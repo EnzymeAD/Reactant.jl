@@ -1,0 +1,11 @@
+--- a/jaxlib/mosaic/BUILD
++++ b/jaxlib/mosaic/BUILD
+@@ -20,7 +20,7 @@ licenses(["notice"])
+ package(
+     default_applicable_licenses = [],
+     default_visibility = [
+-        "//:__subpackages__",
++        "//visibility:public",
+     ],
+ )
+ 
