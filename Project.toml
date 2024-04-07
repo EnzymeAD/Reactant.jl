@@ -1,2 +1,8 @@
+name = "Reactant"
+uuid = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+authors = ["William Moses <wmoses@mit.edu>", "Valentin Churavy <vchuravy@mit.edu>"]
+version = "0.1.0"
+
 [deps]
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+ReactantExtra_jll = "048993ab-281e-44cd-8e8e-14ee1db88751"
