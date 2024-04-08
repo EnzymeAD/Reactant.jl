@@ -5,8 +5,10 @@ include("mlir/MLIR.jl")
 abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType, N} end
 
 @inline Base.eltype(::RArray{ElType,Shape}) where {ElType, Shape} = ElType
-@inline shape(::RArray{ElType,Shape}) where {ElType, Shape} = Shape
+@inline Base.size(::RArray{ElType,Shape}) where {ElType, Shape} = Shape
 @inline dim(::RArray{ElType,Shape, N}) where {ElType, Shape, N} = N
+
+@inline mlir_type(::RArray{ElType,Shape,N}) where {ElType, Shape, N} = MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
 
 @inline dim(::Array{ElType, N}) where {ElType, N} = N
 
@@ -14,13 +16,22 @@ struct XLAArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 end
 
 mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
-	data::XLAArray{ElType, Shape, N}
+	data::Array{ElType, N}
+#	data::XLAArray{ElType, Shape, N}
 end
 
+@inline Base.getindex(a::ConcreteRArray, args::Vararg{Int, N}) where {N} = a.data[args...]
+
+@inline ConcreteRArray(data::Array{ElType, N}) where {ElType, N} = ConcreteRArray{ElType, size(data), N}(data)
+
+@inline ConcreteRArray(data::T) where {T <: Number} = ConcreteRArray{T, (), 0}(data)
+
 mutable struct TracedRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
-	paths::Tuple{<:Tuple}
-	mlir_data::Union{Nothing,Any}
+	paths::Tuple
+	mlir_data::Union{Nothing,MLIR.IR.Value}
 end
+
+include("overloads.jl")
 
 using Enzyme
 
@@ -29,7 +40,7 @@ using Enzyme
 @inline function traced_type(::Type{T}, seen::ST, ::Val{to_traced}) where {ST,T, to_traced}
 	if T <: ConcreteRArray
 		if to_traced
-			return TracedRArray{eltype(T), shape(T), dim(T)}
+			return TracedRArray{eltype(T), size(T), dim(T)}
 		else
 			throw("Abstract RArray cannot be made concrete")
 		end
@@ -38,7 +49,7 @@ using Enzyme
 		if to_traced
 			throw("TracedRArray $T cannot be traced")
 		else
-			return ConcreteRArray{eltype(T), shape(T), dim(T)}
+			return ConcreteRArray{eltype(T), size(T), dim(T)}
 		end
 	end
 
@@ -408,7 +419,7 @@ function generate_jlfunc(concrete_result, fptr, Nargs, linear_args, linear_resul
 	concretize = Expr[]
 	for (idx, res) in linear_results
 		push!(concretize, :(
-			concrete_res_$idx = $(ConcreteRArray{eltype(res),shape(res),len(shape(res))})(linearized_results[$idx])
+			concrete_res_$idx = $(ConcreteRArray{eltype(res),size(res),len(size(res))})(linearized_results[$idx])
 		))
 	end
 
@@ -474,6 +485,7 @@ function generate_jlfunc(concrete_result, fptr, Nargs, linear_args, linear_resul
             prim = :($base[$base_idx])
             base_idx += 1
         end
+	end
 
 	func = quote
 		function compiled_f($(args...))
@@ -488,63 +500,97 @@ function generate_jlfunc(concrete_result, fptr, Nargs, linear_args, linear_resul
 	return eval(func)
 end
 
-function compile(f::FTy, args=VarArg{N, Any}; options="") where {FTy, N}
-	seen_args = IdDict()
-	traced_args = ntuple(Val(N)) do i
-		Base.@_inline_meta
-		make_tracer(seen_args, args[i], ("args", i,), ConcreteToTraced, #=data=#nothing)
-	end
-
-	linear_args = TracedRArray[]
-	for (k, v) in seen_args
-		if !(v <: TracedRArray)
-			continue
-		end
-
-		# todo create arg
-		v.mlir_arg = linear_args.size()
-		push!(linear_args, v)
-	end
-
-	result = f(traced_args...)
-
-	seen_results = IdDict()
-
-	traced_result = make_tracer(seen_results, result, ("result",), TracedTrack, #=data=#nothing)
-
-	retraced_args = ntuple(Val(N)) do i
-		Base.@_inline_meta
-		make_tracer(seen_results, traced_args[i], ("resargs", i,), TracedTrack, #=data=#nothing)
-	end
-
-
-	linear_results = TracedRArray[]
-
-	preserved_args = Tuple{TracedRArray, Int}[]
-	for (k, v) in seen_results
-		if !(v <: TracedRArray)
-			continue
-		end
-
-		if v.mlir_arg isa MLIRArgument
-			push!(preserved_args, (v, index(v.mlir_arg)))
-			continue
-		end
-
-		push!(linear_results, v)
-	end
-
-	# donated = linear_args - preserved_args
-
-	concrete_seen = IdDict()
-
-	concrete_result = make_tracer(concrete_seen, traced_result, ("result",), TracedToConcrete, #=data=#nothing)
-
-	return generate_jlfunc(concrete_result, fptr, N, linear_args, linear_results, preserved_args)
+const registry = Ref{MLIR.IR.DialectRegistry}()
+function __init__()
+	registry[] = MLIR.IR.DialectRegistry()
+	@ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(registry[]::MLIR.API.MlirDialectRegistry)::Cvoid
 end
 
+function compile(f::FTy, args::VAT, options="") where {FTy, VAT <: Tuple}
+	N = length(args)
+	ctx = MLIR.IR.Context()
+	Base.append!(registry[], context=ctx)
+	@ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+	MLIR.IR.context!(ctx) do
+		seen_args = IdDict()
+		traced_args = ntuple(Val(N)) do i
+			Base.@_inline_meta
+			make_tracer(seen_args, args[i], ("args", i,), ConcreteToTraced, #=data=#nothing)
+		end
 
+		linear_args = TracedRArray[]
+		for (k, v) in seen_args
+			if !(v isa TracedRArray)
+				continue
+			end
+			push!(linear_args, v)
+		end
 
+		mod = MLIR.IR.Module(MLIR.IR.Location())
+		modbody = MLIR.IR.body(mod)
+
+		in_tys = [mlir_type(arg) for arg in linear_args]
+		
+		func = MLIR.Dialects.func.func_(; sym_name="main_tmp", function_type=MLIR.IR.FunctionType(in_tys, []), body=MLIR.IR.Region())
+
+		fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
+		push!(MLIR.IR.region(func, 1), fnbody)
+
+		for (i, arg) in enumerate(linear_args)
+			arg.mlir_data = MLIR.IR.argument(fnbody, i)
+		end
+
+		result = MLIR.IR.block!(fnbody) do
+			f(traced_args...)
+		end
+
+		seen_results = IdDict()
+
+		traced_result = make_tracer(seen_results, result, ("result",), TracedTrack, #=data=#nothing)
+
+		retraced_args = ntuple(Val(N)) do i
+			Base.@_inline_meta
+			make_tracer(seen_results, traced_args[i], ("resargs", i,), TracedTrack, #=data=#nothing)
+		end
+
+		linear_results = TracedRArray[]
+
+		preserved_args = Tuple{TracedRArray, Int}[]
+		for (k, v) in seen_results
+			if !(v isa TracedRArray)
+				continue
+			end
+
+			if MLIR.IR.is_block_arg(v.mlir_data)
+				push!(preserved_args, (v, MLIR.IR.block_arg_num(v.mlir_data)))
+				continue
+			end
+
+			push!(linear_results, v)
+		end
+
+		out_tys = [mlir_type(arg) for arg in linear_results]
+
+		MLIR.IR.block!(fnbody) do
+			MLIR.Dialects.func.return_([res.mlir_data for res in linear_results])
+		end
+
+		func2 = MLIR.Dialects.func.func_(; sym_name="main", function_type=MLIR.IR.FunctionType(in_tys, out_tys), body=MLIR.IR.Region())
+		MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
+
+		push!(modbody, func2)
+		@show modbody
+
+		fptr = 0
+		# donated = linear_args - preserved_args
+
+		concrete_seen = IdDict()
+
+		concrete_result = make_tracer(concrete_seen, traced_result, ("result",), TracedToConcrete, #=data=#nothing)
+
+		return generate_jlfunc(concrete_result, fptr, N, linear_args, linear_results, preserved_args)
+	end
 end
+
 
 end # module

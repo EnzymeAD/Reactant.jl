@@ -14,7 +14,21 @@ cc_library(
         [
             "*.cpp",
         ],
-    ),
+
+    ) + [
+        # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
+        "@xla//xla:xla.pb.cc",
+        "@xla//xla:xla_data.pb.cc",
+        "@xla//xla/stream_executor:device_description.pb.cc",
+        "@xla//xla/service:hlo.pb.cc",
+        # "@tsl//tsl/protobuf:dnn.pb.cc",
+        "@tsl//tsl/protobuf:histogram.pb.cc",
+        "@tsl//tsl/protobuf:bfc_memory_map.pb.cc",
+        "@xla//xla/service/gpu:backend_configs.pb.cc",
+        "@xla//xla:autotuning.pb.cc",
+        "@xla//xla:autotune_results.pb.cc",
+        "@xla//xla/service:buffer_assignment.pb.cc",
+        ],
     hdrs = glob([
         "*.h",
     ]),
@@ -23,17 +37,55 @@ cc_library(
         "-Werror=unused-but-set-variable",
         "-Werror=return-type",
         "-Werror=unused-result",
+        "-Wno-error=stringop-truncation"
     ],
     deps = [
+                "@enzyme//:EnzymeMLIR",
+        "@llvm-project//mlir:AffineDialect",
+        "@llvm-project//mlir:AllPassesAndDialects",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:AsyncDialect",
+        "@llvm-project//mlir:ControlFlowDialect",
+        "@llvm-project//mlir:ConversionPasses",
+        "@llvm-project//mlir:DLTIDialect",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:GPUDialect",
+        "@llvm-project//mlir:LinalgDialect",
+        "@llvm-project//mlir:LLVMDialect",
+        "@llvm-project//mlir:MathDialect",
+        "@llvm-project//mlir:MemRefDialect",
+        "@llvm-project//mlir:MlirOptLib",
+        "@llvm-project//mlir:NVVMDialect",
+        "@llvm-project//mlir:OpenMPDialect",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:SCFDialect",
+        "@llvm-project//mlir:TransformDialect",
+        "@llvm-project//mlir:Transforms",
+        "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
-        "@llvm-project//mlir:CAPIIR",
+        "@stablehlo//:chlo_ops",
+        "@xla//xla/pjrt/cpu:cpu_client",
+        "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
+        "@xla//xla/pjrt:status_casters",
+        "@xla//xla/python/ifrt:ifrt",
+        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
+        "@xla//xla/ffi:call_frame",
+        "@com_google_protobuf//:protobuf",
+        "@tsl//tsl/profiler/backends/cpu:annotation_stack_impl",
+        "@tsl//tsl/profiler/backends/cpu:traceme_recorder_impl",
+        "@tsl//tsl/profiler/utils:time_utils_impl",
+        "@tsl//tsl/framework:allocator_registry_impl",
+        "@tsl//tsl/platform:env_impl",
+        "@xla//xla/stream_executor:stream_executor_impl",
     ],
-    alwayslink = 1,
 )
 
 cc_shared_library(
     name = "ReactantExtra",
-    deps = [":ReactantExtraLib"],
+    deps = [":ReactantExtraLib",
+        "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
+        "@llvm-project//mlir:CAPIIR"
+    ],
 )
 
 cc_binary(
@@ -51,7 +103,7 @@ cc_binary(
 gentbl_cc_library(
     name = "BuiltinJLIncGen",
     tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap"],
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
             "Buitin.inc.jl"
         )
     ],
@@ -63,9 +115,23 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "ArithJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Arith.inc.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/Arith/IR/ArithOps.td",
+    deps = [
+        "@llvm-project//mlir:ArithOpsTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
     name = "AffineJLIncGen",
     tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap"],
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
             "Affine.inc.jl"
         )
     ],
@@ -79,7 +145,7 @@ gentbl_cc_library(
 gentbl_cc_library(
     name = "FuncJLIncGen",
     tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap"],
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
             "Func.inc.jl"
         )
     ],
@@ -93,7 +159,7 @@ gentbl_cc_library(
 gentbl_cc_library(
     name = "EnzymeJLIncGen",
     tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap"],
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
             "Enzyme.inc.jl"
         )
     ],
@@ -107,7 +173,7 @@ gentbl_cc_library(
 gentbl_cc_library(
     name = "StableHLOJLIncGen",
     tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap"],
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
             "StableHLO.inc.jl"
         )
     ],
@@ -121,7 +187,7 @@ gentbl_cc_library(
 gentbl_cc_library(
     name = "CHLOJLIncGen",
     tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap"],
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
             "CHLO.inc.jl"
         )
     ],
@@ -135,7 +201,7 @@ gentbl_cc_library(
 gentbl_cc_library(
     name = "VHLOJLIncGen",
     tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap"],
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
             "VHLO.inc.jl"
         )
     ],
@@ -148,6 +214,9 @@ gentbl_cc_library(
 
 genrule(
     name = "libMLIR_h.jl",
+    tags = [
+        "jlrule"
+    ],
     srcs = [
         "@llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h",
         "@llvm-project//llvm:include/llvm-c/Support.h",

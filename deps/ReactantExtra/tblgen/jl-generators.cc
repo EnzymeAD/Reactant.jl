@@ -152,6 +152,7 @@ namespace
     }
     // replace all .'s with _'s
     std::replace(name.begin(), name.end(), '.', '_');
+    std::replace(name.begin(), name.end(), '-', '_');
     return name;
   }
 
@@ -181,7 +182,7 @@ import ...API
   else
   {
     moduleTemplate = R"(module {0}
-
+using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
