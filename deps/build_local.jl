@@ -18,11 +18,12 @@ Pkg.activate(; temp=true)
 # Build!
 @info "Building" source_dir scratch_dir
 run(`mkdir -p $(scratch_dir)`)
-run(Cmd(`bazel build --check_visibility=false ...`, dir=source_dir))
+run(Cmd(`$(Base.julia_cmd().exec[1]) --project=. -e "using Pkg; Pkg.instantiate(); Pkg.add(url=\"https://github.com/JuliaInterop/Clang.jl\", rev=\"vc/cxx_parse2\")"`, dir=source_dir))
+run(Cmd(`bazel build -s --action_env=JULIA=$(Base.julia_cmd().exec[1]) --check_visibility=false ...`, dir=source_dir))
 
 # Discover built libraries
 built_libs = filter(readdir(joinpath(source_dir, "bazel-bin"))) do file
-    endswith(file, ".$(Libdl.dlext)") && startswith(file, "lib")
+    endswith(file, "Extra.$(Libdl.dlext)") && startswith(file, "lib")
 end
 
 lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))

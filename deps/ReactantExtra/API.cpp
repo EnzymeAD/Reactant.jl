@@ -1,3 +1,5 @@
-extern "C" int foo() {
- return 1;
+#include "mlir-c/IR.h"
+
+extern "C" MlirContext foo() {
+ return mlirContextCreate();
 }

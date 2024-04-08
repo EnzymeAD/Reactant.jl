@@ -1,16 +1,14 @@
 module Reactant
 
-struct RArray{ElType,Shape,N} <: AbstractArray{ElType, N}
-end
+include("mlir/MLIR.jl")
+
+abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType, N} end
 
 @inline Base.eltype(::RArray{ElType,Shape}) where {ElType, Shape} = ElType
 @inline shape(::RArray{ElType,Shape}) where {ElType, Shape} = Shape
 @inline dim(::RArray{ElType,Shape, N}) where {ElType, Shape, N} = N
 
 @inline dim(::Array{ElType, N}) where {ElType, N} = N
-
-@inline shape(::RArray{ElType,Shape}) where {ElType, Shape} = Shape
-@inline Base.eltype(::RArray{ElType,Shape}) where {ElType, Shape} = ElType
 
 struct XLAArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 end
@@ -164,20 +162,20 @@ using Enzyme
     end
 
     if T <: NamedTuple
-    	@inline tup_name(::Type{NamedTuple{A, B}}) = A
-    	@inline tup_val(::Type{NamedTuple{A, B}}) = A
+    	@inline tup_name(::Type{NamedTuple{A, B}}) where {A, B} = A
+    	@inline tup_val(::Type{NamedTuple{A, B}}) where {A, B} = B
     	return NamedTuple{tup_name(T), traced_type(seen, tup_val(T), Val(to_traced))}
     end
 
     if T <: Dict
-    	@inline dict_name(::Type{Dict{A, B}}) = A
-    	@inline dict_val(::Type{Dict{A, B}}) = A
+    	@inline dict_name(::Type{Dict{A, B}}) where {A, B} = A
+    	@inline dict_val(::Type{Dict{A, B}}) where {A, B} = B
     	return Dict{dict_name(T), traced_type(seen, dict_val(T), Val(to_traced))}
     end
 
     if T <: IdDict
-    	@inline iddict_name(::Type{IdDict{A, B}}) = A
-    	@inline iddict_val(::Type{IdDict{A, B}}) = A
+    	@inline iddict_name(::Type{IdDict{A, B}}) where {A, B} = A
+    	@inline iddict_val(::Type{IdDict{A, B}}) where {A, B} = B
     	return IdDict{iddict_name(T), traced_type(seen, iddict_val(T), Val(to_traced))}
     end
 
@@ -201,11 +199,11 @@ using Enzyme
     end
 
     subParms = []
-    for ST in T.parameters
-    	if ST <: Type
-    		push!(subParms, traced_type(seen, ST, Val(to_traced)))
+    for SST in T.parameters
+    	if SST <: Type
+    		push!(subParms, traced_type(seen, SST, Val(to_traced)))
     	else
-    		push!(subParms, ST)
+    		push!(subParms, SST)
     	end
     end
 
@@ -401,7 +399,7 @@ function generate_jlfunc(concrete_result, fptr, Nargs, linear_args, linear_resul
 
 	for arg in linear_args
 		res = Symbol("arg_$(arg.path[2])")
-		for p in only(arg.path)[3:]
+		for p in only(arg.path)[3:end]
 			res = :(getfield($res, $p))
 		end
 		push!(linearized_args, res)
@@ -434,7 +432,7 @@ function generate_jlfunc(concrete_result, fptr, Nargs, linear_args, linear_resul
 		end
 	end
 
-	for result, arg_idx in preserved_args
+	for (result, arg_idx) in preserved_args
 		for path in result.path
 			arg = linear_args[arg_idx]
 			argpath = only(argres.path)
@@ -493,7 +491,7 @@ end
 function compile(f::FTy, args=VarArg{N, Any}; options="") where {FTy, N}
 	seen_args = IdDict()
 	traced_args = ntuple(Val(N)) do i
-		Base._@inline_meta
+		Base.@_inline_meta
 		make_tracer(seen_args, args[i], ("args", i,), ConcreteToTraced, #=data=#nothing)
 	end
 
@@ -515,7 +513,7 @@ function compile(f::FTy, args=VarArg{N, Any}; options="") where {FTy, N}
 	traced_result = make_tracer(seen_results, result, ("result",), TracedTrack, #=data=#nothing)
 
 	retraced_args = ntuple(Val(N)) do i
-		Base._@inline_meta
+		Base.@_inline_meta
 		make_tracer(seen_results, traced_args[i], ("resargs", i,), TracedTrack, #=data=#nothing)
 	end
 
@@ -528,7 +526,7 @@ function compile(f::FTy, args=VarArg{N, Any}; options="") where {FTy, N}
 			continue
 		end
 
-		if v.mlir_arg is MLIRArgument
+		if v.mlir_arg isa MLIRArgument
 			push!(preserved_args, (v, index(v.mlir_arg)))
 			continue
 		end
@@ -546,3 +544,7 @@ function compile(f::FTy, args=VarArg{N, Any}; options="") where {FTy, N}
 end
 
 
+
+end
+
+end # module

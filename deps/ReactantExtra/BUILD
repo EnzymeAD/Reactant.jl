@@ -9,7 +9,7 @@ package(
 
 
 cc_library(
-    name = "ReactantExtra",
+    name = "ReactantExtraLib",
     srcs = glob(
         [
             "*.cpp",
@@ -25,8 +25,15 @@ cc_library(
         "-Werror=unused-result",
     ],
     deps = [
-        "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives"
+        "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
+        "@llvm-project//mlir:CAPIIR",
     ],
+    alwayslink = 1,
+)
+
+cc_shared_library(
+    name = "ReactantExtra",
+    deps = [":ReactantExtraLib"],
 )
 
 cc_binary(
@@ -137,4 +144,29 @@ gentbl_cc_library(
         "@stablehlo//:vhlo_ops_td_files",
     ],
     tblgen = "//:mlir-jl-tblgen",
+)
+
+genrule(
+    name = "libMLIR_h.jl",
+    srcs = [
+        "@llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h",
+        "@llvm-project//llvm:include/llvm-c/Support.h",
+        "@llvm-project//llvm:include/llvm-c/DataTypes.h",
+        "@llvm-project//llvm:include/llvm-c/ExternC.h",
+        "@llvm-project//llvm:include/llvm-c/Types.h",
+        "@llvm-project//mlir:c_headers",
+        "@llvm-project//mlir:ConversionPassIncGen_filegroup",
+        "@llvm-project//mlir:TransformsPassIncGen_filegroup",
+        "@llvm-project//mlir:SparseTensorPassIncGen_filegroup",
+        "@llvm-project//mlir:LinalgPassIncGen_filegroup",
+        "@llvm-project//mlir:AsyncPassIncGen_filegroup",
+        "@llvm-project//mlir:GPUPassIncGen_filegroup",
+        "//:Project.toml",
+        "//:Manifest.toml",
+        "//:wrap.toml",
+        "//:missing_defs.jl",
+        "//:make.jl"
+    ],
+    outs = ["libMLIR_h.jl"],
+    cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$@\"",
 )
