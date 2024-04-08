@@ -36,7 +36,7 @@
 #include "stablehlo/dialect/StablehloOps.h"
 
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
-
+#include "xla/mlir/utils/type_util.h"
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #include "xla/pjrt/cpu/cpu_client.h"
 #include "xla/pjrt/status_casters.h"
@@ -75,6 +75,36 @@ extern "C" PjRtClient* MakeGPUClient(int node_id, int num_nodes, int* allowed_de
     // options.collectives = num_nodes;
     auto client = xla::ValueOrThrow(GetStreamExecutorGpuClient(options));
     return client.release();
+}
+
+extern "C" int ClientNumDevices(PjRtClient* client) {
+    return client->device_count();
+}
+
+extern "C" int ClientNumAddressableDevices(PjRtClient* client) {
+    return client->addressable_device_count();
+}
+
+extern "C" int ClientProcessIndex(PjRtClient* client) {
+    return client->process_index();
+}
+
+extern "C" PjRtDevice* ClientGetDevice(PjRtClient* client, int device_id) {
+    return xla::ValueOrThrow(client->LookupDevice(device_id));
+}
+
+extern "C" PjRtDevice* ClientGetAddressableDevice(PjRtClient* client, int device_id) {
+    return xla::ValueOrThrow(client->LookupAddressableDevice(device_id));
+}
+
+static void noop() {}
+
+extern "C" PjRtBuffer* ArrayFromHostBuffer(PjRtClient* client, void* data, MlirType mtype, size_t dim, int64_t* cshape, PjRtDevice* device) {
+    auto primtype = ConvertMlirTypeToPrimitiveType(unwrap(mtype));
+    absl::Span<const int64_t> shape(cshape, dim);
+    PjRtClient::HostBufferSemantics semantics = PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
+    auto buffer = xla::ValueOrThrow(client->BufferFromHostBuffer(data, primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device));
+    return buffer.release();
 }
 
 extern "C" void FreeClient(PjRtClient * client) {
@@ -154,6 +184,18 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBu
 
 extern "C" void ExecutableFree(xla::PjRtLoadedExecutable* exec) {
     delete exec;
+}
+
+extern "C" PjRtDevice* BufferToDevice(PjRtBuffer* Buffer) {
+    return Buffer->device();
+}
+
+extern "C" PjRtClient* BufferToClient(PjRtBuffer* Buffer) {
+    return Buffer->client();
+}
+
+extern "C" PjRtClient* DeviceToClient(PjRtDevice* Device) {
+    return Device->client();
 }
 
 extern "C" void PjRtBufferFree(PjRtBuffer* Buffer) {

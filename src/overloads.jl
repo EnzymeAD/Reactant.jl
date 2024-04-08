@@ -22,7 +22,7 @@ function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,
     return TracedRArray{ElType,Shape,N}(nothing, MLIR.IR.stablehlo.constant(attr))
 end
 
-for (jlop, hloop) in ((:+, :add), (:-, :subtract), (:*, :multiply), (:/, :divide))
+for (jlop, hloop) in ((:(Base.:+), :add), (:(Base.:-), :subtract), (:(Base.:*), :multiply), (:(Base.:/), :divide))
     @eval begin
         function $jlop(lhs::TracedRArray{ElType,Shape,N}, rhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
             return TracedRArray{ElType,Shape,N}((),  MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1))

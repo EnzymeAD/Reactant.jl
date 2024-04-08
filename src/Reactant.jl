@@ -1,6 +1,7 @@
 module Reactant
 
 include("mlir/MLIR.jl")
+include("XLA.jl")
 
 abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType, N} end
 
@@ -16,13 +17,16 @@ struct XLAArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 end
 
 mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
-	data::Array{ElType, N}
+	data::XLA.AsyncBuffer
 #	data::XLAArray{ElType, Shape, N}
 end
 
 @inline Base.getindex(a::ConcreteRArray, args::Vararg{Int, N}) where {N} = a.data[args...]
 
-@inline ConcreteRArray(data::Array{ElType, N}) where {ElType, N} = ConcreteRArray{ElType, size(data), N}(data)
+@inline function ConcreteRArray(data::Array{ElType, N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]) where {ElType, N}
+	device = XLA.ClientGetDevice(client, idx)
+	ConcreteRArray{ElType, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing))
+end
 
 @inline ConcreteRArray(data::T) where {T <: Number} = ConcreteRArray{T, (), 0}(data)
 
@@ -276,7 +280,7 @@ end
 	    if haskey(seen, prev)
 	        return seen[prev]::ConcreteRArray{ElType, Shape, N}
 	    end
-	    res = ConcreteRArray{ElType, Shape, N}(nothing)
+	    res = ConcreteRArray{ElType, Shape, N}(XLA.AsyncEmptyBuffer)
 	    seen[prev] = res
 	    return res	    
 	end
@@ -400,7 +404,7 @@ end
     return y
 end
 
-function generate_jlfunc(concrete_result, fptr, Nargs, linear_args, linear_results, preserved_args)
+function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linear_results, preserved_args)
 	args = ntuple(Val(Nargs)) do i
 		Base.@_inline_meta
 		Symbol("arg_$i")
@@ -409,30 +413,43 @@ function generate_jlfunc(concrete_result, fptr, Nargs, linear_args, linear_resul
 	linearized_args = Union{Symbol,Expr}[]
 
 	for arg in linear_args
-		res = Symbol("arg_$(arg.path[2])")
-		for p in only(arg.path)[3:end]
+		@show arg.paths
+		path = if length(arg.paths) == 1
+			arg.paths[1]
+		elseif length(arg.paths) == 2
+			@assert arg.paths[1][2:end] == arg.paths[2][2:end]
+			@assert (
+				(arg.paths[1][1] == "resargs" && arg.paths[2][1] == "args") ||
+				(arg.paths[1][1] == "args" && arg.paths[2][1] == "resargs")
+			)
+			arg.paths[2]
+		else
+			throw("Invalid path duplication")
+		end
+		res = Symbol("arg_$(path[2])")
+		for p in path[3:end]
 			res = :(getfield($res, $p))
 		end
 		push!(linearized_args, res)
 	end
 
 	concretize = Expr[]
-	for (idx, res) in linear_results
+	for (idx, res) in enumerate(linear_results)
 		push!(concretize, :(
-			concrete_res_$idx = $(ConcreteRArray{eltype(res),size(res),len(size(res))})(linearized_results[$idx])
+			concrete_res_$idx = $(ConcreteRArray{eltype(res),size(res),length(size(res))})(linearized_results[$idx])
 		))
 	end
 
 	delinearized_results = Expr[]
 
 	for (idx, result) in enumerate(linear_results)
-		for path in result.path
+		for path in result.paths
 			if path[1] == "result"
 				res = Symbol("result")
 				path = path[2:end]
 			else
 				@assert path[1] == "resarg"
-				res = Symbol("arg_$(arg.path[2])")
+				res = Symbol("arg_$(path[2])")
 				path = path[3:end]
 			end
 			for p in path
@@ -444,20 +461,32 @@ function generate_jlfunc(concrete_result, fptr, Nargs, linear_args, linear_resul
 	end
 
 	for (result, arg_idx) in preserved_args
-		for path in result.path
+		for path in result.paths
 			arg = linear_args[arg_idx]
-			argpath = only(argres.path)
+			argpath = if length(arg.paths) == 1
+				arg.paths[1]
+			elseif length(arg.paths) == 2
+				@assert arg.paths[1][2:end] == arg.paths[2][2:end]
+				@assert (
+					(arg.paths[1][1] == "resargs" && arg.paths[2][1] == "args") ||
+					(arg.paths[1][1] == "args" && arg.paths[2][1] == "resargs")
+				)
+				arg.paths[2]
+			else
+				throw("Invalid path duplication")
+			end
 
 			if path[1] == "result"
 				res = Symbol("result")
 				path = path[2:end]
 			else
-				@assert path[1] == "resarg"
+				@show path
+				@assert path[1] == "resargs" || path[1] == "args"
 				# We can optimize cases where we set the arg to itself
-				if path[2:end] == path[2:end]
+				if path[2:end] == argpath[2:end]
 					continue
 				end
-				res = Symbol("arg_$(arg.path[2])")
+				res = Symbol("arg_$(path[2])")
 				path = path[3:end]
 			end
 			for p in path
@@ -474,24 +503,21 @@ function generate_jlfunc(concrete_result, fptr, Nargs, linear_args, linear_resul
 		end
 	end
 
-    for i in 1:N
-        if base === nothing
-            prim = Symbol("primal_$i")
-            t = Symbol("PT_$i")
-            e = :($prim::$t)
-            push!(allargs, e)
-            push!(typeargs, t)
-        else
-            prim = :($base[$base_idx])
-            base_idx += 1
-        end
+	exec = XLA.Compile(client, mod)
+
+
+    donated_args_set = zeros(UInt8, length(linearized_args))
+	for (i, val) in enumerate(linear_args)
+		if !in(val, preserved_args)
+			donated_args_set[i] = 1
+		end
 	end
 
 	func = quote
 		function compiled_f($(args...))
-			linearized_results = $fptr($(linearized_args...))
+			linearized_results = ExecutableCall($exec, [$(linearized_args...)], $donated_args_set, $(length(linear_results)))
 			$concretize
-			result = $traced_result
+			result = $concrete_result
 			$delinearized_results
 			return result
 		end
@@ -506,7 +532,7 @@ function __init__()
 	@ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(registry[]::MLIR.API.MlirDialectRegistry)::Cvoid
 end
 
-function compile(f::FTy, args::VAT, options="") where {FTy, VAT <: Tuple}
+function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {FTy, VAT <: Tuple}
 	N = length(args)
 	ctx = MLIR.IR.Context()
 	Base.append!(registry[], context=ctx)
@@ -562,7 +588,7 @@ function compile(f::FTy, args::VAT, options="") where {FTy, VAT <: Tuple}
 			end
 
 			if MLIR.IR.is_block_arg(v.mlir_data)
-				push!(preserved_args, (v, MLIR.IR.block_arg_num(v.mlir_data)))
+				push!(preserved_args, (v, 1+MLIR.IR.block_arg_num(v.mlir_data)))
 				continue
 			end
 
@@ -581,14 +607,25 @@ function compile(f::FTy, args::VAT, options="") where {FTy, VAT <: Tuple}
 		push!(modbody, func2)
 		@show modbody
 
-		fptr = 0
-		# donated = linear_args - preserved_args
-
 		concrete_seen = IdDict()
 
 		concrete_result = make_tracer(concrete_seen, traced_result, ("result",), TracedToConcrete, #=data=#nothing)
 
-		return generate_jlfunc(concrete_result, fptr, N, linear_args, linear_results, preserved_args)
+		if client === nothing
+			if length(linear_args) > 0
+				for (k, v) in seen_args
+					if !(v isa TracedRArray)
+						continue
+					end
+					client = XLA.client(k.data)
+				end
+			end
+			if client === nothing
+				client = XLA.default_backend[]
+			end
+		end
+
+		return generate_jlfunc(concrete_result, client, mod, N, linear_args, linear_results, preserved_args)
 	end
 end
 
