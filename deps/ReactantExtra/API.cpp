@@ -97,6 +97,26 @@ extern "C" PjRtDevice* ClientGetAddressableDevice(PjRtClient* client, int device
     return xla::ValueOrThrow(client->LookupAddressableDevice(device_id));
 }
 
+extern "C" void ExecutableFree(xla::PjRtLoadedExecutable* exec) {
+    delete exec;
+}
+
+extern "C" PjRtDevice* BufferToDevice(PjRtBuffer* Buffer) {
+    return Buffer->device();
+}
+
+extern "C" PjRtClient* BufferToClient(PjRtBuffer* Buffer) {
+    return Buffer->client();
+}
+
+extern "C" PjRtClient* DeviceToClient(PjRtDevice* Device) {
+    return Device->client();
+}
+
+extern "C" void PjRtBufferFree(PjRtBuffer* Buffer) {
+    delete Buffer;
+}
+
 static void noop() {}
 
 extern "C" PjRtBuffer* ArrayFromHostBuffer(PjRtClient* client, void* data, MlirType mtype, size_t dim, int64_t* cshape, PjRtDevice* device) {
@@ -104,7 +124,30 @@ extern "C" PjRtBuffer* ArrayFromHostBuffer(PjRtClient* client, void* data, MlirT
     absl::Span<const int64_t> shape(cshape, dim);
     PjRtClient::HostBufferSemantics semantics = PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
     auto buffer = xla::ValueOrThrow(client->BufferFromHostBuffer(data, primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device));
-    return buffer.release();
+    auto bres = buffer.release();
+    return bres;
+}
+
+extern "C" uint8_t BufferOnCPU(PjRtBuffer* buffer) {
+    return buffer->IsOnCpu();
+}
+
+extern "C" void* UnsafeBufferPointer(PjRtBuffer* buffer) {
+    auto unsafe = xla::ValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
+    return (void*)unsafe;
+}
+
+extern "C" PjRtBuffer* CopyBufferToDevice(PjRtBuffer* buffer, PjRtDevice* dst_device) {
+    auto res = xla::ValueOrThrow(buffer->CopyToDevice(dst_device));
+    return res.release();
+}
+
+extern "C" void BufferToHost(PjRtBuffer* buffer, void* data) {
+    MutableBorrowingLiteral literal((const char*)data, xla::ValueOrThrow(buffer->HostShape()));
+    auto status = buffer->ToLiteralSync(&literal);
+    if (!status.ok()) {
+        printf("error copying to host: %s\n", status.ToString().c_str());
+    }
 }
 
 extern "C" void FreeClient(PjRtClient * client) {
@@ -181,27 +224,6 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBu
         op_results[i] = results[i][0].release();
     }
 }
-
-extern "C" void ExecutableFree(xla::PjRtLoadedExecutable* exec) {
-    delete exec;
-}
-
-extern "C" PjRtDevice* BufferToDevice(PjRtBuffer* Buffer) {
-    return Buffer->device();
-}
-
-extern "C" PjRtClient* BufferToClient(PjRtBuffer* Buffer) {
-    return Buffer->client();
-}
-
-extern "C" PjRtClient* DeviceToClient(PjRtDevice* Device) {
-    return Device->client();
-}
-
-extern "C" void PjRtBufferFree(PjRtBuffer* Buffer) {
-    delete Buffer;
-}
-
 
 extern "C" void RegisterDialects(MlirContext cctx) {
   mlir::MLIRContext &context = *unwrap(cctx);

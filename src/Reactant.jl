@@ -21,7 +21,50 @@ mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 #	data::XLAArray{ElType, Shape, N}
 end
 
-@inline Base.getindex(a::ConcreteRArray, args::Vararg{Int, N}) where {N} = a.data[args...]
+function Base.convert(::Type{T}, X::ConcreteRArray{ElType, Shape, N}) where {T<:Array, ElType, Shape, N}
+	data = Array{ElType, N}(undef, Shape...)
+	XLA.await(X.data)
+	XLA.BufferToHost(X.data.buffer, pointer(data))
+	return data
+end
+
+function Base.print_array(io::IO, X::ConcreteRArray)
+	if X.data == XLA.AsyncEmptyBuffer
+		println(io, "<Empty buffer>")
+		return
+	end
+	Base.print_array(io, convert(Array, X))
+end
+
+function Base.show(io::IO, X::ConcreteRArray)
+	if X.data == XLA.AsyncEmptyBuffer
+		println(io, "<Empty buffer>")
+		return
+	end
+	Base.show(io, convert(Array, X))
+end
+
+
+@inline function Base.getindex(a::ConcreteRArray{ElType, Shape}, args::Vararg{Int, N}) where {ElType, Shape, N}
+	if a.data == XLA.AsyncEmptyBuffer
+		throw("Cannot getindex from empty buffer")
+	end
+	XLA.await(a.data)
+	if XLA.BufferOnCPU(a.data.buffer)
+		buf = a.data.buffer
+		GC.@preserve buf begin
+			ptr = Base.unsafe_convert(Ptr{ElType}, XLA.UnsafeBufferPointer(buf))
+			start = 0
+			for i in 1:N
+				start *= Shape[N-i+1]
+				start += (args[N-i+1]-1)
+			end
+			start += 1
+			return unsafe_load(ptr, start)
+		end
+	end
+	return convert(Array, X)[args...]
+end
 
 @inline function ConcreteRArray(data::Array{ElType, N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]) where {ElType, N}
 	device = XLA.ClientGetDevice(client, idx)
@@ -430,13 +473,14 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 		for p in path[3:end]
 			res = :(getfield($res, $p))
 		end
+		res = :(XLA.synced_buffer($res.data))
 		push!(linearized_args, res)
 	end
 
 	concretize = Expr[]
 	for (idx, res) in enumerate(linear_results)
 		push!(concretize, :(
-			concrete_res_$idx = $(ConcreteRArray{eltype(res),size(res),length(size(res))})(linearized_results[$idx])
+			$(Symbol("concrete_res_$(idx)")) = $(ConcreteRArray{eltype(res),size(res),length(size(res))})(linearized_results[$idx])
 		))
 	end
 
@@ -515,10 +559,10 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 
 	func = quote
 		function compiled_f($(args...))
-			linearized_results = ExecutableCall($exec, [$(linearized_args...)], $donated_args_set, $(length(linear_results)))
-			$concretize
+			linearized_results = XLA.ExecutableCall(XLA.LoadedExecutable($exec), [$(linearized_args...)], $donated_args_set,  Val($(length(linear_results))))
+			$(concretize...)
 			result = $concrete_result
-			$delinearized_results
+			$(delinearized_results...)
 			return result
 		end
 	end
