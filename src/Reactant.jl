@@ -12,6 +12,7 @@ abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType, N} end
 @inline mlir_type(::RArray{ElType,Shape,N}) where {ElType, Shape, N} = MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
 
 @inline dim(::Array{ElType, N}) where {ElType, N} = N
+@inline dim(::Type{Array{ElType, N}}) where {ElType, N} = N
 
 struct XLAArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 end
@@ -24,7 +25,10 @@ end
 function Base.convert(::Type{T}, X::ConcreteRArray{ElType, Shape, N}) where {T<:Array, ElType, Shape, N}
 	data = Array{ElType, N}(undef, Shape...)
 	XLA.await(X.data)
-	XLA.BufferToHost(X.data.buffer, pointer(data))
+	buf = X.data.buffer
+	GC.@preserve data buf begin
+		XLA.BufferToHost(buf, pointer(data))
+	end
 	return data
 end
 
@@ -84,19 +88,31 @@ using Enzyme
 
 @inline val_value(::Val{T}) where T = T
 
-@inline function traced_type(::Type{T}, seen::ST, ::Val{to_traced}) where {ST,T, to_traced}
+@enum TraceMode begin
+	ConcreteToTraced = 1
+	TracedTrack = 2
+	TracedToConcrete = 3
+	ArrayToConcrete = 4
+ end
+
+@inline is_concrete_tuple(x::T2) where T2 = (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
+@inline function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T, mode}
 	if T <: ConcreteRArray
-		if to_traced
+		if mode == ConcreteToTraced
 			return TracedRArray{eltype(T), size(T), dim(T)}
+		elseif mode == TracedToConcrete
+			return T
 		else
 			throw("Abstract RArray cannot be made concrete")
 		end
 	end
 	if T <: TracedRArray
-		if to_traced
+		if mode == ConcreteToTraced
 			throw("TracedRArray $T cannot be traced")
-		else
+		elseif mode == TracedToConcrete
 			return ConcreteRArray{eltype(T), size(T), dim(T)}
+		else
+			throw("Abstract RArray cannot be made concrete")
 		end
 	end
 
@@ -118,7 +134,7 @@ using Enzyme
     
     if T <: Val
     	val = val_value(T)
-    	if traced_type(typeof(val), seen, Val(to_traced)) == typeof(val)
+    	if traced_type(typeof(val), seen, Val(mode)) == typeof(val)
     		return T
     	end
 		throw("Val type $T cannot be traced")
@@ -137,7 +153,7 @@ using Enzyme
     end
 
     if T <: Complex && !(T isa UnionAll)
-        return Complex{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(to_traced))}
+        return Complex{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode))}
     end
 
     if T <: AbstractFloat
@@ -145,19 +161,23 @@ using Enzyme
     end
 
     if T <: Ptr
-    	return Ptr{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(to_traced))}
+    	return Ptr{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode))}
     end
 
     if T <: Core.LLVMPtr
-    	return Core.LLVMPtr{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(to_traced))}
+    	return Core.LLVMPtr{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode))}
     end
 
     if T <: Base.RefValue
-    	return Base.RefValue{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(to_traced))}
+    	return Base.RefValue{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode))}
     end
 
     if T <: Array
-    	return Array{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(to_traced)), dim(T)}
+		if mode == ArrayToConcrete && eltype(T) <: AbstractFloat
+			return (ConcreteRArray{eltype(T), Shape, dim(T)} where Shape)
+		else
+	    	return Array{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode)), dim(T)}
+		end
     end
 
     if T <: Integer
@@ -194,7 +214,7 @@ using Enzyme
     end
 
     if T isa Union
-    	return Union(traced_type(seen, T.a, Val(to_traced)), traced_type(seen, T.b, Val(to_traced)))
+    	return Union{traced_type(T.a, seen, Val(mode)), traced_type(T.b, seen, Val(mode))}
     end
 
     # if abstract it must be by reference
@@ -202,39 +222,37 @@ using Enzyme
     	throw("Unhandled abstract type $T")
     end
 
-    @inline is_concrete_tuple(x::T2) where T2 = (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
-
     @assert !Base.isabstracttype(T)
 
     if !(Base.isconcretetype(T) || is_concrete_tuple(T) || T isa UnionAll)
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
     end
 
-    if Enzyme.Compiler.is_concrete_tuple(T) && any(T2 isa Core.TypeofVararg for T2 in T.parameters)
+    if is_concrete_tuple(T) && any(T2 isa Core.TypeofVararg for T2 in T.parameters)
         Tuple{((T2 isa Core.TypeofVararg ? Any : T2) for T2 in T.parameters)...,}
         throw(AssertionError("Type tuple of vararg $T is not supported"))
     end
 
-    if Enzyme.Compiler.is_concrete_tuple(T)
-    	return Tuple{traced_type(seen, T2, Val(to_traced)) for T2 in T.parameters}
+    if is_concrete_tuple(T)
+    	return Tuple{(traced_type(T2, seen, Val(mode)) for T2 in T.parameters)...}
     end
 
     if T <: NamedTuple
     	@inline tup_name(::Type{NamedTuple{A, B}}) where {A, B} = A
     	@inline tup_val(::Type{NamedTuple{A, B}}) where {A, B} = B
-    	return NamedTuple{tup_name(T), traced_type(seen, tup_val(T), Val(to_traced))}
+    	return NamedTuple{tup_name(T), traced_type(tup_val(T), seen, Val(mode))}
     end
 
     if T <: Dict
     	@inline dict_name(::Type{Dict{A, B}}) where {A, B} = A
     	@inline dict_val(::Type{Dict{A, B}}) where {A, B} = B
-    	return Dict{dict_name(T), traced_type(seen, dict_val(T), Val(to_traced))}
+    	return Dict{dict_name(T), traced_type(dict_val(T), seen, Val(mode))}
     end
 
     if T <: IdDict
     	@inline iddict_name(::Type{IdDict{A, B}}) where {A, B} = A
     	@inline iddict_val(::Type{IdDict{A, B}}) where {A, B} = B
-    	return IdDict{iddict_name(T), traced_type(seen, iddict_val(T), Val(to_traced))}
+    	return IdDict{iddict_name(T), traced_type(iddict_val(T), seen, Val(mode))}
     end
 
     if Val(T) ∈ seen
@@ -247,9 +265,9 @@ using Enzyme
     subTys = Type[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
-        subTT = traced_type(seen, subT, Val(to_traced))
+        subTT = traced_type(subT, seen, Val(mode))
         changed |= subT != subTT
-        push!(subTys, subT)
+        push!(subTys, subTT)
     end
 
     if !changed
@@ -258,8 +276,9 @@ using Enzyme
 
     subParms = []
     for SST in T.parameters
-    	if SST <: Type
-    		push!(subParms, traced_type(seen, SST, Val(to_traced)))
+    	if SST isa Type
+			TrT = traced_type(SST, seen, Val(mode))
+    		push!(subParms, TrT)
     	else
     		push!(subParms, SST)
     	end
@@ -267,12 +286,11 @@ using Enzyme
 
     TT2 = Core.apply_type(T.name.wrapper, subParms...)
     if fieldcount(T) == fieldcount(TT2)
-	    subTys = Type[]
 	    legal = true
 	    for f in 1:fieldcount(T)
 	        subT = fieldtype(T, f)
 	        subT2 = fieldtype(TT2, f)
-	        subTT = traced_type(seen, subT, Val(to_traced))
+	        subTT = traced_type(subT, seen, Val(mode))
 	        legal &= subT2 == subTT
 	    end
 	    if legal
@@ -289,13 +307,88 @@ function append_path(path, i)
 	(path..., i)
 end
 
-@enum TraceMode begin
-   ConcreteToTraced = 1
-   TracedTrack = 2
-   TracedToConcrete = 3
+@inline function make_tracer(seen::IdDict, prev::RT, path, mode, data) where {RT}
+    if haskey(seen, prev)
+        return seen[prev]
+    end
+    TT = traced_type(RT, (), Val(mode))
+    @assert !Base.isabstracttype(RT)
+    @assert Base.isconcretetype(RT)
+    nf = fieldcount(RT)
+
+	if TT <: NamedTuple
+        changed = false
+		subs = []
+        for i in 1:nf
+			xi = getfield(prev, i)
+			xi2 = make_tracer(seen, xi, append_path(path, i), mode, data)
+			if xi !== xi2
+				changed = true
+			end
+			push!(subs, xi2)
+        end
+		if !changed
+			seen[prev] = prev
+			return prev
+		end
+		tup = (subs...,)
+		@show TT, subs, tup
+		return NamedTuple{TT.parameters[1], typeof(tup)}(tup)
+	end
+    
+    if ismutabletype(TT)
+        y = ccall(:jl_new_struct_uninit, Any, (Any,), TT)
+        seen[prev] = y
+        changed = false
+        for i in 1:nf
+            if isdefined(prev, i)
+                xi = getfield(prev, i)
+                xi2 = make_tracer(seen, xi, append_path(path, i), mode, data)
+                if xi !== xi2
+                	changed = true
+                end
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1, xi2)
+            end
+        end
+        if !changed
+        	seen[prev] = prev
+        	return prev
+        end
+        return y
+    end
+    
+    if nf == 0
+        return prev
+    end
+
+    flds = Vector{Any}(undef, nf)
+    changed = false
+    for i in 1:nf
+        if isdefined(prev, i)
+            xi = getfield(prev, i)
+            xi2 = make_tracer(seen, xi, append_path(path, i), mode, data)
+            if xi !== xi2
+            	changed = true
+            end
+            flds[i] = xi2
+        else
+            nf = i - 1 # rest of tail must be undefined values
+            break
+        end
+    end    
+    if !changed
+    	seen[prev] = prev
+    	return prev
+    end
+    y = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), TT, flds, nf)
+    seen[prev] = y
+    return y
 end
 
 @inline function make_tracer(seen::IdDict, prev::ConcreteRArray{ElType, Shape, N}, path, mode, data) where {ElType, Shape, N}
+	if mode == ArrayToConcrete
+		return prev
+	end
 	if mode != ConcreteToTraced
 		throw("Cannot trace concrete")
 	end
@@ -343,7 +436,10 @@ end
     if haskey(seen, prev)
         return seen[prev]
     end
-    TT = traced_type((), eltype(RT), Val(to_traced))
+	if mode == ArrayToConcrete && eltype(RT) <: AbstractFloat
+		return seen[prev] = ConcreteRArray(prev)
+	end
+    TT = traced_type(eltype(RT), (), Val(mode))
     newa = Array{TT, dim(RT)}(undef, size(prev))
     seen[prev] = newa
     same = true
@@ -369,7 +465,7 @@ end
 end
 
 @inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path, mode, data) where {A, RT}
-    return NamedTuple{A, traced_type((), RT, Val(to_traced))}(
+    return NamedTuple{A, traced_type(RT, (), Val(mode))}(
 	    ((make_tracer(seen, getfield(prev, name), append_path(path, name), mode, data) for name in A)...,)
     )
 end
@@ -389,64 +485,6 @@ end
     return res
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode, data)::RT where {RT}
-    if haskey(seen, prev)
-        return seen[prev]
-    end
-    TT = traced_type((), RT, Val(to_traced))
-    @assert !Base.isabstracttype(RT)
-    @assert Base.isconcretetype(RT)
-    nf = fieldcount(RT)
-    
-    if ismutable(TT)
-        y = ccall(:jl_new_struct_uninit, Any, (Any,), TT)
-        seen[prev] = y
-        changed = false
-        for i in 1:nf
-            if isdefined(prev, i)
-                xi = getfield(prev, i)
-                xi2 = make_tracer(seen, xi, append_path(path, i), mode, data)
-                if xi !== xi2
-                	changed = true
-                end
-                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1, xi2)
-            end
-        end
-        if !changed
-        	seen[prev] = prev
-        	return prev
-        end
-        return y
-    end
-    
-    if nf == 0
-        return prev
-    end
-
-    flds = Vector{Any}(undef, nf)
-    changed = false
-    for i in 1:nf
-        if isdefined(prev, i)
-            xi = getfield(prev, i)
-            xi2 = make_tracer(seen, xi, append_path(path, i), mode, data)
-            if xi !== xi2
-            	changed = true
-            end
-            flds[i] = xi2
-        else
-            nf = i - 1 # rest of tail must be undefined values
-            break
-        end
-    end    
-    if !changed
-    	seen[prev] = prev
-    	return prev
-    end
-    y = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), RT, flds, nf)
-    seen[prev] = y
-    return y
-end
-
 function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linear_results, preserved_args)
 	args = ntuple(Val(Nargs)) do i
 		Base.@_inline_meta
@@ -456,7 +494,6 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 	linearized_args = Union{Symbol,Expr}[]
 
 	for arg in linear_args
-		@show arg.paths
 		path = if length(arg.paths) == 1
 			arg.paths[1]
 		elseif length(arg.paths) == 2
@@ -473,14 +510,14 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 		for p in path[3:end]
 			res = :(getfield($res, $p))
 		end
-		res = :(XLA.synced_buffer($res.data))
+		res = :(XLA.synced_buffer($res.data).buffer)
 		push!(linearized_args, res)
 	end
 
 	concretize = Expr[]
 	for (idx, res) in enumerate(linear_results)
 		push!(concretize, :(
-			$(Symbol("concrete_res_$(idx)")) = $(ConcreteRArray{eltype(res),size(res),length(size(res))})(linearized_results[$idx])
+			$(Symbol("concrete_res_$(idx)")) = linearized_results[$idx]
 		))
 	end
 
@@ -499,7 +536,7 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 			for p in path
 				res = :(getfield($res, $p))
 			end
-			res = :($res.data = concrete_res_$idx )
+			res = :($res.data = $(Symbol("concrete_res_$(idx)")) )
 			push!(delinearized_results, res)
 		end
 	end
@@ -524,7 +561,6 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 				res = Symbol("result")
 				path = path[2:end]
 			else
-				@show path
 				@assert path[1] == "resargs" || path[1] == "args"
 				# We can optimize cases where we set the arg to itself
 				if path[2:end] == argpath[2:end]
@@ -559,14 +595,13 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 
 	func = quote
 		function compiled_f($(args...))
-			linearized_results = XLA.ExecutableCall(XLA.LoadedExecutable($exec), [$(linearized_args...)], $donated_args_set,  Val($(length(linear_results))))
+			linearized_results = XLA.ExecutableCall($exec, [$(linearized_args...)], $donated_args_set,  Val($(length(linear_results))))
 			$(concretize...)
 			result = $concrete_result
 			$(delinearized_results...)
 			return result
 		end
 	end
-	@show func
 	return eval(func)
 end
 
@@ -649,7 +684,6 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
 		MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
 		push!(modbody, func2)
-		@show modbody
 
 		concrete_seen = IdDict()
 

@@ -1,6 +1,6 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-ENZYMEXLA_COMMIT = "273122a4ebf91b18bb618509c027a2904e20946b"
+ENZYMEXLA_COMMIT = "dd83c7487360b4a7a1f621c16d3b389ca572f1ae"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
@@ -17,7 +17,10 @@ XLA_PATCHES = XLA_PATCHES + [
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/LLVM_ENABLE_THREADS=1\\/LLVM_ENABLE_THREADS=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
 """
-sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_MALLINFO=1\\/HAVE_MALLINFO=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_MALLINFO=1\\/DONT_HAVE_ANY_MALLINFO=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+""",
+"""
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_PTHREAD_GETNAME_NP=1\\/HAVE_PTHREAD_GETNAME_NP=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
 # """
 # sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\['find . -type f -name BUILD.bazel -exec sed -i.bak0 \\\\\\'s\\/\\\"CAPIIR\\\",\\/\\\"CAPIIR\\\",alwayslink=1,\\/g\\\\\\\\' {} +',/g" third_party/llvm/workspace.bzl

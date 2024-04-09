@@ -175,7 +175,6 @@ extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirMod
             options.executable_build_options.set_device_memory_size(*stats->bytes_limit);
         }
     }
-
     auto exec = xla::ValueOrThrow(client->Compile(cast<ModuleOp>(*unwrap(cmod)), options));
     return exec.release();
 }
@@ -193,11 +192,9 @@ extern "C" void FutureAwait(PjRtFuture<Status>* Future) {
 }
 
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBuffer** op_args, uint8_t* is_arg_donatable, int num_results, PjRtBuffer** op_results, uint8_t *futures, PjRtFuture<Status>** future_results) {
-    absl::Span<std::vector<PjRtBuffer*>> argument_handles({}, num_args);
+    std::vector<std::vector<PjRtBuffer*>> argument_handles;
     for (size_t i=0; i<num_args; i++) {
-        //std::vector<PjRtBuffer*> op_args_i = {op_args[i]};
-        //argument_handles[i] = std::move(op_args_i);
-        argument_handles[i].push_back(op_args[i]);
+        argument_handles.emplace_back(1, op_args[i]);
     }
     ExecuteOptions options;
 
