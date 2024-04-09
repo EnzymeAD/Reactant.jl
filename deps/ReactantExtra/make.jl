@@ -16,16 +16,15 @@ let options = deepcopy(options)
     args = Generators.get_default_args()
     ll_include_dir = joinpath(splitpath(ARGS[2])[1:end-2]...)
 
-    @show ARGS
-
     genarg = first(eachsplit(ARGS[3], " "))
 
     gen_include_dir = joinpath(splitpath(genarg)[1:end-3]...)
-    @show gen_include_dir
 
-    append!(args, ["-I", include_dir, "-I", ll_include_dir,"-I", gen_include_dir, "-x", "c++"])
+    hlo_include_dir = joinpath(splitpath(ARGS[end-1])[1:end-1]...)
+
+    append!(args, ["-I", include_dir, "-I", ll_include_dir,"-I", gen_include_dir,"-I", hlo_include_dir, "-x", "c++"])
     
-    headers = detect_headers(include_dir, args, Dict(), endswith("Python/Interop.h"))
+    headers = [detect_headers(include_dir, args, Dict(), endswith("Python/Interop.h"))..., detect_headers(hlo_include_dir, args, Dict())...]
 
     ctx = create_context(headers, args, options)
 

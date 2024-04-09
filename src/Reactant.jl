@@ -7,12 +7,10 @@ abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType, N} end
 
 @inline Base.eltype(::RArray{ElType,Shape}) where {ElType, Shape} = ElType
 @inline Base.size(::RArray{ElType,Shape}) where {ElType, Shape} = Shape
-@inline dim(::RArray{ElType,Shape, N}) where {ElType, Shape, N} = N
+@inline Base.ndims(::RArray{ElType,Shape, N}) where {ElType, Shape, N} = N
+@inline Base.ndims(::Type{<:RArray{ElType,Shape, N}}) where {ElType, Shape, N} = N
 
 @inline mlir_type(::RArray{ElType,Shape,N}) where {ElType, Shape, N} = MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
-
-@inline dim(::Array{ElType, N}) where {ElType, N} = N
-@inline dim(::Type{Array{ElType, N}}) where {ElType, N} = N
 
 struct XLAArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 end
@@ -82,6 +80,18 @@ mutable struct TracedRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 	mlir_data::Union{Nothing,MLIR.IR.Value}
 end
 
+function Base.promote_rule(A::Type{TracedRArray{T, Shape, N}}, B::Type{TracedRArray{S, Shape, N}}) where {T, S, Shape, N}
+    TracedRArray{Base.promote_type(T, S), Shape, N}
+end
+
+function Base.promote_rule(A::Type{T}, B::Type{TracedRArray{S, Shape, N}}) where {T, S, Shape, N}
+	TracedRArray{Base.promote_type(T, S), Shape, N}
+end
+
+function Base.show(io::IO, X::TracedRArray{ElType, Shape, N}) where {ElType, Shape, N}
+	print(io, "TracedRArray{", ElType, ",", Shape, ",", N, "N}(", X.paths, ", ", X.mlir_data, ")")
+end
+
 include("overloads.jl")
 
 using Enzyme
@@ -99,7 +109,9 @@ using Enzyme
 @inline function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T, mode}
 	if T <: ConcreteRArray
 		if mode == ConcreteToTraced
-			return TracedRArray{eltype(T), size(T), dim(T)}
+			@inline base_typet(TV::TT) where TT <: UnionAll = UnionAll(TV.var, base_typet(TV.body))
+			@inline base_typet(TV::TT) where TT <: DataType = TracedRArray{TV.parameters...}
+			return base_typet(T)
 		elseif mode == TracedToConcrete
 			return T
 		else
@@ -110,7 +122,9 @@ using Enzyme
 		if mode == ConcreteToTraced
 			throw("TracedRArray $T cannot be traced")
 		elseif mode == TracedToConcrete
-			return ConcreteRArray{eltype(T), size(T), dim(T)}
+			@inline base_typec(TV::TT) where TT <: UnionAll = UnionAll(TV.var, base_typec(TV.body))
+			@inline base_typec(TV::TT) where TT <: DataType = ConcreteRArray{TV.parameters...}
+			return base_typec(T)
 		else
 			throw("Abstract RArray cannot be made concrete")
 		end
@@ -174,9 +188,9 @@ using Enzyme
 
     if T <: Array
 		if mode == ArrayToConcrete && eltype(T) <: AbstractFloat
-			return (ConcreteRArray{eltype(T), Shape, dim(T)} where Shape)
+			return (ConcreteRArray{eltype(T), Shape, ndims(T)} where Shape)
 		else
-	    	return Array{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode)), dim(T)}
+	    	return Array{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode)), ndims(T)}
 		end
     end
 
@@ -395,6 +409,7 @@ end
     if haskey(seen, prev)
         return seen[prev]::TracedRArray{ElType, Shape, N}
     end
+	@assert N isa Int
     res = TracedRArray{ElType, Shape, N}((path,), nothing)
     seen[prev] = res
     return res
@@ -440,7 +455,7 @@ end
 		return seen[prev] = ConcreteRArray(prev)
 	end
     TT = traced_type(eltype(RT), (), Val(mode))
-    newa = Array{TT, dim(RT)}(undef, size(prev))
+    newa = Array{TT, ndims(RT)}(undef, size(prev))
     seen[prev] = newa
     same = true
     for I in eachindex(prev)

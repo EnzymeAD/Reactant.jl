@@ -77,7 +77,9 @@ cc_library(
         "@tsl//tsl/framework:allocator_registry_impl",
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
-        "@xla//xla/mlir/utils:type_util"
+        "@xla//xla/mlir/utils:type_util",
+        "@stablehlo//:stablehlo_capi",
+        "@com_google_absl//absl/hash:hash"
     ],
 )
 
@@ -85,7 +87,8 @@ cc_shared_library(
     name = "ReactantExtra",
     deps = [":ReactantExtraLib",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
-        "@llvm-project//mlir:CAPIIR"
+        "@llvm-project//mlir:CAPIIR",
+        "@stablehlo//:stablehlo_capi",
     ],
 )
 
@@ -105,7 +108,7 @@ gentbl_cc_library(
     name = "BuiltinJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Buitin.inc.jl"
+            "Builtin.inc.jl"
         )
     ],
     td_file = "@llvm-project//mlir:include/mlir/IR/BuiltinOps.td",
@@ -231,6 +234,7 @@ genrule(
         "@llvm-project//mlir:LinalgPassIncGen_filegroup",
         "@llvm-project//mlir:AsyncPassIncGen_filegroup",
         "@llvm-project//mlir:GPUPassIncGen_filegroup",
+        "@stablehlo//:stablehlo/integrations/c/StablehloAttributes.h",
         "//:Project.toml",
         "//:Manifest.toml",
         "//:wrap.toml",
@@ -238,5 +242,5 @@ genrule(
         "//:make.jl"
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$@\"",
+    cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$@\"",
 )
