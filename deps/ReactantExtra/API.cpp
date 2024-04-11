@@ -2,6 +2,7 @@
 #include "mlir-c/Support.h"
 
 #include "mlir/CAPI/IR.h"
+#include "mlir/Pass/PassManager.h"
 
 #include "Enzyme/MLIR/Dialect/Dialect.h"
 #include "Enzyme/MLIR/Dialect/Ops.h"
@@ -117,12 +118,29 @@ extern "C" void PjRtBufferFree(PjRtBuffer* Buffer) {
     delete Buffer;
 }
 
+// https://openxla.org/xla/shapes
+// This minor-to-major dimension order of 0 up to N-1 is akin to column-major (at rank 2). Assuming a monotonic ordering of dimensions, another way we may refer to this layout in the code is simply "dim 0 is minor".
+std::vector<int64_t> col_major(int64_t dim) {
+    std::vector<int64_t> minor_to_major;
+    for (int i=0; i<dim; i++) {
+        minor_to_major.push_back(i);//dim-1-i);
+        // minor_to_major.push_back(dim-1-i);
+    }
+    return minor_to_major;
+}
 static void noop() {}
+
+extern "C" void* UnsafeBufferPointer(PjRtBuffer* buffer) {
+    auto unsafe = xla::ValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
+    return (void*)unsafe;
+}
 
 extern "C" PjRtBuffer* ArrayFromHostBuffer(PjRtClient* client, void* data, MlirType mtype, size_t dim, int64_t* cshape, PjRtDevice* device) {
     auto primtype = ConvertMlirTypeToPrimitiveType(unwrap(mtype));
     absl::Span<const int64_t> shape(cshape, dim);
     PjRtClient::HostBufferSemantics semantics = PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
+    //xla::Layout layout(col_major(dim));
+    //auto buffer = xla::ValueOrThrow(client->BufferFromHostBuffer(data, primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device, &layout));
     auto buffer = xla::ValueOrThrow(client->BufferFromHostBuffer(data, primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device));
     auto bres = buffer.release();
     return bres;
@@ -132,10 +150,6 @@ extern "C" uint8_t BufferOnCPU(PjRtBuffer* buffer) {
     return buffer->IsOnCpu();
 }
 
-extern "C" void* UnsafeBufferPointer(PjRtBuffer* buffer) {
-    auto unsafe = xla::ValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
-    return (void*)unsafe;
-}
 
 extern "C" PjRtBuffer* CopyBufferToDevice(PjRtBuffer* buffer, PjRtDevice* dst_device) {
     auto res = xla::ValueOrThrow(buffer->CopyToDevice(dst_device));
@@ -143,7 +157,16 @@ extern "C" PjRtBuffer* CopyBufferToDevice(PjRtBuffer* buffer, PjRtDevice* dst_de
 }
 
 extern "C" void BufferToHost(PjRtBuffer* buffer, void* data) {
-    MutableBorrowingLiteral literal((const char*)data, xla::ValueOrThrow(buffer->HostShape()));
+    Shape shape(xla::ValueOrThrow(buffer->HostShape()));
+    /// Grumpily the cpu copy code does not respect layout and does a raw copy
+    /*
+    auto &layout = *shape.mutable_layout();
+    layout.clear_minor_to_major();
+    for (auto index : col_major(shape.dimensions_size())) {
+        layout.add_minor_to_major(index);
+    }
+    */
+    MutableBorrowingLiteral literal((const char*)data, shape);
     auto status = buffer->ToLiteralSync(&literal);
     if (!status.ok()) {
         printf("error copying to host: %s\n", status.ToString().c_str());
@@ -191,11 +214,30 @@ extern "C" void FutureAwait(PjRtFuture<Status>* Future) {
     Future->Await();
 }
 
+extern "C" void RunPassPipeline(const char* pass_pipeline, MlirModule cmod) {
+    mlir::ModuleOp mod = cast<ModuleOp>(unwrap(cmod));
+    
+    mlir::PassManager pm(mod.getContext());
+
+    std::string error_message;
+    llvm::raw_string_ostream error_stream(error_message);
+    error_stream << "Failed to parse pipeline\n";
+    mlir::LogicalResult result =
+        mlir::parsePassPipeline(pass_pipeline, pm, error_stream);
+    if (mlir::failed(result)) {
+        llvm::errs() << error_message << "\n";
+        exit(1);
+    }
+    if (!mlir::succeeded(pm.run(mod))) {
+        llvm::errs() << "Pipeline failed" << "\n";
+        exit(1);
+    }
+}
+
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBuffer** op_args, uint8_t* is_arg_donatable, int num_results, PjRtBuffer** op_results, uint8_t *futures, PjRtFuture<Status>** future_results) {
     std::vector<std::vector<PjRtBuffer*>> argument_handles;
-    for (size_t i=0; i<num_args; i++) {
-        argument_handles.emplace_back(1, op_args[i]);
-    }
+    argument_handles.emplace_back(op_args, op_args + num_args);
+
     ExecuteOptions options;
 
     for (size_t i=0; i<num_args; i++) {
@@ -205,6 +247,9 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBu
     std::optional<std::vector<PjRtFuture<Status>>> returned_futures;
     auto results = xla::ValueOrThrow(exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer*>>>(argument_handles), options, returned_futures));
 
+    if (results.size() != num_results) {
+        llvm::errs() <<" results.size()=" << results.size() << " num_results=" << num_results << "\n";
+    }
     assert(results.size() == num_results);
     if (returned_futures) {
         *futures = true;

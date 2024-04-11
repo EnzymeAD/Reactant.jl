@@ -198,7 +198,7 @@ function {0}({1}location=Location())
     {2}
 end
 )";      // 0: functionname, 1: functionarguments, 2: functionbody
-  const char *functionbodytemplate = R"(results = IR.Type[{0}]
+  const char *functionbodytemplate = R"(op_ty_results = IR.Type[{0}]
     operands = Value[{1}]
     owned_regions = Region[{2}]
     successors = Block[{3}]
@@ -335,7 +335,7 @@ end
 
       if (optional)
       {
-        optionals += llvm::formatv(R"(!isnothing({0}) && push!(results, {0}{1})
+        optionals += llvm::formatv(R"(!isnothing({0}) && push!(op_ty_results, {0}{1})
     )",
                                    resultname, (variadic ? "..." : ""));
         type = "Union{Nothing, " + type + "}";
@@ -348,8 +348,8 @@ end
       resultarguments += resultname + defaultvalue + "::" + type + ", ";
     }
 
-    std::string resultsexpression = (inferrable ? "(length(results) == 0 ? nothing : results)" : "results");
-    std::string resultinference = (inferrable ? "(length(results) == 0 ? true : false)" : "false");
+    std::string resultsexpression = (inferrable ? "(length(op_ty_results) == 0 ? nothing : op_ty_results)" : "op_ty_results");
+    std::string resultinference = (inferrable ? "(length(op_ty_results) == 0 ? true : false)" : "false");
 
     std::string attributearguments = "";
     std::string attributecontainer = "";

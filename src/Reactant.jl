@@ -21,13 +21,14 @@ mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 end
 
 function Base.convert(::Type{T}, X::ConcreteRArray{ElType, Shape, N}) where {T<:Array, ElType, Shape, N}
-	data = Array{ElType, N}(undef, Shape...)
+    data = Array{ElType, N}(undef, (reverse(Shape)...))
 	XLA.await(X.data)
 	buf = X.data.buffer
 	GC.@preserve data buf begin
 		XLA.BufferToHost(buf, pointer(data))
 	end
-	return data
+    return data
+    # XLA.from_row_major(data)
 end
 
 function Base.print_array(io::IO, X::ConcreteRArray)
@@ -60,6 +61,8 @@ end
 			for i in 1:N
 				start *= Shape[N-i+1]
 				start += (args[N-i+1]-1)
+				# start *= Shape[i]
+				# start += (args[i]-1)
 			end
 			start += 1
 			return unsafe_load(ptr, start)
@@ -71,6 +74,7 @@ end
 @inline function ConcreteRArray(data::Array{ElType, N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]) where {ElType, N}
 	device = XLA.ClientGetDevice(client, idx)
 	ConcreteRArray{ElType, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing))
+	# ConcreteRArray{ElType, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(data), device), nothing))
 end
 
 @inline ConcreteRArray(data::T) where {T <: Number} = ConcreteRArray{T, (), 0}(data)
@@ -78,6 +82,12 @@ end
 mutable struct TracedRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 	paths::Tuple
 	mlir_data::Union{Nothing,MLIR.IR.Value}
+	function TracedRArray{ElType,Shape,N}(paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}) where {ElType, Shape, N}
+		if mlir_data !== nothing
+			@assert size(MLIR.IR.type(mlir_data)) == Shape
+		end
+		new{ElType,Shape,N}(paths, mlir_data)
+	end
 end
 
 function Base.promote_rule(A::Type{TracedRArray{T, Shape, N}}, B::Type{TracedRArray{S, Shape, N}}) where {T, S, Shape, N}
@@ -106,7 +116,7 @@ using Enzyme
  end
 
 @inline is_concrete_tuple(x::T2) where T2 = (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
-@inline function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T, mode}
+@inline function traced_type(val::Type{T}, seen::ST, ::Val{mode}) where {ST,T, mode}
 	if T <: ConcreteRArray
 		if mode == ConcreteToTraced
 			@inline base_typet(TV::TT) where TT <: UnionAll = UnionAll(TV.var, base_typet(TV.body))
@@ -125,8 +135,10 @@ using Enzyme
 			@inline base_typec(TV::TT) where TT <: UnionAll = UnionAll(TV.var, base_typec(TV.body))
 			@inline base_typec(TV::TT) where TT <: DataType = ConcreteRArray{TV.parameters...}
 			return base_typec(T)
+		elseif mode == TracedTrack
+			return T
 		else
-			throw("Abstract RArray cannot be made concrete")
+			throw("Abstract RArray $T cannot be made concrete in mode $mode")
 		end
 	end
 
@@ -509,18 +521,12 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 	linearized_args = Union{Symbol,Expr}[]
 
 	for arg in linear_args
-		path = if length(arg.paths) == 1
-			arg.paths[1]
-		elseif length(arg.paths) == 2
-			@assert arg.paths[1][2:end] == arg.paths[2][2:end]
-			@assert (
-				(arg.paths[1][1] == "resargs" && arg.paths[2][1] == "args") ||
-				(arg.paths[1][1] == "args" && arg.paths[2][1] == "resargs")
-			)
-			arg.paths[2]
+        paths = ((p for p in arg.paths if p[1] == "args")...,)
+		path = if length(paths) == 1
+			paths[1]
 		else
-			throw("Invalid path duplication")
-		end
+            throw("Invalid path duplication $(arg.paths) into $(paths)")
+        end
 		res = Symbol("arg_$(path[2])")
 		for p in path[3:end]
 			res = :(getfield($res, $p))
@@ -539,12 +545,18 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 	delinearized_results = Expr[]
 
 	for (idx, result) in enumerate(linear_results)
-		for path in result.paths
+        paths = ((p for p in result.paths if p[1] != "args")...,)
+		for path in paths
 			if path[1] == "result"
 				res = Symbol("result")
 				path = path[2:end]
 			else
-				@assert path[1] == "resarg"
+				if path[1] != "resargs"
+                    @show idx #, result
+                    @show paths
+                    @show path
+                end
+				@assert path[1] == "resargs"
 				res = Symbol("arg_$(path[2])")
 				path = path[3:end]
 			end
@@ -558,19 +570,8 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 
 	for (result, arg_idx) in preserved_args
 		for path in result.paths
-			arg = linear_args[arg_idx]
-			argpath = if length(arg.paths) == 1
-				arg.paths[1]
-			elseif length(arg.paths) == 2
-				@assert arg.paths[1][2:end] == arg.paths[2][2:end]
-				@assert (
-					(arg.paths[1][1] == "resargs" && arg.paths[2][1] == "args") ||
-					(arg.paths[1][1] == "args" && arg.paths[2][1] == "resargs")
-				)
-				arg.paths[2]
-			else
-				throw("Invalid path duplication")
-			end
+			arg = linear_args[arg_idx+1]
+            argpath = only((p for p in arg.paths if p[1] == "args"))
 
 			if path[1] == "result"
 				res = Symbol("result")
@@ -581,6 +582,7 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 				if path[2:end] == argpath[2:end]
 					continue
 				end
+                @show path, argpath
 				res = Symbol("arg_$(path[2])")
 				path = path[3:end]
 			end
@@ -602,21 +604,30 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 
 
     donated_args_set = zeros(UInt8, length(linearized_args))
+    preserved_argnums = [i for (_, i) in preserved_args]
 	for (i, val) in enumerate(linear_args)
-		if !in(val, preserved_args)
+		if !in(i, preserved_args)
 			donated_args_set[i] = 1
 		end
 	end
 
+    exec_call = if length(linear_results) == 0
+        :()
+    else
+        :(
+			linearized_results = XLA.ExecutableCall($exec, [$(linearized_args...)], $donated_args_set,  Val($(length(linear_results))))
+        )
+    end
 	func = quote
 		function compiled_f($(args...))
-			linearized_results = XLA.ExecutableCall($exec, [$(linearized_args...)], $donated_args_set,  Val($(length(linear_results))))
+            $exec_call
 			$(concretize...)
 			result = $concrete_result
 			$(delinearized_results...)
 			return result
 		end
 	end
+    # @show func
 	return eval(func)
 end
 
@@ -649,18 +660,27 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
 		mod = MLIR.IR.Module(MLIR.IR.Location())
 		modbody = MLIR.IR.body(mod)
 
-		in_tys = [mlir_type(arg) for arg in linear_args]
+        function transpose_ty(mlirty)
+            return MLIR.IR.TensorType([reverse(size(mlirty))...,], eltype(mlirty))
+        end
+        function transpose_val(val)
+            attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:length(size(MLIR.IR.type(val)))-1)...])
+            return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val, permutation=attr), 1)
+        end
+        in_tys = [transpose_ty(mlir_type(arg)) for arg in linear_args]
 		
 		func = MLIR.Dialects.func.func_(; sym_name="main_tmp", function_type=MLIR.IR.FunctionType(in_tys, []), body=MLIR.IR.Region())
 
 		fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
 		push!(MLIR.IR.region(func, 1), fnbody)
 
-		for (i, arg) in enumerate(linear_args)
-			arg.mlir_data = MLIR.IR.argument(fnbody, i)
-		end
-
 		result = MLIR.IR.block!(fnbody) do
+            for (i, arg) in enumerate(linear_args)
+                raw_arg = MLIR.IR.argument(fnbody, i)
+                row_maj_arg = transpose_val(raw_arg)
+                arg.mlir_data = row_maj_arg
+            end
+
 			f(traced_args...)
 		end
 
@@ -675,27 +695,27 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
 
 		linear_results = TracedRArray[]
 
-		preserved_args = Tuple{TracedRArray, Int}[]
 		for (k, v) in seen_results
 			if !(v isa TracedRArray)
-				continue
-			end
-
-			if MLIR.IR.is_block_arg(v.mlir_data)
-				push!(preserved_args, (v, 1+MLIR.IR.block_arg_num(v.mlir_data)))
 				continue
 			end
 
 			push!(linear_results, v)
 		end
 
-		out_tys = [mlir_type(arg) for arg in linear_results]
+        out_tys = [transpose_ty(mlir_type(arg)) for arg in linear_results]
 
-		MLIR.IR.block!(fnbody) do
-			MLIR.Dialects.func.return_([res.mlir_data for res in linear_results])
+		ret = MLIR.IR.block!(fnbody) do
+			vals = MLIR.IR.Value[]
+			for res in linear_results
+                col_maj = transpose_val(res.mlir_data)
+                push!(vals, col_maj)
+			end
+			@assert length(vals) == length(linear_results)
+			MLIR.Dialects.func.return_(vals)
 		end
 
-		func2 = MLIR.Dialects.func.func_(; sym_name="main", function_type=MLIR.IR.FunctionType(in_tys, out_tys), body=MLIR.IR.Region())
+		func2 = MLIR.Dialects.func.func_(; sym_name="main_tmp2", function_type=MLIR.IR.FunctionType(in_tys, out_tys), body=MLIR.IR.Region())
 		MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
 		push!(modbody, func2)
@@ -717,8 +737,40 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
 				client = XLA.default_backend[]
 			end
 		end
+		
+		XLA.RunPassPipeline("inline{default-pipeline=canonicalize max-iterations=4},canonicalize,cse,enzyme-hlo-unroll,canonicalize,cse,enzyme-hlo-opt{passses=24575},cse", mod)
 
-		return generate_jlfunc(concrete_result, client, mod, N, linear_args, linear_results, preserved_args)
+		preserved_args = Tuple{TracedRArray, Int}[]
+        results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
+        nresults = MLIR.IR.Value[]
+		linear_results2 = TracedRArray[]
+        for (i, op) in enumerate(results)
+            if !MLIR.IR.is_block_arg(op)
+                push!(nresults, op)
+                push!(linear_results2, linear_results[i])
+                continue
+            end
+            push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
+        end
+        MLIR.API.mlirOperationDestroy(ret.operation)
+        ret.operation = MLIR.API.MlirOperation(C_NULL)
+		MLIR.IR.block!(fnbody) do
+			MLIR.Dialects.func.return_(nresults)
+        end
+
+        out_tys2 = [MLIR.IR.type(a) for a in nresults]
+
+        func3 = MLIR.Dialects.func.func_(; sym_name="main", function_type=MLIR.IR.FunctionType(in_tys, out_tys2), body=MLIR.IR.Region())
+		MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(func2, 1))
+
+		push!(modbody, func3)
+		
+        MLIR.API.mlirOperationDestroy(func2.operation)
+        func2.operation = MLIR.API.MlirOperation(C_NULL)
+        
+        # println(string(mod))
+
+        return generate_jlfunc(concrete_result, client, mod, N, linear_args, linear_results2, preserved_args)
 	end
 end
 
