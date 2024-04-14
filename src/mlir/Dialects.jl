@@ -3,6 +3,8 @@ module Dialects
 import ..IR: Attribute, NamedAttribute, context
 import ..API
 
+using Reactant_jll
+
 namedattribute(name, val) = namedattribute(name, Attribute(val))
 namedattribute(name, val::Attribute) = NamedAttribute(name, val)
 function namedattribute(name, val::NamedAttribute)
@@ -12,7 +14,7 @@ end
 
 operandsegmentsizes(segments) = namedattribute("operand_segment_sizes", Attribute(Int32.(segments)))
 
-for path in readdir(joinpath(@__DIR__, "../../deps/ReactantExtra/bazel-bin"); join=true)
+for path in readdir(Reactant_jll.artifact_dir; join=true)
     if endswith("inc.jl")(path)
         include(path)
     end
