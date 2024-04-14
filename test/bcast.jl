@@ -10,7 +10,7 @@ end
 
 
 mutable struct Data
-    v::(Reactant.TracedRArray{Float64, S,2} where S)
+    v::(Reactant.TracedRArray{Float64, S,1} where S)
 end
 @noinline function tmp(a, b, d)
     @show d
@@ -34,7 +34,7 @@ function test()
         mod = MLIR.IR.Module(MLIR.IR.Location())
         modbody = MLIR.IR.body(mod)
 
-        in_tys = [MLIR.IR.TensorType([2,2], MLIR.IR.Type(Float64))]
+        in_tys = [MLIR.IR.TensorType([4,], MLIR.IR.Type(Float64))]
             
         func = MLIR.Dialects.func.func_(; sym_name="main_tmp", function_type=MLIR.IR.FunctionType(in_tys, []), body=MLIR.IR.Region())
 
@@ -45,9 +45,9 @@ function test()
         
         GC.@preserve mod func fnbody begin 
             MLIR.IR.block!(fnbody) do
-                a = ones(2,2)
-                b = ones(2,2)
-                d = Data(Reactant.TracedRArray{Float64, (2,2),2}((),  MLIR.IR.argument(fnbody, 1)))
+                a = ones(4)
+                b = ones(4)
+                d = Data(Reactant.TracedRArray{Float64, (4,),1}((),  MLIR.IR.argument(fnbody, 1)))
 
                 tmp(a, b, d)
             end
