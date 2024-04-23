@@ -37,7 +37,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
     compile_flags = [
     ],
-    compiler = "gcc",
+    compiler = "clang",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     cpu = "k8",
@@ -50,6 +50,8 @@ cc_toolchain_config(
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
     link_flags = [
+        "-fuse-ld=lld",
+        "--ld-path=/opt/x86_64-linux-musl/bin/ld.lld",
     ],
     link_libs = [
         "-lstdc++",
@@ -68,10 +70,10 @@ cc_toolchain_config(
     target_libc = "",
     target_system_name = "x86_64-unknown-linux-gnu",
     tool_paths = {
-        "gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-gcc",
-        "ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld",
+        "gcc": "/opt/x86_64-linux-musl/bin/clang",
+        "ld": "/opt/x86_64-linux-musl/bin/ld.lld",
         "ar": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ar",
-        "cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-g++",
+        "cpp": "/opt/x86_64-linux-musl/bin/clang++",
         "llvm-cov": "/usr/lib/llvm-17/bin/llvm-cov",
         "nm": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-nm",
         "objdump": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-objdump",
