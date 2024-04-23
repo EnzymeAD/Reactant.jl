@@ -42,10 +42,11 @@ cc_toolchain_config(
     coverage_link_flags = ["--coverage"],
     cpu = "k8",
     cxx_builtin_include_directories = [
-        "/opt/x86_64-linux-musl/bin/../lib/gcc/x86_64-linux-musl/10.2.0/../../../../x86_64-linux-musl/include",
-        "/opt/x86_64-linux-musl/bin/../lib/gcc/x86_64-linux-musl/10.2.0/include",
-        "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root/usr/include",
-        "/opt/x86_64-linux-musl/lib/gcc/x86_64-linux-musl/12.1.0/include"
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include",
+        "/opt/x86_64-linux-musl/lib/gcc/x86_64-linux-musl/10.2.0/include",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/sys-root/usr/include",
+        "/opt/x86_64-linux-musl/lib/gcc/x86_64-linux-musl/12.1.0/include",
+        "/opt/x86_64-linux-musl/include",
     ],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
