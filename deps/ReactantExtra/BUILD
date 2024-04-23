@@ -7,6 +7,16 @@ package(
     default_visibility = ["//:__subpackages__"],
 )
 
+cc_toolchain_suite(
+    name = "ygg_cross_compile_toolchain_suite",
+    toolchains = {
+        "k8": ":ygg_x86_toolchain",
+        "darwin": ":ygg_x86_toolchain",
+    },
+)
+
+filegroup(name = "empty")
+
 cc_toolchain(
     name = "ygg_x86_toolchain",
     all_files = ":empty",
@@ -26,16 +36,6 @@ cc_toolchain_config(
     abi_version = "local",
     builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
     compile_flags = [
-        "--target=x86_64-unknown-linux-gnu",
-        "-fstack-protector",
-        "-Wall",
-        "-Wthread-safety",
-        "-Wself-assign",
-        "-Wunused-but-set-parameter",
-        "-Wno-free-nonheap-object",
-        "-fcolor-diagnostics",
-        "-fno-omit-frame-pointer",
-        "-mavx",
     ],
     compiler = "gcc",
     coverage_compile_flags = ["--coverage"],
@@ -44,7 +44,8 @@ cc_toolchain_config(
     cxx_builtin_include_directories = [
         "/opt/x86_64-linux-musl/bin/../lib/gcc/x86_64-linux-musl/10.2.0/../../../../x86_64-linux-musl/include",
         "/opt/x86_64-linux-musl/bin/../lib/gcc/x86_64-linux-musl/10.2.0/include",
-        "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root/usr/include"
+        "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root/usr/include",
+        "/opt/x86_64-linux-musl/lib/gcc/x86_64-linux-musl/12.1.0/include"
     ],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
