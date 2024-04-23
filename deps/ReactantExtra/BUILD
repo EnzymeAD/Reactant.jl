@@ -7,6 +7,86 @@ package(
     default_visibility = ["//:__subpackages__"],
 )
 
+cc_toolchain(
+    name = "ygg_x86_toolchain",
+    all_files = ":empty",
+    compiler_files = ":empty",
+    dwp_files = ":empty",
+    linker_files = ":empty",
+    objcopy_files = ":empty",
+    strip_files = ":empty",
+    supports_param_files = 1,
+    toolchain_config = ":ygg_x86_toolchain_config",
+    toolchain_identifier = "ygg_x86_toolchain",
+)
+
+cc_toolchain_config(
+    name = "ygg_x86_toolchain_config",
+    abi_libc_version = "local",
+    abi_version = "local",
+    builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
+    compile_flags = [
+        "--target=x86_64-unknown-linux-gnu",
+        "-fstack-protector",
+        "-Wall",
+        "-Wthread-safety",
+        "-Wself-assign",
+        "-Wunused-but-set-parameter",
+        "-Wno-free-nonheap-object",
+        "-fcolor-diagnostics",
+        "-fno-omit-frame-pointer",
+        "-mavx",
+    ],
+    compiler = "gcc",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    cpu = "k8",
+    cxx_builtin_include_directories = [
+        "/opt/x86_64-linux-musl/bin/../lib/gcc/x86_64-linux-musl/10.2.0/../../../../x86_64-linux-musl/include",
+        "/opt/x86_64-linux-musl/bin/../lib/gcc/x86_64-linux-musl/10.2.0/include",
+        "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root/usr/include"
+    ],
+    dbg_compile_flags = ["-g"],
+    host_system_name = "linux",
+    link_flags = [
+    ],
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    supports_start_end_lib = True,
+    target_libc = "",
+    target_system_name = "x86_64-unknown-linux-gnu",
+    tool_paths = {
+        "gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-gcc",
+        "ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld",
+        "ar": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ar",
+        "cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-g++",
+        "llvm-cov": "/usr/lib/llvm-17/bin/llvm-cov",
+        "nm": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-nm",
+        "objdump": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-objdump",
+        "strip": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-strip",
+    },
+    toolchain_identifier = "ygg_x86_toolchain",
+    unfiltered_compile_flags = [
+        "-no-canonical-prefixes",
+        "-Wno-builtin-macro-redefined",
+        "-D__DATE__=\"redacted\"",
+        "-D__TIMESTAMP__=\"redacted\"",
+        "-D__TIME__=\"redacted\"",
+        "-Wno-unused-command-line-argument",
+        "-Wno-gnu-offsetof-extensions",
+    ],
+)
 
 cc_library(
     name = "ReactantExtraLib",
