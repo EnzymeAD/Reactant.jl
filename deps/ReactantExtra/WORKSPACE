@@ -1,6 +1,6 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-NSYNC_COMMIT = "323d8d9e9289a4016d975dd658e606fb2576a1ff"
+NSYNC_COMMIT = "600c6501514032fd4c36b78a147c881ab466bd15"
 NSYNC_SHA256 = ""
 http_archive(
     name = "nsync",
@@ -9,7 +9,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "dd83c7487360b4a7a1f621c16d3b389ca572f1ae"
+ENZYMEXLA_COMMIT = "7c72f45ecac0e15a8c053e0d1ec5291b42718323"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
