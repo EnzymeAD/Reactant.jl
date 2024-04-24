@@ -1,5 +1,14 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+NSYNC_COMMIT = "323d8d9e9289a4016d975dd658e606fb2576a1ff"
+NSYNC_SHA256 = ""
+http_archive(
+    name = "nsync",
+    sha256 = NSYNC_SHA256,
+    strip_prefix = "nsync-" + NSYNC_COMMIT,
+    urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
+)
+
 ENZYMEXLA_COMMIT = "dd83c7487360b4a7a1f621c16d3b389ca572f1ae"
 ENZYMEXLA_SHA256 = ""
 
@@ -9,16 +18,6 @@ http_archive(
     strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
-
-NSYNC_COMMIT = "96c7134d65482ddccdc2b1425a3a5a9084499a1b"
-NSYNC_SHA256 = ""
-http_archive(
-    name = "nsync",
-    sha256 = NSYNC_SHA256,
-    strip_prefix = "nsync-" + NSYNC_COMMIT,
-    urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
-)
-
 
 load("@enzyme_ad//:workspace.bzl", "JAX_COMMIT", "JAX_SHA256", "ENZYME_COMMIT", "ENZYME_SHA256", "PYRULES_COMMIT", "PYRULES_SHA256", "XLA_PATCHES")
 
