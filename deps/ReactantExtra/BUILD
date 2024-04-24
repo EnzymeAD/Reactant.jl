@@ -62,6 +62,7 @@ cc_toolchain_config(
         "-fuse-ld=lld",
         #"--ld-path=/opt/x86_64-linux-musl/bin/ld.lld",
         "--ld-path=/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
+        "-stdlib=libstdc++",
     ],
     link_libs = [
         "-lstdc++",
@@ -74,6 +75,7 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
+        "-stdlib=libstdc++"
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
@@ -83,7 +85,8 @@ cc_toolchain_config(
         #"gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-gcc",
         #"cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-g++",
         #"ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld",
-		"gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
+		"gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang",
+		"g++": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
 		"cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
 		"ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
         #"gcc": "/opt/x86_64-linux-musl/bin/clang",
