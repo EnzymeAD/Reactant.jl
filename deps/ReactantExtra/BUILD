@@ -220,8 +220,11 @@ cc_library(
     ],
 )
 
-cc_shared_library(
-    name = "ReactantExtra",
+# cc_shared_library(
+cc_binary(
+    name = "libReactantExtra.so",
+    linkshared = 1,     ## important
+    linkstatic = 1,     ## important
     deps = [":ReactantExtraLib",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
         "@llvm-project//mlir:CAPIIR",
