@@ -23,6 +23,12 @@ load("@enzyme_ad//:workspace.bzl", "JAX_COMMIT", "JAX_SHA256", "ENZYME_COMMIT", 
 
 XLA_PATCHES = XLA_PATCHES + [
 """
+sed -i.bak0 "s/@xla\\/\\/xla\\/tsl:linux_x86_64/@bazel_tools\\/\\/src\\/conditions:linux/g" xla/tsl/mkl/build_defs.bzl
+""",
+"""
+sed -i.bak0 "s/@xla\\/\\/xla\\/tsl:windows/@bazel_tools\\/\\/src\\/conditions:windows/g" xla/tsl/mkl/build_defs.bzl
+""",
+"""
 sed -i.bak0 "s/\\\"@onednn\\/\\/:mkl_dnn\\\"//g" xla/tsl/mkl/build_defs.bzl
 """,
 """

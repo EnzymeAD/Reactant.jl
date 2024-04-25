@@ -128,6 +128,22 @@ platform(
     ],
 )
 
+
+platform(
+    name = "darwin_x86_64_2",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:darwin_x86_64",
+    ],
+)
+platform(
+    name = "darwin_arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:darwin_arm64",
+    ],
+)
+
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
@@ -159,6 +175,7 @@ cc_library(
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation"
     ],
+    linkstatic = True,
     deps = [
                 "@enzyme//:EnzymeMLIR",
         "@llvm-project//mlir:AffineDialect",
