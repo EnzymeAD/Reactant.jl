@@ -110,6 +110,24 @@ cc_toolchain_config(
     ],
 )
 
+
+platform(
+    name = "darwin_x86_64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+
+platform(
+    name = "darwin_aarch64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
