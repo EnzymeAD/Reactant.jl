@@ -222,6 +222,9 @@ cc_binary(
         "@llvm-project//llvm:config",
         "@llvm-project//mlir:TableGen",
     ],
+    tags = [
+        "optional"
+    ],
 )
 
 gentbl_cc_library(
