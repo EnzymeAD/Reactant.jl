@@ -71,8 +71,8 @@ extern "C" PjRtClient* MakeGPUClient(int node_id, int num_nodes, int* allowed_de
     // options.allocator_config = 
     options.node_id = node_id;
     options.num_nodes = num_nodes;
-    options.allowed_devices = std::set<int>(allowed_devices, allowed_devices + num_allowed_devices);
-    options.platform_name = std::string(platform_name);
+    options.allowed_devices = allowed_devices ? std::set<int>(allowed_devices, allowed_devices + num_allowed_devices) : std::optional<std::set<int>>();
+    options.platform_name = platform_name ? std::string(platform_name) : std::optional<std::string>();
     // options.collectives = num_nodes;
     auto client = xla::ValueOrThrow(GetStreamExecutorGpuClient(options));
     return client.release();
@@ -202,15 +202,16 @@ extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirMod
     return exec.release();
 }
 
-extern "C" void FreeFuture(PjRtFuture<Status>* Future) {
+typedef PjRtFuture<> FutureType;
+extern "C" void FreeFuture(FutureType* Future) {
     delete Future;
 }
 
-extern "C" uint8_t FutureIsReady(PjRtFuture<Status>* Future) {
+extern "C" uint8_t FutureIsReady(FutureType* Future) {
     return Future->IsReady();
 }
 
-extern "C" void FutureAwait(PjRtFuture<Status>* Future) {
+extern "C" void FutureAwait(FutureType* Future) {
     Future->Await();
 }
 
@@ -234,7 +235,7 @@ extern "C" void RunPassPipeline(const char* pass_pipeline, MlirModule cmod) {
     }
 }
 
-extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBuffer** op_args, uint8_t* is_arg_donatable, int num_results, PjRtBuffer** op_results, uint8_t *futures, PjRtFuture<Status>** future_results) {
+extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBuffer** op_args, uint8_t* is_arg_donatable, int num_results, PjRtBuffer** op_results, uint8_t *futures, FutureType** future_results) {
     std::vector<std::vector<PjRtBuffer*>> argument_handles;
     argument_handles.emplace_back(op_args, op_args + num_args);
 
@@ -244,7 +245,7 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBu
         if (!is_arg_donatable[i])
             options.non_donatable_input_indices.insert((int)i);
     }
-    std::optional<std::vector<PjRtFuture<Status>>> returned_futures;
+    std::optional<std::vector<FutureType>> returned_futures;
     auto results = xla::ValueOrThrow(exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer*>>>(argument_handles), options, returned_futures));
 
     if (results.size() != num_results) {
@@ -255,7 +256,7 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBu
         *futures = true;
         assert(returned_futures->size() == num_results);
         for (size_t i=0; i<num_results; i++) {
-            future_results[i] = new PjRtFuture<Status>((*returned_futures)[i]);
+            future_results[i] = new FutureType((*returned_futures)[i]);
         }
     } else {
         *futures = false;
