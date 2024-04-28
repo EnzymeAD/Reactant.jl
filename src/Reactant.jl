@@ -2,6 +2,7 @@ module Reactant
 
 include("mlir/MLIR.jl")
 include("XLA.jl")
+include("utils.jl")
 
 abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType, N} end
 
@@ -113,6 +114,7 @@ using Enzyme
 	TracedTrack = 2
 	TracedToConcrete = 3
 	ArrayToConcrete = 4
+	TracedSetPath = 5
  end
 
 @inline is_concrete_tuple(x::T2) where T2 = (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
@@ -135,7 +137,7 @@ using Enzyme
 			@inline base_typec(TV::TT) where TT <: UnionAll = UnionAll(TV.var, base_typec(TV.body))
 			@inline base_typec(TV::TT) where TT <: DataType = ConcreteRArray{TV.parameters...}
 			return base_typec(T)
-		elseif mode == TracedTrack
+		elseif mode == TracedTrack || mode == TracedSetPath
 			return T
 		else
 			throw("Abstract RArray $T cannot be made concrete in mode $mode")
@@ -438,6 +440,13 @@ end
 	    end
 	    return prev
 	end
+	if mode == TracedSetPath
+	    if haskey(seen, prev)
+	        return seen[prev]
+	    end
+	    res = TracedRArray{ElType, Shape, N}((path,), prev.mlir_data)
+	    seen[prev] = res
+	end
 
 	if mode == TracedToConcrete
 	    if haskey(seen, prev)
@@ -643,82 +652,10 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
 	Base.append!(registry[], context=ctx)
 	@ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 	MLIR.IR.context!(ctx) do
-		seen_args = IdDict()
-		traced_args = ntuple(Val(N)) do i
-			Base.@_inline_meta
-			make_tracer(seen_args, args[i], ("args", i,), ConcreteToTraced, #=data=#nothing)
-		end
-
-		linear_args = TracedRArray[]
-		for (k, v) in seen_args
-			if !(v isa TracedRArray)
-				continue
-			end
-			push!(linear_args, v)
-		end
-
 		mod = MLIR.IR.Module(MLIR.IR.Location())
-		modbody = MLIR.IR.body(mod)
 
-        function transpose_ty(mlirty)
-            return MLIR.IR.TensorType([reverse(size(mlirty))...,], eltype(mlirty))
-        end
-        function transpose_val(val)
-            attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:length(size(MLIR.IR.type(val)))-1)...])
-            return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val, permutation=attr), 1)
-        end
-        in_tys = [transpose_ty(mlir_type(arg)) for arg in linear_args]
-		
-		func = MLIR.Dialects.func.func_(; sym_name="main_tmp", function_type=MLIR.IR.FunctionType(in_tys, []), body=MLIR.IR.Region())
-
-		fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
-		push!(MLIR.IR.region(func, 1), fnbody)
-
-		result = MLIR.IR.block!(fnbody) do
-            for (i, arg) in enumerate(linear_args)
-                raw_arg = MLIR.IR.argument(fnbody, i)
-                row_maj_arg = transpose_val(raw_arg)
-                arg.mlir_data = row_maj_arg
-            end
-
-			f(traced_args...)
-		end
-
-		seen_results = IdDict()
-
-		traced_result = make_tracer(seen_results, result, ("result",), TracedTrack, #=data=#nothing)
-
-		retraced_args = ntuple(Val(N)) do i
-			Base.@_inline_meta
-			make_tracer(seen_results, traced_args[i], ("resargs", i,), TracedTrack, #=data=#nothing)
-		end
-
-		linear_results = TracedRArray[]
-
-		for (k, v) in seen_results
-			if !(v isa TracedRArray)
-				continue
-			end
-
-			push!(linear_results, v)
-		end
-
-        out_tys = [transpose_ty(mlir_type(arg)) for arg in linear_results]
-
-		ret = MLIR.IR.block!(fnbody) do
-			vals = MLIR.IR.Value[]
-			for res in linear_results
-                col_maj = transpose_val(res.mlir_data)
-                push!(vals, col_maj)
-			end
-			@assert length(vals) == length(linear_results)
-			MLIR.Dialects.func.return_(vals)
-		end
-
-		func2 = MLIR.Dialects.func.func_(; sym_name="main_tmp2", function_type=MLIR.IR.FunctionType(in_tys, out_tys), body=MLIR.IR.Region())
-		MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
-
-		push!(modbody, func2)
+		fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys = make_mlir_fn(mod, f, args, (), "main", true)
+		@assert !fnwrapped
 
 		concrete_seen = IdDict()
 
@@ -763,7 +700,7 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
         func3 = MLIR.Dialects.func.func_(; sym_name="main", function_type=MLIR.IR.FunctionType(in_tys, out_tys2), body=MLIR.IR.Region())
 		MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(func2, 1))
 
-		push!(modbody, func3)
+		push!(MLIR.IR.body(mod), func3)
 		
         MLIR.API.mlirOperationDestroy(func2.operation)
         func2.operation = MLIR.API.MlirOperation(C_NULL)

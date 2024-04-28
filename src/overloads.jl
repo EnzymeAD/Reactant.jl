@@ -1,3 +1,179 @@
+
+using Cassette
+
+using Enzyme
+
+Cassette.@context TraceCtx;
+
+
+const enzyme_out = 0
+const enzyme_dup = 1
+const enzyme_const = 2
+const enzyme_dupnoneed = 3
+
+function get_argidx(x)
+    for path in result.paths
+        if length(path) == 0
+            continue
+        end
+        if path[1] == "args"
+            return path[2]::Int
+        end
+    end
+    throw(AssertionError("No path found"))
+end
+
+@inline act_from_type(x, reverse) = throw(AssertionError("Unhandled activity $(typeof(x))"))
+@inline act_from_type(::Enzyme.Const, reverse) = enzyme_const
+@inline act_from_type(::Enzyme.Duplicated, reverse) = reverse ? enzyme_out : enzyme_dup
+@inline act_from_type(::Enzyme.DuplicatedNoNeed, reverse) = reverse ? enzyme_out : enzyme_dupnoneed
+@inline act_from_type(::Enzyme.Active, reverse) = enzyme_out
+
+function push_val!(ad_inputs, x, path)
+    for p in path
+        x = getfield(x, p)
+    end
+    x = x.mlir_data
+    push!(ad_inputs, x)
+end
+
+function push_acts!(ad_inputs, x::Const, path, reverse)
+    push_val!(ad_inputs, x.val, path)
+end
+
+function push_acts!(ad_inputs, x::Active, path, reverse)
+    push_val!(ad_inputs, x.val, path)
+end
+
+function push_acts!(ad_inputs, x::Duplicated, path, reverse)
+    push_val!(ad_inputs, x.val, path)
+    if !reverse
+        push_val!(ad_inputs, x.dval, path)
+    end
+end
+
+function push_acts!(ad_inputs, x::DuplicatedNoNeed, path, reverse)
+    push_val!(ad_inputs, x.val, path)
+    if !reverse
+        push_val!(ad_inputs, x.dval, path)
+    end
+end
+
+function set_act!(inp, path, reverse, tostore; emptypath = false)
+    x = if inp isa Enzyme.Active
+        inp.val
+    else
+        inp.dval
+    end
+
+    for p in path
+        x = getfield(x, p)
+    end
+
+    if inp isa Enzyme.Active || !reverse
+        x.mlir_data = tostore
+    else
+        x.mlir_data = MLIR.IR.result(MLIR.Dialects.stablehlo.add(x.mlir_data, tostore), 1)
+    end
+
+    if emptypath
+        x.paths = ()
+    end
+end
+
+function Cassette.overdub(::TraceCtx, ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation, Nargs}) where {CMode <: Enzyme.Mode, FA, A <: Enzyme.Annotation, Nargs}
+    
+    reverse = CMode <: Enzyme.ReverseMode
+
+    primf = f.val
+    primargs = (v.val for v in args)
+
+    mod = MLIR.IR.parent_op(MLIR.IR.parent_op(MLIR.IR.block()))
+
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys = make_mlir_fn(mod, primf, primargs, (), string(f)*"_autodiff", false)
+
+    activity = Int32[]
+    ad_inps = MLIR.IR.Value[]
+
+    for a in linear_args
+        idx, path = get_argidx(a)
+        if idx == 1 && fnwrap
+            push!(activity, act_from_type(f, reverse))
+            push_acts!(ad_inputs, f, path[3:end], reverse)
+        else
+            if fnwrap
+                idx-=1
+            end
+            push!(activity, act_from_type(args[idx], reverse))
+            push_acts!(ad_inputs, args[idx], path[3:end], reverse)
+        end
+    end
+
+    outtys = MLIR.IR.Type[]
+    for (i, act) in enumerate(activity)
+        if act == enzyme_out || (reverse && (act == enzyme_dup || act == enzyme_dupnoneed))
+            push!(outtys, transpose_ty(mlir_type(MLIR.IR.operand(ret, i))))
+        end
+    end
+
+    res = (reverse ? MLIR.IR.enzyme.autodiff : MLIR.IR.enzyme.fwddiff)(ad_inps; outputs=outtys, fn=func2, activity=DenseArrayAttribute(activity))
+
+    residx = 1
+
+    restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
+    for a in linear_args
+
+        idx, path = get_argidx(a)
+        if idx == 1 && fnwrap
+            if act_from_type(f, reverse) != enzyme_out
+                continue
+            end
+            if f isa Enzyme.Active
+                @assert false
+                residx+=1
+                continue
+            end
+            set_act!(f, path[3:end], reverse, MLIR.IR.result(res, residx))
+        else
+            if fnwrap
+                idx-=1
+            end
+            if act_from_type(args[idx], reverse) != enzyme_out
+                continue
+            end
+            if args[idx] isa Enzyme.Active
+                set_act!(args[idx], path[3:end], #=reverse=#false, MLIR.IR.result(res, residx); emptypaths = true)
+                residx+=1
+                continue
+            end
+            set_act!(args[idx], path[3:end], reverse, MLIR.IR.result(res, residx))
+        end
+        residx += 1
+    end
+
+    if reverse
+        @inline needs_primal(::Enzyme.ReverseMode{ReturnPrimal}) where ReturnPrimal = ReturnPrimal
+        resv = if needs_primal
+            result
+        else
+            nothing
+        end
+        return ((restup...,), resv)
+    else
+        if A <: Const
+            return result
+        else
+            dres = copy(result)
+            throw(AssertionError("TODO implement forward mode handler"))
+            if A <: Duplicated
+                return ()
+            end
+        end
+    end
+end
+
+
+
 function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
     if !(rhs <: Number)
         if ElType != eltype(rhs)

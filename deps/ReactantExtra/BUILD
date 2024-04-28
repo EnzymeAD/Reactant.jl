@@ -12,6 +12,7 @@ cc_toolchain_suite(
     toolchains = {
         "k8": ":ygg_x86_toolchain",
         "darwin": ":ygg_x86_toolchain",
+        "darwin_arm64": ":ygg_x86_toolchain",
     },
 )
 
@@ -159,6 +160,7 @@ cc_library(
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation"
     ],
+    alwayslink = True,
     linkstatic = True,
     deps = [
                 "@enzyme//:EnzymeMLIR",

@@ -1,4 +1,5 @@
 deps/ReactantExtra/bazel-*
+deps/ReactantExtra/MODULE.bazel.lock
 *.swp
 *.swo
 external
