@@ -202,7 +202,8 @@ cc_library(
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
         "@stablehlo//:stablehlo_capi",
-        "@com_google_absl//absl/hash:hash"
+        "@com_google_absl//absl/hash:hash",
+        "@llvm-project//mlir:CAPIIRObjects",
     ],
 )
 
@@ -211,11 +212,7 @@ cc_binary(
     name = "libReactantExtra.so",
     linkshared = 1,     ## important
     linkstatic = 1,     ## important
-    deps = [":ReactantExtraLib",
-        "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
-        "@llvm-project//mlir:CAPIIR",
-        "@stablehlo//:stablehlo_capi",
-    ],
+    deps = [":ReactantExtraLib"],
 )
 
 cc_binary(
