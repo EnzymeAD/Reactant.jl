@@ -1,41 +1,51 @@
 using Reactant
-
+using Test
+using Enzyme
 
 fastmax(x::AbstractArray{T}) where T = reduce(max, x; dims=1, init = float(T)(-Inf))
 
-if true
 
-    @show fastmax(ones(2, 10)), size(fastmax(ones(2, 10)))
+@testset "Basic reduce max" begin
+    r_res = fastmax(ones(2, 10))
 
     a = Reactant.ConcreteRArray(ones(2, 10))
 
-    @show fastmax(a), size(fastmax(a))
+    c_res = fastmax(a)
+    @test c_res ≈ r_res
 
     f=Reactant.compile(fastmax, (a,))
     
-    @show f(a), size(f(a))
+    f_res = f(a)
+
+    @test f_res ≈ r_res
 end
 
-if true
-    function softmax!(x)
-        max_ = fastmax(x)
-        return x .- max_
-    end
+function softmax!(x)
+    max_ = fastmax(x)
+    return x .- max_
+end
+
+@testset "Basic softmax" begin
 
     in = ones(2, 10)
-    @show softmax!(in)
+    r_res = softmax!(in)
 
     in = Reactant.ConcreteRArray(ones(2, 10))
 
     f=Reactant.compile(softmax!, (in,))
-    @show f(in)
+    
+    f_res = f(in)
+    
+    @test f_res ≈ r_res
 end
 
 
+@testset "Basic cos" begin
+    c = Reactant.ConcreteRArray(ones(3,2))
+
+    f=Reactant.compile(cos, (c,))
+    r = f(c)
+    @test r ≈ cos.(ones(3,2))
+end
 
 
-c = Reactant.ConcreteRArray(ones(3,2))
-
-f=Reactant.compile(cos, (c,))
-
-@show f(c)

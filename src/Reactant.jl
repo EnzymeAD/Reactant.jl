@@ -628,7 +628,7 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
         )
     end
 	func = quote
-		function compiled_f($(args...))
+        ($(args...),) -> begin
             $exec_call
 			$(concretize...)
 			result = $concrete_result
@@ -636,7 +636,6 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 			return result
 		end
 	end
-    # @show func
 	return eval(func)
 end
 
@@ -654,7 +653,7 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
 	MLIR.IR.context!(ctx) do
 		mod = MLIR.IR.Module(MLIR.IR.Location())
 
-		fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys = make_mlir_fn(mod, f, args, (), "main", true)
+		fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(mod, f, args, (), "main", true)
 		@assert !fnwrapped
 
 		concrete_seen = IdDict()
@@ -689,6 +688,7 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
             end
             push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
         end
+        fnbody = MLIR.IR.block(ret)
         MLIR.API.mlirOperationDestroy(ret.operation)
         ret.operation = MLIR.API.MlirOperation(C_NULL)
 		MLIR.IR.block!(fnbody) do

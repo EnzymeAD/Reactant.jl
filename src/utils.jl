@@ -12,10 +12,11 @@ function apply(f, args...; kwargs)
 end
 
 function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
-    if size(typeof(f)) != 0
+    if sizeof(typeof(f)) != 0
         return (true, make_mlir_fn(mod, apply, (f, args...), kwargs, name, concretein)[2:end]...)
     end
 
+    N = length(args)
     seen_args = IdDict()
     traced_args = ntuple(Val(N)) do i
         Base.@_inline_meta
@@ -29,6 +30,8 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
         end
         push!(linear_args, v)
     end
+
+    in_tys = [transpose_ty(mlir_type(arg)) for arg in linear_args]
 
     func = MLIR.Dialects.func.func_(; sym_name=name*"_tmp", function_type=MLIR.IR.FunctionType(in_tys, []), body=MLIR.IR.Region())
 
@@ -82,5 +85,5 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
     modbody = MLIR.IR.body(mod)
     push!(modbody, func2)
 
-    return false, func2, traced_result, result, seen_args, ret, linear_args, in_tys
+    return false, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results
 end

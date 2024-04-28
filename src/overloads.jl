@@ -90,7 +90,7 @@ function Cassette.overdub(::TraceCtx, ::CMode, f::FA, ::Type{A}, args::Vararg{En
 
     mod = MLIR.IR.parent_op(MLIR.IR.parent_op(MLIR.IR.block()))
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys = make_mlir_fn(mod, primf, primargs, (), string(f)*"_autodiff", false)
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(mod, primf, primargs, (), string(f)*"_autodiff", false)
 
     activity = Int32[]
     ad_inps = MLIR.IR.Value[]

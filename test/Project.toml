@@ -1,4 +1,6 @@
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
