@@ -100,7 +100,8 @@ function Base.promote_rule(A::Type{T}, B::Type{TracedRArray{S, Shape, N}}) where
 end
 
 function Base.show(io::IO, X::TracedRArray{ElType, Shape, N}) where {ElType, Shape, N}
-	print(io, "TracedRArray{", ElType, ",", Shape, ",", N, "N}(", X.paths, ", ", X.mlir_data, ")")
+    print(io, "TracedRArray{", ElType, ",", Shape, ",", N, "N}(", X.paths, ", ")
+    print(io, X.mlir_data, ")")
 end
 
 include("overloads.jl")
@@ -636,6 +637,8 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 			return result
 		end
 	end
+    @show func
+    flush(stdout)
 	return eval(func)
 end
 

@@ -45,7 +45,7 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
             arg.mlir_data = row_maj_arg
         end
 
-        f(traced_args...; kwargs...)
+        Cassette.overdub(TraceCtx(), f, traced_args...; kwargs...)
     end
 
     seen_results = IdDict()

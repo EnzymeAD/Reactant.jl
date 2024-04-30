@@ -116,7 +116,10 @@ function Cassette.overdub(::TraceCtx, ::CMode, f::FA, ::Type{A}, args::Vararg{En
         end
     end
 
+    @show func2
     res = (reverse ? MLIR.IR.enzyme.autodiff : MLIR.IR.enzyme.fwddiff)(ad_inps; outputs=outtys, fn=func2, activity=DenseArrayAttribute(activity))
+
+    @show res
 
     residx = 1
 
@@ -227,14 +230,16 @@ function Base.:*(lhs::TracedRArray{ElType,Shape,2}, rhs::TracedRArray{ElType,Sha
     return TracedRArray{ElType,(Base.size(lhsty)[1], Base.size(rhsty)[2]),2}((),  res)
 end
 
+Cassette.overdub(context::TraceCtx, ::typeof(Base.:*), args...) = Base.*(args...)
+
 for (jlop, hloop) in ((:(Base.:-), :negate), (:(Base.sin), :sine), (:(Base.cos), :cosine), (:(Base.tanh), :tanh), (:(Base.FastMath.tanh_fast), :tanh), (:(Base.exp), :exponential), (:(Base.FastMath.exp_fast), :exponential), (:(Base.log), :log), (:(Base.sqrt), :sqrt))
     @eval begin
         function $jlop(lhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
             return TracedRArray{ElType,Shape,N}((), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1))
         end
+        Cassette.overdub(context::TraceCtx, ::typeof($jlop), args...) = $jlop(args...)
     end
 end
-
 
 for (jlop, hloop, RT) in ((:(Base.min), :minimum, :ElType),(:(Base.max), :maximum, :ElType), (:(Base.:+), :add, :ElType), (:(Base.add_sum), :add, :ElType), (:(Base.:-), :subtract, :ElType), (:(Base.:*), :multiply, :ElType), (:(Base.:/), :divide, :ElType))
     @eval begin
@@ -266,11 +271,12 @@ for (jlop, hloop) in ((:(Base.:-), :negate), (:(Base.sin), :sine), (:(Base.cos),
     end
 end
 
-
+Cassette.overdub(context::TraceCtx, ::typeof(elem_apply), args...) = elem_apply(args...)
 
 @inline function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     reshape(A, Base._reshape_uncolon(A, dims))
 end
+Cassette.overdub(context::TraceCtx, f::typeof(Base.reshape), args...) = f(args...)
 
 @inline function Base.reshape(A::ConcreteRArray{T, Shape, N}, dims::NTuple{NT, Int}) where {T, Shape, N, NT}
     prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
@@ -285,7 +291,7 @@ end
 end
 
 Base.copy(A::TracedRArray{T, Shape, N}) where {T, Shape, N} = TracedRArray((), A.mlir_data)
-
+Cassette.overdub(context::TraceCtx, f::typeof(Base.copy), args...) = f(args...)
 
 @inline function Base.permutedims(A::TracedRArray{T, Shape, N}, perm) where {T, Shape, N}
     TracedArray{T, tuple(Shape[i] for i in perm), N}(
@@ -293,6 +299,7 @@ Base.copy(A::TracedRArray{T, Shape, N}) where {T, Shape, N} = TracedRArray((), A
         MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(A.mlir_data, DenseArrayAttribute([Int64(i-1) for i in perm])), 1)
     )
 end
+Cassette.overdub(context::TraceCtx, f::typeof(Base.permutedims), args...) = f(args...)
 
 @inline function Base.reshape(A::TracedRArray{T, Shape, N}, dims::NTuple{NT, Int}) where {T, Shape, N, NT}
     prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
@@ -328,6 +335,7 @@ BroadcastStyle(::Type{T}) where {T<:TracedRArray} = AbstractReactantArrayStyle{n
 
 
 Base.similar(x::TracedRArray{T, Shape, N}, ::Type{T2}) where {T, Shape, N, T2} = TracedRArray{T2, Shape, N}((), nothing)
+Cassette.overdub(context::TraceCtx, f::typeof(Base.similar), args...) = f(args...)
 
 @inline function Base.similar(bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims) where {T,N}
     @assert N isa Int
@@ -339,6 +347,7 @@ function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
     dest = copyto!(similar(bc, ElType), bc)
     return dest[CartesianIndex()]  # 0D broadcast needs to unwrap results
 end
+Cassette.overdub(context::TraceCtx, f::typeof(Broadcast.copy), args...) = f(args...)
 
 @inline Base.eltype(b::Broadcast.Extruded{T}) where T = eltype(T)
 
@@ -373,6 +382,7 @@ end
 @inline function Base.materialize!(::Style, dest, bc::Broadcasted) where {Style<:AbstractReactantArrayStyle}
     return _copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
 end
+Cassette.overdub(context::TraceCtx, f::typeof(Base.materialize!), args...) = f(args...)
 
 @inline Base.copyto!(dest::TracedRArray, bc::Broadcasted{Nothing}) =
     _copyto!(dest, bc) # Keep it for ArrayConflict
@@ -394,6 +404,7 @@ function Base.fill!(A::TracedRArray{T, Shape, N}, x) where {T, Shape, N}
     A.mlir_data = bcast.mlir_data
     A
 end
+Cassette.overdub(context::TraceCtx, f::typeof(Base.fill!), args...) = f(args...)
 
 @inline function broadcast_to_size(arg::T, rsize) where T <: Number
     TT = MLIR.IR.TensorType([Int64(s) for s in rsize], MLIR.IR.Type(typeof(arg)))
@@ -439,6 +450,8 @@ end
     dest.mlir_data = res.mlir_data
     return dest
 end
+
+Cassette.overdub(context::Cassette.Context, ::Core.kwftype(typeof(Base.mapreduce)), kwargs::Any, ::typeof(Base.mapreduce), args...) = Base.mapreduce(args...; kwargs...)
 
 function Base.mapreduce(f, op, A::TracedRArray{ElType, Shape, N}; dims=:, init=nothing) where {ElType, Shape, N}
     if dims isa Int
@@ -491,6 +504,7 @@ function Base.mapreduce(f, op, A::TracedRArray{ElType, Shape, N}; dims=:, init=n
     else
         red = TracedRArray{ElType, (outdims...,), length(outdims)}((), red)
     end
+    @show red
     return red
 end
 
@@ -499,3 +513,4 @@ function Base.mapreducedim!(f, op, R::TracedRArray, A::Base.AbstractArrayOrBroad
     R.mlir_data = elem_apply(op, R, tmp).mlir_data
     return R
 end
+Cassette.overdub(context::TraceCtx, f::typeof(Base.mapreducedim!), args...) = f(args...)
