@@ -36,6 +36,8 @@
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 
+#include "absl/log/initialize.h"
+
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
 #include "xla/mlir/utils/type_util.h"
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
@@ -52,6 +54,16 @@ using namespace xla;
 
 // int google::protobuf::io::CodedInputStream::default_recursion_limit_ = 100;
 // int xla::_LayoutProto_default_instance_;
+
+extern "C" void InitializeLogs() {
+    absl::InitializeLog();
+}
+
+extern "C"
+MLIR_CAPI_EXPORTED MlirAttribute enzymeActivityAttrGet(
+    MlirContext ctx, int32_t val) {
+    return wrap(mlir::enzyme::ActivityAttr::get(unwrap(ctx), (mlir::enzyme::Activity)val));
+}
 
 extern "C" PjRtClient* MakeCPUClient(uint8_t asynchronous, int node_id, int num_nodes) {
     CpuClientOptions options;
@@ -245,13 +257,16 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBu
         if (!is_arg_donatable[i])
             options.non_donatable_input_indices.insert((int)i);
     }
+    options.untuple_result = true;
     std::optional<std::vector<FutureType>> returned_futures;
     auto results = xla::ValueOrThrow(exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer*>>>(argument_handles), options, returned_futures));
 
-    if (results.size() != num_results) {
+    assert(results.size() == 1);
+
+    if (results[0].size() != num_results) {
         llvm::errs() <<" results.size()=" << results.size() << " num_results=" << num_results << "\n";
     }
-    assert(results.size() == num_results);
+    assert(results[0].size() == num_results);
     if (returned_futures) {
         *futures = true;
         assert(returned_futures->size() == num_results);
@@ -263,8 +278,7 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBu
     }
 
     for (size_t i=0; i<num_results; i++) {
-        assert(results[i].size() == 1);
-        op_results[i] = results[i][0].release();
+        op_results[i] = results[0][i].release();
     }
 }
 

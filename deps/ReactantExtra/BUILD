@@ -204,6 +204,7 @@ cc_library(
         "@stablehlo//:stablehlo_capi_objects",
         "@stablehlo//:chlo_capi_objects",
         "@com_google_absl//absl/hash:hash",
+        "@com_google_absl//absl/log:initialize",
         "@llvm-project//mlir:CAPIIRObjects",
     ],
 )

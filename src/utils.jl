@@ -33,6 +33,11 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
 
     in_tys = [transpose_ty(mlir_type(arg)) for arg in linear_args]
 
+    sym_visibility = nothing
+    if !concretein
+        sym_visibility = MLIR.IR.Attribute("private")
+    end
+    
     func = MLIR.Dialects.func.func_(; sym_name=name*"_tmp", function_type=MLIR.IR.FunctionType(in_tys, []), body=MLIR.IR.Region())
 
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
@@ -79,11 +84,14 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
         MLIR.Dialects.func.return_(vals)
     end
 
-    func2 = MLIR.Dialects.func.func_(; sym_name=name, function_type=MLIR.IR.FunctionType(in_tys, out_tys), body=MLIR.IR.Region())
+    func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
+        MLIR.Dialects.func.func_(; sym_name=name, function_type=MLIR.IR.FunctionType(in_tys, out_tys), body=MLIR.IR.Region(), sym_visibility)
+    end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
-    modbody = MLIR.IR.body(mod)
-    push!(modbody, func2)
-
+    if MLIR.IR._has_block() 
+        MLIR.API.mlirOperationDestroy(func.operation)
+        func.operation = MLIR.API.MlirOperation(C_NULL)
+    end
     return false, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results
 end

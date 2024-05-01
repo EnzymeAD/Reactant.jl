@@ -10,24 +10,77 @@ const enzyme_out = 0
 const enzyme_dup = 1
 const enzyme_const = 2
 const enzyme_dupnoneed = 3
+const enzyme_outnoneed = 4
+const enzyme_constnoneed = 5
 
 function get_argidx(x)
-    for path in result.paths
+    for path in x.paths
         if length(path) == 0
             continue
         end
         if path[1] == "args"
-            return path[2]::Int
+            return path[2]::Int, path
         end
     end
     throw(AssertionError("No path found"))
 end
+function get_residx(x)
+    for path in x.paths
+        if length(path) == 0
+            continue
+        end
+        if path[1] == "result"
+            return path
+        end
+    end
+    throw(AssertionError("No path found $x"))
+end
 
-@inline act_from_type(x, reverse) = throw(AssertionError("Unhandled activity $(typeof(x))"))
-@inline act_from_type(::Enzyme.Const, reverse) = enzyme_const
-@inline act_from_type(::Enzyme.Duplicated, reverse) = reverse ? enzyme_out : enzyme_dup
-@inline act_from_type(::Enzyme.DuplicatedNoNeed, reverse) = reverse ? enzyme_out : enzyme_dupnoneed
-@inline act_from_type(::Enzyme.Active, reverse) = enzyme_out
+function has_residx(x)
+    for path in x.paths
+        if length(path) == 0
+            continue
+        end
+        if path[1] == "result"
+            return true
+        end
+    end
+    return false
+end
+
+
+@inline act_from_type(x, reverse, needs_primal=true) = throw(AssertionError("Unhandled activity $(typeof(x))"))
+@inline act_from_type(::Enzyme.Const, reverse, needs_primal=true) = act_from_type(Enzyme.Const, reverse, needs_primal)
+@inline act_from_type(::Enzyme.Duplicated, reverse, needs_primal=true) = act_from_type(Enzyme.Duplicated, reverse, needs_primal)
+@inline act_from_type(::Enzyme.DuplicatedNoNeed, reverse, needs_primal=true) = reverse ? enzyme_out : enzyme_dupnoneed
+@inline act_from_type(::Enzyme.Active, reverse, needs_primal=true) = act_from_tuple(Enzyme.Active, reverse, needs_primal)
+
+@inline act_from_type(::Type{<:Enzyme.Const}, reverse, needs_primal) = 
+    if needs_primal
+        enzyme_const
+    else
+        enzyme_constnoneed
+    end
+@inline act_from_type(::Type{<:Enzyme.Duplicated}, reverse, needs_primal) = 
+    if reverse
+        if needs_primal
+            enzyme_out
+        else
+            enzyme_outnoneed
+        end
+    else
+        if needs_primal
+            enzyme_dup
+        else
+            enzyme_dupnoneed
+        end
+    end
+@inline act_from_type(::Type{<:Enzyme.Active}, reverse, needs_primal) =
+    if needs_primal
+        enzyme_out
+    else
+        enzyme_outnoneed
+    end
 
 function push_val!(ad_inputs, x, path)
     for p in path
@@ -70,30 +123,42 @@ function set_act!(inp, path, reverse, tostore; emptypath = false)
         x = getfield(x, p)
     end
 
-    if inp isa Enzyme.Active || !reverse
+    #if inp isa Enzyme.Active || !reverse
         x.mlir_data = tostore
-    else
-        x.mlir_data = MLIR.IR.result(MLIR.Dialects.stablehlo.add(x.mlir_data, tostore), 1)
-    end
+    #else
+    #    x.mlir_data = MLIR.IR.result(MLIR.Dialects.stablehlo.add(x.mlir_data, tostore), 1)
+    #end
 
     if emptypath
         x.paths = ()
     end
 end
 
-function Cassette.overdub(::TraceCtx, ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation, Nargs}) where {CMode <: Enzyme.Mode, FA, A <: Enzyme.Annotation, Nargs}
+function set!(x, path, tostore; emptypath = false)
+    for p in path
+        x = getfield(x, p)
+    end
+
+    x.mlir_data = tostore
+
+    if emptypath
+        x.paths = ()
+    end
+end
+
+function Cassette.overdub(::TraceCtx, ::typeof(Enzyme.autodiff), ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation, Nargs}) where {CMode <: Enzyme.Mode, FA<:Enzyme.Annotation, A <: Enzyme.Annotation, Nargs}
     
     reverse = CMode <: Enzyme.ReverseMode
 
     primf = f.val
-    primargs = (v.val for v in args)
+    primargs = ((v.val for v in args)...,)
 
-    mod = MLIR.IR.parent_op(MLIR.IR.parent_op(MLIR.IR.block()))
+    mod = MLIR.IR.mmodule()
 
     fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(mod, primf, primargs, (), string(f)*"_autodiff", false)
 
     activity = Int32[]
-    ad_inps = MLIR.IR.Value[]
+    ad_inputs = MLIR.IR.Value[]
 
     for a in linear_args
         idx, path = get_argidx(a)
@@ -110,18 +175,90 @@ function Cassette.overdub(::TraceCtx, ::CMode, f::FA, ::Type{A}, args::Vararg{En
     end
 
     outtys = MLIR.IR.Type[]
+    @inline needs_primal(::Type{<:Enzyme.ReverseMode{ReturnPrimal}}) where ReturnPrimal = ReturnPrimal
+    for a in linear_results
+        if has_residx(a)
+            if needs_primal(CMode)
+                push!(outtys, transpose_ty(MLIR.IR.type(a.mlir_data)))
+            end
+        else
+            push!(outtys, transpose_ty(MLIR.IR.type(a.mlir_data)))
+        end
+    end
     for (i, act) in enumerate(activity)
         if act == enzyme_out || (reverse && (act == enzyme_dup || act == enzyme_dupnoneed))
-            push!(outtys, transpose_ty(mlir_type(MLIR.IR.operand(ret, i))))
+            push!(outtys, in_tys[i])# transpose_ty(MLIR.IR.type(MLIR.IR.operand(ret, i))))
+        end
+    end
+   
+    ret_activity = Int32[]
+    for a in linear_results
+        if has_residx(a)
+            act = act_from_type(A, reverse, needs_primal(CMode))
+            push!(ret_activity, act)
+            if act == enzyme_out || act == enzyme_outnoneed
+                attr = fill(MLIR.IR.Attribute(eltype(a)(1)), mlir_type(a))
+                cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(value=attr), 1)
+                push!(ad_inputs, cst)
+            end
+        else
+            idx, path = get_argidx(a)
+            if idx == 1 && fnwrap
+                act = act_from_type(f, reverse, true)
+                push!(ret_activity, act)
+                if act != enzyme_out && act != enzyme_outnoneed
+                    continue
+                end
+                push_val!(ad_inputs, f.dval, path[3:end])
+            else
+                if fnwrap
+                    idx-=1
+                end
+                act = act_from_type(args[idx], reverse, true)
+                push!(ret_activity, act)
+                if act != enzyme_out && act != enzyme_outnoneed
+                    continue
+                end
+                push_val!(ad_inputs, args[idx].dval, path[3:end])
+            end
         end
     end
 
-    @show func2
-    res = (reverse ? MLIR.IR.enzyme.autodiff : MLIR.IR.enzyme.fwddiff)(ad_inps; outputs=outtys, fn=func2, activity=DenseArrayAttribute(activity))
+    function get_attribute_by_name(operation, name)
+        MLIR.IR.Attribute(MLIR.API.mlirOperationGetAttributeByName(operation, name))
+    end
 
-    @show res
+    function act_attr(val)
+        val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(MLIR.IR.context()::MLIR.API.MlirContext, val::Int32)::MLIR.API.MlirAttribute
+        MLIR.IR.Attribute(val)
+    end
+    fname = get_attribute_by_name(func2, "sym_name")
+    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+    res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)([transpose_val(v) for v in ad_inputs]; outputs=outtys, fn=fname, activity=MLIR.IR.Attribute([act_attr(a) for a in activity]), ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]))
 
     residx = 1
+
+    for a in linear_results
+        if has_residx(a)
+            if needs_primal(CMode)
+                path = get_residx(a)
+                set!(result, path[2:end], transpose_val(MLIR.IR.result(res, residx)))
+                residx+=1
+            end                    
+        else
+            idx, path = get_argidx(a)
+            if idx == 1 && fnwrap
+                set!(f.val, path[3:end], transpose_val(MLIR.IR.result(res, residx)))
+                residx+=1
+            else
+                if fnwrap
+                    idx-=1
+                end
+                set!(args[idx].val, path[3:end], transpose_val(MLIR.IR.result(res, residx)))
+                residx+=1
+            end
+        end
+    end
 
     restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
     for a in linear_args
@@ -136,7 +273,7 @@ function Cassette.overdub(::TraceCtx, ::CMode, f::FA, ::Type{A}, args::Vararg{En
                 residx+=1
                 continue
             end
-            set_act!(f, path[3:end], reverse, MLIR.IR.result(res, residx))
+            set_act!(f, path[3:end], reverse, transpose_val(MLIR.IR.result(res, residx)))
         else
             if fnwrap
                 idx-=1
@@ -145,18 +282,17 @@ function Cassette.overdub(::TraceCtx, ::CMode, f::FA, ::Type{A}, args::Vararg{En
                 continue
             end
             if args[idx] isa Enzyme.Active
-                set_act!(args[idx], path[3:end], #=reverse=#false, MLIR.IR.result(res, residx); emptypaths = true)
+                set_act!(args[idx], path[3:end], #=reverse=#false, transpose_val(MLIR.IR.result(res, residx)); emptypaths = true)
                 residx+=1
                 continue
             end
-            set_act!(args[idx], path[3:end], reverse, MLIR.IR.result(res, residx))
+            set_act!(args[idx], path[3:end], reverse, transpose_val(MLIR.IR.result(res, residx)))
         end
         residx += 1
     end
 
     if reverse
-        @inline needs_primal(::Enzyme.ReverseMode{ReturnPrimal}) where ReturnPrimal = ReturnPrimal
-        resv = if needs_primal
+        resv = if needs_primal(CMode)
             result
         else
             nothing
@@ -195,10 +331,10 @@ function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,
     end
     if isa(rhs, Number)
         attr = fill(MLIR.IR.Attribute(ElType(rhs)), mlir_type(lhs))
-        return TracedRArray{ElType,Shape,N}(nothing, MLIR.IR.stablehlo.constant(attr))
+        return TracedRArray{ElType,Shape,N}(nothing, MLIR.Dialects.stablehlo.constant(attr))
     end
     attr = MLIR.IR.DenseElementsAttribute(mlir_type(lhs), rhs)
-    return TracedRArray{ElType,Shape,N}(nothing, MLIR.IR.stablehlo.constant(attr))
+    return TracedRArray{ElType,Shape,N}(nothing, MLIR.Dialects.stablehlo.constant(attr))
 end
 
 for (jlop, hloop, RT) in ((:(Base.min), :minimum, :ElType),(:(Base.max), :maximum, :ElType), (:(Base.:+), :add, :ElType), (:(Base.:-), :subtract, :ElType))
@@ -219,6 +355,8 @@ for (jlop, hloop, RT) in ((:(Base.min), :minimum, :ElType),(:(Base.max), :maximu
     end
 end
 
+Cassette.overdub(context::TraceCtx, f::typeof(Enzyme.make_zero), args...) = f(args...)
+
 function Base.:*(lhs::TracedRArray{ElType,Shape,2}, rhs::TracedRArray{ElType,Shape2,2}) where {ElType,Shape, Shape2}
     lhsty = MLIR.IR.type(lhs.mlir_data)
     rhsty = MLIR.IR.type(rhs.mlir_data)
@@ -230,14 +368,14 @@ function Base.:*(lhs::TracedRArray{ElType,Shape,2}, rhs::TracedRArray{ElType,Sha
     return TracedRArray{ElType,(Base.size(lhsty)[1], Base.size(rhsty)[2]),2}((),  res)
 end
 
-Cassette.overdub(context::TraceCtx, ::typeof(Base.:*), args...) = Base.*(args...)
+Cassette.overdub(context::TraceCtx, f::typeof(Base.:*), args...) = f(args...)
 
 for (jlop, hloop) in ((:(Base.:-), :negate), (:(Base.sin), :sine), (:(Base.cos), :cosine), (:(Base.tanh), :tanh), (:(Base.FastMath.tanh_fast), :tanh), (:(Base.exp), :exponential), (:(Base.FastMath.exp_fast), :exponential), (:(Base.log), :log), (:(Base.sqrt), :sqrt))
     @eval begin
         function $jlop(lhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
             return TracedRArray{ElType,Shape,N}((), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1))
         end
-        Cassette.overdub(context::TraceCtx, ::typeof($jlop), args...) = $jlop(args...)
+        Cassette.overdub(context::TraceCtx, f::typeof($jlop), args...) = f(args...)
     end
 end
 
@@ -271,7 +409,7 @@ for (jlop, hloop) in ((:(Base.:-), :negate), (:(Base.sin), :sine), (:(Base.cos),
     end
 end
 
-Cassette.overdub(context::TraceCtx, ::typeof(elem_apply), args...) = elem_apply(args...)
+Cassette.overdub(context::TraceCtx, f::typeof(elem_apply), args...) = f(args...)
 
 @inline function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     reshape(A, Base._reshape_uncolon(A, dims))
@@ -347,7 +485,6 @@ function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
     dest = copyto!(similar(bc, ElType), bc)
     return dest[CartesianIndex()]  # 0D broadcast needs to unwrap results
 end
-Cassette.overdub(context::TraceCtx, f::typeof(Broadcast.copy), args...) = f(args...)
 
 @inline Base.eltype(b::Broadcast.Extruded{T}) where T = eltype(T)
 
@@ -453,6 +590,8 @@ end
 
 Cassette.overdub(context::Cassette.Context, ::Core.kwftype(typeof(Base.mapreduce)), kwargs::Any, ::typeof(Base.mapreduce), args...) = Base.mapreduce(args...; kwargs...)
 
+Cassette.overdub(context::Cassette.Context, f::typeof(Base.mapreduce), args...) = f(args...)
+
 function Base.mapreduce(f, op, A::TracedRArray{ElType, Shape, N}; dims=:, init=nothing) where {ElType, Shape, N}
     if dims isa Int
         dims = [dims]
@@ -504,7 +643,6 @@ function Base.mapreduce(f, op, A::TracedRArray{ElType, Shape, N}; dims=:, init=n
     else
         red = TracedRArray{ElType, (outdims...,), length(outdims)}((), red)
     end
-    @show red
     return red
 end
 

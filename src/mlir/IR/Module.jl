@@ -57,3 +57,37 @@ function Base.show(io::IO, module_::Module)
     println(io, "Module:")
     show(io, Operation(module_))
 end
+
+# to simplify the API, we maintain a stack of contexts in task local storage
+# and pass them implicitly to MLIR API's that require them.
+function activate!(blk::Module)
+    stack = get!(task_local_storage(), :mlir_module) do
+        Module[]
+    end
+    Base.push!(stack, blk)
+    return
+end
+
+function deactivate!(blk::Module)
+    mmodule() == blk || error("Deactivating wrong block")
+    Base.pop!(task_local_storage(:mlir_module))
+end
+
+_has_module() = haskey(task_local_storage(), :mlir_module) && !Base.isempty(task_local_storage(:mlir_module))
+
+function mmodule(; throw_error::Core.Bool=true)
+    if !_has_module()
+        throw_error && error("No MLIR module is active")
+        return nothing
+    end
+    last(task_local_storage(:mlir_module))
+end
+
+function mmodule!(f, blk::Module)
+    activate!(blk)
+    try
+        f()
+    finally
+        deactivate!(blk)
+    end
+end

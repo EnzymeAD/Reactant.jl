@@ -66,6 +66,7 @@ const backends = Dict{String, Client}()
 const default_backend = Ref{Client}()
 const default_device_idx = Ref{Int}(0)
 function __init__()
+    @ccall MLIR.API.mlir_c.InitializeLogs()::Cvoid
     cpu = CPUClient()
     backends["cpu"] = cpu
     default_backend[] = cpu
@@ -151,7 +152,7 @@ function ArrayFromHostBuffer(client::Client, array::Array{T, N}, device) where {
     return Buffer(buffer)
 end
 
-function BufferToHost(buffer::Buffer, data::Ptr)
+function BufferToHost(buffer::Buffer, data)
     GC.@preserve buffer begin
         @ccall MLIR.API.mlir_c.BufferToHost(buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid})::Cvoid
     end
@@ -175,20 +176,24 @@ function BufferOnCPU(buffer::Buffer)
 end
 
 
-function ExecutableCall(exec::LoadedExecutable, inputs::Vector{Ptr{Cvoid}}, donated_args::Vector{UInt8}, ::Val{n_outs}) where n_outs
-    outputs = Vector{Ptr{Cvoid}}(undef, n_outs)
-    future_res = Vector{Future}(undef, n_outs)
+@inline function ExecutableCall(exec::LoadedExecutable, inputs::NTuple{N, Ptr{Cvoid}}, donated_args::NTuple{N, UInt8}, ::Val{n_outs}) where {N, n_outs}
+    outputs = Ref{NTuple{n_outs, Ptr{Cvoid}}}()
+    future_res = Ref{NTuple{n_outs, Ptr{Cvoid}}}()
     futures = Ref{UInt8}(0)
 
+    inputs = Base.RefValue(inputs)
+    donated_args = Base.RefValue(donated_args)
     GC.@preserve inputs donated_args outputs futures future_res begin
-        @ccall MLIR.API.mlir_c.XLAExecute(exec.exec::Ptr{Cvoid}, length(inputs)::Cint, pointer(inputs)::Ptr{Cvoid}, pointer(donated_args)::Ptr{UInt8}, n_outs::Cint, pointer(outputs)::Ptr{Cvoid}, Base.unsafe_convert(Ptr{UInt8}, futures)::Ptr{UInt8}, pointer(future_res)::Ptr{Cvoid})::Cvoid
+        @ccall MLIR.API.mlir_c.XLAExecute(exec.exec::Ptr{Cvoid}, N::Cint, inputs::Ptr{Cvoid}, donated_args::Ptr{UInt8}, n_outs::Cint, outputs::Ptr{Cvoid}, Base.unsafe_convert(Ptr{UInt8}, futures)::Ptr{UInt8}, future_res::Ptr{Cvoid})::Cvoid
     end
 
+    outputs = outputs[]
+    future_res = future_res[]
     future = futures[] != 0
 
     return ntuple(Val(n_outs)) do i
         Base.@_inline_meta
-        AsyncBuffer(Buffer(@inbounds outputs[i]), future ? (@inbounds future_res[i]) : nothing)
+        AsyncBuffer(Buffer(outputs[i]), future ? Future(future_res[i]) : nothing)
     end
 end
 

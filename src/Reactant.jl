@@ -32,6 +32,28 @@ function Base.convert(::Type{T}, X::ConcreteRArray{ElType, Shape, N}) where {T<:
     # XLA.from_row_major(data)
 end
 
+function to_float(X::ConcreteRArray{ElType,(), 0}) where ElType
+    data = Ref{ElType}()
+	XLA.await(X.data)
+	buf = X.data.buffer
+	GC.@preserve data buf begin
+        XLA.BufferToHost(buf, data)
+	end
+    return data[]
+end
+
+function Base.isapprox(x::ConcreteRArray{ElType,(), 0}, y; kwargs...) where ElType
+    Base.isapprox(to_float(x), y; kwargs...)
+end
+
+function Base.isapprox(x, y::ConcreteRArray{ElType,(), 0}; kwargs...) where ElType
+    Base.isapprox(to_float(x), y; kwargs...)
+end
+
+function Base.isapprox(x::ConcreteRArray{ElType,(), 0}, y::ConcreteRArray{ElType2,(), 0}; kwargs...) where {ElType, ElType2}
+    Base.isapprox(to_float(x), y; kwargs...)
+end
+
 function Base.print_array(io::IO, X::ConcreteRArray)
 	if X.data == XLA.AsyncEmptyBuffer
 		println(io, "<Empty buffer>")
@@ -90,6 +112,38 @@ mutable struct TracedRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 		new{ElType,Shape,N}(paths, mlir_data)
 	end
 end
+
+using Enzyme
+
+@inline function Enzyme.Compiler.active_reg_inner(::Type{TracedRArray{ElType, Shape, N}}, seen::ST, world::Union{Nothing, UInt}, ::Val{justActive}=Val(false), ::Val{UnionSret}=Val(false))::Enzyme.Compiler.ActivityState where {ST,ElType, Shape, N, justActive, UnionSret}
+    if Enzyme.Compiler.active_reg_inner(ElType, seen, world, Val(justActive), Val(UnionSret)) == Enzyme.Compiler.AnyState
+        return Enzyme.Compiler.AnyState
+    else
+        return Enzyme.Compiler.DupState
+    end
+end
+
+@inline function Enzyme.make_zero(::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false))::RT where {copy_if_inactive, RT<:RArray}
+    if haskey(seen, prev)
+        return seen[prev]
+    end
+    if Enzyme.Compiler.guaranteed_const_nongen(RT, nothing)
+        return copy_if_inactive ? Base.deepcopy_internal(prev, seen) : prev
+    end
+    if RT <: ConcreteRArray
+        res = RT(zeros(eltype(RT), size(prev)))
+        seen[prev] = res
+        return res
+    end
+    
+    attr = fill(MLIR.IR.Attribute(eltype(RT)(0)), mlir_type(prev))
+    cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(value=attr), 1)
+    res = RT((), cst)
+    seen[prev] = res
+    return res
+end
+
+
 
 function Base.promote_rule(A::Type{TracedRArray{T, Shape, N}}, B::Type{TracedRArray{S, Shape, N}}) where {T, S, Shape, N}
     TracedRArray{Base.promote_type(T, S), Shape, N}
@@ -447,6 +501,7 @@ end
 	    end
 	    res = TracedRArray{ElType, Shape, N}((path,), prev.mlir_data)
 	    seen[prev] = res
+        return res
 	end
 
 	if mode == TracedToConcrete
@@ -458,7 +513,7 @@ end
 	    return res	    
 	end
 
-	throw("Cannot Unknown trace mode")
+	throw("Cannot Unknown trace mode $mode")
 end
 
 @inline function make_tracer(seen::IdDict, prev::RT, path, mode, data) where {RT<:AbstractFloat}
@@ -620,12 +675,13 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 			donated_args_set[i] = 1
 		end
 	end
+    donated_args_set = (donated_args_set...,)
 
     exec_call = if length(linear_results) == 0
         :()
     else
         :(
-			linearized_results = XLA.ExecutableCall($exec, [$(linearized_args...)], $donated_args_set,  Val($(length(linear_results))))
+          linearized_results = XLA.ExecutableCall($exec,($(linearized_args...),), $donated_args_set,  Val($(length(linear_results))))
         )
     end
 	func = quote
@@ -637,8 +693,6 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 			return result
 		end
 	end
-    @show func
-    flush(stdout)
 	return eval(func)
 end
 
@@ -648,6 +702,166 @@ function __init__()
 	@ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(registry[]::MLIR.API.MlirDialectRegistry)::Cvoid
 end
 
+const opt_passes = """
+            inline{default-pipeline=canonicalize max-iterations=4},
+            canonicalize,cse,
+            canonicalize,
+            enzyme-hlo-generate-td{
+            patterns=compare_op_canon<16>;
+transpose_transpose<16>;
+broadcast_in_dim_op_canon<16>;
+convert_op_canon<16>;
+dynamic_broadcast_in_dim_op_not_actually_dynamic<16>;
+chained_dynamic_broadcast_in_dim_canonicalization<16>;
+dynamic_broadcast_in_dim_all_dims_non_expanding<16>;
+noop_reduce_op_canon<16>;
+empty_reduce_op_canon<16>;
+dynamic_reshape_op_canon<16>;
+get_tuple_element_op_canon<16>;
+real_op_canon<16>;
+imag_op_canon<16>;
+get_dimension_size_op_canon<16>;
+gather_op_canon<16>;
+reshape_op_canon<16>;
+merge_consecutive_reshapes<16>;
+transpose_is_reshape<16>;
+zero_extent_tensor_canon<16>;
+reorder_elementwise_and_shape_op<16>;
+
+cse_broadcast_in_dim<16>;
+cse_slice<16>;
+cse_transpose<16>;
+cse_convert<16>;
+cse_pad<16>;
+cse_dot_general<16>;
+cse_reshape<16>;
+cse_mul<16>;
+cse_div<16>;
+cse_add<16>;
+cse_subtract<16>;
+cse_min<16>;
+cse_max<16>;
+cse_neg<16>;
+cse_concatenate<16>;
+
+concatenate_op_canon<16>(1024);
+select_op_canon<16>(1024);
+add_simplify<16>;
+sub_simplify<16>;
+and_simplify<16>;
+max_simplify<16>;
+min_simplify<16>;
+or_simplify<16>;
+negate_simplify<16>;
+mul_simplify<16>;
+div_simplify<16>;
+rem_simplify<16>;
+pow_simplify<16>;
+sqrt_simplify<16>;
+cos_simplify<16>;
+sin_simplify<16>;
+noop_slice<16>;
+const_prop_through_barrier<16>;
+slice_slice<16>;
+shift_right_logical_simplify<16>;
+pad_simplify<16>;
+negative_pad_to_slice<16>;
+tanh_simplify<16>;
+exp_simplify<16>;
+slice_simplify<16>;
+convert_simplify<16>;
+reshape_simplify<16>;
+dynamic_slice_to_static<16>;
+dynamic_update_slice_elim<16>;
+concat_to_broadcast<16>;
+reduce_to_reshape<16>;
+broadcast_to_reshape<16>;
+gather_simplify<16>;
+iota_simplify<16>(1024);
+broadcast_in_dim_simplify<16>(1024);
+convert_concat<1>;
+dynamic_update_to_concat<1>;
+slice_of_dynamic_update<1>;
+slice_elementwise<1>;
+slice_pad<1>;
+dot_reshape_dot<1>;
+concat_const_prop<1>;
+concat_fuse<1>;
+pad_reshape_pad<1>;
+pad_pad<1>;
+concat_push_binop_add<1>;
+concat_push_binop_mul<1>;
+scatter_to_dynamic_update_slice<1>;
+reduce_concat<1>;
+slice_concat<1>;
+
+bin_broadcast_splat_add<1>;
+bin_broadcast_splat_subtract<1>;
+bin_broadcast_splat_div<1>;
+bin_broadcast_splat_mul<1>;
+reshape_iota<16>;
+slice_reshape_slice<1>;
+dot_general_simplify<16>;
+transpose_simplify<16>;
+reshape_empty_broadcast<1>;
+add_pad_pad_to_concat<1>;
+broadcast_reshape<1>;
+
+slice_reshape_concat<1>;
+slice_reshape_elementwise<1>;
+slice_reshape_transpose<1>;
+slice_reshape_dot_general<1>;
+concat_pad<1>;
+
+reduce_pad<1>;
+broadcast_pad<1>;
+
+zero_product_reshape_pad<1>;
+mul_zero_pad<1>;
+div_zero_pad<1>;
+
+binop_const_reshape_pad<1>;
+binop_const_pad_add<1>;
+binop_const_pad_subtract<1>;
+binop_const_pad_mul<1>;
+binop_const_pad_div<1>;
+
+slice_reshape_pad<1>;
+binop_binop_pad_pad_add<1>;
+binop_binop_pad_pad_mul<1>;
+binop_pad_pad_add<1>;
+binop_pad_pad_subtract<1>;
+binop_pad_pad_mul<1>;
+binop_pad_pad_div<1>;
+binop_pad_pad_min<1>;
+binop_pad_pad_max<1>;
+
+unary_pad_push_convert<1>;
+unary_pad_push_tanh<1>;
+unary_pad_push_exp<1>;
+
+transpose_pad<1>;
+
+transpose_dot_reorder<1>;
+dot_transpose<1>;
+convert_convert_float<1>;
+concat_to_pad<1>;
+concat_appending_reshape<1>;
+reshape_iota<1>;
+
+broadcast_reduce<1>;
+slice_dot_general<1>;
+
+dot_reshape_pad<1>;
+pad_dot_general<1>(0);
+
+dot_reshape_pad<1>;
+pad_dot_general<1>(1);
+            },
+            transform-interpreter,
+            enzyme-hlo-remove-transform
+"""
+
 function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {FTy, VAT <: Tuple}
 	N = length(args)
 	ctx = MLIR.IR.Context()
@@ -655,62 +869,64 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
 	@ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 	MLIR.IR.context!(ctx) do
 		mod = MLIR.IR.Module(MLIR.IR.Location())
+        MLIR.IR.mmodule!(mod) do
 
-		fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(mod, f, args, (), "main", true)
-		@assert !fnwrapped
+            fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(mod, f, args, (), "main", true)
+            @assert !fnwrapped
 
-		concrete_seen = IdDict()
+            concrete_seen = IdDict()
 
-		concrete_result = make_tracer(concrete_seen, traced_result, ("result",), TracedToConcrete, #=data=#nothing)
+            concrete_result = make_tracer(concrete_seen, traced_result, ("result",), TracedToConcrete, #=data=#nothing)
 
-		if client === nothing
-			if length(linear_args) > 0
-				for (k, v) in seen_args
-					if !(v isa TracedRArray)
-						continue
-					end
-					client = XLA.client(k.data)
-				end
-			end
-			if client === nothing
-				client = XLA.default_backend[]
-			end
-		end
-		
-		XLA.RunPassPipeline("inline{default-pipeline=canonicalize max-iterations=4},canonicalize,cse,enzyme-hlo-unroll,canonicalize,cse,enzyme-hlo-opt{passses=24575},cse", mod)
-
-		preserved_args = Tuple{TracedRArray, Int}[]
-        results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
-        nresults = MLIR.IR.Value[]
-		linear_results2 = TracedRArray[]
-        for (i, op) in enumerate(results)
-            if !MLIR.IR.is_block_arg(op)
-                push!(nresults, op)
-                push!(linear_results2, linear_results[i])
-                continue
+            if client === nothing
+                if length(linear_args) > 0
+                    for (k, v) in seen_args
+                        if !(v isa TracedRArray)
+                            continue
+                        end
+                        client = XLA.client(k.data)
+                    end
+                end
+                if client === nothing
+                    client = XLA.default_backend[]
+                end
             end
-            push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
+           
+            XLA.RunPassPipeline(opt_passes * ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," * opt_passes, mod)
+
+            preserved_args = Tuple{TracedRArray, Int}[]
+            results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
+            nresults = MLIR.IR.Value[]
+            linear_results2 = TracedRArray[]
+            for (i, op) in enumerate(results)
+                if !MLIR.IR.is_block_arg(op)
+                    push!(nresults, op)
+                    push!(linear_results2, linear_results[i])
+                    continue
+                end
+                push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
+            end
+            fnbody = MLIR.IR.block(ret)
+            MLIR.API.mlirOperationDestroy(ret.operation)
+            ret.operation = MLIR.API.MlirOperation(C_NULL)
+            MLIR.IR.block!(fnbody) do
+                MLIR.Dialects.func.return_(nresults)
+            end
+
+            out_tys2 = [MLIR.IR.type(a) for a in nresults]
+
+            func3 = MLIR.Dialects.func.func_(; sym_name="main", function_type=MLIR.IR.FunctionType(in_tys, out_tys2), body=MLIR.IR.Region())
+            MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(func2, 1))
+
+            push!(MLIR.IR.body(mod), func3)
+            
+            MLIR.API.mlirOperationDestroy(func2.operation)
+            func2.operation = MLIR.API.MlirOperation(C_NULL)
+            
+            # println(string(mod))
+
+            return generate_jlfunc(concrete_result, client, mod, N, linear_args, linear_results2, preserved_args)
         end
-        fnbody = MLIR.IR.block(ret)
-        MLIR.API.mlirOperationDestroy(ret.operation)
-        ret.operation = MLIR.API.MlirOperation(C_NULL)
-		MLIR.IR.block!(fnbody) do
-			MLIR.Dialects.func.return_(nresults)
-        end
-
-        out_tys2 = [MLIR.IR.type(a) for a in nresults]
-
-        func3 = MLIR.Dialects.func.func_(; sym_name="main", function_type=MLIR.IR.FunctionType(in_tys, out_tys2), body=MLIR.IR.Region())
-		MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(func2, 1))
-
-		push!(MLIR.IR.body(mod), func3)
-		
-        MLIR.API.mlirOperationDestroy(func2.operation)
-        func2.operation = MLIR.API.MlirOperation(C_NULL)
-        
-        # println(string(mod))
-
-        return generate_jlfunc(concrete_result, client, mod, N, linear_args, linear_results2, preserved_args)
 	end
 end
 

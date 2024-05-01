@@ -4,7 +4,6 @@ using Enzyme
 
 fastmax(x::AbstractArray{T}) where T = reduce(max, x; dims=1, init = float(T)(-Inf))
 
-
 @testset "Basic reduce max" begin
     r_res = fastmax(ones(2, 10))
 
@@ -58,7 +57,7 @@ function grad_ip(x)
     return dx
 end
 
-function resgrad_ip(f, x)
+function resgrad_ip(x)
     dx = Enzyme.make_zero(x)
     res = Enzyme.autodiff(ReverseWithPrimal, sumcos, Active, Duplicated(x, dx))
     return (res, dx)
@@ -67,17 +66,14 @@ end
 @testset "Basic grad cos" begin
     c = Reactant.ConcreteRArray(ones(3,2))
 
-
     f=Reactant.compile(grad_ip, (c,))
     r = f(c)
-    @show r
 
-    @test r ≈ sin.(ones(3,2))
+    @test r ≈ -sin.(ones(3,2))
 
     f=Reactant.compile(resgrad_ip, (c,))
     orig, r = f(c)
-    @show r
 
-    @test orig[1] ≈ cos.(ones(3,2))
-    @test r ≈ sin.(ones(3,2))
+    @test orig[2] ≈ sum(cos.(ones(3,2)))
+    @test r ≈ -sin.(ones(3,2))
 end
