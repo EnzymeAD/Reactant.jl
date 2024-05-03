@@ -196,7 +196,8 @@ cc_library(
         "@xla//xla/stream_executor/cuda:cuda_platform",
         "@xla//xla/stream_executor/cuda:cudnn_plugin",
         "@xla//xla/stream_executor/cuda:cufft_plugin",
-        "@xla//xla/stream_executor:cuda_platform",
+        "@xla//xla/stream_executor:cuda_platform",        
+        "@xla//xla/service/gpu/model:hlo_op_profiles",
 
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
