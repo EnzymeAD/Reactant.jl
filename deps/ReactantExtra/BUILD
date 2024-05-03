@@ -189,6 +189,15 @@ cc_library(
         "@stablehlo//:chlo_ops",
         "@xla//xla/pjrt/cpu:cpu_client",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
+
+
+        "@xla//xla/stream_executor/cuda:all_runtime",
+        "@xla//xla/stream_executor/cuda:cuda_driver",
+        "@xla//xla/stream_executor/cuda:cuda_platform",
+        "@xla//xla/stream_executor/cuda:cudnn_plugin",
+        "@xla//xla/stream_executor/cuda:cufft_plugin",
+        "@xla//xla/stream_executor:cuda_platform",
+
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
         "@xla//xla/python/pjrt_ifrt:xla_ifrt",

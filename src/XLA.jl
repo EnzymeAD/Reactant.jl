@@ -50,14 +50,17 @@ function CPUClient(asynchronous=true, node_id=0, num_nodes=1)
     global cpuclientcount
     @assert cpuclientcount[] == 0
     cpuclientcount[]+=1
-    client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
+    
+    f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
+    client = ccall(f, Ptr{Cvoid}, (UInt8, Cint, Cint), asynchronous, node_id, num_nodes)
     return Client(client)
 end
 
-function GPUClient(node_id=0, num_nodes=1, platform="cuda")
+function GPUClient(node_id=0, num_nodes=1, platform="gpu")
     allowed_devices = [-1]
     GC.@preserve allowed_devices begin
-        client = @ccall MLIR.API.mlir_c.MakeGPUClient(node_id::Cint, num_nodes::Cint, pointer(allowed_devices)::Ptr{Cvoid}, length(allowed_devices)::Cint, platform::Cstring)::Ptr{Cvoid}
+        f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
+        client = ccall(f, Ptr{Cvoid}, (Cint, Cint, Ptr{Cvoid}, Cint, Cstring), node_id, num_nodes, pointer(allowed_devices), length(allowed_devices), platform)
     end
     return Client(client)
 end
@@ -65,10 +68,15 @@ end
 const backends = Dict{String, Client}()
 const default_backend = Ref{Client}()
 const default_device_idx = Ref{Int}(0)
+using Reactant_jll
+using Libdl
 function __init__()
-    @ccall MLIR.API.mlir_c.InitializeLogs()::Cvoid
+    initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
+    ccall(initLogs, Cvoid, ())
     cpu = CPUClient()
     backends["cpu"] = cpu
+    gpu = GPUClient()
+    backends["gpu"] = gpu
     default_backend[] = cpu
 end
 
