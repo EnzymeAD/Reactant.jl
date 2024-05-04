@@ -75,8 +75,8 @@ function __init__()
     ccall(initLogs, Cvoid, ())
     cpu = CPUClient()
     backends["cpu"] = cpu
-    gpu = GPUClient()
-    backends["gpu"] = gpu
+    # gpu = GPUClient()
+    # backends["gpu"] = gpu
     default_backend[] = cpu
 end
 
