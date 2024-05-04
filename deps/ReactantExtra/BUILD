@@ -279,20 +279,12 @@ cc_library(
         "@xla//xla/pjrt/cpu:cpu_client",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
 
-
-        "@xla//xla/stream_executor/cuda:all_runtime", 
-        "@xla//xla/stream_executor/rocm:all_runtime",
-        "@xla//xla/service/gpu/model:hlo_op_profiles",
-        "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
-        "@xla//xla/service/gpu:nvptx_compiler",
-        "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/service/cpu:cpu_compiler",
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
         "@xla//xla/stream_executor/tpu:tpu_executor",
         "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
         
         "@xla//xla/service/cpu:cpu_transfer_manager",
-        "@xla//xla/service/gpu:gpu_transfer_manager",
 
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
@@ -311,7 +303,17 @@ cc_library(
         "@com_google_absl//absl/hash:hash",
         "@com_google_absl//absl/log:initialize",
         "@llvm-project//mlir:CAPIIRObjects",
-    ],
+    ] + select({
+    "@bazel_tools//src/conditions:darwin": [],
+    "//conditions:default": [
+        "@xla//xla/stream_executor/cuda:all_runtime", 
+        "@xla//xla/stream_executor/rocm:all_runtime",
+        "@xla//xla/service/gpu/model:hlo_op_profiles",
+        "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
+        "@xla//xla/service/gpu:nvptx_compiler",
+        "@xla//xla/service/gpu:amdgpu_compiler",
+        "@xla//xla/service/gpu:gpu_transfer_manager",
+    ]}),
 )
 
 # cc_shared_library(
