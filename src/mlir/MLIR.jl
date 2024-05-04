@@ -5,7 +5,7 @@ using CEnum
 using Preferences
 using Reactant_jll
 
-const mlir_c = Reactant_jll.libReactantExtra_handle
+const mlir_c = Reactant_jll.libReactantExtra
 
 # MLIR C API
 let

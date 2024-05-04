@@ -51,8 +51,7 @@ function CPUClient(asynchronous=true, node_id=0, num_nodes=1)
     @assert cpuclientcount[] == 0
     cpuclientcount[]+=1
     
-    f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
-    client = ccall(f, Ptr{Cvoid}, (UInt8, Cint, Cint), asynchronous, node_id, num_nodes)
+    client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
     return Client(client)
 end
 
@@ -71,8 +70,7 @@ const default_device_idx = Ref{Int}(0)
 using Reactant_jll
 using Libdl
 function __init__()
-    initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
-    ccall(initLogs, Cvoid, ())
+    @ccall MLIR.API.mlir_c.InitializeLogs()::Cvoid
     cpu = CPUClient()
     backends["cpu"] = cpu
     # gpu = GPUClient()
@@ -110,8 +108,9 @@ mutable struct Buffer
 
     function Buffer(buffer::Ptr{Cvoid})
         finalizer(new(buffer)) do buffer
-            if buffer != C_NULL
-                @ccall MLIR.API.mlir_c.PjRtBufferFree(buffer.buffer::Ptr{Cvoid})::Cvoid
+            sbuffer = buffer.buffer
+	    if sbuffer != C_NULL
+                @ccall MLIR.API.mlir_c.PjRtBufferFree(sbuffer::Ptr{Cvoid})::Cvoid
             end
         end
     end
