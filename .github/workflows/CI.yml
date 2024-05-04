@@ -32,7 +32,7 @@ jobs:
           - x64
         assertions:
           - false
-        libReactant: [local, packaged]
+        libReactant: [packaged]
         exclude:
           - os: windows-latest
             arch: x64

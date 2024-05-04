@@ -74,7 +74,11 @@ LLVM_TARGETS = select({
     "@bazel_tools//src/conditions:windows": ["AMDGPU", "NVPTX"],
     "@bazel_tools//src/conditions:darwin": [],
     "//conditions:default": ["AMDGPU", "NVPTX"],
-}) + select({"@platforms//cpu:arm": ["AArch64"], "//conditions:default": ["X85"]})
+}) + select({
+    "@platforms//cpu:arm": ["AArch64"],
+    "@platforms//cpu:aarch64": ["AArch64"],
+    "//conditions:default": ["X86"]
+})
 
 http_archive(
     name = "jax",

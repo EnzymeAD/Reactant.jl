@@ -22,7 +22,7 @@ mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 end
 
 function Base.convert(::Type{T}, X::ConcreteRArray{ElType, Shape, N}) where {T<:Array, ElType, Shape, N}
-    data = Array{ElType, N}(undef, (reverse(Shape)...))
+    data = Array{ElType, N}(undef, Shape...)
 	XLA.await(X.data)
 	buf = X.data.buffer
 	GC.@preserve data buf begin
@@ -91,7 +91,7 @@ end
 			return unsafe_load(ptr, start)
 		end
 	end
-	return convert(Array, X)[args...]
+	return convert(Array, a)[args...]
 end
 
 @inline function ConcreteRArray(data::Array{ElType, N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]) where {ElType, N}
@@ -667,7 +667,6 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 
 	exec = XLA.Compile(client, mod)
 
-
     donated_args_set = zeros(UInt8, length(linearized_args))
     preserved_argnums = [i for (_, i) in preserved_args]
 	for (i, val) in enumerate(linear_args)
@@ -930,5 +929,14 @@ function compile(f::FTy, args::VAT; pipeline_options="", client=nothing) where {
 	end
 end
 
+
+function set_default_backend(backend::XLA.Client)
+    XLA.default_backend[] = backend
+end
+
+function set_default_backend(backend::String)
+    backend = XLA.backends[backend]
+    XLA.default_backend[] = backend
+end
 
 end # module

@@ -51,16 +51,18 @@ function CPUClient(asynchronous=true, node_id=0, num_nodes=1)
     @assert cpuclientcount[] == 0
     cpuclientcount[]+=1
     
-    client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
+    f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
+    client = ccall(f, Ptr{Cvoid}, (UInt, Cint, Cint), asynchronous, node_id, num_nodes)
+    #client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
     return Client(client)
 end
 
 function GPUClient(node_id=0, num_nodes=1, platform="gpu")
-    allowed_devices = [-1]
-    GC.@preserve allowed_devices begin
+    #allowed_devices = [-1]
+    # GC.@preserve allowed_devices begin
         f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
-        client = ccall(f, Ptr{Cvoid}, (Cint, Cint, Ptr{Cvoid}, Cint, Cstring), node_id, num_nodes, pointer(allowed_devices), length(allowed_devices), platform)
-    end
+        client = ccall(f, Ptr{Cvoid}, (Cint, Cint, Ptr{Cvoid}, Cint, Cstring), node_id, num_nodes, C_NULL, 0, platform)
+    # end
     return Client(client)
 end
 
@@ -70,11 +72,14 @@ const default_device_idx = Ref{Int}(0)
 using Reactant_jll
 using Libdl
 function __init__()
-    @ccall MLIR.API.mlir_c.InitializeLogs()::Cvoid
+    initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
+    ccall(initLogs, Cvoid, ())
     cpu = CPUClient()
     backends["cpu"] = cpu
-    # gpu = GPUClient()
-    # backends["gpu"] = gpu
+    @static if !Sys.isapple()
+        gpu = GPUClient()
+        backends["gpu"] = gpu
+    end
     default_backend[] = cpu
 end
 
@@ -151,7 +156,7 @@ end
 function ArrayFromHostBuffer(client::Client, array::Array{T, N}, device) where {T, N}
     buffer = MLIR.IR.context!(MLIR.IR.Context()) do
         dtype = MLIR.IR.Type(T)
-        sizear = Int64[s for s in size(array)]
+        sizear = Int64[s for s in reverse(size(array))]
         GC.@preserve array sizear begin
             @ccall MLIR.API.mlir_c.ArrayFromHostBuffer(client.client::Ptr{Cvoid}, pointer(array)::Ptr{T}, dtype::MLIR.API.MlirType, N::Csize_t, pointer(sizear)::Ptr{Int64}, device.device::Ptr{Cvoid})::Ptr{Cvoid}
         end

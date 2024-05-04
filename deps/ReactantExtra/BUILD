@@ -15,6 +15,12 @@ cc_toolchain_suite(
         "darwin_arm64": ":ygg_x86_toolchain",
     },
 )
+cc_toolchain_suite(
+    name = "beast_toolchain_suite",
+    toolchains = {
+        "k8": ":beast_toolchain",
+    },
+)
 
 filegroup(name = "empty")
 
@@ -111,6 +117,89 @@ cc_toolchain_config(
     ],
 )
 
+cc_toolchain(
+    name = "beast_x86_toolchain",
+    all_files = ":empty",
+    compiler_files = ":empty",
+    dwp_files = ":empty",
+    linker_files = ":empty",
+    objcopy_files = ":empty",
+    strip_files = ":empty",
+    supports_param_files = 1,
+    toolchain_config = ":beast_x86_toolchain_config",
+    toolchain_identifier = "beast_x86_toolchain",
+)
+
+cc_toolchain_config(
+    name = "beast_x86_toolchain_config",
+    abi_libc_version = "local",
+    abi_version = "local",
+    compile_flags = [
+        "-I/usr/include/c++/11",
+    ],
+    compiler = "clang",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    cpu = "k8",
+    cxx_builtin_include_directories = [
+        "/home/wmoses/llvms/llvm16/install/lib/clang/include",
+        "/home/wmoses/llvms/llvm16/install/lib/clang/16/include",
+        "/usr/local/include",
+        "/usr/include/x86_64-linux-gnu",
+        "/usr/include",
+        "/usr/include/c++/11",
+        "/usr/include/x86_64-linux-gnu/c++/11",
+    ],
+    dbg_compile_flags = ["-g",
+        "-I/usr/include/c++/11",
+    ],
+    host_system_name = "linux",
+    link_flags = [
+        "-fuse-ld=lld",
+        "--ld-path=/home/wmoses/llvms/llvm16/install/bin/ld.lld",
+        "-stdlib=libstdc++",
+        "-static-libstdc++"
+    ],
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-stdlib=libstdc++",
+        "-I/usr/include/c++/11",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    supports_start_end_lib = True,
+    target_libc = "",
+    target_system_name = "x86_64-unknown-linux-gnu",
+    tool_paths = {
+        "/usr/bin/gcc": "/home/wmoses/llvms/llvm16/install/bin/clang",
+        # "/usr/bin/gcc": "/home/wmoses/git/Reactant.jl/deps/clang",
+        # "gcc": "/home/wmoses/git/Reactant.jl/deps/clang",
+        "gcc": "/home/wmoses/llvms/llvm16/install/bin/clang",
+		"g++": "/home/wmoses/llvms/llvm16/install/bin/clang++",
+		"cpp": "/home/wmoses/llvms/llvm16/install/bin/clang++",
+		"ld": "/home/wmoses/llvms/llvm16/install/bin/ld.lld",
+    },
+    toolchain_identifier = "beast_x86_toolchain",
+    unfiltered_compile_flags = [
+        "-no-canonical-prefixes",
+        "-Wno-builtin-macro-redefined",
+        "-D__DATE__=\"redacted\"",
+        "-D__TIMESTAMP__=\"redacted\"",
+        "-D__TIME__=\"redacted\"",
+        "-Wno-unused-command-line-argument",
+        "-Wno-gnu-offsetof-extensions",
+    ],
+)
+
+
 
 platform(
     name = "darwin_x86_64",
@@ -191,14 +280,19 @@ cc_library(
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
 
 
-        "@xla//xla/stream_executor/cuda:all_runtime",
-        "@xla//xla/stream_executor/cuda:cuda_driver",
-        "@xla//xla/stream_executor/cuda:cuda_platform",
-        "@xla//xla/stream_executor/cuda:cudnn_plugin",
-        "@xla//xla/stream_executor/cuda:cufft_plugin",
-        "@xla//xla/stream_executor:cuda_platform",        
+        "@xla//xla/stream_executor/cuda:all_runtime", 
+        "@xla//xla/stream_executor/rocm:all_runtime",
         "@xla//xla/service/gpu/model:hlo_op_profiles",
         "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
+        "@xla//xla/service/gpu:nvptx_compiler",
+        "@xla//xla/service/gpu:amdgpu_compiler",
+        "@xla//xla/service/cpu:cpu_compiler",
+        "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
+        "@xla//xla/stream_executor/tpu:tpu_executor",
+        "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
+        
+        "@xla//xla/service/cpu:cpu_transfer_manager",
+        "@xla//xla/service/gpu:gpu_transfer_manager",
 
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
