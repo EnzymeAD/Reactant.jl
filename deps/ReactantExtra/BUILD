@@ -306,6 +306,7 @@ cc_library(
     ] + select({
     "@bazel_tools//src/conditions:darwin": [],
     "//conditions:default": [
+        "@xla//xla/stream_executor:kernel", 
         "@xla//xla/stream_executor/cuda:all_runtime", 
         "@xla//xla/stream_executor/rocm:all_runtime",
         "@xla//xla/service/gpu/model:hlo_op_profiles",
