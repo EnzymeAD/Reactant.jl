@@ -31,7 +31,7 @@ run(Cmd(`bazel build -c dbg --action_env=JULIA=$(Base.julia_cmd().exec[1])
 --@local_config_cuda//:cuda_compiler=clang
 --repo_env TENSORRT_INSTALL_PATH=/usr/local/cuda
 --repo_env TF_NCCL_USE_STUB=1
---action_env TF_CUDA_COMPUTE_CAPABILITIES="sm_50,compute_90"
+--action_env TF_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
 --repo_env CLANG_CUDA_COMPILER_PATH="$(source_dir)/../clang"
 --crosstool_top=@//:beast_cross_compile_toolchain_suite
 --host_crosstool_top=@//:beast_cross_compile_toolchain_suite

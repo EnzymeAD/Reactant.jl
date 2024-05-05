@@ -24,19 +24,22 @@ origout = model(noisy)
 cmodel = Reactant.make_tracer(IdDict(), model, (), Reactant.ArrayToConcrete, nothing)
 cnoisy = Reactant.ConcreteRArray(noisy)
 
-c_o = cmodel(noisy)
-@show c_o[3]
-@btime cmodel(noisy)
-
-o_c = model(cnoisy)
-@show o_c[3]
-@btime model(cnoisy)
-
-c_c = cmodel(cnoisy)
-@show c_c[3]
-@btime cmodel(cnoisy)
+# c_o = cmodel(noisy)
+# @show c_o[3]
+# @btime cmodel(noisy)
+# 
+# o_c = model(cnoisy)
+# @show o_c[3]
+# @btime model(cnoisy)
+# 
+# c_c = cmodel(cnoisy)
+# @show c_c[3]
+# @btime cmodel(cnoisy)
 f=Reactant.compile((a,b)->a(b), (cmodel,cnoisy))
 
+# using InteractiveUtils
+# @show @code_typed f(cmodel,cnoisy)
+# @show @code_llvm f(cmodel,cnoisy)
 comp = f(cmodel,cnoisy)
 @show comp[3]
 @btime f(cmodel,cnoisy)

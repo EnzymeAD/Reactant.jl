@@ -2,7 +2,11 @@ using Reactant
 using Test
 using Enzyme
 
+# Reactant.set_default_backend("gpu")
+
 fastmax(x::AbstractArray{T}) where T = reduce(max, x; dims=1, init = float(T)(-Inf))
+
+using InteractiveUtils
 
 @testset "Basic reduce max" begin
     r_res = fastmax(ones(2, 10))
@@ -13,13 +17,16 @@ fastmax(x::AbstractArray{T}) where T = reduce(max, x; dims=1, init = float(T)(-I
     @test c_res ≈ r_res
 
     f=Reactant.compile(fastmax, (a,))
+
+    @show @code_typed f(a)
+    @show @code_llvm f(a)
     
     f_res = f(a)
 
     @test f_res ≈ r_res
 end
 
-function softmax!(x)
+function mysoftmax!(x)
     max_ = fastmax(x)
     return x .- max_
 end
@@ -27,11 +34,11 @@ end
 @testset "Basic softmax" begin
 
     in = ones(2, 10)
-    r_res = softmax!(in)
+    r_res = mysoftmax!(in)
 
     in = Reactant.ConcreteRArray(ones(2, 10))
 
-    f=Reactant.compile(softmax!, (in,))
+    f=Reactant.compile(mysoftmax!, (in,))
     
     f_res = f(in)
     
@@ -76,4 +83,18 @@ end
 
     @test orig[2] ≈ sum(cos.(ones(3,2)))
     @test r ≈ -sin.(ones(3,2))
+end
+
+function mul(A, B)
+    return A * B
+end
+@testset "Basic grad cos" begin
+    c = Reactant.ConcreteRArray(ones(50,70))
+    d = Reactant.ConcreteRArray(ones(70,30))
+
+    f=Reactant.compile(mul, (c,d))
+    r = f(c, d)
+
+    @test r ≈ mul(ones(50,70),ones(70,30))
+
 end

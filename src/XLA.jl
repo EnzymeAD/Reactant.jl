@@ -83,41 +83,44 @@ function __init__()
     default_backend[] = cpu
 end
 
+@inline function free_exec(exec)
+    @ccall MLIR.API.mlir_c.ExecutableFree(exec.exec::Ptr{Cvoid})::Cvoid
+end
+
 mutable struct LoadedExecutable
     exec::Ptr{Cvoid}
 
     function LoadedExecutable(exec::Ptr{Cvoid})
         @assert exec != C_NULL
-        finalizer(new(exec)) do exec
-            @ccall MLIR.API.mlir_c.ExecutableFree(exec.exec::Ptr{Cvoid})::Cvoid
-        end
+        finalizer(free_exec, new(exec))
     end
 end
 
 
+@inline function free_future(future)
+    @ccall MLIR.API.mlir_c.FreeFuture(future.future::Ptr{Cvoid})::Cvoid
+end
 
 mutable struct Future
     future::Ptr{Cvoid}
 
     function Future(future::Ptr{Cvoid})
-        @assert future != C_NULL
-        finalizer(new(future)) do future
-            @ccall MLIR.API.mlir_c.FreeFuture(future.future::Ptr{Cvoid})::Cvoid
-        end
+        # @assert future != C_NULL
+        finalizer(free_future, new(future))
     end
 end
 
+@inline function free_buffer(buffer)
+    sbuffer = buffer.buffer
+    if sbuffer != C_NULL
+        @ccall MLIR.API.mlir_c.PjRtBufferFree(sbuffer::Ptr{Cvoid})::Cvoid
+    end
+end
 
 mutable struct Buffer
     buffer::Ptr{Cvoid}
-
     function Buffer(buffer::Ptr{Cvoid})
-        finalizer(new(buffer)) do buffer
-            sbuffer = buffer.buffer
-	    if sbuffer != C_NULL
-                @ccall MLIR.API.mlir_c.PjRtBufferFree(sbuffer::Ptr{Cvoid})::Cvoid
-            end
-        end
+        finalizer(free_buffer, new(buffer))
     end
 end
 
@@ -126,7 +129,7 @@ struct Device
     device::Ptr{Cvoid}
 end
 
-struct AsyncBuffer
+mutable struct AsyncBuffer
     buffer::Buffer
     future::Union{Future, Nothing}
 end
@@ -188,7 +191,54 @@ function BufferOnCPU(buffer::Buffer)
 end
 
 
-@inline function ExecutableCall(exec::LoadedExecutable, inputs::NTuple{N, Ptr{Cvoid}}, donated_args::NTuple{N, UInt8}, ::Val{n_outs}) where {N, n_outs}
+function execute_ir(N, n_outs, fn)
+    ptr = sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
+    cint = sizeof(Cint) == sizeof(Int64) ? "i64" : "i32"
+    res = """define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, [$N x $ptr] %inps, [$N x i8] %donated) alwaysinline {
+entry:
+    %inpa = alloca [$N x $ptr]
+    %outa = alloca [$n_outs x $ptr]
+    %futpa = alloca [$n_outs x $ptr]
+    store [$N x $ptr] %inps, [$N x $ptr]* %inpa
+    %dona = alloca [$N x i8]
+    store [$N x i8] %donated, [$N x i8]* %dona
+    %futa = alloca i8
+    call void inttoptr ($ptr $fn to void ($ptr, $cint, [$N x $ptr]*, [$N x i8]*, $cint, [$n_outs x $ptr]*, i8*, [$n_outs x $ptr]*)*)($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, [$N x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
+    %out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
+    %fut = load i8, i8* %futa
+    %futp = load [$n_outs x $ptr], [$n_outs x $ptr]* %futpa
+    %fca.0.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } undef, [$n_outs x $ptr] %out, 0
+    %fca.1.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.0.insert, [$n_outs x $ptr] %futp, 1
+    %fca.2.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.1.insert, i8 %fut, 2
+    ret { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.2.insert
+}
+"""
+    return res
+end
+
+@generated function ExecutableCall(exec::LoadedExecutable, inputs::NTuple{N, Ptr{Cvoid}}, donated_args::NTuple{N, UInt8}, ::Val{n_outs}) where {N, n_outs}
+    sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecute")
+    xla_execute_fn = reinterpret(UInt, sym0)
+    ir = execute_ir(N, n_outs, xla_execute_fn)
+    results = []
+    for i in 1:n_outs
+        push!(results, :(
+            AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing)
+           ))
+    end
+    return quote
+        Base.@_inline_meta
+        exec = exec.exec
+        GC.@preserve exec begin
+            outputs, future_res, future = Base.llvmcall(($ir, "f"), Tuple{NTuple{n_outs, Ptr{Cvoid}}, NTuple{n_outs, Ptr{Cvoid}}, Bool},
+                         Tuple{Ptr{Cvoid}, NTuple{N, Ptr{Cvoid}}, NTuple{N, UInt8}},
+                         exec, inputs, donated_args)
+        end
+        return ($(results...),)
+    end
+end
+
+@inline function ExecutableCall0(exec::LoadedExecutable, inputs::NTuple{N, Ptr{Cvoid}}, donated_args::NTuple{N, UInt8}, ::Val{n_outs}) where {N, n_outs}
     outputs = Ref{NTuple{n_outs, Ptr{Cvoid}}}()
     future_res = Ref{NTuple{n_outs, Ptr{Cvoid}}}()
     futures = Ref{UInt8}(0)
@@ -196,7 +246,7 @@ end
     inputs = Base.RefValue(inputs)
     donated_args = Base.RefValue(donated_args)
     GC.@preserve inputs donated_args outputs futures future_res begin
-        @ccall MLIR.API.mlir_c.XLAExecute(exec.exec::Ptr{Cvoid}, N::Cint, inputs::Ptr{Cvoid}, donated_args::Ptr{UInt8}, n_outs::Cint, outputs::Ptr{Cvoid}, Base.unsafe_convert(Ptr{UInt8}, futures)::Ptr{UInt8}, future_res::Ptr{Cvoid})::Cvoid
+        @ccall MLIR.API.mlir_c.XLAExecute(exec.exec::Ptr{Cvoid}, N::Cint, inputs::Ptr{Cvoid}, donated_args::Ptr{UInt8}, n_outs::Cint, Base.unsafe_convert(Ptr{Cvoid}, outputs)::Ptr{Cvoid}, Base.unsafe_convert(Ptr{UInt8}, futures)::Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, future_res)::Ptr{Cvoid})::Cvoid
     end
 
     outputs = outputs[]
@@ -252,42 +302,47 @@ function is_ready(future::Future)
     end
 end
 
-function await(future::Future)
+@inline function await(future::Future)::Nothing
     GC.@preserve future begin
-        return @ccall MLIR.API.mlir_c.FutureAwait(future.future::Ptr{Cvoid})::Cvoid
+        @ccall MLIR.API.mlir_c.FutureAwait(future.future::Ptr{Cvoid})::Cvoid
     end
+    return nothing
 end
 
 
-function is_ready(buffer::AsyncBuffer)
+function is_ready(buffer::AsyncBuffer)::Bool
+    future = buffer.future
     if future === nothing
         return true
     else
-        return is_ready(buffer.future)
+        return is_ready(future)
     end
 end
 
 const AsyncEmptyBuffer = AsyncBuffer(Buffer(C_NULL), nothing)
 
-function await(buffer::AsyncBuffer)
-    if buffer.future === nothing
-        return
+@inline function await(buffer::AsyncBuffer)::Nothing
+    if buffer.future == nothing
+        return nothing
     else
-        await(buffer.future)
+        future = buffer.future
         buffer.future = nothing
+        await(future::Future)
     end
+    return nothing
 end
 
 
-function synced_buffer(buffer::AsyncBuffer)
-    if buffer.future !== nothing
-        await(buffer.future)
+@inline function synced_buffer(buffer::AsyncBuffer)
+    if buffer.future != nothing
+        future = buffer.future
         buffer.future = nothing
+        await(future::Future)
     end
     return buffer.buffer
 end
 
-function synced_buffer(buffer::Buffer)
+@inline function synced_buffer(buffer::Buffer)
     return buffer
 end
 

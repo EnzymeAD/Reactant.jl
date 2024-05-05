@@ -75,6 +75,7 @@ end
 	if a.data == XLA.AsyncEmptyBuffer
 		throw("Cannot getindex from empty buffer")
 	end
+    # error("""Scalar indexing is disallowed.""")
 	XLA.await(a.data)
 	if XLA.BufferOnCPU(a.data.buffer)
 		buf = a.data.buffer
@@ -403,7 +404,7 @@ end
         changed = false
 		subs = []
         for i in 1:nf
-			xi = getfield(prev, i)
+			xi = Base.getfield(prev, i)
 			xi2 = make_tracer(seen, xi, append_path(path, i), mode, data)
 			if xi !== xi2
 				changed = true
@@ -425,7 +426,7 @@ end
         changed = false
         for i in 1:nf
             if isdefined(prev, i)
-                xi = getfield(prev, i)
+                xi = Base.getfield(prev, i)
                 xi2 = make_tracer(seen, xi, append_path(path, i), mode, data)
                 if xi !== xi2
                 	changed = true
@@ -448,7 +449,7 @@ end
     changed = false
     for i in 1:nf
         if isdefined(prev, i)
-            xi = getfield(prev, i)
+            xi = Base.getfield(prev, i)
             xi2 = make_tracer(seen, xi, append_path(path, i), mode, data)
             if xi !== xi2
             	changed = true
@@ -558,7 +559,7 @@ end
 
 @inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path, mode, data) where {A, RT}
     return NamedTuple{A, traced_type(RT, (), Val(mode))}(
-	    ((make_tracer(seen, getfield(prev, name), append_path(path, name), mode, data) for name in A)...,)
+	    ((make_tracer(seen, Base.getfield(prev, name), append_path(path, name), mode, data) for name in A)...,)
     )
 end
 
@@ -583,9 +584,11 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 		Symbol("arg_$i")
 	end
 
+    arg_syncs = Expr[]
+    topres = Symbol[]
 	linearized_args = Union{Symbol,Expr}[]
 
-	for arg in linear_args
+    for (i, arg) in enumerate(linear_args)
         paths = ((p for p in arg.paths if p[1] == "args")...,)
 		path = if length(paths) == 1
 			paths[1]
@@ -594,9 +597,15 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
         end
 		res = Symbol("arg_$(path[2])")
 		for p in path[3:end]
-			res = :(getfield($res, $p))
+			res = :(Base.getfield($res, $p))
 		end
-		res = :(XLA.synced_buffer($res.data).buffer)
+        sym = Symbol("sbuf_$i")
+        sbuf = :($sym = XLA.synced_buffer($res.data))
+        push!(arg_syncs, sbuf)
+        
+        push!(topres, sym)
+        
+		res = :($sym.buffer)
 		push!(linearized_args, res)
 	end
 
@@ -609,12 +618,16 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 
 	delinearized_results = Expr[]
 
+    result_stores = Dict{Tuple,Symbol}()
+
 	for (idx, result) in enumerate(linear_results)
         paths = ((p for p in result.paths if p[1] != "args")...,)
 		for path in paths
 			if path[1] == "result"
 				res = Symbol("result")
 				path = path[2:end]
+                result_stores[path] = Symbol("concrete_res_$(idx)")
+                continue
 			else
 				if path[1] != "resargs"
                     @show idx #, result
@@ -626,7 +639,7 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 				path = path[3:end]
 			end
 			for p in path
-				res = :(getfield($res, $p))
+				res = :(Base.getfield($res, $p))
 			end
 			res = :($res.data = $(Symbol("concrete_res_$(idx)")) )
 			push!(delinearized_results, res)
@@ -652,12 +665,12 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
 				path = path[3:end]
 			end
 			for p in path
-				res = :(getfield($res, $p))
+				res = :(Base.getfield($res, $p))
 			end
 
 			argres = Symbol("arg_$(argpath[2])")
 			for p in argpath[3:end]
-				argres = :(getfield($argres, $p))
+				argres = :(Base.getfield($argres, $p))
 			end
 
 			res = :($res.data = $argres.data )
@@ -679,15 +692,47 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
     exec_call = if length(linear_results) == 0
         :()
     else
-        :(
-          linearized_results = XLA.ExecutableCall($exec,($(linearized_args...),), $donated_args_set,  Val($(length(linear_results))))
-        )
+        quote
+          $(arg_syncs...)
+          GC.@preserve $(topres...) begin
+              linearized_results = XLA.ExecutableCall($exec,($(linearized_args...),), $donated_args_set,  Val($(length(linear_results))))
+          end
+        end
     end
+
+    concrete_result_maker = Expr[]
+    function create_result(tocopy::T, resname::Symbol, path) where T
+        if T <: ConcreteRArray
+            push!(concrete_result_maker, :($resname = $T($(result_stores[path]))))
+            return
+        end
+        if T <: Tuple
+            elems = Symbol[]
+            for (i, v) in enumerate(tocopy)
+                sym = Symbol(string(resname)*"_"*string(i))
+                create_result(v, sym, (path...,i))
+                push!(elems, sym)
+            end
+            push!(concrete_result_maker, quote
+                    $resname = ($(elems...),)
+            end)
+            return
+        end
+        if T <: Int || T <: AbstractFloat || T <: AbstractString || T <: Nothing
+            push!(concrete_result_maker, :($resname = $tocopy))
+            return
+        end
+
+        error("canot copy $T")
+    end
+
+    create_result(concrete_result, :result, ())
 	func = quote
         ($(args...),) -> begin
             $exec_call
 			$(concretize...)
-			result = $concrete_result
+            # Needs to store into result
+            $(concrete_result_maker...)
 			$(delinearized_results...)
 			return result
 		end
