@@ -1,5 +1,7 @@
 module Reactant
 
+using ArrayInterface: ArrayInterface
+
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("utils.jl")
@@ -11,6 +13,9 @@ abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType,N} end
 @inline Base.size(::Type{<:RArray{ElType,Shape}}) where {ElType,Shape} = Shape
 @inline Base.ndims(::RArray{ElType,Shape,N}) where {ElType,Shape,N} = N
 @inline Base.ndims(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} = N
+
+ArrayInterface.can_setindex(::Type{<:RArray}) = false
+ArrayInterface.fast_matrix_colors(::Type{<:RArray}) = false
 
 @inline mlir_type(::RArray{ElType,Shape,N}) where {ElType,Shape,N} =
     MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
@@ -841,6 +846,7 @@ function generate_jlfunc(
             )
             return nothing
         end
+        # TODO: Add NamedTuple here?
 
         return error("cannot copy $T")
     end
