@@ -103,6 +103,8 @@ end
 
 @inline ConcreteRArray(data::T) where {T <: Number} = ConcreteRArray{T, (), 0}(data)
 
+Base.similar(x::ConcreteRArray{T, Shape, N}, ::Type{T2}) where {T, Shape, N, T2} = ConcreteRArray{T, Shape, N}(x.data)
+
 mutable struct TracedRArray{ElType,Shape,N} <: RArray{ElType, Shape, N}
 	paths::Tuple
 	mlir_data::Union{Nothing,MLIR.IR.Value}

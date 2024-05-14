@@ -98,3 +98,8 @@ end
     @test r ≈ mul(ones(50,70),ones(70,30))
 
 end
+
+@testset "ConcreteRArray" begin
+    c = Reactant.ConcreteRArray(ones(50,70))
+    similar(c)
+end
