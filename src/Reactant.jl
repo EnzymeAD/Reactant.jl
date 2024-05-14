@@ -605,7 +605,7 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
         end
 		res = Symbol("arg_$(path[2])")
 		for p in path[3:end]
-			res = :(Base.getfield($res, $p))
+			res = :(Base.getfield($res, $(Meta.quot(p))))
 		end
         sym = Symbol("sbuf_$i")
         sbuf = :($sym = XLA.synced_buffer($res.data))
