@@ -166,6 +166,7 @@ include("overloads.jl")
 using Enzyme
 
 @inline val_value(::Val{T}) where T = T
+@inline val_value(::Type{Val{T}}) where T = T
 
 @enum TraceMode begin
 	ConcreteToTraced = 1
