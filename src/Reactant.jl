@@ -1,10 +1,15 @@
 module Reactant
 
+using ArrayInterface: ArrayInterface
+
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("utils.jl")
 
 abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType, N} end
+
+ArrayInterface.can_setindex(::Type{<:RArray}) = false
+ArrayInterface.fast_matrix_colors(::Type{<:RArray}) = false
 
 @inline Base.eltype(::RArray{ElType,Shape}) where {ElType, Shape} = ElType
 @inline Base.size(::RArray{ElType,Shape}) where {ElType, Shape} = Shape
@@ -725,8 +730,9 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
             push!(concrete_result_maker, :($resname = $tocopy))
             return
         end
+        # TODO: Add NamedTuple here?
 
-        error("canot copy $T")
+        error("cannot copy $T")
     end
 
     create_result(concrete_result, :result, ())
