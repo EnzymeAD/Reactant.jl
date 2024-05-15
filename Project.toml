@@ -18,6 +18,10 @@ NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
 ReactantNNlibExt = "NNlib"
 
 [compat]
-CEnum = "0.4"
+Cassette = "0.3"
+CEnum = "0.4, 0.5"
 Enzyme = "0.11, 0.12"
 Reactant_jll = "0.0.5"
+Preferences = "1.4"
+julia = "1"
+
