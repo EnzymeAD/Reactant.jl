@@ -1,4 +1,4 @@
-using Reactant, Lux, Random
+using Reactant, Lux, Random, Statistics
 using Test
 
 # Generate some data for the XOR problem: vectors of length 2, as columns of a matrix:
@@ -14,7 +14,7 @@ using BenchmarkTools
 
 origout, _ = model(noisy, ps, st)
 @show origout[3]
-@btime model($noisy, $ps, $st)
+@btime model($noisy, $ps, $st)  # 52.731 μs (10 allocations: 32.03 KiB)
 
 cmodel = Reactant.make_tracer(IdDict(), model, (), Reactant.ArrayToConcrete, nothing)
 cps = Reactant.make_tracer(IdDict(), ps, (), Reactant.ArrayToConcrete, nothing)
@@ -28,14 +28,39 @@ f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cs
 # # @show @code_llvm f(cmodel,cnoisy)
 comp = f(cmodel, cnoisy, cps, cst)
 @show comp[3]
-@btime f(cmodel, cnoisy)
+@btime f($cmodel, $cnoisy, $cps, $cst) # 4.430 μs (5 allocations: 160 bytes)
 
-# # To train the model, we use batches of 64 samples, and one-hot encoding:
-# target = Flux.onehotbatch(truth, [true, false])                   # 2×1000 OneHotMatrix
-# loader = Flux.DataLoader((noisy, target); batchsize=64, shuffle=true);
+# To train the model, we use batches of 64 samples, and one-hot encoding:
+
+using MLUtils, OneHotArrays, Optimisers
+
+target = onehotbatch(truth, [true, false])                   # 2×1000 OneHotMatrix
+ctarget = Reactant.ConcreteRArray(Array{Float32}(target))
+loader = DataLoader((noisy, target); batchsize=64, shuffle=true);
 # # 16-element DataLoader with first element: (2×64 Matrix{Float32}, 2×64 OneHotMatrix)
 
-# optim = Flux.setup(Flux.Adam(0.01), model)  # will store optimiser momentum, etc.
+opt = Adam(0.01f0)
+losses = []
+
+# Lux.Exprimental.TrainState is very specialized for Lux models, so we write out the
+# training loop manually:
+
+function crossentropy(ŷ, y)
+    logŷ = log.(ŷ)
+    result = y .* logŷ
+    # result = ifelse.(y .== 0.0f0, zero.(result), result)
+    return -sum(result)
+end
+
+function loss_function(model, x, y, ps, st)
+    y_hat, _ = model(x, ps, st)
+    return crossentropy(y_hat, y)
+end
+
+compiled_loss_function = Reactant.compile(
+    loss_function, (cmodel, cnoisy, ctarget, cps, cst))
+
+
 
 # # Training loop, using the whole data set 1000 times:
 # losses = []
