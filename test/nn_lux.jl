@@ -1,4 +1,5 @@
 using Reactant, Lux, Random, Statistics
+using Enzyme
 using Test
 
 # Generate some data for the XOR problem: vectors of length 2, as columns of a matrix:
@@ -44,7 +45,6 @@ losses = []
 
 # Lux.Exprimental.TrainState is very specialized for Lux models, so we write out the
 # training loop manually:
-
 function crossentropy(ŷ, y)
     logŷ = log.(ŷ)
     result = y .* logŷ
@@ -57,10 +57,18 @@ function loss_function(model, x, y, ps, st)
     return crossentropy(y_hat, y)
 end
 
-compiled_loss_function = Reactant.compile(
-    loss_function, (cmodel, cnoisy, ctarget, cps, cst))
+function gradient_loss_function(model, x, y, ps, st)
+    dps = Enzyme.make_zero(ps)
+    _, res = Enzyme.autodiff(
+        ReverseWithPrimal, loss_function, Active, Const(model), Const(x), Const(y),
+        Duplicated(ps, dps), Const(st))
+    return res, dps
+end
 
+gradient_loss_function(model, noisy, target, ps, st)
 
+compiled_gradient = Reactant.compile(
+    gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst))
 
 # # Training loop, using the whole data set 1000 times:
 # losses = []
