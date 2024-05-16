@@ -22,7 +22,7 @@ end
 examples = [title => joinpath("generated", string(name, ".md")) for (title, name) in examples]
 
 makedocs(;
-    modules=[Reactant, Reactant.XLA, Reactant.MLIR, Reactant.MLIR.API, Reactant.MLIR.IR, Reactant.MLIR.Dialects.chlo, Reactant.MLIR.Dialects.mhlo, Reactant.MLIR.Dialects.stablehlo, Reactant.MLIR.Dialects.enzyme, Reactant.MLIR.Dialects.arith, Reactant.MLIR.Dialects.func, Reactant.MLIR.Dialects.affine, Reactant.MLIR.Dialects.builtin, Base, Core],
+    modules=[Reactant, Reactant.XLA, Reactant.MLIR, Reactant.MLIR.API, Reactant.MLIR.IR, Reactant.MLIR.Dialects.chlo, Reactant.MLIR.Dialects.vhlo, Reactant.MLIR.Dialects.stablehlo, Reactant.MLIR.Dialects.enzyme, Reactant.MLIR.Dialects.arith, Reactant.MLIR.Dialects.func, Reactant.MLIR.Dialects.affine, Reactant.MLIR.Dialects.builtin, Base, Core],
     authors="William Moses <wsmoses@illinois.edu>, Valentin Churavy <vchuravy@mit.edu>",
     repo="https://github.com/EnzymeAD/Reactant.jl/blob/{commit}{path}#{line}",
     sitename="Reactant.jl",
