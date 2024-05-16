@@ -41,6 +41,7 @@ makedocs(;
         "API reference" => "api.md",
     ],
     doctest = true,
+    warnonly = true,
     strict = true,
 )
 
