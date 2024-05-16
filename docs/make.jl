@@ -42,7 +42,6 @@ makedocs(;
     ],
     doctest = true,
     warnonly = true,
-    strict = true,
 )
 
 deploydocs(;
