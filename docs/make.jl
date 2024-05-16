@@ -22,7 +22,7 @@ end
 examples = [title => joinpath("generated", string(name, ".md")) for (title, name) in examples]
 
 makedocs(;
-    modules=[Reactant],
+    # modules=[Reactant],
     authors="William Moses <wsmoses@illinois.edu>, Valentin Churavy <vchuravy@mit.edu>",
     repo="https://github.com/EnzymeAD/Reactant.jl/blob/{commit}{path}#{line}",
     sitename="Reactant.jl",
