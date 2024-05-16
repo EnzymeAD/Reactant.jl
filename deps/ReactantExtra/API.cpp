@@ -89,9 +89,9 @@ extern "C" PjRtClient* MakeGPUClient(int node_id, int num_nodes, int* allowed_de
     auto clientErr = GetStreamExecutorGpuClient(options);
 
     if (!clientErr.ok()) {
-      auto str = clientErr.status();
-      const char* err = malloc(strlen(str)+1);
-      memcpy(err, str, strlen(str)+1);
+      auto str = clientErr.status().message();
+      char* err = (char*)malloc(str.size()+1);
+      memcpy(err, str.data(), str.size()+1);
       *error = err;
       return nullptr;
     } else {
