@@ -150,7 +150,7 @@ jobs:
       - run: |
           julia --project=docs -e '
             using Pkg
-            Pkg.develop([PackageSpec(path=pwd()), "Reactant_jll"])
+            Pkg.develop([PackageSpec(path=pwd()), PackageSpec("Reactant_jll")])
             Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
