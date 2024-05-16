@@ -397,6 +397,31 @@ for (jlop, hloop, RT) in ((:(Base.min), :minimum, :ElType),(:(Base.max), :maximu
 end
 end
 
+for (jlop, hloop, hlocomp, RT) in (
+                                   (:(Base.:(==)), :compare, "EQ", :ElType),
+                                   (:(Base.:(!=)), :compare, "NE", :ElType),
+                                   (:(Base.:(>=)), :compare, "GE", :ElType),
+                                   (:(Base.:(>)), :compare, "GT", :ElType),
+                                   (:(Base.:(<=)), :compare, "LE", :ElType),
+                                   (:(Base.:(<)), :compare, "LT", :ElType),
+                                  )
+    @eval begin
+        function elem_apply(::typeof($jlop), lhs::TracedRArray{ElType,Shape,N}, rhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
+            return TracedRArray{$RT,Shape,N}((),  MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data;
+                                                                                                comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(MLIR.IR.context(), $hlocomp)), 1))
+        end
+
+        function elem_apply(::typeof($jlop), lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
+            rhs = promote_to(lhs, rhs)
+            return TracedRArray{$RT,Shape,N}((),  MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data; comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(MLIR.IR.context(), $hlocomp)), 1))
+        end
+
+        function elem_apply(::typeof($jlop), lhs, rhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
+            lhs = promote_to(rhs, lhs)
+            return TracedRArray{$RT,Shape,N}((),  MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data; comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(MLIR.IR.context(), $hlocomp)), 1))
+        end
+    end
+end
 
 function elem_apply(::typeof(identity), lhs)
     return lhs
