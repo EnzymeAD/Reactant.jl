@@ -720,7 +720,7 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
             end)
             return
         end
-        if T ∈ [Int, AbstractFloat, AbstractString, Nothing, Symbol]
+        if T <: Int || T <: AbstractFloat || T <: AbstractString || T <: Nothing || T <: Symbol
             push!(concrete_result_maker, :($resname = $tocopy))
             return
         end
