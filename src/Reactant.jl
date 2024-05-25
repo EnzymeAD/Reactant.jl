@@ -724,6 +724,10 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
             push!(concrete_result_maker, :($resname = $tocopy))
             return
         end
+        if T <: Symbol
+            push!(concrete_result_maker, :($resname = $(QuoteNode(tocopy))))
+            return
+        end
         if isstructtype(T)
             elems = Symbol[]
             nf = fieldcount(T)
