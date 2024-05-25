@@ -720,8 +720,22 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
             end)
             return
         end
-        if T <: Int || T <: AbstractFloat || T <: AbstractString || T <: Nothing
+        if T ∈ [Int, AbstractFloat, AbstractString, Nothing, Symbol]
             push!(concrete_result_maker, :($resname = $tocopy))
+            return
+        end
+        if isstructtype(T)
+            elems = Symbol[]
+            nf = fieldcount(T)
+            for i in 1:nf
+                sym = Symbol(resname, :_, i)
+                create_result(getfield(tocopy, i), sym, (path..., i))
+                push!(elems, sym)
+            end
+            push!(concrete_result_maker, quote
+                flds = Any[$(elems...)]
+                $resname = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), $T, flds, $nf)
+            end)
             return
         end
 
