@@ -21,6 +21,7 @@ Base.cos(x::MockTensor) = MockTensor(cos(parent(x)), x.inds)
 
     @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
     @test isapprox(parent(y), cos.(parent(x)))
+    # TODO test that y.inds doesn't crash
 end
 
 mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}}
@@ -42,4 +43,5 @@ Base.cos(x::MutableMockTensor) = MutableMockTensor(cos(parent(x)), x.inds)
 
     @test y isa MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
     @test isapprox(parent(y), cos.(parent(x)))
+    # TODO test that y.inds doesn't crash
 end
