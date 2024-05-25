@@ -720,7 +720,19 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
             end)
             return
         end
-        if T <: Int || T <: AbstractFloat || T <: AbstractString || T <: Nothing || T <: Symbol
+        if T <: Array
+            elems = Symbol[]
+            for (i, v) in enumerate(tocopy)
+                sym = Symbol(string(resname)*"_"*string(i))
+                create_result(v, sym, (path...,i))
+                push!(elems, sym)
+            end
+            push!(concrete_result_maker, quote
+                    $resname = $(eltype(T))[$(elems...)]
+            end)
+            return
+        end
+        if T <: Int || T <: AbstractFloat || T <: AbstractString || T <: Nothing
             push!(concrete_result_maker, :($resname = $tocopy))
             return
         end
