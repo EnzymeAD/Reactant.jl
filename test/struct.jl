@@ -23,7 +23,7 @@ Base.cos(x::MockTensor) = MockTensor(cos(parent(x)), x.inds)
     @test isapprox(parent(y), cos.(parent(x)))
 end
 
-struct MutableMockTensor{T,N,A<:AbstractArray{T,N}}
+mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}}
     data::A
     inds::Vector{Symbol}
 end
