@@ -12,18 +12,6 @@ Base.parent(t::MockTensor) = t.data
 
 Base.cos(x::MockTensor) = MockTensor(cos(parent(x)), x.inds)
 
-@testset "Struct" begin
-    x = MockTensor(rand(4, 4), [:i, :j])
-    x2 = MockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
-
-    f = Reactant.compile(cos, (x2,))
-    y = f(x2)
-
-    @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
-    @test isapprox(parent(y), cos.(parent(x)))
-    # TODO test that y.inds doesn't crash
-end
-
 mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}}
     data::A
     inds::Vector{Symbol}
@@ -34,14 +22,30 @@ Base.parent(t::MutableMockTensor) = t.data
 
 Base.cos(x::MutableMockTensor) = MutableMockTensor(cos(parent(x)), x.inds)
 
-@testset "Mutable Struct" begin
-    x = MutableMockTensor(rand(4, 4), [:i, :j])
-    x2 = MutableMockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
+@testset "Struct" begin
+    @testset "MockTensor" begin
+        @testset "immutable" begin
+            x = MockTensor(rand(4, 4), [:i, :j])
+            x2 = MockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
 
-    f = Reactant.compile(cos, (x2,))
-    y = f(x2)
+            f = Reactant.compile(cos, (x2,))
+            y = f(x2)
 
-    @test y isa MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
-    @test isapprox(parent(y), cos.(parent(x)))
-    # TODO test that y.inds doesn't crash
+            @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
+            @test isapprox(parent(y), cos.(parent(x)))
+            # TODO test that y.inds doesn't crash
+        end
+
+        @testset "mutable" begin
+            x = MutableMockTensor(rand(4, 4), [:i, :j])
+            x2 = MutableMockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
+
+            f = Reactant.compile(cos, (x2,))
+            y = f(x2)
+
+            @test y isa MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
+            @test isapprox(parent(y), cos.(parent(x)))
+            # TODO test that y.inds doesn't crash
+        end
+    end
 end
