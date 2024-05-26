@@ -294,7 +294,7 @@ using Enzyme
         if aT === nothing
         	throw("Unhandled type $T")
         end
-        if datatype_fieldcount(aT) === nothing
+        if Base.datatype_fieldcount(aT) === nothing
         	throw("Unhandled type $T")
         end
     end
