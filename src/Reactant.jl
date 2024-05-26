@@ -342,7 +342,7 @@ using Enzyme
     end
 
     if Val(T) ∈ seen
-        return seen[T]
+        return T
     end
 
     seen = (Val(T), seen...)
