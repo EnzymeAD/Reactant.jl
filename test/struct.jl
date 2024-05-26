@@ -37,6 +37,8 @@ function list(x::T...) where {T}
     return l
 end
 
+Base.sum(x::MockLinkedList{T}) where {T} = sum(x.head) + (!isnothing(x.tail) ? sum(x.tail) : 0)
+
 @testset "Struct" begin
     @testset "MockTensor" begin
         @testset "immutable" begin
@@ -65,9 +67,23 @@ end
     end
 
     @testset "MockLinkedList" begin
-        x = list([rand(2, 2) for _ in 1:2]...)
-        x2 = Reactant.make_tracer(IdDict(), x, (), Reactant.ArrayToConcrete, nothing)
+        x = [rand(2, 2) for _ in 1:2]
+        x2 = list(x...)
+        x3 = Reactant.make_tracer(IdDict(), x2, (), Reactant.ArrayToConcrete, nothing)
+        x4 = list(Reactant.ConcreteRArray.(x)...)
 
-        f = Reactant.compile(identity, (x2,))
+
+        # TODO this should be able to run without problems, but crashes
+        # f = Reactant.compile(identity, (x3,))
+
+        f3 = Reactant.compile(sum, (x3,))
+        f4 = Reactant.compile(sum, (x4,))
+
+        y = sum(x2)
+        y3 = f3(x3)
+        y4 = f4(x4)
+
+        @test isapprox(y, y3)
+        @test isapprox(y, y4)
     end
 end
