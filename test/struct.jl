@@ -22,6 +22,21 @@ Base.parent(t::MutableMockTensor) = t.data
 
 Base.cos(x::MutableMockTensor) = MutableMockTensor(cos(parent(x)), x.inds)
 
+# modified from JuliaCollections/DataStructures.jl
+# NOTE original uses abstract type instead of union, which is not supported
+mutable struct MockLinkedList{T}
+    head::T
+    tail::Union{MockLinkedList{T},Nothing}
+end
+
+function list(x::T...) where {T}
+    l = nothing
+    for i in Iterators.reverse(eachindex(x))
+        l = MockLinkedList{T}(x[i], l)
+    end
+    return l
+end
+
 @testset "Struct" begin
     @testset "MockTensor" begin
         @testset "immutable" begin
@@ -47,5 +62,12 @@ Base.cos(x::MutableMockTensor) = MutableMockTensor(cos(parent(x)), x.inds)
             @test isapprox(parent(y), cos.(parent(x)))
             # TODO test that y.inds doesn't crash
         end
+    end
+
+    @testset "MockLinkedList" begin
+        x = list([rand(2, 2) for _ in 1:2]...)
+        x2 = Reactant.make_tracer(IdDict(), x, (), Reactant.ArrayToConcrete, nothing)
+
+        f = Reactant.compile(identity, (x2,))
     end
 end
