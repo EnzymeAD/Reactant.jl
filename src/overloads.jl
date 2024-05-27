@@ -749,6 +749,12 @@ Cassette.overdub(context::TraceCtx, f::typeof(Base.materialize!), args...) = f(a
 
 @inline Base.copyto!(dest::TracedRArray, bc::Broadcasted{Nothing}) = _copyto!(dest, bc) # Keep it for ArrayConflict
 
+@inline function Base.copyto!(dest::TracedRArray{ElType, Shape, N},
+        src::TracedRArray{ElType, Shape, N}) where {ElType, Shape, N}
+    dest.mlir_data = src.mlir_data
+    return dest
+end
+
 @inline function broadcast_to_size(arg::AbstractArray, rsize)
     attr = MLIR.IR.DenseElementsAttribute(arg)
     len = ndims(arg)
