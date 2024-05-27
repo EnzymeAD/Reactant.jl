@@ -6,10 +6,11 @@ include("utils.jl")
 
 abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType,N} end
 
-@inline Base.eltype(::RArray{ElType,Shape}) where {ElType,Shape} = ElType
-@inline Base.size(::RArray{ElType,Shape}) where {ElType,Shape} = Shape
-@inline Base.ndims(::RArray{ElType,Shape,N}) where {ElType,Shape,N} = N
-@inline Base.ndims(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} = N
+@inline Base.eltype(::RArray{ElType,Shape}) where {ElType, Shape} = ElType
+@inline Base.size(::RArray{ElType,Shape}) where {ElType, Shape} = Shape
+@inline Base.size(::Type{<:RArray{ElType,Shape}}) where {ElType, Shape} = Shape
+@inline Base.ndims(::RArray{ElType,Shape, N}) where {ElType, Shape, N} = N
+@inline Base.ndims(::Type{<:RArray{ElType,Shape, N}}) where {ElType, Shape, N} = N
 
 @inline mlir_type(::RArray{ElType,Shape,N}) where {ElType,Shape,N} =
     MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
@@ -162,6 +163,12 @@ end
         return res
     end
 
+    if RT <: TracedRArray
+        res = broadcast_to_size(eltype(RT)(0), size(prev))
+        seen[prev] = res
+        return res
+    end
+    
     attr = fill(MLIR.IR.Attribute(eltype(RT)(0)), mlir_type(prev))
     cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
     res = RT((), cst)
