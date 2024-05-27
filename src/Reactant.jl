@@ -1,5 +1,7 @@
 module Reactant
 
+using ArrayInterface: ArrayInterface
+
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("utils.jl")
@@ -188,7 +190,8 @@ include("overloads.jl")
 
 using Enzyme
 
-@inline val_value(::Val{T}) where {T} = T
+@inline val_value(::Val{T}) where T = T
+@inline val_value(::Type{Val{T}}) where T = T
 
 @enum TraceMode begin
     ConcreteToTraced = 1
@@ -649,7 +652,7 @@ function generate_jlfunc(
         end
         res = Symbol("arg_$(path[2])")
         for p in path[3:end]
-            res = :(Base.getfield($res, $p))
+            res = :(Base.getfield($res, $(Meta.quot(p))))
         end
         sym = Symbol("sbuf_$i")
         sbuf = :($sym = XLA.synced_buffer($res.data))
@@ -819,7 +822,7 @@ function generate_jlfunc(
             return nothing
         end
 
-        return error("canot copy $T")
+        error("cannot copy $T")
     end
 
     create_result(concrete_result, :result, ())
