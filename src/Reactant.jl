@@ -1,7 +1,5 @@
 module Reactant
 
-using ArrayInterface: ArrayInterface
-
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("utils.jl")
