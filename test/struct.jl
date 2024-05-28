@@ -65,7 +65,7 @@ end
             y = f(x2)
 
             @test y isa
-                  MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
+                MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
             @test isapprox(parent(y), cos.(parent(x)))
             @test x.inds == [:i, :j]
         end

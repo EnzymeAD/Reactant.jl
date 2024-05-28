@@ -7,8 +7,19 @@ using ..API
 export Attribute, Block, Context, Dialect, Location, Operation, Region, Value
 export activate!, deactivate!, dispose!, enable_multithreading!, context!
 export context, type, type!, location, typeid, block, dialect
-export nattrs, attr, attr!, rmattr!, nregions, region, nresults, result, noperands, operand,
-       operand!, nsuccessors, successor
+export nattrs,
+    attr,
+    attr!,
+    rmattr!,
+    nregions,
+    region,
+    nresults,
+    result,
+    noperands,
+    operand,
+    operand!,
+    nsuccessors,
+    successor
 export BlockIterator, RegionIterator, OperationIterator
 export @affinemap
 
@@ -32,7 +43,7 @@ macro llvmversioned(pred, expr)
     version = eval(version)
 
     if predname == :min && VersionNumber(19) >= version ||
-       predname == :max && VersionNumber(19) <= version
+        predname == :max && VersionNumber(19) <= version
         esc(expr)
     else
         esc(:(nothing))
@@ -73,8 +84,9 @@ function Base.cconvert(::Core.Type{API.MlirStringRef}, s::AbstractString)
 end
 
 # Directly create `MlirStringRef` instead of adding an extra ccall.
-function Base.unsafe_convert(::Core.Type{API.MlirStringRef},
-                             s::Union{Symbol,String,AbstractVector{UInt8}})
+function Base.unsafe_convert(
+    ::Core.Type{API.MlirStringRef}, s::Union{Symbol,String,AbstractVector{UInt8}}
+)
     p = Base.unsafe_convert(Ptr{Cchar}, s)
     return API.MlirStringRef(p, sizeof(s))
 end

@@ -7,8 +7,8 @@ end
 
 Gets an identifier with the given string value.
 """
-Identifier(str::String; context::Context=context()) = Identifier(API.mlirIdentifierGet(context,
-                                                                                       str))
+Identifier(str::String; context::Context=context()) =
+    Identifier(API.mlirIdentifierGet(context, str))
 
 Base.convert(::Core.Type{API.MlirIdentifier}, id::Identifier) = id.identifier
 

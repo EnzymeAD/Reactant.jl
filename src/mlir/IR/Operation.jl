@@ -65,8 +65,8 @@ block(operation::Operation) = Block(API.mlirOperationGetBlock(operation), false)
 
 Gets the operation that owns this operation, returning null if the operation is not owned.
 """
-parent_op(operation::Operation) = Operation(API.mlirOperationGetParentOperation(operation),
-                                            false)
+parent_op(operation::Operation) =
+    Operation(API.mlirOperationGetParentOperation(operation), false)
 
 """
     rmfromparent(op)
@@ -207,8 +207,8 @@ end
 
 Removes an attribute by name. Returns false if the attribute was not found and true if removed.
 """
-rmattr!(operation::Operation, name) = API.mlirOperationRemoveAttributeByName(operation,
-                                                                             name)
+rmattr!(operation::Operation, name) =
+    API.mlirOperationRemoveAttributeByName(operation, name)
 
 function lose_ownership!(operation::Operation)
     @assert operation.owned
@@ -267,16 +267,19 @@ end
 Returns whether the given fully-qualified operation (i.e. 'dialect.operation') is registered with the context.
 This will return true if the dialect is loaded and the operation is registered within the dialect.
 """
-is_registered(opname; context::Context=context()) = API.mlirContextIsRegisteredOperation(context,
-                                                                                         opname)
+is_registered(opname; context::Context=context()) =
+    API.mlirContextIsRegisteredOperation(context, opname)
 
-function create_operation(name, loc;
-                          results=nothing,
-                          operands=nothing,
-                          owned_regions=nothing,
-                          successors=nothing,
-                          attributes=nothing,
-                          result_inference=isnothing(results))
+function create_operation(
+    name,
+    loc;
+    results=nothing,
+    operands=nothing,
+    owned_regions=nothing,
+    successors=nothing,
+    attributes=nothing,
+    result_inference=isnothing(results),
+)
     GC.@preserve name loc begin
         state = Ref(API.mlirOperationStateGet(name, loc))
         if !isnothing(results)
@@ -292,16 +295,15 @@ function create_operation(name, loc;
             lose_ownership!.(owned_regions)
             GC.@preserve owned_regions begin
                 mlir_regions = Base.unsafe_convert.(API.MlirRegion, owned_regions)
-                API.mlirOperationStateAddOwnedRegions(state, length(mlir_regions),
-                                                      mlir_regions)
+                API.mlirOperationStateAddOwnedRegions(
+                    state, length(mlir_regions), mlir_regions
+                )
             end
         end
         if !isnothing(successors)
             GC.@preserve successors begin
                 mlir_blocks = Base.unsafe_convert.(API.MlirBlock, successors)
-                API.mlirOperationStateAddSuccessors(state,
-                                                    length(mlir_blocks),
-                                                    mlir_blocks)
+                API.mlirOperationStateAddSuccessors(state, length(mlir_blocks), mlir_blocks)
             end
         end
         if !isnothing(attributes)

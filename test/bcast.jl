@@ -31,9 +31,11 @@ function test()
 
         in_tys = [MLIR.IR.TensorType([4], MLIR.IR.Type(Float64))]
 
-        func = MLIR.Dialects.func.func_(; sym_name="main_tmp",
-                                        function_type=MLIR.IR.FunctionType(in_tys, []),
-                                        body=MLIR.IR.Region())
+        func = MLIR.Dialects.func.func_(;
+            sym_name="main_tmp",
+            function_type=MLIR.IR.FunctionType(in_tys, []),
+            body=MLIR.IR.Region(),
+        )
 
         fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for _ in in_tys])
         push!(MLIR.IR.region(func, 1), fnbody)
@@ -42,8 +44,9 @@ function test()
             MLIR.IR.block!(fnbody) do
                 a = ones(4)
                 b = ones(4)
-                d = Data(Reactant.TracedRArray{Float64,(4,),1}((),
-                                                               MLIR.IR.argument(fnbody, 1)))
+                d = Data(
+                    Reactant.TracedRArray{Float64,(4,),1}((), MLIR.IR.argument(fnbody, 1))
+                )
 
                 return tmp(a, b, d)
             end

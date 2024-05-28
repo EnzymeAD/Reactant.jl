@@ -23,8 +23,8 @@ Base.convert(::Core.Type{API.MlirModule}, module_::Module) = module_.module_
 
 Parses a module from the string and transfers ownership to the caller.
 """
-Base.parse(::Core.Type{Module}, module_; context::Context=context()) = Module(API.mlirModuleCreateParse(context,
-                                                                                                        module_))
+Base.parse(::Core.Type{Module}, module_; context::Context=context()) =
+    Module(API.mlirModuleCreateParse(context, module_))
 
 macro mlir_str(code)
     quote
@@ -66,7 +66,7 @@ function activate!(blk::Module)
         return Module[]
     end
     Base.push!(stack, blk)
-    return
+    return nothing
 end
 
 function deactivate!(blk::Module)

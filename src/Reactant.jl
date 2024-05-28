@@ -11,19 +11,19 @@ abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType,N} end
 @inline Base.ndims(::RArray{ElType,Shape,N}) where {ElType,Shape,N} = N
 @inline Base.ndims(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} = N
 
-@inline mlir_type(::RArray{ElType,Shape,N}) where {ElType,Shape,N} = MLIR.IR.TensorType(Shape,
-                                                                                        MLIR.IR.Type(ElType))
+@inline mlir_type(::RArray{ElType,Shape,N}) where {ElType,Shape,N} =
+    MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
 
-struct XLAArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
-end
+struct XLAArray{ElType,Shape,N} <: RArray{ElType,Shape,N} end
 
 mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
     data::XLA.AsyncBuffer
     #	data::XLAArray{ElType, Shape, N}
 end
 
-function Base.convert(::Type{T},
-                      X::ConcreteRArray{ElType,Shape,N}) where {T<:Array,ElType,Shape,N}
+function Base.convert(
+    ::Type{T}, X::ConcreteRArray{ElType,Shape,N}
+) where {T<:Array,ElType,Shape,N}
     data = Array{ElType,N}(undef, Shape...)
     XLA.await(X.data)
     buf = X.data.buffer
@@ -52,15 +52,16 @@ function Base.isapprox(x, y::ConcreteRArray{ElType,(),0}; kwargs...) where {ElTy
     return Base.isapprox(to_float(x), y; kwargs...)
 end
 
-function Base.isapprox(x::ConcreteRArray{ElType,(),0}, y::ConcreteRArray{ElType2,(),0};
-                       kwargs...) where {ElType,ElType2}
+function Base.isapprox(
+    x::ConcreteRArray{ElType,(),0}, y::ConcreteRArray{ElType2,(),0}; kwargs...
+) where {ElType,ElType2}
     return Base.isapprox(to_float(x), y; kwargs...)
 end
 
 function Base.print_array(io::IO, X::ConcreteRArray)
     if X.data == XLA.AsyncEmptyBuffer
         println(io, "<Empty buffer>")
-        return
+        return nothing
     end
     return Base.print_array(io, convert(Array, X))
 end
@@ -68,13 +69,14 @@ end
 function Base.show(io::IO, X::ConcreteRArray)
     if X.data == XLA.AsyncEmptyBuffer
         println(io, "<Empty buffer>")
-        return
+        return nothing
     end
     return Base.show(io, convert(Array, X))
 end
 
-@inline function Base.getindex(a::ConcreteRArray{ElType,Shape},
-                               args::Vararg{Int,N}) where {ElType,Shape,N}
+@inline function Base.getindex(
+    a::ConcreteRArray{ElType,Shape}, args::Vararg{Int,N}
+) where {ElType,Shape,N}
     if a.data == XLA.AsyncEmptyBuffer
         throw("Cannot getindex from empty buffer")
     end
@@ -98,13 +100,13 @@ end
     return convert(Array, a)[args...]
 end
 
-@inline function ConcreteRArray(data::Array{ElType,N}; client=XLA.default_backend[],
-                                idx=XLA.default_device_idx[]) where {ElType,N}
+@inline function ConcreteRArray(
+    data::Array{ElType,N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]
+) where {ElType,N}
     device = XLA.ClientGetDevice(client, idx)
-    return ConcreteRArray{ElType,size(data),N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client,
-                                                                                       data,
-                                                                                       device),
-                                                               nothing))
+    return ConcreteRArray{ElType,size(data),N}(
+        XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing)
+    )
     # ConcreteRArray{ElType, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(data), device), nothing))
 end
 
@@ -117,10 +119,9 @@ end
 mutable struct TracedRArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
-    function TracedRArray{ElType,Shape,N}(paths::Tuple,
-                                          mlir_data::Union{Nothing,MLIR.IR.Value}) where {ElType,
-                                                                                          Shape,
-                                                                                          N}
+    function TracedRArray{ElType,Shape,N}(
+        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+    ) where {ElType,Shape,N}
         if mlir_data !== nothing
             @assert size(MLIR.IR.type(mlir_data)) == Shape
         end
@@ -130,26 +131,25 @@ end
 
 using Enzyme
 
-@inline function Enzyme.Compiler.active_reg_inner(::Type{TracedRArray{ElType,Shape,N}},
-                                                  seen::ST, world::Union{Nothing,UInt},
-                                                  ::Val{justActive}=Val(false),
-                                                  ::Val{UnionSret}=Val(false))::Enzyme.Compiler.ActivityState where {ST,
-                                                                                                                     ElType,
-                                                                                                                     Shape,
-                                                                                                                     N,
-                                                                                                                     justActive,
-                                                                                                                     UnionSret}
-    if Enzyme.Compiler.active_reg_inner(ElType, seen, world, Val(justActive),
-                                        Val(UnionSret)) == Enzyme.Compiler.AnyState
+@inline function Enzyme.Compiler.active_reg_inner(
+    ::Type{TracedRArray{ElType,Shape,N}},
+    seen::ST,
+    world::Union{Nothing,UInt},
+    ::Val{justActive}=Val(false),
+    ::Val{UnionSret}=Val(false),
+)::Enzyme.Compiler.ActivityState where {ST,ElType,Shape,N,justActive,UnionSret}
+    if Enzyme.Compiler.active_reg_inner(
+        ElType, seen, world, Val(justActive), Val(UnionSret)
+    ) == Enzyme.Compiler.AnyState
         return Enzyme.Compiler.AnyState
     else
         return Enzyme.Compiler.DupState
     end
 end
 
-@inline function Enzyme.make_zero(::Type{RT}, seen::IdDict, prev::RT,
-                                  ::Val{copy_if_inactive}=Val(false))::RT where {copy_if_inactive,
-                                                                                 RT<:RArray}
+@inline function Enzyme.make_zero(
+    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
+)::RT where {copy_if_inactive,RT<:RArray}
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -169,8 +169,9 @@ end
     return res
 end
 
-function Base.promote_rule(A::Type{TracedRArray{T,Shape,N}},
-                           B::Type{TracedRArray{S,Shape,N}}) where {T,S,Shape,N}
+function Base.promote_rule(
+    A::Type{TracedRArray{T,Shape,N}}, B::Type{TracedRArray{S,Shape,N}}
+) where {T,S,Shape,N}
     return TracedRArray{Base.promote_type(T, S),Shape,N}
 end
 
@@ -197,13 +198,13 @@ using Enzyme
     TracedSetPath = 5
 end
 
-@inline is_concrete_tuple(x::T2) where {T2} = (x <: Tuple) && !(x === Tuple) &&
-                                              !(x isa UnionAll)
+@inline is_concrete_tuple(x::T2) where {T2} =
+    (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
 @inline function traced_type(val::Type{T}, seen::ST, ::Val{mode}) where {ST,T,mode}
     if T <: ConcreteRArray
         if mode == ConcreteToTraced
-            @inline base_typet(TV::TT) where {TT<:UnionAll} = UnionAll(TV.var,
-                                                                       base_typet(TV.body))
+            @inline base_typet(TV::TT) where {TT<:UnionAll} =
+                UnionAll(TV.var, base_typet(TV.body))
             @inline base_typet(TV::TT) where {TT<:DataType} = TracedRArray{TV.parameters...}
             return base_typet(T)
         elseif mode == TracedToConcrete
@@ -216,9 +217,10 @@ end
         if mode == ConcreteToTraced
             throw("TracedRArray $T cannot be traced")
         elseif mode == TracedToConcrete
-            @inline base_typec(TV::TT) where {TT<:UnionAll} = UnionAll(TV.var,
-                                                                       base_typec(TV.body))
-            @inline base_typec(TV::TT) where {TT<:DataType} = ConcreteRArray{TV.parameters...}
+            @inline base_typec(TV::TT) where {TT<:UnionAll} =
+                UnionAll(TV.var, base_typec(TV.body))
+            @inline base_typec(TV::TT) where {TT<:DataType} =
+                ConcreteRArray{TV.parameters...}
             return base_typec(T)
         elseif mode == TracedTrack || mode == TracedSetPath
             return T
@@ -286,8 +288,9 @@ end
         if mode == ArrayToConcrete && eltype(T) <: AbstractFloat
             return (ConcreteRArray{eltype(T),Shape,ndims(T)} where {Shape})
         else
-            return Array{traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode)),
-                         ndims(T)}
+            return Array{
+                traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode)),ndims(T)
+            }
         end
     end
 
@@ -496,8 +499,9 @@ end
     return y
 end
 
-@inline function make_tracer(seen::IdDict, prev::ConcreteRArray{ElType,Shape,N}, path, mode,
-                             data) where {ElType,Shape,N}
+@inline function make_tracer(
+    seen::IdDict, prev::ConcreteRArray{ElType,Shape,N}, path, mode, data
+) where {ElType,Shape,N}
     if mode == ArrayToConcrete
         return prev
     end
@@ -513,8 +517,9 @@ end
     return res
 end
 
-@inline function make_tracer(seen::IdDict, prev::TracedRArray{ElType,Shape,N}, path, mode,
-                             data) where {ElType,Shape,N}
+@inline function make_tracer(
+    seen::IdDict, prev::TracedRArray{ElType,Shape,N}, path, mode, data
+) where {ElType,Shape,N}
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
@@ -546,14 +551,17 @@ end
     throw("Cannot Unknown trace mode $mode")
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode,
-                             data) where {RT<:AbstractFloat}
+@inline function make_tracer(
+    seen::IdDict, prev::RT, path, mode, data
+) where {RT<:AbstractFloat}
     return prev
 end
 
 @inline function make_tracer(seen::IdDict, prev::Complex{RT}, path, mode, data) where {RT}
-    return Complex(make_tracer(seen, prev.re, append_path(path, :re), mode, data),
-                   make_tracer(seen, prev.im, append_path(path, :im), mode, data))
+    return Complex(
+        make_tracer(seen, prev.re, append_path(path, :re), mode, data),
+        make_tracer(seen, prev.im, append_path(path, :im), mode, data),
+    )
 end
 
 @inline function make_tracer(seen::IdDict, prev::RT, path, mode, data) where {RT<:Array}
@@ -585,19 +593,24 @@ end
 end
 
 @inline function make_tracer(seen::IdDict, prev::RT, path, mode, data) where {RT<:Tuple}
-    return ((make_tracer(seen, v, append_path(path, i), mode, data) for (i, v) in
-                                                                        enumerate(prev))...,)
+    return (
+        (
+            make_tracer(seen, v, append_path(path, i), mode, data) for
+            (i, v) in enumerate(prev)
+        )...,
+    )
 end
 
-@inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path, mode,
-                             data) where {A,RT}
-    return NamedTuple{A,traced_type(RT, (), Val(mode))}(((make_tracer(seen,
-                                                                      Base.getfield(prev,
-                                                                                    name),
-                                                                      append_path(path,
-                                                                                  name),
-                                                                      mode, data) for name in
-                                                                                      A)...,))
+@inline function make_tracer(
+    seen::IdDict, prev::NamedTuple{A,RT}, path, mode, data
+) where {A,RT}
+    return NamedTuple{A,traced_type(RT, (), Val(mode))}((
+        (
+            make_tracer(
+                seen, Base.getfield(prev, name), append_path(path, name), mode, data
+            ) for name in A
+        )...,
+    ))
 end
 
 @inline function make_tracer(seen::IdDict, prev::Core.Box, path, mode, data)
@@ -615,8 +628,9 @@ end
     return res
 end
 
-function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linear_results,
-                         preserved_args)
+function generate_jlfunc(
+    concrete_result, client, mod, Nargs, linear_args, linear_results, preserved_args
+)
     args = ntuple(Val(Nargs)) do i
         Base.@_inline_meta
         return Symbol("arg_$i")
@@ -731,9 +745,12 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
         quote
             $(arg_syncs...)
             GC.@preserve $(topres...) begin
-                linearized_results = XLA.ExecutableCall($exec, ($(linearized_args...),),
-                                                        $donated_args_set,
-                                                        Val($(length(linear_results))))
+                linearized_results = XLA.ExecutableCall(
+                    $exec,
+                    ($(linearized_args...),),
+                    $donated_args_set,
+                    Val($(length(linear_results))),
+                )
             end
         end
     end
@@ -742,7 +759,7 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
     function create_result(tocopy::T, resname::Symbol, path) where {T}
         if T <: ConcreteRArray
             push!(concrete_result_maker, :($resname = $T($(result_stores[path]))))
-            return
+            return nothing
         end
         if T <: Tuple
             elems = Symbol[]
@@ -751,10 +768,13 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
                 create_result(v, sym, (path..., i))
                 push!(elems, sym)
             end
-            push!(concrete_result_maker, quote
-                      $resname = ($(elems...),)
-                  end)
-            return
+            push!(
+                concrete_result_maker,
+                quote
+                    $resname = ($(elems...),)
+                end,
+            )
+            return nothing
         end
         if T <: Array
             elems = Symbol[]
@@ -763,18 +783,21 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
                 create_result(v, sym, (path..., i))
                 push!(elems, sym)
             end
-            push!(concrete_result_maker, quote
-                      $resname = $(eltype(T))[$(elems...)]
-                  end)
-            return
+            push!(
+                concrete_result_maker,
+                quote
+                    $resname = $(eltype(T))[$(elems...)]
+                end,
+            )
+            return nothing
         end
         if T <: Int || T <: AbstractFloat || T <: AbstractString || T <: Nothing
             push!(concrete_result_maker, :($resname = $tocopy))
-            return
+            return nothing
         end
         if T <: Symbol
             push!(concrete_result_maker, :($resname = $(QuoteNode(tocopy))))
-            return
+            return nothing
         end
         if isstructtype(T)
             elems = Symbol[]
@@ -784,13 +807,16 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
                 create_result(getfield(tocopy, i), sym, (path..., i))
                 push!(elems, sym)
             end
-            push!(concrete_result_maker,
-                  quote
-                      flds = Any[$(elems...)]
-                      $resname = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), $T,
-                                       flds, $nf)
-                  end)
-            return
+            push!(
+                concrete_result_maker,
+                quote
+                    flds = Any[$(elems...)]
+                    $resname = ccall(
+                        :jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), $T, flds, $nf
+                    )
+                end,
+            )
+            return nothing
         end
 
         return error("canot copy $T")
@@ -813,7 +839,9 @@ end
 const registry = Ref{MLIR.IR.DialectRegistry}()
 function __init__()
     registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(registry[]::MLIR.API.MlirDialectRegistry)::Cvoid
+    @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
+        registry[]::MLIR.API.MlirDialectRegistry
+    )::Cvoid
 end
 
 const opt_passes = """
@@ -976,8 +1004,9 @@ pad_dot_general<1>(1);
             enzyme-hlo-remove-transform
 """
 
-function compile(f::FTy, args::VAT; pipeline_options="",
-                 client=nothing) where {FTy,VAT<:Tuple}
+function compile(
+    f::FTy, args::VAT; pipeline_options="", client=nothing
+) where {FTy,VAT<:Tuple}
     N = length(args)
     ctx = MLIR.IR.Context()
     Base.append!(registry[]; context=ctx)
@@ -985,18 +1014,16 @@ function compile(f::FTy, args::VAT; pipeline_options="",
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
         MLIR.IR.mmodule!(mod) do
-            fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(mod,
-                                                                                                                        f,
-                                                                                                                        args,
-                                                                                                                        (),
-                                                                                                                        "main",
-                                                                                                                        true)
+            fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
+                mod, f, args, (), "main", true
+            )
             @assert !fnwrapped
 
             concrete_seen = IdDict()
 
-            concrete_result = make_tracer(concrete_seen, traced_result, ("result",),
-                                          TracedToConcrete, nothing) #=data=#
+            concrete_result = make_tracer(
+                concrete_seen, traced_result, ("result",), TracedToConcrete, nothing
+            ) #=data=#
 
             if client === nothing
                 if length(linear_args) > 0
@@ -1012,9 +1039,12 @@ function compile(f::FTy, args::VAT; pipeline_options="",
                 end
             end
 
-            XLA.RunPassPipeline(opt_passes *
-                                ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," *
-                                opt_passes, mod)
+            XLA.RunPassPipeline(
+                opt_passes *
+                ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," *
+                opt_passes,
+                mod,
+            )
 
             preserved_args = Tuple{TracedRArray,Int}[]
             results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
@@ -1037,10 +1067,11 @@ function compile(f::FTy, args::VAT; pipeline_options="",
 
             out_tys2 = [MLIR.IR.type(a) for a in nresults]
 
-            func3 = MLIR.Dialects.func.func_(; sym_name="main",
-                                             function_type=MLIR.IR.FunctionType(in_tys,
-                                                                                out_tys2),
-                                             body=MLIR.IR.Region())
+            func3 = MLIR.Dialects.func.func_(;
+                sym_name="main",
+                function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
+                body=MLIR.IR.Region(),
+            )
             MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(func2, 1))
 
             push!(MLIR.IR.body(mod), func3)
@@ -1050,8 +1081,15 @@ function compile(f::FTy, args::VAT; pipeline_options="",
 
             # println(string(mod))
 
-            return generate_jlfunc(concrete_result, client, mod, N, linear_args,
-                                   linear_results2, preserved_args)
+            return generate_jlfunc(
+                concrete_result,
+                client,
+                mod,
+                N,
+                linear_args,
+                linear_results2,
+                preserved_args,
+            )
         end
     end
 end

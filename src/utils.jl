@@ -3,7 +3,9 @@ function transpose_ty(mlirty)
     return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
 end
 function transpose_val(val)
-    attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...])
+    attr = MLIR.IR.DenseArrayAttribute(
+        Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...]
+    )
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
@@ -13,16 +15,22 @@ end
 
 function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
     if sizeof(typeof(f)) != 0
-        return (true,
-                make_mlir_fn(mod, apply, (f, args...), kwargs, name, concretein)[2:end]...)
+        return (
+            true, make_mlir_fn(mod, apply, (f, args...), kwargs, name, concretein)[2:end]...
+        )
     end
 
     N = length(args)
     seen_args = IdDict()
     traced_args = ntuple(Val(N)) do i
         Base.@_inline_meta
-        return make_tracer(seen_args, args[i], ("args", i),
-                           concretein ? ConcreteToTraced : TracedSetPath, nothing) #=data=#
+        return make_tracer(
+            seen_args,
+            args[i],
+            ("args", i),
+            concretein ? ConcreteToTraced : TracedSetPath,
+            nothing,
+        ) #=data=#
     end
 
     linear_args = TracedRArray[]
@@ -40,9 +48,11 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
         sym_visibility = MLIR.IR.Attribute("private")
     end
 
-    func = MLIR.Dialects.func.func_(; sym_name=name * "_tmp",
-                                    function_type=MLIR.IR.FunctionType(in_tys, []),
-                                    body=MLIR.IR.Region())
+    func = MLIR.Dialects.func.func_(;
+        sym_name=name * "_tmp",
+        function_type=MLIR.IR.FunctionType(in_tys, []),
+        body=MLIR.IR.Region(),
+    )
 
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
@@ -59,13 +69,19 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
 
     seen_results = IdDict()
 
-    traced_result = make_tracer(seen_results, result, ("result",),
-                                concretein ? TracedTrack : TracedSetPath, nothing) #=data=#
+    traced_result = make_tracer(
+        seen_results, result, ("result",), concretein ? TracedTrack : TracedSetPath, nothing
+    ) #=data=#
 
     retraced_args = ntuple(Val(N)) do i
         Base.@_inline_meta
-        return make_tracer(seen_results, traced_args[i], concretein ? ("resargs", i) : (),
-                           TracedTrack, nothing) #=data=#
+        return make_tracer(
+            seen_results,
+            traced_args[i],
+            concretein ? ("resargs", i) : (),
+            TracedTrack,
+            nothing,
+        ) #=data=#
     end
 
     linear_results = TracedRArray[]
@@ -91,9 +107,12 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
     end
 
     func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(; sym_name=name,
-                                        function_type=MLIR.IR.FunctionType(in_tys, out_tys),
-                                        body=MLIR.IR.Region(), sym_visibility)
+        return MLIR.Dialects.func.func_(;
+            sym_name=name,
+            function_type=MLIR.IR.FunctionType(in_tys, out_tys),
+            body=MLIR.IR.Region(),
+            sym_visibility,
+        )
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
@@ -101,6 +120,7 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
         MLIR.API.mlirOperationDestroy(func.operation)
         func.operation = MLIR.API.MlirOperation(C_NULL)
     end
-    return false, func2, traced_result, result, seen_args, ret, linear_args, in_tys,
-           linear_results
+    return false,
+    func2, traced_result, result, seen_args, ret, linear_args, in_tys,
+    linear_results
 end
