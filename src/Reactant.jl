@@ -708,11 +708,11 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
             push!(concrete_result_maker, :($resname = $T($(result_stores[path]))))
             return
         end
-        if T <: Tuple
+        if T <: Tuple || T <: NamedTuple
             elems = Symbol[]
-            for (i, v) in enumerate(tocopy)
-                sym = Symbol(string(resname)*"_"*string(i))
-                create_result(v, sym, (path...,i))
+            for (k, v) in pairs(tocopy)
+                sym = Symbol(resname, :_, k)
+                create_result(v, sym, (path..., k))
                 push!(elems, sym)
             end
             push!(concrete_result_maker, quote
