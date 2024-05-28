@@ -1,6 +1,5 @@
 using Reactant
 
-
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing; typ=typeof(default))
     for f in args
@@ -9,7 +8,7 @@ function extract_flag!(args, flag, default=nothing; typ=typeof(default))
             if f != flag
                 val = split(f, '=')[2]
                 if !(typ === Nothing || typ <: AbstractString)
-                  val = parse(typ, val)
+                    val = parse(typ, val)
                 end
             else
                 val = default

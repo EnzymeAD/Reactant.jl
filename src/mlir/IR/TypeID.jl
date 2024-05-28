@@ -3,7 +3,7 @@ struct TypeID
 
     function TypeID(typeid)
         @assert !mlirIsNull(typeid) "cannot create TypeID with null MlirTypeID"
-        new(typeid)
+        return new(typeid)
     end
 end
 
@@ -28,24 +28,27 @@ Checks if two type ids are equal.
 Base.:(==)(a::TypeID, b::TypeID) = API.mlirTypeIDEqual(a, b)
 
 @static if isdefined(API, :MlirTypeIDAllocator)
-
     mutable struct TypeIDAllocator
         allocator::API.MlirTypeIDAllocator
 
         function TypeIDAllocator()
             ptr = API.mlirTypeIDAllocatorCreate()
             @assert ptr != C_NULL "cannot create TypeIDAllocator"
-            finalizer(API.mlirTypeIDAllocatorDestroy, new(ptr))
+            return finalizer(API.mlirTypeIDAllocatorDestroy, new(ptr))
         end
     end
 
-    Base.cconvert(::Core.Type{API.MlirTypeIDAllocator}, allocator::TypeIDAllocator) = allocator
-    Base.unsafe_convert(::Core.Type{API.MlirTypeIDAllocator}, allocator) = allocator.allocator
+    function Base.cconvert(::Core.Type{API.MlirTypeIDAllocator}, allocator::TypeIDAllocator)
+        return allocator
+    end
+    function Base.unsafe_convert(::Core.Type{API.MlirTypeIDAllocator}, allocator)
+        return allocator.allocator
+    end
 
-    TypeID(allocator::TypeIDAllocator) = TypeID(API.mlirTypeIDAllocatorAllocateTypeID(allocator))
+    function TypeID(allocator::TypeIDAllocator)
+        return TypeID(API.mlirTypeIDAllocatorAllocateTypeID(allocator))
+    end
 
 else
-
     struct TypeIDAllocator end
-
 end

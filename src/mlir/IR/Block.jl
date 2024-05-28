@@ -21,7 +21,7 @@ Creates a new empty block with the given argument types and transfers ownership 
 """
 function Block(args::Vector{Type}, locs::Vector{Location})
     @assert length(args) == length(locs) "there should be one args for each locs (got $(length(args)) & $(length(locs)))"
-    Block(API.mlirBlockCreate(length(args), args, locs))
+    return Block(API.mlirBlockCreate(length(args), args, locs))
 end
 
 """
@@ -57,7 +57,7 @@ Returns the block immediately following the given block in its parent region or 
 function next(block::Block)
     block = API.mlirBlockGetNextInRegion(block)
     mlirIsNull(block) && return nothing
-    Block(block)
+    return Block(block)
 end
 
 """
@@ -74,7 +74,7 @@ Returns `i`-th argument of the block.
 """
 function argument(block::Block, i)
     i ∉ 1:nargs(block) && throw(BoundsError(block, i))
-    Value(API.mlirBlockGetArgument(block, i - 1))
+    return Value(API.mlirBlockGetArgument(block, i - 1))
 end
 
 """
@@ -82,7 +82,9 @@ end
 
 Appends an argument of the specified type to the block. Returns the newly added argument.
 """
-push_argument!(block::Block, type; location::Location=Location()) = Value(API.mlirBlockAddArgument(block, type, location))
+push_argument!(block::Block, type; location::Location=Location()) = Value(API.mlirBlockAddArgument(block,
+                                                                                                   type,
+                                                                                                   location))
 
 """
     first_op(block)
@@ -92,7 +94,7 @@ Returns the first operation in the block or `nothing` if empty.
 function first_op(block::Block)
     op = API.mlirBlockGetFirstOperation(block)
     mlirIsNull(op) && return nothing
-    Operation(op, false)
+    return Operation(op, false)
 end
 Base.first(block::Block) = first_op(block)
 
@@ -104,7 +106,7 @@ Returns the terminator operation in the block or `nothing` if no terminator.
 function terminator(block::Block)
     op = API.mlirBlockGetTerminator(block)
     mlirIsNull(op) && return nothing
-    Operation(op, false)
+    return Operation(op, false)
 end
 
 """
@@ -114,7 +116,7 @@ Takes an operation owned by the caller and appends it to the block.
 """
 function Base.push!(block::Block, op::Operation)
     API.mlirBlockAppendOwnedOperation(block, lose_ownership!(op))
-    op
+    return op
 end
 
 """
@@ -125,12 +127,12 @@ This is an expensive operation that scans the block linearly, prefer insertBefor
 """
 function Base.insert!(block::Block, index, op::Operation)
     API.mlirBlockInsertOwnedOperation(block, index - 1, lose_ownership!(op))
-    op
+    return op
 end
 
 function Base.pushfirst!(block::Block, op::Operation)
     insert!(block, 1, op)
-    op
+    return op
 end
 
 """
@@ -140,7 +142,7 @@ Takes an operation owned by the caller and inserts it after the (non-owned) refe
 """
 function insert_after!(block::Block, reference::Operation, op::Operation)
     API.mlirBlockInsertOwnedOperationAfter(block, reference, lose_ownership!(op))
-    op
+    return op
 end
 
 """
@@ -150,28 +152,27 @@ Takes an operation owned by the caller and inserts it before the (non-owned) ref
 """
 function insert_before!(block::Block, reference::Operation, op::Operation)
     API.mlirBlockInsertOwnedOperationBefore(block, reference, lose_ownership!(op))
-    op
+    return op
 end
 
 function lose_ownership!(block::Block)
     @assert block.owned
     # API.mlirBlockDetach(block)
     @atomic block.owned = false
-    block
+    return block
 end
 
 function Base.show(io::IO, block::Block)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
-    API.mlirBlockPrint(block, c_print_callback, ref)
+    return API.mlirBlockPrint(block, c_print_callback, ref)
 end
-
 
 # to simplify the API, we maintain a stack of contexts in task local storage
 # and pass them implicitly to MLIR API's that require them.
 function activate!(blk::Block)
     stack = get!(task_local_storage(), :mlir_block) do
-        Block[]
+        return Block[]
     end
     Base.push!(stack, blk)
     return
@@ -179,17 +180,20 @@ end
 
 function deactivate!(blk::Block)
     block() == blk || error("Deactivating wrong block")
-    Base.pop!(task_local_storage(:mlir_block))
+    return Base.pop!(task_local_storage(:mlir_block))
 end
 
-_has_block() = haskey(task_local_storage(), :mlir_block) && !Base.isempty(task_local_storage(:mlir_block))
+function _has_block()
+    return haskey(task_local_storage(), :mlir_block) &&
+           !Base.isempty(task_local_storage(:mlir_block))
+end
 
 function block(; throw_error::Core.Bool=true)
     if !_has_block()
         throw_error && error("No MLIR block is active")
         return nothing
     end
-    last(task_local_storage(:mlir_block))
+    return last(task_local_storage(:mlir_block))
 end
 
 function block!(f, blk::Block)

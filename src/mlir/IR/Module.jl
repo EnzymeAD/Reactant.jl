@@ -3,7 +3,7 @@ mutable struct Module
 
     function Module(module_)
         @assert !mlirIsNull(module_) "cannot create Module with null MlirModule"
-        finalizer(API.mlirModuleDestroy, new(module_))
+        return finalizer(API.mlirModuleDestroy, new(module_))
     end
 end
 
@@ -23,7 +23,8 @@ Base.convert(::Core.Type{API.MlirModule}, module_::Module) = module_.module_
 
 Parses a module from the string and transfers ownership to the caller.
 """
-Base.parse(::Core.Type{Module}, module_; context::Context=context()) = Module(API.mlirModuleCreateParse(context, module_))
+Base.parse(::Core.Type{Module}, module_; context::Context=context()) = Module(API.mlirModuleCreateParse(context,
+                                                                                                        module_))
 
 macro mlir_str(code)
     quote
@@ -55,14 +56,14 @@ Operation(module_::Module) = Operation(API.mlirModuleGetOperation(module_), fals
 
 function Base.show(io::IO, module_::Module)
     println(io, "Module:")
-    show(io, Operation(module_))
+    return show(io, Operation(module_))
 end
 
 # to simplify the API, we maintain a stack of contexts in task local storage
 # and pass them implicitly to MLIR API's that require them.
 function activate!(blk::Module)
     stack = get!(task_local_storage(), :mlir_module) do
-        Module[]
+        return Module[]
     end
     Base.push!(stack, blk)
     return
@@ -70,17 +71,20 @@ end
 
 function deactivate!(blk::Module)
     mmodule() == blk || error("Deactivating wrong block")
-    Base.pop!(task_local_storage(:mlir_module))
+    return Base.pop!(task_local_storage(:mlir_module))
 end
 
-_has_module() = haskey(task_local_storage(), :mlir_module) && !Base.isempty(task_local_storage(:mlir_module))
+function _has_module()
+    return haskey(task_local_storage(), :mlir_module) &&
+           !Base.isempty(task_local_storage(:mlir_module))
+end
 
 function mmodule(; throw_error::Core.Bool=true)
     if !_has_module()
         throw_error && error("No MLIR module is active")
         return nothing
     end
-    last(task_local_storage(:mlir_module))
+    return last(task_local_storage(:mlir_module))
 end
 
 function mmodule!(f, blk::Module)
