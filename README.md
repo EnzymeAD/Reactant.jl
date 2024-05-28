@@ -5,8 +5,8 @@
 [![Build Status](https://github.com/EnzymeAD/Reactant.jl/workflows/CI/badge.svg)](https://github.com/EnzymeAD/Reactant.jl/actions)
 [![Coverage](https://codecov.io/gh/EnzymeAD/Reactant.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/EnzymeAD/Reactant.jl)
 
-[!WARNING]  
-This package is under active development at the moment and may change its API and supported end systems at any time. End-users are advised to wait until a corresponding release with broader availability is made. Package developers are suggested to try out Reactant for integration, but should be advised of the same risks.
+> [!WARNING]  
+> This package is under active development at the moment and may change its API and supported end systems at any time. End-users are advised to wait until a corresponding release with broader availability is made. Package developers are suggested to try out Reactant for integration, but should be advised of the same risks.
 
 Reactant takes Julia function and compile it into MLIR and run fancy optimizations on top of it, including using EnzymeMLIR for automatic differentiation, and create relevant executables for CPU/GPU/TPU via XLA. It presently operates as a tracing system based off of Cassette. Compiled functions will assume the same control flow pattern as was original taken by objects used at compile time, and control flow (e.g. if, for) as well as any type instabilities will be removed. The benefits of this approach is immediately making all such code available for advanced optimization with little developer effort. This system and corresponding semantics is subject to change to a (potentially partial) source rewriter in the future.
 
