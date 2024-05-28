@@ -294,7 +294,7 @@ using Enzyme
         if aT === nothing
         	throw("Unhandled type $T")
         end
-        if datatype_fieldcount(aT) === nothing
+        if Base.datatype_fieldcount(aT) === nothing
         	throw("Unhandled type $T")
         end
     end
@@ -342,7 +342,7 @@ using Enzyme
     end
 
     if Val(T) ∈ seen
-        return seen[T]
+        return T
     end
 
     seen = (Val(T), seen...)
@@ -720,8 +720,38 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
             end)
             return
         end
+        if T <: Array
+            elems = Symbol[]
+            for (i, v) in enumerate(tocopy)
+                sym = Symbol(string(resname)*"_"*string(i))
+                create_result(v, sym, (path...,i))
+                push!(elems, sym)
+            end
+            push!(concrete_result_maker, quote
+                    $resname = $(eltype(T))[$(elems...)]
+            end)
+            return
+        end
         if T <: Int || T <: AbstractFloat || T <: AbstractString || T <: Nothing
             push!(concrete_result_maker, :($resname = $tocopy))
+            return
+        end
+        if T <: Symbol
+            push!(concrete_result_maker, :($resname = $(QuoteNode(tocopy))))
+            return
+        end
+        if isstructtype(T)
+            elems = Symbol[]
+            nf = fieldcount(T)
+            for i in 1:nf
+                sym = Symbol(resname, :_, i)
+                create_result(getfield(tocopy, i), sym, (path..., i))
+                push!(elems, sym)
+            end
+            push!(concrete_result_maker, quote
+                flds = Any[$(elems...)]
+                $resname = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), $T, flds, $nf)
+            end)
             return
         end
 
