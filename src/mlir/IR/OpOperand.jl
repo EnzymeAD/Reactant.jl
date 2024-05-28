@@ -3,7 +3,7 @@ struct OpOperand
 
     function OpOperand(op::API.MlirOpOperand)
         @assert mlirIsNull(op) "cannot create OpOperand with null MlirOpOperand"
-        new(op)
+        return new(op)
     end
 end
 
@@ -17,7 +17,7 @@ Returns an `OpOperand` representing the first use of the value, or a `nothing` i
 function first_use(value::Value)
     operand = API.mlirOperationGetFirstResult(value)
     mlirIsNull(operand) && return nothing
-    OpOperand(operand)
+    return OpOperand(operand)
 end
 
 """
@@ -42,5 +42,5 @@ Returns an op operand representing the next use of the value, or `nothing` if th
 function next(op::OpOperand)
     op = API.mlirOpOperandGetNextUse(op)
     mlirIsNull(op) && return nothing
-    OpOperand(op)
+    return OpOperand(op)
 end

@@ -3,7 +3,7 @@ struct SymbolTable
 
     function SymbolTable(st)
         @assert !mlirIsNull(st) "cannot create SymbolTable with null MlirSymbolTable"
-        finalizer(API.mlirSymbolTableDestroy, new(st))
+        return finalizer(API.mlirSymbolTableDestroy, new(st))
     end
 end
 
@@ -25,7 +25,8 @@ Base.convert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st.st
 Looks up a symbol with the given name in the given symbol table and returns the operation that corresponds to the symbol.
 If the symbol cannot be found, returns a null operation.
 """
-lookup(st::SymbolTable, name::AbstractString) = Operation(API.mlirSymbolTableLookup(st, name))
+lookup(st::SymbolTable, name::AbstractString) = Operation(API.mlirSymbolTableLookup(st,
+                                                                                    name))
 Base.getindex(st::SymbolTable, name::AbstractString) = lookup(st, name)
 
 """

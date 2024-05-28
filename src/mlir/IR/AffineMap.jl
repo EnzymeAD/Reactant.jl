@@ -3,7 +3,7 @@ struct AffineMap
 
     function AffineMap(map::API.MlirAffineMap)
         @assert !mlirIsNull(map) "cannot create AffineMap with null MlirAffineMap"
-        new(map)
+        return new(map)
     end
 end
 
@@ -44,7 +44,9 @@ context(map::AffineMap) = API.mlirAffineMapGetContext(map)
 Creates a zero result affine map of the given dimensions and symbols in the context.
 The affine map is owned by the context.
 """
-AffineMap(ndims, nsymbols; context::Context=context()) = AffineMap(API.mlirAffineMapZeroResultGet(context, ndims, nsymbols))
+AffineMap(ndims, nsymbols; context::Context=context()) = AffineMap(API.mlirAffineMapZeroResultGet(context,
+                                                                                                  ndims,
+                                                                                                  nsymbols))
 
 """
     AffineMap(ndims, nsymbols, affineExprs; context=context())
@@ -52,21 +54,27 @@ AffineMap(ndims, nsymbols; context::Context=context()) = AffineMap(API.mlirAffin
 Creates an affine map with results defined by the given list of affine expressions.
 The map resulting map also has the requested number of input dimensions and symbols, regardless of them being used in the results.
 """
-AffineMap(ndims, nsymbols, exprs::Vector{AffineExpr}; context::Context=context()) = AffineMap(API.mlirAffineMapGet(context, ndims, nsymbols, length(exprs), pointer(exprs)))
+AffineMap(ndims, nsymbols, exprs::Vector{AffineExpr}; context::Context=context()) = AffineMap(API.mlirAffineMapGet(context,
+                                                                                                                   ndims,
+                                                                                                                   nsymbols,
+                                                                                                                   length(exprs),
+                                                                                                                   pointer(exprs)))
 
 """
     ConstantAffineMap(val; context=context())
 
 Creates a single constant result affine map in the context. The affine map is owned by the context.
 """
-ConstantAffineMap(val; context::Context=context()) = AffineMap(API.mlirAffineMapConstantGet(context, val))
+ConstantAffineMap(val; context::Context=context()) = AffineMap(API.mlirAffineMapConstantGet(context,
+                                                                                            val))
 
 """
     IdentityAffineMap(ndims; context=context())
 
 Creates an affine map with 'ndims' identity in the context. The affine map is owned by the context.
 """
-IdentityAffineMap(ndims; context::Context=context()) = AffineMap(API.mlirAffineMapMultiDimIdentityGet(context, ndims))
+IdentityAffineMap(ndims; context::Context=context()) = AffineMap(API.mlirAffineMapMultiDimIdentityGet(context,
+                                                                                                      ndims))
 
 """
     MinorIdentityAffineMap(ndims, nresults; context=context())
@@ -76,7 +84,7 @@ The function asserts that the number of dimensions is greater or equal to the nu
 """
 function MinorIdentityAffineMap(ndims, nresults; context::Context=context())
     @assert ndims >= nresults "number of dimensions must be greater or equal to the number of results"
-    AffineMap(API.mlirAffineMapMinorIdentityGet(context, ndims, nresults))
+    return AffineMap(API.mlirAffineMapMinorIdentityGet(context, ndims, nresults))
 end
 
 """
@@ -90,7 +98,8 @@ The affine map is owned by the context.
 function PermutationAffineMap(permutation; context::Context=context())
     @assert Base.isperm(permutation) "$permutation must be a valid permutation"
     zero_perm = permutation .- 1
-    AffineMap(API.mlirAffineMapPermutationGet(context, length(zero_perm), pointer(zero_perm)))
+    return AffineMap(API.mlirAffineMapPermutationGet(context, length(zero_perm),
+                                                     pointer(zero_perm)))
 end
 
 """
@@ -128,7 +137,7 @@ Returns the constant result of the given affine map. The function asserts that t
 """
 function result(map::AffineMap)
     @assert issingleconstant(map) "affine map must have a single constant result"
-    API.mlirAffineMapGetSingleConstantResult(map)
+    return API.mlirAffineMapGetSingleConstantResult(map)
 end
 
 """
@@ -185,7 +194,9 @@ Base.isperm(map::AffineMap) = API.mlirAffineMapIsPermutation(map)
 
 Returns the affine map consisting of the `positions` subset.
 """
-submap(map::AffineMap, pos::Vector{Int}) = AffineMap(API.mlirAffineMapGetSubMap(map, length(pos), pointer(pos)))
+submap(map::AffineMap, pos::Vector{Int}) = AffineMap(API.mlirAffineMapGetSubMap(map,
+                                                                                length(pos),
+                                                                                pointer(pos)))
 
 """
     majorsubmap(affineMap, nresults)
@@ -194,7 +205,8 @@ Returns the affine map consisting of the most major `nresults` results.
 Returns the null AffineMap if the `nresults` is equal to zero.
 Returns the `affineMap` if `nresults` is greater or equals to number of results of the given affine map.
 """
-majorsubmap(map::AffineMap, nresults) = AffineMap(API.mlirAffineMapGetMajorSubMap(map, nresults))
+majorsubmap(map::AffineMap, nresults) = AffineMap(API.mlirAffineMapGetMajorSubMap(map,
+                                                                                  nresults))
 
 """
     minorsubmap(affineMap, nresults)
@@ -202,14 +214,19 @@ majorsubmap(map::AffineMap, nresults) = AffineMap(API.mlirAffineMapGetMajorSubMa
 Returns the affine map consisting of the most minor `nresults` results. Returns the null AffineMap if the `nresults` is equal to zero.
 Returns the `affineMap` if `nresults` is greater or equals to number of results of the given affine map.
 """
-minorsubmap(map::AffineMap, nresults) = AffineMap(API.mlirAffineMapGetMinorSubMap(map, nresults))
+minorsubmap(map::AffineMap, nresults) = AffineMap(API.mlirAffineMapGetMinorSubMap(map,
+                                                                                  nresults))
 
 """
     mlirAffineMapReplace(affineMap, expression => replacement, numResultDims, numResultSyms)
 
 Apply `AffineExpr::replace(map)` to each of the results and return a new new AffineMap with the new results and the specified number of dims and symbols.
 """
-Base.replace(map::AffineMap, old_new::Pair{AffineExpr,AffineExpr}, nresultdims, nresultsyms) = AffineMap(API.mlirAffineMapReplace(map, old_new.first, old_new.second, nresultdims, nresultsyms))
+Base.replace(map::AffineMap, old_new::Pair{AffineExpr,AffineExpr}, nresultdims, nresultsyms) = AffineMap(API.mlirAffineMapReplace(map,
+                                                                                                                                  old_new.first,
+                                                                                                                                  old_new.second,
+                                                                                                                                  nresultdims,
+                                                                                                                                  nresultsyms))
 
 """
     simplify(affineMaps, size, result, populateResult)
@@ -226,13 +243,13 @@ function Base.show(io::IO, map::AffineMap)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
     API.mlirAffineMapPrint(map, c_print_callback, ref)
-    print(io, " =#)")
+    return print(io, " =#)")
 end
 
 walk(f, other) = f(other)
 function walk(f, expr::Expr)
     expr = f(expr)
-    Expr(expr.head, map(arg -> walk(f, arg), expr.args)...)
+    return Expr(expr.head, map(arg -> walk(f, arg), expr.args)...)
 end
 
 """
@@ -274,32 +291,33 @@ macro affinemap(expr)
     @assert all(x -> x isa Symbol, syms) "invalid symbols $syms"
 
     dimexprs = map(enumerate(dims)) do (i, dim)
-        :($dim = AffineDimensionExpr($(i-1)))
+        return :($dim = AffineDimensionExpr($(i - 1)))
     end
 
     symexprs = map(enumerate(syms)) do (i, sym)
-        :($sym = SymbolExpr($(i-1)))
+        return :($sym = SymbolExpr($(i - 1)))
     end
 
     known_binops = [:+, :-, :*, :÷, :%, :fld, :cld]
 
-    affine_exprs = Expr(:vect, map(rhs.args) do ex
-        walk(ex) do v
-            if v isa Integer
-                Expr(:call, ConstantExpr, Int64(v))
-            elseif Meta.isexpr(v, :call)
-                v
-            elseif v isa Symbol
-                if v in dims || v in syms || v in known_binops
-                    v
-                else
-                    error("unknown item $v")
-                end
-            else
-                v
-            end
-        end
-    end...)
+    affine_exprs = Expr(:vect,
+                        map(rhs.args) do ex
+                            walk(ex) do v
+                                if v isa Integer
+                                    Expr(:call, ConstantExpr, Int64(v))
+                                elseif Meta.isexpr(v, :call)
+                                    v
+                                elseif v isa Symbol
+                                    if v in dims || v in syms || v in known_binops
+                                        v
+                                    else
+                                        error("unknown item $v")
+                                    end
+                                else
+                                    v
+                                end
+                            end
+                        end...)
 
     quote
         $(dimexprs...)

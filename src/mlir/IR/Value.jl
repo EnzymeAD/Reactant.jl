@@ -3,7 +3,7 @@ struct Value
 
     function Value(value)
         @assert !mlirIsNull(value) "cannot create Value with null MlirValue"
-        new(value)
+        return new(value)
     end
 end
 
@@ -39,7 +39,7 @@ Returns the block in which this value is defined as an argument. Asserts if the 
 """
 function block_owner(value::Value)
     @assert is_block_arg(value) "could not get owner, value is not a block argument"
-    Block(API.mlirBlockArgumentGetOwner(value), false)
+    return Block(API.mlirBlockArgumentGetOwner(value), false)
 end
 
 """
@@ -49,7 +49,7 @@ Returns an operation that produced this value as its result. Asserts if the valu
 """
 function op_owner(value::Value)
     @assert is_op_res(value) "could not get owner, value is not an op result"
-    Operation(API.mlirOpResultGetOwner(value), false)
+    return Operation(API.mlirOpResultGetOwner(value), false)
 end
 
 function owner(value::Value)
@@ -73,7 +73,7 @@ Returns the position of the value in the argument list of its block.
 """
 function block_arg_num(value::Value)
     @assert is_block_arg(value) "could not get arg number, value is not a block argument"
-    API.mlirBlockArgumentGetArgNumber(value)
+    return API.mlirBlockArgumentGetArgNumber(value)
 end
 
 """
@@ -83,7 +83,7 @@ Returns the position of the value in the list of results of the operation that p
 """
 function op_res_num(value::Value)
     @assert is_op_res(value) "could not get result number, value is not an op result"
-    API.mlirOpResultGetResultNumber(value)
+    return API.mlirOpResultGetResultNumber(value)
 end
 
 function position(value::Value)
@@ -111,7 +111,7 @@ Sets the type of the block argument to the given type.
 function type!(value, type)
     @assert is_a_block_argument(value) "could not set type, value is not a block argument"
     API.mlirBlockArgumentSetType(value, type)
-    value
+    return value
 end
 
 function Base.show(io::IO, value::Value)
