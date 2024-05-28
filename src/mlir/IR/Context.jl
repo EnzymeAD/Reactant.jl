@@ -39,7 +39,7 @@ function activate!(ctx::Context)
         return Context[]
     end
     Base.push!(stack, ctx)
-    return
+    return nothing
 end
 
 function deactivate!(ctx::Context)

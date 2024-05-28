@@ -8,10 +8,12 @@ noisy = rand(Float32, 2, 1000)                                    # 2×1000 Matr
 truth = [xor(col[1] > 0.5, col[2] > 0.5) for col in eachcol(noisy)]   # 1000-element Vector{Bool}
 
 # Define our model, a multi-layer perceptron with one hidden layer of size 3:
-model = Chain(Dense(2 => 3, tanh),   # activation function inside layer
-              BatchNorm(3),
-              Dense(3 => 2),
-              softmax)
+model = Chain(
+    Dense(2 => 3, tanh),   # activation function inside layer
+    BatchNorm(3),
+    Dense(3 => 2),
+    softmax,
+)
 
 using BenchmarkTools
 

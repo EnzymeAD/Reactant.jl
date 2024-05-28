@@ -18,10 +18,17 @@ LLVM passes at `optLevel` are run before code generation.
 The number and array of paths corresponding to shared libraries that will be loaded are specified via `numPaths` and `sharedLibPaths` respectively.
 TODO: figure out other options.
 """
-function ExecutionEngine(mod::Module, optLevel::Int, sharedlibs::Vector{String}=String[],
-                         enableObjectDump::Bool=false)
-    return ExecutionEngine(API.mlirExecutionEngineCreate(mod, optLevel, length(sharedlibs),
-                                                         sharedlibs, enableObjectDump))
+function ExecutionEngine(
+    mod::Module,
+    optLevel::Int,
+    sharedlibs::Vector{String}=String[],
+    enableObjectDump::Bool=false,
+)
+    return ExecutionEngine(
+        API.mlirExecutionEngineCreate(
+            mod, optLevel, length(sharedlibs), sharedlibs, enableObjectDump
+        ),
+    )
 end
 
 Base.convert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine) = engine.engine
@@ -34,8 +41,11 @@ Base.convert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine) = en
 Lookup a native function in the execution engine by name, returns nullptr if the name can't be looked-up.
 """
 function lookup(jit::ExecutionEngine, name::String; packed::Bool=false)
-    fn = packed ? API.mlirExecutionEngineLookupPacked(jit, name) :
-         API.mlirExecutionEngineLookup(jit, name)
+    fn = if packed
+        API.mlirExecutionEngineLookupPacked(jit, name)
+    else
+        API.mlirExecutionEngineLookup(jit, name)
+    end
     return fn == C_NULL ? nothing : fn
 end
 
@@ -46,5 +56,5 @@ end
 
 Dump as an object in `fileName`.
 """
-Base.write(filename::String, jit::ExecutionEngine) = API.mlirExecutionEngineDumpToObjectFile(jit,
-                                                                                             filename)
+Base.write(filename::String, jit::ExecutionEngine) =
+    API.mlirExecutionEngineDumpToObjectFile(jit, filename)

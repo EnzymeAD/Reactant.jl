@@ -4,8 +4,9 @@ import ...MLIR
 
 function RunPassPipeline(pass_pipeline, mod::MLIR.IR.Module)
     GC.@preserve pass_pipeline mod begin
-        @ccall MLIR.API.mlir_c.RunPassPipeline(pass_pipeline::Cstring,
-                                               mod.module_::MLIR.API.MlirModule)::Cvoid
+        @ccall MLIR.API.mlir_c.RunPassPipeline(
+            pass_pipeline::Cstring, mod.module_::MLIR.API.MlirModule
+        )::Cvoid
     end
 end
 mutable struct Client
@@ -61,8 +62,17 @@ function GPUClient(node_id=0, num_nodes=1, platform="gpu")
     # GC.@preserve allowed_devices begin
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
     refstr = Ref{Cstring}()
-    client = ccall(f, Ptr{Cvoid}, (Cint, Cint, Ptr{Cvoid}, Cint, Cstring, Ptr{Cstring}),
-                   node_id, num_nodes, C_NULL, 0, platform, refstr)
+    client = ccall(
+        f,
+        Ptr{Cvoid},
+        (Cint, Cint, Ptr{Cvoid}, Cint, Cstring, Ptr{Cstring}),
+        node_id,
+        num_nodes,
+        C_NULL,
+        0,
+        platform,
+        refstr,
+    )
     if client == C_NULL
         throw(AssertionError(refstr[]))
     end
@@ -142,12 +152,16 @@ end
 
 function device(buffer::Buffer)
     GC.@preserve buffer begin
-        return Device(@ccall MLIR.API.mlir_c.BufferToDevice(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid})
+        return Device(
+            @ccall MLIR.API.mlir_c.BufferToDevice(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
+        )
     end
 end
 function client(buffer::Buffer)
     GC.@preserve buffer begin
-        return Client(@ccall MLIR.API.mlir_c.BufferToClient(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid})
+        return Client(
+            @ccall MLIR.API.mlir_c.BufferToClient(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
+        )
     end
 end
 function device(buffer::AsyncBuffer)
@@ -158,7 +172,9 @@ function client(buffer::AsyncBuffer)
 end
 function client(device::Device)
     GC.@preserve device begin
-        return Client(@ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid})
+        return Client(
+            @ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
+        )
     end
 end
 
@@ -167,11 +183,14 @@ function ArrayFromHostBuffer(client::Client, array::Array{T,N}, device) where {T
         dtype = MLIR.IR.Type(T)
         sizear = Int64[s for s in reverse(size(array))]
         GC.@preserve array sizear begin
-            @ccall MLIR.API.mlir_c.ArrayFromHostBuffer(client.client::Ptr{Cvoid},
-                                                       pointer(array)::Ptr{T},
-                                                       dtype::MLIR.API.MlirType, N::Csize_t,
-                                                       pointer(sizear)::Ptr{Int64},
-                                                       device.device::Ptr{Cvoid})::Ptr{Cvoid}
+            @ccall MLIR.API.mlir_c.ArrayFromHostBuffer(
+                client.client::Ptr{Cvoid},
+                pointer(array)::Ptr{T},
+                dtype::MLIR.API.MlirType,
+                N::Csize_t,
+                pointer(sizear)::Ptr{Int64},
+                device.device::Ptr{Cvoid},
+            )::Ptr{Cvoid}
         end
     end
     return Buffer(buffer)
@@ -179,8 +198,9 @@ end
 
 function BufferToHost(buffer::Buffer, data)
     GC.@preserve buffer begin
-        @ccall MLIR.API.mlir_c.BufferToHost(buffer.buffer::Ptr{Cvoid},
-                                            data::Ptr{Cvoid})::Cvoid
+        @ccall MLIR.API.mlir_c.BufferToHost(
+            buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
+        )::Cvoid
     end
 end
 
@@ -191,8 +211,11 @@ end
 
 function CopyBufferToDevice(buffer::Buffer, device::Device)
     GC.@preserve buffer device begin
-        Buffer(@ccall MLIR.API.mlir_c.CopyBufferToDevice(buffer.buffer::Ptr{Cvoid},
-                                                         device.device::Ptr{Cvoid})::Ptr{Cvoid})
+        Buffer(
+            @ccall MLIR.API.mlir_c.CopyBufferToDevice(
+                buffer.buffer::Ptr{Cvoid}, device.device::Ptr{Cvoid}
+            )::Ptr{Cvoid}
+        )
     end
 end
 
@@ -227,37 +250,45 @@ entry:
     return res
 end
 
-@generated function ExecutableCall(exec::LoadedExecutable, inputs::NTuple{N,Ptr{Cvoid}},
-                                   donated_args::NTuple{N,UInt8},
-                                   ::Val{n_outs}) where {N,n_outs}
+@generated function ExecutableCall(
+    exec::LoadedExecutable,
+    inputs::NTuple{N,Ptr{Cvoid}},
+    donated_args::NTuple{N,UInt8},
+    ::Val{n_outs},
+) where {N,n_outs}
     sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecute")
     xla_execute_fn = reinterpret(UInt, sym0)
     ir = execute_ir(N, n_outs, xla_execute_fn)
     results = []
     for i in 1:n_outs
-        push!(results,
-              :(AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing)))
+        push!(
+            results,
+            :(AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing)),
+        )
     end
     return quote
         Base.@_inline_meta
         exec = exec.exec
         GC.@preserve exec begin
-            outputs, future_res, future = Base.llvmcall(($ir, "f"),
-                                                        Tuple{NTuple{n_outs,Ptr{Cvoid}},
-                                                              NTuple{n_outs,Ptr{Cvoid}},
-                                                              Bool},
-                                                        Tuple{Ptr{Cvoid},
-                                                              NTuple{N,Ptr{Cvoid}},
-                                                              NTuple{N,UInt8}},
-                                                        exec, inputs, donated_args)
+            outputs, future_res, future = Base.llvmcall(
+                ($ir, "f"),
+                Tuple{NTuple{n_outs,Ptr{Cvoid}},NTuple{n_outs,Ptr{Cvoid}},Bool},
+                Tuple{Ptr{Cvoid},NTuple{N,Ptr{Cvoid}},NTuple{N,UInt8}},
+                exec,
+                inputs,
+                donated_args,
+            )
         end
         return ($(results...),)
     end
 end
 
-@inline function ExecutableCall0(exec::LoadedExecutable, inputs::NTuple{N,Ptr{Cvoid}},
-                                 donated_args::NTuple{N,UInt8},
-                                 ::Val{n_outs}) where {N,n_outs}
+@inline function ExecutableCall0(
+    exec::LoadedExecutable,
+    inputs::NTuple{N,Ptr{Cvoid}},
+    donated_args::NTuple{N,UInt8},
+    ::Val{n_outs},
+) where {N,n_outs}
     outputs = Ref{NTuple{n_outs,Ptr{Cvoid}}}()
     future_res = Ref{NTuple{n_outs,Ptr{Cvoid}}}()
     futures = Ref{UInt8}(0)
@@ -265,15 +296,16 @@ end
     inputs = Base.RefValue(inputs)
     donated_args = Base.RefValue(donated_args)
     GC.@preserve inputs donated_args outputs futures future_res begin
-        @ccall MLIR.API.mlir_c.XLAExecute(exec.exec::Ptr{Cvoid}, N::Cint,
-                                          inputs::Ptr{Cvoid}, donated_args::Ptr{UInt8},
-                                          n_outs::Cint,
-                                          Base.unsafe_convert(Ptr{Cvoid},
-                                                              outputs)::Ptr{Cvoid},
-                                          Base.unsafe_convert(Ptr{UInt8},
-                                                              futures)::Ptr{UInt8},
-                                          Base.unsafe_convert(Ptr{Cvoid},
-                                                              future_res)::Ptr{Cvoid})::Cvoid
+        @ccall MLIR.API.mlir_c.XLAExecute(
+            exec.exec::Ptr{Cvoid},
+            N::Cint,
+            inputs::Ptr{Cvoid},
+            donated_args::Ptr{UInt8},
+            n_outs::Cint,
+            Base.unsafe_convert(Ptr{Cvoid}, outputs)::Ptr{Cvoid},
+            Base.unsafe_convert(Ptr{UInt8}, futures)::Ptr{UInt8},
+            Base.unsafe_convert(Ptr{Cvoid}, future_res)::Ptr{Cvoid},
+        )::Cvoid
     end
 
     outputs = outputs[]
@@ -288,8 +320,11 @@ end
 
 function Compile(client::Client, mod::MLIR.IR.Module)
     GC.@preserve client mod begin
-        executable = LoadedExecutable(@ccall MLIR.API.mlir_c.ClientCompile(client.client::Ptr{Cvoid},
-                                                                           mod.module_::MLIR.API.MlirModule)::Ptr{Cvoid})
+        executable = LoadedExecutable(
+            @ccall MLIR.API.mlir_c.ClientCompile(
+                client.client::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule
+            )::Ptr{Cvoid}
+        )
     end
 end
 
@@ -301,7 +336,9 @@ end
 
 function ClientNumAddressableDevices(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientNumAddressableDevices(client.client::Ptr{Cvoid})::Cint
+        return @ccall MLIR.API.mlir_c.ClientNumAddressableDevices(
+            client.client::Ptr{Cvoid}
+        )::Cint
     end
 end
 
@@ -313,15 +350,21 @@ end
 
 function ClientGetDevice(client::Client, idx)
     GC.@preserve client begin
-        return Device(@ccall MLIR.API.mlir_c.ClientGetDevice(client.client::Ptr{Cvoid},
-                                                             idx::Cint)::Ptr{Cvoid})
+        return Device(
+            @ccall MLIR.API.mlir_c.ClientGetDevice(
+                client.client::Ptr{Cvoid}, idx::Cint
+            )::Ptr{Cvoid}
+        )
     end
 end
 
 function ClientGetAddressableDevice(client::Client, idx)
     GC.@preserve client begin
-        return Device(@ccall MLIR.API.mlir_c.ClientGetAddressableDevice(client.client::Ptr{Cvoid},
-                                                                        idx::Cint)::Ptr{Cvoid})
+        return Device(
+            @ccall MLIR.API.mlir_c.ClientGetAddressableDevice(
+                client.client::Ptr{Cvoid}, idx::Cint
+            )::Ptr{Cvoid}
+        )
     end
 end
 
