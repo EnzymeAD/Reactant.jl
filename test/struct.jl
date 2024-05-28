@@ -74,7 +74,10 @@ Base.sum(x::MockLinkedList{T}) where {T} = sum(x.head) + (!isnothing(x.tail) ? s
 
 
         # TODO this should be able to run without problems, but crashes
-        # f = Reactant.compile(identity, (x3,))
+        @test_broken begin
+            f = Reactant.compile(identity, (x3,))
+            isapprox(f(x3), x3)
+        end
 
         f3 = Reactant.compile(sum, (x3,))
         f4 = Reactant.compile(sum, (x4,))
