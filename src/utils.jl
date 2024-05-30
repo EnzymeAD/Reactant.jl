@@ -9,7 +9,7 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-function apply(f, args...; kwargs)
+function apply(f, args...; kwargs...)
     return f(args...; kwargs...)
 end
 
