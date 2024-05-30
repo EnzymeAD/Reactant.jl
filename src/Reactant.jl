@@ -6,11 +6,11 @@ include("utils.jl")
 
 abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType,N} end
 
-@inline Base.eltype(::RArray{ElType,Shape}) where {ElType, Shape} = ElType
-@inline Base.size(::RArray{ElType,Shape}) where {ElType, Shape} = Shape
-@inline Base.size(::Type{<:RArray{ElType,Shape}}) where {ElType, Shape} = Shape
-@inline Base.ndims(::RArray{ElType,Shape, N}) where {ElType, Shape, N} = N
-@inline Base.ndims(::Type{<:RArray{ElType,Shape, N}}) where {ElType, Shape, N} = N
+@inline Base.eltype(::RArray{ElType,Shape}) where {ElType,Shape} = ElType
+@inline Base.size(::RArray{ElType,Shape}) where {ElType,Shape} = Shape
+@inline Base.size(::Type{<:RArray{ElType,Shape}}) where {ElType,Shape} = Shape
+@inline Base.ndims(::RArray{ElType,Shape,N}) where {ElType,Shape,N} = N
+@inline Base.ndims(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} = N
 
 @inline mlir_type(::RArray{ElType,Shape,N}) where {ElType,Shape,N} =
     MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
@@ -168,7 +168,7 @@ end
         seen[prev] = res
         return res
     end
-    
+
     attr = fill(MLIR.IR.Attribute(eltype(RT)(0)), mlir_type(prev))
     cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
     res = RT((), cst)
@@ -195,8 +195,8 @@ include("overloads.jl")
 
 using Enzyme
 
-@inline val_value(::Val{T}) where T = T
-@inline val_value(::Type{Val{T}}) where T = T
+@inline val_value(::Val{T}) where {T} = T
+@inline val_value(::Type{Val{T}}) where {T} = T
 
 @enum TraceMode begin
     ConcreteToTraced = 1
@@ -827,7 +827,7 @@ function generate_jlfunc(
             return nothing
         end
 
-        error("cannot copy $T")
+        return error("cannot copy $T")
     end
 
     create_result(concrete_result, :result, ())
