@@ -13,7 +13,9 @@ mutable struct Operation
 end
 
 Base.cconvert(::Core.Type{API.MlirOperation}, operation::Operation) = operation
-Base.unsafe_convert(::Core.Type{API.MlirOperation}, operation::Operation) = operation.operation
+function Base.unsafe_convert(::Core.Type{API.MlirOperation}, operation::Operation)
+    return operation.operation
+end
 Base.:(==)(op::Operation, other::Operation) = API.mlirOperationEqual(op, other)
 
 """
@@ -63,7 +65,8 @@ block(operation::Operation) = Block(API.mlirOperationGetBlock(operation), false)
 
 Gets the operation that owns this operation, returning null if the operation is not owned.
 """
-parent_op(operation::Operation) = Operation(API.mlirOperationGetParentOperation(operation), false)
+parent_op(operation::Operation) =
+    Operation(API.mlirOperationGetParentOperation(operation), false)
 
 """
     rmfromparent(op)
@@ -74,10 +77,10 @@ The ownership of the operation is transferred to the caller.
 function rmfromparent!(operation::Operation)
     API.mlirOperationRemoveFromParent(operation)
     @atomic operation.owned = true
-    operation
+    return operation
 end
 
-dialect(operation::Operation) = first(split(name(operation), '.')) |> Symbol
+dialect(operation::Operation) = Symbol(first(split(name(operation), '.')))
 
 """
     nregions(op)
@@ -93,7 +96,7 @@ Returns `i`-th region attached to the operation.
 """
 function region(operation::Operation, i)
     i ∉ 1:nregions(operation) && throw(BoundsError(operation, i))
-    Region(API.mlirOperationGetRegion(operation, i - 1), false)
+    return Region(API.mlirOperationGetRegion(operation, i - 1), false)
 end
 
 """
@@ -110,7 +113,7 @@ Returns `i`-th result of the operation.
 """
 function result(operation::Operation, i=1)
     i ∉ 1:nresults(operation) && throw(BoundsError(operation, i))
-    Value(API.mlirOperationGetResult(operation, i - 1))
+    return Value(API.mlirOperationGetResult(operation, i - 1))
 end
 results(operation) = [result(operation, i) for i in 1:nresults(operation)]
 
@@ -128,7 +131,7 @@ Returns `i`-th operand of the operation.
 """
 function operand(operation::Operation, i=1)
     i ∉ 1:noperands(operation) && throw(BoundsError(operation, i))
-    Value(API.mlirOperationGetOperand(operation, i - 1))
+    return Value(API.mlirOperationGetOperand(operation, i - 1))
 end
 
 """
@@ -139,7 +142,7 @@ Sets the `i`-th operand of the operation.
 function operand!(operation::Operation, i, value)
     i ∉ 1:noperands(operation) && throw(BoundsError(operation, i))
     API.mlirOperationSetOperand(operation, i - 1, value)
-    value
+    return value
 end
 
 """
@@ -156,7 +159,7 @@ Returns `i`-th successor of the operation.
 """
 function successor(operation::Operation, i)
     i ∉ 1:nsuccessors(operation) && throw(BoundsError(operation, i))
-    Block(API.mlirOperationGetSuccessor(operation, i - 1), false)
+    return Block(API.mlirOperationGetSuccessor(operation, i - 1), false)
 end
 
 """
@@ -173,7 +176,7 @@ Return `i`-th attribute of the operation.
 """
 function attr(operation::Operation, i)
     i ∉ 1:nattrs(operation) && throw(BoundsError(operation, i))
-    NamedAttribute(API.mlirOperationGetAttribute(operation, i - 1))
+    return NamedAttribute(API.mlirOperationGetAttribute(operation, i - 1))
 end
 
 """
@@ -186,7 +189,7 @@ function attr(operation::Operation, name::AbstractString)
     if mlirIsNull(raw_attr)
         return nothing
     end
-    Attribute(raw_attr)
+    return Attribute(raw_attr)
 end
 
 """
@@ -196,7 +199,7 @@ Sets an attribute by name, replacing the existing if it exists or adding a new o
 """
 function attr!(operation::Operation, name, attribute)
     API.mlirOperationSetAttributeByName(operation, name, attribute)
-    operation
+    return operation
 end
 
 """
@@ -204,12 +207,13 @@ end
 
 Removes an attribute by name. Returns false if the attribute was not found and true if removed.
 """
-rmattr!(operation::Operation, name) = API.mlirOperationRemoveAttributeByName(operation, name)
+rmattr!(operation::Operation, name) =
+    API.mlirOperationRemoveAttributeByName(operation, name)
 
 function lose_ownership!(operation::Operation)
     @assert operation.owned
     @atomic operation.owned = false
-    operation
+    return operation
 end
 
 function Base.show(io::IO, operation::Operation)
@@ -224,7 +228,7 @@ function Base.show(io::IO, operation::Operation)
     API.mlirOperationPrintWithFlags(operation, flags, c_print_callback, ref)
     API.mlirOpPrintingFlagsDestroy(flags)
 
-    write(io, rstrip(String(take!(buffer))))
+    return write(io, rstrip(String(take!(buffer))))
 end
 
 """
@@ -241,7 +245,7 @@ Moves the given operation immediately after the other operation in its parent bl
 """
 function move_after!(operation::Operation, other::Operation)
     lose_ownership!(operation)
-    API.mlirOperationMoveAfter(operation, other)
+    return API.mlirOperationMoveAfter(operation, other)
 end
 
 """
@@ -254,7 +258,7 @@ In any case, the ownership is transferred to the block of the other operation.
 """
 function move_before!(operation::Operation, other::Operation)
     lose_ownership!(operation)
-    API.mlirOperationMoveBefore(operation, other)
+    return API.mlirOperationMoveBefore(operation, other)
 end
 
 """
@@ -263,16 +267,18 @@ end
 Returns whether the given fully-qualified operation (i.e. 'dialect.operation') is registered with the context.
 This will return true if the dialect is loaded and the operation is registered within the dialect.
 """
-is_registered(opname; context::Context=context()) = API.mlirContextIsRegisteredOperation(context, opname)
+is_registered(opname; context::Context=context()) =
+    API.mlirContextIsRegisteredOperation(context, opname)
 
 function create_operation(
-    name, loc;
+    name,
+    loc;
     results=nothing,
     operands=nothing,
     owned_regions=nothing,
     successors=nothing,
     attributes=nothing,
-    result_inference=isnothing(results)
+    result_inference=isnothing(results),
 )
     GC.@preserve name loc begin
         state = Ref(API.mlirOperationStateGet(name, loc))
@@ -289,17 +295,15 @@ function create_operation(
             lose_ownership!.(owned_regions)
             GC.@preserve owned_regions begin
                 mlir_regions = Base.unsafe_convert.(API.MlirRegion, owned_regions)
-                API.mlirOperationStateAddOwnedRegions(state, length(mlir_regions), mlir_regions)
+                API.mlirOperationStateAddOwnedRegions(
+                    state, length(mlir_regions), mlir_regions
+                )
             end
         end
         if !isnothing(successors)
             GC.@preserve successors begin
                 mlir_blocks = Base.unsafe_convert.(API.MlirBlock, successors)
-                API.mlirOperationStateAddSuccessors(
-                    state,
-                    length(mlir_blocks),
-                    mlir_blocks,
-                )
+                API.mlirOperationStateAddSuccessors(state, length(mlir_blocks), mlir_blocks)
             end
         end
         if !isnothing(attributes)

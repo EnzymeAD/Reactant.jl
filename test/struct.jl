@@ -17,7 +17,9 @@ mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}}
     inds::Vector{Symbol}
 end
 
-MutableMockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}} = MutableMockTensor{T,N,A}(data, inds)
+function MutableMockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}}
+    return MutableMockTensor{T,N,A}(data, inds)
+end
 Base.parent(t::MutableMockTensor) = t.data
 
 Base.cos(x::MutableMockTensor) = MutableMockTensor(cos(parent(x)), x.inds)
@@ -37,7 +39,9 @@ function list(x::T...) where {T}
     return l
 end
 
-Base.sum(x::MockLinkedList{T}) where {T} = sum(x.head) + (!isnothing(x.tail) ? sum(x.tail) : 0)
+function Base.sum(x::MockLinkedList{T}) where {T}
+    return sum(x.head) + (!isnothing(x.tail) ? sum(x.tail) : 0)
+end
 
 @testset "Struct" begin
     @testset "MockTensor" begin
@@ -60,7 +64,8 @@ Base.sum(x::MockLinkedList{T}) where {T} = sum(x.head) + (!isnothing(x.tail) ? s
             f = Reactant.compile(cos, (x2,))
             y = f(x2)
 
-            @test y isa MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
+            @test y isa
+                MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
             @test isapprox(parent(y), cos.(parent(x)))
             @test x.inds == [:i, :j]
         end
@@ -71,7 +76,6 @@ Base.sum(x::MockLinkedList{T}) where {T} = sum(x.head) + (!isnothing(x.tail) ? s
         x2 = list(x...)
         x3 = Reactant.make_tracer(IdDict(), x2, (), Reactant.ArrayToConcrete, nothing)
         x4 = list(Reactant.ConcreteRArray.(x)...)
-
 
         # TODO this should be able to run without problems, but crashes
         @test_broken begin

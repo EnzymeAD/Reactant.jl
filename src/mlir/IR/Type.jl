@@ -3,7 +3,7 @@ struct Type
 
     function Type(type)
         @assert !mlirIsNull(type) "cannot create Type with null MlirType"
-        new(type)
+        return new(type)
     end
 end
 
@@ -14,7 +14,8 @@ Base.convert(::Core.Type{API.MlirType}, type::Type) = type.type
 
 Parses a type. The type is owned by the context.
 """
-Base.parse(::Core.Type{Type}, s; context::Context=context()) = Type(API.mlirTypeParseGet(context, s))
+Base.parse(::Core.Type{Type}, s; context::Context=context()) =
+    Type(API.mlirTypeParseGet(context, s))
 
 """
     ==(t1, t2)
@@ -72,7 +73,8 @@ isindex(type::Type) = API.mlirTypeIsAIndex(type)
 
 Creates a 1-bit signless integer type in the context. The type is owned by the context.
 """
-Type(::Core.Type{Bool}; context::Context=context()) = Type(API.mlirIntegerTypeGet(context, 1))
+Type(::Core.Type{Bool}; context::Context=context()) =
+    Type(API.mlirIntegerTypeGet(context, 1))
 
 # Integer types
 """
@@ -80,21 +82,24 @@ Type(::Core.Type{Bool}; context::Context=context()) = Type(API.mlirIntegerTypeGe
 
 Creates a signless integer type of the given bitwidth in the context. The type is owned by the context.
 """
-Type(T::Core.Type{<:Integer}; context::Context=context()) = Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+Type(T::Core.Type{<:Integer}; context::Context=context()) =
+    Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
 
 """
     Type(T::Core.Type{<:Signed}; context=context()
 
 Creates a signed integer type of the given bitwidth in the context. The type is owned by the context.
 """
-Type(T::Core.Type{<:Signed}; context::Context=context()) = Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+Type(T::Core.Type{<:Signed}; context::Context=context()) =
+    Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
 
 """
     Type(T::Core.Type{<:Unsigned}; context=context()
 
 Creates an unsigned integer type of the given bitwidth in the context. The type is owned by the context.
 """
-Type(T::Core.Type{<:Unsigned}; context::Context=context()) = Type(API.mlirIntegerTypeUnsignedGet(context, sizeof(T) * 8))
+Type(T::Core.Type{<:Unsigned}; context::Context=context()) =
+    Type(API.mlirIntegerTypeUnsignedGet(context, sizeof(T) * 8))
 
 """
     isinteger(type)
@@ -131,7 +136,7 @@ Returns the bitwidth of an integer type.
 """
 function bitwidth(type::Type)
     @assert isinteger(type) "expected an integer type"
-    API.mlirIntegerTypeGetWidth(type)
+    return API.mlirIntegerTypeGetWidth(type)
 end
 
 # Floating point types
@@ -256,7 +261,7 @@ Returns the rank of the given ranked shaped type.
 """
 function Base.ndims(type::Type)
     @assert isshaped(type) && hasrank(type) "expected a ranked shaped type"
-    API.mlirShapedTypeGetRank(type)
+    return API.mlirShapedTypeGetRank(type)
 end
 
 """
@@ -280,7 +285,7 @@ Returns the `i`-th dimension of the given ranked shaped type.
 """
 function Base.size(type::Type, i::Int)
     @assert isshaped(type) "expected a shaped type"
-    API.mlirShapedTypeGetDimSize(type, i - 1)
+    return API.mlirShapedTypeGetDimSize(type, i - 1)
 end
 
 Base.size(type::Type) = Tuple(size(type, i) for i in 1:ndims(type))
@@ -320,8 +325,16 @@ dynstrideoroffset() = API.mlirShapedTypeGetDynamicStrideOrOffset()
 Creates a vector type of the shape identified by its rank and dimensions, with the given element type in the same context as the element type.
 The type is owned by the context. If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function VectorType(rank, shape, elem_type; location::Location=Location(), check::Bool=false)
-    Type(check ? API.mlirVectorTypeGetChecked(location, rank, shape, elem_type) : API.mlirVectorTypeGet(rank, shape, elem_type))
+function VectorType(
+    rank, shape, elem_type; location::Location=Location(), check::Bool=false
+)
+    return Type(
+        if check
+            API.mlirVectorTypeGetChecked(location, rank, shape, elem_type)
+        else
+            API.mlirVectorTypeGet(rank, shape, elem_type)
+        end,
+    )
 end
 
 """
@@ -339,10 +352,18 @@ Creates a tensor type of a fixed rank with the given shape, element type, and op
 The type is owned by the context. Tensor types without any specific encoding field should assign [`mlirAttributeGetNull`](@ref) to this parameter.
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function TensorType(shape, elem_type, encoding=Attribute(); location::Location=Location(), check::Bool=false)
+function TensorType(
+    shape, elem_type, encoding=Attribute(); location::Location=Location(), check::Bool=false
+)
     rank = length(shape)
     shape = shape isa AbstractVector ? shape : collect(shape)
-    Type(check ? API.mlirRankedTensorTypeGetChecked(location, rank, shape, elem_type, encoding) : API.mlirRankedTensorTypeGet(rank, shape, elem_type, encoding))
+    return Type(
+        if check
+            API.mlirRankedTensorTypeGetChecked(location, rank, shape, elem_type, encoding)
+        else
+            API.mlirRankedTensorTypeGet(rank, shape, elem_type, encoding)
+        end,
+    )
 end
 
 """
@@ -352,7 +373,13 @@ Creates an unranked tensor type with the given element type in the same context 
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
 function TensorType(elem_type; location::Location=Location(), check::Bool=false)
-    Type(check ? API.mlirUnrankedTensorTypeGetChecked(location, elem_type) : API.mlirUnrankedTensorTypeGet(elem_type))
+    return Type(
+        if check
+            API.mlirUnrankedTensorTypeGetChecked(location, elem_type)
+        else
+            API.mlirUnrankedTensorTypeGet(elem_type)
+        end,
+    )
 end
 
 # TODO maybe add these helper methods?
@@ -401,7 +428,7 @@ Gets the 'encoding' attribute from the ranked tensor type, returning a `nothing`
 function encoding(type::Type)
     @assert isrankedtensor(type) "expected a ranked tensor type"
     attr = API.mlirRankedTensorTypeGetEncoding(type)
-    mlirIsNull(attr) ? nothing : Attribute(attr)
+    return mlirIsNull(attr) ? nothing : Attribute(attr)
 end
 
 # Memref type
@@ -411,11 +438,26 @@ end
 Creates a MemRef type with the given rank and shape, a potentially empty list of affine layout maps, the given memory space and element type, in the same context as element type.
 The type is owned by the context. If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function MemRefType(elem_type::Type, shape, layout, memspace; location::Location=Location(), check::Bool=false)
+function MemRefType(
+    elem_type::Type,
+    shape,
+    layout,
+    memspace;
+    location::Location=Location(),
+    check::Bool=false,
+)
     if check
-        Type(API.mlirMemRefTypeGetChecked(location, elem_type, length(shape), pointer(shape), layout, memspace))
+        Type(
+            API.mlirMemRefTypeGetChecked(
+                location, elem_type, length(shape), pointer(shape), layout, memspace
+            ),
+        )
     else
-        Type(API.mlirMemRefTypeGet(elem_type, length(shape), pointer(shape), layout, memspace))
+        Type(
+            API.mlirMemRefTypeGet(
+                elem_type, length(shape), pointer(shape), layout, memspace
+            ),
+        )
     end
 end
 
@@ -426,11 +468,21 @@ Creates a MemRef type with the given rank, shape, memory space and element type 
 The type has no affine maps, i.e. represents a default row-major contiguous memref. The type is owned by the context.
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function MemRefType(elem_type::Type, shape, memspace; location::Location=Location(), check::Bool=false)
+function MemRefType(
+    elem_type::Type, shape, memspace; location::Location=Location(), check::Bool=false
+)
     if check
-        Type(API.mlirMemRefTypeContiguousGetChecked(location, elem_type, length(shape), pointer(shape), memspace))
+        Type(
+            API.mlirMemRefTypeContiguousGetChecked(
+                location, elem_type, length(shape), pointer(shape), memspace
+            ),
+        )
     else
-        Type(API.mlirMemRefTypeContiguousGet(elem_type, length(shape), pointer(shape), memspace))
+        Type(
+            API.mlirMemRefTypeContiguousGet(
+                elem_type, length(shape), pointer(shape), memspace
+            ),
+        )
     end
 end
 
@@ -440,7 +492,9 @@ end
 Creates an Unranked MemRef type with the given element type and in the given memory space. The type is owned by the context of element type.
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function MemRefType(elem_type::Type, memspace; location::Location=Location(), check::Bool=false)
+function MemRefType(
+    elem_type::Type, memspace; location::Location=Location(), check::Bool=false
+)
     if check
         Type(API.mlirUnrankedMemRefTypeGetChecked(location, elem_type, memspace))
     else
@@ -471,7 +525,7 @@ Returns the layout of the given MemRef type.
 """
 function layout(type::Type)
     @assert ismemref(type) "expected a MemRef type"
-    Attribute(API.mlirMemRefTypeGetLayout(type))
+    return Attribute(API.mlirMemRefTypeGetLayout(type))
 end
 
 """
@@ -481,7 +535,7 @@ Returns the affine map of the given MemRef type.
 """
 function affinemap(type::Type)
     @assert ismemref(type) "expected a MemRef type"
-    AffineMap(API.mlirMemRefTypeGetAffineMaps(type))
+    return AffineMap(API.mlirMemRefTypeGetAffineMaps(type))
 end
 
 """
@@ -505,9 +559,14 @@ end
 
 Creates a tuple type that consists of the given list of elemental types. The type is owned by the context.
 """
-Type(elements::Vector{Type}; context::Context=context()) = Type(API.mlirTupleTypeGet(context, length(elements), pointer(elements)))
-Type(@nospecialize(elements::NTuple{N,Type}); context::Context=context()) where {N} = Type(collect(elements); context)
-Type(T::Core.Type{<:Tuple}; context::Context=context()) = Type(map(Type, T.parameters); context)
+Type(elements::Vector{Type}; context::Context=context()) =
+    Type(API.mlirTupleTypeGet(context, length(elements), pointer(elements)))
+function Type(@nospecialize(elements::NTuple{N,Type}); context::Context=context()) where {N}
+    return Type(collect(elements); context)
+end
+function Type(T::Core.Type{<:Tuple}; context::Context=context())
+    return Type(map(Type, T.parameters); context)
+end
 
 """
     istuple(type)
@@ -530,7 +589,11 @@ isfunction(type::Type) = API.mlirTypeIsAFunction(type)
 Creates a function type, mapping a list of input types to result types.
 """
 function FunctionType(inputs, results; context::Context=context())
-    Type(API.mlirFunctionTypeGet(context, length(inputs), pointer(inputs), length(results), pointer(results)))
+    return Type(
+        API.mlirFunctionTypeGet(
+            context, length(inputs), pointer(inputs), length(results), pointer(results)
+        ),
+    )
 end
 
 # TODO maybe add this helper method?
@@ -545,7 +608,7 @@ Returns the number of input types.
 """
 function ninputs(type::Type)
     @assert isfunction(type) "cannot get the number of inputs on type $(type), expected a function type"
-    API.mlirFunctionTypeGetNumInputs(type)
+    return API.mlirFunctionTypeGetNumInputs(type)
 end
 
 """
@@ -555,7 +618,7 @@ Returns the number of result types.
 """
 function nresults(type::Type)
     @assert isfunction(type) "cannot get the number of results on type $(type), expected a function type"
-    API.mlirFunctionTypeGetNumResults(type)
+    return API.mlirFunctionTypeGetNumResults(type)
 end
 
 """
@@ -565,7 +628,7 @@ Returns the `i`-th input type.
 """
 function input(type::Type, i)
     @assert isfunction(type) "cannot get input on type $(type), expected a function type"
-    Type(API.mlirFunctionTypeGetInput(type, i - 1))
+    return Type(API.mlirFunctionTypeGetInput(type, i - 1))
 end
 
 """
@@ -575,7 +638,7 @@ Returns the `i`-th result type.
 """
 function result(type::Type, i=1)
     @assert isfunction(type) "cannot get result on type $(type), expected a function type"
-    Type(API.mlirFunctionTypeGetResult(type, i - 1))
+    return Type(API.mlirFunctionTypeGetResult(type, i - 1))
 end
 
 # Opaque type
@@ -584,7 +647,8 @@ end
 
 Creates an opaque type in the given context associated with the dialect identified by its namespace. The type contains opaque byte data of the specified length (data need not be null-terminated).
 """
-OpaqueType(namespace, data; context::Context=context()) = Type(API.mlirOpaqueTypeGet(context, namespace, data))
+OpaqueType(namespace, data; context::Context=context()) =
+    Type(API.mlirOpaqueTypeGet(context, namespace, data))
 
 """
     isopaque(type)
@@ -696,5 +760,5 @@ function Base.show(io::IO, type::Type)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
     API.mlirTypePrint(type, c_print_callback, ref)
-    print(io, " =#)")
+    return print(io, " =#)")
 end

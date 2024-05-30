@@ -7,12 +7,24 @@ using ..API
 export Attribute, Block, Context, Dialect, Location, Operation, Region, Value
 export activate!, deactivate!, dispose!, enable_multithreading!, context!
 export context, type, type!, location, typeid, block, dialect
-export nattrs, attr, attr!, rmattr!, nregions, region, nresults, result, noperands, operand, operand!, nsuccessors, successor
+export nattrs,
+    attr,
+    attr!,
+    rmattr!,
+    nregions,
+    region,
+    nresults,
+    result,
+    noperands,
+    operand,
+    operand!,
+    nsuccessors,
+    successor
 export BlockIterator, RegionIterator, OperationIterator
 export @affinemap
 
 function mlirIsNull(val)
-    val.ptr == C_NULL
+    return val.ptr == C_NULL
 end
 
 function print_callback(str::API.MlirStringRef, userdata)
@@ -30,7 +42,8 @@ macro llvmversioned(pred, expr)
     @assert Meta.isexpr(version, :macrocall) && version.args[1] == Symbol("@v_str") "Expected a VersionNumber"
     version = eval(version)
 
-    if predname == :min && VersionNumber(19) >= version || predname == :max && VersionNumber(19) <= version
+    if predname == :min && VersionNumber(19) >= version ||
+        predname == :max && VersionNumber(19) <= version
         esc(expr)
     else
         esc(:(nothing))
@@ -66,16 +79,20 @@ include("Pass.jl")
 # for foreign-calls. The returned value of the cconvert is rooted across
 # foreign-call.
 Base.cconvert(::Core.Type{API.MlirStringRef}, s::Union{Symbol,String}) = s
-Base.cconvert(::Core.Type{API.MlirStringRef}, s::AbstractString) = Base.cconvert(API.MlirStringRef, String(s)::String)
+function Base.cconvert(::Core.Type{API.MlirStringRef}, s::AbstractString)
+    return Base.cconvert(API.MlirStringRef, String(s)::String)
+end
 
 # Directly create `MlirStringRef` instead of adding an extra ccall.
-function Base.unsafe_convert(::Core.Type{API.MlirStringRef}, s::Union{Symbol,String,AbstractVector{UInt8}})
+function Base.unsafe_convert(
+    ::Core.Type{API.MlirStringRef}, s::Union{Symbol,String,AbstractVector{UInt8}}
+)
     p = Base.unsafe_convert(Ptr{Cchar}, s)
     return API.MlirStringRef(p, sizeof(s))
 end
 
 function Base.String(str::API.MlirStringRef)
-    Base.unsafe_string(pointer(str.data), str.length)
+    return Base.unsafe_string(pointer(str.data), str.length)
 end
 
 Base.String(str::API.MlirIdentifier) = String(API.mlirIdentifierStr(str))
@@ -105,6 +122,6 @@ function verifyall(operation::Operation; debug=false)
         end
     end
 end
-verifyall(module_::IR.Module) = Operation(module_) |> verifyall
+verifyall(module_::IR.Module) = verifyall(Operation(module_))
 
 end # module IR

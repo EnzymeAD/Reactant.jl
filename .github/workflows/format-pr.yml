@@ -1,0 +1,43 @@
+name: Format `main`
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.10'
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Install JuliaFormatter.jl
+        shell: julia --color=yes {0}
+        run: |
+          import Pkg
+          Pkg.add("JuliaFormatter")
+      - name: Format code
+        shell: julia --color=yes {0}
+        run: |
+          using JuliaFormatter
+          format(["src", "ext", "test"])
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: Format code
+          title: 'Format code of branch "main"'
+          branch: format-main
+          delete-branch: true
+          labels: format
+      - name: Check outputs
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
