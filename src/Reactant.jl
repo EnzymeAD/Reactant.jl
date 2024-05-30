@@ -708,7 +708,7 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
             push!(concrete_result_maker, :($resname = $T($(result_stores[path]))))
             return
         end
-        if T <: Tuple || T <: NamedTuple
+        if T <: Tuple
             elems = Symbol[]
             for (k, v) in pairs(tocopy)
                 sym = Symbol(resname, :_, k)
@@ -717,6 +717,18 @@ function generate_jlfunc(concrete_result, client, mod, Nargs, linear_args, linea
             end
             push!(concrete_result_maker, quote
                     $resname = ($(elems...),)
+            end)
+            return
+        end
+        if T <: NamedTuple
+            elems = Symbol[]
+            for (k, v) in pairs(tocopy)
+                sym = Symbol(resname, :_, k)
+                create_result(v, sym, (path..., k))
+                push!(elems, sym)
+            end
+            push!(concrete_result_maker, quote
+                    $resname = NamedTuple{$(keys(tocopy))}($elems)
             end)
             return
         end
