@@ -771,9 +771,9 @@ function generate_jlfunc(
         end
         if T <: Tuple
             elems = Symbol[]
-            for (i, v) in enumerate(tocopy)
-                sym = Symbol(string(resname) * "_" * string(i))
-                create_result(v, sym, (path..., i))
+            for (k, v) in pairs(tocopy)
+                sym = Symbol(resname, :_, k)
+                create_result(v, sym, (path..., k))
                 push!(elems, sym)
             end
             push!(
@@ -783,6 +783,18 @@ function generate_jlfunc(
                 end,
             )
             return nothing
+        end
+        if T <: NamedTuple
+            elems = Symbol[]
+            for (k, v) in pairs(tocopy)
+                sym = Symbol(resname, :_, k)
+                create_result(v, sym, (path..., k))
+                push!(elems, sym)
+            end
+            push!(concrete_result_maker, quote
+                    $resname = NamedTuple{$(keys(tocopy))}($elems)
+            end)
+            return
         end
         if T <: Array
             elems = Symbol[]
