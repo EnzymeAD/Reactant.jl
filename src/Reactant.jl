@@ -791,10 +791,13 @@ function generate_jlfunc(
                 create_result(v, sym, (path..., k))
                 push!(elems, sym)
             end
-            push!(concrete_result_maker, quote
+            push!(
+                concrete_result_maker,
+                quote
                     $resname = NamedTuple{$(keys(tocopy))}($elems)
-            end)
-            return
+                end,
+            )
+            return nothing
         end
         if T <: Array
             elems = Symbol[]
