@@ -84,13 +84,13 @@ jobs:
             version: '1.10'
             assertions: true
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
         if: ${{ ! matrix.assertions }}
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: ${{ matrix.assertions }}
         with:
           repository: 'JuliaLang/julia'
@@ -102,7 +102,7 @@ jobs:
           sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
           make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
           echo $PWD/julia/usr/bin >> $GITHUB_PATH
-      - uses: actions/cache@v1
+      - uses: actions/cache@v4
         env:
           cache-name: cache-artifacts
         with:
@@ -143,8 +143,8 @@ jobs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
         with:
           version: '1'
       - run: |
