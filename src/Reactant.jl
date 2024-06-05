@@ -1,6 +1,7 @@
 module Reactant
 
-include("mlir/MLIR.jl")
+using MLIR
+
 include("XLA.jl")
 include("utils.jl")
 

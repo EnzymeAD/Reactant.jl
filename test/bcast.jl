@@ -1,7 +1,7 @@
 
 using Reactant
 
-using Reactant.MLIR
+using MLIR
 
 @noinline function no(@nospecialize(x))
     x = @ccall $(Base.@cfunction(identity, Any, (Any,)))(x::Any)::Any

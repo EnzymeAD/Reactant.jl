@@ -1,6 +1,6 @@
 module XLA
 
-import ...MLIR
+import ..MLIR
 
 function RunPassPipeline(pass_pipeline, mod::MLIR.IR.Module)
     GC.@preserve pass_pipeline mod begin
