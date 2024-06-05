@@ -1,6 +1,38 @@
 module Reactant
 
 using MLIR
+using Reactant_jll
+
+# TODO regenerate HLO bindings with `--external` flag in `mlir-jl-tblgen`
+for file in ["Enzyme.inc.jl", "CHLO.inc.jl", "VHLO.inc.jl", "StableHLO.inc.jl"]
+    include(joinpath(Reactant_jll.artifact_dir, file)) do expr
+        filter!(expr.args[3].args) do x
+            x isa Expr && x.head ∈ [:using, :import]
+        end
+
+        for x in expr.args[3].args
+            importexpr = if x isa Expr && x.head ∈ [:using, :import]
+                if x.args[1].head === :(:)
+                    x.args[1].args[1]
+                else
+                    x.args[1]
+                end
+            end
+
+            if importexpr.head === :.
+                if length(importexpr.args) > 3 && importexpr.args[1:3] == [:., :., :.]
+                    deleteat!(importexpr.args, 1:3)
+                    pushfirst!(importexpr.args, :MLIR)
+                elseif length(importexpr.args) > 2 && importexpr.args[1:2] == [:., :.]
+                    deleteat!(importexpr.args, 1:2)
+                    pushfirst!(importexpr.args, :MLIR)
+                end
+            end
+        end
+
+        return expr
+    end
+end
 
 include("XLA.jl")
 include("utils.jl")
