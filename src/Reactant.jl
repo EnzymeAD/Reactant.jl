@@ -2,6 +2,7 @@ module Reactant
 
 using MLIR
 using Reactant_jll
+using ScopedValues
 
 # TODO regenerate HLO bindings with `--external` flag in `mlir-jl-tblgen`
 for file in ["Enzyme.inc.jl", "CHLO.inc.jl", "VHLO.inc.jl", "StableHLO.inc.jl"]
@@ -203,7 +204,7 @@ end
     end
 
     attr = fill(MLIR.IR.Attribute(eltype(RT)(0)), mlir_type(prev))
-    cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+    cst = MLIR.IR.result(stablehlo.constant(; value=attr), 1)
     res = RT((), cst)
     seen[prev] = res
     return res
@@ -895,7 +896,7 @@ end
 const registry = Ref{MLIR.IR.DialectRegistry}()
 function __init__()
     registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
+    @ccall LIBREACTANT.InitializeRegistryAndPasses(
         registry[]::MLIR.API.MlirDialectRegistry
     )::Cvoid
 end
@@ -1063,89 +1064,95 @@ pad_dot_general<1>(1);
 function compile(
     f::FTy, args::VAT; pipeline_options="", client=nothing
 ) where {FTy,VAT<:Tuple}
-    N = length(args)
-    ctx = MLIR.IR.Context()
-    Base.append!(registry[]; context=ctx)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    MLIR.IR.context!(ctx) do
-        mod = MLIR.IR.Module(MLIR.IR.Location())
-        MLIR.IR.mmodule!(mod) do
-            fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
-                mod, f, args, (), "main", true
-            )
-            @assert !fnwrapped
+    with(
+        MLIR.MLIR_C_PATH => Reactant_jll.libReactantExtra_handle, MLIR.MLIR_VERSION => v"17"
+    ) do
+        N = length(args)
+        ctx = MLIR.IR.Context()
+        Base.append!(registry[]; context=ctx)
+        @ccall XLA.LIBREACTANT.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+        MLIR.IR.context!(ctx) do
+            mod = MLIR.IR.Module(MLIR.IR.Location())
+            MLIR.IR.mmodule!(mod) do
+                fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
+                    mod, f, args, (), "main", true
+                )
+                @assert !fnwrapped
 
-            concrete_seen = IdDict()
+                concrete_seen = IdDict()
 
-            concrete_result = make_tracer(
-                concrete_seen, traced_result, ("result",), TracedToConcrete, nothing
-            ) #=data=#
+                concrete_result = make_tracer(
+                    concrete_seen, traced_result, ("result",), TracedToConcrete, nothing
+                ) #=data=#
 
-            if client === nothing
-                if length(linear_args) > 0
-                    for (k, v) in seen_args
-                        if !(v isa TracedRArray)
-                            continue
+                if client === nothing
+                    if length(linear_args) > 0
+                        for (k, v) in seen_args
+                            if !(v isa TracedRArray)
+                                continue
+                            end
+                            client = XLA.client(k.data)
                         end
-                        client = XLA.client(k.data)
+                    end
+                    if client === nothing
+                        client = XLA.default_backend[]
                     end
                 end
-                if client === nothing
-                    client = XLA.default_backend[]
+
+                XLA.RunPassPipeline(
+                    opt_passes *
+                    ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," *
+                    opt_passes,
+                    mod,
+                )
+
+                preserved_args = Tuple{TracedRArray,Int}[]
+                results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
+                nresults = MLIR.IR.Value[]
+                linear_results2 = TracedRArray[]
+                for (i, op) in enumerate(results)
+                    if !MLIR.IR.is_block_arg(op)
+                        push!(nresults, op)
+                        push!(linear_results2, linear_results[i])
+                        continue
+                    end
+                    push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
                 end
-            end
-
-            XLA.RunPassPipeline(
-                opt_passes *
-                ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," *
-                opt_passes,
-                mod,
-            )
-
-            preserved_args = Tuple{TracedRArray,Int}[]
-            results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
-            nresults = MLIR.IR.Value[]
-            linear_results2 = TracedRArray[]
-            for (i, op) in enumerate(results)
-                if !MLIR.IR.is_block_arg(op)
-                    push!(nresults, op)
-                    push!(linear_results2, linear_results[i])
-                    continue
+                fnbody = MLIR.IR.block(ret)
+                MLIR.API.mlirOperationDestroy(ret.operation)
+                ret.operation = MLIR.API.MlirOperation(C_NULL)
+                MLIR.IR.block!(fnbody) do
+                    return MLIR.Dialects.func.return_(nresults)
                 end
-                push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
+
+                out_tys2 = [MLIR.IR.type(a) for a in nresults]
+
+                func3 = MLIR.Dialects.func.func_(;
+                    sym_name="main",
+                    function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
+                    body=MLIR.IR.Region(),
+                )
+                MLIR.API.mlirRegionTakeBody(
+                    MLIR.IR.region(func3, 1), MLIR.IR.region(func2, 1)
+                )
+
+                push!(MLIR.IR.body(mod), func3)
+
+                MLIR.API.mlirOperationDestroy(func2.operation)
+                func2.operation = MLIR.API.MlirOperation(C_NULL)
+
+                # println(string(mod))
+
+                return generate_jlfunc(
+                    concrete_result,
+                    client,
+                    mod,
+                    N,
+                    linear_args,
+                    linear_results2,
+                    preserved_args,
+                )
             end
-            fnbody = MLIR.IR.block(ret)
-            MLIR.API.mlirOperationDestroy(ret.operation)
-            ret.operation = MLIR.API.MlirOperation(C_NULL)
-            MLIR.IR.block!(fnbody) do
-                return MLIR.Dialects.func.return_(nresults)
-            end
-
-            out_tys2 = [MLIR.IR.type(a) for a in nresults]
-
-            func3 = MLIR.Dialects.func.func_(;
-                sym_name="main",
-                function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
-                body=MLIR.IR.Region(),
-            )
-            MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(func2, 1))
-
-            push!(MLIR.IR.body(mod), func3)
-
-            MLIR.API.mlirOperationDestroy(func2.operation)
-            func2.operation = MLIR.API.MlirOperation(C_NULL)
-
-            # println(string(mod))
-
-            return generate_jlfunc(
-                concrete_result,
-                client,
-                mod,
-                N,
-                linear_args,
-                linear_results2,
-                preserved_args,
-            )
         end
     end
 end

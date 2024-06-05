@@ -1,10 +1,14 @@
 module XLA
 
-import ..MLIR
+using MLIR: MLIR
+using Reactant_jll
+using Libdl
+
+const LIBREACTANT = Reactant_jll.libReactantExtra_handle
 
 function RunPassPipeline(pass_pipeline, mod::MLIR.IR.Module)
     GC.@preserve pass_pipeline mod begin
-        @ccall MLIR.API.mlir_c.RunPassPipeline(
+        @ccall LIBREACTANT.RunPassPipeline(
             pass_pipeline::Cstring, mod.module_::MLIR.API.MlirModule
         )::Cvoid
     end
@@ -16,7 +20,7 @@ mutable struct Client
         return new(client)
         #@assert client != C_NULL
         #finalizer(new(client)) do client
-        #    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
+        #    @ccall LIBREACTANT.FreeClient(client.client::Ptr{Cvoid})::Cvoid
         #end
     end
 end
@@ -54,7 +58,7 @@ function CPUClient(asynchronous=false, node_id=0, num_nodes=1)
 
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
     client = ccall(f, Ptr{Cvoid}, (UInt, Cint, Cint), asynchronous, node_id, num_nodes)
-    #client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
+    #client = @ccall LIBREACTANT.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
     return Client(client)
 end
 
@@ -103,7 +107,7 @@ function __init__()
 end
 
 @inline function free_exec(exec)
-    @ccall MLIR.API.mlir_c.ExecutableFree(exec.exec::Ptr{Cvoid})::Cvoid
+    @ccall LIBREACTANT.ExecutableFree(exec.exec::Ptr{Cvoid})::Cvoid
 end
 
 mutable struct LoadedExecutable
@@ -116,7 +120,7 @@ mutable struct LoadedExecutable
 end
 
 @inline function free_future(future)
-    @ccall MLIR.API.mlir_c.FreeFuture(future.future::Ptr{Cvoid})::Cvoid
+    @ccall LIBREACTANT.FreeFuture(future.future::Ptr{Cvoid})::Cvoid
 end
 
 mutable struct Future
@@ -131,7 +135,7 @@ end
 @inline function free_buffer(buffer)
     sbuffer = buffer.buffer
     if sbuffer != C_NULL
-        @ccall MLIR.API.mlir_c.PjRtBufferFree(sbuffer::Ptr{Cvoid})::Cvoid
+        @ccall LIBREACTANT.PjRtBufferFree(sbuffer::Ptr{Cvoid})::Cvoid
     end
 end
 
@@ -154,14 +158,14 @@ end
 function device(buffer::Buffer)
     GC.@preserve buffer begin
         return Device(
-            @ccall MLIR.API.mlir_c.BufferToDevice(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
+            @ccall LIBREACTANT.BufferToDevice(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
         )
     end
 end
 function client(buffer::Buffer)
     GC.@preserve buffer begin
         return Client(
-            @ccall MLIR.API.mlir_c.BufferToClient(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
+            @ccall LIBREACTANT.BufferToClient(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
         )
     end
 end
@@ -174,7 +178,7 @@ end
 function client(device::Device)
     GC.@preserve device begin
         return Client(
-            @ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
+            @ccall LIBREACTANT.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
         )
     end
 end
@@ -184,7 +188,7 @@ function ArrayFromHostBuffer(client::Client, array::Array{T,N}, device) where {T
         dtype = MLIR.IR.Type(T)
         sizear = Int64[s for s in reverse(size(array))]
         GC.@preserve array sizear begin
-            @ccall MLIR.API.mlir_c.ArrayFromHostBuffer(
+            @ccall LIBREACTANT.ArrayFromHostBuffer(
                 client.client::Ptr{Cvoid},
                 pointer(array)::Ptr{T},
                 dtype::MLIR.API.MlirType,
@@ -199,21 +203,19 @@ end
 
 function BufferToHost(buffer::Buffer, data)
     GC.@preserve buffer begin
-        @ccall MLIR.API.mlir_c.BufferToHost(
-            buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
-        )::Cvoid
+        @ccall LIBREACTANT.BufferToHost(buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid})::Cvoid
     end
 end
 
 # TODO users themselves need to gc preserve here
 function UnsafeBufferPointer(buffer::Buffer)
-    @ccall MLIR.API.mlir_c.UnsafeBufferPointer(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
+    @ccall LIBREACTANT.UnsafeBufferPointer(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
 end
 
 function CopyBufferToDevice(buffer::Buffer, device::Device)
     GC.@preserve buffer device begin
         Buffer(
-            @ccall MLIR.API.mlir_c.CopyBufferToDevice(
+            @ccall LIBREACTANT.CopyBufferToDevice(
                 buffer.buffer::Ptr{Cvoid}, device.device::Ptr{Cvoid}
             )::Ptr{Cvoid}
         )
@@ -222,7 +224,7 @@ end
 
 function BufferOnCPU(buffer::Buffer)
     GC.@preserve buffer begin
-        (@ccall MLIR.API.mlir_c.BufferOnCPU(buffer.buffer::Ptr{Cvoid})::UInt8) != 0
+        (@ccall LIBREACTANT.BufferOnCPU(buffer.buffer::Ptr{Cvoid})::UInt8) != 0
     end
 end
 
@@ -297,7 +299,7 @@ end
     inputs = Base.RefValue(inputs)
     donated_args = Base.RefValue(donated_args)
     GC.@preserve inputs donated_args outputs futures future_res begin
-        @ccall MLIR.API.mlir_c.XLAExecute(
+        @ccall LIBREACTANT.XLAExecute(
             exec.exec::Ptr{Cvoid},
             N::Cint,
             inputs::Ptr{Cvoid},
@@ -322,7 +324,7 @@ end
 function Compile(client::Client, mod::MLIR.IR.Module)
     GC.@preserve client mod begin
         executable = LoadedExecutable(
-            @ccall MLIR.API.mlir_c.ClientCompile(
+            @ccall LIBREACTANT.ClientCompile(
                 client.client::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule
             )::Ptr{Cvoid}
         )
@@ -331,13 +333,13 @@ end
 
 function ClientNumDevices(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientNumDevices(client.client::Ptr{Cvoid})::Cint
+        return @ccall LIBREACTANT.ClientNumDevices(client.client::Ptr{Cvoid})::Cint
     end
 end
 
 function ClientNumAddressableDevices(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientNumAddressableDevices(
+        return @ccall LIBREACTANT.ClientNumAddressableDevices(
             client.client::Ptr{Cvoid}
         )::Cint
     end
@@ -345,14 +347,14 @@ end
 
 function ClientProcessIndex(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientProcessIndex(client.client::Ptr{Cvoid})::Cint
+        return @ccall LIBREACTANT.ClientProcessIndex(client.client::Ptr{Cvoid})::Cint
     end
 end
 
 function ClientGetDevice(client::Client, idx)
     GC.@preserve client begin
         return Device(
-            @ccall MLIR.API.mlir_c.ClientGetDevice(
+            @ccall LIBREACTANT.ClientGetDevice(
                 client.client::Ptr{Cvoid}, idx::Cint
             )::Ptr{Cvoid}
         )
@@ -362,7 +364,7 @@ end
 function ClientGetAddressableDevice(client::Client, idx)
     GC.@preserve client begin
         return Device(
-            @ccall MLIR.API.mlir_c.ClientGetAddressableDevice(
+            @ccall LIBREACTANT.ClientGetAddressableDevice(
                 client.client::Ptr{Cvoid}, idx::Cint
             )::Ptr{Cvoid}
         )
@@ -371,13 +373,13 @@ end
 
 function is_ready(future::Future)
     GC.@preserve future begin
-        return (@ccall MLIR.API.mlir_c.FutureIsReady(future.future::Ptr{Cvoid})::UInt8) != 0
+        return (@ccall LIBREACTANT.FutureIsReady(future.future::Ptr{Cvoid})::UInt8) != 0
     end
 end
 
 @inline function await(future::Future)::Nothing
     GC.@preserve future begin
-        @ccall MLIR.API.mlir_c.FutureAwait(future.future::Ptr{Cvoid})::Cvoid
+        @ccall LIBREACTANT.FutureAwait(future.future::Ptr{Cvoid})::Cvoid
     end
     return nothing
 end

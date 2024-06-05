@@ -11,7 +11,7 @@ for (jlop, hloop) in ((:(NNlib.tanh), :tanh), (:(NNlib.tanh_fast), :tanh))
                 ::typeof($jlop), lhs::Reactant.TracedRArray{ElType,Shape,N}
             ) where {ElType,Shape,N}
                 return Reactant.TracedRArray{ElType,Shape,N}(
-                    (), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1)
+                    (), MLIR.IR.result(Reactant.stablehlo.$hloop(lhs.mlir_data), 1)
                 )
             end
         end

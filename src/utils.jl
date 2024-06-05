@@ -6,7 +6,7 @@ function transpose_val(val)
     attr = MLIR.IR.DenseArrayAttribute(
         Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...]
     )
-    return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
+    return MLIR.IR.result(stablehlo.transpose(val; permutation=attr), 1)
 end
 
 function apply(f, args...; kwargs...)

@@ -129,7 +129,7 @@ function set_act!(inp, path, reverse, tostore; emptypath=false)
     #if inp isa Enzyme.Active || !reverse
     x.mlir_data = tostore
     #else
-    #    x.mlir_data = MLIR.IR.result(MLIR.Dialects.stablehlo.add(x.mlir_data, tostore), 1)
+    #    x.mlir_data = MLIR.IR.result(stablehlo.add(x.mlir_data, tostore), 1)
     #end
 
     if emptypath
@@ -210,7 +210,7 @@ function Cassette.overdub(
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
                 attr = fill(MLIR.IR.Attribute(eltype(a)(1)), mlir_type(a))
-                cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+                cst = MLIR.IR.result(stablehlo.constant(; value=attr), 1)
                 push!(ad_inputs, cst)
             end
         else
@@ -241,14 +241,14 @@ function Cassette.overdub(
     end
 
     function act_attr(val)
-        val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
+        val = @ccall XLA.LIBREACTANT.enzymeActivityAttrGet(
             MLIR.IR.context()::MLIR.API.MlirContext, val::Int32
         )::MLIR.API.MlirAttribute
         return MLIR.IR.Attribute(val)
     end
     fname = get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
-    res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)(
+    res = (reverse ? Reactant.enzyme.autodiff : Reactant.enzyme.fwddiff)(
         [transpose_val(v) for v in ad_inputs];
         outputs=outtys,
         fn=fname,
@@ -360,10 +360,10 @@ function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,
     end
     if isa(rhs, Number)
         attr = fill(MLIR.IR.Attribute(ElType(rhs)), mlir_type(lhs))
-        return TracedRArray{ElType,Shape,N}(nothing, MLIR.Dialects.stablehlo.constant(attr))
+        return TracedRArray{ElType,Shape,N}(nothing, stablehlo.constant(attr))
     end
     attr = MLIR.IR.DenseElementsAttribute(mlir_type(lhs), rhs)
-    return TracedRArray{ElType,Shape,N}(nothing, MLIR.Dialects.stablehlo.constant(attr))
+    return TracedRArray{ElType,Shape,N}(nothing, stablehlo.constant(attr))
 end
 
 for (jlop, hloop, RT) in (
@@ -377,30 +377,21 @@ for (jlop, hloop, RT) in (
             lhs::TracedRArray{ElType,Shape,N}, rhs::TracedRArray{ElType,Shape,N}
         ) where {ElType,Shape,N}
             return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
+                (), MLIR.IR.result(stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1)
             )
         end
 
         function $jlop(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
             rhs = promote_to(lhs, rhs)
             return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
+                (), MLIR.IR.result(stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1)
             )
         end
 
         function $jlop(lhs, rhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
             lhs = promote_to(rhs, lhs)
             return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
+                (), MLIR.IR.result(stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1)
             )
         end
     end
@@ -422,7 +413,7 @@ function Base.:*(
     )
     precar = MLIR.IR.Attribute([prec, prec])
     res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dot_general(
+        stablehlo.dot_general(
             lhs.mlir_data,
             rhs.mlir_data;
             result_0=resty,
@@ -450,7 +441,7 @@ for (jlop, hloop) in (
     @eval begin
         function $jlop(lhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
             return TracedRArray{ElType,Shape,N}(
-                (), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1)
+                (), MLIR.IR.result(stablehlo.$hloop(lhs.mlir_data), 1)
             )
         end
         Cassette.overdub(context::TraceCtx, f::typeof($jlop), args...) = f(args...)
@@ -473,10 +464,7 @@ for (jlop, hloop, RT) in (
             rhs::TracedRArray{ElType,Shape,N},
         ) where {ElType,Shape,N}
             return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
+                (), MLIR.IR.result(stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1)
             )
         end
 
@@ -485,10 +473,7 @@ for (jlop, hloop, RT) in (
         ) where {ElType,Shape,N}
             rhs = promote_to(lhs, rhs)
             return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
+                (), MLIR.IR.result(stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1)
             )
         end
 
@@ -497,10 +482,7 @@ for (jlop, hloop, RT) in (
         ) where {ElType,Shape,N}
             lhs = promote_to(rhs, lhs)
             return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
+                (), MLIR.IR.result(stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1)
             )
         end
     end
@@ -523,7 +505,7 @@ for (jlop, hloop, hlocomp, RT) in (
             return TracedRArray{$RT,Shape,N}(
                 (),
                 MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
+                    stablehlo.$hloop(
                         lhs.mlir_data,
                         rhs.mlir_data;
                         comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
@@ -542,7 +524,7 @@ for (jlop, hloop, hlocomp, RT) in (
             return TracedRArray{$RT,Shape,N}(
                 (),
                 MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
+                    stablehlo.$hloop(
                         lhs.mlir_data,
                         rhs.mlir_data;
                         comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
@@ -561,7 +543,7 @@ for (jlop, hloop, hlocomp, RT) in (
             return TracedRArray{$RT,Shape,N}(
                 (),
                 MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
+                    stablehlo.$hloop(
                         lhs.mlir_data,
                         rhs.mlir_data;
                         comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
@@ -594,7 +576,7 @@ for (jlop, hloop) in (
             ::typeof($jlop), lhs::TracedRArray{ElType,Shape,N}
         ) where {ElType,Shape,N}
             return TracedRArray{ElType,Shape,N}(
-                (), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1)
+                (), MLIR.IR.result(stablehlo.$hloop(lhs.mlir_data), 1)
             )
         end
     end
@@ -630,7 +612,7 @@ Cassette.overdub(context::TraceCtx, f::typeof(Base.copy), args...) = f(args...)
     return TracedArray{T,tuple(Shape[i] for i in perm),N}(
         (),
         MLIR.IR.result(
-            MLIR.Dialects.stablehlo.transpose(
+            stablehlo.transpose(
                 A.mlir_data, DenseArrayAttribute([Int64(i - 1) for i in perm])
             ),
             1,
@@ -646,7 +628,7 @@ Cassette.overdub(context::TraceCtx, f::typeof(Base.permutedims), args...) = f(ar
 
     # HLO reshape semantics collapse the opposite way
     res1 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.transpose(
+        stablehlo.transpose(
             A.mlir_data;
             permutation=MLIR.IR.DenseArrayAttribute([Int64(N - 1 - i) for i in 0:(N - 1)]),
         ),
@@ -654,7 +636,7 @@ Cassette.overdub(context::TraceCtx, f::typeof(Base.permutedims), args...) = f(ar
     )
 
     res2 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.reshape(
+        stablehlo.reshape(
             res1;
             result_0=MLIR.IR.TensorType(
                 [Int64(i) for i in reverse(dims)], eltype(MLIR.IR.type(res1))
@@ -663,7 +645,7 @@ Cassette.overdub(context::TraceCtx, f::typeof(Base.permutedims), args...) = f(ar
     )
 
     res3 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.transpose(
+        stablehlo.transpose(
             res2;
             permutation=MLIR.IR.DenseArrayAttribute([
                 Int64(NT - 1 - i) for i in 0:(NT - 1)
@@ -761,7 +743,7 @@ end
     len = ndims(arg)
     @assert typeof(len) == Int
     arg = TracedRArray{eltype(arg),size(arg),len}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+        (), MLIR.IR.result(stablehlo.constant(; value=attr), 1)
     )
     return arg
 end
@@ -781,7 +763,7 @@ Cassette.overdub(context::TraceCtx, f::typeof(Base.fill!), args...) = f(args...)
     TT = MLIR.IR.TensorType([Int64(s) for s in rsize], MLIR.IR.Type(typeof(arg)))
     attr = Base.fill(arg, TT)
     return arg = TracedRArray{T,rsize,length(rsize)}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+        (), MLIR.IR.result(stablehlo.constant(; value=attr), 1)
     )
 end
 
@@ -811,7 +793,7 @@ end
     return TracedRArray{eltype(x),rsize,len}(
         (),
         MLIR.IR.result(
-            MLIR.Dialects.stablehlo.broadcast_in_dim(
+            stablehlo.broadcast_in_dim(
                 x.mlir_data;
                 result_0=MLIR.IR.TensorType([t for t in rsize], eltype(mlirty)),
                 broadcast_dimensions=MLIR.IR.DenseArrayAttribute(dims),
@@ -882,7 +864,7 @@ function Base.mapreduce(
 
     res = MLIR.IR.block!(fnbody) do
         tmp = broadcast_to_size(op(args...), (1,)).mlir_data
-        MLIR.Dialects.stablehlo.return_(MLIR.IR.Value[tmp])
+        stablehlo.return_(MLIR.IR.Value[tmp])
         return tmp
     end
 
@@ -896,7 +878,7 @@ function Base.mapreduce(
 
     body = MLIR.IR.Region()
     push!(body, fnbody)
-    red = MLIR.Dialects.stablehlo.reduce(
+    red = stablehlo.reduce(
         inp, init; result_0=TT, dimensions=MLIR.IR.DenseArrayAttribute(rdims), body
     )
 
@@ -904,7 +886,7 @@ function Base.mapreduce(
 
     if dims != (:)
         red = MLIR.IR.result(
-            MLIR.Dialects.stablehlo.reshape(
+            stablehlo.reshape(
                 red; result_0=MLIR.IR.TensorType(toonedims, eltype(MLIR.IR.type(red)))
             ),
             1,
