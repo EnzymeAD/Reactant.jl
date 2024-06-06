@@ -46,7 +46,7 @@
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/python/ifrt/executable.h"
 
-#include "xla/python/pjrt_ifrt/xla_compiler.h"
+#include "xla/python/ifrt/hlo/hlo_program.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -113,11 +113,11 @@ extern "C" int ClientProcessIndex(PjRtClient* client) {
 }
 
 extern "C" PjRtDevice* ClientGetDevice(PjRtClient* client, int device_id) {
-    return xla::ValueOrThrow(client->LookupDevice(device_id));
+    return xla::ValueOrThrow(client->LookupDevice(PjRtGlobalDeviceId(device_id)));
 }
 
 extern "C" PjRtDevice* ClientGetAddressableDevice(PjRtClient* client, int device_id) {
-    return xla::ValueOrThrow(client->LookupAddressableDevice(device_id));
+    return xla::ValueOrThrow(client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
 }
 
 extern "C" void ExecutableFree(xla::PjRtLoadedExecutable* exec) {
@@ -201,7 +201,7 @@ extern "C" void FreeClient(PjRtClient * client) {
 
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirModule cmod) {
-    auto program = std::make_unique<xla::ifrt::XlaProgram>(cast<ModuleOp>(*unwrap(cmod)));
+    auto program = std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
     CompileOptions options;
     // options.argument_layouts;
