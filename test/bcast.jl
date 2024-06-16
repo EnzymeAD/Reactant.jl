@@ -1,7 +1,7 @@
 
 using Reactant
 
-using Reactant.MLIR
+using MLIR
 
 @noinline function no(@nospecialize(x))
     x = @ccall $(Base.@cfunction(identity, Any, (Any,)))(x::Any)::Any
@@ -23,7 +23,7 @@ end
 function test()
     ctx = MLIR.IR.Context()
     Base.append!(Reactant.registry[]; context=ctx)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    @ccall XLA.LIBREACTANT.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
