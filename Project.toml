@@ -1,6 +1,10 @@
 name = "Reactant"
 uuid = "3c362404-f566-11ee-1572-e11a4b42c853"
-authors = ["William Moses <wmoses@mit.edu>", "Valentin Churavy <vchuravy@mit.edu>"]
+authors = [
+    "William Moses <wmoses@mit.edu>",
+    "Valentin Churavy <vchuravy@mit.edu>",
+    "Sergio Sánchez Ramírez <sergio.sanchez.ramirez@bsc.es>",
+]
 version = "0.1.1"
 
 [deps]
