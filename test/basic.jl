@@ -8,6 +8,24 @@ fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-I
 
 using InteractiveUtils
 
+@testset "2D sum" begin
+    r_res = sum(ones(2, 10))
+
+    a = Reactant.ConcreteRArray(ones(2, 10))
+
+    c_res = sum(a)
+    @test c_res ≈ r_res
+
+    f = Reactant.compile(sum, (a,))
+
+    @show @code_typed f(a)
+    @show @code_llvm f(a)
+
+    f_res = f(a)
+
+    @test f_res ≈ r_res
+end
+
 @testset "Basic reduce max" begin
     r_res = fastmax(ones(2, 10))
 

@@ -881,7 +881,7 @@ function Base.mapreduce(
     )
 
     res = MLIR.IR.block!(fnbody) do
-        tmp = broadcast_to_size(op(args...), (1,)).mlir_data
+        tmp = broadcast_to_size(op(args...), ()).mlir_data
         MLIR.Dialects.stablehlo.return_(MLIR.IR.Value[tmp])
         return tmp
     end
