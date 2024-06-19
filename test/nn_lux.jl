@@ -7,8 +7,11 @@ noisy = rand(Float32, 2, 1000)                                        # 2×1000 
 truth = [xor(col[1] > 0.5, col[2] > 0.5) for col in eachcol(noisy)]   # 1000-element Vector{Bool}
 
 # Define our model, a multi-layer perceptron with one hidden layer of size 3:
-model = Chain(Dense(2 => 3, tanh),   # activation function inside layer
-    Dense(3 => 2), softmax)
+model = Chain(
+    Dense(2 => 3, tanh),   # activation function inside layer
+    Dense(3 => 2),
+    softmax,
+)
 ps, st = Lux.setup(Xoshiro(123), model)
 
 using BenchmarkTools
@@ -60,15 +63,23 @@ end
 function gradient_loss_function(model, x, y, ps, st)
     dps = Enzyme.make_zero(ps)
     _, res = Enzyme.autodiff(
-        ReverseWithPrimal, loss_function, Active, Const(model), Const(x), Const(y),
-        Duplicated(ps, dps), Const(st))
+        ReverseWithPrimal,
+        loss_function,
+        Active,
+        Const(model),
+        Const(x),
+        Const(y),
+        Duplicated(ps, dps),
+        Const(st),
+    )
     return res, dps
 end
 
 gradient_loss_function(model, noisy, target, ps, st)
 
 compiled_gradient = Reactant.compile(
-    gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst))
+    gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst)
+)
 
 # # Training loop, using the whole data set 1000 times:
 # losses = []
