@@ -28,3 +28,8 @@ docs/site/
 # committed for packages, but should be committed for applications that require a static
 # environment.
 Manifest.toml
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+.python-version
