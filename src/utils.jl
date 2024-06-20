@@ -27,7 +27,7 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
         return make_tracer(
             seen_args,
             args[i],
-            ("args", i),
+            (:args, i),
             concretein ? ConcreteToTraced : TracedSetPath,
             nothing,
         ) #=data=#
@@ -70,7 +70,7 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
     seen_results = IdDict()
 
     traced_result = make_tracer(
-        seen_results, result, ("result",), concretein ? TracedTrack : TracedSetPath, nothing
+        seen_results, result, (:result,), concretein ? TracedTrack : TracedSetPath, nothing
     ) #=data=#
 
     retraced_args = ntuple(Val(N)) do i
@@ -78,7 +78,7 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
         return make_tracer(
             seen_results,
             traced_args[i],
-            concretein ? ("resargs", i) : (),
+            concretein ? (:resargs, i) : (),
             TracedTrack,
             nothing,
         ) #=data=#

@@ -17,18 +17,18 @@ function get_argidx(x)
         if length(path) == 0
             continue
         end
-        if path[1] == "args"
+        if path[1] == :args
             return path[2]::Int, path
         end
     end
-    throw(AssertionError("No path found"))
+    throw(AssertionError("No path found for $x"))
 end
 function get_residx(x)
     for path in x.paths
         if length(path) == 0
             continue
         end
-        if path[1] == "result"
+        if path[1] == :result
             return path
         end
     end
@@ -40,7 +40,7 @@ function has_residx(x)
         if length(path) == 0
             continue
         end
-        if path[1] == "result"
+        if path[1] == :result
             return true
         end
     end
