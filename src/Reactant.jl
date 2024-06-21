@@ -637,9 +637,9 @@ end
 end
 
 struct MakeConcreteRArray{T} end
-struct MakeArray{AT, Vals} end
-struct MakeString{AT, Val} end
-struct MakeStruct{AT, Val} end
+struct MakeArray{AT,Vals} end
+struct MakeString{AT,Val} end
+struct MakeStruct{AT,Val} end
 struct MakeVal{AT} end
 struct MakeSymbol{AT} end
 
@@ -648,7 +648,7 @@ function make_valable(tocopy)
         return MakeConcreteRArray{typeof(tocopy)}
     end
     if tocopy isa Array
-        return MakeArray{Core.Typeof(tocopy), Tuple{map(make_valable, tocopy)...}}
+        return MakeArray{Core.Typeof(tocopy),Tuple{map(make_valable, tocopy)...}}
     end
     if tocopy isa Symbol
         return tocopy
@@ -657,7 +657,7 @@ function make_valable(tocopy)
         return MakeVal{Val{tocopy}}
     end
     if tocopy isa AbstractString
-        return MakeString{Core.Typeof(tocopy), Symbol(string)}|| T <: Nothing
+        return MakeString{Core.Typeof(tocopy),Symbol(string)} || T <: Nothing
     end
     T = Core.Typeof(tocopy)
     if tocopy isa Tuple || tocopy isa NamedTuple || isstructtype(T)
@@ -666,18 +666,18 @@ function make_valable(tocopy)
         for i in 1:nf
             push!(elems, make_valable(getfield(tocopy, i)))
         end
-        return MakeStruct{Core.Typeof(tocopy), Tuple{elems...}} 
+        return MakeStruct{Core.Typeof(tocopy),Tuple{elems...}}
     end
 
     return error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
 end
 
-function create_result(tocopy::Type{MakeConcreteRArray{T}}, path, result_stores) where T
+function create_result(tocopy::Type{MakeConcreteRArray{T}}, path, result_stores) where {T}
     return :($T($(result_stores[path])))
 end
 
-function create_result(tocopy::Tuple,  path, result_stores)
-    elems = Union{Symbol, Expr}[]
+function create_result(tocopy::Tuple, path, result_stores)
+    elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
         push!(elems, create_result(v, (path..., k), result_stores))
     end
@@ -687,16 +687,18 @@ function create_result(tocopy::Tuple,  path, result_stores)
 end
 
 function create_result(tocopy::NamedTuple, path, result_stores)
-    elems = Union{Symbol, Expr}[]
+    elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
         push!(elems, create_result(v, (path..., k), result_Stores))
     end
     return quote
-       NamedTuple{$(keys(tocopy))}($elems)
+        NamedTuple{$(keys(tocopy))}($elems)
     end
 end
 
-function create_result(concrete_result_maker, ::Type{MakeArray{AT, tocopy}}, path, result_stores) where {AT, tocopy}
+function create_result(
+    concrete_result_maker, ::Type{MakeArray{AT,tocopy}}, path, result_stores
+) where {AT,tocopy}
     elems = Expr[]
     for (i, v) in enumerate(tocopy.parameters)
         push!(elems, create_result(v, (path..., i), result_stores))
@@ -718,12 +720,12 @@ function create_result(tocopy::Symbol, path, result_stores)
     return :($(QuoteNode(tocopy)))
 end
 
-function create_result(tocopy::Type{MakeString{AT, Val}}, path, result_stores) where {AT, Val}
+function create_result(tocopy::Type{MakeString{AT,Val}}, path, result_stores) where {AT,Val}
     return :($(AT(Val)))
 end
 
-function create_result(::Type{MakeStruct{AT, tocopy}}, path, result_stores) where {AT, tocopy}
-    elems = Union{Symbol, Expr}[]
+function create_result(::Type{MakeStruct{AT,tocopy}}, path, result_stores) where {AT,tocopy}
+    elems = Union{Symbol,Expr}[]
     for (i, v) in enumerate(tocopy.parameters)
         ev = create_result(v, (path..., i), result_stores)
         push!(elems, ev)
@@ -731,11 +733,20 @@ function create_result(::Type{MakeStruct{AT, tocopy}}, path, result_stores) wher
     return Expr(:new, AT, elems...)
 end
 
-struct Thunk{linear_results_paths, linear_args_paths, preserved_args_paths, concrete_result_ty}
+struct Thunk{linear_results_paths,linear_args_paths,preserved_args_paths,concrete_result_ty}
     exec::XLA.LoadedExecutable
 end
 
-@generated function (thunk::Thunk{Val{linear_results_paths}, Val{linear_args_paths}, Val{preserved_args_paths}, concrete_result_ty})(args::Vararg{Any, N}) where {linear_results_paths, linear_args_paths, preserved_args_paths, N, concrete_result_ty}
+@generated function (
+    thunk::Thunk{
+        Val{linear_results_paths},
+        Val{linear_args_paths},
+        Val{preserved_args_paths},
+        concrete_result_ty,
+    }
+)(
+    args::Vararg{Any,N}
+) where {linear_results_paths,linear_args_paths,preserved_args_paths,N,concrete_result_ty}
     arg_syncs = Expr[]
     topres = Symbol[]
     linearized_args = Union{Symbol,Expr}[]
@@ -869,12 +880,16 @@ end
 function generate_jlfunc(
     concrete_result, client, mod, Nargs, linear_args, linear_results, preserved_args
 )
-    linear_results_paths = (map(x->x.paths, linear_results)...,)
-    linear_args_paths = (map(x->x.paths, linear_args)...,)
-    preserved_args_paths = (map(x->(x[1].paths, x[2]), preserved_args)...,)
+    linear_results_paths = (map(x -> x.paths, linear_results)...,)
+    linear_args_paths = (map(x -> x.paths, linear_args)...,)
+    preserved_args_paths = (map(x -> (x[1].paths, x[2]), preserved_args)...,)
     exec = XLA.Compile(client, mod)
     v = make_valable(concrete_result)
-    return Thunk{Val{linear_results_paths}, Val{linear_args_paths}, Val{preserved_args_paths}, v}(exec)
+    return Thunk{
+        Val{linear_results_paths},Val{linear_args_paths},Val{preserved_args_paths},v
+    }(
+        exec
+    )
 end
 
 const registry = Ref{MLIR.IR.DialectRegistry}()
