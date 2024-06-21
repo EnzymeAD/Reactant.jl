@@ -384,7 +384,7 @@ end
 
 function is_ready(buffer::AsyncBuffer)::Bool
     future = buffer.future
-    if future === nothing
+    if isnothing(future)
         return true
     else
         return is_ready(future)

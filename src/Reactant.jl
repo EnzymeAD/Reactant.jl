@@ -327,10 +327,10 @@ end
     # unknown number of fields
     if T isa UnionAll
         aT = Base.argument_datatype(T)
-        if aT === nothing
+        if isnothing(aT)
             throw("Unhandled type $T")
         end
-        if Base.datatype_fieldcount(aT) === nothing
+        if isnothing(Base.datatype_fieldcount(aT))
             throw("Unhandled type $T")
         end
     end
@@ -1081,7 +1081,7 @@ function compile(
                 concrete_seen, traced_result, ("result",), TracedToConcrete, nothing
             ) #=data=#
 
-            if client === nothing
+            if isnothing(client)
                 if length(linear_args) > 0
                     for (k, v) in seen_args
                         if !(v isa TracedRArray)
@@ -1090,7 +1090,7 @@ function compile(
                         client = XLA.client(k.data)
                     end
                 end
-                if client === nothing
+                if isnothing(client)
                     client = XLA.default_backend[]
                 end
             end
