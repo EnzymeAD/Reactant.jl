@@ -13,6 +13,7 @@ cc_toolchain_suite(
         "k8": ":ygg_x86_toolchain",
         "darwin": ":ygg_x86_toolchain",
         "darwin_arm64": ":ygg_x86_toolchain",
+        "linux_arm64": ":ygg_x86_toolchain",
     },
 )
 cc_toolchain_suite(
@@ -214,6 +215,14 @@ platform(
     name = "darwin_aarch64",
     constraint_values = [
         "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+platform(
+    name = "linux_aarch64",
+    constraint_values = [
+        "@platforms//os:linux",
         "@platforms//cpu:aarch64",
     ],
 )
