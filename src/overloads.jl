@@ -600,6 +600,16 @@ for (jlop, hloop) in (
     end
 end
 
+function elem_apply(
+        ::Type{T}, lhs::TracedRArray{ElType,Shape,N}
+) where {T, ElType,Shape,N}
+    inTy = MLIR.IR.type(lhs.mlir_data)
+    outTy = MLIR.IR.TensorType(Base.size(inTy), MLIR.IR.Type(T))
+    return TracedRArray{T,Shape,N}(
+        (), MLIR.IR.result(MLIR.Dialects.stablehlo.convert(lhs.mlir_data; result=outTy), 1)
+    )
+end
+
 Cassette.overdub(context::TraceCtx, f::typeof(elem_apply), args...) = f(args...)
 
 @inline function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
