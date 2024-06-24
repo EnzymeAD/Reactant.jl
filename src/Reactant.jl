@@ -696,9 +696,7 @@ function create_result(tocopy::NamedTuple, path, result_stores)
     end
 end
 
-function create_result(
-    concrete_result_maker, ::Type{MakeArray{AT,tocopy}}, path, result_stores
-) where {AT,tocopy}
+function create_result(::Type{MakeArray{AT,tocopy}}, path, result_stores) where {AT,tocopy}
     elems = Expr[]
     for (i, v) in enumerate(tocopy.parameters)
         push!(elems, create_result(v, (path..., i), result_stores))
@@ -717,7 +715,7 @@ function create_result(tocopy::Type{MakeVal{Val{elem}}}, path, result_stores) wh
 end
 
 function create_result(tocopy::Symbol, path, result_stores)
-    return :($(QuoteNode(tocopy)))
+    return Meta.quot(tocopy)
 end
 
 function create_result(tocopy::Type{MakeString{AT,Val}}, path, result_stores) where {AT,Val}
