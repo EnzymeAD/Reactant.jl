@@ -600,9 +600,7 @@ for (jlop, hloop) in (
     end
 end
 
-function elem_apply(
-        ::Type{T}, lhs::TracedRArray{ElType,Shape,N}
-) where {T, ElType,Shape,N}
+function elem_apply(::Type{T}, lhs::TracedRArray{ElType,Shape,N}) where {T,ElType,Shape,N}
     inTy = MLIR.IR.type(lhs.mlir_data)
     outTy = MLIR.IR.TensorType(Base.size(inTy), MLIR.IR.Type(T))
     return TracedRArray{T,Shape,N}(
