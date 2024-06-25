@@ -16,14 +16,17 @@ Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 
 [weakdeps]
+Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
 
 [extensions]
+ReactantAdaptExt = "Adapt"
 ReactantArrayInterfaceExt = "ArrayInterface"
 ReactantNNlibExt = "NNlib"
 
 [compat]
+Adapt = "4"
 ArrayInterface = "7.10"
 CEnum = "0.4, 0.5"
 Cassette = "0.3"
