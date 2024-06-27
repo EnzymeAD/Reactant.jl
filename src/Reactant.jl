@@ -628,6 +628,28 @@ end
     return res
 end
 
+@inline function make_tracer(seen::IdDict, prev::RT, path, mode, data) where {RT<:Function}
+    # functions are directly returned
+    if sizeof(RT) == 0
+        return prev
+    end
+
+    # in closures, enclosured variables need to be traced
+    N = fieldcount(RT)
+    traced_fields = ntuple(Val(N)) do i
+        return make_tracer(
+            seen, getfield(prev, i), append_path(path, fieldname(RT, i)), mode, nothing
+        ) #=data=#
+    end
+
+    # closure are struct types with the types of enclosured vars as type parameters
+    restype = Core.apply_type(RT.name.wrapper, typeof.(traced_fields)...)
+    res = @eval $(Expr(:new, restype, traced_fields...))
+
+    seen[prev] = res
+    return res
+end
+
 struct MakeConcreteRArray{T} end
 struct MakeArray{AT,Vals} end
 struct MakeString{AT,Val} end
