@@ -311,7 +311,19 @@ end
     end
 
     if T <: Function
-        return T
+        # functions are directly returned
+        if sizeof(T) == 0
+            return T
+        end
+
+        # in closures, enclosured variables need to be traced
+        N = fieldcount(T)
+        traced_fieldtypes = ntuple(Val(N)) do i
+            return traced_type(fieldtype(T, i), seen, Val(mode))
+        end
+
+        # closure are struct types with the types of enclosured vars as type parameters
+        return Core.apply_type(T.name.wrapper, traced_fieldtypes...)
     end
 
     if T <: DataType
@@ -624,28 +636,6 @@ end
         return prev
     end
     res = Core.Box(tr)
-    seen[prev] = res
-    return res
-end
-
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode, data) where {RT<:Function}
-    # functions are directly returned
-    if sizeof(RT) == 0
-        return prev
-    end
-
-    # in closures, enclosured variables need to be traced
-    N = fieldcount(RT)
-    traced_fields = ntuple(Val(N)) do i
-        return make_tracer(
-            seen, getfield(prev, i), append_path(path, fieldname(RT, i)), mode, nothing
-        ) #=data=#
-    end
-
-    # closure are struct types with the types of enclosured vars as type parameters
-    restype = Core.apply_type(RT.name.wrapper, typeof.(traced_fields)...)
-    res = @eval $(Expr(:new, restype, traced_fields...))
-
     seen[prev] = res
     return res
 end
@@ -1085,7 +1075,6 @@ function compile(
             fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
                 mod, f, args, (), "main", true
             )
-            @assert !fnwrapped
 
             concrete_seen = IdDict()
 
