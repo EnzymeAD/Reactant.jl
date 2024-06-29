@@ -443,7 +443,7 @@ function append_path(path, i)
     return (path..., i)
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode) where {RT}
+@inline function make_tracer(seen::IdDict, prev::RT, path, mode; toscalar=false, tobatch=nothing) where {RT}
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -457,7 +457,7 @@ end
         subs = []
         for i in 1:nf
             xi = Base.getfield(prev, i)
-            xi2 = make_tracer(seen, xi, append_path(path, i), mode)
+            xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
             if xi !== xi2
                 changed = true
             end
@@ -479,7 +479,7 @@ end
         for i in 1:nf
             if isdefined(prev, i)
                 xi = Base.getfield(prev, i)
-                xi2 = make_tracer(seen, xi, append_path(path, i), mode)
+                xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
                 if xi !== xi2
                     changed = true
                 end
@@ -502,7 +502,7 @@ end
     for i in 1:nf
         if isdefined(prev, i)
             xi = Base.getfield(prev, i)
-            xi2 = make_tracer(seen, xi, append_path(path, i), mode)
+            xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
             if xi !== xi2
                 changed = true
             end
@@ -522,7 +522,7 @@ end
 end
 
 @inline function make_tracer(
-    seen::IdDict, prev::ConcreteRArray{ElType,Shape,N}, path, mode
+    seen::IdDict, prev::ConcreteRArray{ElType,Shape,N}, path, mode; toscalar=false, tobatch=nothing
 ) where {ElType,Shape,N}
     if mode == ArrayToConcrete
         return prev
@@ -540,7 +540,7 @@ end
 end
 
 @inline function make_tracer(
-    seen::IdDict, prev::TracedRArray{ElType,Shape,N}, path, mode
+    seen::IdDict, prev::TracedRArray{ElType,Shape,N}, path, mode; toscalar=false, tobatch=nothing
 ) where {ElType,Shape,N}
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
@@ -556,7 +556,13 @@ end
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = TracedRArray{ElType,Shape,N}((path,), prev.mlir_data)
+        res = if toscalar
+            TracedRArray{ElType,(),0}((path,), nothing)
+        elseif tobatch !== nothing
+            TracedRArray{ElType,tobatch,length(tobatch)}((path,), prev.mlir_data)
+        else
+            TracedRArray{ElType,Shape,N}((path,), prev.mlir_data)
+        end
         seen[prev] = res
         return res
     end
@@ -577,14 +583,14 @@ end
     return prev
 end
 
-@inline function make_tracer(seen::IdDict, prev::Complex{RT}, path, mode) where {RT}
+@inline function make_tracer(seen::IdDict, prev::Complex{RT}, path, mode; toscalar=false, tobatch=nothing) where {RT}
     return Complex(
-        make_tracer(seen, prev.re, append_path(path, :re), mode),
-        make_tracer(seen, prev.im, append_path(path, :im), mode),
+        make_tracer(seen, prev.re, append_path(path, :re), mode; toscalar, tobatch),
+        make_tracer(seen, prev.im, append_path(path, :im), mode; toscalar, tobatch),
     )
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode) where {RT<:Array}
+@inline function make_tracer(seen::IdDict, prev::RT, path, mode; toscalar=false, tobatch=nothing) where {RT<:Array}
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -598,7 +604,7 @@ end
     for I in eachindex(prev)
         if isassigned(prev, I)
             pv = prev[I]
-            nv = make_tracer(seen, pv, append_path(path, I), mode)
+            nv = make_tracer(seen, pv, append_path(path, I), mode; toscalar, tobatch)
             if pv !== nv
                 same = false
             end
@@ -612,27 +618,27 @@ end
     return newa
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode) where {RT<:Tuple}
+@inline function make_tracer(seen::IdDict, prev::RT, path, mode; toscalar=false, tobatch=nothing) where {RT<:Tuple}
     return (
-        (make_tracer(seen, v, append_path(path, i), mode) for (i, v) in enumerate(prev))...,
+        (make_tracer(seen, v, append_path(path, i), mode; toscalar, tobatch) for (i, v) in enumerate(prev))...,
     )
 end
 
-@inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path, mode) where {A,RT}
+@inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path, mode; toscalar=false, tobatch=nothing) where {A,RT}
     return NamedTuple{A,traced_type(RT, (), Val(mode))}((
         (
-            make_tracer(seen, Base.getfield(prev, i), append_path(path, i), mode) for
+            make_tracer(seen, Base.getfield(prev, i), append_path(path, i), mode; toscalar, tobatch) for
             i in 1:length(A)
         )...,
     ))
 end
 
-@inline function make_tracer(seen::IdDict, prev::Core.Box, path, mode)
+@inline function make_tracer(seen::IdDict, prev::Core.Box, path, mode; toscalar=false, tobatch=nothing)
     if haskey(seen, prev)
         return seen[prev]
     end
     prev2 = prev.contents
-    tr = make_tracer(seen, prev2, append_path(path, :contents), mode)
+    tr = make_tracer(seen, prev2, append_path(path, :contents), mode; toscalar, tobatch)
     if tr == prev2
         seen[prev] = prev
         return prev

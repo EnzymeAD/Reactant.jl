@@ -457,6 +457,95 @@ for (jlop, hloop) in (
     end
 end
 
+
+function elem_apply(f, args::VarArgs{Nargs})
+    primf = f.val
+
+    mod = MLIR.IR.module()
+
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
+        mod, f, args, (), string(f) * "_broadcast_scalar", false
+    )
+
+    invmap = IdDict()
+    OutShape = nothing
+    for (k, v) in seen_args
+        invmap[v] = k
+        OutShape size(k)
+    end
+    @assert OutShape !== nothing
+    in_tys2 = [mlir_type(invmap[arg]) for arg in linear_args]
+
+    out_tys2 = [MLIR.IR.TensorType(OutShape, MLIR.IR.Type(eltype(arg))) for arg in linear_results]
+
+    function act_attr(val)
+        val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
+            MLIR.IR.context()::MLIR.API.MlirContext, val::Int32
+        )::MLIR.API.MlirAttribute
+        return MLIR.IR.Attribute(val)
+    end
+
+    fname = get_attribute_by_name(func2, "sym_name")
+    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+
+    batch_inputs = MLIR.IR.Value[]
+
+    for a in linear_args
+        idx, path = get_argidx(a)
+        if idx == 1 && fnwrap
+            push_acts!(batch_inputs, f, path[3:end], reverse)
+        else
+            if fnwrap
+                idx -= 1
+            end
+            push_acts!(batch_inputs, args[idx], path[3:end], reverse)
+        end
+    end
+
+
+    function act_attr(val)
+        val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
+            MLIR.IR.context()::MLIR.API.MlirContext, val::Int32
+        )::MLIR.API.MlirAttribute
+        return MLIR.IR.Attribute(val)
+    end
+
+    res = MLIR.Dialects.enzyme.batch(
+        batch_inputs;
+        outputs=outtys,
+        fn=fname,
+        batch_sizes=DenseArrayAttribute([Int64(i) for i in Shape]),
+    )
+
+    residx = 1
+
+    for a in linear_results
+        if has_residx(a)
+            path = get_residx(a)
+            set!(result, path[2:end], MLIR.IR.result(res, residx))
+            residx += 1
+        else
+            idx, path = get_argidx(a)
+            if idx == 1 && fnwrap
+                set!(f, path[3:end], MLIR.IR.result(res, residx))
+                residx += 1
+            else
+                if fnwrap
+                    idx -= 1
+                end
+                set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
+                residx += 1
+            end
+        end
+    end
+
+    traced2_result = make_tracer(
+        seen_results, result, (), TracedSetPath, nothing; tobatch=OutShape
+    ) #=data=#
+
+    return traced2_result
+end
+
 for (jlop, hloop, RT) in (
     (:(Base.min), :minimum, :ElType),
     (:(Base.max), :maximum, :ElType),
