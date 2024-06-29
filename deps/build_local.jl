@@ -15,12 +15,7 @@ source_dir = joinpath(@__DIR__, "ReactantExtra")
 # 2. Ensure that an appropriate LLVM_full_jll is installed
 Pkg.activate(; temp=true)
 
-# Build!
-@info "Building" source_dir scratch_dir
-run(`mkdir -p $(scratch_dir)`)
-run(Cmd(`$(Base.julia_cmd().exec[1]) --project=. -e "using Pkg; Pkg.instantiate()"`, dir=source_dir))
-# --action_env TF_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
-run(Cmd(`bazel build -c dbg --action_env=JULIA=$(Base.julia_cmd().exec[1])
+cuda = """
  --repo_env TF_NEED_CUDA=1
 --repo_env TF_DOWNLOAD_CLANG=1
 --repo_env TF_CUDA_PATHS="/usr/local/cuda"
@@ -39,8 +34,16 @@ run(Cmd(`bazel build -c dbg --action_env=JULIA=$(Base.julia_cmd().exec[1])
 --@xla//xla/python:enable_gpu=true
 --@xla//xla/python:jax_cuda_pip_rpaths=true
 --define=xla_python_enable_gpu=true
+"""
+
+# Build!
+@info "Building" source_dir scratch_dir
+run(`mkdir -p $(scratch_dir)`)
+run(Cmd(`$(Base.julia_cmd().exec[1]) --project=. -e "using Pkg; Pkg.instantiate()"`, dir=source_dir))
+# --action_env TF_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
+run(Cmd(`bazel build -c dbg --action_env=JULIA=$(Base.julia_cmd().exec[1])
 --check_visibility=false --verbose_failures :libReactantExtra.so :Builtin.inc.jl :Arith.inc.jl :Affine.inc.jl :Func.inc.jl :Enzyme.inc.jl :StableHLO.inc.jl :CHLO.inc.jl :VHLO.inc.jl`, dir=source_dir,
-env=Dict("PATH"=>joinpath(source_dir, "..")*":"*ENV["PATH"])))
+env=Dict("PATH"=>joinpath(source_dir, "..")*":"*ENV["PATH"], "HOME"=>ENV["HOME"])))
 
 run(Cmd(`rm -f libReactantExtra.dylib`, dir=joinpath(source_dir, "bazel-bin")))
 run(Cmd(`ln -s libReactantExtra.so libReactantExtra.dylib`, dir=joinpath(source_dir, "bazel-bin")))

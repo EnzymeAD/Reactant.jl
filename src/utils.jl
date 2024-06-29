@@ -13,7 +13,7 @@ function apply(f, args...; kwargs...)
     return f(args...; kwargs...)
 end
 
-function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
+function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true; toscalar=false)
     if sizeof(typeof(f)) != 0
         return (
             true, make_mlir_fn(mod, apply, (f, args...), kwargs, name, concretein)[2:end]...
@@ -29,8 +29,7 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
             args[i],
             (:args, i),
             concretein ? ConcreteToTraced : TracedSetPath,
-            nothing,
-        ) #=data=#
+            nothing; toscalar)
     end
 
     linear_args = TracedRArray[]
@@ -41,7 +40,11 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
         push!(linear_args, v)
     end
 
-    in_tys = [transpose_ty(mlir_type(arg)) for arg in linear_args]
+    in_tys = if traced_scalar
+        [MLIR.IR.TensorType((), MLIR.IR.Type(eltype(arg))) for arg in linear_args]
+    else
+        [transpose_ty(mlir_type(arg)) for arg in linear_args]
+    end
 
     sym_visibility = nothing
     if !concretein
