@@ -29,8 +29,7 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
             args[i],
             (:args, i),
             concretein ? ConcreteToTraced : TracedSetPath,
-            nothing,
-        ) #=data=#
+        )
     end
 
     linear_args = TracedRArray[]
@@ -72,18 +71,14 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true)
     seen_results = IdDict()
 
     traced_result = make_tracer(
-        seen_results, result, (:result,), concretein ? TracedTrack : TracedSetPath, nothing
-    ) #=data=#
+        seen_results, result, (:result,), concretein ? TracedTrack : TracedSetPath
+    )
 
     retraced_args = ntuple(Val(N)) do i
         Base.@_inline_meta
         return make_tracer(
-            seen_results,
-            traced_args[i],
-            concretein ? (:resargs, i) : (),
-            TracedTrack,
-            nothing,
-        ) #=data=#
+            seen_results, traced_args[i], concretein ? (:resargs, i) : (), TracedTrack
+        )
     end
 
     linear_results = TracedRArray[]

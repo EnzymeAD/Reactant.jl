@@ -21,7 +21,7 @@ origout = model(noisy)
 @show origout[3]
 @btime model(noisy)
 
-cmodel = Reactant.make_tracer(IdDict(), model, (), Reactant.ArrayToConcrete, nothing)
+cmodel = Reactant.make_tracer(IdDict(), model, (), Reactant.ArrayToConcrete)
 cnoisy = Reactant.ConcreteRArray(noisy)
 
 # c_o = cmodel(noisy)

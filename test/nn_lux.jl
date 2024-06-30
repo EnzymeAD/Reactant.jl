@@ -20,9 +20,9 @@ origout, _ = model(noisy, ps, st)
 @show origout[3]
 @btime model($noisy, $ps, $st)  # 52.731 μs (10 allocations: 32.03 KiB)
 
-cmodel = Reactant.make_tracer(IdDict(), model, (), Reactant.ArrayToConcrete, nothing)
-cps = Reactant.make_tracer(IdDict(), ps, (), Reactant.ArrayToConcrete, nothing)
-cst = Reactant.make_tracer(IdDict(), st, (), Reactant.ArrayToConcrete, nothing)
+cmodel = Reactant.make_tracer(IdDict(), model, (), Reactant.ArrayToConcrete)
+cps = Reactant.make_tracer(IdDict(), ps, (), Reactant.ArrayToConcrete)
+cst = Reactant.make_tracer(IdDict(), st, (), Reactant.ArrayToConcrete)
 cnoisy = Reactant.ConcreteRArray(noisy)
 
 f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
