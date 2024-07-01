@@ -888,7 +888,7 @@ end
             # if `f` is a closure, then prepend the closure into `args`
             # the closure fields will be correctly extracted from it as the tracer has already passed through it
             if !(closure_ty <: Nothing)
-                :(args = [thunk.fnwrap, args...])
+                :(args = (thunk.fnwrap, args...))
             end
         )
         $exec_call
