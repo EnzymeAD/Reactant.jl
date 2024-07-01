@@ -735,8 +735,15 @@ function create_result(::Type{MakeStruct{AT,tocopy}}, path, result_stores) where
     return Expr(:new, AT, elems...)
 end
 
-struct Thunk{linear_results_paths,linear_args_paths,preserved_args_paths,concrete_result_ty}
+struct Thunk{
+    linear_results_paths,
+    linear_args_paths,
+    preserved_args_paths,
+    concrete_result_ty,
+    closure_ty,
+}
     exec::XLA.LoadedExecutable
+    fnwrap::closure_ty
 end
 
 @generated function (
@@ -745,10 +752,18 @@ end
         Val{linear_args_paths},
         Val{preserved_args_paths},
         concrete_result_ty,
+        closure_ty,
     }
 )(
     args::Vararg{Any,N}
-) where {linear_results_paths,linear_args_paths,preserved_args_paths,N,concrete_result_ty}
+) where {
+    linear_results_paths,
+    linear_args_paths,
+    preserved_args_paths,
+    N,
+    concrete_result_ty,
+    closure_ty,
+}
     arg_syncs = Expr[]
     topres = Symbol[]
     linearized_args = Union{Symbol,Expr}[]
@@ -869,6 +884,13 @@ end
     resexpr = create_result(concrete_result_ty, (), result_stores)
     expr = quote
         Base.@_inline_meta
+        $(
+            # if `f` is a closure, then prepend the closure into `args`
+            # the closure fields will be correctly extracted from it as the tracer has already passed through it
+            if !(closure_ty <: Nothing)
+                :(args = [thunk.fnwrap, args...])
+            end
+        )
         $exec_call
         $(concretize...)
         # Needs to store into result
@@ -880,17 +902,27 @@ end
 end
 
 function generate_jlfunc(
-    concrete_result, client, mod, Nargs, linear_args, linear_results, preserved_args
-)
+    concrete_result,
+    client,
+    mod,
+    linear_args,
+    linear_results,
+    preserved_args,
+    fnwrap::closure_ty,
+) where {closure_ty}
     linear_results_paths = (map(x -> x.paths, linear_results)...,)
     linear_args_paths = (map(x -> x.paths, linear_args)...,)
     preserved_args_paths = (map(x -> (x[1].paths, x[2]), preserved_args)...,)
     exec = XLA.Compile(client, mod)
     v = make_valable(concrete_result)
     return Thunk{
-        Val{linear_results_paths},Val{linear_args_paths},Val{preserved_args_paths},v
+        Val{linear_results_paths},
+        Val{linear_args_paths},
+        Val{preserved_args_paths},
+        v,
+        closure_ty,
     }(
-        exec
+        exec, fnwrap
     )
 end
 
@@ -1136,16 +1168,14 @@ function compile(
             MLIR.API.mlirOperationDestroy(func2.operation)
             func2.operation = MLIR.API.MlirOperation(C_NULL)
 
-            # println(string(mod))
-
             return generate_jlfunc(
                 concrete_result,
                 client,
                 mod,
-                N,
                 linear_args,
                 linear_results2,
                 preserved_args,
+                fnwrapped ? f : nothing,
             )
         end
     end
