@@ -790,7 +790,7 @@ end
                 path = path[3:end]
             end
             for p in path
-                res = :(Base.getfield($res, $p))
+                res = :(Base.getfield($res, $(Meta.quot(p))))
             end
             res = :($res.data = $(Symbol("concrete_res_$(idx)")))
             push!(delinearized_results, res)
