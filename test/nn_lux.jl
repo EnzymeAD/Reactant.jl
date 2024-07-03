@@ -7,9 +7,9 @@ noisy = rand(Float32, 2, 1000)                                        # 2×1000 
 truth = [xor(col[1] > 0.5, col[2] > 0.5) for col in eachcol(noisy)]   # 1000-element Vector{Bool}
 
 # Define our model, a multi-layer perceptron with one hidden layer of size 3:
-model = Chain(
-    Dense(2 => 3, tanh),   # activation function inside layer
-    Dense(3 => 2),
+model = Lux.Chain(
+    Lux.Dense(2 => 3, tanh),   # activation function inside layer
+    Lux.Dense(3 => 2),
     softmax,
 )
 ps, st = Lux.setup(Xoshiro(123), model)
@@ -43,7 +43,7 @@ ctarget = Reactant.ConcreteRArray(Array{Float32}(target))
 loader = DataLoader((noisy, target); batchsize=64, shuffle=true);
 # # 16-element DataLoader with first element: (2×64 Matrix{Float32}, 2×64 OneHotMatrix)
 
-opt = Adam(0.01f0)
+opt = Optimisers.Adam(0.01f0)
 losses = []
 
 # Lux.Exprimental.TrainState is very specialized for Lux models, so we write out the
