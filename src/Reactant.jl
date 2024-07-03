@@ -607,8 +607,8 @@ end
 @inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path, mode) where {A,RT}
     return NamedTuple{A,traced_type(RT, (), Val(mode))}((
         (
-            make_tracer(seen, Base.getfield(prev, name), append_path(path, name), mode) for
-            name in A
+            make_tracer(seen, Base.getfield(prev, i), append_path(path, i), mode) for
+            i in 1:length(A)
         )...,
     ))
 end
