@@ -129,7 +129,7 @@ jobs:
           SDKROOT=`xcrun --show-sdk-path` julia --project=deps deps/build_local.jl
           cp LocalPreferences.toml test/
       - uses: julia-actions/julia-runtest@v1
-        if: steps.buildpkg.outcome == 'success'
+        # if: steps.buildpkg.outcome == 'success'
         id: run_tests
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
