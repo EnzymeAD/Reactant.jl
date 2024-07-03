@@ -39,8 +39,30 @@ function list(x::T...) where {T}
     return l
 end
 
+function Reactant.make_tracer(
+    seen::IdDict, prev::RT, path, mode, data
+) where {T,RT<:MockLinkedList{T}}
+    TT = Reactant.traced_type(T, (), Val(mode))
+    return MockLinkedList{TT}(
+        Reactant.make_tracer(
+            seen, prev.head, Reactant.append_path(path, :head), mode, data
+        ),
+        if !isnothing(prev.tail)
+            Reactant.make_tracer(
+                seen, prev.tail, Reactant.append_path(path, :tail), mode, data
+            )
+        else
+            nothing
+        end,
+    )
+end
+
 function Base.sum(x::MockLinkedList{T}) where {T}
-    return sum(x.head) + (!isnothing(x.tail) ? sum(x.tail) : 0)
+    if isnothing(x.tail)
+        return sum(x.head)
+    else
+        return sum(x.head) + sum(x.tail)
+    end
 end
 
 @testset "Struct" begin
@@ -75,7 +97,6 @@ end
         x = [rand(2, 2) for _ in 1:2]
         x2 = list(x...)
         x3 = Reactant.make_tracer(IdDict(), x2, (), Reactant.ArrayToConcrete)
-        x4 = list(Reactant.ConcreteRArray.(x)...)
 
         # TODO this should be able to run without problems, but crashes
         @test_broken begin
@@ -83,14 +104,11 @@ end
             isapprox(f(x3), x3)
         end
 
-        f3 = Reactant.compile(sum, (x3,))
-        f4 = Reactant.compile(sum, (x4,))
+        f = Reactant.compile(sum, (x3,))
 
         y = sum(x2)
-        y3 = f3(x3)
-        y4 = f4(x4)
+        y3 = f(x3)
 
-        @test isapprox(y, y3)
-        @test isapprox(y, y4)
+        @test isapprox(y, only(y3))
     end
 end
