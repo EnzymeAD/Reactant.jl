@@ -5,7 +5,7 @@ authors = [
     "Valentin Churavy <vchuravy@mit.edu>",
     "Sergio Sánchez Ramírez <sergio.sanchez.ramirez@bsc.es>",
 ]
-version = "0.1.5"
+version = "0.1.6"
 
 [deps]
 CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
