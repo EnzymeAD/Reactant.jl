@@ -76,13 +76,13 @@ end
 
 function grad_ip(x)
     dx = Enzyme.make_zero(x)
-    Enzyme.autodiff(Reverse, sumcos, Active, Duplicated(x, dx))
+    Reactant.autodiff(Reverse, sumcos, Active, Duplicated(x, dx))
     return dx
 end
 
 function resgrad_ip(x)
     dx = Enzyme.make_zero(x)
-    res = Enzyme.autodiff(ReverseWithPrimal, sumcos, Active, Duplicated(x, dx))
+    res = Reactant.autodiff(ReverseWithPrimal, sumcos, Active, Duplicated(x, dx))
     return (res, dx)
 end
 

@@ -1,9 +1,4 @@
-
-using Cassette
-
 using Enzyme
-
-Cassette.@context TraceCtx;
 
 const enzyme_out = 0
 const enzyme_dup = 1
@@ -149,13 +144,8 @@ function set!(x, path, tostore; emptypath=false)
     end
 end
 
-function Cassette.overdub(
-    ::TraceCtx,
-    ::typeof(Enzyme.autodiff),
-    ::CMode,
-    f::FA,
-    ::Type{A},
-    args::Vararg{Enzyme.Annotation,Nargs},
+function Reactant.autodiff(
+    ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation,Nargs}
 ) where {CMode<:Enzyme.Mode,FA<:Enzyme.Annotation,A<:Enzyme.Annotation,Nargs}
     reverse = CMode <: Enzyme.ReverseMode
 
@@ -406,8 +396,6 @@ for (jlop, hloop, RT) in (
     end
 end
 
-Cassette.overdub(context::TraceCtx, f::typeof(Enzyme.make_zero), args...) = f(args...)
-
 function Base.:*(
     lhs::TracedRArray{ElType,Shape,2}, rhs::TracedRArray{ElType,Shape2,2}
 ) where {ElType,Shape,Shape2}
@@ -434,8 +422,6 @@ function Base.:*(
     return TracedRArray{ElType,(Base.size(lhsty)[1], Base.size(rhsty)[2]),2}((), res)
 end
 
-Cassette.overdub(context::TraceCtx, f::typeof(Base.:*), args...) = f(args...)
-
 for (jlop, hloop) in (
     (:(Base.:-), :negate),
     (:(Base.sin), :sine),
@@ -453,7 +439,6 @@ for (jlop, hloop) in (
                 (), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1)
             )
         end
-        Cassette.overdub(context::TraceCtx, f::typeof($jlop), args...) = f(args...)
     end
 end
 
@@ -608,12 +593,9 @@ function elem_apply(::Type{T}, lhs::TracedRArray{ElType,Shape,N}) where {T,ElTyp
     )
 end
 
-Cassette.overdub(context::TraceCtx, f::typeof(elem_apply), args...) = f(args...)
-
 @inline function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
 end
-Cassette.overdub(context::TraceCtx, f::typeof(Base.reshape), args...) = f(args...)
 
 @inline function Base.reshape(
     A::ConcreteRArray{T,Shape,N}, dims::NTuple{NT,Int}
@@ -632,7 +614,6 @@ Cassette.overdub(context::TraceCtx, f::typeof(Base.reshape), args...) = f(args..
 end
 
 Base.copy(A::TracedRArray{T,Shape,N}) where {T,Shape,N} = TracedRArray((), A.mlir_data)
-Cassette.overdub(context::TraceCtx, f::typeof(Base.copy), args...) = f(args...)
 
 @inline function Base.permutedims(A::TracedRArray{T,Shape,N}, perm) where {T,Shape,N}
     return TracedArray{T,tuple(Shape[i] for i in perm),N}(
@@ -645,7 +626,6 @@ Cassette.overdub(context::TraceCtx, f::typeof(Base.copy), args...) = f(args...)
         ),
     )
 end
-Cassette.overdub(context::TraceCtx, f::typeof(Base.permutedims), args...) = f(args...)
 
 @inline function Base.reshape(
     A::TracedRArray{T,Shape,N}, dims::NTuple{NT,Int}
@@ -703,7 +683,6 @@ BroadcastStyle(::Type{T}) where {T<:TracedRArray} = AbstractReactantArrayStyle{n
 function Base.similar(x::TracedRArray{T,Shape,N}, ::Type{T2}) where {T,Shape,N,T2}
     return TracedRArray{T2,Shape,N}((), nothing)
 end
-Cassette.overdub(context::TraceCtx, f::typeof(Base.similar), args...) = f(args...)
 
 @inline function Base.similar(
     bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
@@ -753,7 +732,6 @@ end
 ) where {Style<:AbstractReactantArrayStyle}
     return _copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
 end
-Cassette.overdub(context::TraceCtx, f::typeof(Base.materialize!), args...) = f(args...)
 
 @inline Base.copyto!(dest::TracedRArray, bc::Broadcasted{Nothing}) = _copyto!(dest, bc) # Keep it for ArrayConflict
 
@@ -783,7 +761,6 @@ function Base.fill!(A::TracedRArray{T,Shape,N}, x) where {T,Shape,N}
     A.mlir_data = bcast.mlir_data
     return A
 end
-Cassette.overdub(context::TraceCtx, f::typeof(Base.fill!), args...) = f(args...)
 
 @inline function broadcast_to_size(arg::T, rsize) where {T<:Number}
     TT = MLIR.IR.TensorType([Int64(s) for s in rsize], MLIR.IR.Type(typeof(arg)))
@@ -841,18 +818,6 @@ end
     dest.mlir_data = res.mlir_data
     return dest
 end
-
-function Cassette.overdub(
-    context::Cassette.Context,
-    ::Core.kwftype(typeof(Base.mapreduce)),
-    kwargs::Any,
-    ::typeof(Base.mapreduce),
-    args...,
-)
-    return Base.mapreduce(args...; kwargs...)
-end
-
-Cassette.overdub(context::Cassette.Context, f::typeof(Base.mapreduce), args...) = f(args...)
 
 function Base.mapreduce(
     f, op, A::TracedRArray{ElType,Shape,N}; dims=:, init=nothing
@@ -929,4 +894,3 @@ function Base.mapreducedim!(f, op, R::TracedRArray, A::Base.AbstractArrayOrBroad
     R.mlir_data = elem_apply(op, R, tmp).mlir_data
     return R
 end
-Cassette.overdub(context::TraceCtx, f::typeof(Base.mapreducedim!), args...) = f(args...)
