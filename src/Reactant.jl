@@ -132,7 +132,7 @@ mutable struct TracedRArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
     end
 end
 
-using Enzyme
+using Enzyme: Enzyme
 
 @inline function Enzyme.Compiler.active_reg_inner(
     ::Type{TracedRArray{ElType,Shape,N}},
@@ -194,8 +194,6 @@ function Base.show(io::IO, X::TracedRArray{ElType,Shape,N}) where {ElType,Shape,
 end
 
 include("overloads.jl")
-
-using Enzyme
 
 @inline val_value(::Val{T}) where {T} = T
 @inline val_value(::Type{Val{T}}) where {T} = T

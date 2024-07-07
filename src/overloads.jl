@@ -1,4 +1,4 @@
-using Enzyme
+using Enzyme: Enzyme
 
 const enzyme_out = 0
 const enzyme_dup = 1
@@ -88,22 +88,22 @@ function push_val!(ad_inputs, x, path)
     return push!(ad_inputs, x)
 end
 
-function push_acts!(ad_inputs, x::Const, path, reverse)
+function push_acts!(ad_inputs, x::Enzyme.Const, path, reverse)
     return push_val!(ad_inputs, x.val, path)
 end
 
-function push_acts!(ad_inputs, x::Active, path, reverse)
+function push_acts!(ad_inputs, x::Enzyme.Active, path, reverse)
     return push_val!(ad_inputs, x.val, path)
 end
 
-function push_acts!(ad_inputs, x::Duplicated, path, reverse)
+function push_acts!(ad_inputs, x::Enzyme.Duplicated, path, reverse)
     push_val!(ad_inputs, x.val, path)
     if !reverse
         push_val!(ad_inputs, x.dval, path)
     end
 end
 
-function push_acts!(ad_inputs, x::DuplicatedNoNeed, path, reverse)
+function push_acts!(ad_inputs, x::Enzyme.DuplicatedNoNeed, path, reverse)
     push_val!(ad_inputs, x.val, path)
     if !reverse
         push_val!(ad_inputs, x.dval, path)
@@ -144,7 +144,19 @@ function set!(x, path, tostore; emptypath=false)
     end
 end
 
-function Reactant.autodiff(
+@inline function autodiff(
+    mode::CMode, f::F, args::Vararg{Enzyme.Annotation,Nargs}
+) where {CMode<:Enzyme.Mode,F,Nargs}
+    return autodiff(mode, Enzyme.Const(f), args...)
+end
+
+@inline function autodiff(
+    mode::CMode, f::F, ::Type{RT}, args::Vararg{Enzyme.Annotation,Nargs}
+) where {CMode<:Enzyme.Mode,F,RT<:Enzyme.Annotation,Nargs}
+    return autodiff(mode, Enzyme.Const(f), RT, args...)
+end
+
+function autodiff(
     ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation,Nargs}
 ) where {CMode<:Enzyme.Mode,FA<:Enzyme.Annotation,A<:Enzyme.Annotation,Nargs}
     reverse = CMode <: Enzyme.ReverseMode
@@ -270,7 +282,7 @@ function Reactant.autodiff(
         end
     end
 
-    restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
+    restup = Any[(a isa Enzyme.Active) ? copy(a) : nothing for a in args]
     for a in linear_args
         idx, path = get_argidx(a)
         if idx == 1 && fnwrap
