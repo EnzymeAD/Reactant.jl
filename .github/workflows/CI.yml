@@ -41,16 +41,6 @@ jobs:
           # - os: ubuntu-20.04
           #   arch: x86
           #   libReactant: packaged
-          #   version: '1.7'
-          #   assertions: false
-          # - os: ubuntu-20.04
-          #   arch: x86
-          #   libReactant: packaged
-          #   version: '1.8'
-          #   assertions: false
-          # - os: ubuntu-20.04
-          #   arch: x86
-          #   libReactant: packaged
           #   version: '1.9'
           #   assertions: false
           # - os: ubuntu-20.04
@@ -58,16 +48,6 @@ jobs:
           #   libReactant: packaged
           #   version: '1.10'
           #   assertions: false
-          - os: ubuntu-20.04
-            arch: x64
-            libReactant: packaged
-            version: '1.7'
-            assertions: true
-          - os: ubuntu-20.04
-            arch: x64
-            libReactant: packaged
-            version: '1.8'
-            assertions: true
           - os: ubuntu-20.04
             arch: x64
             libReactant: packaged
