@@ -71,9 +71,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
             arg.mlir_data = row_maj_arg
         end
 
-        return Cassette.overdub(
-            Cassette.disablehooks(TraceCtx()), f, traced_args...; kwargs...
-        )
+        # Base.invoke_within()
     end
 
     seen_results = IdDict()

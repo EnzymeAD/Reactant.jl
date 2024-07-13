@@ -5,6 +5,7 @@ using PackageExtensionCompat
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("utils.jl")
+include("Interpreter.jl")
 
 abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType,N} end
 
