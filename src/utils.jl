@@ -13,10 +13,10 @@ function apply(f, args...; kwargs...)
     return f(args...; kwargs...)
 end
 
-function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true; toscalar=false)
+function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=false)
     if sizeof(typeof(f)) != 0
         return (
-            true, make_mlir_fn(mod, apply, (f, args...), kwargs, name, concretein)[2:end]...
+            true, make_mlir_fn(apply, (f, args...), kwargs, name, concretein)[2:end]...
         )
     end
 
@@ -40,7 +40,7 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true; toscal
         push!(linear_args, v)
     end
 
-    in_tys = if traced_scalar
+    in_tys = if toscalar
         [MLIR.IR.TensorType((), MLIR.IR.Type(eltype(arg))) for arg in linear_args]
     else
         [transpose_ty(mlir_type(arg)) for arg in linear_args]
@@ -51,14 +51,19 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true; toscal
         sym_visibility = MLIR.IR.Attribute("private")
     end
 
-    func = MLIR.Dialects.func.func_(;
+    mod = MLIR.IR.mmodule()
+    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
+        return MLIR.Dialects.func.func_(;
         sym_name=name * "_tmp",
         function_type=MLIR.IR.FunctionType(in_tys, []),
         body=MLIR.IR.Region(),
     )
+    end
 
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
+    
+    @assert MLIR.IR._has_block()
 
     result = MLIR.IR.block!(fnbody) do
         for (i, arg) in enumerate(linear_args)
@@ -113,14 +118,12 @@ function make_mlir_fn(mod, f, args, kwargs, name="main", concretein=true; toscal
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
             sym_visibility,
-        )
+    )
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
-    if MLIR.IR._has_block()
-        MLIR.API.mlirOperationDestroy(func.operation)
-        func.operation = MLIR.API.MlirOperation(C_NULL)
-    end
+    MLIR.API.mlirOperationDestroy(func.operation)
+    func.operation = MLIR.API.MlirOperation(C_NULL)
     return false,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results

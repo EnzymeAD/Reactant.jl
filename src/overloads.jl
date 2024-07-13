@@ -148,6 +148,10 @@ function set!(x, path, tostore; emptypath=false)
         x.paths = ()
     end
 end
+    
+function get_attribute_by_name(operation, name)
+    return MLIR.IR.Attribute(MLIR.API.mlirOperationGetAttributeByName(operation, name))
+end
 
 function Cassette.overdub(
     ::TraceCtx,
@@ -162,10 +166,8 @@ function Cassette.overdub(
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
-    mod = MLIR.IR.mmodule()
-
     fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
-        mod, primf, primargs, (), string(f) * "_autodiff", false
+        primf, primargs, (), string(f) * "_autodiff", false
     )
 
     activity = Int32[]
@@ -234,10 +236,6 @@ function Cassette.overdub(
                 push_val!(ad_inputs, args[idx].dval, path[3:end])
             end
         end
-    end
-
-    function get_attribute_by_name(operation, name)
-        return MLIR.IR.Attribute(MLIR.API.mlirOperationGetAttributeByName(operation, name))
     end
 
     function act_attr(val)
@@ -318,6 +316,8 @@ function Cassette.overdub(
         residx += 1
     end
 
+    func2.operation = MLIR.API.MlirOperation(C_NULL)
+    
     if reverse
         resv = if needs_primal(CMode)
             result
@@ -457,33 +457,29 @@ for (jlop, hloop) in (
     end
 end
 
+function act_attr(val)
+    val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
+        MLIR.IR.context()::MLIR.API.MlirContext, val::Int32
+    )::MLIR.API.MlirAttribute
+    return MLIR.IR.Attribute(val)
+end
 
-function elem_apply(f, args::VarArgs{Nargs})
-    primf = f.val
-
-    mod = MLIR.IR.module()
-
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
-        mod, f, args, (), string(f) * "_broadcast_scalar", false
-    )
+function elem_apply(f, args::Vararg{Any, Nargs}) where Nargs
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = 
+        make_mlir_fn(
+            f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
+        )
 
     invmap = IdDict()
     OutShape = nothing
     for (k, v) in seen_args
         invmap[v] = k
-        OutShape size(k)
+        OutShape=size(k)
     end
     @assert OutShape !== nothing
     in_tys2 = [mlir_type(invmap[arg]) for arg in linear_args]
 
     out_tys2 = [MLIR.IR.TensorType(OutShape, MLIR.IR.Type(eltype(arg))) for arg in linear_results]
-
-    function act_attr(val)
-        val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
-            MLIR.IR.context()::MLIR.API.MlirContext, val::Int32
-        )::MLIR.API.MlirAttribute
-        return MLIR.IR.Attribute(val)
-    end
 
     fname = get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
@@ -493,12 +489,12 @@ function elem_apply(f, args::VarArgs{Nargs})
     for a in linear_args
         idx, path = get_argidx(a)
         if idx == 1 && fnwrap
-            push_acts!(batch_inputs, f, path[3:end], reverse)
+            push_val!(batch_inputs, f, path[3:end])
         else
             if fnwrap
                 idx -= 1
             end
-            push_acts!(batch_inputs, args[idx], path[3:end], reverse)
+            push_val!(batch_inputs, args[idx], path[3:end])
         end
     end
 
@@ -512,9 +508,9 @@ function elem_apply(f, args::VarArgs{Nargs})
 
     res = MLIR.Dialects.enzyme.batch(
         batch_inputs;
-        outputs=outtys,
+        outputs=out_tys2,
         fn=fname,
-        batch_sizes=DenseArrayAttribute([Int64(i) for i in Shape]),
+        batch_shape=MLIR.IR.DenseArrayAttribute([Int64(i) for i in OutShape]),
     )
 
     residx = 1
@@ -539,10 +535,14 @@ function elem_apply(f, args::VarArgs{Nargs})
         end
     end
 
-    traced2_result = make_tracer(
-        seen_results, result, (), TracedSetPath, nothing; tobatch=OutShape
-    ) #=data=#
 
+    seen_results = IdDict()
+    traced2_result = make_tracer(
+         seen_results, result, (), TracedSetPath; tobatch=OutShape
+    ) 
+    
+    func2.operation = MLIR.API.MlirOperation(C_NULL)
+    
     return traced2_result
 end
 
@@ -728,7 +728,7 @@ Cassette.overdub(context::TraceCtx, f::typeof(Base.copy), args...) = f(args...)
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.transpose(
-                A.mlir_data, DenseArrayAttribute([Int64(i - 1) for i in perm])
+                A.mlir_data, MLIR.IR.DenseArrayAttribute([Int64(i - 1) for i in perm])
             ),
             1,
         ),

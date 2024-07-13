@@ -443,7 +443,7 @@ function append_path(path, i)
     return (path..., i)
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode; toscalar=false, tobatch=nothing) where {RT}
+@inline function make_tracer(seen::IdDict, prev::RT, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT}
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -522,7 +522,7 @@ end
 end
 
 @inline function make_tracer(
-    seen::IdDict, prev::ConcreteRArray{ElType,Shape,N}, path, mode; toscalar=false, tobatch=nothing
+    seen::IdDict, prev::ConcreteRArray{ElType,Shape,N}, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing
 ) where {ElType,Shape,N}
     if mode == ArrayToConcrete
         return prev
@@ -540,7 +540,7 @@ end
 end
 
 @inline function make_tracer(
-    seen::IdDict, prev::TracedRArray{ElType,Shape,N}, path, mode; toscalar=false, tobatch=nothing
+    seen::IdDict, prev::TracedRArray{ElType,Shape,N}, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing
 ) where {ElType,Shape,N}
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
@@ -579,18 +579,18 @@ end
     throw("Cannot Unknown trace mode $mode")
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode) where {RT<:AbstractFloat}
+@inline function make_tracer(seen::IdDict, prev::RT, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT<:AbstractFloat}
     return prev
 end
 
-@inline function make_tracer(seen::IdDict, prev::Complex{RT}, path, mode; toscalar=false, tobatch=nothing) where {RT}
+@inline function make_tracer(seen::IdDict, prev::Complex{RT}, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT}
     return Complex(
         make_tracer(seen, prev.re, append_path(path, :re), mode; toscalar, tobatch),
         make_tracer(seen, prev.im, append_path(path, :im), mode; toscalar, tobatch),
     )
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode; toscalar=false, tobatch=nothing) where {RT<:Array}
+@inline function make_tracer(seen::IdDict, prev::RT, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT<:Array}
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -618,13 +618,13 @@ end
     return newa
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode; toscalar=false, tobatch=nothing) where {RT<:Tuple}
+@inline function make_tracer(seen::IdDict, prev::RT, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT<:Tuple}
     return (
         (make_tracer(seen, v, append_path(path, i), mode; toscalar, tobatch) for (i, v) in enumerate(prev))...,
     )
 end
 
-@inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path, mode; toscalar=false, tobatch=nothing) where {A,RT}
+@inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {A,RT}
     return NamedTuple{A,traced_type(RT, (), Val(mode))}((
         (
             make_tracer(seen, Base.getfield(prev, i), append_path(path, i), mode; toscalar, tobatch) for
@@ -633,7 +633,7 @@ end
     ))
 end
 
-@inline function make_tracer(seen::IdDict, prev::Core.Box, path, mode; toscalar=false, tobatch=nothing)
+@inline function make_tracer(seen::IdDict, prev::Core.Box, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing)
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -1106,9 +1106,12 @@ pad_dot_general<1>(1);
 """
 
 function compile_to_module(mod, f, args; optimize=true)
-    fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
-        mod, f, args, (), "main", true
-    )
+    fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = 
+    MLIR.IR.block!(MLIR.IR.body(mod)) do
+        return make_mlir_fn(
+            f, args, (), "main", true
+        )
+    end
 
     concrete_seen = IdDict()
 
@@ -1118,6 +1121,7 @@ function compile_to_module(mod, f, args; optimize=true)
 
     if optimize
         XLA.RunPassPipeline(
+            opt_passes * ",enzyme-batch,"*
             opt_passes *
             ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," *
             opt_passes,
