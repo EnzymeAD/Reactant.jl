@@ -1,9 +1,32 @@
 # Taken from https://github.com/JuliaLang/julia/pull/52964/files#diff-936d33e524bcd097015043bd6410824119be5c210d43185c4d19634eb4912708
+# Other references:
+# - https://github.com/JuliaLang/julia/blob/0fd1f04dc7d4b905b0172b7130e9b1beab9bc4c9/test/compiler/AbstractInterpreter.jl#L228-L234
+# - https://github.com/JuliaLang/julia/blob/v1.10.4/test/compiler/newinterp.jl#L9
 
 const CC = Core.Compiler
 using Enzyme
 
 Base.Experimental.@MethodTable(ReactantMethodTable)
+
+struct ReactantCache
+    dict::IdDict{Core.MethodInstance,Core.CodeInstance}
+end
+ReactantCache() = ReactantCache(IdDict{Core.MethodInstance,Core.CodeInstance}())
+
+function CC.get(wvc::CC.WorldView{ReactantCache}, mi::Core.MethodInstance, default)
+    return get(wvc.cache.dict, mi, default)
+end
+function CC.getindex(wvc::CC.WorldView{ReactantCache}, mi::Core.MethodInstance)
+    return getindex(wvc.cache.dict, mi)
+end
+function CC.haskey(wvc::CC.WorldView{ReactantCache}, mi::Core.MethodInstance)
+    return haskey(wvc.cache.dict, mi)
+end
+function CC.setindex!(
+    wvc::CC.WorldView{ReactantCache}, ci::Core.CodeInstance, mi::Core.MethodInstance
+)
+    return setindex!(wvc.cache.dict, ci, mi)
+end
 
 struct ReactantInterpreter <: CC.AbstractInterpreter
     # compiler::ReactantCompiler
@@ -11,14 +34,16 @@ struct ReactantInterpreter <: CC.AbstractInterpreter
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
+    code_cache::ReactantCache
 
     function ReactantInterpreter(;
         world::UInt=Base.get_world_counter(),
         inf_params::CC.InferenceParams=CC.InferenceParams(),
         opt_params::CC.OptimizationParams=CC.OptimizationParams(),
         inf_cache::Vector{CC.InferenceResult}=CC.InferenceResult[],
+        code_cache::ReactantCache=ReactantCache(),
     )
-        return new(world, inf_params, opt_params, inf_cache)
+        return new(world, inf_params, opt_params, inf_cache, code_cache)
     end
 end
 
@@ -28,6 +53,9 @@ CC.OptimizationParams(interp::ReactantInterpreter) = interp.opt_params
 CC.get_world_counter(interp::ReactantInterpreter) = interp.world
 CC.get_inference_cache(interp::ReactantInterpreter) = interp.inf_cache
 # CC.cache_owner(interp::ReactantInterpreter) = interp.compiler
+function CC.code_cache(interp::ReactantInterpreter)
+    return CC.WorldView(interp.code_cache, CC.WorldRange(interp.world))
+end
 
 function CC.method_table(interp::ReactantInterpreter)
     return CC.OverlayMethodTable(CC.get_world_counter(interp), ReactantMethodTable)
