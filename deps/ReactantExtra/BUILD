@@ -329,7 +329,7 @@ cc_library(
         
         "@xla//xla/service/cpu:cpu_transfer_manager",
         
-        "@xla//xla/tsl/framework:allocator",
+        "@xla//xla/tsl/framework:allocator_registry_impl",
 
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
