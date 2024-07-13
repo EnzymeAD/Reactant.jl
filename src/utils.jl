@@ -78,7 +78,11 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
             ),
         )
         oc = Core.OpaqueClosure(ir)
-        oc(traced_args...)
+        if f === Reactant.apply
+            oc(traced_args[1], (traced_args[2:end]...,))
+        else
+            oc(traced_args...)
+        end
     end
 
     seen_results = IdDict()
