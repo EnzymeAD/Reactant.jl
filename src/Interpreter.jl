@@ -18,7 +18,7 @@ struct ReactantInterpreter <: CC.AbstractInterpreter
         opt_params::CC.OptimizationParams=CC.OptimizationParams(),
         inf_cache::Vector{CC.InferenceResult}=CC.InferenceResult[],
     )
-        return new(compiler, world, inf_params, opt_params, inf_cache)
+        return new(world, inf_params, opt_params, inf_cache)
     end
 end
 
