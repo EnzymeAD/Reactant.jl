@@ -237,7 +237,7 @@ cc_library(
     ) + [
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         "@xla//xla:xla.pb.cc",
-        #  "@xla//xla:xla_data.pb.cc",
+        "@xla//xla:xla_data.pb.cc",
         "@xla//xla/stream_executor:device_description.pb.cc",
         "@xla//xla/service:hlo.pb.cc",
         #  # "@tsl//tsl/protobuf:dnn.pb.cc",
