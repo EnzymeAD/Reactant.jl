@@ -71,7 +71,14 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
             arg.mlir_data = row_maj_arg
         end
 
-        # Base.invoke_within()
+        # TODO replace with `Base.invoke_within` if julia#52964 lands
+        ir = first(
+            only(
+                Base.code_ircode(f, map(typeof, traced_args); interp=ReactantInterpreter()),
+            ),
+        )
+        oc = Core.OpaqueClosure(ir)
+        oc(traced_args...)
     end
 
     seen_results = IdDict()
