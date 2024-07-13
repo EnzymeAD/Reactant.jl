@@ -468,7 +468,6 @@ end
             return prev
         end
         tup = (subs...,)
-        @show TT, subs, tup
         return NamedTuple{TT.parameters[1],typeof(tup)}(tup)
     end
 

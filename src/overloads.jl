@@ -371,6 +371,8 @@ for (jlop, hloop, RT) in (
     (:(Base.max), :maximum, :ElType),
     (:(Base.:+), :add, :ElType),
     (:(Base.:-), :subtract, :ElType),
+    (:(Base.:*), :multiply, :ElType),
+    (:(Base.:/), :divide, :ElType),
 )
     @eval begin
         function $jlop(
@@ -546,55 +548,6 @@ function elem_apply(f, args::Vararg{Any, Nargs}) where Nargs
     return traced2_result
 end
 
-for (jlop, hloop, RT) in (
-    (:(Base.min), :minimum, :ElType),
-    (:(Base.max), :maximum, :ElType),
-    (:(Base.:+), :add, :ElType),
-    (:(Base.add_sum), :add, :ElType),
-    (:(Base.:-), :subtract, :ElType),
-    (:(Base.:*), :multiply, :ElType),
-    (:(Base.:/), :divide, :ElType),
-)
-    @eval begin
-        function elem_apply(
-            ::typeof($jlop),
-            lhs::TracedRArray{ElType,Shape,N},
-            rhs::TracedRArray{ElType,Shape,N},
-        ) where {ElType,Shape,N}
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-
-        function elem_apply(
-            ::typeof($jlop), lhs::TracedRArray{ElType,Shape,N}, rhs
-        ) where {ElType,Shape,N}
-            rhs = promote_to(lhs, rhs)
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-
-        function elem_apply(
-            ::typeof($jlop), lhs, rhs::TracedRArray{ElType,Shape,N}
-        ) where {ElType,Shape,N}
-            lhs = promote_to(rhs, lhs)
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-    end
-end
-
 for (jlop, hloop, hlocomp, RT) in (
     (:(Base.:(==)), :compare, "EQ", :ElType),
     (:(Base.:(!=)), :compare, "NE", :ElType),
@@ -664,38 +617,13 @@ for (jlop, hloop, hlocomp, RT) in (
     end
 end
 
-function elem_apply(::typeof(identity), lhs)
-    return lhs
-end
-for (jlop, hloop) in (
-    (:(Base.:-), :negate),
-    (:(Base.sin), :sine),
-    (:(Base.cos), :cosine),
-    (:(Base.tanh), :tanh),
-    (:(Base.FastMath.tanh_fast), :tanh),
-    (:(Base.exp), :exponential),
-    (:(Base.FastMath.exp_fast), :exponential),
-    (:(Base.log), :log),
-    (:(Base.sqrt), :sqrt),
-)
-    @eval begin
-        function elem_apply(
-            ::typeof($jlop), lhs::TracedRArray{ElType,Shape,N}
-        ) where {ElType,Shape,N}
-            return TracedRArray{ElType,Shape,N}(
-                (), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1)
-            )
-        end
-    end
-end
-
-function elem_apply(::Type{T}, lhs::TracedRArray{ElType,Shape,N}) where {T,ElType,Shape,N}
-    inTy = MLIR.IR.type(lhs.mlir_data)
-    outTy = MLIR.IR.TensorType(Base.size(inTy), MLIR.IR.Type(T))
-    return TracedRArray{T,Shape,N}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.convert(lhs.mlir_data; result=outTy), 1)
-    )
-end
+# function elem_apply(::Type{T}, lhs::TracedRArray{ElType,Shape,N}) where {T,ElType,Shape,N}
+#     inTy = MLIR.IR.type(lhs.mlir_data)
+#     outTy = MLIR.IR.TensorType(Base.size(inTy), MLIR.IR.Type(T))
+#     return TracedRArray{T,Shape,N}(
+#         (), MLIR.IR.result(MLIR.Dialects.stablehlo.convert(lhs.mlir_data; result=outTy), 1)
+#     )
+# end
 
 Cassette.overdub(context::TraceCtx, f::typeof(elem_apply), args...) = f(args...)
 
