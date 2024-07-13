@@ -328,6 +328,8 @@ cc_library(
         "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
         
         "@xla//xla/service/cpu:cpu_transfer_manager",
+        
+        "@xla//xla/tsl/framework:allocator",
 
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
