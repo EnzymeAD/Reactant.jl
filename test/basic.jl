@@ -44,6 +44,19 @@ end
     @test f_res ≈ r_res
 end
 
+sumexp(x) = sum(exp, x)
+
+@testset "Basic mapreduce" begin
+    x = ones(Float32, 10)
+    a = Reactant.ConcreteRArray(x)
+    r_res = sumexp(x)
+
+    f = Reactant.compile(sumexp, (a,))
+    f_res = f(a)
+
+    @test f_res ≈ r_res
+end
+
 function mysoftmax!(x)
     max_ = fastmax(x)
     return x .- max_

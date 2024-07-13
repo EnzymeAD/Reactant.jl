@@ -869,7 +869,7 @@ function Base.mapreduce(
 
     init = [broadcast_to_size(init, ()).mlir_data]
 
-    inp = [elem_apply(f, A.mlir_data)]
+    inp = [elem_apply(f, A).mlir_data]
 
     rdims = if dims == (:)
         Int64[i for i in 0:(N - 1)]
