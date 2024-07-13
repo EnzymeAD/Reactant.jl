@@ -68,8 +68,8 @@ MLIR_CAPI_EXPORTED MlirAttribute enzymeActivityAttrGet(
 extern "C" PjRtClient* MakeCPUClient(uint8_t asynchronous, int node_id, int num_nodes) {
     CpuClientOptions options;
     // options.kv_store = "etcd";
-    options.node_id = node_id;
-    options.num_nodes = num_nodes;
+    options.process_id = node_id;
+    // options.num_nodes = num_nodes;
     // options.collectives = num_nodes;
     options.asynchronous = asynchronous != 0;
     auto client = xla::ValueOrThrow(GetTfrtCpuClient(options));
