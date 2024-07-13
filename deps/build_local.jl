@@ -21,7 +21,8 @@ run(`mkdir -p $(scratch_dir)`)
 run(Cmd(`$(Base.julia_cmd().exec[1]) --project=. -e "using Pkg; Pkg.instantiate()"`, dir=source_dir))
 # --action_env TF_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
 run(Cmd(`bazel build -c dbg --action_env=JULIA=$(Base.julia_cmd().exec[1])
- --repo_env TF_NEED_CUDA=1
+--repo_env HERMETIC_PYTHON_VERSION="3.10"
+--repo_env TF_NEED_CUDA=1
 --repo_env TF_DOWNLOAD_CLANG=1
 --repo_env TF_CUDA_PATHS="/usr/local/cuda"
 --repo_env CUDA_TOOLKIT_PATH=/usr/local/cuda

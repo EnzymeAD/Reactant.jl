@@ -338,7 +338,6 @@ cc_library(
         "@tsl//tsl/profiler/backends/cpu:annotation_stack_impl",
         "@tsl//tsl/profiler/backends/cpu:traceme_recorder_impl",
         "@tsl//tsl/profiler/utils:time_utils_impl",
-        "@tsl//tsl/framework:allocator_registry_impl",
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
