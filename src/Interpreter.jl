@@ -30,7 +30,7 @@ CC.get_inference_cache(interp::ReactantInterpreter) = interp.inf_cache
 # CC.cache_owner(interp::ReactantInterpreter) = interp.compiler
 
 function CC.method_table(interp::ReactantInterpreter)
-    return CC.OverlayMethodTable(CC.get_inference_world(interp), ReactantMethodTable)
+    return CC.OverlayMethodTable(CC.get_world_counter(interp), ReactantMethodTable)
 end
 
 const enzyme_out = 0
