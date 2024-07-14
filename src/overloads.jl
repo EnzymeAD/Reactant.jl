@@ -358,6 +358,11 @@ function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,
     promote_to(TracedRArray{ElType,Shape,N}, rhs)
 end
 
+
+function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
+    promote_to(TracedRArray{ElType,Shape,N}, rhs)
+end
+
 for (jlop, hloop, RT) in (
     (:(Base.min), :minimum, :ElType),
     (:(Base.max), :maximum, :ElType),
