@@ -8,6 +8,10 @@ using Enzyme
 
 Base.Experimental.@MethodTable(ReactantMethodTable)
 
+macro hlo_override(expr)
+    return :(Base.Experimental.@overlay ReactantMethodTable $(esc(expr)))
+end
+
 struct ReactantCache
     dict::IdDict{Core.MethodInstance,Core.CodeInstance}
 end
@@ -208,7 +212,7 @@ function get_attribute_by_name(operation, name)
     return MLIR.IR.Attribute(MLIR.API.mlirOperationGetAttributeByName(operation, name))
 end
 
-Base.Experimental.@overlay ReactantMethodTable function Enzyme.autodiff(
+@hlo_override function Enzyme.autodiff(
     ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation,Nargs}
 ) where {CMode<:Enzyme.Mode,FA<:Enzyme.Annotation,A<:Enzyme.Annotation,Nargs}
     reverse = CMode <: Enzyme.ReverseMode
