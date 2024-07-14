@@ -525,13 +525,6 @@ for (jlop, hloop) in (
     end
 end
 
-function act_attr(val)
-    val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
-        MLIR.IR.context()::MLIR.API.MlirContext, val::Int32
-    )::MLIR.API.MlirAttribute
-    return MLIR.IR.Attribute(val)
-end
-
 function elem_apply(f, args::Vararg{Any, Nargs}) where Nargs
     fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = 
         make_mlir_fn(
@@ -564,14 +557,6 @@ function elem_apply(f, args::Vararg{Any, Nargs}) where Nargs
             end
             push_val!(batch_inputs, args[idx], path[3:end])
         end
-    end
-
-
-    function act_attr(val)
-        val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
-            MLIR.IR.context()::MLIR.API.MlirContext, val::Int32
-        )::MLIR.API.MlirAttribute
-        return MLIR.IR.Attribute(val)
     end
 
     res = MLIR.Dialects.enzyme.batch(
