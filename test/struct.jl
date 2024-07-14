@@ -39,20 +39,6 @@ function list(x::T...) where {T}
     return l
 end
 
-# function Reactant.make_tracer(
-#     seen::IdDict, prev::RT, path, mode
-# ) where {T,RT<:MockLinkedList{T}}
-#     TT = Reactant.traced_type(T, (), Val(mode))
-#     return MockLinkedList{TT}(
-#         Reactant.make_tracer(seen, prev.head, Reactant.append_path(path, :head), mode),
-#         if !isnothing(prev.tail)
-#             Reactant.make_tracer(seen, prev.tail, Reactant.append_path(path, :tail), mode)
-#         else
-#             nothing
-#         end,
-#     )
-# end
-
 function Base.sum(x::MockLinkedList{T}) where {T}
     if isnothing(x.tail)
         return sum(x.head)
@@ -93,8 +79,6 @@ end
         x = [rand(2, 2) for _ in 1:2]
         x2 = list(x...)
         x3 = Reactant.make_tracer(IdDict(), x2, (), Reactant.ArrayToConcrete)
-        @show x2
-        @show x3
 
         # TODO this should be able to run without problems, but crashes
         @test_broken begin

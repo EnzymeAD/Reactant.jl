@@ -434,7 +434,6 @@ end
             subT2 = fieldtype(TT2, f)
             subTT = traced_type(subT, seen3, Val(mode))
             if subT2 != subTT
-                @show "illegal subs", subT2, subTT
                 legal = false
                 break
             end
@@ -442,15 +441,10 @@ end
         if legal
             return TT2
         end
-    else
-        @show "non equal fields", fieldcount(T), fieldcount(TT2)
     end
 
     name = Symbol[]
-
-    @show "unconvertable type", T, TT2
-
-    return NamedTuple{fieldnames(T),Tuple{subTys...}}
+    throw(error("Cannot convert type $T, best attempt $TT2 failed"))
 end
 
 function append_path(path, i)
@@ -466,7 +460,6 @@ end
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
 
-    @show TT, TT <: NamedTuple
     if TT <: NamedTuple
         changed = false
         subs = []
