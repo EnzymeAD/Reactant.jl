@@ -18,9 +18,6 @@ using InteractiveUtils
 
     f = Reactant.compile(sum, (a,))
 
-    @show @code_typed f(a)
-    @show @code_llvm f(a)
-
     f_res = f(a)
 
     @test f_res ≈ r_res
@@ -36,8 +33,23 @@ end
 
     f = Reactant.compile(fastmax, (a,))
 
-    @show @code_typed f(a)
-    @show @code_llvm f(a)
+    f_res = f(a)
+
+    @test f_res ≈ r_res
+end
+
+sinexp(x) = sin(exp(x))
+sinexpbc(x) = sinexp.(x)
+
+@testset "Broadcast combined" begin
+    r_res = sinexpbc(ones(2, 10))
+
+    a = Reactant.ConcreteRArray(ones(2, 10))
+
+    c_res = sinexpbc(a)
+    @test c_res ≈ r_res
+
+    f = Reactant.compile(sinexpbc, (a,))
 
     f_res = f(a)
 

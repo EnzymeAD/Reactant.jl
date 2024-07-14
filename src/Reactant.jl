@@ -17,6 +17,9 @@ abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType,N} end
 @inline mlir_type(::RArray{ElType,Shape,N}) where {ElType,Shape,N} =
     MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
 
+@inline mlir_type(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} =
+    MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
+
 struct XLAArray{ElType,Shape,N} <: RArray{ElType,Shape,N} end
 
 mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
@@ -208,6 +211,10 @@ using Enzyme
     TracedSetPath = 5
 end
 
+@inline getmap(::Val{T}) where T = nothing
+@inline getmap(::Val{T}, a, b, args...) where {T} = getmap(Val(T), args...)
+@inline getmap(::Val{T}, ::Val{T}, ::Val{T2}, args...) where {T, T2} = T2
+
 @inline is_concrete_tuple(x::T2) where {T2} =
     (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
 @inline function traced_type(val::Type{T}, seen::ST, ::Val{mode}) where {ST,T,mode}
@@ -391,17 +398,18 @@ end
         return IdDict{iddict_name(T),traced_type(iddict_val(T), seen, Val(mode))}
     end
 
-    if Val(T) ∈ seen
-        return T
+    nextTy = getmap(Val(T), seen...)
+    if nextTy != nothing
+        return nextTy
     end
 
-    seen = (Val(T), seen...)
+    seen2 = (Val(T), Val(T), seen...)
 
     changed = false
     subTys = Type[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
-        subTT = traced_type(subT, seen, Val(mode))
+        subTT = traced_type(subT, seen2, Val(mode))
         changed |= subT != subTT
         push!(subTys, subTT)
     end
@@ -421,13 +429,17 @@ end
     end
 
     TT2 = Core.apply_type(T.name.wrapper, subParms...)
+    seen3 = (Val(T), Val(TT2), seen...)
     if fieldcount(T) == fieldcount(TT2)
         legal = true
         for f in 1:fieldcount(T)
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
-            subTT = traced_type(subT, seen, Val(mode))
-            legal &= subT2 == subTT
+            subTT = traced_type(subT, seen3, Val(mode))
+            if subT2 != subTT
+                legal = false
+                break
+            end
         end
         if legal
             return TT2
@@ -435,15 +447,14 @@ end
     end
 
     name = Symbol[]
-
-    return NamedTuple{fieldnames(T),Tuple{subTys...}}
+    throw(error("Cannot convert type $T, best attempt $TT2 failed"))
 end
 
 function append_path(path, i)
     return (path..., i)
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode) where {RT}
+@inline function make_tracer(seen::IdDict, prev::RT, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT}
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -457,7 +468,7 @@ end
         subs = []
         for i in 1:nf
             xi = Base.getfield(prev, i)
-            xi2 = make_tracer(seen, xi, append_path(path, i), mode)
+            xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
             if xi !== xi2
                 changed = true
             end
@@ -468,7 +479,6 @@ end
             return prev
         end
         tup = (subs...,)
-        @show TT, subs, tup
         return NamedTuple{TT.parameters[1],typeof(tup)}(tup)
     end
 
@@ -479,7 +489,7 @@ end
         for i in 1:nf
             if isdefined(prev, i)
                 xi = Base.getfield(prev, i)
-                xi2 = make_tracer(seen, xi, append_path(path, i), mode)
+                xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
                 if xi !== xi2
                     changed = true
                 end
@@ -502,7 +512,7 @@ end
     for i in 1:nf
         if isdefined(prev, i)
             xi = Base.getfield(prev, i)
-            xi2 = make_tracer(seen, xi, append_path(path, i), mode)
+            xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
             if xi !== xi2
                 changed = true
             end
@@ -522,7 +532,7 @@ end
 end
 
 @inline function make_tracer(
-    seen::IdDict, prev::ConcreteRArray{ElType,Shape,N}, path, mode
+    seen::IdDict, prev::ConcreteRArray{ElType,Shape,N}, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing
 ) where {ElType,Shape,N}
     if mode == ArrayToConcrete
         return prev
@@ -540,7 +550,7 @@ end
 end
 
 @inline function make_tracer(
-    seen::IdDict, prev::TracedRArray{ElType,Shape,N}, path, mode
+    seen::IdDict, prev::TracedRArray{ElType,Shape,N}, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing
 ) where {ElType,Shape,N}
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
@@ -556,7 +566,13 @@ end
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = TracedRArray{ElType,Shape,N}((path,), prev.mlir_data)
+        res = if toscalar
+            TracedRArray{ElType,(),0}((path,), nothing)
+        elseif tobatch !== nothing
+            TracedRArray{ElType,tobatch,length(tobatch)}((path,), prev.mlir_data)
+        else
+            TracedRArray{ElType,Shape,N}((path,), prev.mlir_data)
+        end
         seen[prev] = res
         return res
     end
@@ -573,18 +589,18 @@ end
     throw("Cannot Unknown trace mode $mode")
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode) where {RT<:AbstractFloat}
+@inline function make_tracer(seen::IdDict, prev::RT, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT<:AbstractFloat}
     return prev
 end
 
-@inline function make_tracer(seen::IdDict, prev::Complex{RT}, path, mode) where {RT}
+@inline function make_tracer(seen::IdDict, prev::Complex{RT}, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT}
     return Complex(
-        make_tracer(seen, prev.re, append_path(path, :re), mode),
-        make_tracer(seen, prev.im, append_path(path, :im), mode),
+        make_tracer(seen, prev.re, append_path(path, :re), mode; toscalar, tobatch),
+        make_tracer(seen, prev.im, append_path(path, :im), mode; toscalar, tobatch),
     )
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode) where {RT<:Array}
+@inline function make_tracer(seen::IdDict, prev::RT, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT<:Array}
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -598,7 +614,7 @@ end
     for I in eachindex(prev)
         if isassigned(prev, I)
             pv = prev[I]
-            nv = make_tracer(seen, pv, append_path(path, I), mode)
+            nv = make_tracer(seen, pv, append_path(path, I), mode; toscalar, tobatch)
             if pv !== nv
                 same = false
             end
@@ -612,27 +628,27 @@ end
     return newa
 end
 
-@inline function make_tracer(seen::IdDict, prev::RT, path, mode) where {RT<:Tuple}
+@inline function make_tracer(seen::IdDict, prev::RT, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {RT<:Tuple}
     return (
-        (make_tracer(seen, v, append_path(path, i), mode) for (i, v) in enumerate(prev))...,
+        (make_tracer(seen, v, append_path(path, i), mode; toscalar, tobatch) for (i, v) in enumerate(prev))...,
     )
 end
 
-@inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path, mode) where {A,RT}
+@inline function make_tracer(seen::IdDict, prev::NamedTuple{A,RT}, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing) where {A,RT}
     return NamedTuple{A,traced_type(RT, (), Val(mode))}((
         (
-            make_tracer(seen, Base.getfield(prev, i), append_path(path, i), mode) for
+            make_tracer(seen, Base.getfield(prev, i), append_path(path, i), mode; toscalar, tobatch) for
             i in 1:length(A)
         )...,
     ))
 end
 
-@inline function make_tracer(seen::IdDict, prev::Core.Box, path, mode)
+@inline function make_tracer(seen::IdDict, prev::Core.Box, path::Tuple, mode::TraceMode; toscalar=false, tobatch=nothing)
     if haskey(seen, prev)
         return seen[prev]
     end
     prev2 = prev.contents
-    tr = make_tracer(seen, prev2, append_path(path, :contents), mode)
+    tr = make_tracer(seen, prev2, append_path(path, :contents), mode; toscalar, tobatch)
     if tr == prev2
         seen[prev] = prev
         return prev
@@ -1100,9 +1116,12 @@ pad_dot_general<1>(1);
 """
 
 function compile_to_module(mod, f, args; optimize=true)
-    fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
-        mod, f, args, (), "main", true
-    )
+    fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = 
+    MLIR.IR.block!(MLIR.IR.body(mod)) do
+        return make_mlir_fn(
+            f, args, (), "main", true
+        )
+    end
 
     concrete_seen = IdDict()
 
@@ -1112,6 +1131,7 @@ function compile_to_module(mod, f, args; optimize=true)
 
     if optimize
         XLA.RunPassPipeline(
+            opt_passes * ",enzyme-batch,"*
             opt_passes *
             ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," *
             opt_passes,
