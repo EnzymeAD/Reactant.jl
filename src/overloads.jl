@@ -338,32 +338,24 @@ function Cassette.overdub(
     end
 end
 
-function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
-    if !(rhs <: Number)
-        if ElType != eltype(rhs)
-            throw(
-                ArgumentError(
-                    "Cannot promote $(typeof(rhs)) to $(TracedRArray{ElType,Shape,N}) with different element types",
-                ),
-            )
-        end
-        if Shape != size(rhs)
-            throw(ArgumentError("Cannot promote to TracedRArray with different shapes"))
-        end
-    end
-
+function promote_to(::Type{TracedRArray{ElType,Shape,N}}, rhs) where {ElType,Shape,N}
     if isa(rhs, TracedRArray)
-        if isa(rhs, Number)
-            throw(ArgumentError("TODO broadcast"))
-        end
-        return rhs
+       return TracedRArray{ElType,Shape,N}(
+          (), MLIR.IR.result(MLIR.Dialects.stablehlo.convert(rhs.mlir_data; result=mlir_type(TracedRArray{ElType, Shape, N})), 1)
+       )
     end
     if isa(rhs, Number)
-        attr = fill(MLIR.IR.Attribute(ElType(rhs)), mlir_type(lhs))
-        return TracedRArray{ElType,Shape,N}(nothing, MLIR.Dialects.stablehlo.constant(attr))
+        attr = fill(MLIR.IR.Attribute(ElType(rhs)), mlir_type(TracedRArray{ElType,Shape,N}))
+        ta = TracedRArray{ElType,Shape,N}((), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1))
+        return ta
     end
-    attr = MLIR.IR.DenseElementsAttribute(mlir_type(lhs), rhs)
-    return TracedRArray{ElType,Shape,N}(nothing, MLIR.Dialects.stablehlo.constant(attr))
+    attr = MLIR.IR.DenseElementsAttribute(mlir_type(TracedRArray{ElType,Shape,N}), rhs)
+    return TracedRArray{ElType,Shape,N}((), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr),1))
+end
+
+
+function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
+    promote_to(TracedRArray{ElType,Shape,N}, rhs)
 end
 
 for (jlop, hloop, RT) in (
@@ -371,10 +363,23 @@ for (jlop, hloop, RT) in (
     (:(Base.max), :maximum, :ElType),
     (:(Base.:+), :add, :ElType),
     (:(Base.:-), :subtract, :ElType),
-    (:(Base.:*), :multiply, :ElType),
-    (:(Base.:/), :divide, :ElType),
 )
     @eval begin
+
+        function $jlop(
+            lhs::TracedRArray{ElType,Shape,N}, rhs::TracedRArray{ElType2,Shape,N}
+        ) where {ElType, ElType2,Shape,N}
+            commonTy = TracedRArray{Base.promote_type(ElType, ElType2), Shape, N}
+            lhs = promote_to(commonTy, lhs)
+            rhs = promote_to(commonTy, rhs)
+            return commonTy(
+                (),
+                MLIR.IR.result(
+                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                ),
+            )
+        end
+
         function $jlop(
             lhs::TracedRArray{ElType,Shape,N}, rhs::TracedRArray{ElType,Shape,N}
         ) where {ElType,Shape,N}
@@ -399,6 +404,62 @@ for (jlop, hloop, RT) in (
         function $jlop(lhs, rhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
             lhs = promote_to(rhs, lhs)
             return TracedRArray{$RT,Shape,N}(
+                (),
+                MLIR.IR.result(
+                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                ),
+            )
+        end
+    end
+end
+
+Base.literal_pow(::Base.RefValue{typeof(^)}, x::Reactant.TracedRArray{T, (), 0}, ::Base.RefValue{Val{P}}) where {T, P} = Base.literal_pow(^, x, Val(P))
+
+for (jlop, hloop, RT) in (
+    (:(Base.:*), :multiply, :ElType),
+    (:(Base.:/), :divide, :ElType),
+    (:(Base.:^), :power, :ElType),
+)
+    @eval begin
+
+        function $jlop(
+            lhs::TracedRArray{ElType,Shape,0}, rhs::TracedRArray{ElType2,Shape,0}
+        ) where {ElType, ElType2,Shape}
+            commonTy = TracedRArray{Base.promote_type(ElType, ElType2), Shape, 0}
+            lhs = promote_to(commonTy, lhs)
+            rhs = promote_to(commonTy, rhs)
+            return commonTy(
+                (),
+                MLIR.IR.result(
+                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                ),
+            )
+        end
+
+        function $jlop(
+            lhs::TracedRArray{ElType,Shape,0}, rhs::TracedRArray{ElType,Shape,0}
+        ) where {ElType,Shape}
+            return TracedRArray{$RT,Shape,0}(
+                (),
+                MLIR.IR.result(
+                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                ),
+            )
+        end
+
+        function $jlop(lhs::TracedRArray{ElType,Shape,0}, rhs) where {ElType,Shape}
+            rhs = promote_to(lhs, rhs)
+            return TracedRArray{$RT,Shape,0}(
+                (),
+                MLIR.IR.result(
+                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                ),
+            )
+        end
+
+        function $jlop(lhs, rhs::TracedRArray{ElType,Shape,0}) where {ElType,Shape}
+            lhs = promote_to(rhs, lhs)
+            return TracedRArray{$RT,Shape,0}(
                 (),
                 MLIR.IR.result(
                     MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
@@ -617,14 +678,6 @@ for (jlop, hloop, hlocomp, RT) in (
     end
 end
 
-# function elem_apply(::Type{T}, lhs::TracedRArray{ElType,Shape,N}) where {T,ElType,Shape,N}
-#     inTy = MLIR.IR.type(lhs.mlir_data)
-#     outTy = MLIR.IR.TensorType(Base.size(inTy), MLIR.IR.Type(T))
-#     return TracedRArray{T,Shape,N}(
-#         (), MLIR.IR.result(MLIR.Dialects.stablehlo.convert(lhs.mlir_data; result=outTy), 1)
-#     )
-# end
-
 Cassette.overdub(context::TraceCtx, f::typeof(elem_apply), args...) = f(args...)
 
 @inline function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
@@ -792,6 +845,10 @@ end
 end
 
 @inline function broadcast_to_size(arg::TracedRArray, rsize)
+    return arg
+end
+
+@inline function broadcast_to_size(arg::Base.RefValue, rsize)
     return arg
 end
 

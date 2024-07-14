@@ -17,6 +17,9 @@ abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType,N} end
 @inline mlir_type(::RArray{ElType,Shape,N}) where {ElType,Shape,N} =
     MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
 
+@inline mlir_type(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} =
+    MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
+
 struct XLAArray{ElType,Shape,N} <: RArray{ElType,Shape,N} end
 
 mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
