@@ -143,3 +143,12 @@ end
     c = Reactant.ConcreteRArray(ones(50, 70))
     similar(c)
 end
+
+@testset "Reactant.@code_hlo" begin
+    W = Reactant.ConcreteRArray(randn(Float32, 10, 20))
+    x = Reactant.ConcreteRArray(randn(Float32, 20, 5))
+    res = Reactant.@code_hlo W * x
+    res_repr = sprint(show, res)
+
+    @test contains(res_repr, "stablehlo.dot_general")
+end
