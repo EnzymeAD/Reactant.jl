@@ -78,7 +78,16 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
                 Base.code_ircode(f, map(typeof, traced_args); interp=ReactantInterpreter()),
             ),
         )
+
+        # NOTE on Julia 1.9, it appends a ghost argument at the end
+        # solution: manually specify argument types
+        @static if VERSION < v"1.10"
+            empty!(ir.argtypes)
+            append!(ir.argtypes, Any[Core.Const(f), typeof.(traced_args)...])
+        end
+
         oc = Core.OpaqueClosure(ir)
+
         if f === Reactant.apply
             oc(traced_args[1], (traced_args[2:end]...,))
         else
