@@ -15,9 +15,7 @@ end
 
 function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=false)
     if sizeof(typeof(f)) != 0
-        return (
-            true, make_mlir_fn(apply, (f, args...), kwargs, name, concretein)[2:end]...
-        )
+        return (true, make_mlir_fn(apply, (f, args...), kwargs, name, concretein)[2:end]...)
     end
 
     N = length(args)
@@ -28,7 +26,8 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
             seen_args,
             args[i],
             (:args, i),
-            concretein ? ConcreteToTraced : TracedSetPath; toscalar
+            concretein ? ConcreteToTraced : TracedSetPath;
+            toscalar,
         )
     end
 
@@ -54,15 +53,15 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
     mod = MLIR.IR.mmodule()
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
-        sym_name=name * "_tmp",
-        function_type=MLIR.IR.FunctionType(in_tys, []),
-        body=MLIR.IR.Region(),
-    )
+            sym_name=name * "_tmp",
+            function_type=MLIR.IR.FunctionType(in_tys, []),
+            body=MLIR.IR.Region(),
+        )
     end
 
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
-    
+
     @assert MLIR.IR._has_block()
 
     result = MLIR.IR.block!(fnbody) do
@@ -118,7 +117,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
             sym_visibility,
-    )
+        )
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 

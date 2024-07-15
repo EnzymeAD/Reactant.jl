@@ -148,7 +148,7 @@ function set!(x, path, tostore; emptypath=false)
         x.paths = ()
     end
 end
-    
+
 function get_attribute_by_name(operation, name)
     return MLIR.IR.Attribute(MLIR.API.mlirOperationGetAttributeByName(operation, name))
 end
@@ -317,7 +317,7 @@ function Cassette.overdub(
     end
 
     func2.operation = MLIR.API.MlirOperation(C_NULL)
-    
+
     if reverse
         resv = if needs_primal(CMode)
             result
@@ -340,27 +340,35 @@ end
 
 function promote_to(::Type{TracedRArray{ElType,Shape,N}}, rhs) where {ElType,Shape,N}
     if isa(rhs, TracedRArray)
-       return TracedRArray{ElType,Shape,N}(
-          (), MLIR.IR.result(MLIR.Dialects.stablehlo.convert(rhs.mlir_data; result=mlir_type(TracedRArray{ElType, Shape, N})), 1)
-       )
+        return TracedRArray{ElType,Shape,N}(
+            (),
+            MLIR.IR.result(
+                MLIR.Dialects.stablehlo.convert(
+                    rhs.mlir_data; result=mlir_type(TracedRArray{ElType,Shape,N})
+                ),
+                1,
+            ),
+        )
     end
     if isa(rhs, Number)
         attr = fill(MLIR.IR.Attribute(ElType(rhs)), mlir_type(TracedRArray{ElType,Shape,N}))
-        ta = TracedRArray{ElType,Shape,N}((), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1))
+        ta = TracedRArray{ElType,Shape,N}(
+            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+        )
         return ta
     end
     attr = MLIR.IR.DenseElementsAttribute(mlir_type(TracedRArray{ElType,Shape,N}), rhs)
-    return TracedRArray{ElType,Shape,N}((), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr),1))
+    return TracedRArray{ElType,Shape,N}(
+        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+    )
 end
 
-
 function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
-    promote_to(TracedRArray{ElType,Shape,N}, rhs)
+    return promote_to(TracedRArray{ElType,Shape,N}, rhs)
 end
 
-
 function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
-    promote_to(TracedRArray{ElType,Shape,N}, rhs)
+    return promote_to(TracedRArray{ElType,Shape,N}, rhs)
 end
 
 for (jlop, hloop, RT) in (
@@ -370,11 +378,10 @@ for (jlop, hloop, RT) in (
     (:(Base.:-), :subtract, :ElType),
 )
     @eval begin
-
         function $jlop(
             lhs::TracedRArray{ElType,Shape,N}, rhs::TracedRArray{ElType2,Shape,N}
-        ) where {ElType, ElType2,Shape,N}
-            commonTy = TracedRArray{Base.promote_type(ElType, ElType2), Shape, N}
+        ) where {ElType,ElType2,Shape,N}
+            commonTy = TracedRArray{Base.promote_type(ElType, ElType2),Shape,N}
             lhs = promote_to(commonTy, lhs)
             rhs = promote_to(commonTy, rhs)
             return commonTy(
@@ -418,7 +425,11 @@ for (jlop, hloop, RT) in (
     end
 end
 
-Base.literal_pow(::Base.RefValue{typeof(^)}, x::Reactant.TracedRArray{T, (), 0}, ::Base.RefValue{Val{P}}) where {T, P} = Base.literal_pow(^, x, Val(P))
+function Base.literal_pow(
+    ::Base.RefValue{typeof(^)}, x::Reactant.TracedRArray{T,(),0}, ::Base.RefValue{Val{P}}
+) where {T,P}
+    return Base.literal_pow(^, x, Val(P))
+end
 
 for (jlop, hloop, RT) in (
     (:(Base.:*), :multiply, :ElType),
@@ -426,11 +437,10 @@ for (jlop, hloop, RT) in (
     (:(Base.:^), :power, :ElType),
 )
     @eval begin
-
         function $jlop(
             lhs::TracedRArray{ElType,Shape,0}, rhs::TracedRArray{ElType2,Shape,0}
-        ) where {ElType, ElType2,Shape}
-            commonTy = TracedRArray{Base.promote_type(ElType, ElType2), Shape, 0}
+        ) where {ElType,ElType2,Shape}
+            commonTy = TracedRArray{Base.promote_type(ElType, ElType2),Shape,0}
             lhs = promote_to(commonTy, lhs)
             rhs = promote_to(commonTy, rhs)
             return commonTy(
@@ -525,22 +535,23 @@ for (jlop, hloop) in (
     end
 end
 
-function elem_apply(f, args::Vararg{Any, Nargs}) where Nargs
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = 
-        make_mlir_fn(
-            f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
-        )
+function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
+        f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
+    )
 
     invmap = IdDict()
     OutShape = nothing
     for (k, v) in seen_args
         invmap[v] = k
-        OutShape=size(k)
+        OutShape = size(k)
     end
     @assert OutShape !== nothing
     in_tys2 = [mlir_type(invmap[arg]) for arg in linear_args]
 
-    out_tys2 = [MLIR.IR.TensorType(OutShape, MLIR.IR.Type(eltype(arg))) for arg in linear_results]
+    out_tys2 = [
+        MLIR.IR.TensorType(OutShape, MLIR.IR.Type(eltype(arg))) for arg in linear_results
+    ]
 
     fname = get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
@@ -588,14 +599,11 @@ function elem_apply(f, args::Vararg{Any, Nargs}) where Nargs
         end
     end
 
-
     seen_results = IdDict()
-    traced2_result = make_tracer(
-         seen_results, result, (), TracedSetPath; tobatch=OutShape
-    ) 
-    
+    traced2_result = make_tracer(seen_results, result, (), TracedSetPath; tobatch=OutShape)
+
     func2.operation = MLIR.API.MlirOperation(C_NULL)
-    
+
     return traced2_result
 end
 
