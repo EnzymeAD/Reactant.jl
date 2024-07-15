@@ -609,6 +609,17 @@ end
 
 @inline function make_tracer(
     seen::IdDict,
+    prev::Symbol,
+    path::Tuple,
+    mode::TraceMode;
+    toscalar=false,
+    tobatch=nothing,
+)
+    return prev
+end
+
+@inline function make_tracer(
+    seen::IdDict,
     prev::Complex{RT},
     path::Tuple,
     mode::TraceMode;
