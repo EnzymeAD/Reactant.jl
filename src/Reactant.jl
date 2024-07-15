@@ -1161,8 +1161,10 @@ pad_dot_general<1>(1);
 function compile_to_module(mod, f, args; optimize=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
-    linear_results = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return make_mlir_fn(f, args, (), "main", true)
+    linear_results = MLIR.IR.mmodule!(mod) do
+        MLIR.IR.block!(MLIR.IR.body(mod)) do
+            return make_mlir_fn(f, args, (), "main", true)
+        end
     end
 
     concrete_seen = IdDict()
@@ -1229,35 +1231,33 @@ function compile(
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        MLIR.IR.mmodule!(mod) do
-            linear_args, linear_results2, preserved_args, seen_args, concrete_result, fnwrapped = compile_to_module(
-                mod, f, args; optimize=true
-            )
+        linear_args, linear_results2, preserved_args, seen_args, concrete_result, fnwrapped = compile_to_module(
+            mod, f, args; optimize=true
+        )
 
-            if isnothing(client)
-                if length(linear_args) > 0
-                    for (k, v) in seen_args
-                        if !(v isa TracedRArray)
-                            continue
-                        end
-                        client = XLA.client(k.data)
+        if isnothing(client)
+            if length(linear_args) > 0
+                for (k, v) in seen_args
+                    if !(v isa TracedRArray)
+                        continue
                     end
-                end
-                if isnothing(client)
-                    client = XLA.default_backend[]
+                    client = XLA.client(k.data)
                 end
             end
-
-            return generate_jlfunc(
-                concrete_result,
-                client,
-                mod,
-                linear_args,
-                linear_results2,
-                preserved_args,
-                fnwrapped ? f : nothing,
-            )
+            if isnothing(client)
+                client = XLA.default_backend[]
+            end
         end
+
+        return generate_jlfunc(
+            concrete_result,
+            client,
+            mod,
+            linear_args,
+            linear_results2,
+            preserved_args,
+            fnwrapped ? f : nothing,
+        )
     end
 end
 
