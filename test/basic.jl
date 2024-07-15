@@ -146,9 +146,10 @@ end
 
 @testset "Reactant.@code_hlo" begin
     W = Reactant.ConcreteRArray(randn(Float32, 10, 20))
-    x = Reactant.ConcreteRArray(randn(Float32, 20, 5))
-    res = Reactant.@code_hlo W * x
+    # x = Reactant.ConcreteRArray(randn(Float32, 20, 5))
+    # res = Reactant.@code_hlo W * x
+    res = Reactant.@code_hlo sum(W)
     res_repr = sprint(show, res)
 
-    @test contains(res_repr, "stablehlo.dot_general")
+    @test contains(res_repr, "stablehlo.reduce")
 end
