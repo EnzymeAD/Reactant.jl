@@ -163,7 +163,7 @@ function Base.:*(
         ),
         1,
     )
-    return TracedRArray{ElType,(Base.size(lhsty)[1], Base.size(rhsty)[2]),2}((), res)
+    return TracedRArray{ElType,(Shape[1], Shape2[2]),2}((), res)
 end
 
 for (jlop, hloop) in (
