@@ -71,9 +71,39 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
             arg.mlir_data = row_maj_arg
         end
 
-        return Cassette.overdub(
-            Cassette.disablehooks(TraceCtx()), f, traced_args...; kwargs...
+        # TODO replace with `Base.invoke_within` if julia#52964 lands
+        ir = first(
+            only(
+                # TODO fix it for kwargs
+                Base.code_ircode(f, map(typeof, traced_args); interp=ReactantInterpreter()),
+            ),
         )
+
+        # NOTE on Julia 1.9, it appends a ghost argument at the end
+        # solution: manually specify argument types
+        @static if VERSION < v"1.10"
+            empty!(ir.argtypes)
+            if f === Reactant.apply
+                append!(
+                    ir.argtypes,
+                    Any[
+                        Core.Const(f),
+                        typeof(traced_args[1]),
+                        Tuple{typeof.(traced_args[2:end])...},
+                    ],
+                )
+            else
+                append!(ir.argtypes, Any[Core.Const(f), typeof.(traced_args)...])
+            end
+        end
+
+        oc = Core.OpaqueClosure(ir)
+
+        if f === Reactant.apply
+            oc(traced_args[1], (traced_args[2:end]...,))
+        else
+            oc(traced_args...)
+        end
     end
 
     seen_results = IdDict()
