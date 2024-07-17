@@ -2,13 +2,6 @@ module XLA
 
 import ...MLIR
 
-function RunPassPipeline(pass_pipeline, mod::MLIR.IR.Module)
-    GC.@preserve pass_pipeline mod begin
-        @ccall MLIR.API.mlir_c.RunPassPipeline(
-            pass_pipeline::Cstring, mod.module_::MLIR.API.MlirModule
-        )::Cvoid
-    end
-end
 mutable struct Client
     client::Ptr{Cvoid}
 
