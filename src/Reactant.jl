@@ -1170,6 +1170,14 @@ pad_dot_general<1>(1);
             enzyme-hlo-remove-transform
 """
 
+function run_pass_pipeline!(mod, pass_pipeline)
+    pm = MLIR.IR.PassManager()
+    opm = MLIR.IR.OpPassManager(pm)
+    MLIR.IR.add_pipeline!(opm, pass_pipeline)
+    MLIR.IR.run!(pm, mod)
+    return mod
+end
+
 function compile_to_module(mod, f, args; optimize=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
@@ -1186,13 +1194,13 @@ function compile_to_module(mod, f, args; optimize=true)
     )
 
     if optimize
-        XLA.RunPassPipeline(
+        run_pass_pipeline!(
+            mod,
             opt_passes *
             ",enzyme-batch," *
             opt_passes *
             ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," *
             opt_passes,
-            mod,
         )
     end
 
