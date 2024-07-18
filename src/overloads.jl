@@ -27,117 +27,10 @@ function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,
     return promote_to(TracedRArray{ElType,Shape,N}, rhs)
 end
 
-for (jlop, hloop, RT) in (
-    (:(Base.min), :minimum, :ElType),
-    (:(Base.max), :maximum, :ElType),
-    (:(Base.:+), :add, :ElType),
-    (:(Base.:-), :subtract, :ElType),
-)
-    @eval begin
-        function $jlop(
-            lhs::TracedRArray{ElType,Shape,N}, rhs::TracedRArray{ElType2,Shape,N}
-        ) where {ElType,ElType2,Shape,N}
-            commonTy = TracedRArray{Base.promote_type(ElType, ElType2),Shape,N}
-            lhs = promote_to(commonTy, lhs)
-            rhs = promote_to(commonTy, rhs)
-            return commonTy(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-
-        function $jlop(
-            lhs::TracedRArray{ElType,Shape,N}, rhs::TracedRArray{ElType,Shape,N}
-        ) where {ElType,Shape,N}
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-
-        function $jlop(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
-            rhs = promote_to(lhs, rhs)
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-
-        function $jlop(lhs, rhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
-            lhs = promote_to(rhs, lhs)
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-    end
-end
-
 function Base.literal_pow(
     ::Base.RefValue{typeof(^)}, x::Reactant.TracedRArray{T,(),0}, ::Base.RefValue{Val{P}}
 ) where {T,P}
     return Base.literal_pow(^, x, Val(P))
-end
-
-for (jlop, hloop, RT) in (
-    (:(Base.:*), :multiply, :ElType),
-    (:(Base.:/), :divide, :ElType),
-    (:(Base.:^), :power, :ElType),
-)
-    @eval begin
-        function $jlop(
-            lhs::TracedRArray{ElType,Shape,0}, rhs::TracedRArray{ElType2,Shape,0}
-        ) where {ElType,ElType2,Shape}
-            commonTy = TracedRArray{Base.promote_type(ElType, ElType2),Shape,0}
-            lhs = promote_to(commonTy, lhs)
-            rhs = promote_to(commonTy, rhs)
-            return commonTy(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-
-        function $jlop(
-            lhs::TracedRArray{ElType,Shape,0}, rhs::TracedRArray{ElType,Shape,0}
-        ) where {ElType,Shape}
-            return TracedRArray{$RT,Shape,0}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-
-        function $jlop(lhs::TracedRArray{ElType,Shape,0}, rhs) where {ElType,Shape}
-            rhs = promote_to(lhs, rhs)
-            return TracedRArray{$RT,Shape,0}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-
-        function $jlop(lhs, rhs::TracedRArray{ElType,Shape,0}) where {ElType,Shape}
-            lhs = promote_to(rhs, lhs)
-            return TracedRArray{$RT,Shape,0}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-    end
 end
 
 function Base.:*(
@@ -164,26 +57,6 @@ function Base.:*(
         1,
     )
     return TracedRArray{ElType,(Shape[1], Shape2[2]),2}((), res)
-end
-
-for (jlop, hloop) in (
-    (:(Base.:-), :negate),
-    (:(Base.sin), :sine),
-    (:(Base.cos), :cosine),
-    (:(Base.tanh), :tanh),
-    (:(Base.FastMath.tanh_fast), :tanh),
-    (:(Base.exp), :exponential),
-    (:(Base.FastMath.exp_fast), :exponential),
-    (:(Base.log), :log),
-    (:(Base.sqrt), :sqrt),
-)
-    @eval begin
-        function $jlop(lhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
-            return TracedRArray{ElType,Shape,N}(
-                (), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1)
-            )
-        end
-    end
 end
 
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
@@ -258,95 +131,6 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-for (jlop, hloop, hlocomp, RT) in (
-    (:(Base.:(==)), :compare, "EQ", :ElType),
-    (:(Base.:(!=)), :compare, "NE", :ElType),
-    (:(Base.:(>=)), :compare, "GE", :ElType),
-    (:(Base.:(>)), :compare, "GT", :ElType),
-    (:(Base.:(<=)), :compare, "LE", :ElType),
-    (:(Base.:(<)), :compare, "LT", :ElType),
-)
-    @eval begin
-        function elem_apply(
-            ::typeof($jlop),
-            lhs::TracedRArray{ElType,Shape,N},
-            rhs::TracedRArray{ElType,Shape,N},
-        ) where {ElType,Shape,N}
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
-                        lhs.mlir_data,
-                        rhs.mlir_data;
-                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                            MLIR.IR.context(), $hlocomp
-                        ),
-                    ),
-                    1,
-                ),
-            )
-        end
-
-        function elem_apply(
-            ::typeof($jlop), lhs::TracedRArray{ElType,Shape,N}, rhs
-        ) where {ElType,Shape,N}
-            rhs = promote_to(lhs, rhs)
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
-                        lhs.mlir_data,
-                        rhs.mlir_data;
-                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                            MLIR.IR.context(), $hlocomp
-                        ),
-                    ),
-                    1,
-                ),
-            )
-        end
-
-        function elem_apply(
-            ::typeof($jlop), lhs, rhs::TracedRArray{ElType,Shape,N}
-        ) where {ElType,Shape,N}
-            lhs = promote_to(rhs, lhs)
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
-                        lhs.mlir_data,
-                        rhs.mlir_data;
-                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                            MLIR.IR.context(), $hlocomp
-                        ),
-                    ),
-                    1,
-                ),
-            )
-        end
-    end
-end
-
-@inline function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
-    return reshape(A, Base._reshape_uncolon(A, dims))
-end
-
-@inline function Base.reshape(
-    A::ConcreteRArray{T,Shape,N}, dims::NTuple{NT,Int}
-) where {T,Shape,N,NT}
-    prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
-    host = convert(Array{T,N}, A)
-    # HLO reshape semantics collapse the opposite so enforce on Julia Side
-    # until we later make the transpose/reshape/transpose
-    host = reshape(host, dims)
-    client = XLA.client(A.data)
-    device = XLA.device(A.data)
-    return ConcreteRArray{T,dims,NT}(
-        XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, host, device), nothing)
-    )
-    # ConcreteRArray{T, dims, NT}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(host), device), nothing))
-end
-
 Base.copy(A::TracedRArray{T,Shape,N}) where {T,Shape,N} = TracedRArray((), A.mlir_data)
 
 @inline function Base.permutedims(A::TracedRArray{T,Shape,N}, perm) where {T,Shape,N}
@@ -413,10 +197,6 @@ AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle
 # end
 
 BroadcastStyle(::Type{T}) where {T<:TracedRArray} = AbstractReactantArrayStyle{ndims(T)}()
-
-function Base.similar(x::TracedRArray{T,Shape,N}, ::Type{T2}) where {T,Shape,N,T2}
-    return TracedRArray{T2,Shape,N}((), nothing)
-end
 
 @inline function Base.similar(
     bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
