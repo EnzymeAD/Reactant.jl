@@ -7,31 +7,58 @@ include("XLA.jl")
 include("Interpreter.jl")
 include("utils.jl")
 
-abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType,N} end
+abstract type RArray{ElType,N} <: AbstractArray{ElType,N} end
 
-@inline Base.eltype(::RArray{ElType,Shape}) where {ElType,Shape} = ElType
-@inline Base.size(::RArray{ElType,Shape}) where {ElType,Shape} = Shape
-@inline Base.size(::Type{<:RArray{ElType,Shape}}) where {ElType,Shape} = Shape
-@inline Base.ndims(::RArray{ElType,Shape,N}) where {ElType,Shape,N} = N
-@inline Base.ndims(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} = N
-
-@inline mlir_type(::RArray{ElType,Shape,N}) where {ElType,Shape,N} =
-    MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
-
-@inline mlir_type(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} =
-    MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
-
-struct XLAArray{ElType,Shape,N} <: RArray{ElType,Shape,N} end
-
-mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
-    data::XLA.AsyncBuffer
-    #	data::XLAArray{ElType, Shape, N}
+function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
+    return reshape(A, Base._reshape_uncolon(A, dims))
 end
 
-function Base.convert(
-    ::Type{T}, X::ConcreteRArray{ElType,Shape,N}
-) where {T<:Array,ElType,Shape,N}
-    data = Array{ElType,N}(undef, Shape...)
+function mlir_type(x::RArray{T,N}) where {T,N}
+    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
+end
+
+# @inline Base.ndims(::RArray{ElType,N}) where {ElType,N} = N
+# @inline Base.ndims(::Type{<:RArray{ElType,N}}) where {ElType,N} = N
+
+struct XLAArray{ElType,N} <: RArray{ElType,N}
+    # size::NTuple{N,Int}
+end
+
+mutable struct ConcreteRArray{ElType,N} <: RArray{ElType,N}
+    data::XLA.AsyncBuffer
+    #	data::XLAArray{ElType, Shape, N}
+    shape::NTuple{N,Int}
+end
+
+ConcreteRArray(data::T) where {T<:Number} = ConcreteRArray{T,0}(data, ())
+
+function ConcreteRArray(
+    data::Array{ElType,N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]
+) where {ElType,N}
+    device = XLA.ClientGetDevice(client, idx)
+    return ConcreteRArray{ElType,N}(
+        XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing), size(data)
+    )
+    # ConcreteRArray{ElType, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(data), device), nothing))
+end
+
+Base.size(x::ConcreteRArray) = x.shape
+
+function Base.reshape(A::ConcreteRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
+    prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
+    host = convert(Array{T,N}, A)
+    # HLO reshape semantics collapse the opposite so enforce on Julia Side
+    # until we later make the transpose/reshape/transpose
+    host = reshape(host, dims)
+    client = XLA.client(A.data)
+    device = XLA.device(A.data)
+    buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, host, device), nothing)
+    return ConcreteRArray{T,NT}(buffer, dims)
+    # ConcreteRArray{T, dims, NT}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(host), device), nothing))
+end
+
+function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,ElType,N}
+    data = Array{ElType,N}(undef, size(X)...) # TODO replace for `similar`?
     XLA.await(X.data)
     buf = X.data.buffer
     GC.@preserve data buf begin
@@ -41,7 +68,14 @@ function Base.convert(
     # XLA.from_row_major(data)
 end
 
-function to_float(X::ConcreteRArray{ElType,(),0}) where {ElType}
+# function Base.similar(x::ConcreteRArray{T,N}, ::Type{T2}) where {T,N,T2}
+#     return ConcreteRArray{T,N}(x.data)
+# end
+# function Base.convert(::Type{ConcreteRArray{T2,N}}, x::ConcreteRArray{T,N}) where {T,N,T2}
+#     return ConcreteRArray{T,N}(x.data)
+# end
+
+function to_float(X::ConcreteRArray{ElType,0}) where {ElType}
     data = Ref{ElType}()
     XLA.await(X.data)
     buf = X.data.buffer
@@ -51,16 +85,16 @@ function to_float(X::ConcreteRArray{ElType,(),0}) where {ElType}
     return data[]
 end
 
-function Base.isapprox(x::ConcreteRArray{ElType,(),0}, y; kwargs...) where {ElType}
+function Base.isapprox(x::ConcreteRArray{ElType,0}, y; kwargs...) where {ElType}
     return Base.isapprox(to_float(x), y; kwargs...)
 end
 
-function Base.isapprox(x, y::ConcreteRArray{ElType,(),0}; kwargs...) where {ElType}
+function Base.isapprox(x, y::ConcreteRArray{ElType,0}; kwargs...) where {ElType}
     return Base.isapprox(to_float(x), y; kwargs...)
 end
 
 function Base.isapprox(
-    x::ConcreteRArray{ElType,(),0}, y::ConcreteRArray{ElType2,(),0}; kwargs...
+    x::ConcreteRArray{ElType,0}, y::ConcreteRArray{ElType2,0}; kwargs...
 ) where {ElType,ElType2}
     return Base.isapprox(to_float(x), y; kwargs...)
 end
@@ -81,9 +115,7 @@ function Base.show(io::IO, X::ConcreteRArray)
     return Base.show(io, convert(Array, X))
 end
 
-@inline function Base.getindex(
-    a::ConcreteRArray{ElType,Shape}, args::Vararg{Int,N}
-) where {ElType,Shape,N}
+function Base.getindex(a::ConcreteRArray{ElType}, args::Vararg{Int,N}) where {ElType,N}
     if a.data == XLA.AsyncEmptyBuffer
         throw("Cannot getindex from empty buffer")
     end
@@ -95,9 +127,9 @@ end
             ptr = Base.unsafe_convert(Ptr{ElType}, XLA.UnsafeBufferPointer(buf))
             start = 0
             for i in 1:N
-                start *= Shape[N - i + 1]
+                start *= size(a, N - i + 1)
                 start += (args[N - i + 1] - 1)
-                # start *= Shape[i]
+                # start *= size(a, i)
                 # start += (args[i]-1)
             end
             start += 1
@@ -105,35 +137,6 @@ end
         end
     end
     return convert(Array, a)[args...]
-end
-
-@inline function ConcreteRArray(
-    data::Array{ElType,N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]
-) where {ElType,N}
-    device = XLA.ClientGetDevice(client, idx)
-    return ConcreteRArray{ElType,size(data),N}(
-        XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing)
-    )
-    # ConcreteRArray{ElType, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(data), device), nothing))
-end
-
-@inline ConcreteRArray(data::T) where {T<:Number} = ConcreteRArray{T,(),0}(data)
-
-function Base.similar(x::ConcreteRArray{T,Shape,N}, ::Type{T2}) where {T,Shape,N,T2}
-    return ConcreteRArray{T,Shape,N}(x.data)
-end
-
-mutable struct TracedRArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
-    function TracedRArray{ElType,Shape,N}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
-    ) where {ElType,Shape,N}
-        if mlir_data !== nothing
-            @assert size(MLIR.IR.type(mlir_data)) == Shape
-        end
-        return new{ElType,Shape,N}(paths, mlir_data)
-    end
 end
 
 using Enzyme
@@ -800,6 +803,7 @@ function create_result(tocopy::Type{MakeString{AT,Val}}, path, result_stores) wh
 end
 
 function create_result(::Type{MakeStruct{AT,tocopy}}, path, result_stores) where {AT,tocopy}
+    # @info "create_result" AT tocopy path tocopy.parameters result_stores
     elems = Union{Symbol,Expr}[]
     for (i, v) in enumerate(tocopy.parameters)
         ev = create_result(v, (path..., i), result_stores)
@@ -954,6 +958,7 @@ end
         end
     end
 
+    # @info "Thunk" concrete_result_ty result_stores
     resexpr = create_result(concrete_result_ty, (), result_stores)
     expr = quote
         Base.@_inline_meta
