@@ -8,8 +8,8 @@ for (jlop, hloop) in (
     (:(NNlib.sigmoid_fast), :logistic),
     (:(NNlib.sigmoid), :logistic),
 )
-    @eval function $(jlop)(x::Reactant.TracedRArray{T,(),0}) where {T}
-        return Reactant.TracedRArray{T,(),0}(
+    @eval function $(jlop)(x::Reactant.TracedRArray{T,0}) where {T}
+        return Reactant.TracedRArray{T,0}(
             (),
             Reactant.MLIR.IR.result(
                 Reactant.MLIR.Dialects.stablehlo.$(hloop)(x.mlir_data), 1
@@ -24,8 +24,8 @@ NNlib.gelu(x::Reactant.TracedRArray{T,(),0}) where {T} = x * sigmoid(T(1.702) * 
 
 # TODO handle non finite cases
 function NNlib.softmax!(
-    out::Reactant.TracedRArray{T,Shape,N}, x::AbstractArray; dims=1
-) where {T,Shape,N}
+    out::Reactant.TracedRArray{T,N}, x::AbstractArray; dims=1
+) where {T,N}
     max_ = NNlib.fast_maximum(x; dims)
     #if all(isfinite, max_)
     @fastmath out .= exp.(x .- max_)

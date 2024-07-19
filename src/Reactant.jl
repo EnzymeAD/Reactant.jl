@@ -1,11 +1,14 @@
 module Reactant
 
+using PackageExtensionCompat
+using Enzyme
+
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")
 include("utils.jl")
 
-abstract type RArray{ElType,N} <: AbstractArray{ElType,N} end
+abstract type RArray{T,N} <: AbstractArray{T,N} end
 
 function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
@@ -15,29 +18,54 @@ function mlir_type(x::RArray{T,N}) where {T,N}
     return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
 end
 
-# @inline Base.ndims(::RArray{ElType,N}) where {ElType,N} = N
-# @inline Base.ndims(::Type{<:RArray{ElType,N}}) where {ElType,N} = N
+function Enzyme.make_zero(
+    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
+)::RT where {copy_if_inactive,RT<:RArray}
+    if haskey(seen, prev)
+        return seen[prev]
+    end
+    if Enzyme.Compiler.guaranteed_const_nongen(RT, nothing)
+        return copy_if_inactive ? Base.deepcopy_internal(prev, seen) : prev
+    end
+    if RT <: ConcreteRArray
+        res = RT(zeros(eltype(RT), size(prev)))
+        seen[prev] = res
+        return res
+    end
 
-struct XLAArray{ElType,N} <: RArray{ElType,N}
+    if RT <: TracedRArray
+        res = broadcast_to_size(eltype(RT)(0), size(prev))
+        seen[prev] = res
+        return res
+    end
+
+    attr = fill(MLIR.IR.Attribute(eltype(RT)(0)), mlir_type(prev))
+    cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+    res = RT((), cst)
+    seen[prev] = res
+    return res
+end
+
+struct XLAArray{T,N} <: RArray{T,N}
     # size::NTuple{N,Int}
 end
 
-mutable struct ConcreteRArray{ElType,N} <: RArray{ElType,N}
+mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     data::XLA.AsyncBuffer
-    #	data::XLAArray{ElType, Shape, N}
+    #	data::XLAArray{T, N}
     shape::NTuple{N,Int}
 end
 
 ConcreteRArray(data::T) where {T<:Number} = ConcreteRArray{T,0}(data, ())
 
 function ConcreteRArray(
-    data::Array{ElType,N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]
-) where {ElType,N}
+    data::Array{T,N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]
+) where {T,N}
     device = XLA.ClientGetDevice(client, idx)
-    return ConcreteRArray{ElType,N}(
+    return ConcreteRArray{T,N}(
         XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing), size(data)
     )
-    # ConcreteRArray{ElType, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(data), device), nothing))
+    # ConcreteRArray{T, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(data), device), nothing))
 end
 
 Base.size(x::ConcreteRArray) = x.shape
@@ -73,8 +101,8 @@ end
 #     return ConcreteRArray{T,N}(x.data)
 # end
 
-function to_float(X::ConcreteRArray{ElType,0}) where {ElType}
-    data = Ref{ElType}()
+function to_float(X::ConcreteRArray{T,0}) where {T}
+    data = Ref{T}()
     XLA.await(X.data)
     buf = X.data.buffer
     GC.@preserve data buf begin
@@ -83,17 +111,17 @@ function to_float(X::ConcreteRArray{ElType,0}) where {ElType}
     return data[]
 end
 
-function Base.isapprox(x::ConcreteRArray{ElType,0}, y; kwargs...) where {ElType}
+function Base.isapprox(x::ConcreteRArray{T,0}, y; kwargs...) where {T}
     return Base.isapprox(to_float(x), y; kwargs...)
 end
 
-function Base.isapprox(x, y::ConcreteRArray{ElType,0}; kwargs...) where {ElType}
-    return Base.isapprox(to_float(x), to_float(y); kwargs...)
+function Base.isapprox(x, y::ConcreteRArray{T,0}; kwargs...) where {T}
+    return Base.isapprox(x, to_float(y); kwargs...)
 end
 
 function Base.isapprox(
-    x::ConcreteRArray{ElType,0}, y::ConcreteRArray{ElType2,0}; kwargs...
-) where {ElType,ElType2}
+    x::ConcreteRArray{T,0}, y::ConcreteRArray{T2,0}; kwargs...
+) where {T,T2}
     return Base.isapprox(to_float(x), to_float(y); kwargs...)
 end
 
@@ -113,7 +141,7 @@ function Base.show(io::IO, X::ConcreteRArray)
     return Base.show(io, convert(Array, X))
 end
 
-function Base.getindex(a::ConcreteRArray{ElType}, args::Vararg{Int,N}) where {ElType,N}
+function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     if a.data == XLA.AsyncEmptyBuffer
         throw("Cannot getindex from empty buffer")
     end
@@ -122,7 +150,7 @@ function Base.getindex(a::ConcreteRArray{ElType}, args::Vararg{Int,N}) where {El
     if XLA.BufferOnCPU(a.data.buffer)
         buf = a.data.buffer
         GC.@preserve buf begin
-            ptr = Base.unsafe_convert(Ptr{ElType}, XLA.UnsafeBufferPointer(buf))
+            ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
             start = 0
             for i in 1:N
                 start *= size(a, N - i + 1)
@@ -137,70 +165,7 @@ function Base.getindex(a::ConcreteRArray{ElType}, args::Vararg{Int,N}) where {El
     return convert(Array, a)[args...]
 end
 
-using Enzyme
-
-@inline function Enzyme.Compiler.active_reg_inner(
-    ::Type{TracedRArray{ElType,Shape,N}},
-    seen::ST,
-    world::Union{Nothing,UInt},
-    ::Val{justActive}=Val(false),
-    ::Val{UnionSret}=Val(false),
-)::Enzyme.Compiler.ActivityState where {ST,ElType,Shape,N,justActive,UnionSret}
-    if Enzyme.Compiler.active_reg_inner(
-        ElType, seen, world, Val(justActive), Val(UnionSret)
-    ) == Enzyme.Compiler.AnyState
-        return Enzyme.Compiler.AnyState
-    else
-        return Enzyme.Compiler.DupState
-    end
-end
-
-@inline function Enzyme.make_zero(
-    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
-)::RT where {copy_if_inactive,RT<:RArray}
-    if haskey(seen, prev)
-        return seen[prev]
-    end
-    if Enzyme.Compiler.guaranteed_const_nongen(RT, nothing)
-        return copy_if_inactive ? Base.deepcopy_internal(prev, seen) : prev
-    end
-    if RT <: ConcreteRArray
-        res = RT(zeros(eltype(RT), size(prev)))
-        seen[prev] = res
-        return res
-    end
-
-    if RT <: TracedRArray
-        res = broadcast_to_size(eltype(RT)(0), size(prev))
-        seen[prev] = res
-        return res
-    end
-
-    attr = fill(MLIR.IR.Attribute(eltype(RT)(0)), mlir_type(prev))
-    cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
-    res = RT((), cst)
-    seen[prev] = res
-    return res
-end
-
-function Base.promote_rule(
-    A::Type{TracedRArray{T,Shape,N}}, B::Type{TracedRArray{S,Shape,N}}
-) where {T,S,Shape,N}
-    return TracedRArray{Base.promote_type(T, S),Shape,N}
-end
-
-function Base.promote_rule(A::Type{T}, B::Type{TracedRArray{S,Shape,N}}) where {T,S,Shape,N}
-    return TracedRArray{Base.promote_type(T, S),Shape,N}
-end
-
-function Base.show(io::IO, X::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
-    print(io, "TracedRArray{", ElType, ",", Shape, ",", N, "N}(", X.paths, ", ")
-    return print(io, X.mlir_data, ")")
-end
-
-include("overloads.jl")
-
-using Enzyme
+include("Tracing.jl")
 
 @inline val_value(::Val{T}) where {T} = T
 @inline val_value(::Type{Val{T}}) where {T} = T
@@ -305,7 +270,7 @@ end
 
     if T <: Array
         if mode == ArrayToConcrete && eltype(T) <: AbstractFloat
-            return (ConcreteRArray{eltype(T),Shape,ndims(T)} where {Shape})
+            return ConcreteRArray{eltype(T),ndims(T)}
         else
             return Array{
                 traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode)),ndims(T)
@@ -537,12 +502,12 @@ end
 
 @inline function make_tracer(
     seen::IdDict,
-    prev::ConcreteRArray{ElType,Shape,N},
+    prev::ConcreteRArray{T,N},
     path::Tuple,
     mode::TraceMode;
     toscalar=false,
     tobatch=nothing,
-) where {ElType,Shape,N}
+) where {T,N}
     if mode == ArrayToConcrete
         return prev
     end
@@ -550,22 +515,22 @@ end
         throw("Cannot trace concrete")
     end
     if haskey(seen, prev)
-        return seen[prev]::TracedRArray{ElType,Shape,N}
+        return seen[prev]::TracedRArray{T,N}
     end
     @assert N isa Int
-    res = TracedRArray{ElType,Shape,N}((path,), nothing)
+    res = TracedRArray{T,N}((path,), nothing, size(prev))
     seen[prev] = res
     return res
 end
 
 @inline function make_tracer(
     seen::IdDict,
-    prev::TracedRArray{ElType,Shape,N},
+    prev::TracedRArray{T,N},
     path::Tuple,
     mode::TraceMode;
     toscalar=false,
     tobatch=nothing,
-) where {ElType,Shape,N}
+) where {T,N}
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
@@ -581,11 +546,11 @@ end
             return seen[prev]
         end
         res = if toscalar
-            TracedRArray{ElType,(),0}((path,), nothing)
+            TracedRArray{T,0}((path,), nothing, ())
         elseif tobatch !== nothing
-            TracedRArray{ElType,tobatch,length(tobatch)}((path,), prev.mlir_data)
+            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
         else
-            TracedRArray{ElType,Shape,N}((path,), prev.mlir_data)
+            TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
         end
         seen[prev] = res
         return res
@@ -593,9 +558,9 @@ end
 
     if mode == TracedToConcrete
         if haskey(seen, prev)
-            return seen[prev]::ConcreteRArray{ElType,Shape,N}
+            return seen[prev]::ConcreteRArray{T,N}
         end
-        res = ConcreteRArray{ElType,Shape,N}(XLA.AsyncEmptyBuffer)
+        res = ConcreteRArray{T,N}(XLA.AsyncEmptyBuffer, size(prev))
         seen[prev] = res
         return res
     end

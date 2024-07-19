@@ -1,64 +1,3 @@
-function promote_to(::Type{TracedRArray{ElType,Shape,N}}, rhs) where {ElType,Shape,N}
-    if isa(rhs, TracedRArray)
-        return TracedRArray{ElType,Shape,N}(
-            (),
-            MLIR.IR.result(
-                MLIR.Dialects.stablehlo.convert(
-                    rhs.mlir_data; result=mlir_type(TracedRArray{ElType,Shape,N})
-                ),
-                1,
-            ),
-        )
-    end
-    if isa(rhs, Number)
-        attr = fill(MLIR.IR.Attribute(ElType(rhs)), mlir_type(TracedRArray{ElType,Shape,N}))
-        ta = TracedRArray{ElType,Shape,N}(
-            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
-        )
-        return ta
-    end
-    attr = MLIR.IR.DenseElementsAttribute(mlir_type(TracedRArray{ElType,Shape,N}), rhs)
-    return TracedRArray{ElType,Shape,N}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
-    )
-end
-
-function promote_to(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
-    return promote_to(TracedRArray{ElType,Shape,N}, rhs)
-end
-
-function Base.literal_pow(
-    ::Base.RefValue{typeof(^)}, x::Reactant.TracedRArray{T,(),0}, ::Base.RefValue{Val{P}}
-) where {T,P}
-    return Base.literal_pow(^, x, Val(P))
-end
-
-function Base.:*(
-    lhs::TracedRArray{ElType,Shape,2}, rhs::TracedRArray{ElType,Shape2,2}
-) where {ElType,Shape,Shape2}
-    lhsty = MLIR.IR.type(lhs.mlir_data)
-    rhsty = MLIR.IR.type(rhs.mlir_data)
-    resty = MLIR.IR.TensorType((Base.size(lhsty)[1], Base.size(rhsty)[2]), eltype(lhsty))
-    dot_dimension_numbers = MLIR.API.stablehloDotDimensionNumbersGet(
-        MLIR.IR.context(), 0, [], 0, [], 1, [1], 1, [0]
-    )
-    prec = MLIR.IR.Attribute(
-        MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.context(), "DEFAULT")
-    )
-    precar = MLIR.IR.Attribute([prec, prec])
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dot_general(
-            lhs.mlir_data,
-            rhs.mlir_data;
-            result_0=resty,
-            dot_dimension_numbers=dot_dimension_numbers,
-            precision_config=precar,
-        ),
-        1,
-    )
-    return TracedRArray{ElType,(Shape[1], Shape2[2]),2}((), res)
-end
-
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
         f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
@@ -70,7 +9,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         invmap[v] = k
         OutShape = size(k)
     end
-    @assert OutShape !== nothing
+    @assert !isnothing(OutShape)
     in_tys2 = [mlir_type(invmap[arg]) for arg in linear_args]
 
     out_tys2 = [
@@ -131,10 +70,8 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-Base.copy(A::TracedRArray{T,Shape,N}) where {T,Shape,N} = TracedRArray((), A.mlir_data)
-
-@inline function Base.permutedims(A::TracedRArray{T,Shape,N}, perm) where {T,Shape,N}
-    return TracedArray{T,tuple(Shape[i] for i in perm),N}(
+@inline function Base.permutedims(A::TracedRArray{T,N}, perm) where {T,N}
+    return TracedArray{T,N}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.transpose(
@@ -142,12 +79,11 @@ Base.copy(A::TracedRArray{T,Shape,N}) where {T,Shape,N} = TracedRArray((), A.mli
             ),
             1,
         ),
+        tuple(size(A, i) for i in perm),
     )
 end
 
-@inline function Base.reshape(
-    A::TracedRArray{T,Shape,N}, dims::NTuple{NT,Int}
-) where {T,Shape,N,NT}
+@inline function Base.reshape(A::TracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
     prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
 
     # HLO reshape semantics collapse the opposite way
@@ -178,7 +114,7 @@ end
         1,
     )
 
-    return TracedRArray{T,dims,NT}((), res3)
+    return TracedRArray{T,NT}((), res3, dims)
 end
 
 using Base.Broadcast
@@ -202,7 +138,7 @@ BroadcastStyle(::Type{T}) where {T<:TracedRArray} = AbstractReactantArrayStyle{n
     bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T,N}
     @assert N isa Int
-    return TracedRArray{T,map(length, dims),N}((), nothing)
+    return TracedRArray{T,N}((), nothing, map(length, dims))
 end
 
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
@@ -249,9 +185,7 @@ end
 
 @inline Base.copyto!(dest::TracedRArray, bc::Broadcasted{Nothing}) = _copyto!(dest, bc) # Keep it for ArrayConflict
 
-@inline function Base.copyto!(
-    dest::TracedRArray{ElType,Shape,N}, src::TracedRArray{ElType,Shape,N}
-) where {ElType,Shape,N}
+@inline function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T,N}) where {T,N}
     dest.mlir_data = src.mlir_data
     return dest
 end
@@ -260,8 +194,8 @@ end
     attr = MLIR.IR.DenseElementsAttribute(arg)
     len = ndims(arg)
     @assert typeof(len) == Int
-    arg = TracedRArray{eltype(arg),size(arg),len}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+    arg = TracedRArray{eltype(arg),len}(
+        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(arg)
     )
     return arg
 end
@@ -274,8 +208,8 @@ end
     return arg
 end
 
-function Base.fill!(A::TracedRArray{T,Shape,N}, x) where {T,Shape,N}
-    bcast = broadcast_to_size(T(x), Shape)
+function Base.fill!(A::TracedRArray{T,N}, x) where {T,N}
+    bcast = broadcast_to_size(T(x), size(A))
     A.mlir_data = bcast.mlir_data
     return A
 end
@@ -283,8 +217,8 @@ end
 @inline function broadcast_to_size(arg::T, rsize) where {T<:Number}
     TT = MLIR.IR.TensorType([Int64(s) for s in rsize], MLIR.IR.Type(typeof(arg)))
     attr = Base.fill(arg, TT)
-    return arg = TracedRArray{T,rsize,length(rsize)}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+    return arg = TracedRArray{T,length(rsize)}(
+        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), rsize
     )
 end
 
@@ -337,17 +271,15 @@ end
     return dest
 end
 
-function Base.mapreduce(
-    f, op, A::TracedRArray{ElType,Shape,N}; dims=:, init=nothing
-) where {ElType,Shape,N}
+function Base.mapreduce(f, op, A::TracedRArray{T,N}; dims=:, init=nothing) where {T,N}
     if dims isa Int
         dims = [dims]
     end
 
     if init == nothing
-        init = Base.reduce_empty(Base.BottomRF(op), ElType)
+        init = Base.reduce_empty(Base.BottomRF(op), T)
     else
-        init = init::ElType
+        init = init::T
     end
 
     init = [broadcast_to_size(init, ()).mlir_data]
@@ -367,7 +299,7 @@ function Base.mapreduce(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in in_tys])
 
     args = (
-        TracedRArray{ElType,(),0}((), MLIR.IR.argument(fnbody, i)) for
+        TracedRArray{T,(),0}((), MLIR.IR.argument(fnbody, i)) for
         (i, ty) in enumerate(in_tys)
     )
 
@@ -377,8 +309,8 @@ function Base.mapreduce(
         return tmp
     end
 
-    toonedims = [(in(i - 1, rdims) ? 1 : Shape[i]) for i in 1:N]
-    outdims = [Shape[i] for i in 1:N if (i - 1) ∉ rdims]
+    toonedims = [(in(i - 1, rdims) ? 1 : size(A, i)) for i in 1:N]
+    outdims = [size(A, i) for i in 1:N if (i - 1) ∉ rdims]
 
     TT = [
         MLIR.IR.TensorType(outdims, eltype(MLIR.IR.type(inp0))) for
@@ -400,9 +332,9 @@ function Base.mapreduce(
             ),
             1,
         )
-        red = TracedRArray{ElType,(toonedims...,),length(toonedims)}((), red)
+        red = TracedRArray{T,length(toonedims)}((), red, (toonedims...,))
     else
-        red = TracedRArray{ElType,(outdims...,),length(outdims)}((), red)
+        red = TracedRArray{T,length(outdims)}((), red, (outdims...,))
     end
     return red
 end
