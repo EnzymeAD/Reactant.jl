@@ -56,7 +56,8 @@ end
             f = Reactant.compile(cos, (x2,))
             y = f(x2)
 
-            @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
+            @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
+            @test size(y) == (4, 4)
             @test isapprox(parent(y), cos.(parent(x)))
             @test x.inds == [:i, :j]
         end
@@ -68,8 +69,8 @@ end
             f = Reactant.compile(cos, (x2,))
             y = f(x2)
 
-            @test y isa
-                MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
+            @test y isa MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
+            @test size(y) == (4, 4)
             @test isapprox(parent(y), cos.(parent(x)))
             @test x.inds == [:i, :j]
         end
