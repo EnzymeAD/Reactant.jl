@@ -237,26 +237,6 @@ extern "C" void FutureAwait(FutureType* Future) {
     Future->Await();
 }
 
-extern "C" void RunPassPipeline(const char* pass_pipeline, MlirModule cmod) {
-    mlir::ModuleOp mod = cast<ModuleOp>(unwrap(cmod));
-    
-    mlir::PassManager pm(mod.getContext());
-
-    std::string error_message;
-    llvm::raw_string_ostream error_stream(error_message);
-    error_stream << "Failed to parse pipeline\n";
-    mlir::LogicalResult result =
-        mlir::parsePassPipeline(pass_pipeline, pm, error_stream);
-    if (mlir::failed(result)) {
-        llvm::errs() << error_message << "\n";
-        exit(1);
-    }
-    if (!mlir::succeeded(pm.run(mod))) {
-        llvm::errs() << "Pipeline failed" << "\n";
-        exit(1);
-    }
-}
-
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBuffer** op_args, uint8_t* is_arg_donatable, int num_results, PjRtBuffer** op_results, uint8_t *futures, FutureType** future_results) {
     std::vector<std::vector<PjRtBuffer*>> argument_handles;
     argument_handles.emplace_back(op_args, op_args + num_args);
