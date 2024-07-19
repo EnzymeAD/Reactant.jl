@@ -9,7 +9,7 @@ using Reactant.MLIR
 end
 
 mutable struct Data
-    v::(Reactant.TracedRArray{Float64,S,1} where {S})
+    v::Reactant.TracedRArray{Float64,1}
 end
 @noinline function tmp(a, b, d)
     @show d
