@@ -695,6 +695,9 @@ function traced_type(::Type{T}, seen, mode) where {T<:Function}
     return Core.apply_type(T.name.wrapper, traced_fieldtypes...)
 end
 
+@inline is_concrete_tuple(x::T2) where {T2} =
+    (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
+
 function traced_type(::Type{T}, seen, mode) where {T<:Tuple}
     if !Base.isconcretetype(T) || !is_concrete_tuple(T) || T isa UnionAll
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
@@ -713,6 +716,10 @@ function traced_type(::Type{T}, seen, mode) where {K,V,T<:AbstractDict{K,V}}
     dictty = T.name.wrapper
     return dictty{K,traced_type(V, seen, mode)}
 end
+
+@inline getmap(::Val{T}) where {T} = nothing
+@inline getmap(::Val{T}, a, b, args...) where {T} = getmap(Val(T), args...)
+@inline getmap(::Val{T}, ::Val{T}, ::Val{T2}, args...) where {T,T2} = T2
 
 function traced_type(::Type{T}, seen, mode) where {T}
     if T === Any
@@ -855,6 +862,8 @@ function traced_type(::Type{Val{T}}, seen, mode) where {T}
     end
     throw("Val type $T cannot be traced")
 end
+
+append_path(path, i) = (path..., i)
 
 function make_tracer(seen, prev::RT, path, mode; toscalar=false, tobatch=nothing) where {RT}
     if haskey(seen, prev)

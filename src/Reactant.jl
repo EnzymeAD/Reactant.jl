@@ -167,20 +167,6 @@ end
 
 include("Tracing.jl")
 
-@inline val_value(::Val{T}) where {T} = T
-@inline val_value(::Type{Val{T}}) where {T} = T
-
-@inline getmap(::Val{T}) where {T} = nothing
-@inline getmap(::Val{T}, a, b, args...) where {T} = getmap(Val(T), args...)
-@inline getmap(::Val{T}, ::Val{T}, ::Val{T2}, args...) where {T,T2} = T2
-
-@inline is_concrete_tuple(x::T2) where {T2} =
-    (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
-
-function append_path(path, i)
-    return (path..., i)
-end
-
 struct MakeConcreteRArray{T} end
 struct MakeArray{AT,Vals} end
 struct MakeString{AT,Val} end
