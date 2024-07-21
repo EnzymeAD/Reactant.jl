@@ -621,7 +621,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
 
     len = length(rsize)
     @assert typeof(len) == Int
-    return TracedRArray{eltype(x),rsize,len}(
+    return TracedRArray{eltype(x),len}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.broadcast_in_dim(
@@ -631,6 +631,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
             ),
             1,
         ),
+        rsize,
     )
 end
 
