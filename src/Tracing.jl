@@ -24,7 +24,7 @@ function Base.similar(x::TracedRArray{T,N}, ::Type{T2}) where {T,N,T2}
     return TracedRArray{T2,N}((), nothing, size(x))
 end
 
-function Base.show(io::IO, X::TracedRArray{T,N}) where {T,N}
+function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
     print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", ")
     return print(io, X.mlir_data, ")")
 end
