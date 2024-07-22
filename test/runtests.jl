@@ -1,4 +1,5 @@
 using Reactant
+using Test
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing; typ=typeof(default))
