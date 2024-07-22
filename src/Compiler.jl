@@ -175,13 +175,22 @@ function compile_to_module!(mod, f, args; optimize=true)
     )
 
     if optimize
-        XLA.RunPassPipeline(
-            opt_passes *
-            ",enzyme-batch," *
-            opt_passes *
-            ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," *
-            opt_passes,
+        run_pass_pipeline!(
             mod,
+            join(
+                [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes,
+                    "enzyme",
+                    "arith-raise{stablehlo=true}",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+                ],
+                ',',
+            ),
         )
     end
 
