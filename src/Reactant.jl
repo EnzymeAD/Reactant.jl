@@ -167,7 +167,9 @@ end
 
 include("Tracing.jl")
 
-struct MakeConcreteRArray{T} end
+struct MakeConcreteRArray{T,N}
+    shape::NTuple{N,Int}
+end
 struct MakeArray{AT,Vals} end
 struct MakeString{AT,Val} end
 struct MakeStruct{AT,Val} end
@@ -176,19 +178,19 @@ struct MakeSymbol{AT} end
 
 function make_valable(tocopy)
     if tocopy isa ConcreteRArray
-        return MakeConcreteRArray{typeof(tocopy)}
+        return MakeConcreteRArray{eltype(tocopy),ndims(tocopy)}(size(tocopy))
     end
     if tocopy isa Array
-        return MakeArray{Core.Typeof(tocopy),Tuple{map(make_valable, tocopy)...}}
+        return MakeArray{Core.Typeof(tocopy),Tuple{map(make_valable, tocopy)...}}()
     end
     if tocopy isa Symbol
         return tocopy
     end
     if tocopy isa Int || tocopy isa AbstractFloat || tocopy isa Nothing || tocopy isa Type
-        return MakeVal{Val{tocopy}}
+        return MakeVal{Val{tocopy}}()
     end
     if tocopy isa AbstractString
-        return MakeString{Core.Typeof(tocopy),Symbol(string)} || T <: Nothing
+        return MakeString{Core.Typeof(tocopy),Symbol(string)}() || T <: Nothing
     end
     T = Core.Typeof(tocopy)
     if tocopy isa Tuple || tocopy isa NamedTuple || isstructtype(T)
@@ -197,14 +199,14 @@ function make_valable(tocopy)
         for i in 1:nf
             push!(elems, make_valable(getfield(tocopy, i)))
         end
-        return MakeStruct{Core.Typeof(tocopy),Tuple{elems...}}
+        return MakeStruct{Core.Typeof(tocopy),Tuple{elems...}}()
     end
 
     return error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
 end
 
-function create_result(tocopy::Type{MakeConcreteRArray{T}}, path, result_stores) where {T}
-    return :($T($(result_stores[path])))
+function create_result(tocopy::MakeConcreteRArray{T,N}, path, result_stores) where {T,N}
+    return :(ConcreteRArray{$T,$N}($(result_stores[path]), $(tocopy.shape)))
 end
 
 function create_result(tocopy::Tuple, path, result_stores)
@@ -227,7 +229,7 @@ function create_result(tocopy::NamedTuple, path, result_stores)
     end
 end
 
-function create_result(::Type{MakeArray{AT,tocopy}}, path, result_stores) where {AT,tocopy}
+function create_result(::MakeArray{AT,tocopy}, path, result_stores) where {AT,tocopy}
     elems = Expr[]
     for (i, v) in enumerate(tocopy.parameters)
         push!(elems, create_result(v, (path..., i), result_stores))
@@ -237,11 +239,11 @@ function create_result(::Type{MakeArray{AT,tocopy}}, path, result_stores) where 
     end
 end
 
-function create_result(tocopy::Type{MakeVal{Val{nothing}}}, path, result_stores)
+function create_result(::MakeVal{Val{nothing}}, path, result_stores)
     return :(nothing)
 end
 
-function create_result(tocopy::Type{MakeVal{Val{elem}}}, path, result_stores) where {elem}
+function create_result(::MakeVal{Val{elem}}, path, result_stores) where {elem}
     return :($elem)
 end
 
@@ -249,11 +251,11 @@ function create_result(tocopy::Symbol, path, result_stores)
     return Meta.quot(tocopy)
 end
 
-function create_result(tocopy::Type{MakeString{AT,Val}}, path, result_stores) where {AT,Val}
+function create_result(::MakeString{AT,Val}, path, result_stores) where {AT,Val}
     return :($(AT(Val)))
 end
 
-function create_result(::Type{MakeStruct{AT,tocopy}}, path, result_stores) where {AT,tocopy}
+function create_result(::MakeStruct{AT,tocopy}, path, result_stores) where {AT,tocopy}
     # @info "create_result" AT tocopy path tocopy.parameters result_stores
     elems = Union{Symbol,Expr}[]
     for (i, v) in enumerate(tocopy.parameters)
