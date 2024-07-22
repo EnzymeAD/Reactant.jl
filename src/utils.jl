@@ -141,9 +141,23 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         return MLIR.Dialects.func.return_(vals)
     end
 
+    name2 = name
+
+    tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
+    for i in 0:10000
+        name2 = if i == 0
+            name
+        else
+            name * string(i)
+        end
+        if MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, name2))
+            break
+        end
+    end
+
     func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
-            sym_name=name,
+            sym_name=name2,
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
             sym_visibility,
