@@ -152,6 +152,14 @@ const opt_passes::String = join(
     ',',
 )
 
+function run_pass_pipeline!(mod, pass_pipeline)
+    pm = MLIR.IR.PassManager()
+    opm = MLIR.IR.OpPassManager(pm)
+    MLIR.IR.add_pipeline!(opm, pass_pipeline)
+    MLIR.IR.run!(pm, mod)
+    return mod
+end
+
 struct CompiledModule
     mod::MLIR.IR.Module
     ctx::MLIR.IR.Context
@@ -175,7 +183,7 @@ function compile_to_module!(mod, f, args; optimize=true)
     )
 
     if optimize
-        XLA.RunPassPipeline(
+        run_pass_pipeline!(
             opt_passes *
             ",enzyme-batch," *
             opt_passes *
