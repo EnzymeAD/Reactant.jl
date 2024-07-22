@@ -61,7 +61,11 @@ end
 Run the provided `passManager` on the given `module`.
 """
 function run!(pm::PassManager, mod::Module)
-    status = LogicalResult(API.mlirPassManagerRun(pm, mod))
+    status = LogicalResult(@static if isdefined(API, :mlirPassManagerRunOnOp)
+        API.mlirPassManagerRunOnOp(pm, Operation(mod))
+    else
+        API.mlirPassManagerRun(pm, mod)
+    end)
     if isfailure(status)
         throw("failed to run pass manager on module")
     end

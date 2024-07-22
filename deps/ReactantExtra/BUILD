@@ -289,7 +289,6 @@ cc_library(
 "-Wl,-exported_symbol,_FreeFuture",
 "-Wl,-exported_symbol,_FutureIsReady",
 "-Wl,-exported_symbol,_FutureAwait",
-"-Wl,-exported_symbol,_RunPassPipeline",
 "-Wl,-exported_symbol,_XLAExecute",
 "-Wl,-exported_symbol,_RegisterDialects",
 "-Wl,-exported_symbol,_InitializeRegistryAndPasses",

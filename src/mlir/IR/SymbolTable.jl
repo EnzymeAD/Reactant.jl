@@ -1,4 +1,4 @@
-struct SymbolTable
+mutable struct SymbolTable
     st::API.MlirSymbolTable
 
     function SymbolTable(st)
