@@ -14,6 +14,7 @@ for (jlop, hloop) in ((:(NNlib.tanh), :tanh), (:(NNlib.tanh_fast), :tanh))
                     Reactant.MLIR.IR.result(
                         Reactant.MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1
                     ),
+                    size(lhs),
                 )
             end
         end
