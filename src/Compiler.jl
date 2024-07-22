@@ -433,7 +433,7 @@ function compile(f, args; pipeline_options="", client=nothing)
                     # if `f` is a closure, then prepend the closure into `args`
                     # the closure fields will be correctly extracted from it as the tracer has already passed through it
                     if !(closure_ty <: Nothing)
-                        :(args = (fnwrap, args...))
+                        :(args = ($fnwrap, $args...))
                     end
                 )
                 $exec_call
