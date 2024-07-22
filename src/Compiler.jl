@@ -184,12 +184,21 @@ function compile_to_module!(mod, f, args; optimize=true)
 
     if optimize
         run_pass_pipeline!(
-            opt_passes *
-            ",enzyme-batch," *
-            opt_passes *
-            ",enzyme,arith-raise{stablehlo=true},canonicalize, remove-unnecessary-enzyme-ops, enzyme-simplify-math," *
-            opt_passes,
             mod,
+            join(
+                [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes,
+                    "enzyme",
+                    "arith-raise{stablehlo=true}",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+                ],
+                ',',
+            ),
         )
     end
 
