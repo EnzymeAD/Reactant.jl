@@ -706,7 +706,8 @@ function traced_type(::Type{T}, seen, mode) where {T<:Tuple}
         # Tuple{((T2 isa Core.TypeofVararg ? Any : T2) for T2 in T.parameters)...}
         throw(AssertionError("Type tuple of vararg $T is not supported"))
     end
-    return Tuple{traced_type(T.parameters[i], seen, mode) for i in 1:length(T.parameters)}
+    TT = [traced_type(T.parameters[i], seen, mode) for i in 1:length(T.parameters)]
+    return Tuple{TT...}
 end
 
 function traced_type(::Type{T}, seen, mode) where {N,V,T<:NamedTuple{N,V}}
