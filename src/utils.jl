@@ -20,8 +20,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
 
     N = length(args)
     seen_args = IdDict()
-    traced_args = ntuple(Val(N)) do i
-        Base.@_inline_meta
+    traced_args = ntuple(N) do i
         return make_tracer(
             seen_args,
             args[i],
