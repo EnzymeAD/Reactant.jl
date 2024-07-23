@@ -261,6 +261,8 @@ macro code_hlo(options, maybe_call=nothing)
     end
 end
 
+traced_getfield(obj, field) = Base.getfield(obj, field)
+
 function compile(f, args; pipeline_options="", client=nothing)
     N = length(args)
     ctx = MLIR.IR.Context()
@@ -325,7 +327,7 @@ function compile(f, args; pipeline_options="", client=nothing)
             end
             res = :(args[$(path[2])])
             for p in path[3:end]
-                res = :(Base.getfield($res, $(Meta.quot(p))))
+                res = :(traced_getfield($res, $(Meta.quot(p))))
             end
             sym = Symbol("sbuf_$i")
             sbuf = :($sym = XLA.synced_buffer($res.data))
@@ -367,7 +369,7 @@ function compile(f, args; pipeline_options="", client=nothing)
                     path = path[3:end]
                 end
                 for p in path
-                    res = :(Base.getfield($res, $(Meta.quot(p))))
+                    res = :(traced_getfield($res, $(Meta.quot(p))))
                 end
                 res = :($res.data = $(Symbol("concrete_res_$(idx)")))
                 push!(delinearized_results, res)
@@ -393,12 +395,12 @@ function compile(f, args; pipeline_options="", client=nothing)
                     path = path[3:end]
                 end
                 for p in path
-                    res = :(Base.getfield($res, $(Meta.quot(p))))
+                    res = :(traced_getfield($res, $(Meta.quot(p))))
                 end
 
                 argres = :(args[argpath[2]])
                 for p in argpath[3:end]
-                    argres = :(Base.getfield($argres, $(Meta.quot(p))))
+                    argres = :(traced_getfield($argres, $(Meta.quot(p))))
                 end
 
                 res = :($res.data = $argres.data)
