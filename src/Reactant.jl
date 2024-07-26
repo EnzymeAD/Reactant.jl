@@ -1,6 +1,7 @@
 module Reactant
 
 using PackageExtensionCompat
+using Statistics: Statistics
 
 include("mlir/MLIR.jl")
 include("XLA.jl")
