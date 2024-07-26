@@ -172,6 +172,20 @@ for (jlop, hloop, RT) in (
     end
 end
 
+function elem_apply(
+    ::typeof(Base.ifelse),
+    pred::TracedRArray{Bool,Shape,N},
+    x::TracedRArray{ElType1,Shape,N},
+    y::TracedRArray{ElType2,Shape,N},
+) where {ElType1,ElType2,Shape,N}
+    return TracedRArray{promote_type(ElType1, ElType2),Shape,N}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.select(pred.mlir_data, x.mlir_data, y.mlir_data), 1
+        ),
+    )
+end
+
 function Base.:*(
     lhs::TracedRArray{ElType,Shape,2}, rhs::TracedRArray{ElType,Shape2,2}
 ) where {ElType,Shape,Shape2}
@@ -664,7 +678,6 @@ function Base.mapreducedim!(f, op, R::TracedRArray, A::Base.AbstractArrayOrBroad
     R.mlir_data = elem_apply(op, R, tmp).mlir_data
     return R
 end
-
 
 # Stdlib overloads
 ## Statistics
