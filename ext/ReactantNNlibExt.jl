@@ -3,21 +3,36 @@ module ReactantNNlibExt
 using NNlib
 using Reactant
 
-for (jlop, hloop) in ((:(NNlib.tanh), :tanh), (:(NNlib.tanh_fast), :tanh))
+for (jlop, hloop) in (
+    (:(NNlib.tanh_fast), :tanh),
+    (:(NNlib.sigmoid_fast), :logistic),
+    (:(NNlib.sigmoid), :logistic),
+)
     @eval begin
-        if $jlop != Base.tanh && $jlop != Base.FastMath.tanh_fast
-            function Reactant.elem_apply(
-                ::typeof($jlop), lhs::Reactant.TracedRArray{ElType,Shape,N}
-            ) where {ElType,Shape,N}
-                return Reactant.TracedRArray{ElType,Shape,N}(
-                    (),
-                    Reactant.MLIR.IR.result(
-                        Reactant.MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1
-                    ),
-                )
-            end
+        function Reactant.elem_apply(
+            ::typeof($jlop), lhs::Reactant.TracedRArray{ElType,Shape,N}
+        ) where {ElType,Shape,N}
+            return Reactant.TracedRArray{ElType,Shape,N}(
+                (),
+                Reactant.MLIR.IR.result(
+                    Reactant.MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1
+                ),
+            )
         end
     end
+end
+
+function Reactant.elem_apply(
+    ::typeof(NNlib.relu), lhs::Reactant.TracedRArray{ElType,Shape,N}
+) where {ElType,Shape,N}
+    return (lhs .> zero(ElType)) .* lhs  # base case uses ifelse, so we compile the product
+end
+
+function Reactant.elem_apply(
+    ::typeof(NNlib.gelu), lhs::Reactant.TracedRArray{ElType,Shape,N}
+) where {ElType,Shape,N}
+    # See https://arxiv.org/pdf/1606.08415v5 Section 2
+    return lhs .* sigmoid.(ElType(1.702) .* lhs)
 end
 
 # TODO handle non finite cases

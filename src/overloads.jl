@@ -81,6 +81,8 @@ for (jlop, hloop, RT) in (
     end
 end
 
+Base.abs2(x::Reactant.TracedRArray{T,(),0}) where {T} = x * x
+
 function Base.literal_pow(
     ::Base.RefValue{typeof(^)}, x::Reactant.TracedRArray{T,(),0}, ::Base.RefValue{Val{P}}
 ) where {T,P}
