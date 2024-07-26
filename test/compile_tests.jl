@@ -1,9 +1,8 @@
-using Reactant
-using Test
+@testitem "compile" begin
+    function Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray}
+        return (; a=sum(x.a))
+    end
 
-Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=sum(x.a))
-
-@testset "compile" begin
     @testset "create_result" begin
         @testset "NamedTuple" begin
             x = (; a=rand(4, 3))

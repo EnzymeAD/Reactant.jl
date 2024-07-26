@@ -1,4 +1,4 @@
-using Reactant
+using Reactant, InteractiveUtils, Hwloc, ReTestItems, Test
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing; typ=typeof(default))
@@ -35,15 +35,15 @@ end
 do_gpu_list, gpu_list = extract_flag!(ARGS, "--gpu")
 
 if do_gpu_list
-    Reactant.set_default_backend("gpu")
-    # TODO set which gpu
+    Reactant.set_default_backend("gpu") # TODO set which gpu
 end
 
-include("layout.jl")
-include("basic.jl")
-include("bcast.jl")
-include("nn.jl")
-include("struct.jl")
-include("closure.jl")
-include("compile.jl")
-include("nn_lux.jl")
+@info sprint(io -> versioninfo(io; verbose=true))
+
+const RETESTITEMS_NWORKERS = parse(
+    Int, get(ENV, "RETESTITEMS_NWORKERS", string(min(Hwloc.num_physical_cores(), 16)))
+)
+
+@testset "Reactant" begin
+    ReTestItems.runtests(@__DIR__; nworkers=RETESTITEMS_NWORKERS, testitem_timeout=3600)
+end

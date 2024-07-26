@@ -31,6 +31,18 @@ Reactant_jll = "0.0.13"
 julia = "1.9"
 
 [extras]
-Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
-NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+Hwloc = "0e44f5e4-bd66-52a0-8798-143a42290a1d"
+InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
+MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
+OneHotArrays = "0b1bfda6-eb8a-41d2-88d8-f5af5cad476f"
+Optimisers = "3bd65402-5787-11e9-1adc-39752487f4e2"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+ReTestItems = "817f1d60-ba6b-4fd5-9520-3cf149f6a823"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["BenchmarkTools", "Flux", "Hwloc", "InteractiveUtils", "Lux", "MLUtils", "OneHotArrays", "Optimisers", "Random", "ReTestItems", "Statistics", "Test"]
