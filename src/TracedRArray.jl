@@ -124,7 +124,9 @@ for (jlop, hloop, RT) in (
     (:(Base.:-), :subtract, :T),
 )
     @eval begin
-        function $jlop(lhs::TracedRArray{T,N}, rhs::TracedRArray{T2,N}) where {T,T2,N}
+        function $jlop(
+            @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::TracedRArray{T2,N})
+        ) where {T,T2,N}
             commonTy = TracedRArray{Base.promote_type(T, T2),N}
             lhs = promote_to(commonTy, lhs)
             rhs = promote_to(commonTy, rhs)
@@ -137,7 +139,9 @@ for (jlop, hloop, RT) in (
             )
         end
 
-        function $jlop(lhs::TracedRArray{T,N}, rhs::TracedRArray{T,N}) where {T,N}
+        function $jlop(
+            @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::TracedRArray{T,N})
+        ) where {T,N}
             return TracedRArray{$RT,N}(
                 (),
                 MLIR.IR.result(
@@ -150,7 +154,9 @@ for (jlop, hloop, RT) in (
 
     for otherType in (Number, Any) #=TracedRArray{S,0} where {S}=#
         @eval begin
-            function $jlop(lhs::TracedRArray{T,N}, rhs::$otherType) where {T,N}
+            function $jlop(
+                @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::$otherType)
+            ) where {T,N}
                 rhs = promote_to(lhs, rhs)
                 return TracedRArray{$RT,N}(
                     (),
@@ -161,7 +167,9 @@ for (jlop, hloop, RT) in (
                 )
             end
 
-            function $jlop(lhs::$otherType, rhs::TracedRArray{T,N}) where {T,N}
+            function $jlop(
+                @nospecialize(lhs::$otherType), @nospecialize(rhs::TracedRArray{T,N})
+            ) where {T,N}
                 lhs = promote_to(rhs, lhs)
                 return TracedRArray{$RT,N}(
                     (),
@@ -178,7 +186,9 @@ end
 for (jlop, hloop, RT) in
     ((:(Base.:*), :multiply, :T), (:(Base.:/), :divide, :T), (:(Base.:^), :power, :T))
     @eval begin
-        function $jlop(lhs::TracedRArray{T,0}, rhs::TracedRArray{T2,0}) where {T,T2}
+        function $jlop(
+            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::TracedRArray{T2,0})
+        ) where {T,T2}
             commonTy = TracedRArray{Base.promote_type(T, T2),0}
             lhs = promote_to(commonTy, lhs)
             rhs = promote_to(commonTy, rhs)
@@ -191,7 +201,9 @@ for (jlop, hloop, RT) in
             )
         end
 
-        function $jlop(lhs::TracedRArray{T,0}, rhs::TracedRArray{T,0}) where {T}
+        function $jlop(
+            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::TracedRArray{T,0})
+        ) where {T}
             return TracedRArray{$RT,0}(
                 (),
                 MLIR.IR.result(
@@ -201,7 +213,7 @@ for (jlop, hloop, RT) in
             )
         end
 
-        function $jlop(lhs::TracedRArray{T,0}, rhs) where {T}
+        function $jlop(@nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs)) where {T}
             rhs = promote_to(lhs, rhs)
             return TracedRArray{$RT,0}(
                 (),
@@ -212,7 +224,7 @@ for (jlop, hloop, RT) in
             )
         end
 
-        function $jlop(lhs, rhs::TracedRArray{T,0}) where {T}
+        function $jlop(@nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,0})) where {T}
             lhs = promote_to(rhs, lhs)
             return TracedRArray{$RT,0}(
                 (),
@@ -224,7 +236,9 @@ for (jlop, hloop, RT) in
         end
 
         # Base defines ::AbstractArray / ::Number, so we need this to avoid ambiguity
-        function $jlop(lhs::TracedRArray{T,0}, rhs::Number) where {T}
+        function $jlop(
+            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::Number)
+        ) where {T}
             rhs = promote_to(lhs, rhs)
             return TracedRArray{$RT,0}(
                 (),
@@ -235,7 +249,9 @@ for (jlop, hloop, RT) in
             )
         end
 
-        function $jlop(lhs::Number, rhs::TracedRArray{T,0}) where {T}
+        function $jlop(
+            @nospecialize(lhs::Number), @nospecialize(rhs::TracedRArray{T,0})
+        ) where {T}
             lhs = promote_to(rhs, lhs)
             return TracedRArray{$RT,0}(
                 (),
@@ -249,7 +265,9 @@ for (jlop, hloop, RT) in
 end
 
 function Base.ifelse(
-    pred::TracedRArray{Bool,0}, x::TracedRArray{T1,0}, y::TracedRArray{T2,0}
+    @nospecialize(pred::TracedRArray{Bool,0}),
+    @nospecialize(x::TracedRArray{T1,0}),
+    @nospecialize(y::TracedRArray{T2,0})
 ) where {T1,T2}
     return TracedRArray{promote_type(T1, T2),0}(
         (),
@@ -280,7 +298,7 @@ for (jlop, hloop) in (
     (:(Base.sqrt), :sqrt),
 )
     @eval begin
-        function $jlop(lhs::TracedRArray{T,N}) where {T,N}
+        function $jlop(@nospecialize(lhs::TracedRArray{T,N})) where {T,N}
             return TracedRArray{T,N}(
                 (),
                 MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1),
@@ -372,7 +390,9 @@ for (jlop, hloop, hlocomp) in (
 )
     @eval begin
         function elem_apply(
-            ::typeof($jlop), lhs::TracedRArray{T,N}, rhs::TracedRArray{T,N}
+            ::typeof($jlop),
+            @nospecialize(lhs::TracedRArray{T,N}),
+            @nospecialize(rhs::TracedRArray{T,N})
         ) where {T,N}
             return TracedRArray{T,N}(
                 (),
@@ -390,7 +410,9 @@ for (jlop, hloop, hlocomp) in (
             )
         end
 
-        function elem_apply(::typeof($jlop), lhs::TracedRArray{T,N}, rhs) where {T,N}
+        function elem_apply(
+            ::typeof($jlop), @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
+        ) where {T,N}
             rhs = promote_to(lhs, rhs)
             return TracedRArray{T,N}(
                 (),
@@ -408,7 +430,9 @@ for (jlop, hloop, hlocomp) in (
             )
         end
 
-        function elem_apply(::typeof($jlop), lhs, rhs::TracedRArray{T,N}) where {T,N}
+        function elem_apply(
+            ::typeof($jlop), @nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
+        ) where {T,N}
             lhs = promote_to(rhs, lhs)
             return TracedRArray{T,N}(
                 (),
@@ -428,7 +452,9 @@ for (jlop, hloop, hlocomp) in (
     end
 end
 
-function Base.:*(lhs::TracedRArray{T,2}, rhs::TracedRArray{T,2}) where {T}
+function Base.:*(
+    @nospecialize(lhs::TracedRArray{T,2}), @nospecialize(rhs::TracedRArray{T,2})
+) where {T}
     lhsty = MLIR.IR.type(lhs.mlir_data)
     rhsty = MLIR.IR.type(rhs.mlir_data)
     resty = MLIR.IR.TensorType((size(lhs, 1), size(rhs, 2)), eltype(lhsty))
@@ -467,7 +493,13 @@ function Enzyme.Compiler.active_reg_inner(
     end
 end
 
-function Base.mapreduce(f, op, A::TracedRArray{T,N}; dims=:, init=nothing) where {T,N}
+function Base.mapreduce(
+    @nospecialize(f),
+    @nospecialize(op),
+    @nospecialize(A::TracedRArray{T,N});
+    dims=:,
+    init=nothing,
+) where {T,N}
     if dims isa Int
         dims = [dims]
     end
@@ -535,7 +567,12 @@ function Base.mapreduce(f, op, A::TracedRArray{T,N}; dims=:, init=nothing) where
     return red
 end
 
-function Base.mapreducedim!(f, op, R::TracedRArray, A::Base.AbstractArrayOrBroadcasted)
+function Base.mapreducedim!(
+    @nospecialize(f),
+    @nospecialize(op),
+    @nospecialize(R::TracedRArray),
+    A::Base.AbstractArrayOrBroadcasted,
+)
     tmp = broadcast_to_size(Base.mapreduce(f, op, A; dims=1), (1, size(R)[2:end]...))
     R.mlir_data = elem_apply(op, R, tmp).mlir_data
     return R
