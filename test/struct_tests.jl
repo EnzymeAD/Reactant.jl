@@ -5,7 +5,8 @@
         inds::Vector{Symbol}
     end
 
-    MockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}} = MockTensor{T,N,A}(data, inds)
+    MockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}} =
+        MockTensor{T,N,A}(data, inds)
     Base.parent(t::MockTensor) = t.data
 
     Base.cos(x::MockTensor) = MockTensor(cos(parent(x)), x.inds)

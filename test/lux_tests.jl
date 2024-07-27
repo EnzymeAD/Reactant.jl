@@ -1,4 +1,4 @@
-@testitem "Lux" skip=:(VERSION < v"1.10") begin
+@testitem "Lux" skip = :(VERSION < v"1.10") begin
     using Lux, Random, Statistics, Enzyme, Test, BenchmarkTools
     using MLUtils, OneHotArrays, Optimisers
 
@@ -36,7 +36,7 @@
 
     target = onehotbatch(truth, [true, false])                   # 2×1000 OneHotMatrix
     ctarget = Reactant.ConcreteRArray(Array{Float32}(target))
-    loader = DataLoader((noisy, target); batchsize=64, shuffle=true);
+    loader = DataLoader((noisy, target); batchsize=64, shuffle=true)
     # # 16-element DataLoader with first element: (2×64 Matrix{Float32}, 2×64 OneHotMatrix)
 
     opt = Optimisers.Adam(0.01f0)

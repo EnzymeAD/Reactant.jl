@@ -45,5 +45,5 @@ const RETESTITEMS_NWORKERS = parse(
 )
 
 @testset "Reactant" begin
-    ReTestItems.runtests(@__DIR__; nworkers=RETESTITEMS_NWORKERS, testitem_timeout=3600)
+    ReTestItems.runtests(Reactant; nworkers=RETESTITEMS_NWORKERS)
 end
