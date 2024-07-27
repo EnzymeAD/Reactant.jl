@@ -271,6 +271,104 @@ end
 
 traced_getfield(obj, field) = Base.getfield(obj, field)
 
+struct MakeConcreteRArray{T,N}
+    shape::NTuple{N,Int}
+end
+struct MakeArray{AT,Vals} end
+struct MakeString{AT,Val} end
+struct MakeStruct{AT,Val} end
+struct MakeVal{AT} end
+struct MakeSymbol{AT} end
+
+function make_valable(tocopy)
+    if tocopy isa ConcreteRArray
+        return MakeConcreteRArray{eltype(tocopy),ndims(tocopy)}(size(tocopy))
+    end
+    if tocopy isa Array
+        return MakeArray{Core.Typeof(tocopy),Tuple{map(make_valable, tocopy)...}}()
+    end
+    if tocopy isa Symbol
+        return tocopy
+    end
+    if tocopy isa Int || tocopy isa AbstractFloat || tocopy isa Nothing || tocopy isa Type
+        return MakeVal{Val{tocopy}}()
+    end
+    if tocopy isa AbstractString
+        return MakeString{Core.Typeof(tocopy),Symbol(string)}() || T <: Nothing
+    end
+    T = Core.Typeof(tocopy)
+    if tocopy isa Tuple || tocopy isa NamedTuple || isstructtype(T)
+        elems = []
+        nf = fieldcount(T)
+        for i in 1:nf
+            push!(elems, make_valable(getfield(tocopy, i)))
+        end
+        return MakeStruct{Core.Typeof(tocopy),Tuple{elems...}}()
+    end
+
+    return error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
+end
+
+function create_result(tocopy::MakeConcreteRArray{T,N}, path, result_stores) where {T,N}
+    return :(ConcreteRArray{$T,$N}($(result_stores[path]), $(tocopy.shape)))
+end
+
+function create_result(tocopy::Tuple, path, result_stores)
+    elems = Union{Symbol,Expr}[]
+    for (k, v) in pairs(tocopy)
+        push!(elems, create_result(v, (path..., k), result_stores))
+    end
+    return quote
+        ($(elems...),)
+    end
+end
+
+function create_result(tocopy::NamedTuple, path, result_stores)
+    elems = Union{Symbol,Expr}[]
+    for (k, v) in pairs(tocopy)
+        push!(elems, create_result(v, (path..., k), result_Stores))
+    end
+    return quote
+        NamedTuple{$(keys(tocopy))}($elems)
+    end
+end
+
+function create_result(::MakeArray{AT,tocopy}, path, result_stores) where {AT,tocopy}
+    elems = Expr[]
+    for (i, v) in enumerate(tocopy.parameters)
+        push!(elems, create_result(v, (path..., i), result_stores))
+    end
+    return quote
+        $(eltype(AT))[$(elems...)]
+    end
+end
+
+function create_result(::MakeVal{Val{nothing}}, path, result_stores)
+    return :(nothing)
+end
+
+function create_result(::MakeVal{Val{elem}}, path, result_stores) where {elem}
+    return :($elem)
+end
+
+function create_result(tocopy::Symbol, path, result_stores)
+    return Meta.quot(tocopy)
+end
+
+function create_result(::MakeString{AT,Val}, path, result_stores) where {AT,Val}
+    return :($(AT(Val)))
+end
+
+function create_result(::MakeStruct{AT,tocopy}, path, result_stores) where {AT,tocopy}
+    # @info "create_result" AT tocopy path tocopy.parameters result_stores
+    elems = Union{Symbol,Expr}[]
+    for (i, v) in enumerate(tocopy.parameters)
+        ev = create_result(v, (path..., i), result_stores)
+        push!(elems, ev)
+    end
+    return Expr(:new, AT, elems...)
+end
+
 function compile(f, args; pipeline_options="", client=nothing)
     N = length(args)
     ctx = MLIR.IR.Context()
