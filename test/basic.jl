@@ -1,6 +1,7 @@
 using Reactant
 using Test
 using Enzyme
+using Statistics
 
 # Reactant.set_default_backend("gpu")
 
