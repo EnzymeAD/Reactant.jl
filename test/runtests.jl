@@ -46,4 +46,7 @@ include("nn.jl")
 include("struct.jl")
 include("closure.jl")
 include("compile.jl")
-include("nn_lux.jl")
+
+if VERSION ≥ v"1.10-" # Lux isn't supported on 1.9
+    include("nn_lux.jl")
+end
