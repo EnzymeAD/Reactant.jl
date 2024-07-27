@@ -172,13 +172,10 @@ for (jlop, hloop, RT) in (
     end
 end
 
-function elem_apply(
-    ::typeof(Base.ifelse),
-    pred::TracedRArray{Bool,Shape,N},
-    x::TracedRArray{ElType1,Shape,N},
-    y::TracedRArray{ElType2,Shape,N},
-) where {ElType1,ElType2,Shape,N}
-    return TracedRArray{promote_type(ElType1, ElType2),Shape,N}(
+function Base.ifelse(
+    pred::TracedRArray{Bool,(),0}, x::TracedRArray{T1,(),0}, y::TracedRArray{T2,(),0}
+) where {T1,T2}
+    return TracedRArray{promote_type(T1, T2),(),0}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.select(pred.mlir_data, x.mlir_data, y.mlir_data), 1
