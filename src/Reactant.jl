@@ -57,13 +57,13 @@ function Base.isapprox(x::ConcreteRArray{ElType,(),0}, y; kwargs...) where {ElTy
 end
 
 function Base.isapprox(x, y::ConcreteRArray{ElType,(),0}; kwargs...) where {ElType}
-    return Base.isapprox(to_float(x), y; kwargs...)
+    return Base.isapprox(x, to_float(y); kwargs...)
 end
 
 function Base.isapprox(
     x::ConcreteRArray{ElType,(),0}, y::ConcreteRArray{ElType2,(),0}; kwargs...
 ) where {ElType,ElType2}
-    return Base.isapprox(to_float(x), y; kwargs...)
+    return Base.isapprox(to_float(x), to_float(y); kwargs...)
 end
 
 function Base.print_array(io::IO, X::ConcreteRArray)
