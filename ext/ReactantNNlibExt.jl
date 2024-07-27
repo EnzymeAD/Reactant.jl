@@ -25,7 +25,7 @@ end
 function Reactant.elem_apply(
     ::typeof(NNlib.relu), lhs::Reactant.TracedRArray{ElType,Shape,N}
 ) where {ElType,Shape,N}
-    return ifelse.((lhs .> zero(ElType)), lhs, zero(ElType))
+    return max.(lhs, zero(ElType))
 end
 
 function Reactant.elem_apply(

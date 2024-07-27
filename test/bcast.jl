@@ -70,24 +70,20 @@ test()
     x_act_ca = Reactant.ConcreteRArray(x_act)
 
     @testset "Activation: $act" for act in (
-        identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu
+        identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2
     )
         f_compile = Reactant.compile(sumabs2, (act, x_act))
 
         y_simple = sumabs2(act, x_act)
         y_compile = f_compile(act, x_act_ca)
 
-        if act !== relu
-            ∂x_enz = Enzyme.make_zero(x_act)
-            Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
+        ∂x_enz = Enzyme.make_zero(x_act)
+        Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
 
-            ∇sumabs2_compiled = Reactant.compile(∇sumabs2, (act, x_act_ca))
+        ∇sumabs2_compiled = Reactant.compile(∇sumabs2, (act, x_act_ca))
 
-            ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
+        ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
 
-            @test y_simple ≈ y_compile
-        else
-            @test_broken Reactant.compile(∇sumabs2, (act, x_act_ca)) isa Any
-        end
+        @test y_simple ≈ y_compile
     end
 end
