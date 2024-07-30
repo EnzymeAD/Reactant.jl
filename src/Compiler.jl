@@ -326,7 +326,7 @@ end
 function create_result(tocopy::NamedTuple, path, result_stores)
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
-        push!(elems, create_result(v, (path..., k), result_Stores))
+        push!(elems, create_result(v, (path..., k), result_stores))
     end
     return quote
         NamedTuple{$(keys(tocopy))}($elems)
