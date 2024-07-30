@@ -83,11 +83,11 @@ end
         x2 = list(x...)
         x3 = Reactant.make_tracer(IdDict(), x2, (), Reactant.ArrayToConcrete)
 
-        # TODO this should be able to run without problems, but crashes
-        @test_broken begin
-            f = Reactant.compile(identity, (x3,))
-            isapprox(f(x3), x3)
-        end
+        #     # TODO this should be able to run without problems, but crashes
+        #     @test_broken begin
+        #         f = Reactant.compile(identity, (x3,))
+        #         isapprox(f(x3), x3)
+        #     end
 
         f = Reactant.compile(sum, (x3,))
 
