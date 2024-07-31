@@ -15,4 +15,16 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
             @test isapprox(f(x2).a, sum(x.a))
         end
     end
+
+    @testset "world-age" begin
+        a = Reactant.ConcreteRArray(ones(2, 10))
+        b = Reactant.ConcreteRArray(ones(10, 2))
+
+        function fworld(x, y)
+            g = Reactant.compile(*, (a, b))
+            return g(x, y)
+        end
+
+        @test fworld(a, b) ≈ ones(2, 2) * 10
+    end
 end
