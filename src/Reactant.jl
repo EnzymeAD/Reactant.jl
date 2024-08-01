@@ -1,6 +1,5 @@
 module Reactant
 
-using PackageExtensionCompat
 using Enzyme
 
 include("mlir/MLIR.jl")
@@ -170,9 +169,6 @@ include("Compiler.jl")
 
 const registry = Ref{MLIR.IR.DialectRegistry}()
 function __init__()
-    # PackageExtensionCompat: required for weakdeps to work in Julia <1.9
-    @require_extensions
-
     registry[] = MLIR.IR.DialectRegistry()
     @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
         registry[]::MLIR.API.MlirDialectRegistry
