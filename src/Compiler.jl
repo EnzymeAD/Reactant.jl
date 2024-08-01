@@ -317,10 +317,8 @@ function create_result(tocopy::NamedTuple{K,T}, path, result_stores) where {K,T}
     return :(NamedTuple{$K}($(elems...)))
 end
 
-create_result(tocopy::Symbol, path, result_stores) = Meta.quot(tocopy)
-
-for T in [Int, AbstractFloat, AbstractString, Nothing, Type]
-    @eval create_result(tocopy::$T, path, result_stores) = :($tocopy)
+for T in [Int, AbstractFloat, AbstractString, Nothing, Type, Symbol]
+    @eval create_result(tocopy::$T, path, result_stores) = Meta.quot(tocopy)
 end
 
 function compile(f, args; pipeline_options="", client=nothing)
