@@ -560,25 +560,6 @@ Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 # iteration (see, e.g., CUDA.jl#145)
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
-    if ElType == Any
-        a1 = bc.args[1]
-        @show a1
-        b1 = a1.args[1]
-        @show b1
-        @show typeof(b1)
-        @show eltype(b1)
-        @show Broadcast._broadcast_getindex_eltype(a1.args[1])
-        @show Broadcast.eltypes(a1.args)
-        @show Broadcast._broadcast_getindex_eltype(a1)
-        @show typeof(bc.args)
-        argT = Broadcast.eltypes(bc.args)
-        @show argT
-        RT = Base._return_type(bc.f, argT)
-        @show RT
-        T = Base.promote_typejoin_union(RT)
-        @show T
-        @show bc.f, bc.args
-    end
     @assert ElType != Any
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
@@ -640,13 +621,6 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
 
     dims = collect(Int64, 0:(length(size(x)) - 1))
 
-    if length(size(MLIR.IR.type(x.mlir_data))) != length(dims)
-        @show x
-        @show arg
-        @show rsize
-        @show rsize2
-        @show dims
-    end
     @assert length(size(MLIR.IR.type(x.mlir_data))) == length(dims)
     mlirty = MLIR.IR.type(x.mlir_data)
 
