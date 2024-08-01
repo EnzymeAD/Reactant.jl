@@ -317,6 +317,8 @@ cc_library(
         "@llvm-project//mlir:TransformDialect",
         "@llvm-project//mlir:Transforms",
         "@llvm-project//llvm:Support",
+        "@llvm-project//llvm:AArch64AsmParser",
+        "@llvm-project//llvm:AArch64CodeGen",
         "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
         "@stablehlo//:chlo_ops",
