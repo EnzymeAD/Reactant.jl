@@ -15,6 +15,7 @@ Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 PackageExtensionCompat = "65ce6f38-6b18-4e1d-a461-8949797d7930"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
+RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
 
 [weakdeps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -35,6 +36,7 @@ NNlib = "0.9"
 PackageExtensionCompat = "1"
 Preferences = "1.4"
 Reactant_jll = "0.0.12"
+RuntimeGeneratedFunctions = "0.5"
 julia = "1.9"
 
 [extras]
