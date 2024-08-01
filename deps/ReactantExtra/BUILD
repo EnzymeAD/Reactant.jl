@@ -58,6 +58,7 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/bin/../include/c++/v1",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/sys-root/usr/include",
         "/opt/x86_64-linux-musl/lib/clang/16/include",
+        "/opt/x86_64-linux-musl/lib/clang/17/include",
         #         "/opt/x86_64-linux-musl/x86_64-linux-musl/include",
         #         "/opt/x86_64-linux-musl/lib/gcc/x86_64-linux-musl/10.2.0/include",
         #         "/opt/x86_64-linux-musl/x86_64-linux-musl/sys-root/usr/include",
