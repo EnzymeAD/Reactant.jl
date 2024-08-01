@@ -9,9 +9,11 @@ fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-I
 using InteractiveUtils
 
 @testset "2D sum" begin
-    r_res = sum(ones(2, 10))
+    x = rand(2, 10)
 
-    a = Reactant.ConcreteRArray(ones(2, 10))
+    r_res = sum(x)
+
+    a = Reactant.ConcreteRArray(x)
 
     c_res = sum(a)
     @test c_res ≈ r_res
@@ -24,9 +26,11 @@ using InteractiveUtils
 end
 
 @testset "Basic reduce max" begin
-    r_res = fastmax(ones(2, 10))
+    x = rand(2, 10)
 
-    a = Reactant.ConcreteRArray(ones(2, 10))
+    r_res = fastmax(x)
+
+    a = Reactant.ConcreteRArray(x)
 
     c_res = fastmax(a)
     @test c_res ≈ r_res
@@ -42,9 +46,11 @@ sinexp(x) = sin(exp(x))
 sinexpbc(x) = sinexp.(x)
 
 @testset "Broadcast combined" begin
-    r_res = sinexpbc(ones(2, 10))
+    x = rand(2, 10)
 
-    a = Reactant.ConcreteRArray(ones(2, 10))
+    r_res = sinexpbc(x)
+
+    a = Reactant.ConcreteRArray(x)
 
     c_res = sinexpbc(a)
     @test c_res ≈ r_res
@@ -59,7 +65,7 @@ end
 sumexp(x) = sum(exp, x)
 
 @testset "Basic mapreduce" begin
-    x = ones(Float32, 10)
+    x = rand(Float32, 10)
     a = Reactant.ConcreteRArray(x)
     r_res = sumexp(x)
 
@@ -88,11 +94,12 @@ end
 end
 
 @testset "Basic cos" begin
-    c = Reactant.ConcreteRArray(ones(3, 2))
+    x = rand(3, 2)
+    c = Reactant.ConcreteRArray(x)
 
     f = Reactant.compile(cos, (c,))
     r = f(c)
-    @test r ≈ cos.(ones(3, 2))
+    @test r ≈ cos.(x)
 end
 
 function sumcos(x)
