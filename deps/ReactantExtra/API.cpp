@@ -58,7 +58,7 @@ using namespace xla;
 
 extern "C" void InitializeLogs() {
     absl::InitializeLog();
-    InitializeAllTargets();
+    InitializeNativeTarget();
 }
 
 extern "C"
