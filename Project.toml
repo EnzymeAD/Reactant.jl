@@ -1,6 +1,11 @@
 name = "Reactant"
 uuid = "3c362404-f566-11ee-1572-e11a4b42c853"
-authors = ["William Moses <wmoses@mit.edu>", "Valentin Churavy <vchuravy@mit.edu>", "Sergio Sánchez Ramírez <sergio.sanchez.ramirez@bsc.es>", "Paul Berg <paul@plutojl.org>"]
+authors = [
+    "William Moses <wmoses@mit.edu>",
+    "Valentin Churavy <vchuravy@mit.edu>",
+    "Sergio Sánchez Ramírez <sergio.sanchez.ramirez@bsc.es>",
+    "Paul Berg <paul@plutojl.org>",
+]
 version = "0.1.9"
 
 [deps]
@@ -9,6 +14,7 @@ Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
+RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
 
 [weakdeps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -30,6 +36,7 @@ Enzyme = "0.11, 0.12"
 NNlib = "0.9"
 Preferences = "1.4"
 Reactant_jll = "0.0.15"
+RuntimeGeneratedFunctions = "0.5"
 Statistics = "1.9"
 julia = "1.9"
 

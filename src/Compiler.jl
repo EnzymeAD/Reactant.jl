@@ -1,3 +1,6 @@
+using RuntimeGeneratedFunctions
+RuntimeGeneratedFunctions.init(@__MODULE__)
+
 const opt_passes::String = join(
     [
         "inline{default-pipeline=canonicalize max-iterations=4}",
@@ -271,102 +274,53 @@ end
 
 traced_getfield(obj, field) = Base.getfield(obj, field)
 
-struct MakeConcreteRArray{T,N}
-    shape::NTuple{N,Int}
-end
-struct MakeArray{AT,Vals} end
-struct MakeString{AT,Val} end
-struct MakeStruct{AT,Val} end
-struct MakeVal{AT} end
-struct MakeSymbol{AT} end
-
-function make_valable(tocopy)
-    if tocopy isa ConcreteRArray
-        return MakeConcreteRArray{eltype(tocopy),ndims(tocopy)}(size(tocopy))
-    end
-    if tocopy isa Array
-        return MakeArray{Core.Typeof(tocopy),Tuple{map(make_valable, tocopy)...}}()
-    end
-    if tocopy isa Symbol
-        return tocopy
-    end
-    if tocopy isa Int || tocopy isa AbstractFloat || tocopy isa Nothing || tocopy isa Type
-        return MakeVal{Val{tocopy}}()
-    end
-    if tocopy isa AbstractString
-        return MakeString{Core.Typeof(tocopy),Symbol(string)}() || T <: Nothing
-    end
-    T = Core.Typeof(tocopy)
-    if tocopy isa Tuple || tocopy isa NamedTuple || isstructtype(T)
-        elems = []
-        nf = fieldcount(T)
-        for i in 1:nf
-            push!(elems, make_valable(getfield(tocopy, i)))
-        end
-        return MakeStruct{Core.Typeof(tocopy),Tuple{elems...}}()
+function create_result(tocopy::T, path, result_stores) where {T}
+    if !isstructtype(typeof(tocopy))
+        error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
     end
 
-    return error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
+    elems = Union{Symbol,Expr}[]
+
+    for i in 1:fieldcount(T)
+        ev = create_result(getfield(tocopy, i), append_path(path, i), result_stores)
+        push!(elems, ev)
+    end
+
+    return Expr(:new, T, elems...)
 end
 
-function create_result(tocopy::MakeConcreteRArray{T,N}, path, result_stores) where {T,N}
+function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
     return :(ConcreteRArray{$T,$N}($(result_stores[path]), $(tocopy.shape)))
+end
+
+function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
+    elems = Expr[]
+    for (i, v) in enumerate(tocopy)
+        push!(elems, create_result(v, append_path(path, i), result_stores))
+    end
+    return :($T[$(elems...)])
 end
 
 function create_result(tocopy::Tuple, path, result_stores)
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
-        push!(elems, create_result(v, (path..., k), result_stores))
+        push!(elems, create_result(v, append_path(path, k), result_stores))
     end
-    return quote
-        ($(elems...),)
-    end
+    return :(($(elems...),))
 end
 
-function create_result(tocopy::NamedTuple, path, result_stores)
+function create_result(tocopy::NamedTuple{K,T}, path, result_stores) where {K,T}
     elems = Union{Symbol,Expr}[]
-    for (k, v) in pairs(tocopy)
-        push!(elems, create_result(v, (path..., k), result_stores))
+    for (i, (k, v)) in enumerate(pairs(tocopy))
+        push!(elems, create_result(v, append_path(path, i), result_stores))
     end
-    return quote
-        NamedTuple{$(keys(tocopy))}($elems)
-    end
+    return :(NamedTuple{$K}($(elems...)))
 end
 
-function create_result(::MakeArray{AT,tocopy}, path, result_stores) where {AT,tocopy}
-    elems = Expr[]
-    for (i, v) in enumerate(tocopy.parameters)
-        push!(elems, create_result(v, (path..., i), result_stores))
-    end
-    return quote
-        $(eltype(AT))[$(elems...)]
-    end
-end
+create_result(tocopy::Symbol, path, result_stores) = Meta.quot(tocopy)
 
-function create_result(::MakeVal{Val{nothing}}, path, result_stores)
-    return :(nothing)
-end
-
-function create_result(::MakeVal{Val{elem}}, path, result_stores) where {elem}
-    return :($elem)
-end
-
-function create_result(tocopy::Symbol, path, result_stores)
-    return Meta.quot(tocopy)
-end
-
-function create_result(::MakeString{AT,Val}, path, result_stores) where {AT,Val}
-    return :($(AT(Val)))
-end
-
-function create_result(::MakeStruct{AT,tocopy}, path, result_stores) where {AT,tocopy}
-    # @info "create_result" AT tocopy path tocopy.parameters result_stores
-    elems = Union{Symbol,Expr}[]
-    for (i, v) in enumerate(tocopy.parameters)
-        ev = create_result(v, (path..., i), result_stores)
-        push!(elems, ev)
-    end
-    return Expr(:new, AT, elems...)
+for T in [Int, AbstractFloat, AbstractString, Nothing, Type]
+    @eval create_result(tocopy::$T, path, result_stores) = :($tocopy)
 end
 
 function compile(f, args; pipeline_options="", client=nothing)
@@ -376,7 +330,7 @@ function compile(f, args; pipeline_options="", client=nothing)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        linear_args, linear_results, preserved_args, seen_args, concrete_result, isfwrapped = compile_to_module!(
+        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_to_module!(
             mod, f, args; optimize=true
         )
 
@@ -391,47 +345,22 @@ function compile(f, args; pipeline_options="", client=nothing)
             end
         end
 
-        # return generate_jlfunc(
-        #     concrete_result,
-        #     client,
-        #     mod,
-        #     linear_args,
-        #     linear_results,
-        #     preserved_args,
-        #     isfwrapped ? f : nothing,
-        # )
-
-        # @show linear_args linear_results
-        # @show map(size, linear_results)
-        # @show preserved_args seen_args
-        # @show concrete_result typeof(concrete_result)
-
-        linear_results_paths = (map(x -> x.paths, linear_results)...,)
-        linear_args_paths = (map(x -> x.paths, linear_args)...,)
-        preserved_args_paths = (map(x -> (x[1].paths, x[2]), preserved_args)...,)
-
-        # @show linear_results_paths
-        # @show linear_args_paths
-        # @show preserved_args_paths
-
         exec = XLA.Compile(client, mod)
-        fnwrap = isfwrapped ? f : nothing
+        fnwrap = isclosure ? f : nothing
         closure_ty = typeof(fnwrap)
-        concrete_result_ty = make_valable(concrete_result)
 
-        # Thunk code
         arg_syncs = Expr[]
         topres = Symbol[]
         linearized_args = Union{Symbol,Expr}[]
 
-        for (i, argpaths) in enumerate(linear_args_paths)
-            paths = ((p for p in argpaths if p[1] == :args)...,)
+        for (i, arg) in enumerate(linear_args)
+            paths = ((p for p in arg.paths if p[1] == :args)...,)
             path = if length(paths) == 1
                 paths[1]
             else
-                throw("Invalid path duplication $(argpaths) into $(paths)")
+                throw("Invalid path duplication $(arg.paths) into $(paths)")
             end
-            res = :(args[$(path[2])])
+            res = :(getindex(args, $(path[2])))
             for p in path[3:end]
                 res = :(traced_getfield($res, $(Meta.quot(p))))
             end
@@ -446,18 +375,16 @@ function compile(f, args; pipeline_options="", client=nothing)
         end
 
         concretize = Expr[]
-        for idx in 1:length(linear_results_paths)
-            push!(
-                concretize, :($(Symbol("concrete_res_$(idx)")) = linearized_results[$idx])
-            )
+        for (idx, _) in enumerate(linear_results)
+            push!(concretize, :($(Symbol(:concrete_res_, idx)) = linearized_results[$idx]))
         end
 
         delinearized_results = Expr[]
 
         result_stores = Dict{Tuple,Symbol}()
 
-        for (idx, result_paths) in enumerate(linear_results_paths)
-            paths = ((p for p in result_paths if p[1] != :args)...,)
+        for (idx, result) in enumerate(linear_results)
+            paths = ((p for p in result.paths if p[1] != :args)...,)
             for path in paths
                 if path[1] == :result
                     res = Symbol("result")
@@ -465,11 +392,11 @@ function compile(f, args; pipeline_options="", client=nothing)
                     result_stores[path] = Symbol("concrete_res_$(idx)")
                     continue
                 else
-                    if path[1] != :resargs
-                        @show idx #, result
-                        @show paths
-                        @show path
-                    end
+                    # if path[1] != :resargs
+                    #     @show idx #, result
+                    #     @show paths
+                    #     @show path
+                    # end
                     @assert path[1] == :resargs
                     res = :(args[$(path[2])])
                     path = path[3:end]
@@ -482,10 +409,10 @@ function compile(f, args; pipeline_options="", client=nothing)
             end
         end
 
-        for (result_paths, arg_idx) in preserved_args_paths
-            for path in result_paths
-                argpaths = linear_args_paths[arg_idx + 1]
-                argpath = only((p for p in argpaths if p[1] == :args))
+        for (result, arg_idx) in preserved_args
+            for path in result.paths
+                arg = linear_args[arg_idx + 1]
+                argpath = only((p for p in arg.paths if p[1] == :args))
 
                 if path[1] == :result
                     res = Symbol("result")
@@ -496,7 +423,6 @@ function compile(f, args; pipeline_options="", client=nothing)
                     if path[2:end] == argpath[2:end]
                         continue
                     end
-                    @show path, argpath
                     res = :(args[path[2]])
                     path = path[3:end]
                 end
@@ -515,15 +441,15 @@ function compile(f, args; pipeline_options="", client=nothing)
         end
 
         donated_args_set = zeros(UInt8, length(linearized_args))
-        preserved_argnums = [i for (_, i) in preserved_args_paths]
-        for i in 1:length(linear_args_paths)
+        preserved_argnums = [i for (_, i) in preserved_args]
+        for (i, _) in enumerate(linear_args)
             if !in(i, preserved_argnums)
                 donated_args_set[i] = 1
             end
         end
         donated_args_set = (donated_args_set...,)
 
-        exec_call = if length(linear_results_paths) == 0
+        exec_call = if length(linear_results) == 0
             :()
         else
             quote
@@ -533,63 +459,35 @@ function compile(f, args; pipeline_options="", client=nothing)
                         $exec, # thunk.exec,
                         ($(linearized_args...),),
                         $donated_args_set,
-                        Val($(length(linear_results_paths))),
+                        Val($(length(linear_results))),
                     )
                 end
             end
         end
 
-        resexpr = create_result(concrete_result_ty, (), result_stores)
+        resexpr = create_result(concrete_result, (), result_stores)
 
         fname = gensym(Symbol(Symbol(f), :_reactant))
+        argsyms = [Symbol("args_$(i)") for i in 1:N]
 
-        expr = quote
-            function $fname(args...)
-                Base.@_inline_meta
-                $(
-                    # if `f` is a closure, then prepend the closure into `args`
-                    # the closure fields will be correctly extracted from it as the tracer has already passed through it
-                    if !(closure_ty <: Nothing)
-                        :(args = ($fnwrap, $args...))
-                    end
-                )
-                $exec_call
-                $(concretize...)
-                # Needs to store into result
-                result = $resexpr
-                $(delinearized_results...)
-                return result
-            end
-        end
+        expr = :(function $fname($(argsyms...))
+            $(
+                # if `f` is a closure, then prepend the closure into `args`
+                # the closure fields will be correctly extracted from it as the tracer has already passed through it
+                if !(closure_ty <: Nothing)
+                    :(args = ($fnwrap, $(argsyms...)))
+                else
+                    :(args = ($(argsyms...),))
+                end
+            )
+            $exec_call
+            $(concretize...)
+            # Needs to store into result
+            result = $resexpr
+            $(delinearized_results...)
+            return result
+        end)
 
-        return eval(expr)
+        return @RuntimeGeneratedFunction(expr)
     end
 end
-
-# function generate_jlfunc(
-#     concrete_result,
-#     client,
-#     mod,
-#     linear_args,
-#     linear_results,
-#     preserved_args,
-#     fnwrap::closure_ty,
-# ) where {closure_ty}
-#     linear_results_paths = (map(x -> x.paths, linear_results)...,)
-#     linear_args_paths = (map(x -> x.paths, linear_args)...,)
-#     preserved_args_paths = (map(x -> (x[1].paths, x[2]), preserved_args)...,)
-#     exec = XLA.Compile(client, mod)
-#     v = make_valable(concrete_result)
-
-#     @info "generate_jlfunc" concrete_result v
-#     return Thunk{
-#         Val{linear_results_paths},
-#         Val{linear_args_paths},
-#         Val{preserved_args_paths},
-#         v,
-#         closure_ty,
-#         ndims(concrete_result),
-#     }(
-#         exec, fnwrap, size(concrete_result)
-#     )
-# end
