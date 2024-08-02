@@ -82,14 +82,14 @@ function mysoftmax!(x)
 end
 
 @testset "Basic softmax" begin
-    in = ones(2, 10)
-    r_res = mysoftmax!(in)
+    x = rand(2, 10)
+    r_res = mysoftmax!(x)
 
-    in = Reactant.ConcreteRArray(ones(2, 10))
+    a = Reactant.ConcreteRArray(x)
 
-    f = Reactant.compile(mysoftmax!, (in,))
+    f = Reactant.compile(mysoftmax!, (a,))
 
-    f_res = f(in)
+    f_res = f(a)
 
     @test f_res ≈ r_res
 end
