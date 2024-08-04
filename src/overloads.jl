@@ -149,6 +149,16 @@ for (jlop, hloop, RT) in (
             )
         end
 
+        function $jlop(lhs, rhs::TracedRArray{ElType,Shape,0}) where {ElType,Shape}
+            lhs = promote_to(rhs, lhs)
+            return TracedRArray{$RT,Shape,0}(
+                (),
+                MLIR.IR.result(
+                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                ),
+            )
+        end
+
         # Base defines ::AbstractArray / ::Number, so we need this to avoid ambiguity
         function $jlop(lhs::TracedRArray{ElType,Shape,0}, rhs::Number) where {ElType,Shape}
             rhs = promote_to(lhs, rhs)
@@ -160,7 +170,7 @@ for (jlop, hloop, RT) in (
             )
         end
 
-        function $jlop(lhs, rhs::TracedRArray{ElType,Shape,0}) where {ElType,Shape}
+        function $jlop(lhs::Number, rhs::TracedRArray{ElType,Shape,0}) where {ElType,Shape}
             lhs = promote_to(rhs, lhs)
             return TracedRArray{$RT,Shape,0}(
                 (),
