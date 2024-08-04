@@ -2,17 +2,18 @@ using Reactant
 using Test
 
 # from bsc-quantic/Tenet.jl
-struct MockTensor{T,N,A<:AbstractArray{T,N}}
+struct MockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     data::A
     inds::Vector{Symbol}
 end
 
 MockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}} = MockTensor{T,N,A}(data, inds)
 Base.parent(t::MockTensor) = t.data
+Base.size(t::MockTensor) = size(parent(t))
 
 Base.cos(x::MockTensor) = MockTensor(cos(parent(x)), x.inds)
 
-mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}}
+mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     data::A
     inds::Vector{Symbol}
 end
@@ -21,6 +22,7 @@ function MutableMockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}}
     return MutableMockTensor{T,N,A}(data, inds)
 end
 Base.parent(t::MutableMockTensor) = t.data
+Base.size(t::MutableMockTensor) = size(parent(t))
 
 Base.cos(x::MutableMockTensor) = MutableMockTensor(cos(parent(x)), x.inds)
 
@@ -56,7 +58,8 @@ end
             f = Reactant.compile(cos, (x2,))
             y = f(x2)
 
-            @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
+            @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
+            @test size(y) == (4, 4)
             @test isapprox(parent(y), cos.(parent(x)))
             @test x.inds == [:i, :j]
         end
@@ -68,8 +71,8 @@ end
             f = Reactant.compile(cos, (x2,))
             y = f(x2)
 
-            @test y isa
-                MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,(4, 4),2}}
+            @test y isa MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
+            @test size(y) == (4, 4)
             @test isapprox(parent(y), cos.(parent(x)))
             @test x.inds == [:i, :j]
         end
