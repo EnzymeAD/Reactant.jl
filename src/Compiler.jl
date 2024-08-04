@@ -1,6 +1,3 @@
-using RuntimeGeneratedFunctions
-RuntimeGeneratedFunctions.init(@__MODULE__)
-
 const opt_passes::String = join(
     [
         "inline{default-pipeline=canonicalize max-iterations=4}",
@@ -466,16 +463,13 @@ function compile(f, args; pipeline_options="", client=nothing)
         resexpr = create_result(concrete_result, (), result_stores)
 
         fname = gensym(Symbol(Symbol(f), :_reactant))
-        argsyms = [Symbol("args_$(i)") for i in 1:N]
 
-        expr = :(function $fname($(argsyms...))
+        expr = :(function $fname(args...)
             $(
                 # if `f` is a closure, then prepend the closure into `args`
                 # the closure fields will be correctly extracted from it as the tracer has already passed through it
                 if !(closure_ty <: Nothing)
-                    :(args = ($fnwrap, $(argsyms...)))
-                else
-                    :(args = ($(argsyms...),))
+                    :(args = ($fnwrap, args...))
                 end
             )
             $exec_call
@@ -486,6 +480,21 @@ function compile(f, args; pipeline_options="", client=nothing)
             return result
         end)
 
-        return @RuntimeGeneratedFunction(expr)
+        body = expr.args[2]
+        return register_thunk(fname, body)
     end
+end
+
+# inspired by RuntimeGeneratedFunction.jl
+const __thunk_body_cache = Dict{Symbol,Expr}()
+
+struct Thunk{tag} end
+
+@generated function (thunk::Thunk{tag})(args...) where {tag}
+    return __thunk_body_cache[tag]
+end
+
+function register_thunk(tag, body)
+    __thunk_body_cache[tag] = body
+    return Thunk{tag}()
 end
