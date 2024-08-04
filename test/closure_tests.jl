@@ -1,8 +1,6 @@
-using Reactant
+@testitem "closure" begin
+    muler(x) = y -> x * y
 
-muler(x) = y -> x * y
-
-@testset "closure" begin
     x = Reactant.ConcreteRArray(ones(2, 2))
     y = Reactant.ConcreteRArray(ones(2, 2))
 

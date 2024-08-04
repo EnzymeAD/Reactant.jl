@@ -1,7 +1,4 @@
-using Reactant
-using Test
-
-@testset "Layout" begin
+@testitem "Layout" begin
     x = reshape([1.0, 2.0, 3.0, 4.0], (2, 2))
 
     y = Reactant.ConcreteRArray(x)
