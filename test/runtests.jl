@@ -40,6 +40,7 @@ if do_gpu_list
 end
 
 include("layout.jl")
+include("tracing.jl")
 include("basic.jl")
 include("bcast.jl")
 include("nn.jl")
