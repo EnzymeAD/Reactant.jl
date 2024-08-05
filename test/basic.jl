@@ -1,6 +1,7 @@
 using Reactant
 using Test
 using Enzyme
+using Statistics
 
 # Reactant.set_default_backend("gpu")
 
@@ -151,4 +152,39 @@ end
     res_repr = sprint(show, res)
 
     @test contains(res_repr, "stablehlo.dot_general")
+end
+
+@testset "Statistics: `mean` & `var`" begin
+    x = randn(2, 3, 4)
+    x_ca = Reactant.ConcreteRArray(x)
+
+    mean_fn1(x) = mean(x)
+    mean_fn2(x) = mean(x; dims=1)
+    mean_fn3(x) = mean(x; dims=(1, 2))
+    mean_fn4(x) = mean(x; dims=(1, 3))
+
+    mean_fn1_compiled = Reactant.compile(mean_fn1, (x_ca,))
+    mean_fn2_compiled = Reactant.compile(mean_fn2, (x_ca,))
+    mean_fn3_compiled = Reactant.compile(mean_fn3, (x_ca,))
+    mean_fn4_compiled = Reactant.compile(mean_fn4, (x_ca,))
+
+    @test mean_fn1(x) ≈ mean_fn1_compiled(x_ca)
+    @test mean_fn2(x) ≈ mean_fn2_compiled(x_ca)
+    @test mean_fn3(x) ≈ mean_fn3_compiled(x_ca)
+    @test mean_fn4(x) ≈ mean_fn4_compiled(x_ca)
+
+    var_fn1(x) = var(x)
+    var_fn2(x) = var(x; dims=1)
+    var_fn3(x) = var(x; dims=(1, 2), corrected=false)
+    var_fn4(x) = var(x; dims=(1, 3), corrected=false)
+
+    var_fn1_compiled = Reactant.compile(var_fn1, (x_ca,))
+    var_fn2_compiled = Reactant.compile(var_fn2, (x_ca,))
+    var_fn3_compiled = Reactant.compile(var_fn3, (x_ca,))
+    var_fn4_compiled = Reactant.compile(var_fn4, (x_ca,))
+
+    @test var_fn1(x) ≈ var_fn1_compiled(x_ca)
+    @test var_fn2(x) ≈ var_fn2_compiled(x_ca)
+    @test var_fn3(x) ≈ var_fn3_compiled(x_ca)
+    @test var_fn4(x) ≈ var_fn4_compiled(x_ca)
 end

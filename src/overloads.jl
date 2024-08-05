@@ -59,19 +59,10 @@ for (jlop, hloop, RT) in (
             )
         end
 
-        function $jlop(lhs::TracedRArray{ElType,Shape,N}, rhs) where {ElType,Shape,N}
-            rhs = promote_to(lhs, rhs)
-            return TracedRArray{$RT,Shape,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-            )
-        end
-
-        function $jlop(lhs, rhs::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
-            lhs = promote_to(rhs, lhs)
-            return TracedRArray{$RT,Shape,N}(
+        function $jlop(
+            lhs::TracedRArray{ElType,(),0}, rhs::TracedRArray{ElType,(),0}
+        ) where {ElType}
+            return TracedRArray{$RT,(),0}(
                 (),
                 MLIR.IR.result(
                     MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
@@ -79,7 +70,37 @@ for (jlop, hloop, RT) in (
             )
         end
     end
+
+    for otherType in (Number, Any, TracedRArray{S,(),0} where {S})
+        @eval begin
+            function $jlop(
+                lhs::TracedRArray{ElType,Shape,N}, rhs::$otherType
+            ) where {ElType,Shape,N}
+                rhs = promote_to(lhs, rhs)
+                return TracedRArray{$RT,Shape,N}(
+                    (),
+                    MLIR.IR.result(
+                        MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                    ),
+                )
+            end
+
+            function $jlop(
+                lhs::$otherType, rhs::TracedRArray{ElType,Shape,N}
+            ) where {ElType,Shape,N}
+                lhs = promote_to(rhs, lhs)
+                return TracedRArray{$RT,Shape,N}(
+                    (),
+                    MLIR.IR.result(
+                        MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                    ),
+                )
+            end
+        end
+    end
 end
+
+Base.abs2(x::Reactant.TracedRArray{T,(),0}) where {T} = x * conj(x)
 
 function Base.literal_pow(
     ::Base.RefValue{typeof(^)}, x::Reactant.TracedRArray{T,(),0}, ::Base.RefValue{Val{P}}
@@ -137,7 +158,39 @@ for (jlop, hloop, RT) in (
                 ),
             )
         end
+
+        # Base defines ::AbstractArray / ::Number, so we need this to avoid ambiguity
+        function $jlop(lhs::TracedRArray{ElType,Shape,0}, rhs::Number) where {ElType,Shape}
+            rhs = promote_to(lhs, rhs)
+            return TracedRArray{$RT,Shape,0}(
+                (),
+                MLIR.IR.result(
+                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                ),
+            )
+        end
+
+        function $jlop(lhs::Number, rhs::TracedRArray{ElType,Shape,0}) where {ElType,Shape}
+            lhs = promote_to(rhs, lhs)
+            return TracedRArray{$RT,Shape,0}(
+                (),
+                MLIR.IR.result(
+                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                ),
+            )
+        end
     end
+end
+
+function Base.ifelse(
+    pred::TracedRArray{Bool,(),0}, x::TracedRArray{T1,(),0}, y::TracedRArray{T2,(),0}
+) where {T1,T2}
+    return TracedRArray{promote_type(T1, T2),(),0}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.select(pred.mlir_data, x.mlir_data, y.mlir_data), 1
+        ),
+    )
 end
 
 function Base.:*(
