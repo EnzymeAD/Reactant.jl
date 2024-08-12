@@ -76,7 +76,6 @@ extern "C" void InitializeLogs() {
     LLVMInitializeAArch64TargetMC();
     LLVMInitializeAArch64AsmPrinter();
     LLVMInitializeAArch64AsmParser();
-    TargetRegistry::printRegisteredTargetsForVersion(llvm::errs());
 }
 
 extern "C"
@@ -254,23 +253,6 @@ extern "C" void FreeClient(PjRtClient * client) {
 
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirModule cmod) {
-    TargetRegistry::printRegisteredTargetsForVersion(llvm::errs());
-    llvm::errs() <<" host cpu name: " << llvm::sys::getHostCPUName() << "\n";
-
-
-    std::vector<std::string> attrs = xla::cpu::DetectMachineAttributes();
-    llvm::SmallVector<std::string, 0> llvm_attrs(attrs.begin(), attrs.end());
-      std::unique_ptr<llvm::TargetMachine> target_machine(
-          llvm::EngineBuilder()
-              //.setTargetOptions(target_options)
-              //.setOptLevel(opt_level)
-              .selectTarget(
-                  /*TargetTriple=*/llvm::Triple(), /*MArch=*/"",
-                  /*MCPU=*/llvm::sys::getHostCPUName(),
-                  /*MAttrs=*/llvm_attrs));
-    CHECK(target_machine != nullptr);
-
-
     auto program = std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
     CompileOptions options;
