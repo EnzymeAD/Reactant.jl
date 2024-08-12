@@ -46,6 +46,7 @@
 #include "xla/pjrt/status_casters.h"
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/python/ifrt/executable.h"
+#include "xla/service/cpu/simple_orc_jit.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 
@@ -59,6 +60,7 @@ using namespace xla;
 extern "C" void InitializeLogs() {
     absl::InitializeLog();
     LLVMInitializeAArch64Target();
+    TargetRegistry::printRegisteredTargetsForVersion(llvm::errs());
 }
 
 extern "C"
@@ -203,6 +205,23 @@ extern "C" void FreeClient(PjRtClient * client) {
 
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirModule cmod) {
+    TargetRegistry::printRegisteredTargetsForVersion(llvm::errs());
+    llvm::errs() <<" host cpu name: " << llvm::sys::getHostCPUName() << "\n";
+
+
+    std::vector<std::string> attrs = DetectMachineAttributes();
+    llvm::SmallVector<std::string, 0> llvm_attrs(attrs.begin(), attrs.end());
+      std::unique_ptr<llvm::TargetMachine> target_machine(
+          llvm::EngineBuilder()
+              .setTargetOptions(target_options)
+              .setOptLevel(opt_level)
+              .selectTarget(
+                  /*TargetTriple=*/llvm::Triple(), /*MArch=*/"",
+                  /*MCPU=*/llvm::sys::getHostCPUName(),
+                  /*MAttrs=*/llvm_attrs));
+    CHECK(target_machine != nullptr);
+
+
     auto program = std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
     CompileOptions options;
