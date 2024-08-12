@@ -49,6 +49,9 @@
 #include "xla/service/cpu/simple_orc_jit.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
+#include "llvm/MC/TargetRegistry.h"
+#include "llvm/TargetParser/Host.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -209,12 +212,12 @@ extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirMod
     llvm::errs() <<" host cpu name: " << llvm::sys::getHostCPUName() << "\n";
 
 
-    std::vector<std::string> attrs = DetectMachineAttributes();
+    std::vector<std::string> attrs = xla::cpu::DetectMachineAttributes();
     llvm::SmallVector<std::string, 0> llvm_attrs(attrs.begin(), attrs.end());
       std::unique_ptr<llvm::TargetMachine> target_machine(
           llvm::EngineBuilder()
-              .setTargetOptions(target_options)
-              .setOptLevel(opt_level)
+              //.setTargetOptions(target_options)
+              //.setOptLevel(opt_level)
               .selectTarget(
                   /*TargetTriple=*/llvm::Triple(), /*MArch=*/"",
                   /*MCPU=*/llvm::sys::getHostCPUName(),
