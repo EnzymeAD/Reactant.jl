@@ -62,7 +62,25 @@ using namespace xla;
 
 extern "C" void InitializeLogs() {
     absl::InitializeLog();
+    LLVMInitializeNativeTarget();
+    LLVMInitializeNativeAsmPrinter();
+    LLVMInitializeNativeAsmParser();
+    // LLVMInitializeNativeDisassembler();
+    /*
     LLVMInitializeAArch64Target();
+    LLVMInitializeAArch64TargetInfo();
+    LLVMInitializeAArch64TargetMC();
+    LLVMInitializeAArch64TargetAsmPrinter();
+    LLVMInitializeAArch64TargetAsmParser();
+    LLVMInitializeAArch64TargetDisassembler();
+
+    LLVMInitializeX86Target();
+    LLVMInitializeX86TargetInfo();
+    LLVMInitializeX86TargetMC();
+    LLVMInitializeX86TargetAsmPrinter();
+    LLVMInitializeX86TargetAsmParser();
+    LLVMInitializeX86TargetDisassembler();
+    */
     TargetRegistry::printRegisteredTargetsForVersion(llvm::errs());
 }
 
