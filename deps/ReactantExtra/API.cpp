@@ -45,6 +45,8 @@
 #include "xla/pjrt/cpu/cpu_client.h"
 #include "xla/pjrt/status_casters.h"
 #include "xla/pjrt/pjrt_executable.h"
+#include "xla/pjrt/pjrt_api.h"
+#include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/python/ifrt/executable.h"
 #include "xla/service/cpu/simple_orc_jit.h"
 
@@ -52,6 +54,7 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/TargetParser/Host.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/Support/Process.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -62,25 +65,17 @@ using namespace xla;
 
 extern "C" void InitializeLogs() {
     absl::InitializeLog();
-    LLVMInitializeNativeTarget();
-    LLVMInitializeNativeAsmPrinter();
-    LLVMInitializeNativeAsmParser();
-    // LLVMInitializeNativeDisassembler();
-    /*
-    LLVMInitializeAArch64Target();
-    LLVMInitializeAArch64TargetInfo();
-    LLVMInitializeAArch64TargetMC();
-    LLVMInitializeAArch64TargetAsmPrinter();
-    LLVMInitializeAArch64TargetAsmParser();
-    LLVMInitializeAArch64TargetDisassembler();
-
     LLVMInitializeX86Target();
     LLVMInitializeX86TargetInfo();
     LLVMInitializeX86TargetMC();
-    LLVMInitializeX86TargetAsmPrinter();
-    LLVMInitializeX86TargetAsmParser();
-    LLVMInitializeX86TargetDisassembler();
-    */
+    LLVMInitializeX86AsmPrinter();
+    LLVMInitializeX86AsmParser();
+
+    LLVMInitializeAArch64Target();
+    LLVMInitializeAArch64TargetInfo();
+    LLVMInitializeAArch64TargetMC();
+    LLVMInitializeAArch64AsmPrinter();
+    LLVMInitializeAArch64AsmParser();
     TargetRegistry::printRegisteredTargetsForVersion(llvm::errs());
 }
 
@@ -123,6 +118,39 @@ extern "C" PjRtClient* MakeGPUClient(int node_id, int num_nodes, int* allowed_de
       auto client = std::move(clientErr).value();
       return client.release();
     }
+}
+
+const char* const kEnvTpuLibraryPath = "TPU_LIBRARY_PATH";
+
+extern "C" PjRtClient* MakeTPUClient(const char* tpu_path , const char** error) {
+    // Prefer $TPU_LIBRARY_PATH if set
+    std::string tpu_library_path;
+    if (tpu_path) {
+        tpu_library_path = std::string(tpu_path);
+    } else if (auto path = llvm::sys::Process::GetEnv(kEnvTpuLibraryPath)) {
+        tpu_library_path = *path;
+    } else {
+        *error = "Could not find TPU path";
+        return nullptr;
+    }
+
+    absl::StatusOr<const PJRT_Api *> pluginLoad = pjrt::LoadPjrtPlugin("tpu", tpu_library_path);
+    if (!pluginLoad.ok()) {
+      auto str = pluginLoad.status().message();
+      char* err = (char*)malloc(str.size()+1);
+      memcpy(err, str.data(), str.size()+1);
+      *error = err;
+      return nullptr;
+    }
+    absl::Status tpu_status = pjrt::InitializePjrtPlugin("tpu");
+    if (!tpu_status.ok()) {
+      auto str = tpu_status.message();
+      char* err = (char*)malloc(str.size()+1);
+      memcpy(err, str.data(), str.size()+1);
+      *error = err;
+      return nullptr;
+    }
+    return xla::GetCApiClient("TPU").value().release();
 }
 
 extern "C" int ClientNumDevices(PjRtClient* client) {

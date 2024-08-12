@@ -319,9 +319,13 @@ cc_library(
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:AArch64AsmParser",
         "@llvm-project//llvm:AArch64CodeGen",
+        "@llvm-project//llvm:X86AsmParser",
+        "@llvm-project//llvm:X86CodeGen",
         "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
         "@stablehlo//:chlo_ops",
+        "@xla//xla/pjrt:pjrt_api",
+        "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
 
