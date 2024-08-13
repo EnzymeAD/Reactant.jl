@@ -16,9 +16,6 @@ SUITE["comptime"]["basics"] = BenchmarkGroup()
 SUITE["comptime"]["basics"]["2D sum"] = @benchmarkable Reactant.compile(sum, (a,)) setup = (
     a = Reactant.ConcreteRArray(ones(2, 10))
 )
-SUITE["comptime"]["basics"]["Basic reduce max"] = @benchmarkable Reactant.compile(
-    fastmax, (a,)
-) setup = (a = Reactant.ConcreteRArray(ones(2, 10)))
 SUITE["comptime"]["basics"]["Basic cos"] = @benchmarkable Reactant.compile(cos, (a,)) setup = (
     a = Reactant.ConcreteRArray(ones(2, 10))
 )
