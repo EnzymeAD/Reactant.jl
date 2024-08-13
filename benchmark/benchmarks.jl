@@ -8,6 +8,7 @@
 
 using BenchmarkTools
 using Reactant
+using Enzyme
 
 const SUITE = BenchmarkGroup()
 
