@@ -1,6 +1,5 @@
 module Reactant
 
-using PackageExtensionCompat
 using Enzyme
 
 include("mlir/MLIR.jl")
