@@ -74,6 +74,23 @@ function GPUClient(node_id=0, num_nodes=1, platform="gpu")
     return Client(client)
 end
 
+function TPUClient(tpu_path::Cstring=C_NULL)
+    f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeTPUClient")
+    refstr = Ref{Cstring}()
+    client = ccall(
+        f,
+        Ptr{Cvoid},
+        (Cstring, Ptr{Cstring}),
+        tpu_path,
+        refstr,
+    )
+    if client == C_NULL
+        throw(AssertionError(refstr[]))
+    end
+    # end
+    return Client(client)
+end
+
 const backends = Dict{String,Client}()
 const default_backend = Ref{Client}()
 const default_device_idx = Ref{Int}(0)
@@ -84,15 +101,24 @@ function __init__()
     ccall(initLogs, Cvoid, ())
     cpu = CPUClient()
     backends["cpu"] = cpu
+    default_backend[] = cpu
     @static if !Sys.isapple()
         try
             gpu = GPUClient()
             backends["gpu"] = gpu
+            default_backend[] = gpu
+        catch e
+            println(stdout, e)
+        end
+        try
+            tpu = TPUClient()
+            backends["tpu"] = tpu
+            default_backend[] = tpu
         catch e
             println(stdout, e)
         end
     end
-    return default_backend[] = cpu
+    return default_backend[]
 end
 
 @inline function free_exec(exec)
