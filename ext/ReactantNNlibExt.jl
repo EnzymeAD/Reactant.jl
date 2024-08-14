@@ -14,13 +14,14 @@ for (jlop, hloop) in (
             Reactant.MLIR.IR.result(
                 Reactant.MLIR.Dialects.stablehlo.$(hloop)(x.mlir_data), 1
             ),
+            (),
         )
     end
 end
 
-NNlib.relu(x::Reactant.TracedRArray{T,(),0}) where {T} = max(x, zero(T))
+NNlib.relu(x::Reactant.TracedRArray{T,0}) where {T} = max(x, zero(T))
 
-NNlib.gelu(x::Reactant.TracedRArray{T,(),0}) where {T} = x * sigmoid(T(1.702) * x)
+NNlib.gelu(x::Reactant.TracedRArray{T,0}) where {T} = x * sigmoid(T(1.702) * x)
 
 # TODO handle non finite cases
 function NNlib.softmax!(

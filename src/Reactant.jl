@@ -17,6 +17,11 @@ function mlir_type(x::RArray{T,N}) where {T,N}
     return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
 end
 
+function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
+    @assert length(shape) == N
+    return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+end
+
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
 )::RT where {copy_if_inactive,RT<:RArray}
