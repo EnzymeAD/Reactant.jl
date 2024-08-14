@@ -80,10 +80,13 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         end
 
         # TODO replace with `Base.invoke_within` if julia#52964 lands
+        if isnothing(REACTANT_INTERPRETER)
+            global REACTANT_INTERPRETER = ReactantInterpreter()
+        end
         ir = first(
             only(
                 # TODO fix it for kwargs
-                Base.code_ircode(f, map(typeof, traced_args); interp=ReactantInterpreter()),
+                Base.code_ircode(f, map(typeof, traced_args); interp=REACTANT_INTERPRETER),
             ),
         )
 
