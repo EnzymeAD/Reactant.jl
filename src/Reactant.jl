@@ -8,11 +8,6 @@ function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
 end
 
-include("mlir/MLIR.jl")
-include("XLA.jl")
-include("Interpreter.jl")
-include("utils.jl")
-
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
 )::RT where {copy_if_inactive,RT<:RArray}
@@ -41,6 +36,10 @@ function Enzyme.make_zero(
     return res
 end
 
+include("mlir/MLIR.jl")
+include("XLA.jl")
+include("Interpreter.jl")
+include("utils.jl")
 include("ConcreteRArray.jl")
 include("TracedRArray.jl")
 include("Tracing.jl")
