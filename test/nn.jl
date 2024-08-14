@@ -42,7 +42,8 @@ f = Reactant.compile((a, b) -> a(b), (cmodel, cnoisy))
 # @show @code_llvm f(cmodel,cnoisy)
 comp = f(cmodel, cnoisy)
 @show comp[3]
-@btime f(cmodel, cnoisy)
+# @btime f(cmodel, cnoisy)
+@test origout ≈ comp
 
 # To train the model, we use batches of 64 samples, and one-hot encoding:
 target = Flux.onehotbatch(truth, [true, false])                   # 2×1000 OneHotMatrix
