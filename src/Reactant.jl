@@ -1,158 +1,28 @@
 module Reactant
 
+using Enzyme
+
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")
 include("utils.jl")
 
-abstract type RArray{ElType,Shape,N} <: AbstractArray{ElType,N} end
+abstract type RArray{T,N} <: AbstractArray{T,N} end
 
-@inline Base.eltype(::RArray{ElType,Shape}) where {ElType,Shape} = ElType
-@inline Base.size(::RArray{ElType,Shape}) where {ElType,Shape} = Shape
-@inline Base.size(::Type{<:RArray{ElType,Shape}}) where {ElType,Shape} = Shape
-@inline Base.ndims(::RArray{ElType,Shape,N}) where {ElType,Shape,N} = N
-@inline Base.ndims(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} = N
-
-@inline mlir_type(::RArray{ElType,Shape,N}) where {ElType,Shape,N} =
-    MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
-
-@inline mlir_type(::Type{<:RArray{ElType,Shape,N}}) where {ElType,Shape,N} =
-    MLIR.IR.TensorType(Shape, MLIR.IR.Type(ElType))
-
-struct XLAArray{ElType,Shape,N} <: RArray{ElType,Shape,N} end
-
-mutable struct ConcreteRArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
-    data::XLA.AsyncBuffer
-    #	data::XLAArray{ElType, Shape, N}
+function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
+    return reshape(A, Base._reshape_uncolon(A, dims))
 end
 
-function Base.convert(
-    ::Type{T}, X::ConcreteRArray{ElType,Shape,N}
-) where {T<:Array,ElType,Shape,N}
-    data = Array{ElType,N}(undef, Shape...)
-    XLA.await(X.data)
-    buf = X.data.buffer
-    GC.@preserve data buf begin
-        XLA.BufferToHost(buf, pointer(data))
-    end
-    return data
-    # XLA.from_row_major(data)
+function mlir_type(x::RArray{T,N}) where {T,N}
+    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
 end
 
-function to_float(X::ConcreteRArray{ElType,(),0}) where {ElType}
-    data = Ref{ElType}()
-    XLA.await(X.data)
-    buf = X.data.buffer
-    GC.@preserve data buf begin
-        XLA.BufferToHost(buf, data)
-    end
-    return data[]
+function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
+    @assert length(shape) == N
+    return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
 end
 
-function Base.isapprox(x::ConcreteRArray{ElType,(),0}, y; kwargs...) where {ElType}
-    return Base.isapprox(to_float(x), y; kwargs...)
-end
-
-function Base.isapprox(x, y::ConcreteRArray{ElType,(),0}; kwargs...) where {ElType}
-    return Base.isapprox(x, to_float(y); kwargs...)
-end
-
-function Base.isapprox(
-    x::ConcreteRArray{ElType,(),0}, y::ConcreteRArray{ElType2,(),0}; kwargs...
-) where {ElType,ElType2}
-    return Base.isapprox(to_float(x), to_float(y); kwargs...)
-end
-
-function Base.print_array(io::IO, X::ConcreteRArray)
-    if X.data == XLA.AsyncEmptyBuffer
-        println(io, "<Empty buffer>")
-        return nothing
-    end
-    return Base.print_array(io, convert(Array, X))
-end
-
-function Base.show(io::IO, X::ConcreteRArray)
-    if X.data == XLA.AsyncEmptyBuffer
-        println(io, "<Empty buffer>")
-        return nothing
-    end
-    return Base.show(io, convert(Array, X))
-end
-
-@inline function Base.getindex(
-    a::ConcreteRArray{ElType,Shape}, args::Vararg{Int,N}
-) where {ElType,Shape,N}
-    if a.data == XLA.AsyncEmptyBuffer
-        throw("Cannot getindex from empty buffer")
-    end
-    # error("""Scalar indexing is disallowed.""")
-    XLA.await(a.data)
-    if XLA.BufferOnCPU(a.data.buffer)
-        buf = a.data.buffer
-        GC.@preserve buf begin
-            ptr = Base.unsafe_convert(Ptr{ElType}, XLA.UnsafeBufferPointer(buf))
-            start = 0
-            for i in 1:N
-                start *= Shape[N - i + 1]
-                start += (args[N - i + 1] - 1)
-                # start *= Shape[i]
-                # start += (args[i]-1)
-            end
-            start += 1
-            return unsafe_load(ptr, start)
-        end
-    end
-    return convert(Array, a)[args...]
-end
-
-@inline function ConcreteRArray(
-    data::Array{ElType,N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]
-) where {ElType,N}
-    device = XLA.ClientGetDevice(client, idx)
-    return ConcreteRArray{ElType,size(data),N}(
-        XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing)
-    )
-    # ConcreteRArray{ElType, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(data), device), nothing))
-end
-
-@inline ConcreteRArray(data::T) where {T<:Number} = ConcreteRArray{T,(),0}(data)
-
-function Base.similar(x::ConcreteRArray{T,Shape,N}, ::Type{T2}) where {T,Shape,N,T2}
-    return ConcreteRArray{T,Shape,N}(x.data)
-end
-
-mutable struct TracedRArray{ElType,Shape,N} <: RArray{ElType,Shape,N}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
-    function TracedRArray{ElType,Shape,N}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
-    ) where {ElType,Shape,N}
-        if mlir_data !== nothing
-            @assert size(MLIR.IR.type(mlir_data)) == Shape
-        end
-        return new{ElType,Shape,N}(paths, mlir_data)
-    end
-end
-
-using Enzyme
-
-@inline function Enzyme.Compiler.active_reg_inner(
-    ::Type{TracedRArray{ElType,Shape,N}},
-    seen::ST,
-    world::Union{Nothing,UInt},
-    ::Val{justActive}=Val(false),
-    ::Val{UnionSret}=Val(false),
-)::Enzyme.Compiler.ActivityState where {ST,ElType,Shape,N,justActive,UnionSret}
-    if Enzyme.Compiler.active_reg_inner(
-        ElType, seen, world, Val(justActive), Val(UnionSret)
-    ) == Enzyme.Compiler.AnyState
-        return Enzyme.Compiler.AnyState
-    else
-        return Enzyme.Compiler.DupState
-    end
-end
-
-@inline function Enzyme.make_zero(
+function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
 )::RT where {copy_if_inactive,RT<:RArray}
     if haskey(seen, prev)
@@ -180,24 +50,126 @@ end
     return res
 end
 
-function Base.promote_rule(
-    A::Type{TracedRArray{T,Shape,N}}, B::Type{TracedRArray{S,Shape,N}}
-) where {T,S,Shape,N}
-    return TracedRArray{Base.promote_type(T, S),Shape,N}
+struct XLAArray{T,N} <: RArray{T,N}
+    # size::NTuple{N,Int}
 end
 
-function Base.promote_rule(A::Type{T}, B::Type{TracedRArray{S,Shape,N}}) where {T,S,Shape,N}
-    return TracedRArray{Base.promote_type(T, S),Shape,N}
+mutable struct ConcreteRArray{T,N} <: RArray{T,N}
+    data::XLA.AsyncBuffer
+    #	data::XLAArray{T, N}
+    shape::NTuple{N,Int}
 end
 
-function Base.show(io::IO, X::TracedRArray{ElType,Shape,N}) where {ElType,Shape,N}
-    print(io, "TracedRArray{", ElType, ",", Shape, ",", N, "N}(", X.paths, ", ")
-    return print(io, X.mlir_data, ")")
+ConcreteRArray(data::T) where {T<:Number} = ConcreteRArray{T,0}(data, ())
+
+function ConcreteRArray(
+    data::Array{T,N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]
+) where {T,N}
+    device = XLA.ClientGetDevice(client, idx)
+    return ConcreteRArray{T,N}(
+        XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing), size(data)
+    )
+    # ConcreteRArray{T, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(data), device), nothing))
 end
 
-include("overloads.jl")
+Base.size(x::ConcreteRArray) = x.shape
 
-using Enzyme
+function Base.reshape(A::ConcreteRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
+    prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
+    host = convert(Array{T,N}, A)
+    # HLO reshape semantics collapse the opposite so enforce on Julia Side
+    # until we later make the transpose/reshape/transpose
+    host = reshape(host, dims)
+    client = XLA.client(A.data)
+    device = XLA.device(A.data)
+    buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, host, device), nothing)
+    return ConcreteRArray{T,NT}(buffer, dims)
+    # ConcreteRArray{T, dims, NT}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(host), device), nothing))
+end
+
+function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,ElType,N}
+    data = Array{ElType,N}(undef, size(X)...) # TODO replace for `similar`?
+    XLA.await(X.data)
+    buf = X.data.buffer
+    GC.@preserve data buf begin
+        XLA.BufferToHost(buf, pointer(data))
+    end
+    return data
+    # XLA.from_row_major(data)
+end
+
+# function Base.similar(x::ConcreteRArray{T,N}, ::Type{T2}) where {T,N,T2}
+#     return ConcreteRArray{T,N}(x.data)
+# end
+# function Base.convert(::Type{ConcreteRArray{T2,N}}, x::ConcreteRArray{T,N}) where {T,N,T2}
+#     return ConcreteRArray{T,N}(x.data)
+# end
+
+function to_float(X::ConcreteRArray{T,0}) where {T}
+    data = Ref{T}()
+    XLA.await(X.data)
+    buf = X.data.buffer
+    GC.@preserve data buf begin
+        XLA.BufferToHost(buf, data)
+    end
+    return data[]
+end
+
+function Base.isapprox(x::ConcreteRArray{T,0}, y; kwargs...) where {T}
+    return Base.isapprox(to_float(x), y; kwargs...)
+end
+
+function Base.isapprox(x, y::ConcreteRArray{T,0}; kwargs...) where {T}
+    return Base.isapprox(x, to_float(y); kwargs...)
+end
+
+function Base.isapprox(
+    x::ConcreteRArray{T,0}, y::ConcreteRArray{T2,0}; kwargs...
+) where {T,T2}
+    return Base.isapprox(to_float(x), to_float(y); kwargs...)
+end
+
+function Base.print_array(io::IO, X::ConcreteRArray)
+    if X.data == XLA.AsyncEmptyBuffer
+        println(io, "<Empty buffer>")
+        return nothing
+    end
+    return Base.print_array(io, convert(Array, X))
+end
+
+function Base.show(io::IO, X::ConcreteRArray)
+    if X.data == XLA.AsyncEmptyBuffer
+        println(io, "<Empty buffer>")
+        return nothing
+    end
+    return Base.show(io, convert(Array, X))
+end
+
+function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
+    if a.data == XLA.AsyncEmptyBuffer
+        throw("Cannot getindex from empty buffer")
+    end
+    # error("""Scalar indexing is disallowed.""")
+    XLA.await(a.data)
+    if XLA.BufferOnCPU(a.data.buffer)
+        buf = a.data.buffer
+        GC.@preserve buf begin
+            ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
+            start = 0
+            for i in 1:N
+                start *= size(a, N - i + 1)
+                start += (args[N - i + 1] - 1)
+                # start *= size(a, i)
+                # start += (args[i]-1)
+            end
+            start += 1
+            return unsafe_load(ptr, start)
+        end
+    end
+    return convert(Array, a)[args...]
+end
+
+include("Tracing.jl")
 
 @inline val_value(::Val{T}) where {T} = T
 @inline val_value(::Type{Val{T}}) where {T} = T
@@ -302,7 +274,7 @@ end
 
     if T <: Array
         if mode == ArrayToConcrete && eltype(T) <: AbstractFloat
-            return (ConcreteRArray{eltype(T),Shape,ndims(T)} where {Shape})
+            return ConcreteRArray{eltype(T),ndims(T)}
         else
             return Array{
                 traced_type(Enzyme.Compiler.ptreltype(T), seen, Val(mode)),ndims(T)
@@ -534,12 +506,12 @@ end
 
 @inline function make_tracer(
     seen::IdDict,
-    prev::ConcreteRArray{ElType,Shape,N},
+    prev::ConcreteRArray{T,N},
     path::Tuple,
     mode::TraceMode;
     toscalar=false,
     tobatch=nothing,
-) where {ElType,Shape,N}
+) where {T,N}
     if mode == ArrayToConcrete
         return prev
     end
@@ -547,22 +519,22 @@ end
         throw("Cannot trace concrete")
     end
     if haskey(seen, prev)
-        return seen[prev]::TracedRArray{ElType,Shape,N}
+        return seen[prev]::TracedRArray{T,N}
     end
     @assert N isa Int
-    res = TracedRArray{ElType,Shape,N}((path,), nothing)
+    res = TracedRArray{T,N}((path,), nothing, size(prev))
     seen[prev] = res
     return res
 end
 
 @inline function make_tracer(
     seen::IdDict,
-    prev::TracedRArray{ElType,Shape,N},
+    prev::TracedRArray{T,N},
     path::Tuple,
     mode::TraceMode;
     toscalar=false,
     tobatch=nothing,
-) where {ElType,Shape,N}
+) where {T,N}
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
@@ -578,11 +550,11 @@ end
             return seen[prev]
         end
         res = if toscalar
-            TracedRArray{ElType,(),0}((path,), nothing)
+            TracedRArray{T,0}((path,), nothing, ())
         elseif tobatch !== nothing
-            TracedRArray{ElType,tobatch,length(tobatch)}((path,), prev.mlir_data)
+            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
         else
-            TracedRArray{ElType,Shape,N}((path,), prev.mlir_data)
+            TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
         end
         seen[prev] = res
         return res
@@ -590,9 +562,9 @@ end
 
     if mode == TracedToConcrete
         if haskey(seen, prev)
-            return seen[prev]::ConcreteRArray{ElType,Shape,N}
+            return seen[prev]::ConcreteRArray{T,N}
         end
-        res = ConcreteRArray{ElType,Shape,N}(XLA.AsyncEmptyBuffer)
+        res = ConcreteRArray{T,N}(XLA.AsyncEmptyBuffer, size(prev))
         seen[prev] = res
         return res
     end
@@ -711,7 +683,9 @@ end
     return res
 end
 
-struct MakeConcreteRArray{T} end
+struct MakeConcreteRArray{T,N}
+    shape::NTuple{N,Int}
+end
 struct MakeArray{AT,Vals} end
 struct MakeString{AT,Val} end
 struct MakeStruct{AT,Val} end
@@ -720,19 +694,19 @@ struct MakeSymbol{AT} end
 
 function make_valable(tocopy)
     if tocopy isa ConcreteRArray
-        return MakeConcreteRArray{typeof(tocopy)}
+        return MakeConcreteRArray{eltype(tocopy),ndims(tocopy)}(size(tocopy))
     end
     if tocopy isa Array
-        return MakeArray{Core.Typeof(tocopy),Tuple{map(make_valable, tocopy)...}}
+        return MakeArray{Core.Typeof(tocopy),Tuple{map(make_valable, tocopy)...}}()
     end
     if tocopy isa Symbol
         return tocopy
     end
     if tocopy isa Int || tocopy isa AbstractFloat || tocopy isa Nothing || tocopy isa Type
-        return MakeVal{Val{tocopy}}
+        return MakeVal{Val{tocopy}}()
     end
     if tocopy isa AbstractString
-        return MakeString{Core.Typeof(tocopy),Symbol(string)} || T <: Nothing
+        return MakeString{Core.Typeof(tocopy),Symbol(string)}() || T <: Nothing
     end
     T = Core.Typeof(tocopy)
     if tocopy isa Tuple || tocopy isa NamedTuple || isstructtype(T)
@@ -741,14 +715,14 @@ function make_valable(tocopy)
         for i in 1:nf
             push!(elems, make_valable(getfield(tocopy, i)))
         end
-        return MakeStruct{Core.Typeof(tocopy),Tuple{elems...}}
+        return MakeStruct{Core.Typeof(tocopy),Tuple{elems...}}()
     end
 
     return error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
 end
 
-function create_result(tocopy::Type{MakeConcreteRArray{T}}, path, result_stores) where {T}
-    return :($T($(result_stores[path])))
+function create_result(tocopy::MakeConcreteRArray{T,N}, path, result_stores) where {T,N}
+    return :(ConcreteRArray{$T,$N}($(result_stores[path]), $(tocopy.shape)))
 end
 
 function create_result(tocopy::Tuple, path, result_stores)
@@ -771,7 +745,7 @@ function create_result(tocopy::NamedTuple, path, result_stores)
     end
 end
 
-function create_result(::Type{MakeArray{AT,tocopy}}, path, result_stores) where {AT,tocopy}
+function create_result(::MakeArray{AT,tocopy}, path, result_stores) where {AT,tocopy}
     elems = Expr[]
     for (i, v) in enumerate(tocopy.parameters)
         push!(elems, create_result(v, (path..., i), result_stores))
@@ -781,11 +755,11 @@ function create_result(::Type{MakeArray{AT,tocopy}}, path, result_stores) where 
     end
 end
 
-function create_result(tocopy::Type{MakeVal{Val{nothing}}}, path, result_stores)
+function create_result(::MakeVal{Val{nothing}}, path, result_stores)
     return :(nothing)
 end
 
-function create_result(tocopy::Type{MakeVal{Val{elem}}}, path, result_stores) where {elem}
+function create_result(::MakeVal{Val{elem}}, path, result_stores) where {elem}
     return :($elem)
 end
 
@@ -793,11 +767,12 @@ function create_result(tocopy::Symbol, path, result_stores)
     return Meta.quot(tocopy)
 end
 
-function create_result(tocopy::Type{MakeString{AT,Val}}, path, result_stores) where {AT,Val}
+function create_result(::MakeString{AT,Val}, path, result_stores) where {AT,Val}
     return :($(AT(Val)))
 end
 
-function create_result(::Type{MakeStruct{AT,tocopy}}, path, result_stores) where {AT,tocopy}
+function create_result(::MakeStruct{AT,tocopy}, path, result_stores) where {AT,tocopy}
+    # @info "create_result" AT tocopy path tocopy.parameters result_stores
     elems = Union{Symbol,Expr}[]
     for (i, v) in enumerate(tocopy.parameters)
         ev = create_result(v, (path..., i), result_stores)
@@ -952,6 +927,7 @@ end
         end
     end
 
+    # @info "Thunk" concrete_result_ty result_stores
     resexpr = create_result(concrete_result_ty, (), result_stores)
     expr = quote
         Base.@_inline_meta

@@ -9,7 +9,7 @@ using Reactant.MLIR
 end
 
 mutable struct Data
-    v::(Reactant.TracedRArray{Float64,S,1} where {S})
+    v::Reactant.TracedRArray{Float64,1}
 end
 @noinline function tmp(a, b, d)
     @show d
@@ -45,7 +45,7 @@ function test()
                 a = ones(4)
                 b = ones(4)
                 d = Data(
-                    Reactant.TracedRArray{Float64,(4,),1}((), MLIR.IR.argument(fnbody, 1))
+                    Reactant.TracedRArray{Float64,1}((), MLIR.IR.argument(fnbody, 1), (4,))
                 )
 
                 return tmp(a, b, d)
