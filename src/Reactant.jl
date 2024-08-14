@@ -2,25 +2,16 @@ module Reactant
 
 using Enzyme
 
-include("mlir/MLIR.jl")
-include("XLA.jl")
-include("Interpreter.jl")
-include("utils.jl")
-
 abstract type RArray{T,N} <: AbstractArray{T,N} end
 
 function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
 end
 
-function mlir_type(x::RArray{T,N}) where {T,N}
-    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
-end
-
-function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
-    @assert length(shape) == N
-    return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
-end
+include("mlir/MLIR.jl")
+include("XLA.jl")
+include("Interpreter.jl")
+include("utils.jl")
 
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
