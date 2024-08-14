@@ -210,9 +210,9 @@ end
 
 function traced_type(::Type{Val{T}}, seen, mode) where {T}
     if traced_type(typeof(T), seen, mode) == typeof(T)
-        return T
+        return Val{T}
     end
-    throw("Val type $T cannot be traced")
+    throw("Val type $(Val{T}) cannot be traced")
 end
 
 append_path(path, i) = (path..., i)
@@ -225,25 +225,6 @@ function make_tracer(seen, prev::RT, path, mode; toscalar=false, tobatch=nothing
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
-
-    if TT <: NamedTuple
-        changed = false
-        subs = []
-        for i in 1:nf
-            xi = Base.getfield(prev, i)
-            xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
-            if xi !== xi2
-                changed = true
-            end
-            push!(subs, xi2)
-        end
-        if !changed
-            seen[prev] = prev
-            return prev
-        end
-        tup = (subs...,)
-        return NamedTuple{TT.parameters[1],typeof(tup)}(tup)
-    end
 
     if ismutabletype(TT)
         y = ccall(:jl_new_struct_uninit, Any, (Any,), TT)

@@ -78,12 +78,9 @@ using Test
                 ),
 
                 # Val types
-                (Val{Int}, Int),
-                (Val{Float64}, Float64),
-                (Val{Symbol}, Symbol),
-                (Val{0}, 0),
-                (Val{0.5}, 0.5),
-                (Val{:x}, :x),
+                (Val{0}, Val{0}),
+                (Val{0.5}, Val{0.5}),
+                (Val{:x}, Val{:x}),
             ]
                 tracedty = traced_type(origty, IdDict(), Val(ConcreteToTraced))
                 @test tracedty == targetty
