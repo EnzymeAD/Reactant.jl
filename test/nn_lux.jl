@@ -31,7 +31,7 @@ f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cs
 # # @show @code_typed f(cmodel,cnoisy)
 # # @show @code_llvm f(cmodel,cnoisy)
 comp = f(cmodel, cnoisy, cps, cst)
-@btime f($cmodel, $cnoisy, $cps, $cst) # 21.790 μs (6 allocations: 224 bytes)
+# @btime f($cmodel, $cnoisy, $cps, $cst) # 21.790 μs (6 allocations: 224 bytes)
 
 @test comp ≈ origout atol = 1e-5 rtol = 1e-2
 
