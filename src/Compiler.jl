@@ -311,7 +311,7 @@ function create_result(tocopy::NamedTuple{K,T}, path, result_stores) where {K,T}
     for (i, (k, v)) in enumerate(pairs(tocopy))
         push!(elems, create_result(v, append_path(path, i), result_stores))
     end
-    return :(NamedTuple{$K}($(elems...)))
+    return :(NamedTuple{$K}(($(elems...),)))
 end
 
 for T in [Int, AbstractFloat, AbstractString, Nothing, Type, Symbol]
