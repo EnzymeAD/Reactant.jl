@@ -116,3 +116,36 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     end
     return convert(Array, a)[args...]
 end
+
+# TODO is there any way to allocate an uninitialized buffer in XLA?
+function Base.similar(a::ConcreteRArray{T}, ::Type{S}=T, dims=size(a)) where {T,S}
+    return ConcreteRArray(similar(Array, S, dims))
+end
+Base.similar(a::ConcreteRArray, dims) = similar(a, eltype(a), dims)
+
+function Base.similar(::Type{ConcreteRArray{T}}, dims) where {T}
+    return ConcreteRArray(similar(Array{T}, dims))
+end
+
+# Broadcasting interface
+Base.BroadcastStyle(::Type{<:ConcreteRArray}) = Broadcast.ArrayStyle{ConcreteRArray}()
+function Base.similar(
+    bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}}, ::Type{T}
+) where {T}
+    return ConcreteRArray(similar(Array{T}, axes(bc)))
+end
+
+# TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
+function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}})
+    ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
+    if !Base.isconcretetype(ElType)
+        throw(
+            ErrorException(
+                "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
+            ),
+        )
+    end
+
+    aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
+    return ConcreteRArray(aux)
+end
