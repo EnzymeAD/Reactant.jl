@@ -64,15 +64,16 @@ function Base.reshape(A::TracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
 end
 
 function Base.permutedims(A::TracedRArray{T,N}, perm) where {T,N}
-    return TracedArray{T,N}(
+    return TracedRArray{T,N}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.transpose(
-                A.mlir_data, MLIR.IR.DenseArrayAttribute([Int64(i - 1) for i in perm])
+                A.mlir_data;
+                permutation=MLIR.IR.DenseArrayAttribute([Int64(i - 1) for i in perm]),
             ),
             1,
         ),
-        tuple(size(A, i) for i in perm),
+        Tuple(size(A, i) for i in perm),
     )
 end
 
