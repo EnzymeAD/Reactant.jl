@@ -29,6 +29,8 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     return print(io, X.mlir_data, ")")
 end
 
+Base.only(A::TracedRArray{T,0}) where {T} = A
+
 function Base.reshape(A::TracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
     prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
 
