@@ -314,6 +314,14 @@ function create_result(tocopy::NamedTuple{K,T}, path, result_stores) where {K,T}
     return :(NamedTuple{$K}(($(elems...),)))
 end
 
+function create_result(tocopy::D, path, result_stores) where {K,V,D<:AbstractDict{K,V}}
+    elems = Expr[]
+    for (i, p) in enumerate(pairs(tocopy))
+        push!(elems, create_result(p, append_path(path, i), result_stores))
+    end
+    return :($D([$(elems...)]))
+end
+
 for T in [Int, AbstractFloat, AbstractString, Nothing, Type, Symbol]
     @eval create_result(tocopy::$T, path, result_stores) = Meta.quot(tocopy)
 end
