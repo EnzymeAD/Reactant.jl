@@ -18,7 +18,7 @@ steps:
       julia --color=yes -e '
           import Pkg
           Pkg.develop(; path = pwd())
-          Pkg.test(args=["--gpu"])
+          Pkg.test(args=["--gpu"])'
     env:
       JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
 
@@ -40,7 +40,7 @@ steps:
       julia --color=yes -e '
           import Pkg
           Pkg.develop(; path = pwd())
-          Pkg.test(args=["--gpu"])
+          Pkg.test(args=["--gpu"])'
     env:
       JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
 
