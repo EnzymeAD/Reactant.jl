@@ -78,6 +78,10 @@ extern "C" void InitializeLogs() {
     LLVMInitializeAArch64AsmParser();
 }
 
+extern "C" void SetLogLevel(int level) {
+    absl::SetGlobalVLogLevel(level);
+}
+
 extern "C"
 MLIR_CAPI_EXPORTED MlirAttribute enzymeActivityAttrGet(
     MlirContext ctx, int32_t val) {

@@ -267,6 +267,7 @@ cc_library(
 "-Wl,-exported_symbol,_stablehlo*",
 "-Wl,-exported_symbol,_mlir*",
 "-Wl,-exported_symbol,_InitializeLogs",
+"-Wl,-exported_symbol,_SetLogLevel",
 "-Wl,-exported_symbol,_enzymeActivityAttrGet",
 "-Wl,-exported_symbol,_MakeCPUClient",
 "-Wl,-exported_symbol,_MakeGPUClient",
