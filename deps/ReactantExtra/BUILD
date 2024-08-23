@@ -228,14 +228,6 @@ platform(
     ],
 )
 
-
-config_setting(
-    name = "gpu_build",
-    flag_values = {
-        "@local_config_cuda//:enable_cuda": "True",
-    },
-)
-
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
@@ -368,8 +360,7 @@ cc_library(
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
     ] + select({
-    "//conditions:default": [], 
-    ":gpu_build": [
+    "@xla//xla/tsl:is_cuda_enabled_and_oss":[
         "@xla//xla/stream_executor/cuda:all_runtime", 
         "@xla//xla/stream_executor/rocm:all_runtime",
         "@xla//xla/service/gpu/model:hlo_op_profiles",
@@ -378,7 +369,9 @@ cc_library(
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/service/gpu:gpu_transfer_manager",
         "@xla//xla/stream_executor:kernel", 
-    ]}),
+    ],
+    "//conditions:default": [],
+    }),
 )
 
 # cc_shared_library(
