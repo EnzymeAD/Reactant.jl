@@ -22,7 +22,7 @@ function apply(f, args...; kwargs...)
 end
 
 function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=false)
-    if sizeof(typeof(f)) != 0
+    if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
         return (true, make_mlir_fn(apply, (f, args...), kwargs, name, concretein)[2:end]...)
     end
 
