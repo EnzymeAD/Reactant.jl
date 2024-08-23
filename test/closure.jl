@@ -1,3 +1,4 @@
+using Test
 using Reactant
 
 muler(x) = y -> x * y
