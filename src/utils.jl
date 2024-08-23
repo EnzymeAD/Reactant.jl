@@ -79,16 +79,24 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
             arg.mlir_data = row_maj_arg
         end
 
-        # TODO replace with `Base.invoke_within` if julia#52964 lands
-        if isnothing(REACTANT_INTERPRETER)
-            global REACTANT_INTERPRETER = ReactantInterpreter()
+        # NOTE an `AbstractInterpreter` cannot process methods with more recent world-ages than it
+        # solution is to use a new interpreter, but we reuse the `code_cache` to minimize comptime in Julia <= 1.10
+        @static if !HAS_INTEGRATED_CACHE
+            interp = if isnothing(REACTANT_INTERPRETER)
+                ReactantInterpreter()
+            else
+                ReactantInterpreter(; code_cache=REACTANT_INTERPRETER.code_cache)
+            end
+            global REACTANT_INTERPRETER = interp
+        else
+            interp = ReactantInterpreter()
         end
-        ir = first(
-            only(
-                # TODO fix it for kwargs
-                Base.code_ircode(f, map(typeof, traced_args); interp=REACTANT_INTERPRETER),
-            ),
-        )
+
+        # TODO replace with `Base.invoke_within` if julia#52964 lands
+        ir = first(only(
+            # TODO fix it for kwargs
+            Base.code_ircode(f, map(typeof, traced_args); interp),
+        ))
 
         # NOTE on Julia 1.9, it appends a ghost argument at the end
         # solution: manually specify argument types

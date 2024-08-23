@@ -67,7 +67,9 @@ struct ReactantInterpreter <: CC.AbstractInterpreter
     end
 end
 
-REACTANT_INTERPRETER::Union{Nothing,ReactantInterpreter} = nothing
+@static if !HAS_INTEGRATED_CACHE
+    REACTANT_INTERPRETER::Union{Nothing,ReactantInterpreter} = nothing
+end
 
 @static if HAS_INTEGRATED_CACHE
     CC.get_inference_world(interp::ReactantInterpreter) = interp.world
