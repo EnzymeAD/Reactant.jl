@@ -20,6 +20,8 @@ end
     end
     ReactantCache() = ReactantCache(IdDict{Core.MethodInstance,Core.CodeInstance}())
 
+    const REACTANT_CACHE = ReactantCache()
+
     function CC.get(wvc::CC.WorldView{ReactantCache}, mi::Core.MethodInstance, default)
         return get(wvc.cache.dict, mi, default)
     end
