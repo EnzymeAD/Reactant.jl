@@ -20,6 +20,8 @@ end
     end
     ReactantCache() = ReactantCache(IdDict{Core.MethodInstance,Core.CodeInstance}())
 
+    const REACTANT_CACHE = ReactantCache()
+
     function CC.get(wvc::CC.WorldView{ReactantCache}, mi::Core.MethodInstance, default)
         return get(wvc.cache.dict, mi, default)
     end
@@ -65,10 +67,6 @@ struct ReactantInterpreter <: CC.AbstractInterpreter
             return new(world, inf_params, opt_params, inf_cache, code_cache)
         end
     end
-end
-
-@static if !HAS_INTEGRATED_CACHE
-    REACTANT_INTERPRETER::Union{Nothing,ReactantInterpreter} = nothing
 end
 
 @static if HAS_INTEGRATED_CACHE

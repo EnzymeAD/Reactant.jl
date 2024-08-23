@@ -82,12 +82,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         # NOTE an `AbstractInterpreter` cannot process methods with more recent world-ages than it
         # solution is to use a new interpreter, but we reuse the `code_cache` to minimize comptime in Julia <= 1.10
         @static if !HAS_INTEGRATED_CACHE
-            interp = if isnothing(REACTANT_INTERPRETER)
-                ReactantInterpreter()
-            else
-                ReactantInterpreter(; code_cache=REACTANT_INTERPRETER.code_cache)
-            end
-            global REACTANT_INTERPRETER = interp
+            interp = ReactantInterpreter(; code_cache=REACTANT_CACHE)
         else
             interp = ReactantInterpreter()
         end
