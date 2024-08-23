@@ -116,3 +116,60 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     end
     return convert(Array, a)[args...]
 end
+
+function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N}
+    if a.data == XLA.AsyncEmptyBuffer
+        throw("Cannot setindex! to empty buffer")
+    end
+    XLA.await(a.data)
+    if XLA.BufferOnCPU(a.data.buffer)
+        buf = a.data.buffer
+        GC.@preserve buf begin
+            ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
+            start = 0
+            for i in 1:N
+                start *= size(a, N - i + 1)
+                start += (args[N - i + 1] - 1)
+                # start *= size(a, i)
+                # start += (args[i]-1)
+            end
+            start += 1
+            unsafe_store!(ptr, v, start)
+        end
+        return a
+    end
+    throw("Cannot setindex! to non-CPU buffer")
+end
+
+# TODO is there any way to allocate an uninitialized buffer in XLA?
+function Base.similar(a::ConcreteRArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
+    return ConcreteRArray(Array{S}(undef, dims))
+end
+Base.similar(a::ConcreteRArray, dims) = similar(a, eltype(a), dims)
+
+function Base.similar(::Type{ConcreteRArray{T}}, dims) where {T}
+    return ConcreteRArray(similar(Array{T}, dims))
+end
+
+# Broadcasting interface
+Base.BroadcastStyle(::Type{<:ConcreteRArray}) = Broadcast.ArrayStyle{ConcreteRArray}()
+function Base.similar(
+    bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}}, ::Type{T}
+) where {T}
+    return ConcreteRArray(similar(Array{T}, axes(bc)))
+end
+
+# TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
+function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}})
+    ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
+    if !Base.isconcretetype(ElType)
+        throw(
+            ErrorException(
+                "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
+            ),
+        )
+    end
+
+    aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
+    return ConcreteRArray(aux)
+end
