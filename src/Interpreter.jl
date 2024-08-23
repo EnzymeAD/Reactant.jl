@@ -10,8 +10,10 @@ const HAS_INTEGRATED_CACHE = VERSION >= v"1.11.0-DEV.1552"
 
 Base.Experimental.@MethodTable(ReactantMethodTable)
 
-macro reactant_override(expr)
-    return :(Base.Experimental.@overlay ReactantMethodTable $(expr))
+function var"@reactant_override"(__source__::LineNumberNode, __module__::Module, def)
+    return Base.Experimental.var"@overlay"(
+        __source__, __module__, :(Reactant.ReactantMethodTable), def
+    )
 end
 
 @static if !HAS_INTEGRATED_CACHE
@@ -139,7 +141,7 @@ const enzyme_constnoneed = 5
 
 function push_val!(ad_inputs, x, path)
     for p in path
-        x = getfield(x, p)
+        x = traced_getfield(x, p)
     end
     x = x.mlir_data
     return push!(ad_inputs, x)
@@ -175,7 +177,7 @@ function set_act!(inp, path, reverse, tostore; emptypath=false)
     end
 
     for p in path
-        x = getfield(x, p)
+        x = traced_getfield(x, p)
     end
 
     #if inp isa Enzyme.Active || !reverse
