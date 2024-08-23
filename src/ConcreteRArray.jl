@@ -118,8 +118,8 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
 end
 
 # TODO is there any way to allocate an uninitialized buffer in XLA?
-function Base.similar(a::ConcreteRArray{T}, ::Type{S}=T, dims=size(a)) where {T,S}
-    return ConcreteRArray(similar(Array, S, dims))
+function Base.similar(a::ConcreteRArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
+    return ConcreteRArray(Array{S}(undef, dims))
 end
 Base.similar(a::ConcreteRArray, dims) = similar(a, eltype(a), dims)
 
