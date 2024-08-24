@@ -73,10 +73,10 @@ function GPUClient(node_id=0, num_nodes=1, platform="gpu")
     return Client(client)
 end
 
-function TPUClient(tpu_path::Union{Ptr{Cvoid},Cstring}=C_NULL)
+function TPUClient(tpu_path::String)
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeTPUClient")
     refstr = Ref{Cstring}()
-    client = ccall(f, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cstring}), tpu_path, refstr)
+    client = ccall(f, Ptr{Cvoid}, (Cstring, Ptr{Cstring}), tpu_path, refstr)
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
@@ -101,12 +101,14 @@ function __init__()
         catch e
             println(stdout, e)
         end
-        try
-            tpu = TPUClient("/usr/lib")
-            backends["tpu"] = tpu
-            default_backend[] = tpu
-        catch e
-            println(stdout, e)
+        if isfile("/usr/lib/libtpu.so")
+            try
+                tpu = TPUClient("/home/wmoses/.local/lib/python3.8/site-packages/libtpu/libtpu.so")
+                backends["tpu"] = tpu
+                default_backend[] = tpu
+            catch e
+                println(stdout, e)
+            end
         end
     end
     return default_backend[]
