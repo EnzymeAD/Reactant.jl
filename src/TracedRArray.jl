@@ -316,6 +316,7 @@ function Base.literal_pow(
 end
 
 for (jlop, hloop) in (
+    (:(Base.abs), :abs),
     (:(Base.:-), :negate),
     (:(Base.sin), :sine),
     (:(Base.cos), :cosine),
