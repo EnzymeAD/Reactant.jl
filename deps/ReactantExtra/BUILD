@@ -242,8 +242,8 @@ cc_library(
         "@xla//xla/stream_executor:device_description.pb.cc",
         "@xla//xla/service:hlo.pb.cc",
         #  # "@tsl//tsl/protobuf:dnn.pb.cc",
-        "@tsl//tsl/protobuf:histogram.pb.cc",
-        "@tsl//tsl/protobuf:bfc_memory_map.pb.cc",
+        #"@tsl//tsl/protobuf:histogram.pb.cc",
+        #"@tsl//tsl/protobuf:bfc_memory_map_proto",bfc_memory_map.pb.cc",
         "@xla//xla/service/gpu:backend_configs.pb.cc",
         "@xla//xla:autotuning.pb.cc",
         "@xla//xla:autotune_results.pb.cc",
@@ -267,6 +267,8 @@ cc_library(
 "-Wl,-exported_symbol,_stablehlo*",
 "-Wl,-exported_symbol,_mlir*",
 "-Wl,-exported_symbol,_InitializeLogs",
+"-Wl,-exported_symbol,_SetLogLevel",
+"-Wl,-exported_symbol,_SetModuleLogLevel",
 "-Wl,-exported_symbol,_enzymeActivityAttrGet",
 "-Wl,-exported_symbol,_MakeCPUClient",
 "-Wl,-exported_symbol,_MakeGPUClient",
@@ -327,7 +329,6 @@ cc_library(
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
-        "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
 
         "@xla//xla/service/cpu:cpu_compiler",
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
@@ -335,7 +336,9 @@ cc_library(
         "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
         
         "@xla//xla/service/cpu:cpu_transfer_manager",
+        "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
         
+        "@tsl//tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
 
         "@xla//xla/pjrt:status_casters",
@@ -354,10 +357,10 @@ cc_library(
         "@stablehlo//:chlo_capi_objects",
         "@com_google_absl//absl/hash:hash",
         "@com_google_absl//absl/log:initialize",
+        "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
     ] + select({
-    "@bazel_tools//src/conditions:darwin": [],
-    "//conditions:default": [
+    "@xla//xla/tsl:is_cuda_enabled_and_oss":[
         "@xla//xla/stream_executor/cuda:all_runtime", 
         "@xla//xla/stream_executor/rocm:all_runtime",
         "@xla//xla/service/gpu/model:hlo_op_profiles",
@@ -366,7 +369,9 @@ cc_library(
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/service/gpu:gpu_transfer_manager",
         "@xla//xla/stream_executor:kernel", 
-    ]}),
+    ],
+    "//conditions:default": [],
+    }),
 )
 
 # cc_shared_library(
