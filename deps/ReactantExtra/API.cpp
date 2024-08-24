@@ -38,6 +38,7 @@
 #include "stablehlo/dialect/StablehloOps.h"
 
 #include "absl/log/initialize.h"
+#include "absl/log/globals.h"
 
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
 #include "xla/mlir/utils/type_util.h"
@@ -76,6 +77,15 @@ extern "C" void InitializeLogs() {
     LLVMInitializeAArch64TargetMC();
     LLVMInitializeAArch64AsmPrinter();
     LLVMInitializeAArch64AsmParser();
+}
+
+extern "C" void SetLogLevel(int level) {
+    SetStderrThreshold((absl::LogSeverity)level);
+    //absl::SetGlobalVLogLevel(level);
+}
+
+extern "C" void SetModuleLogLevel(const char* module_pattern, int level) {
+    //absl::SetVLOGLevel(module_pattern, level);
 }
 
 extern "C"
