@@ -167,7 +167,7 @@ end
 function Base.similar(a::ConcreteRArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
     return ConcreteRArray(Array{S}(undef, dims))
 end
-Base.similar(a::ConcreteRArray, dims) = similar(a, eltype(a), dims)
+Base.similar(a::ConcreteRArray, dims::Dims) = similar(a, eltype(a), dims)
 
 function Base.similar(::Type{ConcreteRArray{T}}, dims) where {T}
     return ConcreteRArray(similar(Array{T}, dims))
