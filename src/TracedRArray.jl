@@ -16,17 +16,19 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
-function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Integer, N}) where {T, N}
-    @warn("""Performing scalar indexing on task $(current_task()).
+function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Integer,N}) where {T,N}
+    @warn(
+        """Performing scalar indexing on task $(current_task()).
 Invocation resulted in scalar indexing of a TracedRArray.
 This is typically caused by calling an iterating implementation of a method.
 Such implementations *do not* execute on device, but very slowly on the CPU,
-and require expensive copies and synchronization each time and therefore should be avoided.""")
+and require expensive copies and synchronization each time and therefore should be avoided."""
+    )
 
     res1 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.slice(
             a.mlir_data;
-            start_indices=MLIR.IR.DenseArrayAttribute([Int64(i-1) for i in index]),
+            start_indices=MLIR.IR.DenseArrayAttribute([Int64(i - 1) for i in index]),
             limit_indices=MLIR.IR.DenseArrayAttribute([Int64(i) for i in index]),
             strides=MLIR.IR.DenseArrayAttribute([Int64(1) for i in index]),
         ),
@@ -34,10 +36,7 @@ and require expensive copies and synchronization each time and therefore should 
     )
     res2 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.reshape(
-            res1;
-            result_0=MLIR.IR.TensorType(
-                Int64[], eltype(MLIR.IR.type(res1))
-            ),
+            res1; result_0=MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(res1)))
         ),
         1,
     )

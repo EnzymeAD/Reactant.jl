@@ -103,7 +103,9 @@ function __init__()
         end
         if isfile("/usr/lib/libtpu.so")
             try
-                tpu = TPUClient("/home/wmoses/.local/lib/python3.8/site-packages/libtpu/libtpu.so")
+                tpu = TPUClient(
+                    "/home/wmoses/.local/lib/python3.8/site-packages/libtpu/libtpu.so"
+                )
                 backends["tpu"] = tpu
                 default_backend[] = tpu
             catch e
