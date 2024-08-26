@@ -272,6 +272,7 @@ cc_library(
 "-Wl,-exported_symbol,_enzymeActivityAttrGet",
 "-Wl,-exported_symbol,_MakeCPUClient",
 "-Wl,-exported_symbol,_MakeGPUClient",
+"-Wl,-exported_symbol,_MakeTPUClient",
 "-Wl,-exported_symbol,_LoadPjrtPlugin",
 "-Wl,-exported_symbol,_InitializePjrtPlugin",
 "-Wl,-exported_symbol,_GetCApiClient",
