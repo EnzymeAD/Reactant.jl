@@ -131,6 +131,34 @@ extern "C" PjRtClient* MakeGPUClient(int node_id, int num_nodes, int* allowed_de
 
 const char* const kEnvTpuLibraryPath = "TPU_LIBRARY_PATH";
 
+extern "C" PJRT_Api* LoadPjrtPlugin(const char* device_type, const char* library_path, const char** error) {
+    absl::StatusOr<const PJRT_Api*> pluginLoad = pjrt::LoadPjrtPlugin(std::string(device_type), std::string(library_path));
+    if (!pluginLoad.ok()) {
+        auto str = pluginLoad.status().message();
+        char* err = (char*)malloc(str.size()+1);
+        memcpy(err, str.data(), str.size()+1);
+        *error = err;
+        return nullptr;
+    }
+    return pluginLoad.value();
+}
+
+extern "C" int InitializePjrtPlugin(const char* device_type, const char** error) {
+    absl::Status tpu_status = pjrt::InitializePjrtPlugin(device_type);
+    if (!tpu_status.ok()) {
+      auto str = tpu_status.message();
+      char* err = (char*)malloc(str.size()+1);
+      memcpy(err, str.data(), str.size()+1);
+      *error = err;
+      return 1;
+    }
+    return 0;
+}
+
+extern "C" PjRtClient* GetCApiClient(const char* device_type) {
+    return xla::GetCApiClient(device_type).value().release();
+}
+
 extern "C" PjRtClient* MakeTPUClient(const char* tpu_path , const char** error) {
     // Prefer $TPU_LIBRARY_PATH if set
     std::string tpu_library_path;
@@ -143,23 +171,16 @@ extern "C" PjRtClient* MakeTPUClient(const char* tpu_path , const char** error) 
         return nullptr;
     }
 
-    absl::StatusOr<const PJRT_Api *> pluginLoad = pjrt::LoadPjrtPlugin("tpu", tpu_library_path);
-    if (!pluginLoad.ok()) {
-      auto str = pluginLoad.status().message();
-      char* err = (char*)malloc(str.size()+1);
-      memcpy(err, str.data(), str.size()+1);
-      *error = err;
-      return nullptr;
-    }
-    absl::Status tpu_status = pjrt::InitializePjrtPlugin("tpu");
-    if (!tpu_status.ok()) {
-      auto str = tpu_status.message();
-      char* err = (char*)malloc(str.size()+1);
-      memcpy(err, str.data(), str.size()+1);
-      *error = err;
-      return nullptr;
-    }
-    return xla::GetCApiClient("TPU").value().release();
+    const PJRT_Api* pluginLoad = LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
+    if (pluginLoad == nullptr)
+        return nullptr;
+
+
+    auto tpu_status = InitializePjrtPlugin("tpu");
+    if (tpu_status)
+        return nullptr;
+
+    return GetCApiClient("TPU");
 }
 
 extern "C" int ClientNumDevices(PjRtClient* client) {
