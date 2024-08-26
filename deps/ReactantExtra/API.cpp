@@ -176,7 +176,7 @@ extern "C" PjRtClient* MakeTPUClient(const char* tpu_path , const char** error) 
         return nullptr;
 
 
-    auto tpu_status = InitializePjrtPlugin("tpu");
+    auto tpu_status = InitializePjrtPlugin("tpu", error);
     if (tpu_status)
         return nullptr;
 
