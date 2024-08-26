@@ -162,10 +162,10 @@ extern "C" PjRtClient* GetCApiClient(const char* device_type) {
 extern "C" PjRtClient* MakeTPUClient(const char* tpu_path , const char** error) {
     // Prefer $TPU_LIBRARY_PATH if set
     std::string tpu_library_path;
-    if (tpu_path) {
-        tpu_library_path = std::string(tpu_path);
-    } else if (auto path = llvm::sys::Process::GetEnv(kEnvTpuLibraryPath)) {
+    if (auto path = llvm::sys::Process::GetEnv(kEnvTpuLibraryPath)) {
         tpu_library_path = *path;
+    } else if (tpu_path) {
+        tpu_library_path = std::string(tpu_path);
     } else {
         *error = "Could not find TPU path";
         return nullptr;
