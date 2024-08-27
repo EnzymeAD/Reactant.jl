@@ -131,35 +131,56 @@ extern "C" PjRtClient* MakeGPUClient(int node_id, int num_nodes, int* allowed_de
 
 const char* const kEnvTpuLibraryPath = "TPU_LIBRARY_PATH";
 
-extern "C" PjRtClient* MakeTPUClient(const char* tpu_path , const char** error) {
-    // Prefer $TPU_LIBRARY_PATH if set
-    std::string tpu_library_path;
-    if (tpu_path) {
-        tpu_library_path = std::string(tpu_path);
-    } else if (auto path = llvm::sys::Process::GetEnv(kEnvTpuLibraryPath)) {
-        tpu_library_path = *path;
-    } else {
-        *error = "Could not find TPU path";
+extern "C" PJRT_Api* LoadPjrtPlugin(const char* device_type, const char* library_path, const char** error) {
+    absl::StatusOr<const PJRT_Api*> pluginLoad = pjrt::LoadPjrtPlugin(std::string(device_type), std::string(library_path));
+    if (!pluginLoad.ok()) {
+        auto str = pluginLoad.status().message();
+        char* err = (char*)malloc(str.size()+1);
+        memcpy(err, str.data(), str.size()+1);
+        *error = err;
         return nullptr;
     }
+    return pluginLoad.value();
+}
 
-    absl::StatusOr<const PJRT_Api *> pluginLoad = pjrt::LoadPjrtPlugin("tpu", tpu_library_path);
-    if (!pluginLoad.ok()) {
-      auto str = pluginLoad.status().message();
-      char* err = (char*)malloc(str.size()+1);
-      memcpy(err, str.data(), str.size()+1);
-      *error = err;
-      return nullptr;
-    }
-    absl::Status tpu_status = pjrt::InitializePjrtPlugin("tpu");
+extern "C" int InitializePjrtPlugin(const char* device_type, const char** error) {
+    absl::Status tpu_status = pjrt::InitializePjrtPlugin(device_type);
     if (!tpu_status.ok()) {
       auto str = tpu_status.message();
       char* err = (char*)malloc(str.size()+1);
       memcpy(err, str.data(), str.size()+1);
       *error = err;
-      return nullptr;
+      return 1;
     }
-    return xla::GetCApiClient("TPU").value().release();
+    return 0;
+}
+
+extern "C" PjRtClient* GetCApiClient(const char* device_type) {
+    return xla::GetCApiClient(device_type).value().release();
+}
+
+extern "C" PjRtClient* MakeTPUClient(const char* tpu_path , const char** error) {
+    // Prefer $TPU_LIBRARY_PATH if set
+    std::string tpu_library_path;
+    if (auto path = llvm::sys::Process::GetEnv(kEnvTpuLibraryPath)) {
+        tpu_library_path = *path;
+    } else if (tpu_path) {
+        tpu_library_path = std::string(tpu_path);
+    } else {
+        *error = "Could not find TPU path";
+        return nullptr;
+    }
+
+    const PJRT_Api* pluginLoad = LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
+    if (pluginLoad == nullptr)
+        return nullptr;
+
+
+    auto tpu_status = InitializePjrtPlugin("tpu", error);
+    if (tpu_status)
+        return nullptr;
+
+    return GetCApiClient("TPU");
 }
 
 extern "C" int ClientNumDevices(PjRtClient* client) {
