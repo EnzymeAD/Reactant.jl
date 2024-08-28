@@ -1,4 +1,4 @@
-using Reactant
+using Reactant, Test
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing; typ=typeof(default))
@@ -39,16 +39,18 @@ if do_gpu_list
     # TODO set which gpu
 end
 
-include("layout.jl")
-include("tracing.jl")
-include("basic.jl")
-include("bcast.jl")
-include("struct.jl")
-include("closure.jl")
-include("compile.jl")
-include("buffer_donation.jl")
-include("nn.jl")
+@testset "Reactant Tests" begin
+    include("layout.jl")
+    include("tracing.jl")
+    include("basic.jl")
+    include("bcast.jl")
+    include("struct.jl")
+    include("closure.jl")
+    include("compile.jl")
+    include("buffer_donation.jl")
+>>>>>>> 075b25f (test: run tests inside a global testset)
 
-if VERSION ≥ v"1.10-" # Lux isn't supported on 1.9
-    include("nn_lux.jl")
+    if VERSION ≥ v"1.10-" # Lux isn't supported on 1.9
+        include("nn_lux.jl")
+    end
 end
