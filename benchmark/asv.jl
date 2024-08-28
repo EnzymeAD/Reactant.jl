@@ -1,14 +1,4 @@
-# To run:
-# using PkgBenchmark, Reactant
-# result = benchmarkpkg(KernelAbstractions)
-# export_markdown("benchmark/perf.md", result)
-
-# Note: if you change this file you will need to delete an regenerate tune.json
-# Your "v1.x" environment needs to have BenchmarkTools and PkgBenchmark installed.
-
-using BenchmarkTools
-using Reactant
-using Enzyme
+using BenchmarkTools, Reactant, Enzyme
 
 const SUITE = BenchmarkGroup()
 
