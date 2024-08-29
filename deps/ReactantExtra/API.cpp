@@ -131,7 +131,7 @@ extern "C" PjRtClient* MakeGPUClient(int node_id, int num_nodes, int* allowed_de
 
 const char* const kEnvTpuLibraryPath = "TPU_LIBRARY_PATH";
 
-extern "C" PJRT_Api* LoadPjrtPlugin(const char* device_type, const char* library_path, const char** error) {
+extern "C" const PJRT_Api* LoadPjrtPlugin(const char* device_type, const char* library_path, const char** error) {
     absl::StatusOr<const PJRT_Api*> pluginLoad = pjrt::LoadPjrtPlugin(std::string(device_type), std::string(library_path));
     if (!pluginLoad.ok()) {
         auto str = pluginLoad.status().message();
