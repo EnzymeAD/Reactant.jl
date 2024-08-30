@@ -253,6 +253,8 @@ docs/site/
 # environment.
 Manifest.toml
 
+.CondaPkg
+
 .vscode/*
 .vscode/settings.json
 !.vscode/tasks.json
@@ -271,3 +273,7 @@ deps/ReactantExtra/MODULE.bazel.lock
 *.swp
 *.swo
 external
+
+# Examples
+## llama2
+tokenizer.model
