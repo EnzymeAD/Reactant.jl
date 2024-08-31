@@ -72,18 +72,17 @@ out2 = model(noisy)  # first row is prob. of true, second row p(false)
 mean((out2[1, :] .> 0.5) .== truth)  # accuracy 94% so far!
 
 @testset "conv" begin
-    conv = Conv(
-        randn(Float32, 10, 10, 3, 1),
-        randn(Float32, 1),
+    conv = Conv(randn(Float32, 10, 10, 3, 1), randn(Float32, 1))
+    conv_reactant = Conv(
+        Reactant.ConcreteRArray(conv.weight), Reactant.ConcreteRArray(conv.bias)
     )
-    conv_reactant = Conv(Reactant.ConcreteRArray(conv.weight), Reactant.ConcreteRArray(conv.bias))
 
     img = randn(Float32, 224, 224, 3, 2)
     img_reactant = Reactant.ConcreteRArray(img)
 
     comp_conv = Reactant.compile(conv_reactant, (img_reactant,))
 
-    res_reactant = comp_conv(img_reactant) |> Array{Float32,4}
+    res_reactant = Array{Float32,4}(comp_conv(img_reactant))
     res = conv(img)
 
     @test res_reactant ≈ res
