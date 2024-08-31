@@ -194,20 +194,42 @@ function client(device::Device)
     end
 end
 
+# https://github.com/openxla/xla/blob/4bfb5c82a427151d6fe5acad8ebe12cee403036a/xla/xla_data.proto#L29
+@inline primitive_type(::Type{Bool}) = 1
+
+@inline primitive_type(::Type{Int8}) = 2
+@inline primitive_type(::Type{UInt8}) = 6
+
+@inline primitive_type(::Type{Int16}) = 3
+@inline primitive_type(::Type{UInt16}) = 7
+
+@inline primitive_type(::Type{Int32}) = 4
+@inline primitive_type(::Type{UInt32}) = 8
+
+@inline primitive_type(::Type{Int64}) = 5
+@inline primitive_type(::Type{UInt64}) = 9
+
+@inline primitive_type(::Type{Float16}) = 10
+@inline primitive_type(::Type{Float32}) = 11
+
+# @inline primitive_type(::Type{BFloat16}) = 16
+
+@inline primitive_type(::Type{Float64}) = 12
+
+@inline primitive_type(::Type{Complex{Float32}}) = 24
+@inline primitive_type(::Type{Complex{Float64}}) = 25
+
 function ArrayFromHostBuffer(client::Client, array::Array{T,N}, device) where {T,N}
-    buffer = MLIR.IR.context!(MLIR.IR.Context()) do
-        dtype = MLIR.IR.Type(T)
-        sizear = Int64[s for s in reverse(size(array))]
-        GC.@preserve array sizear begin
-            @ccall MLIR.API.mlir_c.ArrayFromHostBuffer(
-                client.client::Ptr{Cvoid},
-                pointer(array)::Ptr{T},
-                dtype::MLIR.API.MlirType,
-                N::Csize_t,
-                pointer(sizear)::Ptr{Int64},
-                device.device::Ptr{Cvoid},
-            )::Ptr{Cvoid}
-        end
+    sizear = Int64[s for s in reverse(size(array))]
+    buffer = GC.@preserve array sizear begin
+        @ccall MLIR.API.mlir_c.ArrayFromHostBuffer(
+            client.client::Ptr{Cvoid},
+            pointer(array)::Ptr{T},
+            primitive_type(T)::UInt64,
+            N::Csize_t,
+            pointer(sizear)::Ptr{Int64},
+            device.device::Ptr{Cvoid},
+        )::Ptr{Cvoid}
     end
     return Buffer(buffer)
 end

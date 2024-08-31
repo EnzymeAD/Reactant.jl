@@ -23,17 +23,22 @@ run(Cmd(`$(Base.julia_cmd().exec[1]) --project=. -e "using Pkg; Pkg.instantiate(
 #--repo_env TF_NEED_ROCM=1
 #--define=using_rocm=true --define=using_rocm_hipcc=true
 #--action_env TF_ROCM_AMDGPU_TARGETS="gfx900,gfx906,gfx908,gfx90a,gfx1030"
+
+
+# --repo_env TF_NEED_CUDA=1
+# --repo_env TF_NVCC_CLANG=1
+# --repo_env TF_NCCL_USE_STUB=1
+# --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
+# --@xla//xla/python:jax_cuda_pip_rpaths=true
+# --repo_env=HERMETIC_CUDA_VERSION="12.3.2"
+# --repo_env=HERMETIC_CUDNN_VERSION="9.1.1"
+# --@local_config_cuda//cuda:include_cuda_libs=true
+# --@local_config_cuda//:enable_cuda
+# --@local_config_cuda//:cuda_compiler=nvcc
+# --crosstool_top="@local_config_cuda//crosstool:toolchain"
+
 run(Cmd(`bazel build -c dbg --action_env=JULIA=$(Base.julia_cmd().exec[1])
 --repo_env HERMETIC_PYTHON_VERSION="3.10"
---repo_env TF_NEED_CUDA=1
---repo_env TF_NCCL_USE_STUB=1
---repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
---@xla//xla/python:jax_cuda_pip_rpaths=true
---repo_env=HERMETIC_CUDA_VERSION="12.3.2"
---repo_env=HERMETIC_CUDNN_VERSION="9.1.1"
---@local_config_cuda//cuda:include_hermetic_cuda_libs=true
---@local_config_cuda//:enable_cuda
-
 --check_visibility=false --verbose_failures :libReactantExtra.so :Builtin.inc.jl :Arith.inc.jl :Affine.inc.jl :Func.inc.jl :Enzyme.inc.jl :StableHLO.inc.jl :CHLO.inc.jl :VHLO.inc.jl`, dir=source_dir,
 env=Dict("HOME"=>ENV["HOME"], "PATH"=>joinpath(source_dir, "..")*":"*ENV["PATH"])))
 
