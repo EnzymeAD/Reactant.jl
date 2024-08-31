@@ -30,7 +30,7 @@ end
 
 pair = Pair(ones(3), ones(10))
 
-reactant_pair = Reactant.make_tracer(IdDict(), pair, (), Reactant.ArrayToConcrete, nothing)
+reactant_pair = Reactant.to_rarray(pair)
 ``` 
 
 To compile programs using ConcreteRArray's, one uses the compile function, like as follows:
