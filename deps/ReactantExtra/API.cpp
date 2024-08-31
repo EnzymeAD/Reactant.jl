@@ -240,8 +240,8 @@ extern "C" void* UnsafeBufferPointer(PjRtBuffer* buffer) {
     return (void*)unsafe;
 }
 
-extern "C" PjRtBuffer* ArrayFromHostBuffer(PjRtClient* client, void* data, MlirType mtype, size_t dim, int64_t* cshape, PjRtDevice* device) {
-    auto primtype = ConvertMlirTypeToPrimitiveType(unwrap(mtype));
+extern "C" PjRtBuffer* ArrayFromHostBuffer(PjRtClient* client, void* data, uint64_t ptype, size_t dim, int64_t* cshape, PjRtDevice* device) {
+    auto primtype = (xla::PrimitiveType)ptype;
     absl::Span<const int64_t> shape(cshape, dim);
     PjRtClient::HostBufferSemantics semantics = PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
     //xla::Layout layout(col_major(dim));
