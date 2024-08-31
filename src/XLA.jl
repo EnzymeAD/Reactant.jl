@@ -95,12 +95,6 @@ function __init__()
     backends["cpu"] = cpu
     default_backend[] = cpu
     @static if !Sys.isapple()
-        try
-            gpu = GPUClient()
-            backends["gpu"] = gpu
-        catch e
-            println(stdout, e)
-        end
         if isfile("/usr/lib/libtpu.so")
             try
                 tpu = TPUClient(
@@ -111,9 +105,16 @@ function __init__()
             catch e
                 println(stdout, e)
             end
+        else
+            try
+                gpu = GPUClient()
+                backends["gpu"] = gpu
+            catch e
+                println(stdout, e)
+            end
         end
     end
-    return default_backend[]
+    return
 end
 
 @inline function free_exec(exec)

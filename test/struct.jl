@@ -81,7 +81,7 @@ end
     @testset "MockLinkedList" begin
         x = [rand(2, 2) for _ in 1:2]
         x2 = list(x...)
-        x3 = Reactant.make_tracer(IdDict(), x2, (), Reactant.ArrayToConcrete)
+        x3 = Reactant.to_rarray(x2)
 
         # TODO this should be able to run without problems, but crashes
         @test_broken begin
