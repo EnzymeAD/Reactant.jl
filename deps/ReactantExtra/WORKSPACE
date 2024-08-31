@@ -88,7 +88,7 @@ http_archive(
     strip_prefix = "jax-" + JAX_COMMIT,
     urls = ["https://github.com/google/jax/archive/{commit}.tar.gz".format(commit = JAX_COMMIT)],
     patch_args = ["-p1"],
-    patches = ["//:patches/jax.patch"],
+    patches = ["@enzyme_ad//:patches/jax.patch"],
 )
 
 # load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
