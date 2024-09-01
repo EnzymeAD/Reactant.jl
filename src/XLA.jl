@@ -73,6 +73,7 @@ function GPUClient(node_id=0, num_nodes=1, platform="gpu")
     return Client(client)
 end
 
+
 function TPUClient(tpu_path::String)
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeTPUClient")
     refstr = Ref{Cstring}()
@@ -88,17 +89,27 @@ const default_backend = Ref{Client}()
 const default_device_idx = Ref{Int}(0)
 using Reactant_jll
 using Libdl
+using Scratch, Downloads
 function __init__()
     initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
     ccall(initLogs, Cvoid, ())
     cpu = CPUClient()
     backends["cpu"] = cpu
     default_backend[] = cpu
+
     @static if !Sys.isapple()
         if isfile("/usr/lib/libtpu.so")
+	    dataset_dir = @get_scratch!("libtpu")
+	    if !isfile(dataset_dir*"/libtpu.so")
+		Downloads.download("https://storage.googleapis.com/cloud-tpu-tpuvm-artifacts/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20240829-py3-none-any.whl", dataset_dir*"/tpu.zip")
+		run(`unzip -qq $(dataset_dir*"/tpu.zip") -d $(dataset_dir)/tmp`)
+		run(`mv $(dataset_dir)/tmp/libtpu/libtpu.so $(dataset_dir)/libtpu.so`)
+		rm(dataset_dir*"/tmp", recursive=true)
+		rm(dataset_dir*"/tpu.zip", recursive=true)
+	    end
             try
                 tpu = TPUClient(
-                    "/home/wmoses/.local/lib/python3.8/site-packages/libtpu/libtpu.so"
+                    dataset_dir*"/libtpu.so"
                 )
                 backends["tpu"] = tpu
                 default_backend[] = tpu
