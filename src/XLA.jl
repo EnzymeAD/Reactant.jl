@@ -114,7 +114,7 @@ function __init__()
             end
         end
     end
-    return
+    return nothing
 end
 
 @inline function free_exec(exec)
