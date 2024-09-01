@@ -19,7 +19,7 @@ using BenchmarkTools
 
 origout = model(noisy)
 
-cmodel = Reactant.make_tracer(IdDict(), model, (), Reactant.ArrayToConcrete)
+cmodel = Reactant.to_rarray(model)
 cnoisy = Reactant.ConcreteRArray(noisy)
 
 # c_o = cmodel(noisy)
@@ -41,3 +41,46 @@ f = Reactant.compile((a, b) -> a(b), (cmodel, cnoisy))
 comp = f(cmodel, cnoisy)
 # @btime f(cmodel, cnoisy)
 @test origout ≈ comp
+
+# To train the model, we use batches of 64 samples, and one-hot encoding:
+target = Flux.onehotbatch(truth, [true, false])                   # 2×1000 OneHotMatrix
+loader = Flux.DataLoader((noisy, target); batchsize=64, shuffle=true);
+# 16-element DataLoader with first element: (2×64 Matrix{Float32}, 2×64 OneHotMatrix)
+
+optim = Flux.setup(Flux.Adam(0.01), model)  # will store optimiser momentum, etc.
+
+# Training loop, using the whole data set 1000 times:
+losses = []
+for epoch in 1:1_000
+    for (x, y) in loader
+        loss, grads = Flux.withgradient(model) do m
+            # Evaluate model and loss inside gradient context:
+            y_hat = m(x)
+            return Flux.crossentropy(y_hat, y)
+        end
+        Flux.update!(optim, model, grads[1])
+        push!(losses, loss)  # logging, outside gradient context
+    end
+end
+
+optim # parameters, momenta and output have all changed
+out2 = model(noisy)  # first row is prob. of true, second row p(false)
+
+mean((out2[1, :] .> 0.5) .== truth)  # accuracy 94% so far!
+
+@testset "conv" begin
+    conv = Conv(randn(Float32, 10, 10, 3, 1), randn(Float32, 1))
+    conv_reactant = Conv(
+        Reactant.ConcreteRArray(conv.weight), Reactant.ConcreteRArray(conv.bias)
+    )
+
+    img = randn(Float32, 224, 224, 3, 2)
+    img_reactant = Reactant.ConcreteRArray(img)
+
+    comp_conv = Reactant.compile(conv_reactant, (img_reactant,))
+
+    res_reactant = Array{Float32,4}(comp_conv(img_reactant))
+    res = conv(img)
+
+    @test res_reactant ≈ res
+end

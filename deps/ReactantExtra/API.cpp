@@ -131,7 +131,7 @@ extern "C" PjRtClient* MakeGPUClient(int node_id, int num_nodes, int* allowed_de
 
 const char* const kEnvTpuLibraryPath = "TPU_LIBRARY_PATH";
 
-extern "C" PJRT_Api* LoadPjrtPlugin(const char* device_type, const char* library_path, const char** error) {
+extern "C" const PJRT_Api* LoadPjrtPlugin(const char* device_type, const char* library_path, const char** error) {
     absl::StatusOr<const PJRT_Api*> pluginLoad = pjrt::LoadPjrtPlugin(std::string(device_type), std::string(library_path));
     if (!pluginLoad.ok()) {
         auto str = pluginLoad.status().message();
@@ -240,8 +240,8 @@ extern "C" void* UnsafeBufferPointer(PjRtBuffer* buffer) {
     return (void*)unsafe;
 }
 
-extern "C" PjRtBuffer* ArrayFromHostBuffer(PjRtClient* client, void* data, MlirType mtype, size_t dim, int64_t* cshape, PjRtDevice* device) {
-    auto primtype = ConvertMlirTypeToPrimitiveType(unwrap(mtype));
+extern "C" PjRtBuffer* ArrayFromHostBuffer(PjRtClient* client, void* data, uint64_t ptype, size_t dim, int64_t* cshape, PjRtDevice* device) {
+    auto primtype = (xla::PrimitiveType)ptype;
     absl::Span<const int64_t> shape(cshape, dim);
     PjRtClient::HostBufferSemantics semantics = PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
     //xla::Layout layout(col_major(dim));

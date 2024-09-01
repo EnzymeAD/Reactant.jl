@@ -434,3 +434,5 @@ function make_tracer(seen, prev::Core.Box, @nospecialize(path), mode; kwargs...)
     seen[prev] = res
     return res
 end
+
+@inline to_rarray(@nospecialize(x)) = make_tracer(IdDict(), x, (), Reactant.ArrayToConcrete)

@@ -20,9 +20,9 @@ using BenchmarkTools
 origout, _ = model(noisy, ps, st)
 @btime model($noisy, $ps, $st)  # 68.444 μs (46 allocations: 45.88 KiB)
 
-cmodel = Reactant.make_tracer(IdDict(), model, (), Reactant.ArrayToConcrete)
-cps = Reactant.make_tracer(IdDict(), ps, (), Reactant.ArrayToConcrete)
-cst = Reactant.make_tracer(IdDict(), st, (), Reactant.ArrayToConcrete)
+cmodel = Reactant.to_rarray(model)
+cps = Reactant.to_rarray(ps)
+cst = Reactant.to_rarray(st)
 cnoisy = Reactant.ConcreteRArray(noisy)
 
 f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
