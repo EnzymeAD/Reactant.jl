@@ -38,6 +38,8 @@ function from_row_major(x::Matrix{T}) where {T}
     return transpose(x)
 end
 
+SetLogLevel(x) = @ccall MLIR.API.mlir_c.SetLogLevel(x::Cint)::Cvoid
+
 const cpuclientcount = Ref(0)
 # TODO synchronization when async is not working because `future` in `ConcreteRArray` is always `nothing`
 function CPUClient(asynchronous=false, node_id=0, num_nodes=1)
@@ -93,6 +95,8 @@ using Scratch, Downloads
 function __init__()
     initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
     ccall(initLogs, Cvoid, ())
+    # Add most log level
+    SetLogLevel(0)
     cpu = CPUClient()
     backends["cpu"] = cpu
     default_backend[] = cpu
