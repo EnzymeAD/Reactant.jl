@@ -1,19 +1,16 @@
 name = "Reactant"
 uuid = "3c362404-f566-11ee-1572-e11a4b42c853"
-authors = [
-    "William Moses <wmoses@mit.edu>",
-    "Valentin Churavy <vchuravy@mit.edu>",
-    "Sergio Sánchez Ramírez <sergio.sanchez.ramirez@bsc.es>",
-    "Paul Berg <paul@plutojl.org>",
-]
+authors = ["William Moses <wmoses@mit.edu>", "Valentin Churavy <vchuravy@mit.edu>", "Sergio Sánchez Ramírez <sergio.sanchez.ramirez@bsc.es>", "Paul Berg <paul@plutojl.org>"]
 version = "0.1.9"
 
 [deps]
 CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
+Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
+Scratch = "6c6a2e73-6563-6170-7368-637461726353"
 
 [weakdeps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
