@@ -96,7 +96,7 @@ function __init__()
     initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
     ccall(initLogs, Cvoid, ())
     # Add most log level
-    SetLogLevel(0)
+    # SetLogLevel(0)
     cpu = CPUClient()
     backends["cpu"] = cpu
     default_backend[] = cpu
