@@ -1,8 +1,9 @@
 using Test
 using Reactant
 
+# TODO try again with `2` to check automatic conversion from int to float
 function donate_fill_x_with_2(x, y)
-    x .= 2
+    x .= 2.0
     return nothing
 end
 
