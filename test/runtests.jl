@@ -48,7 +48,6 @@ end
     include("closure.jl")
     include("compile.jl")
     include("buffer_donation.jl")
->>>>>>> 075b25f (test: run tests inside a global testset)
 
     if VERSION ≥ v"1.10-" # Lux isn't supported on 1.9
         include("nn_lux.jl")
