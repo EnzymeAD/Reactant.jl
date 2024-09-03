@@ -18,8 +18,6 @@ model = Chain(
 using BenchmarkTools
 
 origout = model(noisy)
-@show origout[3]
-@btime model(noisy)
 
 cmodel = Reactant.to_rarray(model)
 cnoisy = Reactant.ConcreteRArray(noisy)
@@ -41,7 +39,6 @@ f = Reactant.compile((a, b) -> a(b), (cmodel, cnoisy))
 # @show @code_typed f(cmodel,cnoisy)
 # @show @code_llvm f(cmodel,cnoisy)
 comp = f(cmodel, cnoisy)
-@show comp[3]
 # @btime f(cmodel, cnoisy)
 @test origout ≈ comp
 
