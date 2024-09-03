@@ -37,9 +37,14 @@ run(Cmd(`$(Base.julia_cmd().exec[1]) --project=. -e "using Pkg; Pkg.instantiate(
 # --@local_config_cuda//:cuda_compiler=nvcc
 # --crosstool_top="@local_config_cuda//crosstool:toolchain"
 
-run(Cmd(`bazel query --experimental_repo_remote_exec --repo_env HERMETIC_PYTHON_VERSION="3.10" "allpaths(:libReactantExtra.so, @llvm-project//mlir:CAPIIR)" --output graph`, dir=source_dir,
-))
-run(Cmd(`bazel build -c dbg --action_env=JULIA=$(Base.julia_cmd().exec[1])
+arg = try
+	run(Cmd(`nvidia-smi`))
+	"--config=cuda"
+catch
+	""
+end
+
+run(Cmd(`bazel build $(arg) -c dbg --action_env=JULIA=$(Base.julia_cmd().exec[1])
 --repo_env HERMETIC_PYTHON_VERSION="3.10"
 --check_visibility=false --verbose_failures :libReactantExtra.so :Builtin.inc.jl :Arith.inc.jl :Affine.inc.jl :Func.inc.jl :Enzyme.inc.jl :StableHLO.inc.jl :CHLO.inc.jl :VHLO.inc.jl`, dir=source_dir,
 ))

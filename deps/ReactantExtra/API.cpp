@@ -233,6 +233,14 @@ std::vector<int64_t> col_major(int64_t dim) {
     }
     return minor_to_major;
 }
+
+std::vector<int64_t> row_major(int64_t dim) {
+    std::vector<int64_t> minor_to_major;
+    for (int i=0; i<dim; i++) {
+        minor_to_major.push_back(dim-1-i);
+    }
+    return minor_to_major;
+}
 static void noop() {}
 
 extern "C" void* UnsafeBufferPointer(PjRtBuffer* buffer) {
@@ -264,13 +272,9 @@ extern "C" PjRtBuffer* CopyBufferToDevice(PjRtBuffer* buffer, PjRtDevice* dst_de
 extern "C" void BufferToHost(PjRtBuffer* buffer, void* data) {
     Shape shape(xla::ValueOrThrow(buffer->HostShape()));
     /// Grumpily the cpu copy code does not respect layout and does a raw copy
-    /*
-    auto &layout = *shape.mutable_layout();
-    layout.clear_minor_to_major();
-    for (auto index : col_major(shape.dimensions_size())) {
-        layout.add_minor_to_major(index);
-    }
-    */
+    /// For now, we assume a non-julia row major ordering
+    /// If in the future it supports col_major we can swap to that.
+    *shape.mutable_layout() = xla::Layout(row_major(shape.dimensions_size()));
     MutableBorrowingLiteral literal((const char*)data, shape);
     auto status = buffer->ToLiteralSync(&literal);
     if (!status.ok()) {
