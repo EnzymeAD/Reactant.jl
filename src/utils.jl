@@ -125,12 +125,12 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         seen_results, result, (:result,), concretein ? TracedTrack : TracedSetPath
     )
 
-    # retraced_args = ntuple(Val(N)) do i
-    #     Base.@_inline_meta
-    #     return make_tracer(
-    #         seen_results, traced_args[i], concretein ? (:resargs, i) : (), TracedTrack
-    #     )
-    # end
+    # marks buffers to be donated
+    for i in 1:N
+        make_tracer(
+            seen_results, traced_args[i], concretein ? (:resargs, i) : (), TracedTrack
+        )
+    end
 
     linear_results = TracedRArray[]
 
