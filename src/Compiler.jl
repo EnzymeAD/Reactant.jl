@@ -343,13 +343,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_args = TracedRArray[]
-    for (k, v) in seen_args
-        if !(v isa TracedRArray)
-            continue
-        end
-        push!(linear_args, v)
-    end
+    linear_args = TracedRArray[v for v in values(seen_args) if v isa TracedRArray]
 
     in_tys = if toscalar
         [MLIR.IR.TensorType((), MLIR.IR.Type(eltype(arg))) for arg in linear_args]
@@ -437,15 +431,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_results = TracedRArray[]
-
-    for (k, v) in seen_results
-        if !(v isa TracedRArray)
-            continue
-        end
-
-        push!(linear_results, v)
-    end
+    linear_results = TracedRArray[v for v in values(seen_results) if v isa TracedRArray]
 
     out_tys = [transpose_ty(mlir_type(arg)) for arg in linear_results]
 
