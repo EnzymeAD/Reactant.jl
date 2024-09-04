@@ -183,6 +183,32 @@ extern "C" PjRtClient* MakeTPUClient(const char* tpu_path , const char** error) 
     return GetCApiClient("TPU");
 }
 
+const char* const kEnvMetalLibraryPath = "METAL_LIBRARY_PATH";
+
+extern "C" PjRtClient* MakeMetalClient(const char* libpath, const char** error) {
+    // Prefer $METAL_LIBRARY_PATH if set
+    std::string metal_library_path;
+    if (auto path = llvm::sys::Process::GetEnv(kEnvMetalLibraryPath)) {
+        metal_library_path = *path;
+    } else if (libpath) {
+        metal_library_path = std::string(libpath);
+    } else {
+        *error = "Could not find Metal path";
+        return nullptr;
+    }
+
+    const PJRT_Api* pluginLoad = LoadPjrtPlugin("metal", metal_library_path.c_str(), error);
+    if (pluginLoad == nullptr)
+        return nullptr;
+
+
+    auto metal_status = InitializePjrtPlugin("metal", error);
+    if (metal_status)
+        return nullptr;
+
+    return GetCApiClient("METAL");
+}
+
 extern "C" int ClientNumDevices(PjRtClient* client) {
     return client->device_count();
 }
