@@ -84,3 +84,15 @@ mean((out2[1, :] .> 0.5) .== truth)  # accuracy 94% so far!
 
     @test res_reactant ≈ res
 end
+
+@testset "$f" for f in (NNlib.meanpool, NNlib.maxpool)
+    img = randn(Float32, 224, 224, 3, 2)
+    img_reactant = Reactant.ConcreteRArray(img)
+
+    f_reactant = Reactant.compile(f, (img_reactant, (3, 3)))
+
+    res_reactant = f_reactant(img_reactant, (3, 3))
+    res = f(img, (3, 3))
+
+    @test res_reactant ≈ res
+end
