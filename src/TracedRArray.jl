@@ -758,3 +758,23 @@ function _copyto!(dest::TracedRArray, bc::Broadcasted)
     dest.mlir_data = res.mlir_data
     return dest
 end
+
+function Base._cat(dims::Val{D}, A::TracedRArray{T,N}, Bs::TracedRArray...) where {T,N,D}
+    @assert D isa Integer "Support for non-integer dimensions is not implemented yet."
+    catdims = Base.dims2cat(dims)
+    shape = Base.cat_size_shape(catdims, A, Bs...)
+    RT = Base.promote_eltype(A, Bs...)
+    Res = TracedRArray{RT,length(shape)}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.concatenate(
+                [A.mlir_data, [B.mlir_data for B in Bs]...];
+                result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
+                dimension=D - 1, # stablehlo expects this to be zero-indexed
+            ),
+            1,
+        ),
+        shape,
+    )
+    return Res
+end

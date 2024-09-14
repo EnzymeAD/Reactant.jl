@@ -195,3 +195,20 @@ end
     @test var_fn3(x) ≈ var_fn3_compiled(x_ca)
     @test var_fn4(x) ≈ var_fn4_compiled(x_ca)
 end
+
+@testset "concatenation" begin
+    x = ones(2, 4, 3)
+    x_concrete = Reactant.to_rarray(x)
+
+    cat1(x) = vcat(x, x, x)
+    cat2(x) = hcat(x, x, x)
+    cat3(x) = cat(x, x, x; dims=Val(3))
+
+    cat1_compiled = Reactant.compile(cat1, (x_concrete,))
+    cat2_compiled = Reactant.compile(cat2, (x_concrete,))
+    cat3_compiled = Reactant.compile(cat3, (x_concrete,))
+
+    @test cat1(x) ≈ cat1_compiled(x_concrete)
+    @test cat2(x) ≈ cat2_compiled(x_concrete)
+    @test cat3(x) ≈ cat3_compiled(x_concrete)
+end
