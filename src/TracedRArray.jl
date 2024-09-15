@@ -43,6 +43,43 @@ and require expensive copies and synchronization each time and therefore should 
     return TracedRArray{T,0}((), res2, ())
 end
 
+function Base.getindex(
+    a::TracedRArray{T,N}, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+) where {T,N}
+    indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.slice(
+            a.mlir_data;
+            start_indices=MLIR.IR.DenseArrayAttribute([
+                Int64(first(i) - 1) for i in indices
+            ]),
+            limit_indices=MLIR.IR.DenseArrayAttribute([Int64(last(i)) for i in indices]),
+            strides=MLIR.IR.DenseArrayAttribute([Int64(1) for i in indices]),
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, Tuple(length.(indices)))
+end
+
+function Base.view(
+    a::TracedRArray{T,N}, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+) where {T,N}
+    # TODO: Implement before merging the PR
+    return error("view is not supported yet")
+end
+
+function Base.setindex!(
+    a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+) where {T,N}
+    indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
+    @show indices
+    @show v
+    if !(v isa TracedRArray)
+        v = promote_to(TracedRArray{eltype(v),ndims(v)}, v) 
+    end
+    return error("setindex! is not supported yet")
+end
+
 Base.size(x::TracedRArray) = x.shape
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray((), A.mlir_data, size(A))
