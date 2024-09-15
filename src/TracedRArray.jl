@@ -74,9 +74,7 @@ function Base.setindex!(
     indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
     @show indices
     @show v
-    if !(v isa TracedRArray)
-        v = promote_to(TracedRArray{eltype(v),ndims(v)}, v) 
-    end
+    v = v isa TracedRArray ? v : promote_to(TracedRArray{T,N}, v)
     return error("setindex! is not supported yet")
 end
 
