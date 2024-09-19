@@ -68,21 +68,21 @@ out2 = model(noisy)  # first row is prob. of true, second row p(false)
 
 mean((out2[1, :] .> 0.5) .== truth)  # accuracy 94% so far!
 
-@testset "conv" begin
-    conv = Conv(randn(Float32, 10, 10, 3, 1), randn(Float32, 1))
+@testset "conv: groups $groups" for groups in (1, 2, 4)
+    nn_conv = Conv(randn(Float32, 10, 10, 8 ÷ groups, groups), randn(Float32, groups); groups)
     conv_reactant = Conv(
-        Reactant.ConcreteRArray(conv.weight), Reactant.ConcreteRArray(conv.bias)
+        Reactant.ConcreteRArray(nn_conv.weight), Reactant.ConcreteRArray(nn_conv.bias);
+        groups
     )
 
-    img = randn(Float32, 224, 224, 3, 2)
+    img = randn(Float32, 224, 224, 8, 2)
     img_reactant = Reactant.ConcreteRArray(img)
 
     comp_conv = Reactant.compile(conv_reactant, (img_reactant,))
 
     res_reactant = Array{Float32,4}(comp_conv(img_reactant))
-    res = conv(img)
 
-    @test res_reactant ≈ res
+    @test res_reactant ≈ nn_conv(img)
 end
 
 @testset "$f" for f in (NNlib.meanpool, NNlib.maxpool)

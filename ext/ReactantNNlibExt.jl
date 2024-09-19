@@ -46,6 +46,7 @@ function NNlib.conv(
     stride = NNlib.stride(cdims)
     dilation = NNlib.dilation(cdims)
     flipkernel = NNlib.flipkernel(cdims)
+    feature_group_count = NNlib.groupcount(cdims)
 
     input_rank = ndims(x)
 
@@ -102,7 +103,7 @@ function NNlib.conv(
         dimension_numbers,
         lhs_dilation=1,
         rhs_dilation=collect(dilation),
-        feature_group_count=1,
+        feature_group_count,
         batch_group_count=1,
     )
 
