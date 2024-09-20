@@ -54,14 +54,17 @@ end
 
 @testset "Convolution" begin
     @testset for groups in (1, 2, 4)
-        weight = randn(Float32, 10, 10, 8 ÷ groups, groups)
+        weight = randn(Float32, 4, 4, 8 ÷ groups, groups)
         x = randn(Float32, 16, 16, 8, 2)
 
         weight_reactant = Reactant.ConcreteRArray(weight)
         x_reactant = Reactant.ConcreteRArray(x)
 
-        @testset for stride in ((1, 1), (2, 2), (3, 3)), padding in ((0, 0), (1, 1), (2, 2))
-            conv_dims = DenseConvDims(x, weight; stride, padding, dilation=1, groups)
+        @testset for stride in ((1, 1), (2, 2), (3, 3)),
+            padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0), (0, 1), (1, 0)),
+            dilation in ((1, 1), (2, 2), (1, 2), (2, 1))
+
+            conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
             conv_compiled = Reactant.compile(
                 NNlib.conv, (x_reactant, weight_reactant, conv_dims)
