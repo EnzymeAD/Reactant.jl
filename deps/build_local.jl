@@ -18,7 +18,12 @@ Pkg.activate(; temp=true)
 # Build!
 @info "Building" source_dir scratch_dir
 run(`mkdir -p $(scratch_dir)`)
-run(Cmd(`$(Base.julia_cmd().exec[1]) --project=. -e "using Pkg; Pkg.instantiate()"`, dir=source_dir))
+run(
+    Cmd(
+        `$(Base.julia_cmd().exec[1]) --project=. -e "using Pkg; Pkg.instantiate()"`;
+        dir=source_dir,
+    ),
+)
 
 #--repo_env TF_NEED_ROCM=1
 #--define=using_rocm=true --define=using_rocm_hipcc=true
@@ -45,7 +50,7 @@ end
 
 build_kind = if length(ARGS) == 1
     kind = ARGS[1]
-    if kind  ∉ ("dbg", "opt")
+    if kind ∉ ("dbg", "opt")
         error("Invalid build kind $(kind). Valid options are 'dbg' and 'opt'")
     end
     kind
@@ -56,20 +61,33 @@ end
 @info "Building JLL with -c $(build_kind)"
 
 if isempty(arg)
-    run(Cmd(`bazel build -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
+    run(
+        Cmd(
+            `bazel build -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
     --repo_env HERMETIC_PYTHON_VERSION="3.10"
-    --check_visibility=false --verbose_failures :libReactantExtra.so :Builtin.inc.jl :Arith.inc.jl :Affine.inc.jl :Func.inc.jl :Enzyme.inc.jl :StableHLO.inc.jl :CHLO.inc.jl :VHLO.inc.jl`, dir=source_dir,
-    ))
+    --check_visibility=false --verbose_failures :libReactantExtra.so :Builtin.inc.jl :Arith.inc.jl :Affine.inc.jl :Func.inc.jl :Enzyme.inc.jl :StableHLO.inc.jl :CHLO.inc.jl :VHLO.inc.jl`;
+            dir=source_dir,
+        ),
+    )
 else
-    run(Cmd(`bazel build $(arg) -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
+    run(
+        Cmd(
+            `bazel build $(arg) -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
     --repo_env HERMETIC_PYTHON_VERSION="3.10"
-    --check_visibility=false --verbose_failures :libReactantExtra.so :Builtin.inc.jl :Arith.inc.jl :Affine.inc.jl :Func.inc.jl :Enzyme.inc.jl :StableHLO.inc.jl :CHLO.inc.jl :VHLO.inc.jl`, dir=source_dir,
-    ))
+    --check_visibility=false --verbose_failures :libReactantExtra.so :Builtin.inc.jl :Arith.inc.jl :Affine.inc.jl :Func.inc.jl :Enzyme.inc.jl :StableHLO.inc.jl :CHLO.inc.jl :VHLO.inc.jl`;
+            dir=source_dir,
+        ),
+    )
 end
 # env=Dict("HOME"=>ENV["HOME"], "PATH"=>joinpath(source_dir, "..")*":"*ENV["PATH"])))
 
-run(Cmd(`rm -f libReactantExtra.dylib`, dir=joinpath(source_dir, "bazel-bin")))
-run(Cmd(`ln -s libReactantExtra.so libReactantExtra.dylib`, dir=joinpath(source_dir, "bazel-bin")))
+run(Cmd(`rm -f libReactantExtra.dylib`; dir=joinpath(source_dir, "bazel-bin")))
+run(
+    Cmd(
+        `ln -s libReactantExtra.so libReactantExtra.dylib`;
+        dir=joinpath(source_dir, "bazel-bin"),
+    ),
+)
 
 # Discover built libraries
 built_libs = filter(readdir(joinpath(source_dir, "bazel-bin"))) do file
@@ -84,6 +102,6 @@ set_preferences!(
     joinpath(dirname(@__DIR__), "LocalPreferences.toml"),
     "Reactant_jll",
     "libReactantExtra_path" => lib_path,
-    "libReactantDialects_path" => joinpath(source_dir, "bazel-bin"),
+    "libReactantDialects_path" => joinpath(source_dir, "bazel-bin");
     force=true,
 )

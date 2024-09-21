@@ -31,9 +31,9 @@ for depth in [11, 13, 16, 19]
     end setup = begin
         vgg = Vision.VGG($depth; pretrained=false, batchnorm=false)
         ps, st = Lux.setup(Random.default_rng(), vgg)
-        ps_concrete = ps |> Reactant.to_rarray
-        st_concrete = st |> Lux.testmode |> Reactant.to_rarray
-        x = rand(Float32, 224, 224, 3, 16) |> Reactant.to_rarray
+        ps_concrete = Reactant.to_rarray(ps)
+        st_concrete = Reactant.to_rarray(Lux.testmode(st))
+        x = Reactant.to_rarray(rand(Float32, 224, 224, 3, 16))
     end
 end
 
