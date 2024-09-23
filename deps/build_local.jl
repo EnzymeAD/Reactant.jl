@@ -1,5 +1,5 @@
 # Invoke with
-# `julia --project=deps deps/build_local.jl [dbg/opt]`
+# `julia --project=deps deps/build_local.jl [dbg/opt] [auto/cpu/cuda]`
 
 # the pre-built ReactantExtra_jll might not be loadable on this platform
 Reactant_jll = Base.UUID("0192cb87-2b54-54ad-80e0-3be72ad8a3c0")
@@ -41,14 +41,7 @@ run(
 # --@local_config_cuda//:cuda_compiler=nvcc
 # --crosstool_top="@local_config_cuda//crosstool:toolchain"
 
-arg = try
-    run(Cmd(`nvidia-smi`))
-    "--config=cuda"
-catch
-    ""
-end
-
-build_kind = if length(ARGS) == 1
+build_kind = if length(ARGS) ≥ 1
     kind = ARGS[1]
     if kind ∉ ("dbg", "opt")
         error("Invalid build kind $(kind). Valid options are 'dbg' and 'opt'")
@@ -59,6 +52,33 @@ else
 end
 
 @info "Building JLL with -c $(build_kind)"
+
+build_backend = if length(ARGS) ≥ 2
+    backend = ARGS[2]
+    if backend ∉ ("auto", "cpu", "cuda")
+        error("Invalid build backend $(backend). Valid options are 'auto', 'cpu', and 'cuda'")
+    end
+    backend
+else
+    "auto"
+end
+
+if build_backend == "auto"
+    build_backend = try
+        run(Cmd(`nvidia-smi`))
+        "cuda"
+    catch
+        "cpu"
+    end
+end
+
+arg = if build_backend == "cuda"
+    "--config=cuda"
+elseif build_backend == "cpu"
+    ""
+end
+
+@info "Building JLL with backend $(build_backend)"
 
 if isempty(arg)
     run(
