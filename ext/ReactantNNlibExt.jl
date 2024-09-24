@@ -93,12 +93,20 @@ function NNlib.conv(
     )
     result_type = Reactant.MLIR.IR.TensorType(output_shape, Reactant.MLIR.IR.Type(T))
 
+    weight = W.mlir_data
+    if !flipkernel
+        weight = Reactant.MLIR.IR.result(
+            Reactant.MLIR.Dialects.stablehlo.reverse(
+                weight; dimensions=collect(kernel_spatial_dims .- 1)
+            ),
+        )
+    end
+
     conv = Reactant.MLIR.Dialects.stablehlo.convolution(
         x.mlir_data,
-        W.mlir_data;
+        weight;
         result_0=result_type,
         window_strides=collect(stride),
-        window_reversal=collect(fill(flipkernel, num_spatial_dims)),
         padding,
         dimension_numbers,
         lhs_dilation=1,
