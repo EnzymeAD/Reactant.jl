@@ -16,7 +16,7 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
-function Base.getindex(a::TracedRArray{T,0})
+function Base.getindex(a::TracedRArray{T,0}) where T
     return a
 end
 
