@@ -245,3 +245,19 @@ end
     # get_indices_compiled = Reactant.compile(get_indices, (x_concrete,))
     # get_view_compiled = Reactant.compile(get_view, (x_concrete,))
 end
+
+tuple_byref(x) = (; a =(; b=x))
+tuple_byref2(x) = abs2.(x), tuple_byref2(x)
+
+@testset "Tuple byref" begin
+    x = Reactant.to_rarray([1.0 -2.0; -3.0 4.0])
+    f1 = Reactant.compile(tuple_byref, (x,))
+    r1 = f1(x)
+    @test r1.a.b.data === x.data
+    
+    # TODO this seems to hang during compile
+    # f2 = Reactant.compile(tuple_byref2, (x,))
+    # r2 = f2(x)
+    # @test r2[2].a.b.data === x.data
+    # @test r2[1] == abs2.([1.0 -2.0; -3.0 4.0])
+end

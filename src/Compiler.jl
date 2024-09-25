@@ -246,9 +246,9 @@ end
 macro code_hlo(options, maybe_call=nothing)
     call = something(maybe_call, options)
     options = isnothing(maybe_call) ? :(optimize = true) : options
-    Meta.isexpr(call, :call) || error("@code_mlir: expected call, got $call")
+    Meta.isexpr(call, :call) || error("@code_hlo: expected call, got $call")
     if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@code_mlir: expected options in format optimize=value, got $options")
+        error("@code_hlo: expected options in format optimize=value, got $options")
     end
 
     options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
@@ -266,6 +266,26 @@ macro code_hlo(options, maybe_call=nothing)
             compile_to_module!(mod, f, args; optimize=options.optimize)
             CompiledModule(mod, ctx)
         end
+    end
+end
+
+"""
+    @compile f(args...)
+"""
+macro compile(options, maybe_call=nothing)
+    call = something(maybe_call, options)
+    options = isnothing(maybe_call) ? :(optimize = true) : options
+    Meta.isexpr(call, :call) || error("@compile: expected call, got $call")
+    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
+        error("@compile: expected options in format optimize=value, got $options")
+    end
+
+    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
+
+    quote
+        f = $(esc(call.args[1]))
+        args = $(esc(Expr(:tuple, call.args[2:end]...)))
+        compile(f, args)
     end
 end
 
@@ -287,7 +307,9 @@ function create_result(tocopy::T, path, result_stores) where {T}
 end
 
 function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
-    return :(ConcreteRArray{$T,$N}($(result_stores[path]), $(tocopy.shape)))
+    restore = result_stores[path]
+    delete!(result_stores, path)
+    return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
 end
 
 function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
@@ -353,8 +375,18 @@ function compile(f, args; pipeline_options="", client=nothing)
         closure_ty = typeof(fnwrap)
 
         arg_syncs = Expr[]
+        resarg_syncs = Expr[]
         topres = Symbol[]
         linearized_args = Union{Symbol,Expr}[]
+
+        concretize = Expr[]
+        for (idx, _) in enumerate(linear_results)
+            push!(concretize, :($(Symbol(:concrete_res_, idx)) = linearized_results[$idx]))
+        end
+
+        delinearized_results = Expr[]
+
+        result_stores = Dict{Tuple,Symbol}()
 
         for (i, arg) in enumerate(linear_args)
             paths = ((p for p in arg.paths if p[1] == :args)...,)
@@ -367,25 +399,48 @@ function compile(f, args; pipeline_options="", client=nothing)
             for p in path[3:end]
                 res = :(traced_getfield($res, $(Meta.quot(p))))
             end
+            usym = Symbol("usbuf_$i")
+            usbuf = :($usym = $res.data)
             sym = Symbol("sbuf_$i")
-            sbuf = :($sym = XLA.synced_buffer($res.data))
+            sbuf = :($sym = XLA.synced_buffer($usym))
+            push!(arg_syncs, usbuf)
             push!(arg_syncs, sbuf)
 
             push!(topres, sym)
 
             res = :($sym.buffer)
             push!(linearized_args, res)
+            
+            respaths = ((p for p in arg.paths if p[1] != :args)...,)
+            
+            resarg = false
+            for respath in respaths
+                if respath[1] == :result
+                    res = Symbol("result")
+                    respath = respath[2:end]
+                    result_stores[respath] = usym
+                    resarg = true
+                    continue
+                else
+                    @assert respath[1] == :resargs
+                    if respath[2] == path[2]
+                        continue
+                    end
+                    res = :(args[$(respath[2])])
+                    path = path[3:end]
+                end
+                for p in path
+                    res = :(traced_getfield($res, $(Meta.quot(p))))
+                end
+                resarg = true
+                res = :($res.data = $usym)
+                push!(delinearized_results, res)
+            end
+            if resarg
+                push!(resarg_syncs, usbuf)
+            end
         end
-
-        concretize = Expr[]
-        for (idx, _) in enumerate(linear_results)
-            push!(concretize, :($(Symbol(:concrete_res_, idx)) = linearized_results[$idx]))
-        end
-
-        delinearized_results = Expr[]
-
-        result_stores = Dict{Tuple,Symbol}()
-
+        
         for (idx, result) in enumerate(linear_results)
             paths = ((p for p in result.paths if p[1] != :args)...,)
             for path in paths
@@ -412,37 +467,6 @@ function compile(f, args; pipeline_options="", client=nothing)
             end
         end
 
-        for (result, arg_idx) in preserved_args
-            for path in result.paths
-                arg = linear_args[arg_idx + 1]
-                argpath = only((p for p in arg.paths if p[1] == :args))
-
-                if path[1] == :result
-                    res = Symbol("result")
-                    path = path[2:end]
-                else
-                    @assert path[1] == :resargs || path[1] == :args
-                    # We can optimize cases where we set the arg to itself
-                    if path[2:end] == argpath[2:end]
-                        continue
-                    end
-                    res = :(args[path[2]])
-                    path = path[3:end]
-                end
-                for p in path
-                    res = :(traced_getfield($res, $(Meta.quot(p))))
-                end
-
-                argres = :(args[argpath[2]])
-                for p in argpath[3:end]
-                    argres = :(traced_getfield($argres, $(Meta.quot(p))))
-                end
-
-                res = :($res.data = $argres.data)
-                push!(delinearized_results, res)
-            end
-        end
-
         donated_args_set = zeros(UInt8, length(linearized_args))
         preserved_argnums = [i for (_, i) in preserved_args]
         for (i, _) in enumerate(linear_args)
@@ -453,7 +477,9 @@ function compile(f, args; pipeline_options="", client=nothing)
         donated_args_set = (donated_args_set...,)
 
         exec_call = if length(linear_results) == 0
-            :()
+            quote
+                $(resarg_syncs...)
+            end
         else
             quote
                 $(arg_syncs...)
@@ -468,7 +494,44 @@ function compile(f, args; pipeline_options="", client=nothing)
             end
         end
 
+        prevkeys = collect(keys(result_stores))
         resexpr = create_result(concrete_result, (), result_stores)
+        postkeys = collect(keys(result_stores))
+        used = [t for t in prevkeys if !in(t, postkeys)]
+
+        for (result, arg_idx) in preserved_args
+            for path in result.paths
+                arg = linear_args[arg_idx + 1]
+                argpath = only((p for p in arg.paths if p[1] == :args))
+
+                if path[1] == :result
+                    res = Symbol("result")
+                    path = path[2:end]
+                    if in(path, used)
+                        continue
+                    end
+                else
+                    @assert path[1] == :resargs || path[1] == :args
+                    # We can optimize cases where we set the arg to itself
+                    if path[2:end] == argpath[2:end]
+                        continue
+                    end
+                    res = :(args[path[2]])
+                    path = path[3:end]
+                end
+                for p in path
+                    res = :(traced_getfield($res, $(Meta.quot(p))))
+                end
+
+                argres = :(args[$(argpath[2])])
+                for p in argpath[3:end]
+                    argres = :(traced_getfield($argres, $(Meta.quot(p))))
+                end
+
+                res = :($res.data = $argres.data)
+                push!(delinearized_results, res)
+            end
+        end
 
         fname = gensym(Symbol(Symbol(f), :_reactant))
 
