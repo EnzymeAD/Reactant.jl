@@ -99,9 +99,9 @@ end
     conv_flip(x, W) = NNlib.conv(x, W; pad=1, flipped=false)
 
     @test Reactant.compile(conv_noflip, (xx, WW))(xx, WW) ==
-          [0*1+1*2+2*3; 1*1+2*2+3*3; 1*2+2*3+3*0;;;]
+        [0*1+1*2+2*3; 1*1+2*2+3*3; 1*2+2*3+3*0;;;]
     @test Reactant.compile(conv_flip, (xx, WW))(xx, WW) ==
-          [3*0+2*1+1*2; 3*1+2*2+1*3; 3*2+2*3+1*0;;;]
+        [3*0+2*1+1*2; 3*1+2*2+1*3; 3*2+2*3+1*0;;;]
 end
 
 @testset "$f" for f in (NNlib.meanpool, NNlib.maxpool)
