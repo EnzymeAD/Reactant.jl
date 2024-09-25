@@ -219,6 +219,17 @@ function run_pass_pipeline!(mod, pass_pipeline)
     return mod
 end
 
+function compile_mlir(f, args; kwargs...)
+    ctx = MLIR.IR.Context()
+    Base.append!(registry[]; context=ctx)
+    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    MLIR.IR.context!(ctx) do
+        mod = MLIR.IR.Module(MLIR.IR.Location())
+        evalinfo = compile_mlir!(mod, f, args; kwargs...)
+        return mod, evalinfo...
+    end
+end
+
 function compile_mlir!(mod, f, args; optimize=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
@@ -310,14 +321,8 @@ macro code_hlo(options, maybe_call=nothing)
         f = $(esc(call.args[1]))
         args = $(esc(Expr(:vect, call.args[2:end]...)))
 
-        ctx = MLIR.IR.Context()
-        Base.append!(registry[]; context=ctx)
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-        MLIR.IR.context!(ctx) do
-            mod = MLIR.IR.Module(MLIR.IR.Location())
-            compile_mlir!(mod, f, args; optimize=options.optimize)
-            return mod
-        end
+        mod, _... = compile_mlir(f, args; optimize=options.optimize)
+        return mod
     end
 end
 
