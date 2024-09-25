@@ -71,11 +71,16 @@ end
 function Base.setindex!(
     a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
 ) where {T,N}
-    indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
-    @show indices
-    @show v
-    v = v isa TracedRArray ? v : promote_to(TracedRArray{T,N}, v)
-    return error("setindex! is not supported yet")
+    indices = [promote_to(TracedRArray{Int, 0}, i isa Colon ? 1 : first(i))-1 for i in indices]
+    v = promote_to(TracedRArray{T,N}, v)
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.dynamic_update_slice(
+           a.mlir_data, v, indices...
+        ),
+        1,
+    )
+    a.mlir_data = v.mlir_data
+    return v
 end
 
 Base.size(x::TracedRArray) = x.shape
@@ -153,6 +158,9 @@ end
 
 function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     if isa(rhs, TracedRArray)
+        if typeof(rhs) == TracedRArray{T, N}
+            return rhs
+        end
         return TracedRArray{T,N}(
             (),
             MLIR.IR.result(
@@ -171,10 +179,11 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
         )
         return ta
     end
-    attr = MLIR.IR.DenseElementsAttribute(mlir_type(TracedRArray{T,N}, size(rhs)), rhs)
-    return TracedRArray{T,N}(
+    T0 = eltype(rhs)
+    attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
+    return promote_to(TracedRArray{T, N}, TracedRArray{T0,length(size(rhs))}(
         (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(rhs)
-    )
+    ))
 end
 
 function promote_to(lhs::TracedRArray{T,N}, rhs) where {T,N}
