@@ -50,8 +50,8 @@ using LuxLib, Reactant, Enzyme, NNlib
         ∇sumabs2!!_compiled = Reactant.compile(∇sumabs2!!, (act, x_act_ca))
         ∂x_compile!! = ∇sumabs2!!_compiled(act, x_act_ca)
 
-        @test ∂x_enz ≈ ∂x_compile broken=(act === gelu)
-        @test ∂x_enz!! ≈ ∂x_compile!! broken=(act === gelu)
+        @test ∂x_enz ≈ ∂x_compile broken = (act === gelu)
+        @test ∂x_enz!! ≈ ∂x_compile!! broken = (act === gelu)
     end
 end
 

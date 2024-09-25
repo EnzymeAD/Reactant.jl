@@ -29,7 +29,7 @@ using NNlib, Reactant, Enzyme
 
         @test y_simple ≈ y_compile
         # Mathematically the gelu definition here is slightly different from the one in NNlib
-        @test ∂x_enz ≈ ∂x_compile broken=(act === gelu)
+        @test ∂x_enz ≈ ∂x_compile broken = (act === gelu)
     end
 end
 
