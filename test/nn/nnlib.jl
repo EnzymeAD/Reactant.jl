@@ -56,7 +56,7 @@ end
 
 @testset "Convolution" begin
     @testset for groups in (1, 2, 4)
-        weight = randn(Float32, 4, 4, 8 ÷ groups, groups)
+        weight = randn(Float32, 4, 4, 8 ÷ groups, 4)
         x = randn(Float32, 16, 16, 8, 2)
 
         weight_reactant = Reactant.ConcreteRArray(weight)

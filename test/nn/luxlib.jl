@@ -2,7 +2,8 @@ using LuxLib, Reactant, Enzyme, NNlib
 
 @testset "Fused Dense" begin end
 
-@testset "Bias Activation" begin end
+@testset "Bias Activation" begin
+end
 
 @testset "Fast Activation" begin
     # Here we are testing that fast_activation doesn't switch to the faster versions
@@ -55,4 +56,38 @@ using LuxLib, Reactant, Enzyme, NNlib
     end
 end
 
-@testset "Fused Conv" begin end
+@testset "Fused Conv" begin
+    @testset for groups in (1, 2, 4),
+        has_bias in (true, false),
+        act in (identity, relu, sigmoid, tanh, gelu)
+
+        weight = randn(Float32, 4, 4, 8 ÷ groups, 4)
+        x = randn(Float32, 16, 16, 8, 2)
+        bias = has_bias ? randn(Float32, 4) : nothing
+
+        weight_reactant = Reactant.ConcreteRArray(weight)
+        x_reactant = Reactant.ConcreteRArray(x)
+        bias_reactant = Reactant.to_rarray(bias)
+
+        @testset for stride in ((1, 1), (2, 2), (3, 3)),
+            padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0), (0, 1), (1, 0)),
+            dilation in ((1, 1), (2, 2), (1, 2), (2, 1))
+
+            conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
+
+            fused_conv_compiled = Reactant.compile(
+                fused_conv_bias_activation,
+                (act, weight_reactant, x_reactant, bias_reactant, conv_dims),
+            )
+
+            reactant_res = fused_conv_compiled(
+                act, weight_reactant, x_reactant, bias_reactant, conv_dims
+            )
+            luxlib_res = fused_conv_bias_activation(act, weight, x, bias, conv_dims)
+
+            @test reactant_res ≈ luxlib_res broken = (act === gelu)
+        end
+
+        # TODO: test for gradients
+    end
+end
