@@ -21,9 +21,9 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.9'
-          - '1.10'
-          - ~1.11.0-0
+          - 'min'
+          - '1'
+          - 'pre'
           - 'nightly'
         os:
           - ubuntu-20.04
@@ -34,11 +34,6 @@ jobs:
           - false
         libReactant: [packaged]
         include:
-          - os: ubuntu-20.04
-            arch: x64
-            libReactant: packaged
-            version: '1.9'
-            assertions: true
           - os: ubuntu-20.04
             arch: x64
             libReactant: packaged
