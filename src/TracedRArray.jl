@@ -16,6 +16,10 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
+function Base.getindex(a::TracedRArray{T,0})
+    return a
+end
+
 function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Integer,N}) where {T,N}
     @warn(
         """Performing scalar indexing on task $(current_task()).
