@@ -219,14 +219,7 @@ function run_pass_pipeline!(mod, pass_pipeline)
     return mod
 end
 
-struct CompiledModule
-    mod::MLIR.IR.Module
-    ctx::MLIR.IR.Context
-end
-
-Base.show(io::IO, cm::CompiledModule) = show(io, cm.mod)
-
-function compile_to_module!(mod, f, args; optimize=true)
+function compile_mlir!(mod, f, args; optimize=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
@@ -322,8 +315,8 @@ macro code_hlo(options, maybe_call=nothing)
         @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
         MLIR.IR.context!(ctx) do
             mod = MLIR.IR.Module(MLIR.IR.Location())
-            compile_to_module!(mod, f, args; optimize=options.optimize)
-            CompiledModule(mod, ctx)
+            compile_mlir!(mod, f, args; optimize=options.optimize)
+            return mod
         end
     end
 end
