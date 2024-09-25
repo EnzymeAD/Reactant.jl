@@ -75,7 +75,7 @@ function Base.setindex!(
     v = promote_to(TracedRArray{T,N}, v)
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_update_slice(
-           a.mlir_data, v, indices
+           a.mlir_data, v.mlir_data, indices
         ),
         1,
     )
