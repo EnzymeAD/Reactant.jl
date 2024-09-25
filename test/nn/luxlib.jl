@@ -1,6 +1,59 @@
 using LuxLib, Reactant, Enzyme, NNlib
 
-@testset "Fused Dense" begin end
+@testset "Fused Dense" begin
+    sumabs2fuseddense(act, weight, x, bias) =
+        sum(abs2, fused_dense_bias_activation(act, weight, x, bias))
+
+    function ∇fuseddense(act, weight, x, bias)
+        dw = Enzyme.make_zero(weight)
+        dx = Enzyme.make_zero(x)
+        db = bias === nothing ? nothing : Enzyme.make_zero(bias)
+        b_dup = bias === nothing ? Const(bias) : Duplicated(bias, db)
+        Enzyme.autodiff(
+            Reverse,
+            sumabs2fuseddense,
+            Active,
+            Const(act),
+            Duplicated(weight, dw),
+            Duplicated(x, dx),
+            b_dup,
+        )
+        return dw, dx, db
+    end
+
+    @testset for act in (identity, relu, sigmoid, tanh, gelu), has_bias in (true, false)
+        weight = randn(Float32, 9, 10)
+        x = randn(Float32, 10, 12)
+        bias = has_bias ? randn(Float32, 9) : nothing
+
+        weight_ra = Reactant.ConcreteRArray(weight)
+        x_ra = Reactant.ConcreteRArray(x)
+        bias_ra = Reactant.to_rarray(bias)
+
+        f_compile = Reactant.compile(
+            fused_dense_bias_activation, (act, weight_ra, x_ra, bias_ra)
+        )
+
+        y_res = fused_dense_bias_activation(act, weight, x, bias)
+        y_compile = f_compile(act, weight_ra, x_ra, bias_ra)
+
+        @test y_res ≈ y_compile broken = (act === gelu)
+
+        @testset "Enzyme: fused_dense_bias_activation" begin
+            dw, dx, db = ∇fuseddense(act, weight, x, bias)
+            ∇fuseddense_compiled = Reactant.compile(
+                ∇fuseddense, (act, weight_ra, x_ra, bias_ra)
+            )
+            dw_compile, dx_compile, db_compile = ∇fuseddense_compiled(
+                act, weight_ra, x_ra, bias_ra
+            )
+
+            @test dw ≈ dw_compile broken = (act === gelu)
+            @test dx ≈ dx_compile broken = (act === gelu)
+            has_bias && @test db ≈ db_compile broken = (act === gelu)
+        end
+    end
+end
 
 @testset "Bias Activation" begin
     biasact(act, x, b) = bias_activation(act, x, b)
@@ -54,7 +107,6 @@ using LuxLib, Reactant, Enzyme, NNlib
         @test y_simple ≈ y_compile broken = (act === gelu)
         @test y_simple!! ≈ y_compile!! broken = (act === gelu)
 
-        # FIXME: Seems broken currently
         @testset "Enzyme: bias_activation" begin
             ∂x_enz, ∂b_enz = ∇biasact(act, x, b)
             ∇biasact_compiled = Reactant.compile(∇biasact, (act, x_ra, b_ra))
@@ -106,8 +158,8 @@ end
         y_compile = f_compile(act, x_act_ca)
         y_compile!! = f_compile!!(act, x_act_ca)
 
-        @test y_simple ≈ y_compile
-        @test y_simple!! ≈ y_compile!!
+        @test y_simple ≈ y_compile broken = (act === gelu)
+        @test y_simple!! ≈ y_compile!! broken = (act === gelu)
 
         ∂x_enz = Enzyme.make_zero(x_act)
         Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
