@@ -1,3 +1,62 @@
+traced_getfield(obj, field) = Base.getfield(obj, field)
+
+function create_result(tocopy::T, path, result_stores) where {T}
+    if !isstructtype(typeof(tocopy))
+        error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
+    end
+
+    elems = Union{Symbol,Expr}[]
+
+    for i in 1:fieldcount(T)
+        ev = create_result(getfield(tocopy, i), append_path(path, i), result_stores)
+        push!(elems, ev)
+    end
+
+    return Expr(:new, T, elems...)
+end
+
+function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
+    restore = result_stores[path]
+    delete!(result_stores, path)
+    return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
+end
+
+function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
+    elems = Expr[]
+    for (i, v) in enumerate(tocopy)
+        push!(elems, create_result(v, append_path(path, i), result_stores))
+    end
+    return :($T[$(elems...)])
+end
+
+function create_result(tocopy::Tuple, path, result_stores)
+    elems = Union{Symbol,Expr}[]
+    for (k, v) in pairs(tocopy)
+        push!(elems, create_result(v, append_path(path, k), result_stores))
+    end
+    return :(($(elems...),))
+end
+
+function create_result(tocopy::NamedTuple{K,T}, path, result_stores) where {K,T}
+    elems = Union{Symbol,Expr}[]
+    for (i, (k, v)) in enumerate(pairs(tocopy))
+        push!(elems, create_result(v, append_path(path, i), result_stores))
+    end
+    return :(NamedTuple{$K}(($(elems...),)))
+end
+
+function create_result(tocopy::D, path, result_stores) where {K,V,D<:AbstractDict{K,V}}
+    elems = Expr[]
+    for (i, p) in enumerate(pairs(tocopy))
+        push!(elems, create_result(p, append_path(path, i), result_stores))
+    end
+    return :($D([$(elems...)]))
+end
+
+for T in [Int, AbstractFloat, AbstractString, Nothing, Type, Symbol]
+    @eval create_result(tocopy::$T, path, result_stores) = Meta.quot(tocopy)
+end
+
 const opt_passes::String = join(
     [
         "inline{default-pipeline=canonicalize max-iterations=4}",
@@ -287,65 +346,6 @@ macro compile(options, maybe_call=nothing)
         args = $(esc(Expr(:tuple, call.args[2:end]...)))
         compile(f, args)
     end
-end
-
-traced_getfield(obj, field) = Base.getfield(obj, field)
-
-function create_result(tocopy::T, path, result_stores) where {T}
-    if !isstructtype(typeof(tocopy))
-        error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
-    end
-
-    elems = Union{Symbol,Expr}[]
-
-    for i in 1:fieldcount(T)
-        ev = create_result(getfield(tocopy, i), append_path(path, i), result_stores)
-        push!(elems, ev)
-    end
-
-    return Expr(:new, T, elems...)
-end
-
-function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
-    restore = result_stores[path]
-    delete!(result_stores, path)
-    return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
-end
-
-function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
-    elems = Expr[]
-    for (i, v) in enumerate(tocopy)
-        push!(elems, create_result(v, append_path(path, i), result_stores))
-    end
-    return :($T[$(elems...)])
-end
-
-function create_result(tocopy::Tuple, path, result_stores)
-    elems = Union{Symbol,Expr}[]
-    for (k, v) in pairs(tocopy)
-        push!(elems, create_result(v, append_path(path, k), result_stores))
-    end
-    return :(($(elems...),))
-end
-
-function create_result(tocopy::NamedTuple{K,T}, path, result_stores) where {K,T}
-    elems = Union{Symbol,Expr}[]
-    for (i, (k, v)) in enumerate(pairs(tocopy))
-        push!(elems, create_result(v, append_path(path, i), result_stores))
-    end
-    return :(NamedTuple{$K}(($(elems...),)))
-end
-
-function create_result(tocopy::D, path, result_stores) where {K,V,D<:AbstractDict{K,V}}
-    elems = Expr[]
-    for (i, p) in enumerate(pairs(tocopy))
-        push!(elems, create_result(p, append_path(path, i), result_stores))
-    end
-    return :($D([$(elems...)]))
-end
-
-for T in [Int, AbstractFloat, AbstractString, Nothing, Type, Symbol]
-    @eval create_result(tocopy::$T, path, result_stores) = Meta.quot(tocopy)
 end
 
 function compile(f, args; pipeline_options="", client=nothing)
