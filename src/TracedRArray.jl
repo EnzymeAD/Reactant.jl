@@ -458,13 +458,13 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-for (jlop, hloop, hlocomp) in (
-    (:(Base.:(==)), :compare, "EQ"),
-    (:(Base.:(!=)), :compare, "NE"),
-    (:(Base.:(>=)), :compare, "GE"),
-    (:(Base.:(>)), :compare, "GT"),
-    (:(Base.:(<=)), :compare, "LE"),
-    (:(Base.:(<)), :compare, "LT"),
+for (jlop, hloop, hlocomp, merge) in (
+    (:(Base.:(==)), :compare, "EQ", :all),
+    (:(Base.:(!=)), :compare, "NE", :any),
+    (:(Base.:(>=)), :compare, "GE", nothing),
+    (:(Base.:(>)), :compare, "GT", nothing),
+    (:(Base.:(<=)), :compare, "LE", nothing),
+    (:(Base.:(<)), :compare, "LT", nothing),
 )
     @eval begin
         function elem_apply(
@@ -489,43 +489,50 @@ for (jlop, hloop, hlocomp) in (
         end
 
         function elem_apply(
-            ::typeof($jlop), @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
+            fn::typeof($jlop), @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
         ) where {T,N}
-            rhs = promote_to(lhs, rhs)
-            return TracedRArray{T,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
-                        lhs.mlir_data,
-                        rhs.mlir_data;
-                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                            MLIR.IR.context(), $hlocomp
-                        ),
-                    ),
-                    1,
-                ),
-                size(lhs),
-            )
+            elem_apply(fn, lhs, promote_to(lhs, rhs))
         end
 
         function elem_apply(
             ::typeof($jlop), @nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
         ) where {T,N}
-            lhs = promote_to(rhs, lhs)
-            return TracedRArray{T,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
-                        lhs.mlir_data,
-                        rhs.mlir_data;
-                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                            MLIR.IR.context(), $hlocomp
-                        ),
-                    ),
-                    1,
-                ),
-                size(lhs),
-            )
+            elem_apply(fn, promote_to(rhs, lhs), rhs)
+        end
+
+        function $jlop(@nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
+        ) where {T, N}
+            $jlop(lhs, promote_to(lhs, rhs))
+        end
+
+        function $jlop(@nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
+        ) where {T, N}
+            $jlop(promote_to(rhs, lhs), rhs)
+        end
+    end
+    
+    if merge != nothing
+        @eval begin
+            function $jlop(
+                @nospecialize(lhs::TracedRArray{T,N}),
+                @nospecialize(rhs::TracedRArray{T,N})
+            ) where {T,N}
+                elems = elem_apply($jlop, lhs, rhs)
+                if N == 0
+                    elems
+                else
+                    $merge(elems)
+                end
+            end
+        end
+    else
+        @eval begin
+            function $jlop(
+                @nospecialize(lhs::TracedRArray{T,0}),
+                @nospecialize(rhs::TracedRArray{T,0})
+            ) where {T}
+                elem_apply($jlop, lhs, rhs)
+            end
         end
     end
 end

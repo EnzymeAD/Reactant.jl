@@ -433,7 +433,7 @@ function make_tracer(seen, prev::Core.Box, @nospecialize(path), mode; kwargs...)
     end
     prev2 = prev.contents
     tr = make_tracer(seen, prev2, append_path(path, :contents), mode; kwargs...)
-    if tr == prev2
+    if tr === prev2
         seen[prev] = prev
         return prev
     end

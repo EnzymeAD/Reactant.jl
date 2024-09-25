@@ -213,17 +213,17 @@ end
     @test cat3(x) ≈ cat3_compiled(x_concrete)
 end
 
+function update_on_copy(x)
+    y = x[1:2, 2:4, :]
+    y[1:1, 1:1, :] = ones(1, 1, 3)
+    return y
+end
+
 @testset "view / setindex" begin
     x = rand(2, 4, 3)
     y = copy(x)
     x_concrete = Reactant.to_rarray(x)
     y_concrete = Reactant.to_rarray(y)
-
-    function update_on_copy(x)
-        y = x[1:2, 2:4, :]
-        y[1:1, 1:1, :] = ones(1, 1, 3)
-        return y
-    end
 
     update_on_copy_compiled = Reactant.compile(update_on_copy, (x_concrete,))
 
