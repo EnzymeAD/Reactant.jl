@@ -28,8 +28,7 @@ using NNlib, Reactant, Enzyme
         ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
 
         @test y_simple ≈ y_compile
-        # Mathematically the gelu definition here is slightly different from the one in NNlib
-        @test ∂x_enz ≈ ∂x_compile broken = (act === gelu)
+        @test ∂x_enz ≈ ∂x_compile
     end
 end
 
