@@ -16,6 +16,10 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
+function Base.getindex(a::TracedRArray{T,0}) where T
+    return a
+end
+
 function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Integer,N}) where {T,N}
     @warn(
         """Performing scalar indexing on task $(current_task()).
@@ -41,6 +45,46 @@ and require expensive copies and synchronization each time and therefore should 
         1,
     )
     return TracedRArray{T,0}((), res2, ())
+end
+
+function Base.getindex(
+    a::TracedRArray{T,N}, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+) where {T,N}
+    indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.slice(
+            a.mlir_data;
+            start_indices=MLIR.IR.DenseArrayAttribute([
+                Int64(first(i) - 1) for i in indices
+            ]),
+            limit_indices=MLIR.IR.DenseArrayAttribute([Int64(last(i)) for i in indices]),
+            strides=MLIR.IR.DenseArrayAttribute([Int64(1) for i in indices]),
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, Tuple(length.(indices)))
+end
+
+function Base.view(
+    a::TracedRArray{T,N}, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+) where {T,N}
+    # TODO: Implement before merging the PR
+    return error("view is not supported yet")
+end
+
+function Base.setindex!(
+    a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+) where {T,N}
+    indices = [(promote_to(TracedRArray{Int, 0}, i isa Colon ? 1 : first(i))-1).mlir_data for i in indices]
+    v = promote_to(TracedRArray{T,N}, v)
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.dynamic_update_slice(
+           a.mlir_data, v.mlir_data, indices
+        ),
+        1,
+    )
+    a.mlir_data = res
+    return v
 end
 
 Base.size(x::TracedRArray) = x.shape
@@ -118,6 +162,9 @@ end
 
 function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     if isa(rhs, TracedRArray)
+        if typeof(rhs) == TracedRArray{T, N}
+            return rhs
+        end
         return TracedRArray{T,N}(
             (),
             MLIR.IR.result(
@@ -136,10 +183,11 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
         )
         return ta
     end
-    attr = MLIR.IR.DenseElementsAttribute(mlir_type(TracedRArray{T,N}, size(rhs)), rhs)
-    return TracedRArray{T,N}(
+    T0 = eltype(rhs)
+    attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
+    return promote_to(TracedRArray{T, N}, TracedRArray{T0,length(size(rhs))}(
         (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(rhs)
-    )
+    ))
 end
 
 function promote_to(lhs::TracedRArray{T,N}, rhs) where {T,N}
@@ -410,13 +458,13 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-for (jlop, hloop, hlocomp) in (
-    (:(Base.:(==)), :compare, "EQ"),
-    (:(Base.:(!=)), :compare, "NE"),
-    (:(Base.:(>=)), :compare, "GE"),
-    (:(Base.:(>)), :compare, "GT"),
-    (:(Base.:(<=)), :compare, "LE"),
-    (:(Base.:(<)), :compare, "LT"),
+for (jlop, hloop, hlocomp, merge) in (
+    (:(Base.:(==)), :compare, "EQ", :all),
+    (:(Base.:(!=)), :compare, "NE", :any),
+    (:(Base.:(>=)), :compare, "GE", nothing),
+    (:(Base.:(>)), :compare, "GT", nothing),
+    (:(Base.:(<=)), :compare, "LE", nothing),
+    (:(Base.:(<)), :compare, "LT", nothing),
 )
     @eval begin
         function elem_apply(
@@ -441,43 +489,50 @@ for (jlop, hloop, hlocomp) in (
         end
 
         function elem_apply(
-            ::typeof($jlop), @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
+            fn::typeof($jlop), @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
         ) where {T,N}
-            rhs = promote_to(lhs, rhs)
-            return TracedRArray{T,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
-                        lhs.mlir_data,
-                        rhs.mlir_data;
-                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                            MLIR.IR.context(), $hlocomp
-                        ),
-                    ),
-                    1,
-                ),
-                size(lhs),
-            )
+            elem_apply(fn, lhs, promote_to(lhs, rhs))
         end
 
         function elem_apply(
             ::typeof($jlop), @nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
         ) where {T,N}
-            lhs = promote_to(rhs, lhs)
-            return TracedRArray{T,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
-                        lhs.mlir_data,
-                        rhs.mlir_data;
-                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                            MLIR.IR.context(), $hlocomp
-                        ),
-                    ),
-                    1,
-                ),
-                size(lhs),
-            )
+            elem_apply(fn, promote_to(rhs, lhs), rhs)
+        end
+
+        function $jlop(@nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
+        ) where {T, N}
+            $jlop(lhs, promote_to(lhs, rhs))
+        end
+
+        function $jlop(@nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
+        ) where {T, N}
+            $jlop(promote_to(rhs, lhs), rhs)
+        end
+    end
+    
+    if merge != nothing
+        @eval begin
+            function $jlop(
+                @nospecialize(lhs::TracedRArray{T,N}),
+                @nospecialize(rhs::TracedRArray{T,N})
+            ) where {T,N}
+                elems = elem_apply($jlop, lhs, rhs)
+                if N == 0
+                    elems
+                else
+                    $merge(elems)
+                end
+            end
+        end
+    else
+        @eval begin
+            function $jlop(
+                @nospecialize(lhs::TracedRArray{T,0}),
+                @nospecialize(rhs::TracedRArray{T,0})
+            ) where {T}
+                elem_apply($jlop, lhs, rhs)
+            end
         end
     end
 end

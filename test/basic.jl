@@ -212,3 +212,36 @@ end
     @test cat2(x) ≈ cat2_compiled(x_concrete)
     @test cat3(x) ≈ cat3_compiled(x_concrete)
 end
+
+function update_on_copy(x)
+    y = x[1:2, 2:4, :]
+    y[1:1, 1:1, :] = ones(1, 1, 3)
+    return y
+end
+
+@testset "view / setindex" begin
+    x = rand(2, 4, 3)
+    y = copy(x)
+    x_concrete = Reactant.to_rarray(x)
+    y_concrete = Reactant.to_rarray(y)
+
+    update_on_copy_compiled = Reactant.compile(update_on_copy, (x_concrete,))
+
+    y1 = update_on_copy(x)
+    y2 = update_on_copy_compiled(x_concrete)
+    @test x == y
+    @test x_concrete == y_concrete
+    @test y1 == y2
+
+    # function update_inplace(x)
+    #     y = view(x, 1:2, 1:2, :)
+    #     y[1, 1, :] .= 1
+    #     return y
+    # end
+
+    # get_indices(x) = x[1:2, 1:2, :]
+    # get_view(x) = view(x, 1:2, 1:2, :)
+
+    # get_indices_compiled = Reactant.compile(get_indices, (x_concrete,))
+    # get_view_compiled = Reactant.compile(get_view, (x_concrete,))
+end
