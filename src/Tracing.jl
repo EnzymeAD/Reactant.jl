@@ -38,8 +38,15 @@ function traced_type(::Type{T}, seen, mode) where {T<:Function}
 
     # in closures, enclosured variables need to be traced
     N = fieldcount(T)
+    changed = false
     traced_fieldtypes = ntuple(Val(N)) do i
-        return traced_type(fieldtype(T, i), seen, mode)
+        next = traced_type(fieldtype(T, i), seen, mode)
+        changed |=  next != fieldtype(T, i)
+        next
+    end
+
+    if !changed
+        return T
     end
 
     # closure are struct types with the types of enclosured vars as type parameters
