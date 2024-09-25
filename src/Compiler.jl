@@ -346,14 +346,222 @@ macro compile(options, maybe_call=nothing)
     end
 end
 
-function compile(f, args; pipeline_options="", client=nothing)
-    N = length(args)
+"""
+    codegen_flatten!
+
+Generate Julia code to extract the XLA buffers from input arguments.
+The name is due to its similarity to the `flatten` function in `jax.tree_util.register_pytree_node`.
+
+# Arguments
+
+- `linear_args`: A list of arguments to be flattened.
+
+# Returns
+
+- `flatten_names`: A list of `Symbol`s representing the names of the flattened arguments.
+- `flatten_code`: A list of `Expr`s to extract the XLA buffers from the input arguments.
+
+# Note
+
+The _linearized arguments_ do not directly refer to the  are the arguments that have been flattened into a single list.
+"""
+function codegen_flatten!(linear_args, result_stores)
+    flatten_names = Symbol[]
+    flatten_code = Expr[]
+    resarg_code = Expr[]
+
+    for (i, arg) in enumerate(linear_args)
+        paths = ((p for p in arg.paths if p[1] == :args)...,)
+        path = if length(paths) == 1
+            paths[1]
+        else
+            throw("Invalid path duplication $(arg.paths) into $(paths)")
+        end
+
+        usbuf = Symbol(:usbuf_, i)
+        sbuf = Symbol(:sbuf_, i)
+        push!(flatten_names, sbuf)
+
+        flatcode = :(getindex(args, $(path[2])))
+        for p in path[3:end]
+            flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
+        end
+        push!(flatten_code, :($usbuf = $flatcode.data))
+        push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+
+        # TODO
+        respaths = ((p for p in arg.paths if p[1] != :args)...,)
+
+        resarg = false
+        for respath in respaths
+            if respath[1] == :result
+                flatcode = :result
+                respath = respath[2:end]
+                result_stores[respath] = usbuf
+                resarg = true
+                continue
+            else
+                @assert respath[1] == :resargs
+                if respath[2] == path[2]
+                    continue
+                end
+                flatcode = :(args[$(respath[2])])
+                path = path[3:end]
+            end
+            for p in path
+                flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
+            end
+            resarg = true
+            flatcode = :($flatcode.data = $usbuf)
+            @show flatcode
+            push!(flatten_code, res)
+        end
+        if resarg
+            push!(resarg_code, :($usbuf = $flatcode.data))
+        end
+    end
+    return flatten_names, flatten_code, resarg_code
+end
+
+"""
+    codegen_unflatten!
+
+Generate Julia code to wrap the XLA buffers back into the output result datatypes.
+The name is due to its similarity to the `unflatten` function in `jax.tree_util.register_pytree_node`.
+"""
+function codegen_unflatten!(
+    linear_args,
+    preserved_args,
+    concretized_res_names,
+    linear_results,
+    concrete_result,
+    result_stores,
+)
+    unflatten_code = Expr[]
+
+    # mutate the result stores to point to the correct concrete results
+    for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
+        paths = ((p for p in result.paths if p[1] != :args)...,)
+        for path in paths
+            if path[1] == :result
+                unflatcode = :result
+                path = path[2:end]
+                result_stores[path] = concrete_res_name
+                continue
+            else
+                @assert path[1] == :resargs
+                unflatcode = :(args[$(path[2])])
+                path = path[3:end]
+            end
+
+            # unroll path tree
+            for p in path
+                unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
+            end
+            unflatcode = :($unflatcode.data = $concrete_res_name)
+
+            push!(unflatten_code, unflatcode)
+        end
+    end
+
+    prevkeys = collect(keys(result_stores))
+    result_code = create_result(concrete_result, (), result_stores)
+    postkeys = collect(keys(result_stores))
+    used = [t for t in prevkeys if !in(t, postkeys)]
+
+    # if some argument is mutated, change them to point to the correct concrete results
+    for (result, arg_idx) in preserved_args
+        for path in result.paths
+            arg = linear_args[arg_idx + 1]
+            argpath = only((p for p in arg.paths if p[1] == :args))
+
+            if path[1] == :result
+                res = :result
+                path = path[2:end]
+                if in(path, used) # TODO
+                    continue
+                end
+            else
+                @assert path[1] == :resargs || path[1] == :args
+                # We can optimize cases where we set the arg to itself
+                if path[2:end] == argpath[2:end]
+                    continue
+                end
+                res = :(args[path[2]])
+                path = path[3:end]
+            end
+            for p in path
+                res = :(traced_getfield($res, $(Meta.quot(p))))
+            end
+
+            argres = :(args[$(argpath[2])])
+            for p in argpath[3:end]
+                argres = :(traced_getfield($argres, $(Meta.quot(p))))
+            end
+
+            res = :($res.data = $argres.data)
+            push!(unflatten_code, res)
+        end
+    end
+
+    # generate return object which stores the concrete results in some arbitrary way
+    pushfirst!(unflatten_code, :(result = $result_code))
+    # push!(unflatten_code, :(return result))
+
+    return unflatten_code
+end
+
+"""
+    codegen_xla_call
+
+Generate Julia code to call the XLA executable.
+
+# Arguments
+
+- `exec`: The XLA executable to call.
+- `flatten_names`: A list of `Symbol`s representing the names of the flattened linear arguments.
+- `donated_args_mask`: A list of `UInt8`s representing whether the argument is donated.
+- `nresults`: The number of results to expect.
+"""
+function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults, resarg_code)
+    flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
+
+    concretized_res_names = Symbol[Symbol(:concrete_res_, i) for i in 1:nresults]
+    concretized_res_code = map(enumerate(concretized_res_names)) do (i, varname)
+        :($varname = linearized_results[$i])
+    end
+
+    xla_call_code = if nresults == 0
+        quote
+            $(resarg_code...)
+        end
+    else
+        quote
+            GC.@preserve $(flatten_names...) begin
+                linearized_results = XLA.ExecutableCall(
+                    $exec,
+                    ($(flatten_buffer_refs...),),
+                    $(Tuple(donated_args_mask)),
+                    Val($nresults),
+                )
+            end
+            $(concretized_res_code...)
+        end
+    end
+
+    return concretized_res_names, xla_call_code
+end
+
+function compile_xla(f, args; client=nothing)
+    # register MLIR dialects
     ctx = MLIR.IR.Context()
     Base.append!(registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    MLIR.IR.context!(ctx) do
+
+    return MLIR.IR.context!(ctx) do
+        # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_to_module!(
+        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
             mod, f, args; optimize=true
         )
 
@@ -368,190 +576,67 @@ function compile(f, args; pipeline_options="", client=nothing)
             end
         end
 
+        # compile MLIR module to XLA executable
         exec = XLA.Compile(client, mod)
-        fnwrap = isclosure ? f : nothing
-        closure_ty = typeof(fnwrap)
-
-        arg_syncs = Expr[]
-        resarg_syncs = Expr[]
-        topres = Symbol[]
-        linearized_args = Union{Symbol,Expr}[]
-
-        concretize = Expr[]
-        for (idx, _) in enumerate(linear_results)
-            push!(concretize, :($(Symbol(:concrete_res_, idx)) = linearized_results[$idx]))
-        end
-
-        delinearized_results = Expr[]
-
-        result_stores = Dict{Tuple,Symbol}()
-
-        for (i, arg) in enumerate(linear_args)
-            paths = ((p for p in arg.paths if p[1] == :args)...,)
-            path = if length(paths) == 1
-                paths[1]
-            else
-                throw("Invalid path duplication $(arg.paths) into $(paths)")
-            end
-            res = :(getindex(args, $(path[2])))
-            for p in path[3:end]
-                res = :(traced_getfield($res, $(Meta.quot(p))))
-            end
-            usym = Symbol("usbuf_$i")
-            usbuf = :($usym = $res.data)
-            sym = Symbol("sbuf_$i")
-            sbuf = :($sym = XLA.synced_buffer($usym))
-            push!(arg_syncs, usbuf)
-            push!(arg_syncs, sbuf)
-
-            push!(topres, sym)
-
-            res = :($sym.buffer)
-            push!(linearized_args, res)
-
-            respaths = ((p for p in arg.paths if p[1] != :args)...,)
-
-            resarg = false
-            for respath in respaths
-                if respath[1] == :result
-                    res = Symbol("result")
-                    respath = respath[2:end]
-                    result_stores[respath] = usym
-                    resarg = true
-                    continue
-                else
-                    @assert respath[1] == :resargs
-                    if respath[2] == path[2]
-                        continue
-                    end
-                    res = :(args[$(respath[2])])
-                    path = path[3:end]
-                end
-                for p in path
-                    res = :(traced_getfield($res, $(Meta.quot(p))))
-                end
-                resarg = true
-                res = :($res.data = $usym)
-                push!(delinearized_results, res)
-            end
-            if resarg
-                push!(resarg_syncs, usbuf)
-            end
-        end
-
-        for (idx, result) in enumerate(linear_results)
-            paths = ((p for p in result.paths if p[1] != :args)...,)
-            for path in paths
-                if path[1] == :result
-                    res = Symbol("result")
-                    path = path[2:end]
-                    result_stores[path] = Symbol("concrete_res_$(idx)")
-                    continue
-                else
-                    # if path[1] != :resargs
-                    #     @show idx #, result
-                    #     @show paths
-                    #     @show path
-                    # end
-                    @assert path[1] == :resargs
-                    res = :(args[$(path[2])])
-                    path = path[3:end]
-                end
-                for p in path
-                    res = :(traced_getfield($res, $(Meta.quot(p))))
-                end
-                res = :($res.data = $(Symbol("concrete_res_$(idx)")))
-                push!(delinearized_results, res)
-            end
-        end
-
-        donated_args_set = zeros(UInt8, length(linearized_args))
-        preserved_argnums = [i for (_, i) in preserved_args]
-        for (i, _) in enumerate(linear_args)
-            if !in(i, preserved_argnums)
-                donated_args_set[i] = 1
-            end
-        end
-        donated_args_set = (donated_args_set...,)
-
-        exec_call = if length(linear_results) == 0
-            quote
-                $(resarg_syncs...)
-            end
-        else
-            quote
-                $(arg_syncs...)
-                GC.@preserve $(topres...) begin
-                    linearized_results = XLA.ExecutableCall(
-                        $exec, # thunk.exec,
-                        ($(linearized_args...),),
-                        $donated_args_set,
-                        Val($(length(linear_results))),
-                    )
-                end
-            end
-        end
-
-        prevkeys = collect(keys(result_stores))
-        resexpr = create_result(concrete_result, (), result_stores)
-        postkeys = collect(keys(result_stores))
-        used = [t for t in prevkeys if !in(t, postkeys)]
-
-        for (result, arg_idx) in preserved_args
-            for path in result.paths
-                arg = linear_args[arg_idx + 1]
-                argpath = only((p for p in arg.paths if p[1] == :args))
-
-                if path[1] == :result
-                    res = Symbol("result")
-                    path = path[2:end]
-                    if in(path, used)
-                        continue
-                    end
-                else
-                    @assert path[1] == :resargs || path[1] == :args
-                    # We can optimize cases where we set the arg to itself
-                    if path[2:end] == argpath[2:end]
-                        continue
-                    end
-                    res = :(args[path[2]])
-                    path = path[3:end]
-                end
-                for p in path
-                    res = :(traced_getfield($res, $(Meta.quot(p))))
-                end
-
-                argres = :(args[$(argpath[2])])
-                for p in argpath[3:end]
-                    argres = :(traced_getfield($argres, $(Meta.quot(p))))
-                end
-
-                res = :($res.data = $argres.data)
-                push!(delinearized_results, res)
-            end
-        end
-
-        fname = gensym(Symbol(Symbol(f), :_reactant))
-
-        expr = :(function $fname(args...)
-            $(
-                # if `f` is a closure, then prepend the closure into `args`
-                # the closure fields will be correctly extracted from it as the tracer has already passed through it
-                if !(closure_ty <: Nothing)
-                    :(args = ($fnwrap, args...))
-                end
-            )
-            $exec_call
-            $(concretize...)
-            # Needs to store into result
-            result = $resexpr
-            $(delinearized_results...)
-            return result
-        end)
-
-        body = expr.args[2]
-        return register_thunk(fname, body)
+        return exec,
+        linear_args, linear_results, preserved_args, seen_args, concrete_result,
+        isclosure
     end
+end
+
+function compile(f, args; client=nothing)
+    exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
+        f, args
+    )
+
+    preserved_args_idx = last.(preserved_args)
+    donated_args_mask = map(1:length(linear_args)) do i
+        UInt8(i ∉ preserved_args_idx)
+    end
+
+    fnwrap = isclosure ? f : nothing
+    closure_ty = typeof(fnwrap)
+
+    result_stores = Dict{Tuple,Symbol}()
+
+    # generate Julia `Thunk` code
+    flatten_arg_names, flatten_code, resarg_code = codegen_flatten!(
+        linear_args, result_stores
+    )
+
+    concretized_res_names, xla_call_code = codegen_xla_call(
+        exec, flatten_arg_names, donated_args_mask, length(linear_results), resarg_code
+    )
+
+    unflatten_code = codegen_unflatten!(
+        linear_args,
+        preserved_args,
+        concretized_res_names,
+        linear_results,
+        concrete_result,
+        result_stores,
+    )
+
+    fname = gensym(Symbol(Symbol(f), :_reactant))
+    expr = :(function $fname(args...)
+        $(
+            # if `f` is a closure, then prepend the closure into `args`
+            # the closure fields will be correctly extracted from it as the tracer has already passed through it
+            if !(closure_ty <: Nothing)
+                :(args = ($fnwrap, args...))
+            end
+        )
+        $(flatten_code...)
+        $xla_call_code
+        $(resarg_code...)
+        $(unflatten_code...)
+        return result
+    end)
+
+    @show flatten_code xla_call_code resarg_code unflatten_code
+
+    body = expr.args[2]
+    return register_thunk(fname, body)
 end
 
 # inspired by RuntimeGeneratedFunction.jl
