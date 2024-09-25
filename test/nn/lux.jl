@@ -1,5 +1,34 @@
 using Reactant, Lux, Random, Statistics, Enzyme, Functors, OneHotArrays
 
+# Lux.Exprimental.TrainState is very specialized for Lux models, so we write out the
+# training loop manually:
+function crossentropy(ŷ, y)
+    logŷ = log.(ŷ)
+    result = y .* logŷ
+    return -sum(result)
+end
+
+function loss_function(model, x, y, ps, st)
+    y_hat, _ = model(x, ps, st)
+    # return CrossEntropyLoss()(y_hat, y)
+    return crossentropy(y_hat, y)
+end
+
+function gradient_loss_function(model, x, y, ps, st)
+    dps = Enzyme.make_zero(ps)
+    _, res = Enzyme.autodiff(
+        ReverseWithPrimal,
+        loss_function,
+        Active,
+        Const(model),
+        Const(x),
+        Const(y),
+        Duplicated(ps, dps),
+        Const(st),
+    )
+    return res, dps
+end
+
 @testset "Lux.jl Integration" begin
     # Generate some data for the XOR problem: vectors of length 2, as columns of a matrix:
     noisy = rand(Float32, 2, 1000)                                        # 2×1000 Matrix{Float32}
@@ -32,36 +61,6 @@ using Reactant, Lux, Random, Statistics, Enzyme, Functors, OneHotArrays
 
     ctarget = Reactant.ConcreteRArray(Array{Float32}(target))
     # ctarget = Reactant.to_rarray(target)
-
-    # Lux.Exprimental.TrainState is very specialized for Lux models, so we write out the
-    # training loop manually:
-    function crossentropy(ŷ, y)
-        logŷ = log.(ŷ)
-        result = y .* logŷ
-        # result = ifelse.(y .== 0.0f0, zero.(result), result)
-        return -sum(result)
-    end
-
-    function loss_function(model, x, y, ps, st)
-        y_hat, _ = model(x, ps, st)
-        # return CrossEntropyLoss()(y_hat, y)
-        return crossentropy(y_hat, y)
-    end
-
-    function gradient_loss_function(model, x, y, ps, st)
-        dps = Enzyme.make_zero(ps)
-        _, res = Enzyme.autodiff(
-            ReverseWithPrimal,
-            loss_function,
-            Active,
-            Const(model),
-            Const(x),
-            Const(y),
-            Duplicated(ps, dps),
-            Const(st),
-        )
-        return res, dps
-    end
 
     res, dps = gradient_loss_function(model, noisy, target, ps, st)
 

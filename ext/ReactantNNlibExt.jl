@@ -27,7 +27,6 @@ function NNlib.gelu(x::Reactant.TracedRArray{T,0}) where {T}
     return x * sigmoid(λλ * x * muladd(x^2, α, one(T)))
 end
 
-
 # TODO handle non finite cases
 function NNlib.softmax!(
     out::Reactant.TracedRArray{T,N}, x::AbstractArray; dims=1
