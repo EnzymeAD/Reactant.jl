@@ -79,7 +79,7 @@ function Base.setindex!(
         ),
         1,
     )
-    a.mlir_data = v.mlir_data
+    a.mlir_data = res
     return v
 end
 
