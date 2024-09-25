@@ -71,7 +71,7 @@ end
 function Base.setindex!(
     a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
 ) where {T,N}
-    indices = [promote_to(TracedRArray{Int, 0}, i isa Colon ? 1 : first(i))-1 for i in indices]
+    indices = [(promote_to(TracedRArray{Int, 0}, i isa Colon ? 1 : first(i))-1).mlir_data for i in indices]
     v = promote_to(TracedRArray{T,N}, v)
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_update_slice(
