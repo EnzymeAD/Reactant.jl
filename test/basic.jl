@@ -246,7 +246,7 @@ end
     # get_view_compiled = Reactant.compile(get_view, (x_concrete,))
 end
 
-tuple_byref(x) = (; a =(; b=x))
+tuple_byref(x) = (; a=(; b=x))
 tuple_byref2(x) = abs2.(x), tuple_byref2(x)
 
 @testset "Tuple byref" begin
@@ -254,7 +254,7 @@ tuple_byref2(x) = abs2.(x), tuple_byref2(x)
     f1 = Reactant.compile(tuple_byref, (x,))
     r1 = f1(x)
     @test r1.a.b.data === x.data
-    
+
     # TODO this seems to hang during compile
     # f2 = Reactant.compile(tuple_byref2, (x,))
     # r2 = f2(x)
