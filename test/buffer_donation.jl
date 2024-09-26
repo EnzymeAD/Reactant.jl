@@ -21,7 +21,7 @@ end
 
     _, _, _, preserved_args, _, _, _ = Reactant.compile_xla(donate_fill_x_with_2, (a, b))
     preserved_args_idx = last.(preserved_args)
-    @test preserved_args_idx == [0]
+    @test preserved_args_idx == [1]
 
     a = Reactant.ConcreteRArray(2 * ones(2, 2))
     b = Reactant.ConcreteRArray(3 * ones(2, 2))
