@@ -16,7 +16,7 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
-function Base.getindex(a::TracedRArray{T,0}) where T
+function Base.getindex(a::TracedRArray{T,0}) where {T}
     return a
 end
 
@@ -75,13 +75,13 @@ end
 function Base.setindex!(
     a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
 ) where {T,N}
-    indices = [(promote_to(TracedRArray{Int, 0}, i isa Colon ? 1 : first(i))-1).mlir_data for i in indices]
+    indices = [
+        (promote_to(TracedRArray{Int,0}, i isa Colon ? 1 : first(i)) - 1).mlir_data for
+        i in indices
+    ]
     v = promote_to(TracedRArray{T,N}, v)
     res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dynamic_update_slice(
-           a.mlir_data, v.mlir_data, indices
-        ),
-        1,
+        MLIR.Dialects.stablehlo.dynamic_update_slice(a.mlir_data, v.mlir_data, indices), 1
     )
     a.mlir_data = res
     return v
@@ -162,7 +162,7 @@ end
 
 function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     if isa(rhs, TracedRArray)
-        if typeof(rhs) == TracedRArray{T, N}
+        if typeof(rhs) == TracedRArray{T,N}
             return rhs
         end
         return TracedRArray{T,N}(
@@ -185,9 +185,12 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     end
     T0 = eltype(rhs)
     attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
-    return promote_to(TracedRArray{T, N}, TracedRArray{T0,length(size(rhs))}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(rhs)
-    ))
+    return promote_to(
+        TracedRArray{T,N},
+        TracedRArray{T0,length(size(rhs))}(
+            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(rhs)
+        ),
+    )
 end
 
 function promote_to(lhs::TracedRArray{T,N}, rhs) where {T,N}
@@ -491,31 +494,32 @@ for (jlop, hloop, hlocomp, merge) in (
         function elem_apply(
             fn::typeof($jlop), @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
         ) where {T,N}
-            elem_apply(fn, lhs, promote_to(lhs, rhs))
+            return elem_apply(fn, lhs, promote_to(lhs, rhs))
         end
 
         function elem_apply(
             ::typeof($jlop), @nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
         ) where {T,N}
-            elem_apply(fn, promote_to(rhs, lhs), rhs)
+            return elem_apply(fn, promote_to(rhs, lhs), rhs)
         end
 
-        function $jlop(@nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
-        ) where {T, N}
-            $jlop(lhs, promote_to(lhs, rhs))
+        function $jlop(
+            @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
+        ) where {T,N}
+            return $jlop(lhs, promote_to(lhs, rhs))
         end
 
-        function $jlop(@nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
-        ) where {T, N}
-            $jlop(promote_to(rhs, lhs), rhs)
+        function $jlop(
+            @nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
+        ) where {T,N}
+            return $jlop(promote_to(rhs, lhs), rhs)
         end
     end
-    
+
     if merge != nothing
         @eval begin
             function $jlop(
-                @nospecialize(lhs::TracedRArray{T,N}),
-                @nospecialize(rhs::TracedRArray{T,N})
+                @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::TracedRArray{T,N})
             ) where {T,N}
                 elems = elem_apply($jlop, lhs, rhs)
                 if N == 0
@@ -528,10 +532,9 @@ for (jlop, hloop, hlocomp, merge) in (
     else
         @eval begin
             function $jlop(
-                @nospecialize(lhs::TracedRArray{T,0}),
-                @nospecialize(rhs::TracedRArray{T,0})
+                @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::TracedRArray{T,0})
             ) where {T}
-                elem_apply($jlop, lhs, rhs)
+                return elem_apply($jlop, lhs, rhs)
             end
         end
     end

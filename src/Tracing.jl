@@ -41,7 +41,7 @@ function traced_type(::Type{T}, seen, mode) where {T<:Function}
     changed = false
     traced_fieldtypes = ntuple(Val(N)) do i
         next = traced_type(fieldtype(T, i), seen, mode)
-        changed |=  next != fieldtype(T, i)
+        changed |= next != fieldtype(T, i)
         next
     end
 

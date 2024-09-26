@@ -410,9 +410,9 @@ function compile(f, args; pipeline_options="", client=nothing)
 
             res = :($sym.buffer)
             push!(linearized_args, res)
-            
+
             respaths = ((p for p in arg.paths if p[1] != :args)...,)
-            
+
             resarg = false
             for respath in respaths
                 if respath[1] == :result
@@ -440,7 +440,7 @@ function compile(f, args; pipeline_options="", client=nothing)
                 push!(resarg_syncs, usbuf)
             end
         end
-        
+
         for (idx, result) in enumerate(linear_results)
             paths = ((p for p in result.paths if p[1] != :args)...,)
             for path in paths
