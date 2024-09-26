@@ -82,7 +82,9 @@ using Test
                 (Val{0.5}, Val{0.5}),
                 (Val{:x}, Val{:x}),
             ]
-                tracedty = traced_type(origty, IdDict(), Val(ConcreteToTraced))
+                tracedty = traced_type(
+                    origty, Reactant.OrderedIdDict(), Val(ConcreteToTraced)
+                )
                 @test tracedty == targetty
             end
 
@@ -93,7 +95,7 @@ using Test
                 TracedRArray{Float64,3},
             ]
                 @test_throws Union{ErrorException,String} traced_type(
-                    type, IdDict(), Val(ConcreteToTraced)
+                    type, Reactant.OrderedIdDict(), Val(ConcreteToTraced)
                 )
             end
         end

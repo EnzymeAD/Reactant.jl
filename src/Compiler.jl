@@ -176,7 +176,7 @@ function compile_to_module!(mod, f, args; optimize=true)
         end
     end
 
-    concrete_seen = IdDict()
+    concrete_seen = OrderedIdDict()
 
     concrete_result = make_tracer(
         concrete_seen, traced_result, ("result",), TracedToConcrete
