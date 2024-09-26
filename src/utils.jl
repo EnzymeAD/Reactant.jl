@@ -27,7 +27,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
     end
 
     N = length(args)
-    seen_args = IdDict()
+    seen_args = OrderedIdDict()
     traced_args = ntuple(N) do i
         return make_tracer(
             seen_args,
@@ -101,7 +101,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         end
     end
 
-    seen_results = IdDict()
+    seen_results = OrderedIdDict()
 
     traced_result = make_tracer(
         seen_results, result, (:result,), concretein ? TracedTrack : TracedSetPath

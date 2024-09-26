@@ -453,7 +453,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         end
     end
 
-    seen_results = IdDict()
+    seen_results = OrderedIdDict()
     traced2_result = make_tracer(seen_results, result, (), TracedSetPath; tobatch=OutShape)
 
     func2.operation = MLIR.API.MlirOperation(C_NULL)

@@ -1,5 +1,8 @@
 module Reactant
 
+# auxiliary types and functions
+include("OrderedIdDict.jl")
+
 using Enzyme
 
 abstract type RArray{T,N} <: AbstractArray{T,N} end
