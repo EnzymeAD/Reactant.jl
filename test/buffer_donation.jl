@@ -21,7 +21,7 @@ end
 
     _, _, _, preserved_args, _, _, _ = Reactant.compile_xla(donate_fill_x_with_2, (a, b))
     preserved_args_idx = last.(preserved_args)
-    @test preserved_args_idx == [1]
+    @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 
     a = Reactant.ConcreteRArray(2 * ones(2, 2))
     b = Reactant.ConcreteRArray(3 * ones(2, 2))
@@ -31,5 +31,5 @@ end
 
     _, _, _, preserved_args, _, _, _ = Reactant.compile_xla(donate_inplace_mul, (a, b))
     preserved_args_idx = last.(preserved_args)
-    @test preserved_args_idx == [1]
+    @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 end
