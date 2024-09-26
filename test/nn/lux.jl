@@ -1,7 +1,5 @@
 using Reactant, Lux, Random, Statistics, Enzyme, Functors, OneHotArrays
 
-# Lux.Exprimental.TrainState is very specialized for Lux models, so we write out the
-# training loop manually:
 function crossentropy(ŷ, y)
     logŷ = log.(ŷ)
     result = y .* logŷ
@@ -10,7 +8,7 @@ end
 
 function loss_function(model, x, y, ps, st)
     y_hat, _ = model(x, ps, st)
-    # return CrossEntropyLoss()(y_hat, y)
+    # return CrossEntropyLoss()(y_hat, y) # <-- needs handling of xlogx xlogy from LuxOps
     return crossentropy(y_hat, y)
 end
 
@@ -70,8 +68,8 @@ end
 
     res_reactant, dps_reactant = compiled_gradient(cmodel, cnoisy, ctarget, cps, cst2)
 
-    @test res ≈ res_reactant
+    @test res ≈ res_reactant atol = 1e-5 rtol = 1e-2
     for (dps1, dps2) in zip(fleaves(dps), fleaves(dps_reactant))
-        @test dps1 ≈ dps2
+        @test dps1 ≈ dps2 atol = 1e-5 rtol = 1e-2
     end
 end

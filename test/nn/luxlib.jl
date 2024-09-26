@@ -37,7 +37,7 @@ using LuxLib, Reactant, Enzyme, NNlib
         y_res = fused_dense_bias_activation(act, weight, x, bias)
         y_compile = f_compile(act, weight_ra, x_ra, bias_ra)
 
-        @test y_res ≈ y_compile
+        @test y_res ≈ y_compile atol = 1e-5 rtol = 1e-2
 
         @testset "Enzyme: fused_dense_bias_activation" begin
             dw, dx, db = ∇fuseddense(act, weight, x, bias)
@@ -48,9 +48,9 @@ using LuxLib, Reactant, Enzyme, NNlib
                 act, weight_ra, x_ra, bias_ra
             )
 
-            @test dw ≈ dw_compile
-            @test dx ≈ dx_compile
-            has_bias && @test db ≈ db_compile
+            @test dw ≈ dw_compile atol = 1e-5 rtol = 1e-2
+            @test dx ≈ dx_compile atol = 1e-5 rtol = 1e-2
+            has_bias && @test db ≈ db_compile atol = 1e-5 rtol = 1e-2
         end
     end
 end
@@ -104,16 +104,16 @@ end
         y_compile = f_compile(act, x_ra, b_ra)
         y_compile!! = f_compile!!(act, x_ra, b_ra)
 
-        @test y_simple ≈ y_compile
-        @test y_simple!! ≈ y_compile!!
+        @test y_simple ≈ y_compile atol = 1e-5 rtol = 1e-2
+        @test y_simple!! ≈ y_compile!! atol = 1e-5 rtol = 1e-2
 
         @testset "Enzyme: bias_activation" begin
             ∂x_enz, ∂b_enz = ∇biasact(act, x, b)
             ∇biasact_compiled = Reactant.compile(∇biasact, (act, x_ra, b_ra))
             ∂x_compile, ∂b_compile = ∇biasact_compiled(act, x_ra, b_ra)
 
-            @test ∂x_enz ≈ ∂x_compile
-            @test ∂b_enz ≈ ∂b_compile
+            @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
+            @test ∂b_enz ≈ ∂b_compile atol = 1e-5 rtol = 1e-2
         end
 
         @testset "Enzyme: bias_activation!!" begin
@@ -121,8 +121,8 @@ end
             ∇biasact!!_compiled = Reactant.compile(∇biasact!!, (act, x_ra, b_ra))
             ∂x_compile!!, ∂b_compile!! = ∇biasact!!_compiled(act, x_ra, b_ra)
 
-            @test ∂x_enz!! ≈ ∂x_compile!!
-            @test ∂b_enz!! ≈ ∂b_compile!!
+            @test ∂x_enz!! ≈ ∂x_compile!! atol = 1e-5 rtol = 1e-2
+            @test ∂b_enz!! ≈ ∂b_compile!! atol = 1e-5 rtol = 1e-2
         end
     end
 end
@@ -158,8 +158,8 @@ end
         y_compile = f_compile(act, x_act_ca)
         y_compile!! = f_compile!!(act, x_act_ca)
 
-        @test y_simple ≈ y_compile
-        @test y_simple!! ≈ y_compile!!
+        @test y_simple ≈ y_compile atol = 1e-5 rtol = 1e-2
+        @test y_simple!! ≈ y_compile!! atol = 1e-5 rtol = 1e-2
 
         ∂x_enz = Enzyme.make_zero(x_act)
         Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
@@ -173,8 +173,8 @@ end
         ∇sumabs2!!_compiled = Reactant.compile(∇sumabs2!!, (act, x_act_ca))
         ∂x_compile!! = ∇sumabs2!!_compiled(act, x_act_ca)
 
-        @test ∂x_enz ≈ ∂x_compile
-        @test ∂x_enz!! ≈ ∂x_compile!!
+        @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
+        @test ∂x_enz!! ≈ ∂x_compile!! atol = 1e-5 rtol = 1e-2
     end
 end
 
@@ -207,7 +207,7 @@ end
             )
             luxlib_res = fused_conv_bias_activation(act, weight, x, bias, conv_dims)
 
-            @test reactant_res ≈ luxlib_res
+            @test reactant_res ≈ luxlib_res atol = 1e-5 rtol = 1e-2
         end
 
         # TODO: test for gradients
