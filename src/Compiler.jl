@@ -368,7 +368,7 @@ The _linearized arguments_ do not directly refer to the  are the arguments that 
 function codegen_flatten!(linear_args, result_stores)
     flatten_names = Symbol[]
     flatten_code = Expr[]
-    resarg_code = Expr[]
+    # resarg_code = Expr[]
 
     for (i, arg) in enumerate(linear_args)
         paths = ((p for p in arg.paths if p[1] == :args)...,)
@@ -392,35 +392,34 @@ function codegen_flatten!(linear_args, result_stores)
         # TODO
         respaths = ((p for p in arg.paths if p[1] != :args)...,)
 
-        resarg = false
+        # resarg = false
         for respath in respaths
             if respath[1] == :result
                 flatcode = :result
                 respath = respath[2:end]
                 result_stores[respath] = usbuf
                 resarg = true
-                continue
             else
                 @assert respath[1] == :resargs
-                if respath[2] == path[2]
+                if respath[2] != path[2]
                     continue
                 end
-                flatcode = :(args[$(respath[2])])
+                # flatcode = :(args[$(respath[2])])
                 path = path[3:end]
             end
-            for p in path
-                flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
-            end
-            resarg = true
-            flatcode = :($flatcode.data = $usbuf)
-            @show flatcode
-            push!(flatten_code, res)
+            # for p in path
+            #     flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
+            # end
+            # resarg = true
+            # flatcode = :($flatcode.data = $usbuf)
+            # @show flatcode
+            # push!(flatten_code, res)
         end
-        if resarg
-            push!(resarg_code, :($usbuf = $flatcode.data))
-        end
+        # if resarg
+        #     push!(resarg_code, :($usbuf = $flatcode.data))
+        # end
     end
-    return flatten_names, flatten_code, resarg_code
+    return flatten_names, flatten_code
 end
 
 """
@@ -523,7 +522,7 @@ Generate Julia code to call the XLA executable.
 - `donated_args_mask`: A list of `UInt8`s representing whether the argument is donated.
 - `nresults`: The number of results to expect.
 """
-function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults, resarg_code)
+function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
     concretized_res_names = Symbol[Symbol(:concrete_res_, i) for i in 1:nresults]
@@ -532,9 +531,7 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults, resa
     end
 
     xla_call_code = if nresults == 0
-        quote
-            $(resarg_code...)
-        end
+        :()
     else
         quote
             GC.@preserve $(flatten_names...) begin
@@ -600,12 +597,10 @@ function compile(f, args; client=nothing)
     result_stores = Dict{Tuple,Symbol}()
 
     # generate Julia `Thunk` code
-    flatten_arg_names, flatten_code, resarg_code = codegen_flatten!(
-        linear_args, result_stores
-    )
+    flatten_arg_names, flatten_code = codegen_flatten!(linear_args, result_stores)
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        exec, flatten_arg_names, donated_args_mask, length(linear_results), resarg_code
+        exec, flatten_arg_names, donated_args_mask, length(linear_results)
     )
 
     unflatten_code = codegen_unflatten!(
@@ -628,12 +623,9 @@ function compile(f, args; client=nothing)
         )
         $(flatten_code...)
         $xla_call_code
-        $(resarg_code...)
         $(unflatten_code...)
         return result
     end)
-
-    @show flatten_code xla_call_code resarg_code unflatten_code
 
     body = expr.args[2]
     return register_thunk(fname, body)
