@@ -78,9 +78,7 @@ end
 
 gradient_loss_function(model, noisy, target, ps, st)
 
-compiled_gradient = Reactant.compile(
-    gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst)
-)
+compiled_gradient = @compile gradient_loss_function(cmodel, cnoisy, ctarget, cps, cst)
 
 @test length(compiled_gradient(cmodel, cnoisy, ctarget, cps, cst)) == 2
 

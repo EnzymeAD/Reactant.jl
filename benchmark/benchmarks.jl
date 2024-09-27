@@ -26,9 +26,9 @@ SUITE["comptime"]["basics"]["Basic cos"] = @benchmarkable Reactant.compile(cos, 
 SUITE["comptime"]["lux neural networks"] = BenchmarkGroup()
 
 for depth in [11, 13, 16, 19]
-    SUITE["comptime"]["lux neural networks"]["vgg$depth"] = @benchmarkable begin
-        Reactant.compile(vgg, (x, ps_concrete, st_concrete))
-    end setup = begin
+    SUITE["comptime"]["lux neural networks"]["vgg$depth"] = @benchmarkable Reactant.compile(
+        vgg, (x, ps_concrete, st_concrete)
+    ) setup = begin
         vgg = Vision.VGG($depth; pretrained=false, batchnorm=false)
         ps, st = Lux.setup(Random.default_rng(), vgg)
         ps_concrete = Reactant.to_rarray(ps)

@@ -15,13 +15,25 @@ end
 @testset "buffer_donation" begin
     a = Reactant.ConcreteRArray(ones(2, 2))
     b = Reactant.ConcreteRArray(3 * ones(2, 2))
-    f = Reactant.compile(donate_fill_x_with_2, (a, b))
+    f = @compile donate_fill_x_with_2(a, b)
     f(a, b)
     @test convert(Array, a) == 2 * ones(2, 2)
 
+    _, _, _, preserved_args, _, _, _ = Reactant.Compiler.compile_xla(
+        donate_fill_x_with_2, (a, b)
+    )
+    preserved_args_idx = last.(preserved_args)
+    @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
+
     a = Reactant.ConcreteRArray(2 * ones(2, 2))
     b = Reactant.ConcreteRArray(3 * ones(2, 2))
-    f = Reactant.compile(donate_inplace_mul, (a, b))
+    f = @compile donate_inplace_mul(a, b)
     f(a, b)
     @test convert(Array, a) == 6 * ones(2, 2)
+
+    _, _, _, preserved_args, _, _, _ = Reactant.Compiler.compile_xla(
+        donate_inplace_mul, (a, b)
+    )
+    preserved_args_idx = last.(preserved_args)
+    @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 end

@@ -72,7 +72,7 @@ test()
     @testset "Activation: $act" for act in (
         identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2
     )
-        f_compile = Reactant.compile(sumabs2, (act, x_act))
+        f_compile = @compile sumabs2(act, x_act)
 
         y_simple = sumabs2(act, x_act)
         y_compile = f_compile(act, x_act_ca)
@@ -80,7 +80,7 @@ test()
         ∂x_enz = Enzyme.make_zero(x_act)
         Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
 
-        ∇sumabs2_compiled = Reactant.compile(∇sumabs2, (act, x_act_ca))
+        ∇sumabs2_compiled = @compile ∇sumabs2(act, x_act_ca)
 
         ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
 
@@ -96,9 +96,10 @@ end
     y_ca = Reactant.ConcreteRArray(y)
 
     @testset "Broadcasting" begin
-        @test x .+ y ≈ Reactant.compile(.+, (x_ca, y_ca))(x_ca, y_ca)
-        @test x .- y ≈ Reactant.compile(.-, (x_ca, y_ca))(x_ca, y_ca)
-        @test x .* y ≈ Reactant.compile(.*, (x_ca, y_ca))(x_ca, y_ca)
-        @test x ./ y ≈ Reactant.compile(./, (x_ca, y_ca))(x_ca, y_ca)
+        # TODO make `@compile` work with broadcasting syntax
+        @test x .+ y ≈ Reactant.Compiler.compile(.+, (x_ca, y_ca))(x_ca, y_ca)
+        @test x .- y ≈ Reactant.Compiler.compile(.-, (x_ca, y_ca))(x_ca, y_ca)
+        @test x .* y ≈ Reactant.Compiler.compile(.*, (x_ca, y_ca))(x_ca, y_ca)
+        @test x ./ y ≈ Reactant.Compiler.compile(./, (x_ca, y_ca))(x_ca, y_ca)
     end
 end

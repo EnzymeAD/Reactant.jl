@@ -96,8 +96,9 @@ function Base.similar(x::TracedRArray{T,N}, ::Type{T2}) where {T,N,T2}
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
-    print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", ")
-    return print(io, X.mlir_data, ")")
+    return print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", ")
+    # TODO this line segfaults if MLIR IR has not correctly been generated
+    # return print(io, X.mlir_data, ")")
 end
 
 Base.only(A::TracedRArray{T,0}) where {T} = A

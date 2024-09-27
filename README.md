@@ -44,7 +44,7 @@ function sinsum_add(x, y)
    return sum(sin.(x) .+ y)
 end
 
-f=Reactant.compile(sinsum_add, (input1,input2))
+f= @compile sinsum_add(input1,input2)
 
 # one can now run the program
 f(input1, input2)
