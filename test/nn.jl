@@ -38,7 +38,7 @@ f = @compile cmodel(cnoisy)
 # using InteractiveUtils
 # @show @code_typed f(cmodel,cnoisy)
 # @show @code_llvm f(cmodel,cnoisy)
-comp = f(cmodel, cnoisy)
+comp = f(cnoisy)
 # @btime f(cmodel, cnoisy)
 @test origout ≈ comp
 
