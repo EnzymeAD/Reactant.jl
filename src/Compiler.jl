@@ -1,3 +1,7 @@
+module Compiler
+
+import ..Reactant: ConcreteRArray, TracedRArray, append_path, MLIR, XLA, OrderedIdDict
+
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 
 function create_result(tocopy::T, path, result_stores) where {T}
@@ -645,4 +649,6 @@ end
 function register_thunk(tag, body)
     __thunk_body_cache[tag] = body
     return Thunk{tag}()
+end
+
 end
