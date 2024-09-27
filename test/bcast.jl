@@ -97,9 +97,9 @@ end
 
     @testset "Broadcasting" begin
         # TODO make `@compile` work with broadcasting syntax
-        @test x .+ y ≈ @compile(broadcast(+, x_ca, y_ca))(x_ca, y_ca)
-        @test x .- y ≈ @compile(broadcast(-, x_ca, y_ca))(x_ca, y_ca)
-        @test x .* y ≈ @compile(broadcast(*, x_ca, y_ca))(x_ca, y_ca)
-        @test x ./ y ≈ @compile(broadcast(/, x_ca, y_ca))(x_ca, y_ca)
+        @test x .+ y ≈ Reactant.Compiler.compile(.+, (x_ca, y_ca))(x_ca, y_ca)
+        @test x .- y ≈ Reactant.Compiler.compile(.-, (x_ca, y_ca))(x_ca, y_ca)
+        @test x .* y ≈ Reactant.Compiler.compile(.*, (x_ca, y_ca))(x_ca, y_ca)
+        @test x ./ y ≈ Reactant.Compiler.compile(./, (x_ca, y_ca))(x_ca, y_ca)
     end
 end
