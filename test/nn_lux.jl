@@ -25,7 +25,7 @@ cps = Reactant.to_rarray(ps)
 cst = Reactant.to_rarray(st)
 cnoisy = Reactant.ConcreteRArray(noisy)
 
-f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
+f = @compile(first ∘ a(b, c, d))(cmodel, cnoisy, cps, cst)
 
 # # using InteractiveUtils
 # # @show @code_typed f(cmodel,cnoisy)
@@ -78,9 +78,7 @@ end
 
 gradient_loss_function(model, noisy, target, ps, st)
 
-compiled_gradient = Reactant.compile(
-    gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst)
-)
+compiled_gradient = @compile gradient_loss_function(cmodel, cnoisy, ctarget, cps, cst)
 
 @test length(compiled_gradient(cmodel, cnoisy, ctarget, cps, cst)) == 2
 

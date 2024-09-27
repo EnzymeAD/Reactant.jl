@@ -55,7 +55,7 @@ end
             x = MockTensor(rand(4, 4), [:i, :j])
             x2 = MockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
 
-            f = Reactant.compile(cos, (x2,))
+            f = @compile cos(x2)
             y = f(x2)
 
             @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
@@ -68,7 +68,7 @@ end
             x = MutableMockTensor(rand(4, 4), [:i, :j])
             x2 = MutableMockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
 
-            f = Reactant.compile(cos, (x2,))
+            f = @compile cos(x2)
             y = f(x2)
 
             @test y isa MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
@@ -85,11 +85,11 @@ end
 
         # TODO this should be able to run without problems, but crashes
         @test_broken begin
-            f = Reactant.compile(identity, (x3,))
+            f = @compile identity(x3)
             isapprox(f(x3), x3)
         end
 
-        f = Reactant.compile(sum, (x3,))
+        f = @compile sum(x3)
 
         y = sum(x2)
         y3 = f(x3)

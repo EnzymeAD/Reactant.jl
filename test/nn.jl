@@ -33,7 +33,7 @@ cnoisy = Reactant.ConcreteRArray(noisy)
 # c_c = cmodel(cnoisy)
 # @show c_c[3]
 # @btime cmodel(cnoisy)
-f = Reactant.compile((a, b) -> a(b), (cmodel, cnoisy))
+f = @compile cmodel(cnoisy)
 
 # using InteractiveUtils
 # @show @code_typed f(cmodel,cnoisy)
@@ -81,7 +81,7 @@ mean((out2[1, :] .> 0.5) .== truth)  # accuracy 94% so far!
     img = randn(Float32, 224, 224, 8, 2)
     img_reactant = Reactant.ConcreteRArray(img)
 
-    comp_conv = Reactant.compile(conv_reactant, (img_reactant,))
+    comp_conv = @compile conv_reactant(img_reactant)
 
     res_reactant = Array{Float32,4}(comp_conv(img_reactant))
 
@@ -98,17 +98,16 @@ end
     conv_noflip(x, W) = NNlib.conv(x, W; pad=1, flipped=true)
     conv_flip(x, W) = NNlib.conv(x, W; pad=1, flipped=false)
 
-    @test Reactant.compile(conv_noflip, (xx, WW))(xx, WW) ==
+    @test @compile(conv_noflip(xx, WW))(xx, WW) ==
         [0*1+1*2+2*3; 1*1+2*2+3*3; 1*2+2*3+3*0;;;]
-    @test Reactant.compile(conv_flip, (xx, WW))(xx, WW) ==
-        [3*0+2*1+1*2; 3*1+2*2+1*3; 3*2+2*3+1*0;;;]
+    @test @compile(conv_flip(xx, WW))(xx, WW) == [3*0+2*1+1*2; 3*1+2*2+1*3; 3*2+2*3+1*0;;;]
 end
 
 @testset "$f" for f in (NNlib.meanpool, NNlib.maxpool)
     img = randn(Float32, 224, 224, 3, 2)
     img_reactant = Reactant.ConcreteRArray(img)
 
-    f_reactant = Reactant.compile(f, (img_reactant, (3, 3)))
+    f_reactant = @compile f(img_reactant, (3, 3))
 
     res_reactant = f_reactant(img_reactant, (3, 3))
     res = f(img, (3, 3))

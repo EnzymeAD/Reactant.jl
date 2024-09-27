@@ -19,7 +19,7 @@ using InteractiveUtils
     c_res = sum(a)
     @test c_res ≈ r_res
 
-    f = Reactant.compile(sum, (a,))
+    f = @compile sum(a)
 
     f_res = f(a)
 
@@ -36,7 +36,7 @@ end
     c_res = fastmax(a)
     @test c_res ≈ r_res
 
-    f = Reactant.compile(fastmax, (a,))
+    f = @compile fastmax(a)
 
     f_res = f(a)
 
@@ -56,7 +56,7 @@ sinexpbc(x) = sinexp.(x)
     c_res = sinexpbc(a)
     @test c_res ≈ r_res
 
-    f = Reactant.compile(sinexpbc, (a,))
+    f = @compile sinexpbc(a)
 
     f_res = f(a)
 
@@ -70,7 +70,7 @@ sumexp(x) = sum(exp, x)
     a = Reactant.ConcreteRArray(x)
     r_res = sumexp(x)
 
-    f = Reactant.compile(sumexp, (a,))
+    f = @compile sumexp(a)
     f_res = f(a)
 
     @test f_res ≈ r_res
@@ -87,7 +87,7 @@ end
 
     a = Reactant.ConcreteRArray(x)
 
-    f = Reactant.compile(mysoftmax!, (a,))
+    f = @compile mysoftmax!(a)
 
     f_res = f(a)
 
@@ -98,7 +98,7 @@ end
     x = rand(3, 2)
     c = Reactant.ConcreteRArray(x)
 
-    f = Reactant.compile(cos, (c,))
+    f = @compile cos(c)
     r = f(c)
     @test r ≈ cos.(x)
 end
@@ -122,12 +122,12 @@ end
 @testset "Basic grad cos" begin
     c = Reactant.ConcreteRArray(ones(3, 2))
 
-    f = Reactant.compile(grad_ip, (c,))
+    f = @compile grad_ip(c)
     r = f(c)
 
     @test r ≈ -sin.(ones(3, 2))
 
-    f = Reactant.compile(resgrad_ip, (c,))
+    f = @compile resgrad_ip(c)
     orig, r = f(c)
 
     @test orig[2] ≈ sum(cos.(ones(3, 2)))
@@ -141,7 +141,7 @@ end
     c = Reactant.ConcreteRArray(ones(50, 70))
     d = Reactant.ConcreteRArray(ones(70, 30))
 
-    f = Reactant.compile(mul, (c, d))
+    f = @compile mul(c, d)
     r = f(c, d)
 
     @test r ≈ mul(ones(50, 70), ones(70, 30))
@@ -170,10 +170,10 @@ end
     mean_fn3(x) = mean(x; dims=(1, 2))
     mean_fn4(x) = mean(x; dims=(1, 3))
 
-    mean_fn1_compiled = Reactant.compile(mean_fn1, (x_ca,))
-    mean_fn2_compiled = Reactant.compile(mean_fn2, (x_ca,))
-    mean_fn3_compiled = Reactant.compile(mean_fn3, (x_ca,))
-    mean_fn4_compiled = Reactant.compile(mean_fn4, (x_ca,))
+    mean_fn1_compiled = @compile mean_fn1(x_ca)
+    mean_fn2_compiled = @compile mean_fn2(x_ca)
+    mean_fn3_compiled = @compile mean_fn3(x_ca)
+    mean_fn4_compiled = @compile mean_fn4(x_ca)
 
     @test mean_fn1(x) ≈ mean_fn1_compiled(x_ca)
     @test mean_fn2(x) ≈ mean_fn2_compiled(x_ca)
@@ -185,10 +185,10 @@ end
     var_fn3(x) = var(x; dims=(1, 2), corrected=false)
     var_fn4(x) = var(x; dims=(1, 3), corrected=false)
 
-    var_fn1_compiled = Reactant.compile(var_fn1, (x_ca,))
-    var_fn2_compiled = Reactant.compile(var_fn2, (x_ca,))
-    var_fn3_compiled = Reactant.compile(var_fn3, (x_ca,))
-    var_fn4_compiled = Reactant.compile(var_fn4, (x_ca,))
+    var_fn1_compiled = @compile var_fn1(x_ca)
+    var_fn2_compiled = @compile var_fn2(x_ca)
+    var_fn3_compiled = @compile var_fn3(x_ca)
+    var_fn4_compiled = @compile var_fn4(x_ca)
 
     @test var_fn1(x) ≈ var_fn1_compiled(x_ca)
     @test var_fn2(x) ≈ var_fn2_compiled(x_ca)
@@ -204,9 +204,9 @@ end
     cat2(x) = hcat(x, x, x)
     cat3(x) = cat(x, x, x; dims=Val(3))
 
-    cat1_compiled = Reactant.compile(cat1, (x_concrete,))
-    cat2_compiled = Reactant.compile(cat2, (x_concrete,))
-    cat3_compiled = Reactant.compile(cat3, (x_concrete,))
+    cat1_compiled = @compile cat1(x_concrete)
+    cat2_compiled = @compile cat2(x_concrete)
+    cat3_compiled = @compile cat3(x_concrete)
 
     @test cat1(x) ≈ cat1_compiled(x_concrete)
     @test cat2(x) ≈ cat2_compiled(x_concrete)
@@ -225,7 +225,7 @@ end
     x_concrete = Reactant.to_rarray(x)
     y_concrete = Reactant.to_rarray(y)
 
-    update_on_copy_compiled = Reactant.compile(update_on_copy, (x_concrete,))
+    update_on_copy_compiled = @compile update_on_copy(x_concrete)
 
     y1 = update_on_copy(x)
     y2 = update_on_copy_compiled(x_concrete)
@@ -242,8 +242,8 @@ end
     # get_indices(x) = x[1:2, 1:2, :]
     # get_view(x) = view(x, 1:2, 1:2, :)
 
-    # get_indices_compiled = Reactant.compile(get_indices, (x_concrete,))
-    # get_view_compiled = Reactant.compile(get_view, (x_concrete,))
+    # get_indices_compiled = @compile get_indices(x_concrete)
+    # get_view_compiled = @compile get_view(x_concrete)
 end
 
 tuple_byref(x) = (; a=(; b=x))
@@ -251,12 +251,12 @@ tuple_byref2(x) = abs2.(x), tuple_byref2(x)
 
 @testset "Tuple byref" begin
     x = Reactant.to_rarray([1.0 -2.0; -3.0 4.0])
-    f1 = Reactant.compile(tuple_byref, (x,))
+    f1 = @compile tuple_byref(x)
     r1 = f1(x)
     @test r1.a.b.data === x.data
 
     # TODO this seems to hang during compile
-    # f2 = Reactant.compile(tuple_byref2, (x,))
+    # f2 = @compile tuple_byref2(x)
     # r2 = f2(x)
     # @test r2[2].a.b.data === x.data
     # @test r2[1] == abs2.([1.0 -2.0; -3.0 4.0])

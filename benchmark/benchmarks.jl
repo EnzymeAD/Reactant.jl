@@ -16,10 +16,10 @@ const SUITE = BenchmarkGroup()
 SUITE["comptime"] = BenchmarkGroup()
 
 SUITE["comptime"]["basics"] = BenchmarkGroup()
-SUITE["comptime"]["basics"]["2D sum"] = @benchmarkable Reactant.compile(sum, (a,)) setup = (
+SUITE["comptime"]["basics"]["2D sum"] = @benchmarkable @compile sum(a) setup = (
     a = Reactant.ConcreteRArray(ones(2, 10))
 )
-SUITE["comptime"]["basics"]["Basic cos"] = @benchmarkable Reactant.compile(cos, (a,)) setup = (
+SUITE["comptime"]["basics"]["Basic cos"] = @benchmarkable @compile cos(a) setup = (
     a = Reactant.ConcreteRArray(ones(2, 10))
 )
 
@@ -27,7 +27,7 @@ SUITE["comptime"]["lux neural networks"] = BenchmarkGroup()
 
 for depth in [11, 13, 16, 19]
     SUITE["comptime"]["lux neural networks"]["vgg$depth"] = @benchmarkable begin
-        Reactant.compile(vgg, (x, ps_concrete, st_concrete))
+        @compile vgg(x, ps_concrete, st_concrete)
     end setup = begin
         vgg = Vision.VGG($depth; pretrained=false, batchnorm=false)
         ps, st = Lux.setup(Random.default_rng(), vgg)
@@ -47,6 +47,6 @@ function grad_ip(x)
     return dx
 end
 
-SUITE["comptime"]["basics"]["Basic grad cos"] = @benchmarkable Reactant.compile(
-    grad_ip, (a,)
-) setup = (a = Reactant.ConcreteRArray(ones(3, 2)))
+SUITE["comptime"]["basics"]["Basic grad cos"] = @benchmarkable @compile grad_ip(a) setup = (
+    a = Reactant.ConcreteRArray(ones(3, 2))
+)
