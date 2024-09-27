@@ -25,7 +25,7 @@ cps = Reactant.to_rarray(ps)
 cst = Reactant.to_rarray(st)
 cnoisy = Reactant.ConcreteRArray(noisy)
 
-f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)))(cmodel, cnoisy, cps, cst)
+f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
 
 # # using InteractiveUtils
 # # @show @code_typed f(cmodel,cnoisy)
