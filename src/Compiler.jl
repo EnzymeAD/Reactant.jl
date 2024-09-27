@@ -1,6 +1,15 @@
 module Compiler
 
-import ..Reactant: ConcreteRArray, TracedRArray, append_path, MLIR, XLA, OrderedIdDict
+import ..Reactant:
+    Reactant,
+    MLIR,
+    XLA,
+    ConcreteRArray,
+    TracedRArray,
+    OrderedIdDict,
+    make_tracer,
+    TracedToConcrete,
+    append_path
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 
@@ -227,7 +236,7 @@ end
 
 function compile_mlir(f, args; kwargs...)
     ctx = MLIR.IR.Context()
-    Base.append!(registry[]; context=ctx)
+    Base.append!(Reactant.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
@@ -241,7 +250,7 @@ function compile_mlir!(mod, f, args; optimize=true)
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
         MLIR.IR.block!(MLIR.IR.body(mod)) do
-            return make_mlir_fn(f, args, (), "main", true)
+            return Reactant.make_mlir_fn(f, args, (), "main", true)
         end
     end
 
@@ -558,7 +567,7 @@ end
 function compile_xla(f, args; client=nothing)
     # register MLIR dialects
     ctx = MLIR.IR.Context()
-    Base.append!(registry[]; context=ctx)
+    Base.append!(Reactant.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     return MLIR.IR.context!(ctx) do
