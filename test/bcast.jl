@@ -96,9 +96,10 @@ end
     y_ca = Reactant.ConcreteRArray(y)
 
     @testset "Broadcasting" begin
-        @test x .+ y ≈ @compile(.+(x_ca, y_ca))(x_ca, y_ca)
-        @test x .- y ≈ @compile(.-(x_ca, y_ca))(x_ca, y_ca)
-        @test x .* y ≈ @compile(.*(x_ca, y_ca))(x_ca, y_ca)
-        @test x ./ y ≈ @compile(./(x_ca, y_ca))(x_ca, y_ca)
+        # TODO make `@compile` work with broadcasting syntax
+        @test x .+ y ≈ @compile(broadcast(+, x_ca, y_ca))(x_ca, y_ca)
+        @test x .- y ≈ @compile(broadcast(-, x_ca, y_ca))(x_ca, y_ca)
+        @test x .* y ≈ @compile(broadcast(*, x_ca, y_ca))(x_ca, y_ca)
+        @test x ./ y ≈ @compile(broadcast(/, x_ca, y_ca))(x_ca, y_ca)
     end
 end
