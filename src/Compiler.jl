@@ -53,8 +53,10 @@ function create_result(tocopy::D, path, result_stores) where {K,V,D<:AbstractDic
     return :($D([$(elems...)]))
 end
 
-for T in [Int, AbstractFloat, AbstractString, Nothing, Type, Symbol]
-    @eval create_result(tocopy::$T, path, result_stores) = Meta.quot(tocopy)
+function create_result(
+    tocopy::Union{Int,AbstractFloat,AbstractString,Nothing,Type,Symbol}, path, result_stores
+)
+    return Meta.quot(tocopy)
 end
 
 const opt_passes::String = join(
