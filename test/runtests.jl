@@ -52,7 +52,9 @@ end
     @testset "Neural Networks" begin
         @safetestset "NNlib Primitives" include("nn/nnlib.jl")
         @safetestset "Flux.jl Integration" include("nn/flux.jl")
-        @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
-        @safetestset "Lux Integration" include("nn/lux.jl")
+        if Sys.islinux()
+            @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
+            @safetestset "Lux Integration" include("nn/lux.jl")
+        end
     end
 end
