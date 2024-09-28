@@ -1,10 +1,18 @@
-# To run:
-# using PkgBenchmark, Reactant
-# result = benchmarkpkg(KernelAbstractions)
-# export_markdown("benchmark/perf.md", result)
-
-# Note: if you change this file you will need to delete an regenerate tune.json
-# Your "v1.x" environment needs to have BenchmarkTools and PkgBenchmark installed.
+if !isfile(joinpath(@__DIR__, "Project.toml"))
+    # Assume the Project.toml wasn't activated yet
+    @info "Installing Benchmark dependencies"
+    import Pkg
+    Pkg.activate(@__DIR__)
+    Pkg.develop(Pkg.PackageSpec(path=joinpath(@__DIR__, "..")))
+    extra_pkgs = [
+        Pkg.PackageSpec(name="BenchmarkTools", version="1.5"),
+        Pkg.PackageSpec(name="Boltz", version="1"),
+        Pkg.PackageSpec(name="Lux", version="1.1"),
+        Pkg.PackageSpec(name="Random", version="1.10"),
+        Pkg.PackageSpec(name="Enzyme", version="0.13"),
+    ]
+    Pkg.add(extra_pkgs)
+end
 
 using BenchmarkTools
 using Reactant
