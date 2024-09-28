@@ -89,7 +89,7 @@ end
 
 Base.size(x::TracedRArray) = x.shape
 
-Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray((), A.mlir_data, size(A))
+Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 function Base.similar(x::TracedRArray{T,N}, ::Type{T2}) where {T,N,T2}
     return TracedRArray{T2,N}((), nothing, size(x))

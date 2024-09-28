@@ -1,4 +1,4 @@
-using Reactant
+using Reactant, SafeTestsets, Test
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing; typ=typeof(default))
@@ -39,13 +39,22 @@ if do_gpu_list
     # TODO set which gpu
 end
 
-include("layout.jl")
-include("tracing.jl")
-include("basic.jl")
-include("bcast.jl")
-include("struct.jl")
-include("closure.jl")
-include("compile.jl")
-include("buffer_donation.jl")
-include("nn.jl")
-include("nn_lux.jl")
+@testset "Reactant.jl Tests" begin
+    @safetestset "Layout" include("layout.jl")
+    @safetestset "Tracing" include("tracing.jl")
+    @safetestset "Basic" include("basic.jl")
+    @safetestset "Broadcast" include("bcast.jl")
+    @safetestset "Struct" include("struct.jl")
+    @safetestset "Closure" include("closure.jl")
+    @safetestset "Compile" include("compile.jl")
+    @safetestset "Buffer Donation" include("buffer_donation.jl")
+
+    @testset "Neural Networks" begin
+        @safetestset "NNlib Primitives" include("nn/nnlib.jl")
+        @safetestset "Flux.jl Integration" include("nn/flux.jl")
+        if Sys.islinux()
+            @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
+            @safetestset "Lux Integration" include("nn/lux.jl")
+        end
+    end
+end
