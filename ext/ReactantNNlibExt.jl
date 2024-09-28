@@ -206,4 +206,24 @@ end
 NNlib.batched_transpose(x::AnyTracedRArray{T,3}) where {T} = permutedims(x, (2, 1, 3))
 NNlib.batched_adjoint(x::AnyTracedRArray{<:Real,3}) = NNlib.batched_transpose(x)
 
+function NNlib.batched_mul(
+    x::AnyTracedRArray{T,3}, y::AnyTracedRArray{T,3}
+) where {T}
+    if (size(x, 3) != size(y, 3) && size(x, 3) != 1 && size(y, 3) != 1) ||
+        (size(x, 2) != size(y, 1))
+        throw(
+            DimensionMismatch(
+                lazy"size(x) = $(size(x)), size(y) = $(size(y)) inconsistent for batched_matmul.",
+            ),
+        )
+    end
+    if size(x, 3) == size(y, 3)
+        return cat([x[:, :, i] * y[:, :, i] for i in axes(x, 3)]...; dims=Val(3))
+    elseif size(x, 3) == 1
+        return cat([x[:, :, i] * y[:, :, 1] for i in axes(x, 3)]...; dims=Val(3))
+    elseif size(y, 3) == 1
+        return cat([x[:, :, 1] * y[:, :, i] for i in axes(y, 3)]...; dims=Val(3))
+    end
+end
+
 end # module ReactantNNlibExt

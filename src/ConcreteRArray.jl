@@ -48,6 +48,11 @@ function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,El
     # XLA.from_row_major(data)
 end
 
+function synchronize(x::ConcreteRArray)
+    XLA.synced_buffer(x.data)
+    return
+end
+
 # function Base.similar(x::ConcreteRArray{T,N}, ::Type{T2}) where {T,N,T2}
 #     return ConcreteRArray{T,N}(x.data)
 # end

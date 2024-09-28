@@ -17,3 +17,6 @@ st_ra = Reactant.to_rarray(st);
 
 apply_compiled = Reactant.compile(Lux.apply, (model, x_ra, ps_ra, st_ra));
 
+lux_timing = @benchmark Lux.apply($model, $x, $ps, $st)
+
+reactant_timing = @benchmark $apply_compiled($model, $x_ra, $ps_ra, $st_ra)
