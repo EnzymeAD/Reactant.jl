@@ -1,7 +1,7 @@
 name = "Reactant"
 uuid = "3c362404-f566-11ee-1572-e11a4b42c853"
 authors = ["William Moses <wmoses@mit.edu>", "Valentin Churavy <vchuravy@mit.edu>", "Sergio Sánchez Ramírez <sergio.sanchez.ramirez@bsc.es>", "Paul Berg <paul@plutojl.org>"]
-version = "0.2.0"
+version = "0.2.1"
 
 [deps]
 CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
