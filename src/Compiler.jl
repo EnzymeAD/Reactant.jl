@@ -236,7 +236,7 @@ end
 
 function compile_mlir(f, args; kwargs...)
     ctx = MLIR.IR.Context()
-    Base.append!(Reactant.registry[]; context=ctx)
+    append!(Reactant.MLIR.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
@@ -567,7 +567,7 @@ end
 function compile_xla(f, args; client=nothing)
     # register MLIR dialects
     ctx = MLIR.IR.Context()
-    Base.append!(Reactant.registry[]; context=ctx)
+    append!(Reactant.MLIR.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     return MLIR.IR.context!(ctx) do

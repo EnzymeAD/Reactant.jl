@@ -24,12 +24,4 @@ using .Compiler: @compile, @code_hlo, traced_getfield, create_result, compile
 export ConcreteRArray, @compile, @code_hlo
 using .XLA: set_default_backend
 
-const registry = Ref{MLIR.IR.DialectRegistry}()
-function __init__()
-    registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
-        registry[]::MLIR.API.MlirDialectRegistry
-    )::Cvoid
-end
-
 end # module
