@@ -56,9 +56,7 @@ and require expensive copies and synchronization each time and therefore should 
     return TracedRArray{T,0}((), res2, ())
 end
 
-function Base.getindex(
-    a::TracedRArray{T,N}, indices::Vararg{Any,N}
-) where {T,N}
+function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.slice(
@@ -73,20 +71,16 @@ function Base.getindex(
     )
     x = TracedRArray{T,N}((), res, Tuple(length.(indices)))
     ddims = findall(x -> x isa Integer, indices)
-    !isempty(ddims) && return dropdims(x, dims=Tuple(ddims))
+    !isempty(ddims) && return dropdims(x; dims=Tuple(ddims))
     return x
 end
 
 # Prevents ambiguity
-function Base.getindex(
-    a::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices::Int...
-) where {T,N}
+function Base.getindex(a::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices::Int...) where {T,N}
     return getindex(parent(a), Base.reindex(a.indices, indices)...)
 end
 
-function Base.getindex(
-    a::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices...
-) where {T,N}
+function Base.getindex(a::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices...) where {T,N}
     return getindex(parent(a), Base.reindex(a.indices, indices)...)
 end
 
