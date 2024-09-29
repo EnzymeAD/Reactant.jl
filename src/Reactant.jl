@@ -1,5 +1,7 @@
 module Reactant
 
+using Adapt: Adapt
+
 # auxiliary types and functions
 include("OrderedIdDict.jl")
 
