@@ -16,11 +16,17 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
-function Base.getindex(a::TracedRArray{T,0}) where {T}
-    return a
-end
+const AnyTracedRArray{T,N} = Union{
+    TracedRArray{T,N},WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+}
+const AnyTracedRScalar{T} = AnyTracedRArray{T,0}
+const AnyTracedRVector{T} = AnyTracedRArray{T,1}
+const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
+const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
-function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Integer,N}) where {T,N}
+Base.getindex(a::AnyTracedRScalar{T}) where {T} = a
+
+function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
     @warn(
         """Performing scalar indexing on task $(current_task()).
 Invocation resulted in scalar indexing of a TracedRArray.
@@ -48,7 +54,7 @@ and require expensive copies and synchronization each time and therefore should 
 end
 
 function Base.getindex(
-    a::TracedRArray{T,N}, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+    a::TracedRArray{T,N}, indices::Vararg{Any,N}
 ) where {T,N}
     indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
     res = MLIR.IR.result(
@@ -62,14 +68,23 @@ function Base.getindex(
         ),
         1,
     )
-    return TracedRArray{T,N}((), res, Tuple(length.(indices)))
+    x = TracedRArray{T,N}((), res, Tuple(length.(indices)))
+    ddims = findall(x -> x isa Integer, indices)
+    !isempty(ddims) && return dropdims(x, dims=Tuple(ddims))
+    return x
 end
 
-function Base.view(
-    a::TracedRArray{T,N}, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+# Prevents ambiguity
+function Base.getindex(
+    a::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices::Int...
 ) where {T,N}
-    # TODO: Implement before merging the PR
-    return error("view is not supported yet")
+    return getindex(parent(a), Base.reindex(a.indices, indices)...)
+end
+
+function Base.getindex(
+    a::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices...
+) where {T,N}
+    return getindex(parent(a), Base.reindex(a.indices, indices)...)
 end
 
 function Base.setindex!(
@@ -101,7 +116,7 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     # return print(io, X.mlir_data, ")")
 end
 
-Base.only(A::TracedRArray{T,0}) where {T} = A
+Base.only(A::AnyTracedRScalar{T}) where {T} = A
 
 function Base.reshape(A::TracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
     prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
@@ -194,7 +209,7 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     )
 end
 
-function promote_to(lhs::TracedRArray{T,N}, rhs) where {T,N}
+function promote_to(::TracedRArray{T,N}, rhs) where {T,N}
     return promote_to(TracedRArray{T,N}, rhs)
 end
 

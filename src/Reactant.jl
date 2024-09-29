@@ -1,6 +1,6 @@
 module Reactant
 
-using Adapt: Adapt
+using Adapt: Adapt, WrappedArray
 
 # auxiliary types and functions
 include("OrderedIdDict.jl")
