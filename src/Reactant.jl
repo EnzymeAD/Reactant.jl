@@ -22,6 +22,7 @@ include("Compiler.jl")
 
 using .Compiler: @compile, @code_hlo, traced_getfield, create_result, compile
 export ConcreteRArray, @compile, @code_hlo
+using .XLA: set_default_backend
 
 const registry = Ref{MLIR.IR.DialectRegistry}()
 function __init__()
@@ -29,15 +30,6 @@ function __init__()
     @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
         registry[]::MLIR.API.MlirDialectRegistry
     )::Cvoid
-end
-
-function set_default_backend(backend::XLA.Client)
-    return XLA.default_backend[] = backend
-end
-
-function set_default_backend(backend::String)
-    backend = XLA.backends[backend]
-    return XLA.default_backend[] = backend
 end
 
 end # module
