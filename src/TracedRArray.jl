@@ -149,12 +149,12 @@ function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,
     return TracedRArray{T,NT}((), res3, dims)
 end
 
-function Base.permutedims(A::TracedRArray{T,N}, perm) where {T,N}
+function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     return TracedRArray{T,N}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.transpose(
-                A.mlir_data;
+                get_mlir_data(A);
                 permutation=MLIR.IR.DenseArrayAttribute([Int64(i - 1) for i in perm]),
             ),
             1,
@@ -169,7 +169,7 @@ function Base.promote_rule(
     return TracedRArray{Base.promote_type(T, S),N}
 end
 
-function Base.promote_rule(A::Type{T}, B::Type{TracedRArray{S,N}}) where {T,S,N}
+function Base.promote_rule(::Type{T}, ::Type{TracedRArray{S,N}}) where {T,S,N}
     return TracedRArray{Base.promote_type(T, S),N}
 end
 
