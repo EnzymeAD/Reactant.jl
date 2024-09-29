@@ -24,6 +24,9 @@ const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
+get_mlir_data(x::TracedRArray) = x.mlir_data
+get_mlir_data(x::AnyTracedRArray) = get_mlir_data(x[axes(x)...])
+
 Base.getindex(a::AnyTracedRScalar{T}) where {T} = a
 
 function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
@@ -118,13 +121,13 @@ end
 
 Base.only(A::AnyTracedRScalar{T}) where {T} = A
 
-function Base.reshape(A::TracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
+function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
     prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
 
     # HLO reshape semantics collapse the opposite way
     res1 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.transpose(
-            A.mlir_data;
+            get_mlir_data(A);
             permutation=MLIR.IR.DenseArrayAttribute([Int64(N - 1 - i) for i in 0:(N - 1)]),
         ),
         1,

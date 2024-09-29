@@ -32,3 +32,19 @@ end
 
     @test view_getindex_3_compiled(x_ra) ≈ view_getindex_3(x)
 end
+
+function reshape_wrapper(x)
+    x = view(x, 2:3, 1:2, :)
+    return reshape(x, 4, :)
+end
+
+@testset "reshape wrapper" begin
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    reshape_wrapper(x)
+
+    reshape_wrapper_compiled = @compile reshape_wrapper(x_ra)
+
+    @test reshape_wrapper_compiled(x_ra) ≈ reshape_wrapper(x)
+end
