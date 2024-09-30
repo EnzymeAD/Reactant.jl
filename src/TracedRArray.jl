@@ -242,149 +242,53 @@ function promote_to(::TracedRArray{T,N}, rhs) where {T,N}
     return promote_to(TracedRArray{T,N}, rhs)
 end
 
-for (jlop, hloop, RT) in (
-    (:(Base.min), :minimum, :T),
-    (:(Base.max), :maximum, :T),
-    (:(Base.:+), :add, :T),
-    (:(Base.:-), :subtract, :T),
+for (jlop, hloop) in (
+    (:(Base.min), :minimum),
+    (:(Base.max), :maximum),
+    (:(Base.:+), :add),
+    (:(Base.:-), :subtract),
+    (:(Base.:*), :multiply),
+    (:(Base.:/), :divide),
+    (:(Base.:^), :power),
 )
     @eval begin
-        function $jlop(
-            @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::TracedRArray{T2,N})
-        ) where {T,T2,N}
-            commonTy = TracedRArray{Base.promote_type(T, T2),N}
-            lhs = promote_to(commonTy, lhs)
-            rhs = promote_to(commonTy, rhs)
-            return commonTy(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-                size(lhs),
-            )
-        end
-
-        function $jlop(
-            @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::TracedRArray{T,N})
-        ) where {T,N}
-            return TracedRArray{$RT,N}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-                size(lhs),
-            )
-        end
-    end
-
-    for otherType in (Number, Any) #=TracedRArray{S,0} where {S}=#
-        @eval begin
-            function $jlop(
-                @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::$otherType)
-            ) where {T,N}
-                rhs = promote_to(lhs, rhs)
-                return TracedRArray{$RT,N}(
-                    (),
-                    MLIR.IR.result(
-                        MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                    ),
-                    size(lhs),
-                )
-            end
-
-            function $jlop(
-                @nospecialize(lhs::$otherType), @nospecialize(rhs::TracedRArray{T,N})
-            ) where {T,N}
-                lhs = promote_to(rhs, lhs)
-                return TracedRArray{$RT,N}(
-                    (),
-                    MLIR.IR.result(
-                        MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                    ),
-                    size(lhs),
-                )
-            end
-        end
-    end
-end
-
-for (jlop, hloop, RT) in
-    ((:(Base.:*), :multiply, :T), (:(Base.:/), :divide, :T), (:(Base.:^), :power, :T))
-    @eval begin
-        function $jlop(
-            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::TracedRArray{T2,0})
-        ) where {T,T2}
-            commonTy = TracedRArray{Base.promote_type(T, T2),0}
-            lhs = promote_to(commonTy, lhs)
-            rhs = promote_to(commonTy, rhs)
-            return commonTy(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-                (),
-            )
-        end
-
-        function $jlop(
+        function $(jlop)(
             @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::TracedRArray{T,0})
         ) where {T}
-            return TracedRArray{$RT,0}(
+            return TracedRArray{T,0}(
                 (),
                 MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
+                    MLIR.Dialects.stablehlo.$(hloop)(lhs.mlir_data, rhs.mlir_data), 1
                 ),
                 (),
             )
         end
 
-        function $jlop(@nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs)) where {T}
-            rhs = promote_to(lhs, rhs)
-            return TracedRArray{$RT,0}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-                (),
-            )
+        function $(jlop)(
+            @nospecialize(lhs::TracedRArray{T1,0}), @nospecialize(rhs::TracedRArray{T2,0})
+        ) where {T1,T2}
+            commonTy = promote_type(T1, T2)
+            lhs = promote_to(commonTy, lhs)
+            rhs = promote_to(commonTy, rhs)
+            return $(jlop)(lhs, rhs)
         end
+    end
 
-        function $jlop(@nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,0})) where {T}
-            lhs = promote_to(rhs, lhs)
-            return TracedRArray{$RT,0}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-                (),
-            )
-        end
+    for otherType in (Number, Any)
+        @eval begin
+            function $(jlop)(
+                @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::$(otherType))
+            ) where {T}
+                rhs = promote_to(lhs, rhs)
+                return $(jlop)(lhs, rhs)
+            end
 
-        # Base defines ::AbstractArray / ::Number, so we need this to avoid ambiguity
-        function $jlop(
-            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::Number)
-        ) where {T}
-            rhs = promote_to(lhs, rhs)
-            return TracedRArray{$RT,0}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-                (),
-            )
-        end
-
-        function $jlop(
-            @nospecialize(lhs::Number), @nospecialize(rhs::TracedRArray{T,0})
-        ) where {T}
-            lhs = promote_to(rhs, lhs)
-            return TracedRArray{$RT,0}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-                (),
-            )
+            function $(jlop)(
+                @nospecialize(lhs::$(otherType)), @nospecialize(rhs::TracedRArray{T,0})
+            ) where {T}
+                lhs = promote_to(rhs, lhs)
+                return $(jlop)(lhs, rhs)
+            end
         end
     end
 end
@@ -424,8 +328,8 @@ for (jlop, hloop) in (
     (:(Base.sqrt), :sqrt),
 )
     @eval begin
-        function $jlop(@nospecialize(lhs::TracedRArray{T,N})) where {T,N}
-            return TracedRArray{T,N}(
+        function $jlop(@nospecialize(lhs::TracedRArray{T,0})) where {T}
+            return TracedRArray{T,0}(
                 (),
                 MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1),
                 size(lhs),
