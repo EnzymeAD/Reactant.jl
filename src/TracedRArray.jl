@@ -42,6 +42,13 @@ end
 
 Base.getindex(a::AnyTracedRScalar{T}) where {T} = a
 
+Base.zero(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T, 0}, zero(T))
+Base.one(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T, 0}, one(T))
+
+function Base.convert(::Type{<:AnyTracedRScalar{T}}, x::Number) where {T}
+    return promote_to(TracedRArray{T, 0}, T(x))
+end
+
 function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
     @warn(
         """Performing scalar indexing on task $(current_task()).
@@ -514,12 +521,11 @@ for (jlop, hloop, hlocomp, merge) in (
     (:(Base.:(<)), :compare, "LT", nothing),
 )
     @eval begin
-        function elem_apply(
-            ::typeof($jlop),
-            @nospecialize(lhs::TracedRArray{T,N}),
-            @nospecialize(rhs::TracedRArray{T,N})
-        ) where {T,N}
-            return TracedRArray{T,N}(
+        function $(jlop)(
+            @nospecialize(lhs::TracedRArray{T,0}),
+            @nospecialize(rhs::TracedRArray{T,0})
+        ) where {T}
+            return TracedRArray{Bool,0}(
                 (),
                 MLIR.IR.result(
                     MLIR.Dialects.stablehlo.$hloop(
@@ -535,50 +541,26 @@ for (jlop, hloop, hlocomp, merge) in (
             )
         end
 
-        function elem_apply(
-            fn::typeof($jlop), @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
-        ) where {T,N}
-            return elem_apply(fn, lhs, promote_to(lhs, rhs))
+        function $(jlop)(
+            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs)
+        ) where {T}
+            return $(jlop)(lhs, promote_to(lhs, rhs))
         end
 
-        function elem_apply(
-            ::typeof($jlop), @nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
-        ) where {T,N}
-            return elem_apply(fn, promote_to(rhs, lhs), rhs)
-        end
-
-        function $jlop(
-            @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs)
-        ) where {T,N}
-            return $jlop(lhs, promote_to(lhs, rhs))
-        end
-
-        function $jlop(
-            @nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,N})
-        ) where {T,N}
-            return $jlop(promote_to(rhs, lhs), rhs)
+        function $(jlop)(
+            @nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,0})
+        ) where {T}
+            return $(jlop)(promote_to(rhs, lhs), rhs)
         end
     end
 
-    if merge != nothing
+    if merge !== nothing
         @eval begin
             function $jlop(
                 @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::TracedRArray{T,N})
             ) where {T,N}
-                elems = elem_apply($jlop, lhs, rhs)
-                if N == 0
-                    elems
-                else
-                    $merge(elems)
-                end
-            end
-        end
-    else
-        @eval begin
-            function $jlop(
-                @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::TracedRArray{T,0})
-            ) where {T}
-                return elem_apply($jlop, lhs, rhs)
+                elems = $(jlop).(lhs, rhs)
+                return N == 0 ? elems : $(merge)(elems)
             end
         end
     end
@@ -644,7 +626,7 @@ function Base.mapreduce(
 
     init = [broadcast_to_size(init, ()).mlir_data]
 
-    inp = [elem_apply(f, A).mlir_data]
+    inp = [broadcast(f, A).mlir_data]
 
     rdims = if dims == (:)
         Int64[i for i in 0:(N - 1)]
@@ -706,7 +688,7 @@ function Base.mapreducedim!(
     A::Base.AbstractArrayOrBroadcasted,
 )
     tmp = broadcast_to_size(Base.mapreduce(f, op, A; dims=1), (1, size(R)[2:end]...))
-    R.mlir_data = elem_apply(op, R, tmp).mlir_data
+    R.mlir_data = broadcast(op, R, tmp).mlir_data
     return R
 end
 
