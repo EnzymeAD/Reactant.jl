@@ -9,10 +9,11 @@ dev = gpu_device()
 model = Vision.ViT(:tiny);
 ps, st = Lux.setup(Random.default_rng(), model);
 
-ps_gpu, st_gpu = (ps, st) |> dev;
+ps_gpu = dev(ps);
+st_gpu = dev(st);
 
 x = rand(Float32, 256, 256, 3, 4);
-x_gpu = x |> dev;
+x_gpu = dev(x);
 
 lux_timing = @benchmark begin
     Lux.apply($model, $x_gpu, $ps_gpu, $st_gpu)
