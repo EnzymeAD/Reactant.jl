@@ -48,6 +48,7 @@ end
     @safetestset "Closure" include("closure.jl")
     @safetestset "Compile" include("compile.jl")
     @safetestset "Buffer Donation" include("buffer_donation.jl")
+    @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
 
     @testset "Neural Networks" begin
         @safetestset "NNlib Primitives" include("nn/nnlib.jl")

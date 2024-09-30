@@ -10,6 +10,8 @@ end
 
 ConcreteRArray(data::T) where {T<:Number} = ConcreteRArray{T,0}(data, ())
 
+Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x)
+
 function ConcreteRArray(
     data::Array{T,N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]
 ) where {T,N}

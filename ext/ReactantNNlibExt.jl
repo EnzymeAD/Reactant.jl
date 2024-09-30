@@ -1,15 +1,15 @@
 module ReactantNNlibExt
 
 using NNlib
-using Reactant
+using Reactant: Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array
 
 for (jlop, hloop) in (
     (:(NNlib.tanh_fast), :tanh),
     (:(NNlib.sigmoid_fast), :logistic),
     (:(NNlib.sigmoid), :logistic),
 )
-    @eval function $(jlop)(x::Reactant.TracedRArray{T,0}) where {T}
-        return Reactant.TracedRArray{T,0}(
+    @eval function $(jlop)(x::TracedRArray{T,0}) where {T}
+        return TracedRArray{T,0}(
             (),
             Reactant.MLIR.IR.result(
                 Reactant.MLIR.Dialects.stablehlo.$(hloop)(x.mlir_data), 1
@@ -19,18 +19,16 @@ for (jlop, hloop) in (
     end
 end
 
-NNlib.relu(x::Reactant.TracedRArray{T,0}) where {T} = max(x, zero(T))
+NNlib.relu(x::TracedRArray{T,0}) where {T} = max(x, zero(T))
 
-function NNlib.gelu(x::Reactant.TracedRArray{T,0}) where {T}
+function NNlib.gelu(x::TracedRArray{T,0}) where {T}
     α = T(0.044715)
     λλ = T(√(8 / π))
     return x * sigmoid(λλ * x * muladd(x^2, α, one(T)))
 end
 
 # TODO handle non finite cases
-function NNlib.softmax!(
-    out::Reactant.TracedRArray{T,N}, x::AbstractArray; dims=1
-) where {T,N}
+function NNlib.softmax!(out::TracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     max_ = NNlib.fast_maximum(x; dims)
     #if all(isfinite, max_)
     @fastmath out .= exp.(x .- max_)
@@ -43,8 +41,11 @@ function NNlib.softmax!(
 end
 
 function NNlib.conv(
-    x::Reactant.TracedRArray{T,N}, W::Reactant.TracedRArray{T}, cdims::DenseConvDims
+    x::AnyTracedRArray{T,N}, W::AnyTracedRArray{T}, cdims::DenseConvDims
 ) where {T,N}
+    x = materialize_traced_array(x)
+    W = materialize_traced_array(W)
+
     kernel_size = NNlib.kernel_size(cdims)
     padding = NNlib.padding(cdims)
     stride = NNlib.stride(cdims)
@@ -119,10 +120,12 @@ function NNlib.conv(
         batch_group_count=1,
     )
 
-    return Reactant.TracedRArray{T,N}((), Reactant.MLIR.IR.result(conv), output_shape)
+    return TracedRArray{T,N}((), Reactant.MLIR.IR.result(conv), output_shape)
 end
 
-function reduce_window(f, x::Reactant.TracedRArray{T,N}, pdims; init) where {T,N}
+function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
+    x = materialize_traced_array(x)
+
     num_spatial_dims = N - 2
     input_spatial_dims = 1:num_spatial_dims
 
@@ -185,21 +188,22 @@ function reduce_window(f, x::Reactant.TracedRArray{T,N}, pdims; init) where {T,N
         body,
     )
 
-    return Reactant.TracedRArray{T,N}(
-        (), Reactant.MLIR.IR.result(reduction), size(result_type)
-    )
+    return TracedRArray{T,N}((), Reactant.MLIR.IR.result(reduction), size(result_type))
 end
 
-function NNlib.maxpool(x::Reactant.TracedRArray{T}, pdims::NNlib.PoolDims) where {T}
+function NNlib.maxpool(x::AnyTracedRArray{T}, pdims::NNlib.PoolDims) where {T}
     return reduce_window(
         Reactant.MLIR.Dialects.stablehlo.maximum, x, pdims; init=typemin(T)
     )
 end
 
-function NNlib.meanpool(x::Reactant.TracedRArray{T}, pdims::NNlib.PoolDims) where {T}
+function NNlib.meanpool(x::AnyTracedRArray{T}, pdims::NNlib.PoolDims) where {T}
     numel = prod(NNlib.kernel_size(pdims))
     return reduce_window(Reactant.MLIR.Dialects.stablehlo.add, x, pdims; init=zero(T)) ./
            T(numel)
 end
+
+NNlib.batched_transpose(x::AnyTracedRArray{T,3}) where {T} = permutedims(x, (2, 1, 3))
+NNlib.batched_adjoint(x::AnyTracedRArray{<:Real,3}) = NNlib.batched_transpose(x)
 
 end # module ReactantNNlibExt

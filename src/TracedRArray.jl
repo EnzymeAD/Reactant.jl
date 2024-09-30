@@ -16,11 +16,32 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
-function Base.getindex(a::TracedRArray{T,0}) where {T}
-    return a
+const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
+const AnyTracedRScalar{T} = AnyTracedRArray{T,0}
+const AnyTracedRVector{T} = AnyTracedRArray{T,1}
+const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
+const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
+
+materialize_traced_array(x::TracedRArray) = x
+materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
+
+get_mlir_data(x::TracedRArray) = x.mlir_data
+get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
+
+ancestor(x::TracedRArray) = x
+ancestor(x::WrappedTracedRArray) = ancestor(parent(x))
+
+get_ancestor_indices(::TracedRArray, indices...) = indices
+function get_ancestor_indices(
+    x::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices...
+) where {T,N}
+    return get_ancestor_indices(parent(x), Base.reindex(x.indices, indices)...)
 end
 
-function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Integer,N}) where {T,N}
+Base.getindex(a::AnyTracedRScalar{T}) where {T} = a
+
+function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
     @warn(
         """Performing scalar indexing on task $(current_task()).
 Invocation resulted in scalar indexing of a TracedRArray.
@@ -47,9 +68,7 @@ and require expensive copies and synchronization each time and therefore should 
     return TracedRArray{T,0}((), res2, ())
 end
 
-function Base.getindex(
-    a::TracedRArray{T,N}, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
-) where {T,N}
+function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.slice(
@@ -62,14 +81,19 @@ function Base.getindex(
         ),
         1,
     )
-    return TracedRArray{T,N}((), res, Tuple(length.(indices)))
+    x = TracedRArray{T,N}((), res, Tuple(length.(indices)))
+    ddims = findall(x -> x isa Integer, indices)
+    !isempty(ddims) && return dropdims(x; dims=Tuple(ddims))
+    return x
 end
 
-function Base.view(
-    a::TracedRArray{T,N}, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
-) where {T,N}
-    # TODO: Implement before merging the PR
-    return error("view is not supported yet")
+# Prevent ambiguity
+function Base.getindex(a::WrappedTracedRArray, index::Int...)
+    return getindex(ancestor(a), get_ancestor_indices(a, index...)...)
+end
+
+function Base.getindex(a::WrappedTracedRArray, indices...)
+    return getindex(ancestor(a), get_ancestor_indices(a, indices...)...)
 end
 
 function Base.setindex!(
@@ -101,15 +125,15 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     # return print(io, X.mlir_data, ")")
 end
 
-Base.only(A::TracedRArray{T,0}) where {T} = A
+Base.only(A::AnyTracedRScalar{T}) where {T} = A
 
-function Base.reshape(A::TracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
+function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
     prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
 
     # HLO reshape semantics collapse the opposite way
     res1 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.transpose(
-            A.mlir_data;
+            get_mlir_data(A);
             permutation=MLIR.IR.DenseArrayAttribute([Int64(N - 1 - i) for i in 0:(N - 1)]),
         ),
         1,
@@ -137,12 +161,12 @@ function Base.reshape(A::TracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
     return TracedRArray{T,NT}((), res3, dims)
 end
 
-function Base.permutedims(A::TracedRArray{T,N}, perm) where {T,N}
+function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     return TracedRArray{T,N}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.transpose(
-                A.mlir_data;
+                get_mlir_data(A);
                 permutation=MLIR.IR.DenseArrayAttribute([Int64(i - 1) for i in perm]),
             ),
             1,
@@ -151,13 +175,19 @@ function Base.permutedims(A::TracedRArray{T,N}, perm) where {T,N}
     )
 end
 
+function Base.transpose(A::AnyTracedRVecOrMat)
+    A = ndims(A) == 1 ? reshape(A, :, 1) : A
+    return permutedims(A, (2, 1))
+end
+Base.adjoint(A::AnyTracedRVecOrMat{<:Real}) = transpose(A)
+
 function Base.promote_rule(
     ::Type{TracedRArray{T,N}}, ::Type{TracedRArray{S,N}}
 ) where {T,S,N}
     return TracedRArray{Base.promote_type(T, S),N}
 end
 
-function Base.promote_rule(A::Type{T}, B::Type{TracedRArray{S,N}}) where {T,S,N}
+function Base.promote_rule(::Type{T}, ::Type{TracedRArray{S,N}}) where {T,S,N}
     return TracedRArray{Base.promote_type(T, S),N}
 end
 
@@ -194,7 +224,7 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     )
 end
 
-function promote_to(lhs::TracedRArray{T,N}, rhs) where {T,N}
+function promote_to(::TracedRArray{T,N}, rhs) where {T,N}
     return promote_to(TracedRArray{T,N}, rhs)
 end
 
@@ -668,6 +698,7 @@ function Base.mapreducedim!(
 end
 
 struct AbstractReactantArrayStyle{N} <: Base.Broadcast.AbstractArrayStyle{N} end
+
 AbstractReactantArrayStyle(::Val{N}) where {N} = AbstractReactantArrayStyle{N}()
 AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle{N}()
 
@@ -678,7 +709,9 @@ AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle
 #    copy(inst)
 # end
 
-BroadcastStyle(::Type{T}) where {T<:TracedRArray} = AbstractReactantArrayStyle{ndims(T)}()
+function BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
+    return AbstractReactantArrayStyle{N}()
+end
 
 function Base.similar(
     bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
@@ -746,8 +779,8 @@ function broadcast_to_size(arg::AbstractArray, rsize)
     return arg
 end
 
-function broadcast_to_size(arg::TracedRArray, rsize)
-    return arg
+function broadcast_to_size(arg::AnyTracedRArray, rsize)
+    return materialize_traced_array(arg)
 end
 
 function broadcast_to_size(arg::Base.RefValue, rsize)

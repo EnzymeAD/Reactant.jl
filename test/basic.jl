@@ -261,3 +261,15 @@ tuple_byref2(x) = abs2.(x), tuple_byref2(x)
     # @test r2[2].a.b.data === x.data
     # @test r2[1] == abs2.([1.0 -2.0; -3.0 4.0])
 end
+
+sum_xxᵀ(x) = sum(x .* x')
+
+@testset "sum(x .* x')" begin
+    @testset "size(x): $(size(x))" for x in (rand(4, 4), rand(4))
+        x_ca = Reactant.to_rarray(x)
+
+        sum_xxᵀ_compiled = @compile sum_xxᵀ(x_ca)
+
+        @test sum_xxᵀ_compiled(x_ca) ≈ sum_xxᵀ(x)
+    end
+end
