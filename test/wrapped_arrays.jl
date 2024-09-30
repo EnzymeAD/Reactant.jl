@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, Statistics
 
 function view_getindex_1(x)
     x = view(x, 2:3, 1:2, :)
@@ -79,4 +79,22 @@ end
 
         @test bcast_compiled(op, x_ra) ≈ bcast_wrapper(op, x)
     end
+end
+
+function mean_var(x)
+    x = view(x, 2:3, :)
+    return mean(x; dims=1), var(x; dims=1)
+end
+
+@testset "mean/var" begin
+    x = rand(4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    mean_var_compiled = @compile mean_var(x_ra)
+
+    m1, v1 = mean_var(x)
+    m2, v2 = mean_var_compiled(x_ra)
+
+    @test m1 ≈ m2
+    @test v1 ≈ v2
 end

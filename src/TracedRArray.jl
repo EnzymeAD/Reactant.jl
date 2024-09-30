@@ -16,21 +16,21 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
-const AnyTracedRArray{T,N} = Union{
-    TracedRArray{T,N},WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
-}
+const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
 const AnyTracedRScalar{T} = AnyTracedRArray{T,0}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
+materialize_traced_array(x::TracedRArray) = x
+materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
+
 get_mlir_data(x::TracedRArray) = x.mlir_data
-get_mlir_data(x::AnyTracedRArray) = get_mlir_data(x[axes(x)...])
+get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
 
 ancestor(x::TracedRArray) = x
-function ancestor(x::WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}) where {T,N}
-    return ancestor(parent(x))
-end
+ancestor(x::WrappedTracedRArray) = ancestor(parent(x))
 
 get_ancestor_indices(::TracedRArray, indices...) = indices
 function get_ancestor_indices(
@@ -88,15 +88,11 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 end
 
 # Prevent ambiguity
-function Base.getindex(
-    a::WrappedArray{T,N,TracedRArray,<:TracedRArray{T,N}}, index::Int...
-) where {T,N}
+function Base.getindex(a::WrappedTracedRArray, index::Int...)
     return getindex(ancestor(a), get_ancestor_indices(a, index...)...)
 end
 
-function Base.getindex(
-    a::WrappedArray{T,N,TracedRArray,<:TracedRArray{T,N}}, indices...
-) where {T,N}
+function Base.getindex(a::WrappedTracedRArray, indices...)
     return getindex(ancestor(a), get_ancestor_indices(a, indices...)...)
 end
 
@@ -783,14 +779,8 @@ function broadcast_to_size(arg::AbstractArray, rsize)
     return arg
 end
 
-function broadcast_to_size(
-    arg::WrappedArray{T,N,TracedRArray,<:TracedRArray{T,N}}, rsize
-) where {T,N}
-    return broadcast_to_size(arg[axes(arg)...], rsize)
-end
-
-function broadcast_to_size(arg::TracedRArray, rsize)
-    return arg
+function broadcast_to_size(arg::AnyTracedRArray, rsize)
+    return materialize_traced_array(arg)
 end
 
 function broadcast_to_size(arg::Base.RefValue, rsize)
