@@ -48,3 +48,35 @@ end
 
     @test reshape_wrapper_compiled(x_ra) ≈ reshape_wrapper(x)
 end
+
+function permutedims_wrapper(x)
+    x = view(x, 2:3, 1:2, :)
+    return permutedims(x, (2, 1, 3))
+end
+
+@testset "permutedims wrapper" begin
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    permutedims_wrapper(x)
+
+    permutedims_wrapper_compiled = @compile permutedims_wrapper(x_ra)
+
+    @test permutedims_wrapper_compiled(x_ra) ≈ permutedims_wrapper(x)
+end
+
+function bcast_wrapper(f::F, x) where {F}
+    x = view(x, 2:3, :)
+    return f.(x)
+end
+
+@testset "Broadcasting on wrapped arrays" begin
+    x = rand(4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    for op in (-, tanh, sin)
+        bcast_compiled = @compile bcast_wrapper(op, x_ra)
+
+        @test bcast_compiled(op, x_ra) ≈ bcast_wrapper(op, x)
+    end
+end

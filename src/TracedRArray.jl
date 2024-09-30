@@ -680,6 +680,7 @@ function Base.mapreducedim!(
 end
 
 struct AbstractReactantArrayStyle{N} <: Base.Broadcast.AbstractArrayStyle{N} end
+
 AbstractReactantArrayStyle(::Val{N}) where {N} = AbstractReactantArrayStyle{N}()
 AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle{N}()
 
@@ -690,7 +691,9 @@ AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle
 #    copy(inst)
 # end
 
-BroadcastStyle(::Type{T}) where {T<:TracedRArray} = AbstractReactantArrayStyle{ndims(T)}()
+function BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
+    return AbstractReactantArrayStyle{N}()
+end
 
 function Base.similar(
     bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
@@ -756,6 +759,12 @@ function broadcast_to_size(arg::AbstractArray, rsize)
         (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(arg)
     )
     return arg
+end
+
+function broadcast_to_size(
+    arg::WrappedArray{T,N,TracedRArray,<:TracedRArray{T,N}}, rsize
+) where {T,N}
+    return broadcast_to_size(arg[axes(arg)...], rsize)
 end
 
 function broadcast_to_size(arg::TracedRArray, rsize)
