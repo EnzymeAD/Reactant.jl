@@ -179,6 +179,12 @@ function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     )
 end
 
+function Base.transpose(A::AnyTracedRVecOrMat)
+    A = ndims(A) == 1 ? reshape(A, :, 1) : A
+    return permutedims(A, (2, 1))
+end
+Base.adjoint(A::AnyTracedRVecOrMat{<:Real}) = transpose(A)
+
 function Base.promote_rule(
     ::Type{TracedRArray{T,N}}, ::Type{TracedRArray{S,N}}
 ) where {T,S,N}
