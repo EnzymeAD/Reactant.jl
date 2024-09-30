@@ -19,12 +19,11 @@ for (jlop, hloop) in (
     end
 end
 
-NNlib.relu(x::TracedRArray{T,0}) where {T} = max(x, zero(T))
-
-function NNlib.gelu(x::TracedRArray{T,0}) where {T}
-    α = T(0.044715)
-    λλ = T(√(8 / π))
-    return x * sigmoid(λλ * x * muladd(x^2, α, one(T)))
+# Don't confuse our poor scalar arrays, we no like numbers we like 0D arrays
+for nnlib_op in setdiff(Tuple(NNlib.ACTIVATIONS), (:tanh_fast, :sigmoid_fast, :sigmoid, :σ))
+    @eval function NNlib.$(nnlib_op)(x::TracedRArray{T,0}) where {T}
+        return invoke(NNlib.$(nnlib_op), Tuple{Any}, x)
+    end
 end
 
 # TODO handle non finite cases
