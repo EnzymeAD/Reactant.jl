@@ -101,3 +101,14 @@ end
     ln_comp = @compile custom_ln(x_ra)
     @test ln_comp(x_ra) ≈ custom_ln(x)
 end
+
+pow(x, n) = x .^ n
+
+@testset "Pow" begin
+    x = rand(2, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    pow_compiled = @compile pow(x_ra, 2)
+
+    @test pow_compiled(x_ra) ≈ pow(x, 2)
+end

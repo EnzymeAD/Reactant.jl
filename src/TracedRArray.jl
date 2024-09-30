@@ -267,7 +267,7 @@ for (jlop, hloop) in (
         function $(jlop)(
             @nospecialize(lhs::TracedRArray{T1,0}), @nospecialize(rhs::TracedRArray{T2,0})
         ) where {T1,T2}
-            commonTy = promote_type(T1, T2)
+            commonTy = TracedRArray{Base.promote_type(T1, T2),0}
             lhs = promote_to(commonTy, lhs)
             rhs = promote_to(commonTy, rhs)
             return $(jlop)(lhs, rhs)
