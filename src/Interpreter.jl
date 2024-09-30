@@ -193,7 +193,7 @@ end
 
 function set!(x, path, tostore; emptypath=false)
     for p in path
-        x = getfield(x, p)
+        x = traced_getfield(x, p)
     end
 
     x.mlir_data = tostore
