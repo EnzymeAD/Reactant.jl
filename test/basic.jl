@@ -265,7 +265,7 @@ end
 sum_xxᵀ(x) = sum(x .* x')
 
 @testset "sum(x .* x')" begin
-    @testset "size(x): $(size(x))" for x in (rand(4, 4), rand(4,))
+    @testset "size(x): $(size(x))" for x in (rand(4, 4), rand(4))
         x_ca = Reactant.to_rarray(x)
 
         sum_xxᵀ_compiled = @compile sum_xxᵀ(x_ca)
