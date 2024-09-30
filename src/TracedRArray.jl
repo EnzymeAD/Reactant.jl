@@ -42,11 +42,11 @@ end
 
 Base.getindex(a::AnyTracedRScalar{T}) where {T} = a
 
-Base.zero(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T, 0}, zero(T))
-Base.one(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T, 0}, one(T))
+Base.zero(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T,0}, zero(T))
+Base.one(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T,0}, one(T))
 
 function Base.convert(::Type{<:AnyTracedRScalar{T}}, x::Number) where {T}
-    return promote_to(TracedRArray{T, 0}, T(x))
+    return promote_to(TracedRArray{T,0}, T(x))
 end
 
 function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
@@ -522,8 +522,7 @@ for (jlop, hloop, hlocomp, merge) in (
 )
     @eval begin
         function $(jlop)(
-            @nospecialize(lhs::TracedRArray{T,0}),
-            @nospecialize(rhs::TracedRArray{T,0})
+            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::TracedRArray{T,0})
         ) where {T}
             return TracedRArray{Bool,0}(
                 (),
