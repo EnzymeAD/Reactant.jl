@@ -27,6 +27,18 @@ const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(x[axes(x)...])
 
+ancestor(x::TracedRArray) = x
+function ancestor(x::WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}) where {T,N}
+    return ancestor(parent(x))
+end
+
+get_ancestor_indices(::TracedRArray, indices...) = indices
+function get_ancestor_indices(
+    x::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices...
+) where {T,N}
+    return get_ancestor_indices(parent(x), Base.reindex(x.indices, indices)...)
+end
+
 Base.getindex(a::AnyTracedRScalar{T}) where {T} = a
 
 function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
@@ -75,13 +87,17 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     return x
 end
 
-# Prevents ambiguity
-function Base.getindex(a::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices::Int...) where {T,N}
-    return getindex(parent(a), Base.reindex(a.indices, indices)...)
+# Prevent ambiguity
+function Base.getindex(
+    a::WrappedArray{T,N,TracedRArray,<:TracedRArray{T,N}}, index::Int...
+) where {T,N}
+    return getindex(ancestor(a), get_ancestor_indices(a, index...)...)
 end
 
-function Base.getindex(a::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices...) where {T,N}
-    return getindex(parent(a), Base.reindex(a.indices, indices)...)
+function Base.getindex(
+    a::WrappedArray{T,N,TracedRArray,<:TracedRArray{T,N}}, indices...
+) where {T,N}
+    return getindex(ancestor(a), get_ancestor_indices(a, indices...)...)
 end
 
 function Base.setindex!(
