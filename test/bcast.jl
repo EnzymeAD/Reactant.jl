@@ -2,6 +2,7 @@ using Test
 using Reactant
 using Enzyme, NNlib
 using Reactant.MLIR
+using Statistics
 
 @noinline function no(@nospecialize(x))
     x = @ccall $(Base.@cfunction(identity, Any, (Any,)))(x::Any)::Any
@@ -71,4 +72,32 @@ test()
         @test x .* y ≈ Reactant.Compiler.compile(.*, (x_ca, y_ca))(x_ca, y_ca)
         @test x ./ y ≈ Reactant.Compiler.compile(./, (x_ca, y_ca))(x_ca, y_ca)
     end
+end
+
+function scalar_bcast(x)
+    sc = sum(x)
+    return sc .+ x
+end
+
+@testset "Scalar broadcasting" begin
+    x = rand(2, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    scalar_bcast_compiled = @compile scalar_bcast(x_ra)
+
+    @test scalar_bcast_compiled(x_ra) ≈ scalar_bcast(x)
+end
+
+function custom_ln(x)
+    mu = mean(x; dims=1)
+    sigma = var(x; dims=3)
+    return (x .- mu) ./ sqrt.(sigma)
+end
+
+@testset "Custom layernorm" begin
+    x = rand(Float32, 3, 3, 4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    ln_comp = @compile custom_ln(x_ra)
+    @test ln_comp(x_ra) ≈ custom_ln(x)
 end

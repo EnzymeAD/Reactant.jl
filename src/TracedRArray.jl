@@ -9,6 +9,7 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     function TracedRArray{T,N}(
         paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
     ) where {T,N}
+        shape = Tuple(shape)
         if !isnothing(mlir_data)
             @assert size(MLIR.IR.type(mlir_data)) == shape
         end
@@ -120,7 +121,7 @@ function Base.similar(x::TracedRArray{T,N}, ::Type{T2}) where {T,N,T2}
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
-    return print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ")")
+    return print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", size=", size(X), ")")
     # TODO this line segfaults if MLIR IR has not correctly been generated
     # return print(io, X.mlir_data, ")")
 end
@@ -128,7 +129,13 @@ end
 Base.only(A::AnyTracedRScalar{T}) where {T} = A
 
 function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
-    prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
+    if prod(dims) != prod(size(A))
+        throw(
+            DimensionMismatch(
+                "new shape $(dims) is incompatible with array size $(size(A))"
+            ),
+        )
+    end
 
     # HLO reshape semantics collapse the opposite way
     res1 = MLIR.IR.result(
@@ -421,17 +428,23 @@ for (jlop, hloop) in (
 end
 
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
+    all(iszero ∘ ndims, args) && return f(args...)
+
     fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
         f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
     )
 
     invmap = IdDict()
-    OutShape = nothing
     for (k, v) in seen_args
         invmap[v] = k
-        OutShape = size(k)
     end
+
+    input_shapes = size.(keys(seen_args))
+    # by the time we reach here all args must have same size
+    @assert allequal(input_shapes) "input shapes are $(input_shapes)"
+    OutShape = isempty(seen_args) ? nothing : first(input_shapes)
     @assert !isnothing(OutShape)
+
     in_tys2 = [mlir_type(invmap[arg]) for arg in linear_args]
 
     out_tys2 = [
@@ -697,6 +710,12 @@ function Base.mapreducedim!(
     return R
 end
 
+function Base.fill!(A::TracedRArray{T,N}, x) where {T,N}
+    bcast = broadcast_to_size(T(x), size(A))
+    A.mlir_data = bcast.mlir_data
+    return A
+end
+
 struct AbstractReactantArrayStyle{N} <: Base.Broadcast.AbstractArrayStyle{N} end
 
 AbstractReactantArrayStyle(::Val{N}) where {N} = AbstractReactantArrayStyle{N}()
@@ -776,21 +795,12 @@ function broadcast_to_size(arg::AbstractArray, rsize)
     arg = TracedRArray{eltype(arg),len}(
         (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(arg)
     )
-    return arg
-end
-
-function broadcast_to_size(arg::AnyTracedRArray, rsize)
-    return materialize_traced_array(arg)
+    return broadcast_to_size(arg, rsize)
 end
 
 function broadcast_to_size(arg::Base.RefValue, rsize)
+    # XXX: don't we want to expand here to rsize?
     return arg
-end
-
-function Base.fill!(A::TracedRArray{T,N}, x) where {T,N}
-    bcast = broadcast_to_size(T(x), size(A))
-    A.mlir_data = bcast.mlir_data
-    return A
 end
 
 function broadcast_to_size(arg::T, rsize) where {T<:Number}
@@ -801,15 +811,20 @@ function broadcast_to_size(arg::T, rsize) where {T<:Number}
     )
 end
 
+function broadcast_to_size(arg::AnyTracedRArray, rsize)
+    arg = materialize_traced_array(arg)
+    size(arg) == rsize && return arg
+    return broadcast_to_size_internal(arg, rsize)
+end
+
 function broadcast_to_size(arg::Broadcast.Extruded, rsize)
     rsize2 = (keep ? rsizev : 1 for (keep, rsizev) in zip(arg.keeps, rsize))
-
     x = broadcast_to_size(arg.x, rsize2)
+    size(x) == rsize && return x
+    return broadcast_to_size_internal(x, rsize)
+end
 
-    if size(x) == rsize
-        return x
-    end
-
+function broadcast_to_size_internal(x::TracedRArray, rsize)
     dims = collect(Int64, 0:(length(size(x)) - 1))
 
     if length(size(MLIR.IR.type(x.mlir_data))) != length(dims)
@@ -822,9 +837,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
     @assert length(size(MLIR.IR.type(x.mlir_data))) == length(dims)
     mlirty = MLIR.IR.type(x.mlir_data)
 
-    len = length(rsize)
-    @assert typeof(len) == Int
-    return TracedRArray{eltype(x),len}(
+    return TracedRArray{eltype(x),Int(length(rsize))}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.broadcast_in_dim(
@@ -834,7 +847,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
             ),
             1,
         ),
-        rsize,
+        collect(rsize),
     )
 end
 
@@ -853,6 +866,11 @@ end
 
 function Base._cat(dims::Val{D}, A::TracedRArray{T,N}, Bs::TracedRArray...) where {T,N,D}
     @assert D isa Integer "Support for non-integer dimensions is not implemented yet."
+
+    # MLIR expects the dimension `D` to be ≤ the rank of the input tensors
+    A = maybe_expand_dims(A, dims)
+    Bs = maybe_expand_dims.(Bs, (dims,))
+
     catdims = Base.dims2cat(dims)
     shape = Base.cat_size_shape(catdims, A, Bs...)
     RT = Base.promote_eltype(A, Bs...)
@@ -869,4 +887,9 @@ function Base._cat(dims::Val{D}, A::TracedRArray{T,N}, Bs::TracedRArray...) wher
         shape,
     )
     return Res
+end
+
+function maybe_expand_dims(x::AbstractArray{T,N}, ::Val{D}) where {T,N,D}
+    D ≤ N && return x
+    return reshape(x, ntuple(i -> i ≤ N ? size(x, i) : 1, Val(D)))
 end
