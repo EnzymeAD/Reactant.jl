@@ -11,9 +11,14 @@ SUITE["comptime"]["basics"] = BenchmarkGroup()
 SUITE["comptime"]["basics"]["2D sum"] = @benchmarkable Reactant.compile(sum, (a,)) setup = (
     a = Reactant.ConcreteRArray(ones(2, 10))
 )
-SUITE["comptime"]["basics"]["Basic cos"] = @benchmarkable Reactant.compile(cos, (a,)) setup = (
+
+bcast_cos(x) = cos.(x)
+
+SUITE["comptime"]["basics"]["cos.(x)"] = @benchmarkable begin
+    Reactant.compile(bcast_cos, (a,))
+end setup = begin
     a = Reactant.ConcreteRArray(ones(2, 10))
-)
+end
 
 SUITE["comptime"]["lux neural networks"] = BenchmarkGroup()
 
