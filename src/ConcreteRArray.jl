@@ -50,7 +50,7 @@ end
 
 function synchronize(x::ConcreteRArray)
     XLA.synced_buffer(x.data)
-    return
+    return nothing
 end
 
 # function Base.similar(x::ConcreteRArray{T,N}, ::Type{T2}) where {T,N,T2}
