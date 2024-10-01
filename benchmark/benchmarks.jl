@@ -24,7 +24,7 @@ end
 SUITE["runtime"]["lux neural networks"] = BenchmarkGroup()
 SUITE["comptime"]["lux neural networks"] = BenchmarkGroup()
 
-for depth in [11, 13, 16, 19], batchnorm in [false,]#  true] <-- not working yet
+for depth in [11, 13, 16, 19], batchnorm in [false]#  true] <-- not working yet
     SUITE["comptime"]["lux neural networks"]["vgg$(depth) bn=$(batchnorm)"] = @benchmarkable begin
         @compile vgg(x, ps_concrete, st_concrete)
     end setup = begin
