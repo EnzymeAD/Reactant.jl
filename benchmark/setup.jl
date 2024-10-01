@@ -62,15 +62,19 @@ function setup_lux_forward_pass_benchmark!(
         Lux.apply($model, x, ps, st_test)
         synchronize($dev)
     end setup = begin
+        GC.gc()
         reclaim($dev)
         x, ps, st = $dev(general_lux_setup($model, $x_dims))
         st_test = Lux.testmode(st)
+        GC.gc()
+        reclaim($dev)
     end
 
     suite[benchmark_name]["forward"][backend]["Reactant"] = @benchmarkable begin
         y, _ = apply_compiled($model, x_ra, ps_ra, st_test_ra)
         Reactant.synchronize(y)
     end setup = begin
+        GC.gc()
         reclaim($dev)
         x, ps, st = general_lux_setup($model, $x_dims)
         st_test = Lux.testmode(st)
@@ -78,6 +82,8 @@ function setup_lux_forward_pass_benchmark!(
         ps_ra = Reactant.to_rarray(ps)
         st_test_ra = Reactant.to_rarray(st_test)
         apply_compiled = @compile Lux.apply($model, x_ra, ps_ra, st_test_ra)
+        GC.gc()
+        reclaim($dev)
     end
 
     return nothing
