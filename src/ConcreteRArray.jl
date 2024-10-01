@@ -143,7 +143,19 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
             return unsafe_load(ptr, start)
         end
     end
+    @warn(
+        """Performing scalar indexing on task $(current_task()).
+Invocation resulted in scalar indexing of a ConcreteRArray.
+This is typically caused by calling an iterating implementation of a method.
+Such implementations *do not* execute on device, but very slowly on the CPU,
+and require expensive copies and synchronization each time and therefore should be avoided."""
+    )
     return convert(Array, a)[args...]
+end
+
+function mysetindex!(a, v, args::Vararg{Int,N}) where {N}
+    Base.setindex!(a, v, args)
+    nothing
 end
 
 function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N}
@@ -167,7 +179,15 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
         end
         return a
     end
-    throw("Cannot setindex! to non-CPU buffer")
+    @warn(
+        """Performing scalar indexing on task $(current_task()).
+Invocation resulted in scalar indexing of a ConcreteRArray.
+This is typically caused by calling an iterating implementation of a method.
+Such implementations *do not* execute on device, but very slowly on the CPU,
+and require expensive copies and synchronization each time and therefore should be avoided."""
+    )
+    fn = @compile mysetindex!(a, v, args)
+    fn(a, v, args)
 end
 
 # TODO is there any way to allocate an uninitialized buffer in XLA?
