@@ -3,13 +3,13 @@ using BenchmarkTools
 const BACKENDS = ["CPU", "CUDA"]
 
 const CPU_Results = joinpath(dirname(@__FILE__), "results", "CPUbenchmarks.json")
-
 @assert(ispath(CPU_Results))
 
 const RESULTS = BenchmarkTools.load(CPU_Results)[1]
 @assert RESULTS isa BenchmarkTools.BenchmarkGroup
 
 for backend in BACKENDS[2:end]
+    @info "Aggregating results for $(backend)"
     filename = string(backend, "benchmarks.json")
     filepath = joinpath(dirname(@__FILE__), "results", filename)
     if !ispath(filepath)
@@ -20,7 +20,7 @@ for backend in BACKENDS[2:end]
             # <benchmark name>/<forward or reverse>/<backend>/<reactant or package>
             for benchmark in keys(RESULTS)
                 for pass in keys(RESULTS[benchmark])
-                    for pkg in keys(RESULTS[benchmark][pass][backend])
+                    for pkg in keys(backend_results[benchmark][pass][backend])
                         RESULTS[benchmark][pass][backend][pkg] = backend_results[benchmark][pass][backend][pkg]
                     end
                 end
