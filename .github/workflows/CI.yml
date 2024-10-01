@@ -23,7 +23,7 @@ jobs:
       matrix:
         version:
           - '1.10'
-          - 'pre'
+          - '~1.11.0-0'
           - 'nightly'
         os:
           - ubuntu-20.04
@@ -41,7 +41,7 @@ jobs:
             assertions: true
           - version: '1.10'
             allow_failure: false
-          - version: 'pre'
+          - version: '~1.11.0-0'
             allow_failure: true
           - version: 'nightly'
             allow_failure: true
