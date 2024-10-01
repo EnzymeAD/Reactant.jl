@@ -36,9 +36,12 @@ steps:
         artifact_paths:
           - "benchmark/results/*"
         agents:
-          arch: "aarch64"  # these ones tend to be more free
+          # Models are quite large so we need a decent sized machine. Don't tell Chris we
+          # are stealing SciMLBenchmarks machine :P
           queue: "juliaecosystem"
-          num_cpus: "4"
+          sandbox_capable: true
+          exclusive: true
+          arch: "x86_64"
         env:
           BENCHMARK_GROUP: CPU
           JULIA_NUM_THREADS: "auto"
