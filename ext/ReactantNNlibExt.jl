@@ -1,7 +1,7 @@
 module ReactantNNlibExt
 
 using NNlib
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array
+using Reactant: Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR
 
 for (jlop, hloop) in (
     (:(NNlib.tanh_fast), :tanh),
@@ -214,13 +214,43 @@ function NNlib.batched_mul(x::AnyTracedRArray{T,3}, y::AnyTracedRArray{T,3}) whe
             ),
         )
     end
-    if size(x, 3) == size(y, 3)
-        return cat([x[:, :, i] * y[:, :, i] for i in axes(x, 3)]...; dims=Val(3))
-    elseif size(x, 3) == 1
-        return cat([x[:, :, i] * y[:, :, 1] for i in axes(x, 3)]...; dims=Val(3))
-    elseif size(y, 3) == 1
-        return cat([x[:, :, 1] * y[:, :, i] for i in axes(y, 3)]...; dims=Val(3))
+    x = permutedims(x, (3, 1, 2))
+    y = permutedims(y, (3, 1, 2))
+
+    B = max(size(x, 1), size(y, 1))
+    out_shape = (B, size(x, 2), size(y, 3))
+    resty = MLIR.IR.TensorType(out_shape, eltype(MLIR.IR.type(x.mlir_data)))
+
+    if size(x, 1) != size(y, 1)
+        if size(x, 1) == 1
+            x = Reactant.broadcast_to_size(x, (B, size(x, 2), size(x, 3)))
+        elseif size(y, 1) == 1
+            y = Reactant.broadcast_to_size(y, (B, size(y, 2), size(y, 3)))
+        end
     end
+
+    dot_dimension_numbers = MLIR.API.stablehloDotDimensionNumbersGet(
+        MLIR.IR.context(), 1, [0], 1, [0], 1, [2], 1, [1]
+    )
+
+    prec = MLIR.IR.Attribute(
+        MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.context(), "DEFAULT")
+    )
+    res = TracedRArray{T,3}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.dot_general(
+                x.mlir_data,
+                y.mlir_data;
+                result_0=resty,
+                dot_dimension_numbers=dot_dimension_numbers,
+                precision_config=prec,
+            ),
+            1,
+        ),
+        size(resty),
+    )
+    return permutedims(res, (2, 3, 1))
 end
 
 end # module ReactantNNlibExt

@@ -91,3 +91,35 @@ end
             [3*0+2*1+1*2; 3*1+2*2+1*3; 3*2+2*3+1*0;;;]
     end
 end
+
+@testset "Batched Matrix Multiplication" begin
+    x = rand(Float32, 4, 3, 5)
+    y = rand(Float32, 3, 2, 5)
+
+    x_ra = Reactant.ConcreteRArray(x)
+    y_ra = Reactant.ConcreteRArray(y)
+
+    bmm_compiled = @compile batched_mul(x_ra, y_ra)
+
+    @test bmm_compiled(x_ra, y_ra) ≈ batched_mul(x, y)
+
+    x = rand(Float32, 4, 3, 1)
+    y = rand(Float32, 3, 2, 5)
+
+    x_ra = Reactant.ConcreteRArray(x)
+    y_ra = Reactant.ConcreteRArray(y)
+
+    bmm_compiled = @compile batched_mul(x_ra, y_ra)
+
+    @test bmm_compiled(x_ra, y_ra) ≈ batched_mul(x, y)
+
+    x = rand(Float32, 4, 3, 5)
+    y = rand(Float32, 3, 2, 1)
+
+    x_ra = Reactant.ConcreteRArray(x)
+    y_ra = Reactant.ConcreteRArray(y)
+
+    bmm_compiled = @compile batched_mul(x_ra, y_ra)
+
+    @test bmm_compiled(x_ra, y_ra) ≈ batched_mul(x, y)
+end
