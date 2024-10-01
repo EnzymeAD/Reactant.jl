@@ -56,19 +56,13 @@ steps:
               using Pkg
               Pkg.develop([PackageSpec(path=pwd())])'
 
-          julia --project=benchmark -e 'println("--- :julia: Add CUDA to benchmarks environment")
-              using Pkg
-              # Not needed in general, but since we are benchmarking against Lux this is needed
-              Pkg.add("LuxCUDA")'
-
           julia --project=benchmark -e 'println("--- :julia: Run Benchmarks")
               include("benchmark/runbenchmarks.jl")'
         artifact_paths:
           - "benchmark/results/*"
         agents:
-          queue: "juliagpu"
-          # queue: "benchmark"
-          # gpu: "rtx2070"
+          queue: "benchmark"
+          gpu: "rtx4070"
           cuda: "*"
         env:
           BENCHMARK_GROUP: CUDA

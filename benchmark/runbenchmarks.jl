@@ -1,3 +1,6 @@
+# Accelerator Support for testing non-Reactant performance
+using LuxCUDA
+
 using BenchmarkTools: BenchmarkTools, BenchmarkGroup, @btime, @benchmarkable
 using CpuId: CpuId
 using InteractiveUtils: versioninfo
@@ -33,7 +36,6 @@ BLAS.set_num_threads(BENCHMARK_CPU_THREADS)
 const SUITE = BenchmarkGroup()
 
 if BENCHMARK_GROUP == "CUDA"
-    using LuxCUDA # ] add LuxCUDA to benchmarks/Project.toml
     Reactant.set_default_backend("gpu")
     @info "Running CUDA benchmarks" maxlog = 1
     CUDA.versioninfo()

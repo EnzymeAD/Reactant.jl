@@ -19,7 +19,6 @@ using Zygote: Zygote
 
 function benchmark_group_to_backend(benchmark_group::String)
     benchmark_group == "CPU" && return CPUDevice()
-    benchmark_group == "AMDGPU" && return AMDGPUDevice()
     benchmark_group == "CUDA" && return CUDADevice()
     return error("Unknown backend: $(benchmark_group)")
 end
@@ -42,7 +41,7 @@ end
 
 # Lux Benchmarks
 function setup_vit_benchmark!(suite::BenchmarkGroup, backend, dev::AbstractDevice)
-    for mode in (:tiny, :large), bsize in (4, 16, 32)
+    for mode in (:tiny, :small, :base), bsize in (4, 16, 32)
         benchmark_name = "ViT $(mode) (256 x 256 x 3 x $(bsize))"
 
         setup_lux_forward_pass_benchmark!(
