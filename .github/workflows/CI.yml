@@ -17,12 +17,13 @@ jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ matrix.libReactant }} libReactant - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.allow_failure }}
     strategy:
       fail-fast: false
       matrix:
         version:
           - '1.10'
-          - '~1.11.0-0'
+          - 'pre'
           - 'nightly'
         os:
           - ubuntu-20.04
@@ -38,6 +39,13 @@ jobs:
             libReactant: packaged
             version: '1.10'
             assertions: true
+                  include:
+          - version: '1.10'
+            allow_failure: false
+          - version: 'pre'
+            allow_failure: true
+          - version: 'nightly'
+            allow_failure: true
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
