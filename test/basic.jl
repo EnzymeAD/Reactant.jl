@@ -94,11 +94,13 @@ end
     @test f_res ≈ r_res
 end
 
+bcast_cos(x) = cos.(x)
+
 @testset "Basic cos" begin
     x = rand(3, 2)
     c = Reactant.ConcreteRArray(x)
 
-    f = @compile cos(c)
+    f = @compile bcast_cos(c)
     r = f(c)
     @test r ≈ cos.(x)
 end
@@ -137,7 +139,7 @@ end
 function mul(A, B)
     return A * B
 end
-@testset "Basic grad cos" begin
+@testset "matmul" begin
     c = Reactant.ConcreteRArray(ones(50, 70))
     d = Reactant.ConcreteRArray(ones(70, 30))
 

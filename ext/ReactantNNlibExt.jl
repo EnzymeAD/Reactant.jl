@@ -1,7 +1,7 @@
 module ReactantNNlibExt
 
 using NNlib
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array
+using Reactant: Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR
 
 for (jlop, hloop) in (
     (:(NNlib.tanh_fast), :tanh),
@@ -19,12 +19,11 @@ for (jlop, hloop) in (
     end
 end
 
-NNlib.relu(x::TracedRArray{T,0}) where {T} = max(x, zero(T))
-
-function NNlib.gelu(x::TracedRArray{T,0}) where {T}
-    α = T(0.044715)
-    λλ = T(√(8 / π))
-    return x * sigmoid(λλ * x * muladd(x^2, α, one(T)))
+# Don't confuse our poor scalar arrays, we no like numbers we like 0D arrays
+for nnlib_op in setdiff(Tuple(NNlib.ACTIVATIONS), (:tanh_fast, :sigmoid_fast, :sigmoid, :σ))
+    @eval function NNlib.$(nnlib_op)(x::TracedRArray{T,0}) where {T}
+        return invoke(NNlib.$(nnlib_op), Tuple{Any}, x)
+    end
 end
 
 # TODO handle non finite cases
@@ -205,5 +204,53 @@ end
 
 NNlib.batched_transpose(x::AnyTracedRArray{T,3}) where {T} = permutedims(x, (2, 1, 3))
 NNlib.batched_adjoint(x::AnyTracedRArray{<:Real,3}) = NNlib.batched_transpose(x)
+
+function NNlib.batched_mul(x::AnyTracedRArray{T,3}, y::AnyTracedRArray{T,3}) where {T}
+    if (size(x, 3) != size(y, 3) && size(x, 3) != 1 && size(y, 3) != 1) ||
+        (size(x, 2) != size(y, 1))
+        throw(
+            DimensionMismatch(
+                lazy"size(x) = $(size(x)), size(y) = $(size(y)) inconsistent for batched_matmul.",
+            ),
+        )
+    end
+    x = permutedims(x, (3, 1, 2))
+    y = permutedims(y, (3, 1, 2))
+
+    B = max(size(x, 1), size(y, 1))
+    out_shape = (B, size(x, 2), size(y, 3))
+    resty = MLIR.IR.TensorType(out_shape, eltype(MLIR.IR.type(x.mlir_data)))
+
+    if size(x, 1) != size(y, 1)
+        if size(x, 1) == 1
+            x = Reactant.broadcast_to_size(x, (B, size(x, 2), size(x, 3)))
+        elseif size(y, 1) == 1
+            y = Reactant.broadcast_to_size(y, (B, size(y, 2), size(y, 3)))
+        end
+    end
+
+    dot_dimension_numbers = MLIR.API.stablehloDotDimensionNumbersGet(
+        MLIR.IR.context(), 1, [0], 1, [0], 1, [2], 1, [1]
+    )
+
+    prec = MLIR.IR.Attribute(
+        MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.context(), "DEFAULT")
+    )
+    res = TracedRArray{T,3}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.dot_general(
+                x.mlir_data,
+                y.mlir_data;
+                result_0=resty,
+                dot_dimension_numbers=dot_dimension_numbers,
+                precision_config=prec,
+            ),
+            1,
+        ),
+        size(resty),
+    )
+    return permutedims(res, (2, 3, 1))
+end
 
 end # module ReactantNNlibExt

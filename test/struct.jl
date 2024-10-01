@@ -11,7 +11,8 @@ MockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}} = MockTensor{T,N,A}(
 Base.parent(t::MockTensor) = t.data
 Base.size(t::MockTensor) = size(parent(t))
 
-Base.cos(x::MockTensor) = MockTensor(cos(parent(x)), x.inds)
+Base.cos(x::MockTensor) = MockTensor(cos.(parent(x)), x.inds)
+bcast_cos(x::MockTensor) = cos(x)
 
 mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     data::A
@@ -24,7 +25,10 @@ end
 Base.parent(t::MutableMockTensor) = t.data
 Base.size(t::MutableMockTensor) = size(parent(t))
 
-Base.cos(x::MutableMockTensor) = MutableMockTensor(cos(parent(x)), x.inds)
+Base.cos(x::MutableMockTensor) = MutableMockTensor(cos.(parent(x)), x.inds)
+
+bcast_cos(x) = cos.(x)
+bcast_cos(x::MutableMockTensor) = cos(x)
 
 # modified from JuliaCollections/DataStructures.jl
 # NOTE original uses abstract type instead of union, which is not supported
@@ -55,12 +59,12 @@ end
             x = MockTensor(rand(4, 4), [:i, :j])
             x2 = MockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
 
-            f = @compile cos(x2)
+            f = @compile bcast_cos(x2)
             y = f(x2)
 
             @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
             @test size(y) == (4, 4)
-            @test isapprox(parent(y), cos.(parent(x)))
+            @test isapprox(parent(y), bcast_cos(parent(x)))
             @test x.inds == [:i, :j]
         end
 
@@ -68,12 +72,12 @@ end
             x = MutableMockTensor(rand(4, 4), [:i, :j])
             x2 = MutableMockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
 
-            f = @compile cos(x2)
+            f = @compile bcast_cos(x2)
             y = f(x2)
 
             @test y isa MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
             @test size(y) == (4, 4)
-            @test isapprox(parent(y), cos.(parent(x)))
+            @test isapprox(parent(y), bcast_cos(parent(x)))
             @test x.inds == [:i, :j]
         end
     end
