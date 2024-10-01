@@ -445,3 +445,7 @@ end
 @inline function to_rarray(@nospecialize(x))
     return make_tracer(OrderedIdDict(), x, (), Reactant.ArrayToConcrete)
 end
+
+to_rarray(x::Number) = x  # TODO: should this be a `ConcreteRArray{_,0}`?
+to_rarray(x::ConcreteRArray) = x
+to_rarray(x::AbstractArray{<:Number}) = ConcreteRArray(x)
