@@ -2,6 +2,7 @@ using BenchmarkTools: BenchmarkTools, BenchmarkGroup, @btime, @benchmarkable
 using CpuId: CpuId
 using InteractiveUtils: versioninfo
 using LinearAlgebra: BLAS
+using Reactant: Reactant
 using Statistics: median
 
 # To run benchmarks on a specific GPU backend, add AMDGPU / CUDA / Metal / oneAPI
@@ -23,21 +24,21 @@ if BENCHMARK_GROUP == "CPU"
     end
 end
 
+const BENCHMARK_CPU_THREADS = Threads.nthreads()
+BLAS.set_num_threads(BENCHMARK_CPU_THREADS)
+
 @info sprint(versioninfo)
 @info "BLAS threads: $(BLAS.get_num_threads())"
 
 const SUITE = BenchmarkGroup()
 
-const BENCHMARK_CPU_THREADS = Threads.nthreads()
-BLAS.set_num_threads(BENCHMARK_CPU_THREADS)
-
 if BENCHMARK_GROUP == "CUDA"
     using LuxCUDA # ] add LuxCUDA to benchmarks/Project.toml
     Reactant.set_default_backend("gpu")
-    @info "Running CUDA benchmarks" maxlog=1
+    @info "Running CUDA benchmarks" maxlog = 1
     CUDA.versioninfo()
 else
-    @info "Running CPU benchmarks with $(BENCHMARK_CPU_THREADS) thread(s)" maxlog=1
+    @info "Running CPU benchmarks with $(BENCHMARK_CPU_THREADS) thread(s)" maxlog = 1
 end
 
 # Main benchmark files

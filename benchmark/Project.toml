@@ -21,3 +21,9 @@ Enzyme = "0.13"
 Lux = "1.1"
 Random = "1.10"
 julia = "1.10"
+
+[extras]
+CUDA_Driver_jll = "4ee394cb-3365-5eb0-8335-949819d2adfc"
+
+[preferences.CUDA_Driver_jll]
+compat = false

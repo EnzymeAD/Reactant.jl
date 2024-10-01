@@ -27,14 +27,14 @@ steps:
           - JuliaCI/julia#v1:
               version: "1"
         command: |
-          julia --project=benchmarks -e 'println("--- :julia: Instantiating project")
+          julia --project=benchmark -e 'println("--- :julia: Instantiating project")
               using Pkg
               Pkg.develop([PackageSpec(path=pwd())])'
 
-          julia --project=benchmarks -e 'println("--- :julia: Run Benchmarks")
-              include("benchmarks/runbenchmarks.jl")'
+          julia --project=benchmark -e 'println("--- :julia: Run Benchmarks")
+              include("benchmark/runbenchmarks.jl")'
         artifact_paths:
-          - "benchmarks/results/*"
+          - "benchmark/results/*"
         agents:
           arch: "aarch64"  # these ones tend to be more free
           queue: "juliaecosystem"
@@ -49,25 +49,27 @@ steps:
           - JuliaCI/julia#v1:
               version: "1"
         command: |
-          julia --project=benchmarks -e 'println("--- :julia: Instantiating project")
+          julia --project=benchmark -e 'println("--- :julia: Instantiating project")
               using Pkg
               Pkg.develop([PackageSpec(path=pwd())])'
 
-          julia --project=benchmarks -e 'println("--- :julia: Add CUDA to benchmarks environment")
+          julia --project=benchmark -e 'println("--- :julia: Add CUDA to benchmarks environment")
               using Pkg
               # Not needed in general, but since we are benchmarking against Lux this is needed
               Pkg.add("LuxCUDA")'
 
-          julia --project=benchmarks -e 'println("--- :julia: Run Benchmarks")
-              include("benchmarks/runbenchmarks.jl")'
+          julia --project=benchmark -e 'println("--- :julia: Run Benchmarks")
+              include("benchmark/runbenchmarks.jl")'
         artifact_paths:
-          - "benchmarks/results/*"
+          - "benchmark/results/*"
         agents:
-          queue: "benchmark"
-          gpu: "rtx2070"
+          queue: "juliagpu"
+          # queue: "benchmark"
+          # gpu: "rtx2070"
           cuda: "*"
         env:
           BENCHMARK_GROUP: CUDA
+          JULIA_NUM_THREADS: "auto"
         timeout_in_minutes: 120
 
       - wait: ~
@@ -78,16 +80,16 @@ steps:
           - JuliaCI/julia#v1:
               version: "1"
         command: |
-          buildkite-agent artifact download "benchmarks/results/*" .
+          buildkite-agent artifact download "benchmark/results/*" .
 
           julia -e 'println("--- :julia: Instantiating project")
               using Pkg
               Pkg.add("BenchmarkTools")
 
               println("--- :julia: Combining Benchmarks")
-              include("benchmarks/aggregate.jl")'
+              include("benchmark/aggregate.jl")'
         artifact_paths:
-          - "benchmarks/results/combinedbenchmarks.json"
+          - "benchmark/results/combinedbenchmarks.json"
         agents:
           queue: "juliagpu"
         timeout_in_minutes: 10

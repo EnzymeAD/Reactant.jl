@@ -42,7 +42,7 @@ end
 
 # Lux Benchmarks
 function setup_vit_benchmark!(suite::BenchmarkGroup, backend, dev::AbstractDevice)
-    for mode in (:tiny, :large, :giant), bsize in (4, 16, 32)
+    for mode in (:tiny, :large), bsize in (4, 16, 32)
         benchmark_name = "ViT $(mode) (256 x 256 x 3 x $(bsize))"
 
         setup_lux_forward_pass_benchmark!(

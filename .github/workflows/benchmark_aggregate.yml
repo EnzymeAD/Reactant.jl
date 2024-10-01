@@ -7,15 +7,7 @@ permissions:
 
 on:
   pull_request:
-    branches:
-      - main
-    paths:
-      - "src/**/*"
-      - "ext/**/*"
-      - "benchmarks/**/*"
-      - ".buildkite/**/*"
-      - "Project.toml"
-      - ".github/workflows/Benchmark.yml"
+
   push:
     branches:
       - main

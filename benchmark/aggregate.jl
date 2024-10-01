@@ -21,8 +21,7 @@ for backend in BACKENDS[2:end]
             for benchmark in keys(RESULTS)
                 for pass in keys(RESULTS[benchmark])
                     for pkg in keys(RESULTS[benchmark][pass][backend])
-                        RESULTS[benchmark][pass][backend][pkg] =
-                            backend_results[benchmark][pass][backend][pkg]
+                        RESULTS[benchmark][pass][backend][pkg] = backend_results[benchmark][pass][backend][pkg]
                     end
                 end
             end
