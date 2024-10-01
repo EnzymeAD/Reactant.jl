@@ -186,7 +186,7 @@ This is typically caused by calling an iterating implementation of a method.
 Such implementations *do not* execute on device, but very slowly on the CPU,
 and require expensive copies and synchronization each time and therefore should be avoided."""
     )
-    fn = Reactant.@compile mysetindex!(a, v, args)
+    fn = Reactant.compile(mysetindex!, (a, v, args))
     fn(a, v, args)
 end
 
