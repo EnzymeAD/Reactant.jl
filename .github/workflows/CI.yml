@@ -39,7 +39,6 @@ jobs:
             libReactant: packaged
             version: '1.10'
             assertions: true
-                  include:
           - version: '1.10'
             allow_failure: false
           - version: 'pre'
