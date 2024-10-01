@@ -1,6 +1,10 @@
 module XLA
 
 import ...MLIR
+using Reactant_jll
+using Libdl
+using Scratch
+using Downloads
 
 mutable struct Client
     client::Ptr{Cvoid}
@@ -12,6 +16,19 @@ mutable struct Client
         #    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
         #end
     end
+end
+
+const backends = Dict{String,Client}()
+const default_backend = Ref{Client}()
+const default_device_idx = Ref{Int}(0)
+
+function set_default_backend(backend::XLA.Client)
+    return default_backend[] = backend
+end
+
+function set_default_backend(backend::String)
+    backend = backends[backend]
+    return default_backend[] = backend
 end
 
 function to_row_major(x::Array{T,N}) where {T,N}
@@ -85,12 +102,6 @@ function TPUClient(tpu_path::String)
     return Client(client)
 end
 
-const backends = Dict{String,Client}()
-const default_backend = Ref{Client}()
-const default_device_idx = Ref{Int}(0)
-using Reactant_jll
-using Libdl
-using Scratch, Downloads
 function __init__()
     initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
     ccall(initLogs, Cvoid, ())

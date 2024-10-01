@@ -17,4 +17,13 @@ include("IR/IR.jl")
 
 include("Dialects.jl")
 
+const registry = Ref{MLIR.IR.DialectRegistry}()
+
+function __init__()
+    registry[] = MLIR.IR.DialectRegistry()
+    @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
+        registry[]::MLIR.API.MlirDialectRegistry
+    )::Cvoid
+end
+
 end # module MLIR
