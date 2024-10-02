@@ -118,7 +118,7 @@ namespace
     return description;
   }
 
-  std::string getDialectName(llvm::ArrayRef<llvm::Record*> op_defs) {
+  std::string getDialectName(llvm::ArrayRef<const llvm::Record*> op_defs) {
     mlir::tblgen::Operator any_op(op_defs.front());
     assert(
         std::all_of(op_defs.begin(), op_defs.end(), [&any_op](llvm::Record* op) {
@@ -163,11 +163,7 @@ extern bool disableModuleWrap;
 bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
                      llvm::raw_ostream &os)
 {
-#if LLVM_VERSION_MAJOR >= 16
-  std::vector<llvm::Record *> opdefs = recordKeeper.getAllDerivedDefinitionsIfDefined("Op");
-#else
-  std::vector<llvm::Record *> opdefs = recordKeeper.getAllDerivedDefinitions("Op");
-#endif
+  llvm::ArrayRef<const llvm::Record*> opdefs = recordKeeper.getAllDerivedDefinitionsIfDefined("Op");
 
   const char *moduleTemplate;
   if (disableModuleWrap)

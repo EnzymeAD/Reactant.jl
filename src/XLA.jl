@@ -446,7 +446,7 @@ end
 const AsyncEmptyBuffer = AsyncBuffer(Buffer(C_NULL), nothing)
 
 @inline function await(buffer::AsyncBuffer)::Nothing
-    if buffer.future == nothing
+    if buffer.future === nothing
         return nothing
     else
         future = buffer.future
@@ -457,7 +457,7 @@ const AsyncEmptyBuffer = AsyncBuffer(Buffer(C_NULL), nothing)
 end
 
 @inline function synced_buffer(buffer::AsyncBuffer)
-    if buffer.future != nothing
+    if buffer.future !== nothing
         future = buffer.future
         buffer.future = nothing
         await(future::Future)
