@@ -214,10 +214,10 @@ platform(
 
 
 platform(
-    name = "darwin_aarch64",
+    name = "darwin_arm64",
     constraint_values = [
         "@platforms//os:macos",
-        "@platforms//cpu:aarch64",
+        "@platforms//cpu:arm64",
     ],
 )
 
