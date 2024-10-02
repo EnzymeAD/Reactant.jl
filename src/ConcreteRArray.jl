@@ -158,6 +158,8 @@ function mysetindex!(a, v, args::Vararg{Int,N}) where {N}
     nothing
 end
 
+const setindex_warned = Ref(false)
+
 function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N}
     if a.data == XLA.AsyncEmptyBuffer
         throw("Cannot setindex! to empty buffer")
@@ -179,13 +181,19 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
         end
         return a
     end
-    @warn(
-        """Performing scalar indexing on task $(current_task()).
-Invocation resulted in scalar indexing of a ConcreteRArray.
-This is typically caused by calling an iterating implementation of a method.
-Such implementations *do not* execute on device, but very slowly on the CPU,
-and require expensive copies and synchronization each time and therefore should be avoided."""
-    )
+    if !setindex_warned[]
+        @warn(
+            """Performing scalar indexing on task $(current_task()).
+    Invocation resulted in scalar indexing of a ConcreteRArray.
+    This is typically caused by calling an iterating implementation of a method.
+    Such implementations *do not* execute on device, but very slowly on the CPU,
+    and require expensive copies and synchronization each time and therefore should be avoided.
+ 
+    This error message will only be printed for the first invocation for brevity.
+"""
+        )
+        setindex_warned[] = true
+    end
     fn = Reactant.compile(mysetindex!, (a, v, args))
     fn(a, v, args)
 end
