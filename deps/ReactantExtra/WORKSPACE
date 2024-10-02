@@ -1,7 +1,5 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-bazel_dep(name = "zlib", version = "1.3.1")
-
 NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 NSYNC_SHA256 = ""
 http_archive(
