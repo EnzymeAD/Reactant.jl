@@ -366,7 +366,6 @@ cc_library(
         "@llvm-project//mlir:CAPIIRObjects",
     ] + select({
     "@xla//xla/tsl:is_cuda_enabled_and_oss":[
-        "@xla//xla/stream_executor/gpu:gpu_diagnostics_header",
         "@xla//xla/stream_executor/cuda:all_runtime", 
         "@xla//xla/service/gpu/model:hlo_op_profiles",
         "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
