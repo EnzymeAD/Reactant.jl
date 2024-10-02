@@ -367,7 +367,6 @@ cc_library(
     ] + select({
     "@xla//xla/tsl:is_cuda_enabled_and_oss":[
         "@xla//xla/stream_executor/cuda:all_runtime", 
-        "@xla//xla/stream_executor/rocm:all_runtime",
         "@xla//xla/service/gpu/model:hlo_op_profiles",
         "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
         "@xla//xla/service/gpu:nvptx_compiler",
