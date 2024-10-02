@@ -2,9 +2,15 @@ function mlir_type(x::RArray{T,N}) where {T,N}
     return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
 end
 
+mlir_type(::RScalar{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
+
 function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
     return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+end
+
+function mlir_type(::Type{<:RScalar{T}}) where {T}
+    return MLIR.IR.TensorType((), MLIR.IR.Type(T))
 end
 
 function transpose_ty(mlirty)

@@ -19,9 +19,22 @@ end
 
 TracedRArray{T,N}(x::TracedRArray{T,N}) where {T,N} = x
 
+mutable struct TracedRScalar{T} <: RScalar{T}
+    paths::Tuple
+    mlir_data::Union{Nothing,MLIR.IR.Value}
+
+    function TracedRScalar{T}(
+        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+    ) where {T}
+        if !isnothing(mlir_data)
+            @assert size(MLIR.IR.type(mlir_data)) == ()
+        end
+        return new{T}(paths, mlir_data)
+    end
+end
+
 const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
-const AnyTracedRScalar{T} = AnyTracedRArray{T,0}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
@@ -40,12 +53,12 @@ function get_ancestor_indices(x::WrappedTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
-Base.getindex(a::AnyTracedRScalar{T}) where {T} = a
+Base.getindex(a::TracedRScalar{T}) where {T} = a
 
-Base.zero(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T,0}, zero(T))
-Base.one(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T,0}, one(T))
+Base.zero(::TracedRScalar{T}) where {T} = promote_to(TracedRScalar{T}, zero(T))
+Base.one(::TracedRScalar{T}) where {T} = promote_to(TracedRScalar{T}, one(T))
 
-function Base.convert(::Type{<:AnyTracedRScalar{T}}, x::Number) where {T}
+function Base.convert(::Type{<:TracedRScalar{T}}, x::Number) where {T}
     return promote_to(TracedRArray{T,0}, T(x))
 end
 
@@ -73,7 +86,7 @@ and require expensive copies and synchronization each time and therefore should 
         ),
         1,
     )
-    return TracedRArray{T,0}((), res2, ())
+    return TracedRScalar{T}((), res2)
 end
 
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
@@ -133,7 +146,11 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     # return print(io, X.mlir_data, ")")
 end
 
-Base.only(A::AnyTracedRScalar{T}) where {T} = A
+function Base.show(io::IOty, X::TracedRScalar{T}) where {T,IOty<:Union{IO,IOContext}}
+    return print(io, "TracedRScalar{", T, "}(", X.paths, ")")
+end
+
+Base.only(A::TracedRScalar{T}) where {T} = A
 
 function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
     if prod(dims) != prod(size(A))
@@ -207,9 +224,7 @@ end
 
 function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     if isa(rhs, TracedRArray)
-        if typeof(rhs) == TracedRArray{T,N}
-            return rhs
-        end
+        rhs isa TracedRArray{T,N} && return rhs
         return TracedRArray{T,N}(
             (),
             MLIR.IR.result(
@@ -222,11 +237,8 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
         )
     end
     if isa(rhs, Number)
-        attr = fill(MLIR.IR.Attribute(T(rhs)), mlir_type(TracedRArray{T,N}, size(rhs)))
-        ta = TracedRArray{T,N}(
-            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(rhs)
-        )
-        return ta
+        throw(ArgumentError("Cannot promote number to `TracedRArray`. Use \
+                             `TracedRScalar` instead."))
     end
     T0 = eltype(rhs)
     attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
@@ -238,8 +250,40 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     )
 end
 
+function promote_to(::Type{TracedRScalar{T}}, rhs) where {T}
+    if isa(rhs, TracedRScalar)
+        rhs isa TracedRScalar{T} && return rhs
+        return TracedRScalar{T}(
+            (),
+            MLIR.IR.result(
+                MLIR.Dialects.stablehlo.convert(
+                    rhs.mlir_data; result=mlir_type(TracedRScalar{T})
+                ),
+                1,
+            ),
+        )
+    end
+    if isa(rhs, Number)
+        attr = fill(MLIR.IR.Attribute(T(rhs)), mlir_type(TracedRScalar{T}))
+        return TracedRScalar{T}(
+            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+        )
+    end
+    T0 = eltype(rhs)
+    attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
+    return promote_to(
+        TracedRScalar{T},
+        TracedRScalar{T0}(
+            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+        ),
+    )
+end
+
 function promote_to(::TracedRArray{T,N}, rhs) where {T,N}
     return promote_to(TracedRArray{T,N}, rhs)
+end
+function promote_to(::TracedRScalar{T}, rhs) where {T}
+    return promote_to(TracedRScalar{T}, rhs)
 end
 
 for (jlop, hloop) in (

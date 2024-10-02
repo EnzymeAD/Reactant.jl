@@ -8,6 +8,7 @@ include("OrderedIdDict.jl")
 using Enzyme
 
 abstract type RArray{T,N} <: AbstractArray{T,N} end
+abstract type RScalar{T} <: Number end
 
 function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
