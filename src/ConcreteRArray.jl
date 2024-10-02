@@ -122,6 +122,7 @@ function Base.show(io::IO, X::ConcreteRArray)
     return Base.show(io, convert(Array, X))
 end
 
+const getindex_warned = Ref(false)
 function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     if a.data == XLA.AsyncEmptyBuffer
         throw("Cannot getindex from empty buffer")
@@ -143,13 +144,16 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
             return unsafe_load(ptr, start)
         end
     end
-    @warn(
-        """Performing scalar indexing on task $(current_task()).
+    if !getindex_warned[]
+      @warn(
+        """Performing scalar get-indexing on task $(current_task()).
 Invocation resulted in scalar indexing of a ConcreteRArray.
 This is typically caused by calling an iterating implementation of a method.
 Such implementations *do not* execute on device, but very slowly on the CPU,
 and require expensive copies and synchronization each time and therefore should be avoided."""
-    )
+      )
+      getindex_warned[] = true
+    end
     return convert(Array, a)[args...]
 end
 
@@ -183,7 +187,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     end
     if !setindex_warned[]
         @warn(
-            """Performing scalar indexing on task $(current_task()).
+            """Performing scalar set-indexing on task $(current_task()).
     Invocation resulted in scalar indexing of a ConcreteRArray.
     This is typically caused by calling an iterating implementation of a method.
     Such implementations *do not* execute on device, but very slowly on the CPU,
