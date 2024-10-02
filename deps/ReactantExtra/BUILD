@@ -342,8 +342,8 @@ cc_library(
         
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
-        
-        "@tsl//tsl/protobuf:protos_all_cc_impl",
+       
+	"@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
 
         "@xla//xla/pjrt:status_casters",
@@ -352,9 +352,9 @@ cc_library(
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/ffi:call_frame",
         "@com_google_protobuf//:protobuf",
-        "@tsl//tsl/profiler/backends/cpu:annotation_stack_impl",
-        "@tsl//tsl/profiler/backends/cpu:traceme_recorder_impl",
-        "@tsl//tsl/profiler/utils:time_utils_impl",
+	"@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
+        "@xla//xla/tsl/profiler/backends/cpu:traceme_recorder_impl",
+        "@xla//xla/tsl/profiler/utils:time_utils_impl",
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
