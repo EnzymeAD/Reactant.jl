@@ -122,6 +122,7 @@ function Base.show(io::IO, X::ConcreteRArray)
     return Base.show(io, convert(Array, X))
 end
 
+const getindex_warned = Ref(false)
 function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     if a.data == XLA.AsyncEmptyBuffer
         throw("Cannot getindex from empty buffer")
@@ -143,8 +144,25 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
             return unsafe_load(ptr, start)
         end
     end
+    if !getindex_warned[]
+      @warn(
+        """Performing scalar get-indexing on task $(current_task()).
+Invocation resulted in scalar indexing of a ConcreteRArray.
+This is typically caused by calling an iterating implementation of a method.
+Such implementations *do not* execute on device, but very slowly on the CPU,
+and require expensive copies and synchronization each time and therefore should be avoided."""
+      )
+      getindex_warned[] = true
+    end
     return convert(Array, a)[args...]
 end
+
+function mysetindex!(a, v, args::Vararg{Int,N}) where {N}
+    Base.setindex!(a, v, args...)
+    nothing
+end
+
+const setindex_warned = Ref(false)
 
 function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N}
     if a.data == XLA.AsyncEmptyBuffer
@@ -167,7 +185,22 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
         end
         return a
     end
-    throw("Cannot setindex! to non-CPU buffer")
+    if !setindex_warned[]
+        @warn(
+            """Performing scalar set-indexing on task $(current_task()).
+    Invocation resulted in scalar indexing of a ConcreteRArray.
+    This is typically caused by calling an iterating implementation of a method.
+    Such implementations *do not* execute on device, but very slowly on the CPU,
+    and require expensive copies and synchronization each time and therefore should be avoided.
+ 
+    This error message will only be printed for the first invocation for brevity.
+"""
+        )
+        setindex_warned[] = true
+    end
+    fn = Reactant.compile(mysetindex!, (a, v, args...))
+    fn(a, v, args...)
+    return a
 end
 
 # TODO is there any way to allocate an uninitialized buffer in XLA?
