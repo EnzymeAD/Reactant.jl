@@ -198,8 +198,8 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
         )
         setindex_warned[] = true
     end
-    fn = Reactant.compile(mysetindex!, (a, v, args))
-    fn(a, v, args)
+    fn = Reactant.compile(mysetindex!, (a, v, args...))
+    fn(a, v, args...)
     return a
 end
 
