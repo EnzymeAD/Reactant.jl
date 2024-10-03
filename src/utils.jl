@@ -44,9 +44,9 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_args = TracedRArray[]
+    linear_args = Union{TracedRArray,TracedRScalar}[]
     for (k, v) in seen_args
-        if !(v isa TracedRArray)
+        if !(v isa TracedRArray) && !(v isa TracedRScalar)
             continue
         end
         push!(linear_args, v)
@@ -127,10 +127,10 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_results = TracedRArray[]
+    linear_results = Union{TracedRArray,TracedRScalar}[]
 
     for (k, v) in seen_results
-        if !(v isa TracedRArray)
+        if !(v isa TracedRArray) && !(v isa TracedRScalar)
             continue
         end
 
