@@ -158,7 +158,7 @@ and require expensive copies and synchronization each time and therefore should 
 end
 
 function mysetindex!(a, v, args::Vararg{Int,N}) where {N}
-    Base.setindex!(a, v, args)
+    Base.setindex!(a, v, args...)
     nothing
 end
 
