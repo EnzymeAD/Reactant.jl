@@ -1,5 +1,6 @@
 build --announce_rc
 
+query --experimental_repo_remote_exec
 build --experimental_repo_remote_exec
 build --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
 build --cxxopt=-w --host_cxxopt=-w
