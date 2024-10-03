@@ -200,6 +200,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     end
     fn = Reactant.compile(mysetindex!, (a, v, args))
     fn(a, v, args)
+    return a
 end
 
 # TODO is there any way to allocate an uninitialized buffer in XLA?
