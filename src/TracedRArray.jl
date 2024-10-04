@@ -788,7 +788,7 @@ function Base._cat(dims, A::TracedRArray{T,N}, Bs::TracedRArray...) where {T,N}
     return Res
 end
 
-function maybe_expand_dims(x::AbstractArray, dims) where {T,N}
+function maybe_expand_dims(x::AbstractArray{T,N}, dims) where {T,N}
     dims = dispatch_val(dims)
     dims ≤ N && return x
     return reshape(x, ntuple(i -> i ≤ N ? size(x, i) : 1, dims))
