@@ -234,7 +234,7 @@ function run_pass_pipeline!(mod, pass_pipeline)
     return mod
 end
 
-function compile_mlir(f, args; kwargs...)
+function compile_mlir(@nospecialize(f), @nospecialize(args); kwargs...)
     ctx = MLIR.IR.Context()
     Base.append!(Reactant.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
@@ -245,7 +245,7 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
-function compile_mlir!(mod, f, args; optimize=true)
+function compile_mlir!(mod, @nospecialize(f), @nospecialize(args); optimize=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
@@ -564,7 +564,7 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     return concretized_res_names, xla_call_code
 end
 
-function compile_xla(f, args; client=nothing)
+function compile_xla(@nospecialize(f), @nospecialize(args); client=nothing)
     # register MLIR dialects
     ctx = MLIR.IR.Context()
     Base.append!(Reactant.registry[]; context=ctx)
@@ -596,7 +596,9 @@ function compile_xla(f, args; client=nothing)
     end
 end
 
-function compile(f, args; client=nothing)
+Base.@nospecializeinfer function compile(
+    @nospecialize(f), @nospecialize(args); client=nothing
+)::Thunk
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
         f, args
     )
