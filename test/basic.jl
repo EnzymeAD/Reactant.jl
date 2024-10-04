@@ -105,6 +105,17 @@ bcast_cos(x) = cos.(x)
     @test r ≈ cos.(x)
 end
 
+f_var(args...) = sum(args)
+
+@testset "Vararg" begin
+    x = Reactant.to_rarray(ones(3))
+    y = Reactant.to_rarray(3 * ones(3))
+    z = Reactant.to_rarray(2.6 * ones(3))
+
+    f2 = @compile f_var(x, y, z)
+    @test f2(x, y, z) ≈ [6.6, 6.6, 6.6]
+end
+
 function sumcos(x)
     return sum(cos.(x))
 end

@@ -87,17 +87,24 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         end
 
         # TODO replace with `Base.invoke_within` if julia#52964 lands
-        ir = first(only(
+        ir, ty = only(
             # TODO fix it for kwargs
             Base.code_ircode(f, map(typeof, traced_args); interp),
-        ))
-
+        )
         oc = Core.OpaqueClosure(ir)
 
         if f === Reactant.apply
             oc(traced_args[1], (traced_args[2:end]...,))
         else
-            oc(traced_args...)
+            if length(traced_args) + 1 != length(ir.argtypes)
+                @assert ir.argtypes[end] <: Tuple
+                oc(
+                    traced_args[1:(length(ir.argtypes) - 2)]...,
+                    (traced_args[(length(ir.argtypes) - 1):end]...,),
+                )
+            else
+                oc(traced_args...)
+            end
         end
     end
 
