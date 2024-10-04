@@ -145,21 +145,21 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
         end
     end
     if !getindex_warned[]
-      @warn(
-        """Performing scalar get-indexing on task $(current_task()).
-Invocation resulted in scalar indexing of a ConcreteRArray.
-This is typically caused by calling an iterating implementation of a method.
-Such implementations *do not* execute on device, but very slowly on the CPU,
-and require expensive copies and synchronization each time and therefore should be avoided."""
-      )
-      getindex_warned[] = true
+        @warn(
+            """Performing scalar get-indexing on task $(current_task()).
+    Invocation resulted in scalar indexing of a ConcreteRArray.
+    This is typically caused by calling an iterating implementation of a method.
+    Such implementations *do not* execute on device, but very slowly on the CPU,
+    and require expensive copies and synchronization each time and therefore should be avoided."""
+        )
+        getindex_warned[] = true
     end
     return convert(Array, a)[args...]
 end
 
 function mysetindex!(a, v, args::Vararg{Int,N}) where {N}
     Base.setindex!(a, v, args...)
-    nothing
+    return nothing
 end
 
 const setindex_warned = Ref(false)
