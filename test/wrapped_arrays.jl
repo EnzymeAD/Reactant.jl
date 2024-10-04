@@ -113,3 +113,17 @@ end
 
     @test btranspose_badjoint_compiled(x_ra) ≈ btranspose_badjoint(x)
 end
+
+function bypass_permutedims(x)
+    x = PermutedDimsArray(x, (2, 1, 3))  # Don't use permutedims here
+    return view(x, 2:3, 1:2, :)
+end
+
+@testset "PermutedDimsArray" begin
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    bypass_permutedims_compiled = @compile bypass_permutedims(x_ra)
+
+    @test bypass_permutedims_compiled(x_ra) ≈ bypass_permutedims(x)
+end

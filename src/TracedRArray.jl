@@ -34,10 +34,8 @@ ancestor(x::TracedRArray) = x
 ancestor(x::WrappedTracedRArray) = ancestor(parent(x))
 
 get_ancestor_indices(::TracedRArray, indices...) = indices
-function get_ancestor_indices(
-    x::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices...
-) where {T,N}
-    return get_ancestor_indices(parent(x), Base.reindex(x.indices, indices)...)
+function get_ancestor_indices(x::WrappedTracedRArray, indices...)
+    return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
 Base.getindex(a::AnyTracedRScalar{T}) where {T} = a
