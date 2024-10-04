@@ -96,9 +96,12 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         if f === Reactant.apply
             oc(traced_args[1], (traced_args[2:end]...,))
         else
-            if length(traced_args) +1 != length(ir.argtypes)
+            if length(traced_args) + 1 != length(ir.argtypes)
                 @assert ir.argtypes[end] <: Tuple
-                oc(traced_args[1:(length(ir.argtypes)-2)]..., (traced_args[length(ir.argtypes)-1:end]...,))
+                oc(
+                    traced_args[1:(length(ir.argtypes) - 2)]...,
+                    (traced_args[(length(ir.argtypes) - 1):end]...,),
+                )
             else
                 oc(traced_args...)
             end

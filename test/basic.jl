@@ -112,8 +112,8 @@ f_var(args...) = sum(args)
     y = Reactant.to_rarray(3 * ones(3))
     z = Reactant.to_rarray(2.6 * ones(3))
 
-    f2 = @compile f_var(x,y,z)
-    @test f2(x,y,z) ≈ [6.6, 6.6, 6.6]
+    f2 = @compile f_var(x, y, z)
+    @test f2(x, y, z) ≈ [6.6, 6.6, 6.6]
 end
 
 function sumcos(x)
