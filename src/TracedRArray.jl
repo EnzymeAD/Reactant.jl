@@ -764,22 +764,23 @@ end
 dispatch_val(x) = x
 dispatch_val(::Val{D}) where {D} = D
 
-function Base._cat(dims, A::TracedRArray{T,N}, Bs::TracedRArray...) where {T,N}
+function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
     dims = dispatch_val(dims)
     @assert dims isa Integer "Support for non-integer dimensions is not implemented yet."
 
     # MLIR expects the dimension `dims` to be ≤ the rank of the input tensors
-    A = maybe_expand_dims(A, dims)
-    Bs = maybe_expand_dims.(Bs, (dims,))
+    X = maybe_expand_dims.(X, (dims,))
 
     catdims = Base.dims2cat(dims)
-    shape = Base.cat_size_shape(catdims, A, Bs...)
-    RT = Base.promote_eltype(A, Bs...)
-    Res = TracedRArray{RT,length(shape)}(
+    shape = Base.cat_size_shape(catdims, X...)
+    RT = Base.promote_eltype(T, X...)
+    
+    return TracedRArray{RT,length(shape)}(
         (),
         MLIR.IR.result(
+            # TODO maybe we should do some conversion?
             MLIR.Dialects.stablehlo.concatenate(
-                [A.mlir_data, [B.mlir_data for B in Bs]...];
+                get_mlir_data.(X);
                 result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
                 dimension=dims - 1, # stablehlo expects this to be zero-indexed
             ),
@@ -787,7 +788,6 @@ function Base._cat(dims, A::TracedRArray{T,N}, Bs::TracedRArray...) where {T,N}
         ),
         shape,
     )
-    return Res
 end
 
 function maybe_expand_dims(x::AbstractArray{T,N}, dims) where {T,N}
