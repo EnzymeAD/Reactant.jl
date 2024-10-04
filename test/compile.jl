@@ -27,4 +27,20 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
 
         @test fworld(a, b) ≈ ones(2, 2) * 10
     end
+
+    @testset "type casting & optimized out returns" begin
+        a = Reactant.ConcreteRArray(rand(2, 10))
+
+        ftype1(x) = Float64.(x)
+        ftype2(x) = Float32.(x)
+
+        ftype1_compiled = @compile ftype1(a)
+        ftype2_compiled = @compile ftype2(a)
+
+        @test ftype1_compiled(a) isa Reactant.ConcreteRArray{Float64,2}
+        @test ftype2_compiled(a) isa Reactant.ConcreteRArray{Float32,2}
+
+        @test ftype1_compiled(a) ≈ Float64.(a)
+        @test ftype2_compiled(a) ≈ Float32.(a)
+    end
 end
