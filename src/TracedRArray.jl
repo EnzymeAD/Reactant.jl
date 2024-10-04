@@ -344,8 +344,8 @@ function (::TypeCast{T})(x::TracedRArray{T2,0}) where {T,T2}
     return promote_to(TracedRArray{T,0}, x)
 end
 
-elem_apply(::Type{T}, x::TracedRArray{T}) where {T} = x
-function elem_apply(::Type{T}, x::TracedRArray{T2}) where {T,T2}
+elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:Number} = x
+function elem_apply(::Type{T}, x::TracedRArray{T2}) where {T<:Number,T2<:Number}
     # Special Path to prevent going down a despecialized path
     return elem_apply(TypeCast{T}(), x)
 end
