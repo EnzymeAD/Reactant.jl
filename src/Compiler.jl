@@ -29,9 +29,13 @@ function create_result(tocopy::T, path, result_stores) where {T}
 end
 
 function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
-    restore = result_stores[path]
-    delete!(result_stores, path)
-    return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
+    end
+    # We will set the data for this later
+    return :(ConcreteRArray{$T,$N}($(tocopy.data), $(tocopy.shape)))
 end
 
 function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
