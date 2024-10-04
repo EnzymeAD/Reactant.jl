@@ -29,6 +29,7 @@ function create_result(tocopy::T, path, result_stores) where {T}
 end
 
 function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
+
     restore = result_stores[path]
     delete!(result_stores, path)
     return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
@@ -67,7 +68,7 @@ function create_result(tocopy::D, path, result_stores) where {K,V,D<:AbstractDic
 end
 
 function create_result(
-    tocopy::Union{Int,AbstractFloat,AbstractString,Nothing,Type,Symbol}, path, result_stores
+    tocopy::Union{Int,AbstractFloat,AbstractString,Nothing,Type,Symbol,Bool}, path, result_stores
 )
     return Meta.quot(tocopy)
 end
