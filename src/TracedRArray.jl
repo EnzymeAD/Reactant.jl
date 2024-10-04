@@ -17,6 +17,8 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
+TracedRArray{T,N}(x::TracedRArray{T,N}) where {T,N} = x
+
 const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
 const AnyTracedRScalar{T} = AnyTracedRArray{T,0}
