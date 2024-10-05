@@ -431,7 +431,11 @@ function Base.mapreduce(
         )
         red = TracedRArray{T,length(toonedims)}((), red, (toonedims...,))
     else
-        red = TracedRArray{T,length(outdims)}((), red, (outdims...,))
+        if length(outdims) == 0
+            red = TracedRNumber{T}((), red)
+        else
+            red = TracedRArray{T,length(outdims)}((), red, (outdims...,))
+        end
     end
     return red
 end
