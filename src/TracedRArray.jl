@@ -785,6 +785,32 @@ end
     )
 end
 
+function Base._typed_hvncat(
+    T::Type, dims::NTuple{N,Int}, row_first::Bool, as::TracedRArray...
+) where {N}
+    As = if row_first
+        perm = [2, 1, 3:N...]
+        dims = [dims[2], dims[1], dims[3:end]...]
+        permutedims(reshape(collect(as), dims...), perm)
+    else
+        reshape(collect(as), dims)
+    end
+
+    for d in 1:N
+        Bs = Array{Any,N - d}(undef, size(As)[2:end]...)
+
+        for (i, col) in
+            zip(eachindex(Bs), eachslice(As; dims=Tuple(2:ndims(As)), drop=true))
+            # TODO row_first affects the flattening?
+            Bs[i] = Base._cat_t(d, T, col...)
+        end
+
+        As = Bs
+    end
+
+    return only(As)
+end
+
 function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
     dims = dispatch_val(dims)
     @assert dims isa Integer "Support for non-integer dimensions is not implemented yet."
