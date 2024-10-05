@@ -7,23 +7,42 @@ include("OrderedIdDict.jl")
 
 using Enzyme
 
-const ReactantPrimitives = Union{
-    Bool,
-    Int8,
-    UInt8,
-    Int16,
-    UInt16,
-    Int32,
-    UInt32,
-    Int64,
-    UInt64,
-    Float16,
-    Float32,
-    # BFloat16,
-    Float64,
-    Complex{Float32},
-    Complex{Float64},
-}
+@static if isdefined(Core, :BFloat16)
+    const ReactantPrimitives = Union{
+        Bool,
+        Int8,
+        UInt8,
+        Int16,
+        UInt16,
+        Int32,
+        UInt32,
+        Int64,
+        UInt64,
+        Float16,
+        Core.BFloat16,
+        Float32,
+        Float64,
+        Complex{Float32},
+        Complex{Float64},
+    }
+else
+    const ReactantPrimitives = Union{
+        Bool,
+        Int8,
+        UInt8,
+        Int16,
+        UInt16,
+        Int32,
+        UInt32,
+        Int64,
+        UInt64,
+        Float16,
+        Float32,
+        Float64,
+        Complex{Float32},
+        Complex{Float64},
+    }
+end
 
 abstract type RArray{T<:ReactantPrimitives,N} <: AbstractArray{T,N} end
 abstract type RNumber{T<:ReactantPrimitives} <: Number end

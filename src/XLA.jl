@@ -227,7 +227,9 @@ end
 @inline primitive_type(::Type{Float16}) = 10
 @inline primitive_type(::Type{Float32}) = 11
 
-# @inline primitive_type(::Type{BFloat16}) = 16
+@static if isdefined(Core, :BFloat16)
+    @inline primitive_type(::Type{BFloat16}) = 16
+end
 
 @inline primitive_type(::Type{Float64}) = 12
 
