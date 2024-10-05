@@ -290,7 +290,7 @@ function compile_mlir!(mod, f, args; optimize=true)
     preserved_args = Tuple{TracedRArray,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
-    linear_results2 = Union{TracedRArray,TracedRNumber}[]
+    linear_results2 = TracedTypes[]
     for (i, op) in enumerate(results)
         if !MLIR.IR.is_block_arg(op)
             push!(nresults, op)

@@ -44,7 +44,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_args = Union{TracedRArray,TracedRNumber}[]
+    linear_args = TracedTypes[]
     for (k, v) in seen_args
         if !(v isa TracedRArray) && !(v isa TracedRNumber)
             continue
@@ -127,7 +127,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_results = Union{TracedRArray,TracedRNumber}[]
+    linear_results = TracedTypes[]
 
     for (k, v) in seen_results
         if !(v isa TracedRArray) && !(v isa TracedRNumber)

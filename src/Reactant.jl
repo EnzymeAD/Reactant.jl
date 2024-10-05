@@ -83,9 +83,13 @@ include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")
 include("utils.jl")
+
 include("ConcreteRArray.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
+
+const TracedTypes = Union{TracedRArray,TracedRNumber}
+
 include("Tracing.jl")
 include("Compiler.jl")
 
