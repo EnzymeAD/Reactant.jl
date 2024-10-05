@@ -35,6 +35,15 @@ function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRNumber{S}}) w
     return TracedRNumber{Base.promote_type(T, S)}
 end
 
+# Bool has special promotion rules in Base
+function Base.promote_rule(::Type{Bool}, ::Type{TracedRNumber{T}}) where {T}
+    return TracedRNumber{T}
+end
+
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{Bool}) where {T}
+    return TracedRNumber{T}
+end
+
 function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
