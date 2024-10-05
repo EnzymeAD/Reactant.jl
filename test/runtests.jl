@@ -39,23 +39,29 @@ if do_gpu_list
     # TODO set which gpu
 end
 
-@testset "Reactant.jl Tests" begin
-    @safetestset "Layout" include("layout.jl")
-    @safetestset "Tracing" include("tracing.jl")
-    @safetestset "Basic" include("basic.jl")
-    @safetestset "Broadcast" include("bcast.jl")
-    @safetestset "Struct" include("struct.jl")
-    @safetestset "Closure" include("closure.jl")
-    @safetestset "Compile" include("compile.jl")
-    @safetestset "Buffer Donation" include("buffer_donation.jl")
-    @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
+const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
-    @testset "Neural Networks" begin
-        @safetestset "NNlib Primitives" include("nn/nnlib.jl")
-        @safetestset "Flux.jl Integration" include("nn/flux.jl")
-        if Sys.islinux()
-            @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
-            @safetestset "Lux Integration" include("nn/lux.jl")
+@testset "Reactant.jl Tests" begin
+    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
+        @safetestset "Layout" include("layout.jl")
+        @safetestset "Tracing" include("tracing.jl")
+        @safetestset "Basic" include("basic.jl")
+        @safetestset "Broadcast" include("bcast.jl")
+        @safetestset "Struct" include("struct.jl")
+        @safetestset "Closure" include("closure.jl")
+        @safetestset "Compile" include("compile.jl")
+        @safetestset "Buffer Donation" include("buffer_donation.jl")
+        @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
+    end
+
+    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
+        @testset "Neural Networks" begin
+            @safetestset "NNlib Primitives" include("nn/nnlib.jl")
+            @safetestset "Flux.jl Integration" include("nn/flux.jl")
+            if Sys.islinux()
+                @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
+                @safetestset "Lux Integration" include("nn/lux.jl")
+            end
         end
     end
 end

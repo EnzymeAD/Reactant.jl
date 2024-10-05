@@ -1,9 +1,12 @@
 steps:
-  - label: "CUDA Julia v{{matrix.version}}"
+  - label: "CUDA Julia v{{matrix.version}} -- {{matrix.group}}"
     matrix:
       setup:
         version:
           - "1.10"
+        group:
+          - core
+          - neural_networks
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
@@ -17,6 +20,8 @@ steps:
     agents:
       queue: "juliagpu"
       cuda: "*"
+    env:
+      REACTANT_TEST_GROUP: "{{matrix.group}}"
     if: build.message !~ /\[skip tests\]/
     timeout_in_minutes: 60
 
