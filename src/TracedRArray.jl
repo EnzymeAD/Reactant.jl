@@ -779,7 +779,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
         MLIR.IR.result(
             # TODO maybe we should do some conversion?
             MLIR.Dialects.stablehlo.concatenate(
-                get_mlir_data.(X);
+                collect(get_mlir_data.(X));
                 result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
                 dimension=dims - 1, # stablehlo expects this to be zero-indexed
             ),
