@@ -183,7 +183,7 @@ function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode
     end
 end
 
-function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedRArray,mode}
+function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedTypes,mode}
     if mode == ConcreteToTraced
         throw("TracedRArray $T cannot be traced")
     elseif mode == TracedToConcrete
@@ -203,7 +203,7 @@ function traced_type(::Type{T}, seen, mode) where {T<:XLAArray}
 end
 
 function traced_type(::Type{A}, seen::ST, ::Val{mode}) where {T,N,A<:Array{T,N},ST,mode}
-    if mode == ArrayToConcrete && T <: AbstractFloat
+    if mode == ArrayToConcrete && T <: ReactantPrimitives
         return ConcreteRArray{T,N}
     else
         return Array{traced_type(T, seen, Val(mode)),N}
