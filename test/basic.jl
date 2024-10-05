@@ -308,6 +308,13 @@ end
         @test f(x_concrete) == ones(Bool, 4, 3)
         @test eltype(f(x_concrete)) === Bool
 
+        # hvncat
+        f = Reactant.compile((x_concrete,)) do x
+            return [x x x; x x x;;; x x x; x x x]
+        end
+        @test f(x_concrete) == ones(Bool, 4, 3, 2)
+        @test eltype(f(x_concrete)) === Bool
+
         # typed_vcat
         f = Reactant.compile((x_concrete,)) do x
             return Int[x; x; x]
@@ -327,6 +334,13 @@ end
             return Int[x x x; x x x]
         end
         @test f(x_concrete) == ones(Int, 4, 3)
+        @test eltype(f(x_concrete)) === Int
+
+        # typed_hvncat
+        f = Reactant.compile((x_concrete,)) do x
+            return Int[x x x; x x x;;; x x x; x x x]
+        end
+        @test f(x_concrete) == ones(Int, 4, 3, 2)
         @test eltype(f(x_concrete)) === Int
     end
 
