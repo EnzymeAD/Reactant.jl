@@ -246,7 +246,8 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         invmap[v] = k
     end
 
-    input_shapes = size.(keys(seen_args))
+    keys_seen = [k for k in keys(seen_args) if k isa TracedTypes]
+    input_shapes = size.(keys_seen)
     # by the time we reach here all args must have same size
     @assert allequal(input_shapes) "input shapes are $(input_shapes)"
     OutShape = isempty(seen_args) ? nothing : first(input_shapes)
