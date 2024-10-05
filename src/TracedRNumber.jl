@@ -158,6 +158,8 @@ for (jlop, hloop) in (
     end
 end
 
+struct TypeCast{T<:ReactantPrimitives} <: Function end
+
 (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = promote_to(TracedRNumber{T}, x)
 
 Base.float(x::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{float(T)}, x)

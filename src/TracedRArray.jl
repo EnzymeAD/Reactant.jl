@@ -213,10 +213,10 @@ end
 
 promote_to(::TracedRArray{T,N}, rhs) where {T,N} = promote_to(TracedRArray{T,N}, rhs)
 
-struct TypeCast{T<:Number} <: Function end
-
-elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:Number} = x
-function elem_apply(::Type{T}, x::TracedRArray{T2}) where {T<:Number,T2<:Number}
+elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitives} = x
+function elem_apply(
+    ::Type{T}, x::TracedRArray{T2}
+) where {T<:ReactantPrimitives,T2<:ReactantPrimitives}
     # Special Path to prevent going down a despecialized path
     return elem_apply(TypeCast{T}(), x)
 end
