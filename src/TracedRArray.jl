@@ -764,6 +764,27 @@ end
 dispatch_val(x) = x
 dispatch_val(::Val{D}) where {D} = D
 
+@inline function Base._typed_vcat(
+    ::Type{T}, X::Base.AbstractVecOrTuple{<:TracedRArray}
+) where {T}
+    return Base._cat_t(Val(1), T, X...)
+end
+@inline function Base._typed_hcat(
+    ::Type{T}, X::Base.AbstractVecOrTuple{<:TracedRArray}
+) where {T}
+    return Base._cat_t(Val(2), T, X...)
+end
+
+# `Base.typed_hvcat` is overloaded for `AbstractVecOrMat` using `setindex!` that breaks Reactant
+# generic implementation uses `typed_hcat` and `typed_vcat` which is alright
+@inline function Base.typed_hvcat(
+    ::Type{T}, rows::Tuple{Vararg{Int}}, as::TracedRArray...
+) where {T}
+    return invoke(
+        Base.typed_hvcat, Tuple{Type{T},Tuple{Vararg{Int}},Vararg{Any}}, T, rows, as...
+    )
+end
+
 function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
     dims = dispatch_val(dims)
     @assert dims isa Integer "Support for non-integer dimensions is not implemented yet."
