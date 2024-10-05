@@ -586,20 +586,8 @@ end
 
 function broadcast_to_size(arg::TracedRNumber, rsize)
     length(rsize) == 0 && return arg
-    mlirty = MLIR.IR.type(arg.mlir_data)
-    return TracedRArray{eltype(arg),length(rsize)}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.broadcast_in_dim(
-                arg.mlir_data;
-                result_0=MLIR.IR.TensorType([t for t in rsize], eltype(mlirty)),
-                broadcast_dimensions=MLIR.IR.DenseArrayAttribute([
-                    Int64(i - 1) for i in rsize
-                ]),
-            ),
-            1,
-        ),
-        rsize,
+    return broadcast_to_size_internal(
+        TracedRArray{eltype(arg),0}((), arg.mlir_data, ()), rsize
     )
 end
 
