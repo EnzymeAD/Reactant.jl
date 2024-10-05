@@ -112,22 +112,45 @@ for (jlop, hloop, hlocomp) in (
     (:(Base.:(<=)), :compare, "LE"),
     (:(Base.:(<)), :compare, "LT"),
 )
-    @eval function $(jlop)(
-        @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
-    ) where {T}
-        return TracedRNumber{Bool}(
-            (),
-            MLIR.IR.result(
-                MLIR.Dialects.stablehlo.$(hloop)(
-                    lhs.mlir_data,
-                    rhs.mlir_data;
-                    comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                        MLIR.IR.context(), $hlocomp
+    @eval begin
+        function $(jlop)(
+            @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
+        ) where {T}
+            return TracedRNumber{Bool}(
+                (),
+                MLIR.IR.result(
+                    MLIR.Dialects.stablehlo.$(hloop)(
+                        lhs.mlir_data,
+                        rhs.mlir_data;
+                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
+                            MLIR.IR.context(), $hlocomp
+                        ),
                     ),
+                    1,
                 ),
-                1,
-            ),
-        )
+            )
+        end
+
+        function $(jlop)(
+            @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs)
+        ) where {T}
+            return $(jlop)(lhs, promote_to(lhs, rhs))
+        end
+
+        function $(jlop)(
+            @nospecialize(lhs), @nospecialize(rhs::TracedRNumber{T})
+        ) where {T}
+            return $(jlop)(promote_to(rhs, lhs), rhs)
+        end
+
+        function $(jlop)(
+            @nospecialize(lhs::TracedRNumber{T1}), @nospecialize(rhs::TracedRNumber{T2})
+        ) where {T1,T2}
+            commonTy = TracedRNumber{Base.promote_type(T1, T2)}
+            lhs = promote_to(commonTy, lhs)
+            rhs = promote_to(commonTy, rhs)
+            return $(jlop)(lhs, rhs)
+        end
     end
 end
 
@@ -168,6 +191,9 @@ for (jlop, hloop) in (
         )
     end
 end
+
+# XXX: Enzyme-MLIR doesn't have `abs` adjoint defined
+Base.abs2(x::TracedRNumber{<:Real}) = x^2
 
 struct TypeCast{T<:ReactantPrimitives} <: Function end
 
