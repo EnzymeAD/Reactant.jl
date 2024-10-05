@@ -332,8 +332,8 @@ function make_tracer(
         end
         res = if toscalar
             TracedRNumber{T}((path,), nothing)
-        elseif !isnothing(tobatch)
-            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+        elseif tobatch !== nothing
+            error("This should not happen...")
         else
             TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
         end
@@ -358,7 +358,9 @@ function make_tracer(
     @nospecialize(prev::TracedRNumber{T}),
     @nospecialize(path),
     mode;
-    kwargs...
+    tobatch=nothing,
+    toscalar=false,
+    kwargs...,
 ) where {T}
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
@@ -374,7 +376,13 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = TracedRNumber{T}((path,), prev.mlir_data)
+        res = if toscalar
+            TracedRNumber{T}((path,), nothing)
+        elseif tobatch !== nothing
+            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+        else
+            TracedRNumber{T}((path,), prev.mlir_data)
+        end
         seen[prev] = res
         return res
     end

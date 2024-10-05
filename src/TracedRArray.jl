@@ -19,13 +19,6 @@ end
 
 TracedRArray{T,N}(x::TracedRArray{T,N}) where {T,N} = x
 
-function Base.setproperty!(x::TracedRArray, f::Symbol, v)
-    if f === :mlir_data && !isnothing(v)
-        @assert size(MLIR.IR.type(v)) == size(x)
-    end
-    return setfield!(x, f, v)
-end
-
 mutable struct TracedRNumber{T} <: RNumber{T}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
@@ -38,13 +31,6 @@ mutable struct TracedRNumber{T} <: RNumber{T}
         end
         return new{T}(paths, mlir_data)
     end
-end
-
-function Base.setproperty!(x::TracedRNumber, f::Symbol, v)
-    if f === :mlir_data && !isnothing(v)
-        @assert size(MLIR.IR.type(v)) == ()
-    end
-    return setfield!(x, f, v)
 end
 
 Base.eltype(::Type{TracedRNumber{T}}) where {T} = T
@@ -318,7 +304,7 @@ for (jlop, hloop) in (
     @eval function $(jlop)(
         @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
     ) where {T}
-        return TracedRArray{T}(
+        return TracedRNumber{T}(
             (),
             MLIR.IR.result(
                 MLIR.Dialects.stablehlo.$(hloop)(lhs.mlir_data, rhs.mlir_data), 1
@@ -430,7 +416,6 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     residx = 1
 
     for a in linear_results
-        @show a
         if has_residx(a)
             path = get_residx(a)
             set!(result, path[2:end], MLIR.IR.result(res, residx))
