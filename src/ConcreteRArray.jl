@@ -154,7 +154,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
 end
 
 function mysetindex!(a, v, args::Vararg{Int,N}) where {N}
-    Base.setindex!(a, v, args...)
+    setindex!(a, v, args...)
     return nothing
 end
 

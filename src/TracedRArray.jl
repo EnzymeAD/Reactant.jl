@@ -99,13 +99,17 @@ function Base.getindex(a::WrappedTracedRArray, indices...)
 end
 
 function Base.setindex!(
-    a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+    a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int},N}
 ) where {T,N}
+    indices = map(enumerate(indices)) do (idx, i)
+        i isa Int ? (i:i) : (i isa Colon ? (1:size(a, idx)) : i)
+    end
+    v = broadcast_to_size(v, length.(indices))
+    v = promote_to(TracedRArray{T,N}, v)
     indices = [
         (promote_to(TracedRNumber{Int}, i isa Colon ? 1 : first(i)) - 1).mlir_data for
         i in indices
     ]
-    v = promote_to(TracedRArray{T,N}, v)
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_update_slice(a.mlir_data, v.mlir_data, indices), 1
     )
