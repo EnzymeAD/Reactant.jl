@@ -26,11 +26,11 @@ function Base.setproperty!(x::TracedRArray, f::Symbol, v)
     return setfield!(x, f, v)
 end
 
-mutable struct TracedRScalar{T} <: RScalar{T}
+mutable struct TracedRNumber{T} <: RNumber{T}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
 
-    function TracedRScalar{T}(
+    function TracedRNumber{T}(
         paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
     ) where {T}
         if !isnothing(mlir_data)
@@ -40,14 +40,14 @@ mutable struct TracedRScalar{T} <: RScalar{T}
     end
 end
 
-function Base.setproperty!(x::TracedRScalar, f::Symbol, v)
+function Base.setproperty!(x::TracedRNumber, f::Symbol, v)
     if f === :mlir_data && !isnothing(v)
         @assert size(MLIR.IR.type(v)) == ()
     end
     return setfield!(x, f, v)
 end
 
-Base.eltype(::Type{TracedRScalar{T}}) where {T} = T
+Base.eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
@@ -69,13 +69,13 @@ function get_ancestor_indices(x::WrappedTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
-Base.getindex(a::TracedRScalar{T}) where {T} = a
+Base.getindex(a::TracedRNumber{T}) where {T} = a
 
-Base.zero(::TracedRScalar{T}) where {T} = promote_to(TracedRScalar{T}, zero(T))
-Base.one(::TracedRScalar{T}) where {T} = promote_to(TracedRScalar{T}, one(T))
+Base.zero(::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{T}, zero(T))
+Base.one(::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{T}, one(T))
 
-function Base.convert(::Type{<:TracedRScalar{T}}, x::Number) where {T}
-    return promote_to(TracedRScalar{T}, T(x))
+function Base.convert(::Type{<:TracedRNumber{T}}, x::Number) where {T}
+    return promote_to(TracedRNumber{T}, T(x))
 end
 
 function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
@@ -102,7 +102,7 @@ and require expensive copies and synchronization each time and therefore should 
         ),
         1,
     )
-    return TracedRScalar{T}((), res2)
+    return TracedRNumber{T}((), res2)
 end
 
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
@@ -137,7 +137,7 @@ function Base.setindex!(
     a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
 ) where {T,N}
     indices = [
-        (promote_to(TracedRScalar{Int}, i isa Colon ? 1 : first(i)) - 1).mlir_data for
+        (promote_to(TracedRNumber{Int}, i isa Colon ? 1 : first(i)) - 1).mlir_data for
         i in indices
     ]
     v = promote_to(TracedRArray{T,N}, v)
@@ -162,11 +162,11 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     # return print(io, X.mlir_data, ")")
 end
 
-function Base.show(io::IOty, X::TracedRScalar{T}) where {T,IOty<:Union{IO,IOContext}}
-    return print(io, "TracedRScalar{", T, "}(", X.paths, ")")
+function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
+    return print(io, "TracedRNumber{", T, "}(", X.paths, ")")
 end
 
-Base.only(A::TracedRScalar{T}) where {T} = A
+Base.only(A::TracedRNumber{T}) where {T} = A
 
 function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
     if prod(dims) != prod(size(A))
@@ -238,12 +238,12 @@ function Base.promote_rule(::Type{T}, ::Type{TracedRArray{S,N}}) where {T,S,N}
     return TracedRArray{Base.promote_type(T, S),N}
 end
 
-function Base.promote_rule(::Type{T}, ::Type{TracedRScalar{S}}) where {T,S}
-    return TracedRScalar{Base.promote_type(T, S)}
+function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
+    return TracedRNumber{Base.promote_type(T, S)}
 end
 
-function Base.convert(::Type{TracedRScalar{T}}, x::Number) where {T}
-    return promote_to(TracedRScalar{T}, x)
+function Base.convert(::Type{TracedRNumber{T}}, x::Number) where {T}
+    return promote_to(TracedRNumber{T}, x)
 end
 
 function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
@@ -262,7 +262,7 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     end
     if isa(rhs, Number)
         throw(ArgumentError("Cannot promote number to `TracedRArray`. Use \
-                             `TracedRScalar` instead."))
+                             `TracedRNumber` instead."))
     end
     T0 = eltype(rhs)
     attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
@@ -274,37 +274,37 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     )
 end
 
-function promote_to(::Type{TracedRScalar{T}}, rhs) where {T}
-    if isa(rhs, TracedRScalar)
-        rhs isa TracedRScalar{T} && return rhs
-        return TracedRScalar{T}(
+function promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
+    if isa(rhs, TracedRNumber)
+        rhs isa TracedRNumber{T} && return rhs
+        return TracedRNumber{T}(
             (),
             MLIR.IR.result(
                 MLIR.Dialects.stablehlo.convert(
-                    rhs.mlir_data; result=mlir_type(TracedRScalar{T})
+                    rhs.mlir_data; result=mlir_type(TracedRNumber{T})
                 ),
                 1,
             ),
         )
     end
     if isa(rhs, Number)
-        attr = fill(MLIR.IR.Attribute(T(rhs)), mlir_type(TracedRScalar{T}))
-        return TracedRScalar{T}(
+        attr = fill(MLIR.IR.Attribute(T(rhs)), mlir_type(TracedRNumber{T}))
+        return TracedRNumber{T}(
             (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
         )
     end
     T0 = eltype(rhs)
     attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
     return promote_to(
-        TracedRScalar{T},
-        TracedRScalar{T0}(
+        TracedRNumber{T},
+        TracedRNumber{T0}(
             (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
         ),
     )
 end
 
 promote_to(::TracedRArray{T,N}, rhs) where {T,N} = promote_to(TracedRArray{T,N}, rhs)
-promote_to(::TracedRScalar{T}, rhs) where {T} = promote_to(TracedRScalar{T}, rhs)
+promote_to(::TracedRNumber{T}, rhs) where {T} = promote_to(TracedRNumber{T}, rhs)
 
 for (jlop, hloop) in (
     (:(Base.min), :minimum),
@@ -316,7 +316,7 @@ for (jlop, hloop) in (
     (:(Base.:^), :power),
 )
     @eval function $(jlop)(
-        @nospecialize(lhs::TracedRScalar{T}), @nospecialize(rhs::TracedRScalar{T})
+        @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
     ) where {T}
         return TracedRArray{T}(
             (),
@@ -328,11 +328,11 @@ for (jlop, hloop) in (
 end
 
 function Base.ifelse(
-    @nospecialize(pred::TracedRScalar{Bool}),
-    @nospecialize(x::TracedRScalar{T1}),
-    @nospecialize(y::TracedRScalar{T2})
+    @nospecialize(pred::TracedRNumber{Bool}),
+    @nospecialize(x::TracedRNumber{T1}),
+    @nospecialize(y::TracedRNumber{T2})
 ) where {T1,T2}
-    return TracedRScalar{promote_type(T1, T2)}(
+    return TracedRNumber{promote_type(T1, T2)}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.select(pred.mlir_data, x.mlir_data, y.mlir_data), 1
@@ -340,10 +340,10 @@ function Base.ifelse(
     )
 end
 
-Base.abs2(x::Reactant.TracedRScalar{T}) where {T} = x * conj(x)
+Base.abs2(x::Reactant.TracedRNumber{T}) where {T} = x * conj(x)
 
 function Base.literal_pow(
-    ::Base.RefValue{typeof(^)}, x::TracedRScalar{T}, ::Base.RefValue{Val{P}}
+    ::Base.RefValue{typeof(^)}, x::TracedRNumber{T}, ::Base.RefValue{Val{P}}
 ) where {T,P}
     return Base.literal_pow(^, x, Val(P))
 end
@@ -360,8 +360,8 @@ for (jlop, hloop) in (
     (:(Base.log), :log),
     (:(Base.sqrt), :sqrt),
 )
-    @eval function $(jlop)(@nospecialize(lhs::TracedRScalar{T})) where {T}
-        return TracedRScalar{T}(
+    @eval function $(jlop)(@nospecialize(lhs::TracedRNumber{T})) where {T}
+        return TracedRNumber{T}(
             (), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1)
         )
     end
@@ -467,9 +467,9 @@ for (jlop, hloop, hlocomp, merge) in (
     (:(Base.:(<)), :compare, "LT", nothing),
 )
     @eval function $(jlop)(
-        @nospecialize(lhs::TracedRScalar{T}), @nospecialize(rhs::TracedRScalar{T})
+        @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
     ) where {T}
-        return TracedRScalar{Bool}(
+        return TracedRNumber{Bool}(
             (),
             MLIR.IR.result(
                 MLIR.Dialects.stablehlo.$(hloop)(
@@ -571,7 +571,7 @@ function Base.mapreduce(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in in_tys])
 
     args = (
-        TracedRScalar{T}((), MLIR.IR.argument(fnbody, i), ()) for
+        TracedRNumber{T}((), MLIR.IR.argument(fnbody, i), ()) for
         (i, ty) in enumerate(in_tys)
     )
 

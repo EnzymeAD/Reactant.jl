@@ -2,14 +2,14 @@ function mlir_type(x::RArray{T,N}) where {T,N}
     return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
 end
 
-mlir_type(::RScalar{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
+mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
 
 function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
     return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
 end
 
-function mlir_type(::Type{<:RScalar{T}}) where {T}
+function mlir_type(::Type{<:RNumber{T}}) where {T}
     return MLIR.IR.TensorType((), MLIR.IR.Type(T))
 end
 
@@ -44,9 +44,9 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_args = Union{TracedRArray,TracedRScalar}[]
+    linear_args = Union{TracedRArray,TracedRNumber}[]
     for (k, v) in seen_args
-        if !(v isa TracedRArray) && !(v isa TracedRScalar)
+        if !(v isa TracedRArray) && !(v isa TracedRNumber)
             continue
         end
         push!(linear_args, v)
@@ -127,10 +127,10 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_results = Union{TracedRArray,TracedRScalar}[]
+    linear_results = Union{TracedRArray,TracedRNumber}[]
 
     for (k, v) in seen_results
-        if !(v isa TracedRArray) && !(v isa TracedRScalar)
+        if !(v isa TracedRArray) && !(v isa TracedRNumber)
             continue
         end
 

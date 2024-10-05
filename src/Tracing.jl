@@ -16,7 +16,7 @@ for T in (
     Integer,
     AbstractString,
     RArray,
-    RScalar,
+    RNumber,
 )
     @eval function traced_type(::Type{T}, seen, mode) where {T<:$T}
         return T
@@ -331,7 +331,7 @@ function make_tracer(
             return seen[prev]
         end
         res = if toscalar
-            TracedRScalar{T}((path,), nothing)
+            TracedRNumber{T}((path,), nothing)
         elseif !isnothing(tobatch)
             TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
         else
@@ -355,7 +355,7 @@ end
 
 function make_tracer(
     seen,
-    @nospecialize(prev::TracedRScalar{T}),
+    @nospecialize(prev::TracedRNumber{T}),
     @nospecialize(path),
     mode;
     kwargs...
@@ -374,7 +374,7 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = TracedRScalar{T}((path,), prev.mlir_data)
+        res = TracedRNumber{T}((path,), prev.mlir_data)
         seen[prev] = res
         return res
     end

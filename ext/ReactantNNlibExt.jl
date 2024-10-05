@@ -2,15 +2,15 @@ module ReactantNNlibExt
 
 using NNlib
 using Reactant: Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR,
-                TracedRScalar
+                TracedRNumber
 
 for (jlop, hloop) in (
     (:(NNlib.tanh_fast), :tanh),
     (:(NNlib.sigmoid_fast), :logistic),
     (:(NNlib.sigmoid), :logistic),
 )
-    @eval function $(jlop)(x::TracedRScalar{T}) where {T}
-        return TracedRScalar{T}(
+    @eval function $(jlop)(x::TracedRNumber{T}) where {T}
+        return TracedRNumber{T}(
             (),
             Reactant.MLIR.IR.result(
                 Reactant.MLIR.Dialects.stablehlo.$(hloop)(x.mlir_data), 1
