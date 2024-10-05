@@ -257,7 +257,7 @@ end
 
         # typed_hcat
         f = Reactant.compile((x_concrete,)) do x
-            return Int[x; x; x]
+            return Int[x x x]
         end
         @test f(x_concrete) == ones(Int, 1, 3)
         @test eltype(f(x_concrete)) === Int
@@ -317,7 +317,7 @@ end
 
         # typed_hcat
         f = Reactant.compile((x_concrete,)) do x
-            return Int[x; x; x]
+            return Int[x x x]
         end
         @test f(x_concrete) == ones(Int, 2, 3)
         @test eltype(f(x_concrete)) === Int
