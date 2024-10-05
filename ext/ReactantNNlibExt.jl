@@ -32,6 +32,20 @@ function NNlib.softmax!(out::TracedRArray{T,N}, x::AbstractArray; dims=1) where 
     return out ./= tmp
 end
 
+function NNlib.logsoftmax!(out::TracedRArray{T}, x::AbstractArray; dims=1) where {T}
+    max_ = NNlib.fast_maximum(x; dims)
+    # if all(isfinite, max_)
+    @fastmath out .= x .- max_
+    # else
+    #     _zero, _minf, _inf = T(0), T(-Inf), T(Inf)
+    #     @. out = ifelse(
+    #         isequal(max_, _inf), ifelse(isequal(x, _inf), _zero, _minf), x - max_
+    #     )
+    # end
+    @fastmath log_ = log.(sum(exp, out; dims))
+    return out .-= log_
+end
+
 function NNlib.conv(
     x::AnyTracedRArray{T,N}, W::AnyTracedRArray{T}, cdims::DenseConvDims
 ) where {T,N}
