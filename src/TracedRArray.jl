@@ -19,26 +19,7 @@ end
 
 TracedRArray{T,N}(x::TracedRArray{T,N}) where {T,N} = x
 
-const ReactantPrimitives = Union{
-    Bool,
-    Int8,
-    UInt8,
-    Int16,
-    UInt16,
-    Int32,
-    UInt32,
-    Int64,
-    UInt64,
-    Float16,
-    Float32,
-    # BFloat16,
-    Float64,
-    Complex{Float32},
-    Complex{Float64},
-}
-
-# `<: ReactantPrimitives` ensures we don't end up with nested `TracedRNumber`s
-mutable struct TracedRNumber{T<:ReactantPrimitives} <: RNumber{T}
+mutable struct TracedRNumber{T} <: RNumber{T}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
 

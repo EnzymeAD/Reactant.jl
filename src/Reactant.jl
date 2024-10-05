@@ -7,8 +7,26 @@ include("OrderedIdDict.jl")
 
 using Enzyme
 
-abstract type RArray{T,N} <: AbstractArray{T,N} end
-abstract type RNumber{T} <: Number end
+const ReactantPrimitives = Union{
+    Bool,
+    Int8,
+    UInt8,
+    Int16,
+    UInt16,
+    Int32,
+    UInt32,
+    Int64,
+    UInt64,
+    Float16,
+    Float32,
+    # BFloat16,
+    Float64,
+    Complex{Float32},
+    Complex{Float64},
+}
+
+abstract type RArray{T<:ReactantPrimitives,N} <: AbstractArray{T,N} end
+abstract type RNumber{T<:ReactantPrimitives} <: Number end
 
 function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
