@@ -210,8 +210,8 @@ end
 end
 
 @testset "concatenation" begin
-    @testset "0-dim" begin
-        x = fill(true)
+    @testset "$(ndims(x))-dim" for x in [fill(true), fill(true, 2)]
+        x = [true, false]
         x_concrete = Reactant.to_rarray(x)
 
         # NOTE [,,,] is a call to `vect`, not `*cat`
@@ -221,126 +221,51 @@ end
         # @test f(x_concrete) ≈ ones(3)
 
         # vcat
-        f = Reactant.compile((x_concrete,)) do x
-            return [x; x; x]
-        end
-        @test f(x_concrete) == ones(Bool, 3)
+        g(x) = [x; x; x]
+        f = @compile g(x_concrete)
+        @test f(x_concrete) == g(x)
         @test eltype(f(x_concrete)) === Bool
 
         # hcat
-        f = Reactant.compile((x_concrete,)) do x
-            return [x x x]
-        end
-        @test f(x_concrete) == ones(Bool, 1, 3)
+        g(x) = [x x x]
+        f = @compile g(x_concrete)
+        @test f(x_concrete) == g(x)
         @test eltype(f(x_concrete)) === Bool
 
         # hvcat
-        f = Reactant.compile((x_concrete,)) do x
-            return [x x x; x x x]
-        end
-        @test f(x_concrete) == ones(Bool, 2, 3)
+        g(x) = [x x x; x x x]
+        f = @compile g(x_concrete)
+        @test f(x_concrete) == g(x)
         @test eltype(f(x_concrete)) === Bool
 
         # hvncat
-        f = Reactant.compile((x_concrete,)) do x
-            return [x x x; x x x;;; x x x; x x x]
-        end
-        @test f(x_concrete) == ones(Bool, 2, 3, 2)
+        g(x) = [x x x; x x x;;; x x x; x x x]
+        f = @compile g(x_concrete)
+        @test f(x_concrete) == g(x)
         @test eltype(f(x_concrete)) === Bool
 
         # typed_vcat
-        f = Reactant.compile((x_concrete,)) do x
-            return Int[x; x; x]
-        end
-        @test f(x_concrete) == ones(Int, 3)
+        g(x) = Int[x; x; x]
+        f = @compile g(x_concrete)
+        @test f(x_concrete) == g(x)
         @test eltype(f(x_concrete)) === Int
 
         # typed_hcat
-        f = Reactant.compile((x_concrete,)) do x
-            return Int[x x x]
-        end
-        @test f(x_concrete) == ones(Int, 1, 3)
+        g(x) = Int[x x x]
+        f = @compile g(x_concrete)
+        @test f(x_concrete) == g(x)
         @test eltype(f(x_concrete)) === Int
 
         # typed_hvcat
-        f = Reactant.compile((x_concrete,)) do x
-            return Int[x x x; x x x]
-        end
-        @test f(x_concrete) == ones(Int, 2, 3)
+        g(x) = Int[x x x; x x x]
+        f = @compile g(x_concrete)
+        @test f(x_concrete) == g(x)
         @test eltype(f(x_concrete)) === Int
 
         # typed_hvncat
-        f = Reactant.compile((x_concrete,)) do x
-            return Int[x x x; x x x;;; x x x; x x x]
-        end
-        @test f(x_concrete) == ones(Int, 2, 3, 2)
-        @test eltype(f(x_concrete)) === Int
-    end
-
-    @testset "1-dim" begin
-        x = ones(Bool, 2)
-        x_concrete = Reactant.to_rarray(x)
-
-        # NOTE [,,,] is a call to `vect`, not `*cat`
-        # f = Reactant.compile((x_concrete,)) do x
-        #     return [x, x, x]
-        # end
-        # @test f(x_concrete) ≈ ones(3)
-
-        # vcat
-        f = Reactant.compile((x_concrete,)) do x
-            return [x; x; x]
-        end
-        @test f(x_concrete) == ones(Bool, 6)
-        @test eltype(f(x_concrete)) === Bool
-
-        # hcat
-        f = Reactant.compile((x_concrete,)) do x
-            return [x x x]
-        end
-        @test f(x_concrete) == ones(Bool, 2, 3)
-        @test eltype(f(x_concrete)) === Bool
-
-        # hvcat
-        f = Reactant.compile((x_concrete,)) do x
-            return [x x x; x x x]
-        end
-        @test f(x_concrete) == ones(Bool, 4, 3)
-        @test eltype(f(x_concrete)) === Bool
-
-        # hvncat
-        f = Reactant.compile((x_concrete,)) do x
-            return [x x x; x x x;;; x x x; x x x]
-        end
-        @test f(x_concrete) == ones(Bool, 4, 3, 2)
-        @test eltype(f(x_concrete)) === Bool
-
-        # typed_vcat
-        f = Reactant.compile((x_concrete,)) do x
-            return Int[x; x; x]
-        end
-        @test f(x_concrete) == ones(Int, 6)
-        @test eltype(f(x_concrete)) === Int
-
-        # typed_hcat
-        f = Reactant.compile((x_concrete,)) do x
-            return Int[x x x]
-        end
-        @test f(x_concrete) == ones(Int, 2, 3)
-        @test eltype(f(x_concrete)) === Int
-
-        # typed_hvcat
-        f = Reactant.compile((x_concrete,)) do x
-            return Int[x x x; x x x]
-        end
-        @test f(x_concrete) == ones(Int, 4, 3)
-        @test eltype(f(x_concrete)) === Int
-
-        # typed_hvncat
-        f = Reactant.compile((x_concrete,)) do x
-            return Int[x x x; x x x;;; x x x; x x x]
-        end
-        @test f(x_concrete) == ones(Int, 4, 3, 2)
+        g(x) = Int[x x x; x x x;;; x x x; x x x]
+        f = @compile g(x_concrete)
+        @test f(x_concrete) == g(x)
         @test eltype(f(x_concrete)) === Int
     end
 
