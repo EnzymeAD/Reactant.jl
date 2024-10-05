@@ -66,6 +66,7 @@ include("Interpreter.jl")
 include("utils.jl")
 include("ConcreteRArray.jl")
 include("TracedRArray.jl")
+include("TracedRNumber.jl")
 include("Tracing.jl")
 include("Compiler.jl")
 
