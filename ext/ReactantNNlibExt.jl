@@ -1,8 +1,8 @@
 module ReactantNNlibExt
 
 using NNlib
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR,
-                TracedRNumber
+using Reactant:
+    Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR, TracedRNumber
 
 for (jlop, hloop) in (
     (:(NNlib.tanh_fast), :tanh),
