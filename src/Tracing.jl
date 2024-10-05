@@ -380,7 +380,7 @@ function make_tracer(
     if haskey(seen, prev)
         return seen[prev]
     end
-    if mode == ArrayToConcrete && eltype(RT) <: AbstractFloat
+    if mode == ArrayToConcrete && eltype(RT) <: Union{AbstractFloat, Integer}
         return seen[prev] = ConcreteRArray(prev)
     end
     TT = traced_type(eltype(RT), (), Val(mode))
