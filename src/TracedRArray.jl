@@ -821,6 +821,10 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
     catdims = Base.dims2cat(dims)
     shape = Base.cat_size_shape(catdims, X...)
     RT = Base.promote_eltype(T, X...)
+
+    # convert to the target eltype
+    X = map(Base.Fix1(promote_to, TracedRArray{RT,length(shape)}), X)
+
     return TracedRArray{RT,length(shape)}(
         (),
         MLIR.IR.result(
