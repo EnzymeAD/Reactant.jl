@@ -54,6 +54,17 @@ function promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
             ),
         )
     end
+    if isa(rhs, TracedRArray{<:Any,0})
+        return TracedRNumber{T}(
+            (),
+            MLIR.IR.result(
+                MLIR.Dialects.stablehlo.convert(
+                    rhs.mlir_data; result=mlir_type(TracedRNumber{T})
+                ),
+                1,
+            ),
+        )
+    end
     if isa(rhs, Number)
         attr = fill(MLIR.IR.Attribute(T(rhs)), mlir_type(TracedRNumber{T}))
         return TracedRNumber{T}(

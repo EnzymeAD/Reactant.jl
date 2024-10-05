@@ -66,6 +66,10 @@ and require expensive copies and synchronization each time and therefore should 
     return TracedRNumber{T}((), res2)
 end
 
+function Base.getindex(a::TracedRArray{T,0}) where {T}
+    return TracedRNumber{T}((), a.mlir_data)
+end
+
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
     res = MLIR.IR.result(
@@ -222,7 +226,12 @@ function elem_apply(
 end
 
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
-    all(iszero ∘ ndims, args) && return f(args...)
+    if all(iszero ∘ ndims, args)
+        scalar_args = map(args) do arg
+            return promote_to(TracedRNumber{eltype(arg)}, arg)
+        end
+        return f(scalar_args...)
+    end
 
     fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
         f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
@@ -440,6 +449,12 @@ function Base.fill!(A::TracedRArray{T,N}, x) where {T,N}
     return A
 end
 
+function Base.fill!(A::TracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
+    bcast = broadcast_to_size(promote_to(TracedRNumber{T}, x), size(A))
+    A.mlir_data = bcast.mlir_data
+    return A
+end
+
 struct AbstractReactantArrayStyle{N} <: Base.Broadcast.AbstractArrayStyle{N} end
 
 AbstractReactantArrayStyle(::Val{N}) where {N} = AbstractReactantArrayStyle{N}()
@@ -458,7 +473,14 @@ end
 
 function Base.similar(
     bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
-) where {T,N}
+) where {T<:ReactantPrimitives,N}
+    @assert N isa Int
+    return TracedRArray{T,N}((), nothing, map(length, dims))
+end
+
+function Base.similar(
+    bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
+) where {T<:ReactantPrimitives,N}
     @assert N isa Int
     return TracedRArray{T,N}((), nothing, map(length, dims))
 end
@@ -536,7 +558,7 @@ function broadcast_to_size(arg::T, rsize) where {T<:Number}
 end
 
 function broadcast_to_size(arg::TracedRNumber, rsize)
-    rsize == () && return arg
+    length(rsize) == 0 && return arg
     mlirty = MLIR.IR.type(arg.mlir_data)
     return TracedRArray{eltype(arg),length(rsize)}(
         (),
