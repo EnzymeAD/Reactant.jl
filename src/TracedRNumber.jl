@@ -19,6 +19,8 @@ Base.getindex(a::TracedRNumber{T}) where {T} = a
 Base.zero(::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{T}, zero(T))
 Base.one(::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{T}, one(T))
 
+Base.eps(::Type{TracedRNumber{T}}) where {T} = promote_to(TracedRNumber{T}, eps(T))
+
 function Base.convert(::Type{<:TracedRNumber{T}}, x::Number) where {T}
     return promote_to(TracedRNumber{T}, T(x))
 end
