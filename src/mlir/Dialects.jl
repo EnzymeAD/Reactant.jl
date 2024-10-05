@@ -16,8 +16,8 @@ function operandsegmentsizes(segments)
     return namedattribute("operand_segment_sizes", Attribute(Int32.(segments)))
 end
 
-for file in readdir("Dialects")
-    include(joinpath("Dialects", file))
+for file in readdir(joinpath(@__DIR__, "Dialects"))
+    include(joinpath(@__DIR__, "Dialects", file))
 end
 
 end # module Dialects
