@@ -19,7 +19,26 @@ end
 
 TracedRArray{T,N}(x::TracedRArray{T,N}) where {T,N} = x
 
-mutable struct TracedRNumber{T} <: RNumber{T}
+const ReactantPrimitives = Union{
+    Bool,
+    Int8,
+    UInt8,
+    Int16,
+    UInt16,
+    Int32,
+    UInt32,
+    Int64,
+    UInt64,
+    Float16,
+    Float32,
+    # BFloat16,
+    Float64,
+    Complex{Float32},
+    Complex{Float64},
+}
+
+# `<: ReactantPrimitives` ensures we don't end up with nested `TracedRNumber`s
+mutable struct TracedRNumber{T<:ReactantPrimitives} <: RNumber{T}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
 
@@ -214,14 +233,8 @@ function Base.transpose(A::AnyTracedRVecOrMat)
 end
 Base.adjoint(A::AnyTracedRVecOrMat{<:Real}) = transpose(A)
 
-function Base.promote_rule(
-    ::Type{TracedRArray{T,N}}, ::Type{TracedRArray{S,N}}
-) where {T,S,N}
-    return TracedRArray{Base.promote_type(T, S),N}
-end
-
-function Base.promote_rule(::Type{T}, ::Type{TracedRArray{S,N}}) where {T,S,N}
-    return TracedRArray{Base.promote_type(T, S),N}
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRNumber{S}}) where {T,S}
+    return TracedRNumber{Base.promote_type(T, S)}
 end
 
 function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
@@ -326,8 +339,6 @@ function Base.ifelse(
     )
 end
 
-Base.abs2(x::Reactant.TracedRNumber{T}) where {T} = x * conj(x)
-
 function Base.literal_pow(
     ::Base.RefValue{typeof(^)}, x::TracedRNumber{T}, ::Base.RefValue{Val{P}}
 ) where {T,P}
@@ -355,8 +366,8 @@ end
 
 struct TypeCast{T<:Number} <: Function end
 
-function (::TypeCast{T})(x::TracedRArray{T2,0}) where {T,T2}
-    return promote_to(TracedRArray{T,0}, x)
+function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
+    return promote_to(TracedRNumber{T}, x)
 end
 
 elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:Number} = x
@@ -556,8 +567,7 @@ function Base.mapreduce(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in in_tys])
 
     args = (
-        TracedRNumber{T}((), MLIR.IR.argument(fnbody, i), ()) for
-        (i, ty) in enumerate(in_tys)
+        TracedRNumber{T}((), MLIR.IR.argument(fnbody, i)) for (i, ty) in enumerate(in_tys)
     )
 
     res = MLIR.IR.block!(fnbody) do
@@ -705,6 +715,25 @@ function broadcast_to_size(arg::T, rsize) where {T<:Number}
     attr = Base.fill(arg, TT)
     return arg = TracedRArray{T,length(rsize)}(
         (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), rsize
+    )
+end
+
+function broadcast_to_size(arg::TracedRNumber, rsize)
+    rsize == () && return arg
+    mlirty = MLIR.IR.type(arg.mlir_data)
+    return TracedRArray{eltype(arg),length(rsize)}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.broadcast_in_dim(
+                arg.mlir_data;
+                result_0=MLIR.IR.TensorType([t for t in rsize], eltype(mlirty)),
+                broadcast_dimensions=MLIR.IR.DenseArrayAttribute([
+                    Int64(i - 1) for i in rsize
+                ]),
+            ),
+            1,
+        ),
+        rsize,
     )
 end
 
