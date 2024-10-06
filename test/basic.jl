@@ -230,51 +230,51 @@ end
         # @test f(x_concrete) ≈ ones(3)
 
         # vcat
-        g(x) = [x; x; x]
-        f = @compile g(x_concrete)
-        @test f(x_concrete) == g(x)
+        test_vcat(x) = [x; x; x]
+        f = @compile test_vcat(x_concrete)
+        @test f(x_concrete) == test_vcat(x)
         @test eltype(f(x_concrete)) === Bool
 
         # hcat
-        g(x) = [x x x]
-        f = @compile g(x_concrete)
-        @test f(x_concrete) == g(x)
+        test_hcat(x) = [x x x]
+        f = @compile test_hcat(x_concrete)
+        @test f(x_concrete) == test_hcat(x)
         @test eltype(f(x_concrete)) === Bool
 
         # hvcat
-        g(x) = [x x x; x x x]
-        f = @compile g(x_concrete)
-        @test f(x_concrete) == g(x)
+        test_hvcat(x) = [x x x; x x x]
+        f = @compile test_hvcat(x_concrete)
+        @test f(x_concrete) == test_hvcat(x)
         @test eltype(f(x_concrete)) === Bool
 
         # hvncat
-        g(x) = [x x x; x x x;;; x x x; x x x]
-        f = @compile g(x_concrete)
-        @test f(x_concrete) == g(x)
+        test_hvncat(x) = [x x x; x x x;;; x x x; x x x]
+        f = @compile test_hvncat(x_concrete)
+        @test f(x_concrete) == test_hvncat(x)
         @test eltype(f(x_concrete)) === Bool
 
         # typed_vcat
-        g(x) = Int[x; x; x]
-        f = @compile g(x_concrete)
-        @test f(x_concrete) == g(x)
+        test_typed_vcat(x) = Int[x; x; x]
+        f = @compile test_typed_vcat(x_concrete)
+        @test f(x_concrete) == test_typed_vcat(x)
         @test eltype(f(x_concrete)) === Int
 
         # typed_hcat
-        g(x) = Int[x x x]
-        f = @compile g(x_concrete)
-        @test f(x_concrete) == g(x)
+        test_typed_hcat(x) = Int[x x x]
+        f = @compile test_typed_hcat(x_concrete)
+        @test f(x_concrete) == test_typed_hcat(x)
         @test eltype(f(x_concrete)) === Int
 
         # typed_hvcat
-        g(x) = Int[x x x; x x x]
-        f = @compile g(x_concrete)
-        @test f(x_concrete) == g(x)
+        test_typed_hvcat(x) = Int[x x x; x x x]
+        f = @compile test_typed_hvcat(x_concrete)
+        @test f(x_concrete) == test_typed_hvcat(x)
         @test eltype(f(x_concrete)) === Int
 
         # typed_hvncat
-        g(x) = Int[x x x; x x x;;; x x x; x x x]
-        f = @compile g(x_concrete)
-        @test f(x_concrete) == g(x)
+        test_hvncat(x) = Int[x x x; x x x;;; x x x; x x x]
+        f = @compile test_hvncat(x_concrete)
+        @test f(x_concrete) == test_hvncat(x)
         @test eltype(f(x_concrete)) === Int
     end
 end
