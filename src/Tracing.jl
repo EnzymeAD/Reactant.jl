@@ -183,7 +183,7 @@ function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode
     end
 end
 
-function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedTypes,mode}
+function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedType,mode}
     if mode == ConcreteToTraced
         throw("TracedRArray $T cannot be traced")
     elseif mode == TracedToConcrete

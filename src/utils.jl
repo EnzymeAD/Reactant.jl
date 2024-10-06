@@ -47,9 +47,9 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_args = TracedTypes[]
+    linear_args = TracedType[]
     for (k, v) in seen_args
-        v isa TracedTypes || continue
+        v isa TracedType || continue
         push!(linear_args, v)
     end
 
@@ -128,10 +128,10 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_results = TracedTypes[]
+    linear_results = TracedType[]
 
     for (k, v) in seen_results
-        v isa TracedTypes || continue
+        v isa TracedType || continue
         push!(linear_results, v)
     end
 

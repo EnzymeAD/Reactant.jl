@@ -88,7 +88,7 @@ include("ConcreteRArray.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 
-const TracedTypes = Union{TracedRArray,TracedRNumber}
+const TracedType = Union{TracedRArray,TracedRNumber}
 
 include("Tracing.jl")
 include("Compiler.jl")

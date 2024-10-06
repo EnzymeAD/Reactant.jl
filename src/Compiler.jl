@@ -11,7 +11,7 @@ import ..Reactant:
     make_tracer,
     TracedToConcrete,
     append_path,
-    TracedTypes
+    TracedType
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 
@@ -288,10 +288,10 @@ function compile_mlir!(mod, f, args; optimize=true)
         )
     end
 
-    preserved_args = Tuple{TracedTypes,Int}[]
+    preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
-    linear_results2 = TracedTypes[]
+    linear_results2 = TracedType[]
     for (i, op) in enumerate(results)
         if !MLIR.IR.is_block_arg(op)
             push!(nresults, op)
