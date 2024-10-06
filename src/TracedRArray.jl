@@ -464,36 +464,6 @@ function Base.fill!(A::TracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
     return A
 end
 
-function Base._cat(dims::Val{D}, A::TracedRArray{T,N}, Bs::TracedRArray...) where {T,N,D}
-    @assert D isa Integer "Support for non-integer dimensions is not implemented yet."
-
-    # MLIR expects the dimension `D` to be ≤ the rank of the input tensors
-    A = maybe_expand_dims(A, dims)
-    Bs = maybe_expand_dims.(Bs, (dims,))
-
-    catdims = Base.dims2cat(dims)
-    shape = Base.cat_size_shape(catdims, A, Bs...)
-    RT = Base.promote_eltype(A, Bs...)
-    Res = TracedRArray{RT,length(shape)}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.concatenate(
-                [A.mlir_data, [B.mlir_data for B in Bs]...];
-                result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
-                dimension=D - 1, # stablehlo expects this to be zero-indexed
-            ),
-            1,
-        ),
-        shape,
-    )
-    return Res
-end
-
-function maybe_expand_dims(x::AbstractArray{T,N}, ::Val{D}) where {T,N,D}
-    D ≤ N && return x
-    return reshape(x, ntuple(i -> i ≤ N ? size(x, i) : 1, Val(D)))
-end
-
 struct AbstractReactantArrayStyle{N} <: Base.Broadcast.AbstractArrayStyle{N} end
 
 AbstractReactantArrayStyle(::Val{N}) where {N} = AbstractReactantArrayStyle{N}()
@@ -647,4 +617,89 @@ function _copyto!(dest::TracedRArray, bc::Broadcasted)
     res = elem_apply(bc.f, args...)
     dest.mlir_data = res.mlir_data
     return dest
+end
+
+dispatch_val(x) = x
+dispatch_val(::Val{D}) where {D} = D
+
+@inline function Base._typed_vcat(
+    ::Type{T}, X::Base.AbstractVecOrTuple{<:TracedRArray}
+) where {T}
+    return Base._cat_t(Val(1), T, X...)
+end
+@inline function Base._typed_hcat(
+    ::Type{T}, X::Base.AbstractVecOrTuple{<:TracedRArray}
+) where {T}
+    return Base._cat_t(Val(2), T, X...)
+end
+
+# `Base.typed_hvcat` is overloaded for `AbstractVecOrMat` using `setindex!` that breaks Reactant
+# generic implementation uses `typed_hcat` and `typed_vcat` which is alright
+@inline function Base.typed_hvcat(
+    ::Type{T}, rows::Tuple{Vararg{Int}}, as::TracedRArray...
+) where {T}
+    return invoke(
+        Base.typed_hvcat, Tuple{Type{T},Tuple{Vararg{Int}},Vararg{Any}}, T, rows, as...
+    )
+end
+
+function Base._typed_hvncat(
+    T::Type, dims::NTuple{N,Int}, row_first::Bool, as::TracedRArray...
+) where {N}
+    As = if row_first
+        perm = [2, 1, 3:N...]
+        dims = [dims[2], dims[1], dims[3:end]...]
+        permutedims(reshape(collect(as), dims...), perm)
+    else
+        reshape(collect(as), dims)
+    end
+
+    for d in 1:N
+        Bs = Array{Any,N - d}(undef, size(As)[2:end]...)
+
+        for (i, col) in
+            zip(eachindex(Bs), eachslice(As; dims=Tuple(2:ndims(As)), drop=true))
+            # TODO row_first affects the flattening?
+            Bs[i] = Base._cat_t(d, T, col...)
+        end
+
+        As = Bs
+    end
+
+    return only(As)
+end
+
+function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
+    dims = dispatch_val(dims)
+    @assert dims isa Integer "Support for non-integer dimensions is not implemented yet."
+
+    # MLIR expects the dimension `dims` to be ≤ the rank of the input tensors
+    X = maybe_expand_dims.(X, (dims,))
+
+    catdims = Base.dims2cat(dims)
+    shape = Base.cat_size_shape(catdims, X...)
+    RT = Base.promote_eltype(T, X...)
+
+    # convert to the target eltype
+    X = map(Base.Fix1(promote_to, TracedRArray{RT,length(shape)}), X)
+
+    return TracedRArray{RT,length(shape)}(
+        (),
+        MLIR.IR.result(
+            # TODO maybe we should do some conversion?
+            MLIR.Dialects.stablehlo.concatenate(
+                collect(get_mlir_data.(X));
+                result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
+                dimension=dims - 1, # stablehlo expects this to be zero-indexed
+            ),
+            1,
+        ),
+        shape,
+    )
+end
+
+function maybe_expand_dims(x::AbstractArray{T,N}, dims) where {T,N}
+    dims = dispatch_val(dims)
+    dims ≤ N && return x
+    return reshape(x, ntuple(i -> i ≤ N ? size(x, i) : 1, dims))
 end

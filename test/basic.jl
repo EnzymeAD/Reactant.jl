@@ -218,20 +218,73 @@ end
 end
 
 @testset "concatenation" begin
-    x = ones(2, 4, 3)
-    x_concrete = Reactant.to_rarray(x)
+    @testset "$(ndims(x))-dim" for x in [
+        fill(true),
+        [true, false],
+        [true false],
+        [true true; true false],
+        [
+            true true true true; true true true false;;;
+            true true false true; true true false false;;;
+            true false true true; true false true false
+        ],
+    ]
+        x_concrete = Reactant.to_rarray(x)
 
-    cat1(x) = vcat(x, x, x)
-    cat2(x) = hcat(x, x, x)
-    cat3(x) = cat(x, x, x; dims=Val(3))
+        # NOTE [,,,] is a call to `vect`, not `*cat`
+        # f = Reactant.compile((x_concrete,)) do x
+        #     return [x, x, x]
+        # end
+        # @test f(x_concrete) ≈ ones(3)
 
-    cat1_compiled = @compile cat1(x_concrete)
-    cat2_compiled = @compile cat2(x_concrete)
-    cat3_compiled = @compile cat3(x_concrete)
+        # vcat
+        test_vcat(x) = [x; x; x]
+        f = @compile test_vcat(x_concrete)
+        @test f(x_concrete) == test_vcat(x)
+        @test eltype(f(x_concrete)) === Bool
 
-    @test cat1(x) ≈ cat1_compiled(x_concrete)
-    @test cat2(x) ≈ cat2_compiled(x_concrete)
-    @test cat3(x) ≈ cat3_compiled(x_concrete)
+        # hcat
+        test_hcat(x) = [x x x]
+        f = @compile test_hcat(x_concrete)
+        @test f(x_concrete) == test_hcat(x)
+        @test eltype(f(x_concrete)) === Bool
+
+        # hvcat
+        test_hvcat(x) = [x x x; x x x]
+        f = @compile test_hvcat(x_concrete)
+        @test f(x_concrete) == test_hvcat(x)
+        @test eltype(f(x_concrete)) === Bool
+
+        # hvncat
+        test_hvncat(x) = [x x x; x x x;;; x x x; x x x]
+        f = @compile test_hvncat(x_concrete)
+        @test f(x_concrete) == test_hvncat(x)
+        @test eltype(f(x_concrete)) === Bool
+
+        # typed_vcat
+        test_typed_vcat(x) = Int[x; x; x]
+        f = @compile test_typed_vcat(x_concrete)
+        @test f(x_concrete) == test_typed_vcat(x)
+        @test eltype(f(x_concrete)) === Int
+
+        # typed_hcat
+        test_typed_hcat(x) = Int[x x x]
+        f = @compile test_typed_hcat(x_concrete)
+        @test f(x_concrete) == test_typed_hcat(x)
+        @test eltype(f(x_concrete)) === Int
+
+        # typed_hvcat
+        test_typed_hvcat(x) = Int[x x x; x x x]
+        f = @compile test_typed_hvcat(x_concrete)
+        @test f(x_concrete) == test_typed_hvcat(x)
+        @test eltype(f(x_concrete)) === Int
+
+        # typed_hvncat
+        test_typed_hvncat(x) = Int[x x x; x x x;;; x x x; x x x]
+        f = @compile test_typed_hvncat(x_concrete)
+        @test f(x_concrete) == test_typed_hvncat(x)
+        @test eltype(f(x_concrete)) === Int
+    end
 end
 
 function update_on_copy(x)
