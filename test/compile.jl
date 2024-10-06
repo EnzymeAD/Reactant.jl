@@ -7,7 +7,7 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
     @testset "create_result" begin
         @testset "NamedTuple" begin
             x = (; a=rand(4, 3))
-            x2 = (; a=Reactant.ConcreteRArray(x.a))
+            x2 = Reactant.to_rarray(x)
 
             f = @compile sum(x2)
 

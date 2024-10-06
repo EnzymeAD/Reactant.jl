@@ -6,10 +6,12 @@ import ..Reactant:
     XLA,
     ConcreteRArray,
     TracedRArray,
+    TracedRNumber,
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
-    append_path
+    append_path,
+    TracedType
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 
@@ -286,10 +288,10 @@ function compile_mlir!(mod, f, args; optimize=true)
         )
     end
 
-    preserved_args = Tuple{TracedRArray,Int}[]
+    preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
-    linear_results2 = TracedRArray[]
+    linear_results2 = TracedType[]
     for (i, op) in enumerate(results)
         if !MLIR.IR.is_block_arg(op)
             push!(nresults, op)
@@ -573,7 +575,7 @@ end
 function compile_xla(f, args; client=nothing)
     # register MLIR dialects
     ctx = MLIR.IR.Context()
-    Base.append!(Reactant.registry[]; context=ctx)
+    append!(Reactant.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     return MLIR.IR.context!(ctx) do

@@ -1,15 +1,8 @@
 using Reactant, Lux, Random, Statistics, Enzyme, Functors, OneHotArrays
 
-function crossentropy(ŷ, y)
-    logŷ = log.(ŷ)
-    result = y .* logŷ
-    return -sum(result)
-end
-
 function loss_function(model, x, y, ps, st)
     y_hat, _ = model(x, ps, st)
-    # return CrossEntropyLoss()(y_hat, y) # <-- needs handling of xlogx xlogy from LuxOps
-    return crossentropy(y_hat, y)
+    return CrossEntropyLoss()(y_hat, y)
 end
 
 function gradient_loss_function(model, x, y, ps, st)

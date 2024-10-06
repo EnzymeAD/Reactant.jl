@@ -65,6 +65,8 @@ end
 
 sumexp(x) = sum(exp, x)
 
+sum_compare(x) = sum(x) > 0
+
 @testset "Basic mapreduce" begin
     x = rand(Float32, 10)
     a = Reactant.ConcreteRArray(x)
@@ -74,6 +76,12 @@ sumexp(x) = sum(exp, x)
     f_res = f(a)
 
     @test f_res ≈ r_res
+
+    # Ensure we are tracing as scalars. Else this will fail due to > not being defined on
+    # arrays
+    f = @compile sum_compare(a)
+    # We need to use [] to unwrap the scalar. We will fix this in the future.
+    @test f(a)[] == sum_compare(x)
 end
 
 function mysoftmax!(x)
@@ -210,7 +218,90 @@ end
 end
 
 @testset "concatenation" begin
-    @testset "$(ndims(x))-dim" for x in [
+    @testset "Number" begin
+        x = fill(true)
+        x_concrete = Reactant.to_rarray(x)
+
+        # NOTE [,,,] is a call to `vect`, not `*cat`
+        # f = Reactant.compile((x_concrete,)) do x
+        #     return [x, x, x]
+        # end
+        # @test f(x_concrete) ≈ ones(3)
+
+        # vcat
+        test_vcat(x) = begin
+            x = x[] # unwrap scalar
+            [x; x; x]
+        end
+        f = @compile test_vcat(x_concrete)
+        @test f(x_concrete) == test_vcat(x)
+        @test eltype(f(x_concrete)) === Bool
+
+        # hcat
+        test_hcat(x) = begin
+            x = x[] # unwrap scalar
+            [x x x]
+        end
+        f = @compile test_hcat(x_concrete)
+        @test f(x_concrete) == test_hcat(x)
+        @test eltype(f(x_concrete)) === Bool
+
+        # hvcat
+        test_hvcat(x) = begin
+            x = x[] # unwrap scalar
+            [x x x; x x x]
+        end
+        f = @compile test_hvcat(x_concrete)
+        @test f(x_concrete) == test_hvcat(x)
+        @test eltype(f(x_concrete)) === Bool
+
+        # hvncat
+        test_hvncat(x) = begin
+            x = x[] # unwrap scalar
+            [x x x; x x x;;; x x x; x x x]
+        end
+        f = @compile test_hvncat(x_concrete)
+        @test f(x_concrete) == test_hvncat(x)
+        @test eltype(f(x_concrete)) === Bool
+
+        # typed_vcat
+        test_typed_vcat(x) = begin
+            x = x[] # unwrap scalar
+            Int[x; x; x]
+        end
+        f = @compile test_typed_vcat(x_concrete)
+        @test f(x_concrete) == test_typed_vcat(x)
+        @test eltype(f(x_concrete)) === Int
+
+        # typed_hcat
+        test_typed_hcat(x) = begin
+            x = x[] # unwrap scalar
+            Int[x x x]
+        end
+        f = @compile test_typed_hcat(x_concrete)
+        @test f(x_concrete) == test_typed_hcat(x)
+        @test eltype(f(x_concrete)) === Int
+
+        # typed_hvcat
+        test_typed_hvcat(x) = begin
+            x = x[] # unwrap scalar
+            Int[x x x; x x x]
+        end
+        f = @compile test_typed_hvcat(x_concrete)
+        @test f(x_concrete) == test_typed_hvcat(x)
+        @test eltype(f(x_concrete)) === Int
+
+        # typed_hvncat
+        test_typed_hvncat(x) = begin
+            x = x[] # unwrap scalar
+            Int[x x x; x x x;;; x x x; x x x]
+        end
+        f = @compile test_typed_hvncat(x_concrete)
+        @test f(x_concrete) == test_typed_hvncat(x)
+        @test eltype(f(x_concrete)) === Int
+    end
+
+    @testset "$(ndims(x))-dim Array" for x in [
         fill(true),
         [true, false],
         [true false],

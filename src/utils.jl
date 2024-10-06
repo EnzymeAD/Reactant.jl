@@ -2,9 +2,15 @@ function mlir_type(x::RArray{T,N}) where {T,N}
     return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
 end
 
+mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
+
 function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
     return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+end
+
+function mlir_type(::Type{<:RNumber{T}}) where {T}
+    return MLIR.IR.TensorType((), MLIR.IR.Type(T))
 end
 
 function transpose_ty(mlirty)
@@ -23,7 +29,10 @@ end
 
 function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=false)
     if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
-        return (true, make_mlir_fn(apply, (f, args...), kwargs, name, concretein)[2:end]...)
+        return (
+            true,
+            make_mlir_fn(apply, (f, args...), kwargs, name, concretein; toscalar)[2:end]...,
+        )
     end
 
     N = length(args)
@@ -38,11 +47,9 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_args = TracedRArray[]
+    linear_args = TracedType[]
     for (k, v) in seen_args
-        if !(v isa TracedRArray)
-            continue
-        end
+        v isa TracedType || continue
         push!(linear_args, v)
     end
 
@@ -121,13 +128,10 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    linear_results = TracedRArray[]
+    linear_results = TracedType[]
 
     for (k, v) in seen_results
-        if !(v isa TracedRArray)
-            continue
-        end
-
+        v isa TracedType || continue
         push!(linear_results, v)
     end
 

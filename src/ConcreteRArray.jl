@@ -74,10 +74,6 @@ function Base.convert(::Type{T}, x::ConcreteRArray{T,0}) where {T}
     return to_float(x)
 end
 
-function Base.promote_rule(::Type{<:RArray{T1,0}}, ::Type{T2}) where {T1,T2}
-    return Base.promote_rule(T1, T2)
-end
-
 for jlop in (:(Base.isless), :(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.:^))
     @eval begin
         function $jlop(x::ConcreteRArray{T,0}, y::ConcreteRArray{U,0}) where {T,U}
@@ -158,7 +154,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
 end
 
 function mysetindex!(a, v, args::Vararg{Int,N}) where {N}
-    Base.setindex!(a, v, args...)
+    setindex!(a, v, args...)
     return nothing
 end
 
