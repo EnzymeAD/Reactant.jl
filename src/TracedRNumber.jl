@@ -199,6 +199,16 @@ for (jlop, hloop) in (
     end
 end
 
+Base.conj(x::TracedRNumber) = x
+function Base.conj(x::TracedRNumber{T}) where {T<:Complex}
+    return TracedRNumber{T}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.chlo.conj(x.mlir_data; result=mlir_type(TracedRNumber{T})), 1
+        ),
+    )
+end
+
 # XXX: Enzyme-MLIR doesn't have `abs` adjoint defined
 Base.abs2(x::TracedRNumber{<:Real}) = x^2
 
