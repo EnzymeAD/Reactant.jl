@@ -252,7 +252,7 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
-function compile_mlir!(mod, f, args; optimize::Union{Bool, Symbol}=true)
+function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
