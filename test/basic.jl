@@ -301,7 +301,7 @@ end
         @test eltype(f(x_concrete)) === Int
     end
 
-    @testset "$(ndims(x))-dim" for x in [
+    @testset "$(ndims(x))-dim Array" for x in [
         fill(true),
         [true, false],
         [true false],
