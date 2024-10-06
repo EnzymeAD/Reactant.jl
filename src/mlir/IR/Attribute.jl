@@ -564,6 +564,11 @@ function DenseElementsAttribute(values::AbstractArray{Float16})
     )
 end
 
+function DenseElementsAttribute(values::AbstractArray{Complex{T}}) where {T}
+    shaped_type = TensorType(size(values), Type(Complex{T}))
+    return DenseElementsAttribute(shaped_type, values)
+end
+
 """
     DenseElementsAttribute(array::AbstractArray{String})
 
