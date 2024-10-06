@@ -209,3 +209,34 @@ struct TypeCast{T<:ReactantPrimitives} <: Function end
 (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = promote_to(TracedRNumber{T}, x)
 
 Base.float(x::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{float(T)}, x)
+
+# Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
+Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
+function Base.typed_vcat(::Type{T}, x::TracedRNumber...) where {T}
+    return Base.typed_vcat(T, map(Base.Fix2(broadcast_to_size, (1,)), x)...)
+end
+
+Base.hcat(x::TracedRNumber...) = Base.typed_hcat(Base.promote_eltypeof(x...), x...)
+function Base.typed_hcat(::Type{T}, x::TracedRNumber...) where {T}
+    return Base.typed_hcat(T, map(Base.Fix2(broadcast_to_size, (1, 1)), x)...)
+end
+
+function Base.hvcat(rows::Tuple{Vararg{Int}}, xs::TracedRNumber...)
+    return Base.typed_hvcat(Base.promote_eltypeof(xs...), rows, xs...)
+end
+function Base.typed_hvcat(
+    ::Type{T}, rows::Tuple{Vararg{Int}}, xs::TracedRNumber...
+) where {T}
+    xs = map(Base.Fix2(broadcast_to_size, (1, 1)), xs)
+    return Base.typed_hvcat(T, rows, xs...)
+end
+
+function Base.hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::TracedRNumber...)
+    return Base.typed_hvncat(Base.promote_eltypeof(xs...), dims, row_first, xs...)
+end
+function Base.typed_hvncat(
+    ::Type{T}, dims::Tuple{Vararg{Int}}, row_first::Bool, xs::TracedRNumber...
+) where {T}
+    xs = map(Base.Fix2(broadcast_to_size, (1, 1)), xs)
+    return Base.typed_hvncat(T, dims, row_first, xs...)
+end
