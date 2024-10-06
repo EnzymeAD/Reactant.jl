@@ -204,7 +204,7 @@ Base.abs2(x::TracedRNumber{<:Real}) = x^2
 
 Base.log1p(x::TracedRNumber{T}) where {T} = log(x + one(T))
 
-struct TypeCast{T<:ReactantPrimitives} <: Function end
+struct TypeCast{T<:ReactantPrimitive} <: Function end
 
 (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = promote_to(TracedRNumber{T}, x)
 

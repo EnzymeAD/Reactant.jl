@@ -8,7 +8,7 @@ include("OrderedIdDict.jl")
 using Enzyme
 
 @static if isdefined(Core, :BFloat16)
-    const ReactantPrimitives = Union{
+    const ReactantPrimitive = Union{
         Bool,
         Int8,
         UInt8,
@@ -26,7 +26,7 @@ using Enzyme
         Complex{Float64},
     }
 else
-    const ReactantPrimitives = Union{
+    const ReactantPrimitive = Union{
         Bool,
         Int8,
         UInt8,
@@ -44,8 +44,8 @@ else
     }
 end
 
-abstract type RArray{T<:ReactantPrimitives,N} <: AbstractArray{T,N} end
-abstract type RNumber{T<:ReactantPrimitives} <: Number end
+abstract type RArray{T<:ReactantPrimitive,N} <: AbstractArray{T,N} end
+abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
 function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))

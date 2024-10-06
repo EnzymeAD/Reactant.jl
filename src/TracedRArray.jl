@@ -221,10 +221,10 @@ end
 
 promote_to(::TracedRArray{T,N}, rhs) where {T,N} = promote_to(TracedRArray{T,N}, rhs)
 
-elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitives} = x
+elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
 function elem_apply(
     ::Type{T}, x::TracedRArray{T2}
-) where {T<:ReactantPrimitives,T2<:ReactantPrimitives}
+) where {T<:ReactantPrimitive,T2<:ReactantPrimitive}
     # Special Path to prevent going down a despecialized path
     return elem_apply(TypeCast{T}(), x)
 end
@@ -475,14 +475,14 @@ end
 
 function Base.similar(
     bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
-) where {T<:ReactantPrimitives,N}
+) where {T<:ReactantPrimitive,N}
     @assert N isa Int
     return TracedRArray{T,N}((), nothing, map(length, dims))
 end
 
 function Base.similar(
     bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
-) where {T<:ReactantPrimitives,N}
+) where {T<:ReactantPrimitive,N}
     @assert N isa Int
     return TracedRArray{T,N}((), nothing, map(length, dims))
 end

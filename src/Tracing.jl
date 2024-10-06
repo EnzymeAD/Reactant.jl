@@ -203,7 +203,7 @@ function traced_type(::Type{T}, seen, mode) where {T<:XLAArray}
 end
 
 function traced_type(::Type{A}, seen::ST, ::Val{mode}) where {T,N,A<:Array{T,N},ST,mode}
-    if mode == ArrayToConcrete && T <: ReactantPrimitives
+    if mode == ArrayToConcrete && T <: ReactantPrimitive
         return ConcreteRArray{T,N}
     else
         return Array{traced_type(T, seen, Val(mode)),N}
@@ -427,7 +427,7 @@ function make_tracer(
     if haskey(seen, prev)
         return seen[prev]
     end
-    if mode == ArrayToConcrete && eltype(RT) <: ReactantPrimitives
+    if mode == ArrayToConcrete && eltype(RT) <: ReactantPrimitive
         return seen[prev] = ConcreteRArray(prev)
     end
     TT = traced_type(eltype(RT), (), Val(mode))
