@@ -288,7 +288,7 @@ function compile_mlir!(mod, f, args; optimize=true)
         )
     end
 
-    preserved_args = Tuple{TracedRArray,Int}[]
+    preserved_args = Tuple{TracedTypes,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
     linear_results2 = TracedTypes[]
