@@ -49,9 +49,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
 
     linear_args = TracedTypes[]
     for (k, v) in seen_args
-        if !(v isa TracedRArray) && !(v isa TracedRNumber)
-            continue
-        end
+        v isa TracedTypes || continue
         push!(linear_args, v)
     end
 
@@ -133,10 +131,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
     linear_results = TracedTypes[]
 
     for (k, v) in seen_results
-        if !(v isa TracedRArray) && !(v isa TracedRNumber)
-            continue
-        end
-
+        v isa TracedTypes || continue
         push!(linear_results, v)
     end
 
