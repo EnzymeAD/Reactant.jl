@@ -202,6 +202,15 @@ function Base.conj(A::TracedRArray{T,N}) where {T<:Complex,N}
     )
 end
 
+Base.conj!(A::TracedRArray) = A
+function Base.conj!(A::TracedRArray{T,N}) where {T<:Complex,N}
+    A.mlir_data = MLIR.IR.result(
+        MLIR.Dialects.chlo.conj(A.mlir_data; result=mlir_type(TracedRArray{T,N}, size(A))),
+        1,
+    )
+    return A
+end
+
 function Base.transpose(A::AnyTracedRVecOrMat)
     A = ndims(A) == 1 ? reshape(A, :, 1) : A
     return permutedims(A, (2, 1))
