@@ -272,9 +272,9 @@ end
         @test eltype(f(x_concrete)) === Int
 
         # typed_hvncat
-        test_hvncat(x) = Int[x x x; x x x;;; x x x; x x x]
-        f = @compile test_hvncat(x_concrete)
-        @test f(x_concrete) == test_hvncat(x)
+        test_typed_hvncat(x) = Int[x x x; x x x;;; x x x; x x x]
+        f = @compile test_typed_hvncat(x_concrete)
+        @test f(x_concrete) == test_typed_hvncat(x)
         @test eltype(f(x_concrete)) === Int
     end
 end
