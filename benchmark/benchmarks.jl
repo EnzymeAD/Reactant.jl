@@ -9,14 +9,29 @@ SUITE["runtime"] = BenchmarkGroup()
 SUITE["comptime"] = BenchmarkGroup()
 
 SUITE["comptime"]["basics"] = BenchmarkGroup()
-SUITE["comptime"]["basics"]["2D sum"] = @benchmarkable Reactant.compile(sum, (a,)) setup = (
+
+SUITE["comptime"]["basics"]["2D sum"] = @benchmarkable begin
+    @compile sum(a)
+end setup = begin
     a = Reactant.ConcreteRArray(ones(2, 10))
-)
+end
+
+SUITE["comptime"]["basics"]["2D sum (optimize=:none)"] = @benchmarkable begin
+    @compile optimize=:none sum(a)
+end setup = begin
+    a = Reactant.ConcreteRArray(ones(2, 10))
+end
 
 bcast_cos(x) = cos.(x)
 
 SUITE["comptime"]["basics"]["cos.(x)"] = @benchmarkable begin
-    Reactant.compile(bcast_cos, (a,))
+    @compile bcast_cos(a)
+end setup = begin
+    a = Reactant.ConcreteRArray(ones(2, 10))
+end
+
+SUITE["runtime"]["basics"]["cos.(x) (optimize=:none)"] = @benchmarkable begin
+    @compile optimize=:none bcast_cos(a)
 end setup = begin
     a = Reactant.ConcreteRArray(ones(2, 10))
 end
@@ -24,7 +39,7 @@ end
 SUITE["runtime"]["lux neural networks"] = BenchmarkGroup()
 SUITE["comptime"]["lux neural networks"] = BenchmarkGroup()
 
-for depth in [11, 13, 16, 19], batchnorm in [false]#  true] <-- not working yet
+for depth in [11, 13, 16, 19], batchnorm in [false, true]
     SUITE["comptime"]["lux neural networks"]["vgg$(depth) bn=$(batchnorm)"] = @benchmarkable begin
         @compile vgg(x, ps_concrete, st_concrete)
     end setup = begin
