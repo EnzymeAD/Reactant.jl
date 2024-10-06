@@ -210,8 +210,17 @@ end
 end
 
 @testset "concatenation" begin
-    @testset "$(ndims(x))-dim" for x in [fill(true), fill(true, 2)]
-        x = [true, false]
+    @testset "$(ndims(x))-dim" for x in [
+        fill(true),
+        [true, false],
+        [true false],
+        [true true; true false],
+        [
+            true true true true; true true true false;;;
+            true true false true; true true false false;;;
+            true false true true; true false true false
+        ],
+    ]
         x_concrete = Reactant.to_rarray(x)
 
         # NOTE [,,,] is a call to `vect`, not `*cat`
@@ -268,21 +277,6 @@ end
         @test f(x_concrete) == g(x)
         @test eltype(f(x_concrete)) === Int
     end
-
-    x = ones(2, 4, 3)
-    x_concrete = Reactant.to_rarray(x)
-
-    cat1(x) = vcat(x, x, x)
-    cat2(x) = hcat(x, x, x)
-    cat3(x) = cat(x, x, x; dims=Val(3))
-
-    cat1_compiled = @compile cat1(x_concrete)
-    cat2_compiled = @compile cat2(x_concrete)
-    cat3_compiled = @compile cat3(x_concrete)
-
-    @test cat1(x) ≈ cat1_compiled(x_concrete)
-    @test cat2(x) ≈ cat2_compiled(x_concrete)
-    @test cat3(x) ≈ cat3_compiled(x_concrete)
 end
 
 function update_on_copy(x)
