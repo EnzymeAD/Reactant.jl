@@ -252,7 +252,7 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
-function compile_mlir!(mod, f, args; optimize=true)
+function compile_mlir!(mod, f, args; optimize::Union{Bool, Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
@@ -267,7 +267,9 @@ function compile_mlir!(mod, f, args; optimize=true)
         concrete_seen, traced_result, ("result",), TracedToConcrete
     )
 
-    if optimize
+    optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
+
+    if optimize === :all
         run_pass_pipeline!(
             mod,
             join(
@@ -285,6 +287,23 @@ function compile_mlir!(mod, f, args; optimize=true)
                 ',',
             ),
         )
+    elseif optimize === :only_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "enzyme-batch",
+                    "enzyme",
+                    "arith-raise{stablehlo=true}",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                ],
+                ',',
+            ),
+        )
+    elseif optimize !== :none
+        error("Invalid optimize option: $(Meta.quot(optimize))")
     end
 
     preserved_args = Tuple{TracedType,Int}[]
