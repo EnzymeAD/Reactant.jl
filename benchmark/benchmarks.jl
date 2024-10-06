@@ -16,8 +16,8 @@ end setup = begin
     a = Reactant.ConcreteRArray(ones(2, 10))
 end
 
-SUITE["comptime"]["basics"]["2D sum (optimize=:none)"] = @benchmarkable begin
-    @compile optimize=:none sum(a)
+SUITE["comptime"]["basics"]["2D sum (optimize=:only_enzyme)"] = @benchmarkable begin
+    @compile optimize=:only_enzyme sum(a)
 end setup = begin
     a = Reactant.ConcreteRArray(ones(2, 10))
 end
@@ -30,8 +30,8 @@ end setup = begin
     a = Reactant.ConcreteRArray(ones(2, 10))
 end
 
-SUITE["runtime"]["basics"]["cos.(x) (optimize=:none)"] = @benchmarkable begin
-    @compile optimize=:none bcast_cos(a)
+SUITE["runtime"]["basics"]["cos.(x) (optimize=:only_enzyme)"] = @benchmarkable begin
+    @compile optimize=:only_enzyme bcast_cos(a)
 end setup = begin
     a = Reactant.ConcreteRArray(ones(2, 10))
 end
