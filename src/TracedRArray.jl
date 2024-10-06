@@ -206,7 +206,7 @@ function Base.transpose(A::AnyTracedRVecOrMat)
     A = ndims(A) == 1 ? reshape(A, :, 1) : A
     return permutedims(A, (2, 1))
 end
-Base.adjoint(A::AnyTracedRVecOrMat{<:Real}) = transpose(A)
+Base.adjoint(A::AnyTracedRVecOrMat) = conj(transpose(A))
 
 function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     if isa(rhs, TracedRArray)
