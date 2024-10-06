@@ -362,9 +362,10 @@ macro compile(options, maybe_call=nothing)
     options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
 
     quote
+        options = $(esc(options))
         f = $(esc(call.args[1]))
         args = $(esc(Expr(:tuple, call.args[2:end]...)))
-        compile(f, args)
+        compile(f, args; options.optimize)
     end
 end
 
@@ -571,7 +572,7 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     return concretized_res_names, xla_call_code
 end
 
-function compile_xla(f, args; client=nothing)
+function compile_xla(f, args; client=nothing, optimize=true)
     # register MLIR dialects
     ctx = MLIR.IR.Context()
     append!(Reactant.registry[]; context=ctx)
@@ -581,7 +582,7 @@ function compile_xla(f, args; client=nothing)
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
-            mod, f, args; optimize=true
+            mod, f, args; optimize
         )
 
         if isnothing(client)
@@ -603,9 +604,9 @@ function compile_xla(f, args; client=nothing)
     end
 end
 
-function compile(f, args; client=nothing)
+function compile(f, args; client=nothing, optimize=true)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
-        f, args
+        f, args; client, optimize
     )
 
     preserved_args_idx = last.(preserved_args)
