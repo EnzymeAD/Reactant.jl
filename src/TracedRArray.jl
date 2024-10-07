@@ -211,6 +211,34 @@ function Base.conj!(A::TracedRArray{T,N}) where {T<:Complex,N}
     return A
 end
 
+Base.real(A::TracedRArray) = A
+function Base.real(A::TracedRArray{Complex{T},N}) where {T,N}
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.real(
+                A.mlir_data; result=mlir_type(TracedRArray{T,N}, size(A))
+            ),
+            1,
+        ),
+        size(A),
+    )
+end
+
+Base.imag(A::TracedRArray) = A
+function Base.imag(A::TracedRArray{Complex{T},N}) where {T,N}
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.imag(
+                A.mlir_data; result=mlir_type(TracedRArray{T,N}, size(A))
+            ),
+            1,
+        ),
+        size(A),
+    )
+end
+
 function Base.transpose(A::AnyTracedRVecOrMat)
     A = ndims(A) == 1 ? reshape(A, :, 1) : A
     return permutedims(A, (2, 1))
