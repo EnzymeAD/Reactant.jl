@@ -213,7 +213,7 @@ Base.real(x::TracedRNumber) = x
 function Base.real(x::TracedRNumber{Complex{T}}) where {T}
     return TracedRNumber{T}(
         (),
-        MLIR.Dialects.MLIR.IR.result(
+        MLIR.IR.result(
             MLIR.Dialects.stablehlo.real(x.mlir_data; result=mlir_type(TracedRNumber{T})), 1
         ),
     )
@@ -223,7 +223,7 @@ Base.imag(x::TracedRNumber) = x
 function Base.imag(x::TracedRNumber{Complex{T}}) where {T}
     return TracedRNumber{T}(
         (),
-        MLIR.Dialects.MLIR.IR.result(
+        MLIR.IR.result(
             MLIR.Dialects.stablehlo.imag(x.mlir_data; result=mlir_type(TracedRNumber{T})), 1
         ),
     )
