@@ -9,10 +9,14 @@ for file in [
     "VHLO.jl",
 ]
     run(
-        `bazel build --action_env=JULIA=$(Base.julia_cmd().exec[1]) --repo_env HERMETIC_PYTHON_VERSION="3.10" --check_visibility=false --verbose_failures //:$file`,
+        Cmd(
+            `bazel build --action_env=JULIA=$(Base.julia_cmd().exec[1]) --repo_env HERMETIC_PYTHON_VERSION="3.10" --check_visibility=false --verbose_failures //:$file`;
+            dir=@__DIR__,
+        ),
     )
     Base.Filesystem.cp(
         joinpath(@__DIR__, "bazel-bin", file),
-        joinpath(dirname(dirname(@__DIR__)), "src", "mlir", "Dialects", file),
+        joinpath(dirname(dirname(@__DIR__)), "src", "mlir", "Dialects", file);
+        force=true,
     )
 end

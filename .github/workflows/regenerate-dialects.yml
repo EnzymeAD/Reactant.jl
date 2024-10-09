@@ -16,7 +16,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - run: julia deps/ReactantExtra/make-dialects.jl
+      - run: julia make-dialects.jl
+        working-directory: ./deps/ReactantExtra
       - name: Create Pull Request
         id: cpr
         uses: peter-evans/create-pull-request@v6
