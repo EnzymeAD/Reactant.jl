@@ -1,0 +1,32 @@
+name: Regenerate MLIR Dialects
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.10'
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - run: julia deps/ReactantExtra/make-dialects.jl
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: Regenerate MLIR Dialects
+          title: 'Regenerate MLIR Dialects'
+          branch: regenerate-dialects
+          delete-branch: true
+      - name: Check outputs
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
