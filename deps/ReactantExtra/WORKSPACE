@@ -12,11 +12,16 @@ http_archive(
 ENZYMEXLA_COMMIT = "c81918c2e1625b3ed74dca4e123b2b65ab4aaf3a"
 ENZYMEXLA_SHA256 = ""
 
-http_archive(
+# http_archive(
+#     name = "enzyme_ad",
+#     sha256 = ENZYMEXLA_SHA256,
+#     strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
+#     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
+# )
+# Replace http fetch with local repo
+local_repository(
     name = "enzyme_ad",
-    sha256 = ENZYMEXLA_SHA256,
-    strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
-    urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
+    path = "../../../Enzyme-JAX",
 )
 
 load("@enzyme_ad//:workspace.bzl", "JAX_COMMIT", "JAX_SHA256", "ENZYME_COMMIT", "ENZYME_SHA256", "XLA_PATCHES")
@@ -126,11 +131,16 @@ load("@rules_python//python/pip_install:repositories.bzl", "pip_install_dependen
 
 pip_install_dependencies()
 
-http_archive(
+# http_archive(
+#     name = "enzyme",
+#     sha256 = ENZYME_SHA256,
+#     strip_prefix = "Enzyme-" + ENZYME_COMMIT + "/enzyme",
+#     urls = ["https://github.com/EnzymeAD/Enzyme/archive/{commit}.tar.gz".format(commit = ENZYME_COMMIT)],
+# )
+# Replace http fetch with local changes
+local_repository(
     name = "enzyme",
-    sha256 = ENZYME_SHA256,
-    strip_prefix = "Enzyme-" + ENZYME_COMMIT + "/enzyme",
-    urls = ["https://github.com/EnzymeAD/Enzyme/archive/{commit}.tar.gz".format(commit = ENZYME_COMMIT)],
+    path = "../../../Enzyme/enzyme/"
 )
 
 http_archive(
