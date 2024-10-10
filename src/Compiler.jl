@@ -253,7 +253,7 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
-function compile_mlir!(mod, f, args; optimize=true)
+function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
@@ -268,7 +268,9 @@ function compile_mlir!(mod, f, args; optimize=true)
         concrete_seen, traced_result, ("result",), TracedToConcrete
     )
 
-    if optimize
+    optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
+
+    if optimize === :all
         run_pass_pipeline!(
             mod,
             join(
@@ -286,6 +288,23 @@ function compile_mlir!(mod, f, args; optimize=true)
                 ',',
             ),
         )
+    elseif optimize === :only_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "enzyme-batch",
+                    "enzyme",
+                    "arith-raise{stablehlo=true}",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                ],
+                ',',
+            ),
+        )
+    elseif optimize !== :none
+        error("Invalid optimize option: $(Meta.quot(optimize))")
     end
 
     preserved_args = Tuple{TracedType,Int}[]
@@ -363,9 +382,10 @@ macro compile(options, maybe_call=nothing)
     options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
 
     quote
+        options = $(esc(options))
         f = $(esc(call.args[1]))
         args = $(esc(Expr(:tuple, call.args[2:end]...)))
-        compile(f, args)
+        compile(f, args; options.optimize)
     end
 end
 
@@ -572,7 +592,7 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     return concretized_res_names, xla_call_code
 end
 
-function compile_xla(f, args; client=nothing)
+function compile_xla(f, args; client=nothing, optimize=true)
     # register MLIR dialects
     ctx = MLIR.IR.Context()
     append!(Reactant.registry[]; context=ctx)
@@ -582,7 +602,7 @@ function compile_xla(f, args; client=nothing)
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
-            mod, f, args; optimize=true
+            mod, f, args; optimize
         )
 
         if isnothing(client)
@@ -604,9 +624,9 @@ function compile_xla(f, args; client=nothing)
     end
 end
 
-function compile(f, args; client=nothing)
+function compile(f, args; client=nothing, optimize=true)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
-        f, args
+        f, args; client, optimize
     )
 
     preserved_args_idx = last.(preserved_args)
