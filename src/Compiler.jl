@@ -149,7 +149,6 @@ const opt_passes::String = join(
                 "exp_simplify<16>",
                 "slice_simplify<16>",
                 "convert_simplify<16>",
-                "reshape_simplify<16>",
                 "dynamic_slice_to_static<16>",
                 "dynamic_update_slice_elim<16>",
                 "concat_to_broadcast<16>",
