@@ -545,7 +545,33 @@ extern "C" const char* ifrt_shape_debug_string(ifrt::Shape* shape) {
     return cstr_from_string(shape->DebugString());
 }
 
-// TODO xla::ifrt::DynamicShape
+extern "C" ifrt::DynamicShape* ifrt_dynamicshape_create(ifrt::Shape* shape, bool dynamic_dims_mask) {
+    std::vector<bool> bool_vector(dynamic_dims_mask, dynamic_dims_mask + shape->dims().size());
+    auto tag = ifrt::BoundedDynamicShapeTag(absl::Span<const bool>(bool_vector));
+    return new ifrt::DynamicShape(*shape, tag);
+}
+
+// TODO ifrt::DynamicShape::GetTag
+
+extern "C" bool ifrt_dynamicshape_eq(ifrt::DynamicShape* shape1, ifrt::DynamicShape* shape2) {
+    return *shape1 == *shape2;
+}
+
+extern "C" bool ifrt_dynamicshape_ne(ifrt::DynamicShape* shape1, ifrt::DynamicShape* shape2) {
+    return *shape1 != *shape2;
+}
+
+extern "C" ifrt::Shape* ifrt_dynamicshape_get_padded_shape(ifrt::DynamicShape* shape) {
+    return xla::ValueOrThrow(shape->GetPaddedShape()).release();
+}
+
+extern "C" bool ifrt_dynamicshape_is_dynamic_dim(ifrt::DynamicShape* shape, int dimension) {
+    return shape->IsDynamicDim(dimension);
+}
+
+extern "C" const char* ifrt_dynamicshape_debug_string(ifrt::DynamicShape* shape) {
+    return cstr_from_string(shape->DebugString());
+}
 
 /* xla::ifrt::MemoryKind */
 // extern "C" ifrt::MemoryKind* ifrt_memorykind() {
