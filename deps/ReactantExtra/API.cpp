@@ -706,6 +706,96 @@ extern "C" ifrt::Compiler* ifrt_client_default_compiler(ifrt::Client* client) {
 // TODO ifrt_client_topology_for_devices
 // TODO ifrt_client_default_layout_for_device
 
+/* xla::ifrt::Executable */
+extern "C" const char* ifrt_executable_name(ifrt::Executable* executable) {
+    return cstr_from_string(executable->name());
+}
+
+extern "C" const char* ifrt_executable_fingerprint(ifrt::Executable* executable) {
+    auto result = xla::ValueOrThrow(executable->fingerprint());
+    if (!result.has_value()) return "";
+    return cstr_from_string(result.value());
+}
+
+extern "C" const char* ifrt_executable_serialize(ifrt::Executable* executable) {
+    return cstr_from_string(xla::ValueOrThrow(executable->Serialize()));
+}
+
+extern "C" int ifrt_executable_num_devices(ifrt::Executable* executable) {
+    return executable->num_devices();
+}
+
+extern "C" int64_t ifrt_executable_size(ifrt::Executable* executable) {
+    return executable->SizeOfGeneratedCodeInBytes();
+}
+
+// TODO xla::ifrt::GetCompiledMemoryStats
+// TODO xla::ifrt::GetParameterShardings
+// TODO xla::ifrt::GetOutputShardings
+// TODO xla::ifrt::GetParameterLayouts
+// TODO xla::ifrt::GetOutputLayouts
+// TODO xla::ifrt::GetHloModules
+// TODO xla::ifrt::GetCostAnalysis
+
+extern "C" ifrt::Client* ifrt_loadedexecutable_client(ifrt::LoadedExecutable* executable) {
+    return executable->client();
+}
+
+extern "C" const char* ifrt_loadedexecutable_name(ifrt::LoadedExecutable* executable) {
+    return cstr_from_string(executable->name());
+}
+
+extern "C" const char* ifrt_loadedexecutable_fingerprint(ifrt::LoadedExecutable* executable) {
+    auto result = xla::ValueOrThrow(executable->fingerprint());
+    if (!result.has_value()) return "";
+    return cstr_from_string(result.value());
+}
+
+extern "C" const char* ifrt_loadedexecutable_serialize(ifrt::LoadedExecutable* executable) {
+    return cstr_from_string(xla::ValueOrThrow(executable->Serialize()));
+}
+
+extern "C" ifrt::Future<>* ifrt_loadedexecutable_get_ready_future(ifrt::LoadedExecutable* executable) {
+    return executable->GetReadyFuture();
+}
+
+extern "C" int ifrt_loadedexecutable_num_devices(ifrt::LoadedExecutable* executable) {
+    return executable->num_devices();
+}
+
+extern "C" int64_t ifrt_loadedexecutable_size(ifrt::LoadedExecutable* executable) {
+    return executable->SizeOfGeneratedCodeInBytes();
+}
+
+// TODO xla::ifrt::GetCompiledMemoryStats
+// TODO xla::ifrt::GetParameterShardings
+// TODO xla::ifrt::GetOutputShardings
+// TODO xla::ifrt::GetParameterLayouts
+// TODO xla::ifrt::GetOutputLayouts
+// TODO xla::ifrt::GetHloModules
+// TODO xla::ifrt::GetOutputMemoryKinds
+// TODO xla::ifrt::GetCostAnalysis
+
+// extern "C" ifrt::LoadedExecutable::ExecuteResult* ifrt_loadedexecutable_execute(ifrt::LoadedExecutable* executable, ifrt::Array** args, size_t args_size, ifrt::Array** results, size_t results_size, ifrt::Future<*>** futures, size_t futures_size) {
+//     std::vector<ifrt::Array*> arguments(args, args + args_size);
+//     std::vector<ifrt::Array*> result(results, results + results_size);
+//     std::vector<ifrt::Future<*>*> future(futures, futures + futures_size);
+//     return xla::ValueOrThrow(executable->Execute(arguments, result, future));
+// }
+
+extern "C" ifrt::Future<> ifrt_loadedexecutable_delete(ifrt::LoadedExecutable* executable) {
+    return executable->Delete();
+}
+
+extern "C" bool ifrt_loadedexecutable_is_deleted(ifrt::LoadedExecutable* executable) {
+    return executable->IsDeleted();
+}
+
+// TODO ifrt::LoadedExecutable::addressable_device_logical_ids
+// TODO ifrt::LoadedExecutable::addressable_devices
+
+// TODO auxiliary functions for ifrt::LoadedExecutable::ExecuteResult
+
 // auxiliar functions
 template<typename T>
 const char* cstr_from_string(T text) {
