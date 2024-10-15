@@ -71,6 +71,7 @@
 #include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/executable.h"
+#include "xla/python/ifrt/compiler.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -484,13 +485,13 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
 }
 
 #pragma mark xla::ifrt::DType
-extern "C" ifrt::DType* ifrt_dtype(ifrt::DType::Kind kind) {
+extern "C" ifrt::DType* ifrt_dtype_ctor(ifrt::DType::Kind kind) {
     return new ifrt::DType(kind);
 }
 
-// extern "C" void ifrt_dtype_free(ifrt::DType* dtype) {
-//     delete dtype;
-// }
+extern "C" void ifrt_dtype_free(ifrt::DType* dtype) {
+    delete dtype;
+}
 
 extern "C" ifrt::DType::Kind ifrt_dtype_kind(ifrt::DType* dtype) {
     return dtype->kind();
@@ -527,13 +528,13 @@ extern "C" const char* ifrt_dtype_debug_string(ifrt::DType* dtype) {
 }
 
 #pragma mark xla::ifrt::Shape
-extern "C" ifrt::Shape* ifrt_shape(const int64_t* dims, size_t dims_size) {
+extern "C" ifrt::Shape* ifrt_shape_ctor(const int64_t* dims, size_t dims_size) {
     return new ifrt::Shape(absl::Span<const int64_t>(dims, dims_size));
 }
 
-// extern "C" void ifrt_shape_free(ifrt::Shape* shape) {
-//     delete shape;
-// }
+extern "C" void ifrt_shape_free(ifrt::Shape* shape) {
+    delete shape;
+}
 
 extern "C" const int64_t* ifrt_shape_dims(ifrt::Shape* shape) {
     return shape->dims().data();
@@ -548,10 +549,14 @@ extern "C" const char* ifrt_shape_debug_string(ifrt::Shape* shape) {
 }
 
 #pragma mark xla::ifrt::DynamicShape
-extern "C" ifrt::DynamicShape* ifrt_dynamicshape_create(ifrt::Shape* shape, bool dynamic_dims_mask) {
+extern "C" ifrt::DynamicShape* ifrt_dynamicshape_ctor(ifrt::Shape* shape, bool dynamic_dims_mask) {
     std::vector<bool> bool_vector(dynamic_dims_mask, dynamic_dims_mask + shape->dims().size());
     auto tag = ifrt::BoundedDynamicShapeTag(absl::Span<const bool>(bool_vector));
     return new ifrt::DynamicShape(*shape, tag);
+}
+
+extern "C" void ifrt_dynamicshape_free(ifrt::DynamicShape* shape) {
+    delete shape;
 }
 
 // TODO ifrt::DynamicShape::GetTag
@@ -577,16 +582,16 @@ extern "C" const char* ifrt_dynamicshape_debug_string(ifrt::DynamicShape* shape)
 }
 
 #pragma mark xla::ifrt::Index
-extern "C" ifrt::Index* ifrt_index(const int64_t* elements, size_t elements_size) {
+extern "C" ifrt::Index* ifrt_index_ctor(const int64_t* elements, size_t elements_size) {
     return new ifrt::Index(absl::Span<const int64_t>(elements, elements_size));
-}
-
-extern "C" void ifrt_index_free(ifrt::Index* index) {
-    delete index;
 }
 
 extern "C" ifrt::Index* ifrt_index_zeros(int num_elements) {
     return new ifrt::Index(ifrt::Index::Zeros(num_elements));
+}
+
+extern "C" void ifrt_index_free(ifrt::Index* index) {
+    delete index;
 }
 
 extern "C" const int64_t* ifrt_index_elements(ifrt::Index* index) {
@@ -697,13 +702,13 @@ extern "C" const char* ifrt_indexdomain_debug_string(ifrt::IndexDomain* index_do
 // }
 
 #pragma mark xla::ifrt::Memory
-extern "C" ifrt::Memory* ifrt_memory() {
+extern "C" ifrt::Memory* ifrt_memory_ctor() {
     return new ifrt::Memory();
 }
 
-// extern "C" void ifrt_memory_free(ifrt::Memory* memory) {
-//     delete memory;
-// }
+extern "C" void ifrt_memory_free(ifrt::Memory* memory) {
+    delete memory;
+}
 
 // MemoryId is a struct with a single int32_t field --> check out xla/python/ifrt/memory.h
 extern "C" ifrt::MemoryId ifrt_memory_id(ifrt::Memory* memory) {
@@ -723,13 +728,13 @@ extern "C" const char* ifrt_memory_debug_string(ifrt::Memory* memory) {
 // TODO ifrt_memory_devices
 
 #pragma mark xla::ifrt::Device
-extern "C" ifrt::Device* ifrt_device() {
+extern "C" ifrt::Device* ifrt_device_ctor() {
     return new ifrt::Device();
 }
 
-// extern "C" void ifrt_device_free(ifrt::Device* device) {
-//     delete device;
-// }
+extern "C" void ifrt_device_free(ifrt::Device* device) {
+    delete device;
+}
 
 extern "C" ifrt::Client* ifrt_device_client(ifrt::Device* device) {
     return device->client();
@@ -790,7 +795,7 @@ extern "C" const char* ifrt_sharding_debug_string(ifrt::Sharding* sharding) {
 }
 
 #pragma mark xla::ifrt::Array
-extern "C" ifrt::Array* ifrt_array() {
+extern "C" ifrt::Array* ifrt_array_ctor() {
     return new ifrt::Array();
 }
 
