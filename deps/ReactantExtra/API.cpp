@@ -573,6 +573,113 @@ extern "C" const char* ifrt_dynamicshape_debug_string(ifrt::DynamicShape* shape)
     return cstr_from_string(shape->DebugString());
 }
 
+/* xla::ifrt::Index */
+extern "C" ifrt::Index* ifrt_index(const int64_t* elements, size_t elements_size) {
+    return new ifrt::Index(absl::Span<const int64_t>(elements, elements_size));
+}
+
+extern "C" void ifrt_index_free(ifrt::Index* index) {
+    delete index;
+}
+
+extern "C" ifrt::Index* ifrt_index_zeros(int num_elements) {
+    return new ifrt::Index(ifrt::Index::Zeros(num_elements));
+}
+
+extern "C" const int64_t* ifrt_index_elements(ifrt::Index* index) {
+    return index->elements().data();
+}
+
+extern "C" int ifrt_index_count(ifrt::Index* index) {
+    return index->elements().size();
+}
+
+extern "C" bool ifrt_index_eq(ifrt::Index* index1, ifrt::Index* index2) {
+    return *index1 == *index2;
+}
+
+extern "C" bool ifrt_index_ne(ifrt::Index* index1, ifrt::Index* index2) {
+    return *index1 != *index2;
+}
+
+extern "C" ifrt::Index* ifrt_index_add(ifrt::Index* index, ifrt::Index* offset) {
+    return new ifrt::Index(*index + *offset);
+}
+
+extern "C" ifrt::Index* ifrt_index_sub(ifrt::Index* index, ifrt::Index* offset) {
+    return new ifrt::Index(*index - *offset);
+}
+
+// WARN we're not checking if the multiplier has the same size as the index
+extern "C" ifrt::Index* ifrt_index_mul(ifrt::Index* index, const int64_t* multiplier) {
+    return new ifrt::Index(*index * absl::Span<const int64_t>(multiplier, ifrt_index_count(index)));
+}
+
+extern "C" void ifrt_index_add_inplace(ifrt::Index* index, ifrt::Index* offset) {
+    *index += *offset;
+}
+
+extern "C" void ifrt_index_sub_inplace(ifrt::Index* index, ifrt::Index* offset) {
+    *index -= *offset;
+}
+
+extern "C" void ifrt_index_mul_inplace(ifrt::Index* index, const int64_t* multiplier) {
+    *index *= absl::Span<const int64_t>(multiplier, ifrt_index_count(index));
+}
+
+extern "C" const char* ifrt_index_debug_string(ifrt::Index* index) {
+    return cstr_from_string(index->DebugString());
+}
+
+/* xla::ifrt::IndexDomain */
+extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor(ifrt::Shape* shape) {
+    return new ifrt::IndexDomain(*shape);
+}
+
+extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor_with_origin(ifrt::Index* origin, ifrt::Shape* shape) {
+    return new ifrt::IndexDomain(*origin, *shape);
+}
+
+extern "C" void ifrt_indexdomain_free(ifrt::IndexDomain* index_domain) {
+    delete index_domain;
+}
+
+extern "C" const ifrt::Index* ifrt_indexdomain_origin(ifrt::IndexDomain* index_domain) {
+    return &index_domain->origin();
+}
+
+extern "C" const ifrt::Shape* ifrt_indexdomain_shape(ifrt::IndexDomain* index_domain) {
+    return &index_domain->shape();
+}
+
+extern "C" bool ifrt_indexdomain_eq(ifrt::IndexDomain* index_domain1, ifrt::IndexDomain* index_domain2) {
+    return *index_domain1 == *index_domain2;
+}
+
+extern "C" bool ifrt_indexdomain_ne(ifrt::IndexDomain* index_domain1, ifrt::IndexDomain* index_domain2) {
+    return *index_domain1 != *index_domain2;
+}
+
+extern "C" ifrt::IndexDomain* ifrt_indexdomain_add(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
+    return new ifrt::IndexDomain(*index_domain + *offset);
+}
+
+extern "C" ifrt::IndexDomain* ifrt_indexdomain_sub(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
+    return new ifrt::IndexDomain(*index_domain - *offset);
+}
+
+extern "C" void ifrt_indexdomain_add_inplace(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
+    *index_domain += *offset;
+}
+
+extern "C" void ifrt_indexdomain_sub_inplace(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
+    *index_domain -= *offset;
+}
+
+extern "C" const char* ifrt_indexdomain_debug_string(ifrt::IndexDomain* index_domain) {
+    return cstr_from_string(index_domain->DebugString());
+}
+
 /* xla::ifrt::MemoryKind */
 // extern "C" ifrt::MemoryKind* ifrt_memorykind() {
 //     return new ifrt::MemoryKind();
