@@ -63,6 +63,8 @@
 // IFRT
 #include "xla/python/ifrt/dtype.h"
 #include "xla/python/ifrt/shape.h"
+#include "xla/python/ifrt/index.h"
+#include "xla/python/ifrt/index_domain.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/sharding.h"
@@ -481,7 +483,7 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::enzyme::registerEnzymeJaxTransformExtension(registry);
 }
 
-/* xla::ifrt::DType */
+#pragma mark xla::ifrt::DType
 extern "C" ifrt::DType* ifrt_dtype(ifrt::DType::Kind kind) {
     return new ifrt::DType(kind);
 }
@@ -524,7 +526,7 @@ extern "C" const char* ifrt_dtype_debug_string(ifrt::DType* dtype) {
     return cstr_from_string(dtype->DebugString());
 }
 
-/* xla::ifrt::Shape */
+#pragma mark xla::ifrt::Shape
 extern "C" ifrt::Shape* ifrt_shape(const int64_t* dims, size_t dims_size) {
     return new ifrt::Shape(absl::Span<const int64_t>(dims, dims_size));
 }
@@ -545,6 +547,7 @@ extern "C" const char* ifrt_shape_debug_string(ifrt::Shape* shape) {
     return cstr_from_string(shape->DebugString());
 }
 
+#pragma mark xla::ifrt::DynamicShape
 extern "C" ifrt::DynamicShape* ifrt_dynamicshape_create(ifrt::Shape* shape, bool dynamic_dims_mask) {
     std::vector<bool> bool_vector(dynamic_dims_mask, dynamic_dims_mask + shape->dims().size());
     auto tag = ifrt::BoundedDynamicShapeTag(absl::Span<const bool>(bool_vector));
@@ -573,7 +576,7 @@ extern "C" const char* ifrt_dynamicshape_debug_string(ifrt::DynamicShape* shape)
     return cstr_from_string(shape->DebugString());
 }
 
-/* xla::ifrt::Index */
+#pragma mark xla::ifrt::Index
 extern "C" ifrt::Index* ifrt_index(const int64_t* elements, size_t elements_size) {
     return new ifrt::Index(absl::Span<const int64_t>(elements, elements_size));
 }
@@ -631,7 +634,7 @@ extern "C" const char* ifrt_index_debug_string(ifrt::Index* index) {
     return cstr_from_string(index->DebugString());
 }
 
-/* xla::ifrt::IndexDomain */
+#pragma mark xla::ifrt::IndexDomain
 extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor(ifrt::Shape* shape) {
     return new ifrt::IndexDomain(*shape);
 }
@@ -680,7 +683,7 @@ extern "C" const char* ifrt_indexdomain_debug_string(ifrt::IndexDomain* index_do
     return cstr_from_string(index_domain->DebugString());
 }
 
-/* xla::ifrt::MemoryKind */
+#pragma mark xla::ifrt::MemoryKind
 // extern "C" ifrt::MemoryKind* ifrt_memorykind() {
 //     return new ifrt::MemoryKind();
 // }
@@ -693,7 +696,7 @@ extern "C" const char* ifrt_indexdomain_debug_string(ifrt::IndexDomain* index_do
 //     delete memory_kind;
 // }
 
-/* xla::ifrt::Memory */
+#pragma mark xla::ifrt::Memory
 extern "C" ifrt::Memory* ifrt_memory() {
     return new ifrt::Memory();
 }
@@ -719,7 +722,7 @@ extern "C" const char* ifrt_memory_debug_string(ifrt::Memory* memory) {
 
 // TODO ifrt_memory_devices
 
-/* xla::ifrt::Device */
+#pragma mark xla::ifrt::Device
 extern "C" ifrt::Device* ifrt_device() {
     return new ifrt::Device();
 }
@@ -765,7 +768,7 @@ extern "C" int ifrt_device_process_index(ifrt::Device* device) {
     return device->process_index();
 }
 
-/* xla::ifrt::Sharding */
+#pragma mark xla::ifrt::Sharding
 // TODO ifrt_sharding_devices
 // TODO ifrt_sharding_memory_kind
 
@@ -786,7 +789,7 @@ extern "C" const char* ifrt_sharding_debug_string(ifrt::Sharding* sharding) {
     return cstr_from_string(sharding->DebugString());
 }
 
-/* xla::ifrt::Array */
+#pragma mark xla::ifrt::Array
 extern "C" ifrt::Array* ifrt_array() {
     return new ifrt::Array();
 }
@@ -801,7 +804,7 @@ extern "C" ifrt::DType ifrt_array_dtype(ifrt::Array* array) {
 
 // ...
 
-/* xla::ifrt::Client */
+#pragma mark xla::ifrt::Client
 extern "C" int ifrt_client_device_count(ifrt::Client* client) {
     return client->device_count();
 }
@@ -822,7 +825,7 @@ extern "C" int ifrt_client_process_index(ifrt::Client* client) {
     return client->process_index();
 }
 
-// TODO Client::GetDefaultDeviceAssignment
+// TODO xla::ifrt::Client::GetDefaultDeviceAssignment
 
 extern "C" ifrt::Device* ifrt_client_lookup_device(ifrt::Client* client, int device_id, **) {
     return xla::ValueOrThrow(client->LookupDevice(ifrt::DeviceId(device_id)));
@@ -839,7 +842,7 @@ extern "C" ifrt::Compiler* ifrt_client_default_compiler(ifrt::Client* client) {
 // TODO ifrt_client_topology_for_devices
 // TODO ifrt_client_default_layout_for_device
 
-/* xla::ifrt::Executable */
+#pragma mark xla::ifrt::Executable
 extern "C" const char* ifrt_executable_name(ifrt::Executable* executable) {
     return cstr_from_string(executable->name());
 }
@@ -862,14 +865,15 @@ extern "C" int64_t ifrt_executable_size(ifrt::Executable* executable) {
     return executable->SizeOfGeneratedCodeInBytes();
 }
 
-// TODO xla::ifrt::GetCompiledMemoryStats
-// TODO xla::ifrt::GetParameterShardings
-// TODO xla::ifrt::GetOutputShardings
-// TODO xla::ifrt::GetParameterLayouts
-// TODO xla::ifrt::GetOutputLayouts
-// TODO xla::ifrt::GetHloModules
-// TODO xla::ifrt::GetCostAnalysis
+// TODO xla::ifrt::Executable::GetCompiledMemoryStats
+// TODO xla::ifrt::Executable::GetParameterShardings
+// TODO xla::ifrt::Executable::GetOutputShardings
+// TODO xla::ifrt::Executable::GetParameterLayouts
+// TODO xla::ifrt::Executable::GetOutputLayouts
+// TODO xla::ifrt::Executable::GetHloModules
+// TODO xla::ifrt::Executable::GetCostAnalysis
 
+#pragma mark xla::ifrt::LoadedExecutable
 extern "C" ifrt::Client* ifrt_loadedexecutable_client(ifrt::LoadedExecutable* executable) {
     return executable->client();
 }
@@ -924,12 +928,15 @@ extern "C" bool ifrt_loadedexecutable_is_deleted(ifrt::LoadedExecutable* executa
     return executable->IsDeleted();
 }
 
-// TODO ifrt::LoadedExecutable::addressable_device_logical_ids
-// TODO ifrt::LoadedExecutable::addressable_devices
+// TODO xla::ifrt::LoadedExecutable::addressable_device_logical_ids
+// TODO xla::ifrt::LoadedExecutable::addressable_devices
 
-// TODO auxiliary functions for ifrt::LoadedExecutable::ExecuteResult
+// TODO auxiliary functions for xla::ifrt::LoadedExecutable::ExecuteResult
+
+#pragma mark xla::ifrt::CustomCallProgram
 
 // auxiliar functions
+#pragma mark -
 template<typename T>
 const char* cstr_from_string(T text) {
     char* cstr = (char*)malloc(text.size() + 1);
