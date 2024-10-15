@@ -940,6 +940,17 @@ extern "C" bool ifrt_loadedexecutable_is_deleted(ifrt::LoadedExecutable* executa
 
 #pragma mark xla::ifrt::CustomCallProgram
 
+#pragma mark xla::ifrt::Compiler
+extern "C" ifrt::LoadedExecutable* ifrt_compiler_compile(ifrt::Compiler* compiler, ifrt::Program* program, char** error) {
+    // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and set directly to the default
+    return unwrap_absl_statusor(compiler->Compile(*program, *options, ifrt::CompileOptions()), error);
+}
+
+extern "C" ifrt::LoadedExecutable* ifrt_compiler_deserialize_loadedexecutable(ifrt::Compiler* compiler, const char* data, size_t size, char** error) {
+    // apparently ifrt::DeserializeExecutableOptions is a legacy artifact so we don't use it and set directly to the default
+    return unwrap_absl_statusor(compiler->DeserializeLoadedExecutable(data, size, ifrt::DeserializeExecutableOptions()), error);
+}
+
 // auxiliar functions
 #pragma mark -
 template<typename T>
