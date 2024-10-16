@@ -48,7 +48,6 @@
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
-#include "xla/python/ifrt/executable.h"
 #include "xla/service/cpu/simple_orc_jit.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
@@ -58,6 +57,20 @@
 #include "llvm/Support/Process.h"
 
 #include "llvm-c/TargetMachine.h"
+
+// IFRT
+#include "xla/python/ifrt/dtype.h"
+#include "xla/python/ifrt/shape.h"
+#include "xla/python/ifrt/index.h"
+#include "xla/python/ifrt/index_domain.h"
+#include "xla/python/ifrt/memory.h"
+#include "xla/python/ifrt/device.h"
+#include "xla/python/ifrt/sharding.h"
+#include "xla/python/ifrt/array.h"
+#include "xla/python/ifrt/client.h"
+#include "xla/python/ifrt/executable.h"
+#include "xla/python/ifrt/hlo/hlo_program.h"
+#include "xla/python/ifrt/compiler.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -443,4 +456,532 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::enzyme::registerGenerateApplyPatternsPass();
   mlir::enzyme::registerRemoveTransformPass();
   mlir::enzyme::registerEnzymeJaxTransformExtension(registry);
+}
+
+#pragma mark xla::ifrt::DType
+extern "C" ifrt::DType* ifrt_dtype_ctor(ifrt::DType::Kind kind) {
+    return new ifrt::DType(kind);
+}
+
+extern "C" void ifrt_dtype_free(ifrt::DType* dtype) {
+    delete dtype;
+}
+
+extern "C" ifrt::DType::Kind ifrt_dtype_kind(ifrt::DType* dtype) {
+    return dtype->kind();
+}
+
+extern "C" bool ifrt_dtype_eq(ifrt::DType* dtype1, ifrt::DType* dtype2) {
+    return *dtype1 == *dtype2;
+}
+
+extern "C" bool ifrt_dtype_ne(ifrt::DType* dtype1, ifrt::DType* dtype2) {
+    return *dtype1 != *dtype2;
+}
+
+// Returns -1 if not aligned to a byte boundary or there is no fixed size
+extern "C" int ifrt_dtype_byte_size(ifrt::DType* dtype) {
+    auto byte_size = dtype->byte_size();
+    if (byte_size.has_value()) {
+        return byte_size.value();
+    }
+    return -1;
+}
+
+// Returns -1 if there is no fixed size
+extern "C" int ifrt_dtype_bit_size(ifrt::DType* dtype) {
+    auto bit_size = dtype->bit_size();
+    if (bit_size.has_value()) {
+        return bit_size.value();
+    }
+    return -1;
+}
+
+extern "C" const char* ifrt_dtype_debug_string(ifrt::DType* dtype) {
+    return cstr_from_string(dtype->DebugString());
+}
+
+#pragma mark xla::ifrt::Shape
+extern "C" ifrt::Shape* ifrt_shape_ctor(const int64_t* dims, size_t dims_size) {
+    return new ifrt::Shape(absl::Span<const int64_t>(dims, dims_size));
+}
+
+extern "C" void ifrt_shape_free(ifrt::Shape* shape) {
+    delete shape;
+}
+
+extern "C" const int64_t* ifrt_shape_dims(ifrt::Shape* shape) {
+    return shape->dims().data();
+}
+
+extern "C" int64_t ifrt_shape_dims_num_elements(ifrt::Shape* shape) {
+    return shape->num_elements();
+}
+
+extern "C" const char* ifrt_shape_debug_string(ifrt::Shape* shape) {
+    return cstr_from_string(shape->DebugString());
+}
+
+#pragma mark xla::ifrt::DynamicShape
+extern "C" ifrt::DynamicShape* ifrt_dynamicshape_ctor(ifrt::Shape* shape, bool dynamic_dims_mask) {
+    std::vector<bool> bool_vector(dynamic_dims_mask, dynamic_dims_mask + shape->dims().size());
+    auto tag = ifrt::BoundedDynamicShapeTag(absl::Span<const bool>(bool_vector));
+    return new ifrt::DynamicShape(*shape, tag);
+}
+
+extern "C" void ifrt_dynamicshape_free(ifrt::DynamicShape* shape) {
+    delete shape;
+}
+
+// TODO ifrt::DynamicShape::GetTag
+
+extern "C" bool ifrt_dynamicshape_eq(ifrt::DynamicShape* shape1, ifrt::DynamicShape* shape2) {
+    return *shape1 == *shape2;
+}
+
+extern "C" bool ifrt_dynamicshape_ne(ifrt::DynamicShape* shape1, ifrt::DynamicShape* shape2) {
+    return *shape1 != *shape2;
+}
+
+extern "C" ifrt::Shape* ifrt_dynamicshape_get_padded_shape(ifrt::DynamicShape* shape) {
+    return xla::ValueOrThrow(shape->GetPaddedShape()).release();
+}
+
+extern "C" bool ifrt_dynamicshape_is_dynamic_dim(ifrt::DynamicShape* shape, int dimension) {
+    return shape->IsDynamicDim(dimension);
+}
+
+extern "C" const char* ifrt_dynamicshape_debug_string(ifrt::DynamicShape* shape) {
+    return cstr_from_string(shape->DebugString());
+}
+
+#pragma mark xla::ifrt::Index
+extern "C" ifrt::Index* ifrt_index_ctor(const int64_t* elements, size_t elements_size) {
+    return new ifrt::Index(absl::Span<const int64_t>(elements, elements_size));
+}
+
+extern "C" ifrt::Index* ifrt_index_zeros(int num_elements) {
+    return new ifrt::Index(ifrt::Index::Zeros(num_elements));
+}
+
+extern "C" void ifrt_index_free(ifrt::Index* index) {
+    delete index;
+}
+
+extern "C" const int64_t* ifrt_index_elements(ifrt::Index* index) {
+    return index->elements().data();
+}
+
+extern "C" int ifrt_index_count(ifrt::Index* index) {
+    return index->elements().size();
+}
+
+extern "C" bool ifrt_index_eq(ifrt::Index* index1, ifrt::Index* index2) {
+    return *index1 == *index2;
+}
+
+extern "C" bool ifrt_index_ne(ifrt::Index* index1, ifrt::Index* index2) {
+    return *index1 != *index2;
+}
+
+extern "C" ifrt::Index* ifrt_index_add(ifrt::Index* index, ifrt::Index* offset) {
+    return new ifrt::Index(*index + *offset);
+}
+
+extern "C" ifrt::Index* ifrt_index_sub(ifrt::Index* index, ifrt::Index* offset) {
+    return new ifrt::Index(*index - *offset);
+}
+
+// WARN we're not checking if the multiplier has the same size as the index
+extern "C" ifrt::Index* ifrt_index_mul(ifrt::Index* index, const int64_t* multiplier) {
+    return new ifrt::Index(*index * absl::Span<const int64_t>(multiplier, ifrt_index_count(index)));
+}
+
+extern "C" void ifrt_index_add_inplace(ifrt::Index* index, ifrt::Index* offset) {
+    *index += *offset;
+}
+
+extern "C" void ifrt_index_sub_inplace(ifrt::Index* index, ifrt::Index* offset) {
+    *index -= *offset;
+}
+
+extern "C" void ifrt_index_mul_inplace(ifrt::Index* index, const int64_t* multiplier) {
+    *index *= absl::Span<const int64_t>(multiplier, ifrt_index_count(index));
+}
+
+extern "C" const char* ifrt_index_debug_string(ifrt::Index* index) {
+    return cstr_from_string(index->DebugString());
+}
+
+#pragma mark xla::ifrt::IndexDomain
+extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor(ifrt::Shape* shape) {
+    return new ifrt::IndexDomain(*shape);
+}
+
+extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor_with_origin(ifrt::Index* origin, ifrt::Shape* shape) {
+    return new ifrt::IndexDomain(*origin, *shape);
+}
+
+extern "C" void ifrt_indexdomain_free(ifrt::IndexDomain* index_domain) {
+    delete index_domain;
+}
+
+extern "C" const ifrt::Index* ifrt_indexdomain_origin(ifrt::IndexDomain* index_domain) {
+    return &index_domain->origin();
+}
+
+extern "C" const ifrt::Shape* ifrt_indexdomain_shape(ifrt::IndexDomain* index_domain) {
+    return &index_domain->shape();
+}
+
+extern "C" bool ifrt_indexdomain_eq(ifrt::IndexDomain* index_domain1, ifrt::IndexDomain* index_domain2) {
+    return *index_domain1 == *index_domain2;
+}
+
+extern "C" bool ifrt_indexdomain_ne(ifrt::IndexDomain* index_domain1, ifrt::IndexDomain* index_domain2) {
+    return *index_domain1 != *index_domain2;
+}
+
+extern "C" ifrt::IndexDomain* ifrt_indexdomain_add(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
+    return new ifrt::IndexDomain(*index_domain + *offset);
+}
+
+extern "C" ifrt::IndexDomain* ifrt_indexdomain_sub(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
+    return new ifrt::IndexDomain(*index_domain - *offset);
+}
+
+extern "C" void ifrt_indexdomain_add_inplace(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
+    *index_domain += *offset;
+}
+
+extern "C" void ifrt_indexdomain_sub_inplace(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
+    *index_domain -= *offset;
+}
+
+extern "C" const char* ifrt_indexdomain_debug_string(ifrt::IndexDomain* index_domain) {
+    return cstr_from_string(index_domain->DebugString());
+}
+
+#pragma mark xla::ifrt::MemoryKind
+// Pass a nullptr to create a `MemoryKind` with no memory chosen.
+extern "C" ifrt::MemoryKind* ifrt_memorykind_ctor(const char* memory_kind) {
+    ifrt::MemoryKind tmp{};
+    if (memory_kind != nullptr)
+        tmp = ifrt::MemoryKind(std::string(memory_kind));
+    return new ifrt::MemoryKind(tmp);
+}
+
+extern "C" void ifrt_memorykind_free(ifrt::MemoryKind* memory_kind) {
+    delete memory_kind;
+}
+
+extern "C" bool ifrt_memorykind_eq(ifrt::MemoryKind* mk1, ifrt::MemoryKind* mk2) {
+    return *mk1 == *mk2;
+}
+
+extern "C" bool ifrt_memorykind_ne(ifrt::MemoryKind* mk1, ifrt::MemoryKind* mk2) {
+    return *mk1 != *mk2;
+}
+
+extern "C" const char* ifrt_memorykind_string(ifrt::MemoryKind* memory_kind) {
+    return cstr_from_string(memory_kind->memory_kind());
+}
+
+extern "C" const char* ifrt_memorykind_debug_string(ifrt::MemoryKind* memory_kind) {
+    return cstr_from_string(memory_kind->DebugString());
+}
+
+extern "C" ifrt::MemoryKind* ifrt_memorykind_canonicalize(ifrt::MemoryKind* memory_kind, ifrt::Device* device) {
+    return new ifrt::MemoryKind(CanonicalizeMemoryKind(*memory_kind, device));
+}
+
+#pragma mark xla::ifrt::Memory
+extern "C" ifrt::Memory* ifrt_memory_ctor() {
+    return new ifrt::Memory();
+}
+
+extern "C" void ifrt_memory_free(ifrt::Memory* memory) {
+    delete memory;
+}
+
+// MemoryId is a struct with a single int32_t field --> check out xla/python/ifrt/memory.h
+extern "C" ifrt::MemoryId ifrt_memory_id(ifrt::Memory* memory) {
+    return memory->Id();
+}
+
+extern "C" const ifrt::MemoryKind* ifrt_memory_kind(ifrt::Memory* memory) {
+    return &(memory->Kind());
+}
+
+extern "C" const char* ifrt_memory_to_string(ifrt::Memory* memory) {
+    return cstr_from_string(memory->ToString());
+}
+
+extern "C" const char* ifrt_memory_debug_string(ifrt::Memory* memory) {
+    return cstr_from_string(memory->DebugString());
+}
+
+extern "C" std::tuple<size_t, const ifrt::Device**> ifrt_memory_devices(ifrt::Memory* memory) {
+    auto devices = memory->Devices();
+    return std::make_tuple<devices.size(), devices.data()>;
+}
+
+#pragma mark xla::ifrt::Device
+extern "C" ifrt::Device* ifrt_device_ctor() {
+    return new ifrt::Device();
+}
+
+extern "C" void ifrt_device_free(ifrt::Device* device) {
+    delete device;
+}
+
+extern "C" ifrt::Client* ifrt_device_client(ifrt::Device* device) {
+    return device->client();
+}
+
+// DeviceId is a struct with a single int32_t field --> check out xla/pjrt/pjrt_common.h
+extern "C" ifrt::DeviceId ifrt_device_id(ifrt::Device* device) {
+    return device->id();
+}
+
+// TODO ifrt_device_attributes
+
+extern "C" const char* ifrt_device_kind(ifrt::Device* device) {
+    return cstr_from_string(device->kind());
+}
+
+extern "C" const char* ifrt_device_to_string(ifrt::Device* device) {
+    return cstr_from_string(device->ToString());
+}
+
+extern "C" const char* ifrt_device_from_string(ifrt::Client* client) {
+    return cstr_from_string(client->DebugString());
+}
+
+extern "C" ifrt::Memory* ifrt_device_default_memory(ifrt::Device* device, char** error) {
+    return unwrap_absl_statusor(device->DefaultMemory(), error);
+}
+
+// TODO ifrt_device_memories
+
+extern "C" bool ifrt_device_is_addressable(ifrt::Device* device) {
+    return device->IsAddressable();
+}
+
+extern "C" int ifrt_device_process_index(ifrt::Device* device) {
+    return device->process_index();
+}
+
+#pragma mark xla::ifrt::Sharding
+// TODO ifrt_sharding_devices
+// TODO ifrt_sharding_memory_kind
+
+// extern "C" void ifrt_sharding_disassemble(ifrt::Sharding* sharding, ifrt::Shape* shape, char** error) {
+//     auto status = sharding->Disassemble(*shape);
+//     if (!status.ok()) {
+//         auto str = status.message();
+//         char* err = (char*)malloc(str.size()+1);
+//         memcpy(err, str.data(), str.size()+1);
+//         *error = err;
+//     }
+// }
+
+// TODO ifrt_sharding_disassemble_dynamic_shape
+// TODO ifrt_sharding_index_domains
+
+extern "C" const char* ifrt_sharding_debug_string(ifrt::Sharding* sharding) {
+    return cstr_from_string(sharding->DebugString());
+}
+
+#pragma mark xla::ifrt::Array
+extern "C" ifrt::Array* ifrt_array_ctor() {
+    return new ifrt::Array();
+}
+
+// extern "C" void ifrt_array_free(ifrt::Array* array) {
+//     delete array;
+// }
+
+extern "C" ifrt::DType ifrt_array_dtype(ifrt::Array* array) {
+    return array->dtype();
+}
+
+// ...
+
+#pragma mark xla::ifrt::Client
+extern "C" int ifrt_client_device_count(ifrt::Client* client) {
+    return client->device_count();
+}
+
+extern "C" int ifrt_client_addressable_device_count(ifrt::Client* client) {
+    return client->addressable_device_count();
+}
+
+extern "C" ifrt::Device* ifrt_client_devices(ifrt::Client* client) {
+    return client->devices().data();
+}
+
+extern "C" ifrt::Device* ifrt_client_addressable_devices(ifrt::Client* client) {
+    return client->addressable_devices().data();
+}
+
+extern "C" int ifrt_client_process_index(ifrt::Client* client) {
+    return client->process_index();
+}
+
+// TODO xla::ifrt::Client::GetDefaultDeviceAssignment
+
+extern "C" ifrt::Device* ifrt_client_lookup_device(ifrt::Client* client, int device_id, **) {
+    return xla::ValueOrThrow(client->LookupDevice(ifrt::DeviceId(device_id)));
+}
+
+extern "C" ifrt::Device* ifrt_client_lookup_addressable_device(ifrt::Client* client, int device_id, **) {
+    return xla::ValueOrThrow(client->LookupAddressableDevice(ifrt::DeviceId(device_id)));
+}
+
+extern "C" ifrt::Compiler* ifrt_client_default_compiler(ifrt::Client* client) {
+    return client->GetDefaultCompiler();
+}
+
+// TODO ifrt_client_topology_for_devices
+// TODO ifrt_client_default_layout_for_device
+
+#pragma mark xla::ifrt::Executable
+extern "C" const char* ifrt_executable_name(ifrt::Executable* executable) {
+    return cstr_from_string(executable->name());
+}
+
+extern "C" const char* ifrt_executable_fingerprint(ifrt::Executable* executable) {
+    auto result = xla::ValueOrThrow(executable->fingerprint());
+    if (!result.has_value()) return "";
+    return cstr_from_string(result.value());
+}
+
+extern "C" const char* ifrt_executable_serialize(ifrt::Executable* executable) {
+    return cstr_from_string(xla::ValueOrThrow(executable->Serialize()));
+}
+
+extern "C" int ifrt_executable_num_devices(ifrt::Executable* executable) {
+    return executable->num_devices();
+}
+
+extern "C" int64_t ifrt_executable_size(ifrt::Executable* executable) {
+    return executable->SizeOfGeneratedCodeInBytes();
+}
+
+// TODO xla::ifrt::Executable::GetCompiledMemoryStats
+// TODO xla::ifrt::Executable::GetParameterShardings
+// TODO xla::ifrt::Executable::GetOutputShardings
+// TODO xla::ifrt::Executable::GetParameterLayouts
+// TODO xla::ifrt::Executable::GetOutputLayouts
+// TODO xla::ifrt::Executable::GetHloModules
+// TODO xla::ifrt::Executable::GetCostAnalysis
+
+#pragma mark xla::ifrt::LoadedExecutable
+extern "C" ifrt::Client* ifrt_loadedexecutable_client(ifrt::LoadedExecutable* executable) {
+    return executable->client();
+}
+
+extern "C" const char* ifrt_loadedexecutable_name(ifrt::LoadedExecutable* executable) {
+    return cstr_from_string(executable->name());
+}
+
+extern "C" const char* ifrt_loadedexecutable_fingerprint(ifrt::LoadedExecutable* executable) {
+    auto result = xla::ValueOrThrow(executable->fingerprint());
+    if (!result.has_value()) return "";
+    return cstr_from_string(result.value());
+}
+
+extern "C" const char* ifrt_loadedexecutable_serialize(ifrt::LoadedExecutable* executable) {
+    return cstr_from_string(xla::ValueOrThrow(executable->Serialize()));
+}
+
+extern "C" ifrt::Future<>* ifrt_loadedexecutable_get_ready_future(ifrt::LoadedExecutable* executable) {
+    return executable->GetReadyFuture();
+}
+
+extern "C" int ifrt_loadedexecutable_num_devices(ifrt::LoadedExecutable* executable) {
+    return executable->num_devices();
+}
+
+extern "C" int64_t ifrt_loadedexecutable_size(ifrt::LoadedExecutable* executable) {
+    return executable->SizeOfGeneratedCodeInBytes();
+}
+
+// TODO xla::ifrt::GetCompiledMemoryStats
+// TODO xla::ifrt::GetParameterShardings
+// TODO xla::ifrt::GetOutputShardings
+// TODO xla::ifrt::GetParameterLayouts
+// TODO xla::ifrt::GetOutputLayouts
+// TODO xla::ifrt::GetHloModules
+// TODO xla::ifrt::GetOutputMemoryKinds
+// TODO xla::ifrt::GetCostAnalysis
+
+// extern "C" ifrt::LoadedExecutable::ExecuteResult* ifrt_loadedexecutable_execute(ifrt::LoadedExecutable* executable, ifrt::Array** args, size_t args_size, ifrt::Array** results, size_t results_size, ifrt::Future<*>** futures, size_t futures_size) {
+//     std::vector<ifrt::Array*> arguments(args, args + args_size);
+//     std::vector<ifrt::Array*> result(results, results + results_size);
+//     std::vector<ifrt::Future<*>*> future(futures, futures + futures_size);
+//     return xla::ValueOrThrow(executable->Execute(arguments, result, future));
+// }
+
+extern "C" ifrt::Future<> ifrt_loadedexecutable_delete(ifrt::LoadedExecutable* executable) {
+    return executable->Delete();
+}
+
+extern "C" bool ifrt_loadedexecutable_is_deleted(ifrt::LoadedExecutable* executable) {
+    return executable->IsDeleted();
+}
+
+// TODO xla::ifrt::LoadedExecutable::addressable_device_logical_ids
+// TODO xla::ifrt::LoadedExecutable::addressable_devices
+
+// TODO auxiliary functions for xla::ifrt::LoadedExecutable::ExecuteResult
+
+#pragma mark xla::ifrt::CustomCallProgram
+
+#pragma mark xla::ifrt::HloProgram
+extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor() {
+    return new ifrt::HloProgram();
+}
+
+extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_module(mlir::ModuleOp* module) {
+    return new ifrt::HloProgram(module);
+}
+
+extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_context_and_module(mlir::MLIRContext* context, mlir::ModuleOp* module) {
+    return new ifrt::HloProgram(context, module);
+}
+
+#pragma mark xla::ifrt::Compiler
+extern "C" ifrt::LoadedExecutable* ifrt_compiler_compile(ifrt::Compiler* compiler, ifrt::Program* program, char** error) {
+    // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and set directly to the default
+    return unwrap_absl_statusor(compiler->Compile(*program, *options, ifrt::CompileOptions()), error);
+}
+
+extern "C" ifrt::LoadedExecutable* ifrt_compiler_deserialize_loadedexecutable(ifrt::Compiler* compiler, const char* data, size_t size, char** error) {
+    // apparently ifrt::DeserializeExecutableOptions is a legacy artifact so we don't use it and set directly to the default
+    return unwrap_absl_statusor(compiler->DeserializeLoadedExecutable(data, size, ifrt::DeserializeExecutableOptions()), error);
+}
+
+// auxiliar functions
+#pragma mark -
+template<typename T>
+const char* cstr_from_string(T text) {
+    char* cstr = (char*)malloc(text.size() + 1);
+    memcpy(cstr, text.data(), text.size());
+    cstr[text.size()] = '\0';
+    return cstr;
+}
+
+template<typename T>
+T* unwrap_absl_statusor(absl::StatusOr<T> status, char** error_msg) {
+    *error_msg = nullptr;
+    if (!status.ok()) {
+        auto str = pluginLoad.status().message();
+        char* err = (char*)malloc(str.size()+1);
+        memcpy(err, str.data(), str.size()+1);
+        *error_msg = err;
+        return nullptr;
+    }
+    return status.value();
 }

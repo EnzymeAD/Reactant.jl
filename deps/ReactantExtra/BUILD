@@ -301,6 +301,7 @@ cc_library(
 "-Wl,-exported_symbol,_XLAExecute",
 "-Wl,-exported_symbol,_RegisterDialects",
 "-Wl,-exported_symbol,_InitializeRegistryAndPasses",
+"-Wl,-exported_symbol,_ifrt_*",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
