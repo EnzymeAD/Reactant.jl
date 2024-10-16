@@ -302,6 +302,39 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                 ',',
             ),
         )
+    elseif optimize === :after_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "enzyme-batch",
+                    "enzyme",
+                    "arith-raise{stablehlo=true}",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :before_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes,
+                    "enzyme",
+                    "arith-raise{stablehlo=true}",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                ],
+                ',',
+            ),
+        )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
     end
