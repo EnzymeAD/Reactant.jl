@@ -71,6 +71,7 @@
 #include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/executable.h"
+#include "xla/python/ifrt/hlo/hlo_program.h"
 #include "xla/python/ifrt/compiler.h"
 
 using namespace mlir;
@@ -735,7 +736,9 @@ extern "C" ifrt::MemoryId ifrt_memory_id(ifrt::Memory* memory) {
     return memory->Id();
 }
 
-// TODO ifrt_memory_kind
+extern "C" const ifrt::MemoryKind* ifrt_memory_kind(ifrt::Memory* memory) {
+    return &(memory->Kind());
+}
 
 extern "C" const char* ifrt_memory_to_string(ifrt::Memory* memory) {
     return cstr_from_string(memory->ToString());
@@ -745,7 +748,10 @@ extern "C" const char* ifrt_memory_debug_string(ifrt::Memory* memory) {
     return cstr_from_string(memory->DebugString());
 }
 
-// TODO ifrt_memory_devices
+extern "C" std::tuple<size_t, const ifrt::Device**> ifrt_memory_devices(ifrt::Memory* memory) {
+    auto devices = memory->Devices();
+    return std::make_tuple<devices.size(), devices.data()>;
+}
 
 #pragma mark xla::ifrt::Device
 extern "C" ifrt::Device* ifrt_device_ctor() {
@@ -959,6 +965,19 @@ extern "C" bool ifrt_loadedexecutable_is_deleted(ifrt::LoadedExecutable* executa
 // TODO auxiliary functions for xla::ifrt::LoadedExecutable::ExecuteResult
 
 #pragma mark xla::ifrt::CustomCallProgram
+
+#pragma mark xla::ifrt::HloProgram
+extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor() {
+    return new ifrt::HloProgram();
+}
+
+extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_module(mlir::ModuleOp* module) {
+    return new ifrt::HloProgram(module);
+}
+
+extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_context_and_module(mlir::MLIRContext* context, mlir::ModuleOp* module) {
+    return new ifrt::HloProgram(context, module);
+}
 
 #pragma mark xla::ifrt::Compiler
 extern "C" ifrt::LoadedExecutable* ifrt_compiler_compile(ifrt::Compiler* compiler, ifrt::Program* program, char** error) {
