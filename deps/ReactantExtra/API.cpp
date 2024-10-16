@@ -485,7 +485,9 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::enzyme::registerEnzymeJaxTransformExtension(registry);
 }
 
-#pragma mark xla::ifrt::DType
+#pragma region xla::ifrt
+
+#pragma region xla::ifrt::DType
 extern "C" ifrt::DType* ifrt_dtype_ctor(ifrt::DType::Kind kind) {
     return new ifrt::DType(kind);
 }
@@ -527,8 +529,9 @@ extern "C" int ifrt_dtype_bit_size(ifrt::DType* dtype) {
 extern "C" const char* ifrt_dtype_debug_string(ifrt::DType* dtype) {
     return cstr_from_string(dtype->DebugString());
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::Shape
+#pragma region xla::ifrt::Shape
 extern "C" ifrt::Shape* ifrt_shape_ctor(const int64_t* dims, size_t dims_size) {
     return new ifrt::Shape(absl::Span<const int64_t>(dims, dims_size));
 }
@@ -548,8 +551,9 @@ extern "C" int64_t ifrt_shape_dims_num_elements(ifrt::Shape* shape) {
 extern "C" const char* ifrt_shape_debug_string(ifrt::Shape* shape) {
     return cstr_from_string(shape->DebugString());
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::DynamicShape
+#pragma region xla::ifrt::DynamicShape
 extern "C" ifrt::DynamicShape* ifrt_dynamicshape_ctor(ifrt::Shape* shape, bool dynamic_dims_mask) {
     std::vector<bool> bool_vector(dynamic_dims_mask, dynamic_dims_mask + shape->dims().size());
     auto tag = ifrt::BoundedDynamicShapeTag(absl::Span<const bool>(bool_vector));
@@ -581,8 +585,9 @@ extern "C" bool ifrt_dynamicshape_is_dynamic_dim(ifrt::DynamicShape* shape, int 
 extern "C" const char* ifrt_dynamicshape_debug_string(ifrt::DynamicShape* shape) {
     return cstr_from_string(shape->DebugString());
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::Index
+#pragma region xla::ifrt::Index
 extern "C" ifrt::Index* ifrt_index_ctor(const int64_t* elements, size_t elements_size) {
     return new ifrt::Index(absl::Span<const int64_t>(elements, elements_size));
 }
@@ -639,8 +644,9 @@ extern "C" void ifrt_index_mul_inplace(ifrt::Index* index, const int64_t* multip
 extern "C" const char* ifrt_index_debug_string(ifrt::Index* index) {
     return cstr_from_string(index->DebugString());
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::IndexDomain
+#pragma region xla::ifrt::IndexDomain
 extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor(ifrt::Shape* shape) {
     return new ifrt::IndexDomain(*shape);
 }
@@ -688,8 +694,9 @@ extern "C" void ifrt_indexdomain_sub_inplace(ifrt::IndexDomain* index_domain, if
 extern "C" const char* ifrt_indexdomain_debug_string(ifrt::IndexDomain* index_domain) {
     return cstr_from_string(index_domain->DebugString());
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::MemoryKind
+#pragma region xla::ifrt::MemoryKind
 // Pass a nullptr to create a `MemoryKind` with no memory chosen.
 extern "C" ifrt::MemoryKind* ifrt_memorykind_ctor(const char* memory_kind) {
     ifrt::MemoryKind tmp{};
@@ -721,8 +728,9 @@ extern "C" const char* ifrt_memorykind_debug_string(ifrt::MemoryKind* memory_kin
 extern "C" ifrt::MemoryKind* ifrt_memorykind_canonicalize(ifrt::MemoryKind* memory_kind, ifrt::Device* device) {
     return new ifrt::MemoryKind(CanonicalizeMemoryKind(*memory_kind, device));
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::Memory
+#pragma region xla::ifrt::Memory
 extern "C" ifrt::Memory* ifrt_memory_ctor() {
     return new ifrt::Memory();
 }
@@ -752,8 +760,9 @@ extern "C" std::tuple<size_t, const ifrt::Device**> ifrt_memory_devices(ifrt::Me
     auto devices = memory->Devices();
     return std::make_tuple<devices.size(), devices.data()>;
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::Device
+#pragma region xla::ifrt::Device
 extern "C" ifrt::Device* ifrt_device_ctor() {
     return new ifrt::Device();
 }
@@ -798,8 +807,9 @@ extern "C" bool ifrt_device_is_addressable(ifrt::Device* device) {
 extern "C" int ifrt_device_process_index(ifrt::Device* device) {
     return device->process_index();
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::Sharding
+#pragma region xla::ifrt::Sharding
 // TODO ifrt_sharding_devices
 // TODO ifrt_sharding_memory_kind
 
@@ -819,8 +829,9 @@ extern "C" int ifrt_device_process_index(ifrt::Device* device) {
 extern "C" const char* ifrt_sharding_debug_string(ifrt::Sharding* sharding) {
     return cstr_from_string(sharding->DebugString());
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::Array
+#pragma region xla::ifrt::Array
 extern "C" ifrt::Array* ifrt_array_ctor() {
     return new ifrt::Array();
 }
@@ -834,8 +845,9 @@ extern "C" ifrt::DType ifrt_array_dtype(ifrt::Array* array) {
 }
 
 // ...
+#pragma endregion
 
-#pragma mark xla::ifrt::Client
+#pragma region xla::ifrt::Client
 extern "C" int ifrt_client_device_count(ifrt::Client* client) {
     return client->device_count();
 }
@@ -872,8 +884,9 @@ extern "C" ifrt::Compiler* ifrt_client_default_compiler(ifrt::Client* client) {
 
 // TODO ifrt_client_topology_for_devices
 // TODO ifrt_client_default_layout_for_device
+#pragma endregion
 
-#pragma mark xla::ifrt::Executable
+#pragma region xla::ifrt::Executable
 extern "C" const char* ifrt_executable_name(ifrt::Executable* executable) {
     return cstr_from_string(executable->name());
 }
@@ -903,8 +916,9 @@ extern "C" int64_t ifrt_executable_size(ifrt::Executable* executable) {
 // TODO xla::ifrt::Executable::GetOutputLayouts
 // TODO xla::ifrt::Executable::GetHloModules
 // TODO xla::ifrt::Executable::GetCostAnalysis
+#pragma endregion
 
-#pragma mark xla::ifrt::LoadedExecutable
+#pragma region xla::ifrt::LoadedExecutable
 extern "C" ifrt::Client* ifrt_loadedexecutable_client(ifrt::LoadedExecutable* executable) {
     return executable->client();
 }
@@ -963,10 +977,12 @@ extern "C" bool ifrt_loadedexecutable_is_deleted(ifrt::LoadedExecutable* executa
 // TODO xla::ifrt::LoadedExecutable::addressable_devices
 
 // TODO auxiliary functions for xla::ifrt::LoadedExecutable::ExecuteResult
+#pragma endregion
 
-#pragma mark xla::ifrt::CustomCallProgram
+#pragma region xla::ifrt::CustomCallProgram
+#pragma endregion
 
-#pragma mark xla::ifrt::HloProgram
+#pragma region xla::ifrt::HloProgram
 extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor() {
     return new ifrt::HloProgram();
 }
@@ -978,8 +994,9 @@ extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_module(mlir::ModuleOp* mo
 extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_context_and_module(mlir::MLIRContext* context, mlir::ModuleOp* module) {
     return new ifrt::HloProgram(context, module);
 }
+#pragma endregion
 
-#pragma mark xla::ifrt::Compiler
+#pragma region xla::ifrt::Compiler
 extern "C" ifrt::LoadedExecutable* ifrt_compiler_compile(ifrt::Compiler* compiler, ifrt::Program* program, char** error) {
     // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and set directly to the default
     return unwrap_absl_statusor(compiler->Compile(*program, *options, ifrt::CompileOptions()), error);
@@ -989,9 +1006,12 @@ extern "C" ifrt::LoadedExecutable* ifrt_compiler_deserialize_loadedexecutable(if
     // apparently ifrt::DeserializeExecutableOptions is a legacy artifact so we don't use it and set directly to the default
     return unwrap_absl_statusor(compiler->DeserializeLoadedExecutable(data, size, ifrt::DeserializeExecutableOptions()), error);
 }
+#pragma endregion
+
+#pragma endregion
 
 // auxiliar functions
-#pragma mark -
+#pragma region utils
 template<typename T>
 const char* cstr_from_string(T text) {
     char* cstr = (char*)malloc(text.size() + 1);
@@ -1012,3 +1032,4 @@ T* unwrap_absl_statusor(absl::StatusOr<T> status, char** error_msg) {
     }
     return status.value();
 }
+#pragma endregion
