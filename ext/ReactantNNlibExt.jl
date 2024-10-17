@@ -77,7 +77,7 @@ function NNlib.conv(
         d = dilation[i]
         s = stride[i]
 
-        (size(x, i) + pl + pr - d * (K - 1) - 1) ÷ s + 1
+        return (size(x, i) + pl + pr - d * (K - 1) - 1) ÷ s + 1
     end
     output_batch_dim = input_batch_dim
     output_feature_dim = input_feature_dim
@@ -150,7 +150,7 @@ function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
         d = dilation[i]
         s = stride[i]
 
-        (size(x, i) + pl + pr - d * (K - 1) - 1) ÷ s + 1
+        return (size(x, i) + pl + pr - d * (K - 1) - 1) ÷ s + 1
     end
 
     padding = Reactant.MLIR.IR.DenseElementsAttribute(
@@ -172,7 +172,9 @@ function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
                     Reactant.MLIR.IR.argument(block, 2);
                     result=nothing,
                 )
-                Reactant.MLIR.Dialects.stablehlo.return_([Reactant.MLIR.IR.result(red)])
+                return Reactant.MLIR.Dialects.stablehlo.return_([
+                    Reactant.MLIR.IR.result(red)
+                ])
             end
             push!(body, block)
 

@@ -361,7 +361,7 @@ macro compile(options, maybe_call=nothing)
 
     options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
 
-    quote
+    return quote
         f = $(esc(call.args[1]))
         args = $(esc(Expr(:tuple, call.args[2:end]...)))
         compile(f, args)
@@ -549,7 +549,7 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
 
     concretized_res_names = Symbol[Symbol(:concrete_res_, i) for i in 1:nresults]
     concretized_res_code = map(enumerate(concretized_res_names)) do (i, varname)
-        :($varname = linearized_results[$i])
+        return :($varname = linearized_results[$i])
     end
 
     xla_call_code = if nresults == 0
@@ -610,7 +610,7 @@ function compile(f, args; client=nothing)
 
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = map(1:length(linear_args)) do i
-        UInt8(i ∉ preserved_args_idx)
+        return UInt8(i ∉ preserved_args_idx)
     end
 
     fnwrap = isclosure ? f : nothing

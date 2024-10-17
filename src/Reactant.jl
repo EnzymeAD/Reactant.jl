@@ -52,7 +52,7 @@ function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
 end
 
 function Enzyme.make_zero(
-    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
+    ::Type{RT}, seen::IdDict, prev::RT; (::Val{copy_if_inactive})=Val(false)
 )::RT where {copy_if_inactive,RT<:RArray}
     if haskey(seen, prev)
         return seen[prev]

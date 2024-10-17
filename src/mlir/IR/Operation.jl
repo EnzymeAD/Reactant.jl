@@ -65,8 +65,9 @@ block(operation::Operation) = Block(API.mlirOperationGetBlock(operation), false)
 
 Gets the operation that owns this operation, returning null if the operation is not owned.
 """
-parent_op(operation::Operation) =
-    Operation(API.mlirOperationGetParentOperation(operation), false)
+function parent_op(operation::Operation)
+    return Operation(API.mlirOperationGetParentOperation(operation), false)
+end
 
 """
     rmfromparent(op)
@@ -207,8 +208,9 @@ end
 
 Removes an attribute by name. Returns false if the attribute was not found and true if removed.
 """
-rmattr!(operation::Operation, name) =
-    API.mlirOperationRemoveAttributeByName(operation, name)
+function rmattr!(operation::Operation, name)
+    return API.mlirOperationRemoveAttributeByName(operation, name)
+end
 
 function lose_ownership!(operation::Operation)
     @assert operation.owned
@@ -267,8 +269,9 @@ end
 Returns whether the given fully-qualified operation (i.e. 'dialect.operation') is registered with the context.
 This will return true if the dialect is loaded and the operation is registered within the dialect.
 """
-is_registered(opname; context::Context=context()) =
-    API.mlirContextIsRegisteredOperation(context, opname)
+function is_registered(opname; context::Context=context())
+    return API.mlirContextIsRegisteredOperation(context, opname)
+end
 
 function create_operation(
     name,

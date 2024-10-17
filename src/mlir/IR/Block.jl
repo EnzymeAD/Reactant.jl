@@ -82,8 +82,9 @@ end
 
 Appends an argument of the specified type to the block. Returns the newly added argument.
 """
-push_argument!(block::Block, type; location::Location=Location()) =
-    Value(API.mlirBlockAddArgument(block, type, location))
+function push_argument!(block::Block, type; location::Location=Location())
+    return Value(API.mlirBlockAddArgument(block, type, location))
+end
 
 """
     first_op(block)
