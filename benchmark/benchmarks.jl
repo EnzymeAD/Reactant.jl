@@ -10,8 +10,8 @@ SUITE["comptime"] = BenchmarkGroup()
 
 SUITE["comptime"]["basics"] = BenchmarkGroup()
 
-SUITE["runtime"]["lux neural networks"] = BenchmarkGroup()
-SUITE["comptime"]["lux neural networks"] = BenchmarkGroup()
+SUITE["runtime"]["NN"] = BenchmarkGroup()
+SUITE["comptime"]["NN"] = BenchmarkGroup()
 
 bcast_cos(x) = cos.(x)
 
@@ -37,7 +37,7 @@ for opt_pass in [:all, :only_enzyme, :before_enzyme, :after_enzyme]
     end
 
     for depth in [11, 13, 16, 19], batchnorm in [false, true]
-        SUITE["comptime"]["lux neural networks"]["vgg$(depth) bn=$(batchnorm) (optimize=$(opt_pass))"] = @benchmarkable begin
+        SUITE["comptime"]["NN"]["vgg$(depth) bn=$(batchnorm) (optimize=$(opt_pass))"] = @benchmarkable begin
             @compile optimize = $(opt_pass) vgg(x, ps_concrete, st_concrete)
         end setup = begin
             vgg = Vision.VGG($depth; pretrained=false, batchnorm=$(batchnorm))
@@ -47,7 +47,7 @@ for opt_pass in [:all, :only_enzyme, :before_enzyme, :after_enzyme]
             x = Reactant.to_rarray(rand(Float32, 224, 224, 3, 16))
         end
 
-        SUITE["runtime"]["lux neural networks"]["vgg$(depth) bn=$(batchnorm) (optimize=$(opt_pass))"] = @benchmarkable begin
+        SUITE["runtime"]["NN"]["vgg$(depth) bn=$(batchnorm) (optimize=$(opt_pass))"] = @benchmarkable begin
             vgg_compiled(x, ps_concrete, st_concrete)
         end setup = begin
             vgg = Vision.VGG($depth; pretrained=false, batchnorm=$(batchnorm))
@@ -60,7 +60,7 @@ for opt_pass in [:all, :only_enzyme, :before_enzyme, :after_enzyme]
     end
 
     for version in (:tiny, :base)
-        SUITE["comptime"]["lux neural networks"]["ViT $(version) (optimize=$(opt_pass))"] = @benchmarkable begin
+        SUITE["comptime"]["NN"]["ViT $(version) (optimize=$(opt_pass))"] = @benchmarkable begin
             @compile optimize = $(opt_pass) vit(x, ps_concrete, st_concrete)
         end setup = begin
             vit = Vision.ViT($(Meta.quot(version)))
@@ -70,7 +70,7 @@ for opt_pass in [:all, :only_enzyme, :before_enzyme, :after_enzyme]
             x = Reactant.to_rarray(rand(Float32, 256, 256, 3, 16))
         end
 
-        SUITE["runtime"]["lux neural networks"]["ViT $(version) (optimize=$(opt_pass))"] = @benchmarkable begin
+        SUITE["runtime"]["NN"]["ViT $(version) (optimize=$(opt_pass))"] = @benchmarkable begin
             vit_compiled(x, ps_concrete, st_concrete)
         end setup = begin
             vit = Vision.ViT($(Meta.quot(version)))
@@ -81,7 +81,9 @@ for opt_pass in [:all, :only_enzyme, :before_enzyme, :after_enzyme]
             vit_compiled = @compile optimize = $(opt_pass) vit(x, ps_concrete, st_concrete)
         end
     end
+end
 
+for opt_pass in [:all]# :only_enzyme, :before_enzyme, :after_enzyme]
     SUITE["comptime"]["basics"]["∇cos (optimize=$(opt_pass))"] = @benchmarkable begin
         @compile optimize = $(opt_pass) grad_ip(a)
     end setup = begin
