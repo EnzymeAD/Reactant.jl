@@ -102,16 +102,20 @@ const enzyme_dupnoneed = 3
 const enzyme_outnoneed = 4
 const enzyme_constnoneed = 5
 
-@inline act_from_type(x, reverse, needs_primal=true) =
-    throw(AssertionError("Unhandled activity $(typeof(x))"))
-@inline act_from_type(::Enzyme.Const, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Const, reverse, needs_primal)
-@inline act_from_type(::Enzyme.Duplicated, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Duplicated, reverse, needs_primal)
+@inline act_from_type(x, reverse, needs_primal=true) = throw(
+    AssertionError("Unhandled activity $(typeof(x))")
+)
+@inline act_from_type(::Enzyme.Const, reverse, needs_primal=true) = act_from_type(
+    Enzyme.Const, reverse, needs_primal
+)
+@inline act_from_type(::Enzyme.Duplicated, reverse, needs_primal=true) = act_from_type(
+    Enzyme.Duplicated, reverse, needs_primal
+)
 @inline act_from_type(::Enzyme.DuplicatedNoNeed, reverse, needs_primal=true) =
     reverse ? enzyme_out : enzyme_dupnoneed
-@inline act_from_type(::Enzyme.Active, reverse, needs_primal=true) =
-    act_from_tuple(Enzyme.Active, reverse, needs_primal)
+@inline act_from_type(::Enzyme.Active, reverse, needs_primal=true) = act_from_tuple(
+    Enzyme.Active, reverse, needs_primal
+)
 @inline act_from_type(::Type{<:Enzyme.Const}, reverse, needs_primal) =
     if needs_primal
         enzyme_const
@@ -389,7 +393,7 @@ end
                     false,
                     transpose_val(MLIR.IR.result(res, residx));
                     emptypaths=true,
-                ) #=reverse=#
+                )#=reverse=#
                 residx += 1
                 continue
             end

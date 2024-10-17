@@ -30,8 +30,9 @@ PassManager(; context::Context=context()) = PassManager(API.mlirPassManagerCreat
 
 Create a new top-level PassManager anchored on `anchorOp`.
 """
-PassManager(anchor_op::Operation; context::Context=context()) =
-    PassManager(API.mlirPassManagerCreateOnOperation(context, anchor_op))
+function PassManager(anchor_op::Operation; context::Context=context())
+    return PassManager(API.mlirPassManagerCreateOnOperation(context, anchor_op))
+end
 
 Base.convert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass.pass
 
@@ -87,8 +88,9 @@ end
 
 Cast a top-level `PassManager` to a generic `OpPassManager`.
 """
-OpPassManager(pm::PassManager) =
-    OpPassManager(API.mlirPassManagerGetAsOpPassManager(pm), pm)
+function OpPassManager(pm::PassManager)
+    return OpPassManager(API.mlirPassManagerGetAsOpPassManager(pm), pm)
+end
 
 """
     OpPassManager(passManager, operationName)
@@ -96,16 +98,18 @@ OpPassManager(pm::PassManager) =
 Nest an `OpPassManager` under the top-level PassManager, the nested passmanager will only run on operations matching the provided name.
 The returned `OpPassManager` will be destroyed when the parent is destroyed. To further nest more `OpPassManager` under the newly returned one, see `mlirOpPassManagerNest` below.
 """
-OpPassManager(pm::PassManager, opname) =
-    OpPassManager(API.mlirPassManagerGetNestedUnder(pm, opname), pm)
+function OpPassManager(pm::PassManager, opname)
+    return OpPassManager(API.mlirPassManagerGetNestedUnder(pm, opname), pm)
+end
 
 """
     OpPassManager(opPassManager, operationName)
 
 Nest an `OpPassManager` under the provided `OpPassManager`, the nested passmanager will only run on operations matching the provided name. The returned `OpPassManager` will be destroyed when the parent is destroyed.
 """
-OpPassManager(opm::OpPassManager, opname) =
-    OpPassManager(API.mlirOpPassManagerGetNestedUnder(opm, opname), opm.pass)
+function OpPassManager(opm::OpPassManager, opname)
+    return OpPassManager(API.mlirOpPassManagerGetNestedUnder(opm, opname), opm.pass)
+end
 
 Base.convert(::Core.Type{API.MlirOpPassManager}, op_pass::OpPassManager) = op_pass.op_pass
 

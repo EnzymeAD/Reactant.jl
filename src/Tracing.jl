@@ -43,7 +43,7 @@ function traced_type(::Type{T}, seen, mode) where {T<:Function}
     traced_fieldtypes = ntuple(Val(N)) do i
         next = traced_type(fieldtype(T, i), seen, mode)
         changed |= next != fieldtype(T, i)
-        next
+        return next
     end
 
     if !changed
@@ -172,8 +172,9 @@ end
 
 function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode}
     if mode == ConcreteToTraced
-        @inline base_typet(TV::TT) where {TT<:UnionAll} =
-            UnionAll(TV.var, base_typet(TV.body))
+        @inline base_typet(TV::TT) where {TT<:UnionAll} = UnionAll(
+            TV.var, base_typet(TV.body)
+        )
         @inline base_typet(TV::TT) where {TT<:DataType} = TracedRArray{TV.parameters...}
         return base_typet(T)
     elseif mode == TracedToConcrete
@@ -187,8 +188,9 @@ function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedType,m
     if mode == ConcreteToTraced
         throw("TracedRArray $T cannot be traced")
     elseif mode == TracedToConcrete
-        @inline base_typec(TV::TT) where {TT<:UnionAll} =
-            UnionAll(TV.var, base_typec(TV.body))
+        @inline base_typec(TV::TT) where {TT<:UnionAll} = UnionAll(
+            TV.var, base_typec(TV.body)
+        )
         @inline base_typec(TV::TT) where {TT<:DataType} = ConcreteRArray{TV.parameters...}
         return base_typec(T)
     elseif mode == TracedTrack || mode == TracedSetPath

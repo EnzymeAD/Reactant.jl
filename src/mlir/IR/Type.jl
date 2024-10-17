@@ -14,8 +14,9 @@ Base.convert(::Core.Type{API.MlirType}, type::Type) = type.type
 
 Parses a type. The type is owned by the context.
 """
-Base.parse(::Core.Type{Type}, s; context::Context=context()) =
-    Type(API.mlirTypeParseGet(context, s))
+function Base.parse(::Core.Type{Type}, s; context::Context=context())
+    return Type(API.mlirTypeParseGet(context, s))
+end
 
 """
     ==(t1, t2)
@@ -73,8 +74,9 @@ isindex(type::Type) = API.mlirTypeIsAIndex(type)
 
 Creates a 1-bit signless integer type in the context. The type is owned by the context.
 """
-Type(::Core.Type{Bool}; context::Context=context()) =
-    Type(API.mlirIntegerTypeGet(context, 1))
+function Type(::Core.Type{Bool}; context::Context=context())
+    return Type(API.mlirIntegerTypeGet(context, 1))
+end
 
 # Integer types
 """
@@ -82,24 +84,27 @@ Type(::Core.Type{Bool}; context::Context=context()) =
 
 Creates a signless integer type of the given bitwidth in the context. The type is owned by the context.
 """
-Type(T::Core.Type{<:Integer}; context::Context=context()) =
-    Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+function Type(T::Core.Type{<:Integer}; context::Context=context())
+    return Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+end
 
 """
     Type(T::Core.Type{<:Signed}; context=context()
 
 Creates a signed integer type of the given bitwidth in the context. The type is owned by the context.
 """
-Type(T::Core.Type{<:Signed}; context::Context=context()) =
-    Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+function Type(T::Core.Type{<:Signed}; context::Context=context())
+    return Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+end
 
 """
     Type(T::Core.Type{<:Unsigned}; context=context()
 
 Creates an unsigned integer type of the given bitwidth in the context. The type is owned by the context.
 """
-Type(T::Core.Type{<:Unsigned}; context::Context=context()) =
-    Type(API.mlirIntegerTypeUnsignedGet(context, sizeof(T) * 8))
+function Type(T::Core.Type{<:Unsigned}; context::Context=context())
+    return Type(API.mlirIntegerTypeUnsignedGet(context, sizeof(T) * 8))
+end
 
 """
     isinteger(type)
@@ -559,8 +564,9 @@ end
 
 Creates a tuple type that consists of the given list of elemental types. The type is owned by the context.
 """
-Type(elements::Vector{Type}; context::Context=context()) =
-    Type(API.mlirTupleTypeGet(context, length(elements), pointer(elements)))
+function Type(elements::Vector{Type}; context::Context=context())
+    return Type(API.mlirTupleTypeGet(context, length(elements), pointer(elements)))
+end
 function Type(@nospecialize(elements::NTuple{N,Type}); context::Context=context()) where {N}
     return Type(collect(elements); context)
 end
@@ -647,8 +653,9 @@ end
 
 Creates an opaque type in the given context associated with the dialect identified by its namespace. The type contains opaque byte data of the specified length (data need not be null-terminated).
 """
-OpaqueType(namespace, data; context::Context=context()) =
-    Type(API.mlirOpaqueTypeGet(context, namespace, data))
+function OpaqueType(namespace, data; context::Context=context())
+    return Type(API.mlirOpaqueTypeGet(context, namespace, data))
+end
 
 """
     isopaque(type)

@@ -111,7 +111,7 @@ run(
 
 # Discover built libraries
 built_libs = filter(readdir(joinpath(source_dir, "bazel-bin"))) do file
-    endswith(file, "Extra.$(Libdl.dlext)") && startswith(file, "lib")
+    return endswith(file, "Extra.$(Libdl.dlext)") && startswith(file, "lib")
 end
 
 lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))

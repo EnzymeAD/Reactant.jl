@@ -28,7 +28,7 @@ for depth in [11, 13, 16, 19], batchnorm in [false]#  true] <-- not working yet
     SUITE["comptime"]["lux neural networks"]["vgg$(depth) bn=$(batchnorm)"] = @benchmarkable begin
         @compile vgg(x, ps_concrete, st_concrete)
     end setup = begin
-        vgg = Vision.VGG($depth; pretrained=false, batchnorm=$(batchnorm))
+        vgg = Vision.VGG($depth; pretrained=false, batchnorm=($(batchnorm)))
         ps, st = Lux.setup(Random.default_rng(), vgg)
         ps_concrete = Reactant.to_rarray(ps)
         st_concrete = Reactant.to_rarray(Lux.testmode(st))
@@ -38,7 +38,7 @@ for depth in [11, 13, 16, 19], batchnorm in [false]#  true] <-- not working yet
     SUITE["runtime"]["lux neural networks"]["vgg$(depth) bn=$(batchnorm) (compiled)"] = @benchmarkable begin
         vgg_compiled(x, ps_concrete, st_concrete)
     end setup = begin
-        vgg = Vision.VGG($depth; pretrained=false, batchnorm=$(batchnorm))
+        vgg = Vision.VGG($depth; pretrained=false, batchnorm=($(batchnorm)))
         ps, st = Lux.setup(Random.default_rng(), vgg)
         ps_concrete = Reactant.to_rarray(ps)
         st_concrete = Reactant.to_rarray(Lux.testmode(st))

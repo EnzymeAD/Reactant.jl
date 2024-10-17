@@ -102,7 +102,7 @@ function Base.setindex!(
     a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int},N}
 ) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
-        i isa Int ? (i:i) : (i isa Colon ? (1:size(a, idx)) : i)
+        return i isa Int ? (i:i) : (i isa Colon ? (1:size(a, idx)) : i)
     end
     v = broadcast_to_size(v, length.(indices))
     v = promote_to(TracedRArray{T,N}, v)
@@ -144,7 +144,7 @@ function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,
     res1 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.transpose(
             get_mlir_data(A);
-            permutation=MLIR.IR.DenseArrayAttribute([Int64(N - 1 - i) for i in 0:(N - 1)]),
+            permutation=MLIR.IR.DenseArrayAttribute([Int64(N - 1 - i) for i in 0:(N-1)]),
         ),
         1,
     )
@@ -161,9 +161,7 @@ function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,
     res3 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.transpose(
             res2;
-            permutation=MLIR.IR.DenseArrayAttribute([
-                Int64(NT - 1 - i) for i in 0:(NT - 1)
-            ]),
+            permutation=MLIR.IR.DenseArrayAttribute([Int64(NT - 1 - i) for i in 0:(NT-1)]),
         ),
         1,
     )
@@ -352,9 +350,9 @@ end
 function Enzyme.Compiler.active_reg_inner(
     ::Type{TracedRArray{T,N}},
     seen::ST,
-    world::Union{Nothing,UInt},
-    ::Val{justActive}=Val(false),
-    ::Val{UnionSret}=Val(false),
+    world::Union{Nothing,UInt};
+    (::Val{justActive})=Val(false),
+    (::Val{UnionSret})=Val(false),
 )::Enzyme.Compiler.ActivityState where {ST,T,N,justActive,UnionSret}
     if Enzyme.Compiler.active_reg_inner(T, seen, world, Val(justActive), Val(UnionSret)) ==
         Enzyme.Compiler.AnyState
@@ -386,7 +384,7 @@ function Base.mapreduce(
     inp = [broadcast(f, A).mlir_data]
 
     rdims = if dims == (:)
-        Int64[i for i in 0:(N - 1)]
+        Int64[i for i in 0:(N-1)]
     else
         Int64[i - 1 for i in dims]
     end
@@ -580,7 +578,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
 end
 
 function broadcast_to_size_internal(x::TracedRArray, rsize)
-    dims = collect(Int64, 0:(length(size(x)) - 1))
+    dims = collect(Int64, 0:(length(size(x))-1))
 
     if length(size(MLIR.IR.type(x.mlir_data))) != length(dims)
         @show x
