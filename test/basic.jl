@@ -430,3 +430,11 @@ sum_xxᵀ(x) = sum(x .* x')
         @test sum_xxᵀ_compiled(x_ca) ≈ sum_xxᵀ(x)
     end
 end
+
+@testset "similar" begin
+    x = zeros(2, 3)
+    y = Reactant.to_rarray(x)
+    f = @compile similar(y)
+    @test size(f(y)) == size(x)
+    @test eltype(f(y)) == eltype(x)
+end
