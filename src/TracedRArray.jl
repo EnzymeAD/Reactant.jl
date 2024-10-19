@@ -121,6 +121,7 @@ Base.size(x::TracedRArray) = x.shape
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
+# TODO is there a way to create an unitialized `tensor`? does it show an advantage? maybe `broadcast_in_dim`?
 function Base.similar(x::TracedRArray{T,N}, ::Type{T2}) where {T,N,T2}
     attr = MLIR.IR.Attribute(zeros(T2, size(x)))
     res = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
