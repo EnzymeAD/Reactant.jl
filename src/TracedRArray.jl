@@ -123,10 +123,7 @@ Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data,
 
 function Base.similar(x::TracedRArray{T,N}, ::Type{T2}) where {T,N,T2}
     attr = MLIR.IR.Attribute(zeros(T2, size(x)))
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.constant(; value=attr),
-        1
-    )
+    res = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
     return TracedRArray{T2,N}((), res, size(x))
 end
 
