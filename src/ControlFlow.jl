@@ -2,6 +2,8 @@ module ControlFlow
 
 using ..MLIR: MLIR
 
+using MacroTools: MacroTools
+
 macro trace(expr)
     if expr.head == :if
         return esc(trace_if(__module__, expr))
@@ -32,21 +34,35 @@ function trace_if(mod, expr)
     all_output_vars = true_branch_bound_vars ∪ false_branch_bound_vars
 
     true_branch_fn = quote
-        $(true_branch_fn_name) = let $(map(makelet, all_input_vars)...)
+        $(true_branch_fn_name) =
             ($(all_input_vars...),) -> begin
+                $(Expr(:meta, :inline))
                 $(expr.args[2])
                 return ($(all_output_vars...),)
             end
+    end
+
+    true_branch_fn = MacroTools.prewalk(true_branch_fn) do x
+        if x isa Symbol && x ∈ all_output_vars
+            return Symbol(:true_branch₋, x)
         end
+        return x
     end
 
     false_branch_fn = quote
-        $(false_branch_fn_name) = let $(map(makelet, all_input_vars)...)
+        $(false_branch_fn_name) =
             ($(all_input_vars...),) -> begin
+                $(Expr(:meta, :inline))
                 $(expr.args[3])
                 return ($(all_output_vars...),)
             end
+    end
+
+    false_branch_fn = MacroTools.prewalk(false_branch_fn) do x
+        if x isa Symbol && x ∈ all_output_vars
+            return Symbol(:false_branch₋, x)
         end
+        return x
     end
 
     rewritten_expr = quote
