@@ -56,14 +56,14 @@ function trace_if(mod, expr)
             $(expr.args[1]),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
-            ($(all_input_vars...),)
+            ($(all_input_vars...),),
         )
     end
 
     return rewritten_expr
 end
 
-makelet(x) = :($(x)=$(x))
+makelet(x) = :($(x) = $(x))
 
 # Generate this dummy function and later we remove it during tracing
 function custom_if_condition(cond, true_fn::TFn, false_fn::FFn, args) where {TFn,FFn}
