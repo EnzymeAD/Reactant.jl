@@ -23,13 +23,13 @@ jobs:
           Pkg.add("JuliaFormatter")
       - run: julia make-dialects.jl
         working-directory: ./deps/ReactantExtra
-      - name: Set owner of working dir recurively
-        run: sudo chown -R $(whoami) ./deps/ReactantExtra
+      # - name: Set owner of working dir recurively
+      #   run: sudo chown -R $(whoami) ./deps/ReactantExtra
       - name: Format code
         shell: julia --color=yes {0}
         run: |
           using JuliaFormatter
-          format(".")
+          format("./src/Dialects/")
       - name: Create Pull Request
         id: cpr
         uses: peter-evans/create-pull-request@v6
