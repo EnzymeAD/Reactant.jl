@@ -73,14 +73,21 @@
 #include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/topology.h"
 #include "xla/python/ifrt/client.h"
+#include "xla/python/ifrt/host_callback.h"
 #include "xla/python/ifrt/executable.h"
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "xla/python/ifrt/compiler.h"
 
 // IFRT - PJRT
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"
+#include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 #include "xla/python/pjrt_ifrt/pjrt_memory.h"
+#include "xla/python/pjrt_ifrt/pjrt_device.h"
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
+#include "xla/python/pjrt_ifrt/pjrt_client.h"
+#include "xla/python/pjrt_ifrt/pjrt_host_callback.h"
+#include "xla/python/pjrt_ifrt/pjrt_executable.h"
+#include "xla/python/pjrt_ifrt/pjrt_compiler.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -1067,6 +1074,36 @@ extern "C" ifrt::PjRtCompatibleDevice* ifrt_pjrt_client_lookup_pjrt_device(ifrt:
 
 extern "C" ifrt::PjRtCompatibleMemory* ifrt_pjrt_client_lookup_pjrt_memory(ifrt::PjRtClient* client, xla::PjRtMemorySpace* pjrt_memory_space) {
     return xla::ValueOrThrow(client->LookupPjRtMemory(pjrt_memory_space));
+}
+#pragma endregion
+
+#pragma region xla::ifrt::HostCallback
+extern "C" ifrt::HostCallback* ifrt_hostcallback_serialize(ifrt::HostCallback* host_callback) {
+    return cstr_from_string(host_callback->Serialize());
+}
+#pragma endregion
+
+#pragma region xla::ifrt::LoadedHostCallback
+extern "C" ifrt::Client* ifrt_loadedhostcallback_client(ifrt::LoadedHostCallback* host_callback) {
+    return host_callback->client();
+}
+
+extern "C" const char* ifrt_loadedhostcallback_serialize(ifrt::LoadedHostCallback* host_callback) {
+    return cstr_from_string(host_callback->Serialize());
+}
+#pragma endregion
+
+#pragma region xla::ifrt::PjRtHostSendAndRecvLoadHostCallback
+extern "C" ifrt::PjRtHostSendAndRecvLoadHostCallback* ifrt_pjrt_hostsendandrecv_loadhostcallback_ctor(ifrt::PjRtClient* client, xla::HostCallback* host_callback) {
+    return new xla::ValueOrThrow(ifrt::PjRtHostSendAndRecvLoadHostCallback(client, host_callback));
+}
+
+extern "C" void ifrt_pjrt_hostsendandrecv_loadhostcallback_free(ifrt::PjRtHostSendAndRecvLoadHostCallback* host_callback) {
+    delete host_callback;
+}
+
+extern "C" xla::HostCallback* ifrt_pjrt_hostsendandrecv_loadhostcallback_host_callback(ifrt::PjRtHostSendAndRecvLoadHostCallback* host_callback) {
+    return host_callback->host_callback();
 }
 #pragma endregion
 
