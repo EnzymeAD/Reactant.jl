@@ -173,7 +173,15 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
 
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
-    return false,
-    func2, traced_result, result, seen_args, ret, linear_args, in_tys,
-    linear_results
+    return (
+        false,
+        func2,
+        traced_result,
+        result,
+        seen_args,
+        ret,
+        linear_args,
+        in_tys,
+        linear_results,
+    )
 end
