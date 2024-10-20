@@ -42,15 +42,17 @@ end
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
 @testset "Reactant.jl Tests" begin
-    @safetestset "Layout" include("layout.jl")
-    @safetestset "Tracing" include("tracing.jl")
-    @safetestset "Basic" include("basic.jl")
-    @safetestset "Broadcast" include("bcast.jl")
-    @safetestset "Struct" include("struct.jl")
-    @safetestset "Closure" include("closure.jl")
-    @safetestset "Compile" include("compile.jl")
-    @safetestset "Buffer Donation" include("buffer_donation.jl")
-    @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
+    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
+        @safetestset "Layout" include("layout.jl")
+        @safetestset "Tracing" include("tracing.jl")
+        @safetestset "Basic" include("basic.jl")
+        @safetestset "Broadcast" include("bcast.jl")
+        @safetestset "Struct" include("struct.jl")
+        @safetestset "Closure" include("closure.jl")
+        @safetestset "Compile" include("compile.jl")
+        @safetestset "Buffer Donation" include("buffer_donation.jl")
+        @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
+    end
 
    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
         @testset "Neural Networks" begin
