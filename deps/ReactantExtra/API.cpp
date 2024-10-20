@@ -900,6 +900,22 @@ extern "C" int ifrt_device_process_index(ifrt::Device* device) {
 }
 #pragma endregion
 
+#pragma region xla::ifrt::PjRtDevice
+// DeviceId is a struct with a single int32_t field --> check out xla/pjrt/pjrt_common.h
+// TODO support `attributes` parameter
+extern "C" ifrt::PjRtDevice* ifrt_pjrt_device_ctor(ifrt::PjRtClient* client, DeviceId device_id, const char* kind, const char* to_string, const char* debug_string, int process_index, xla::PjRtDevice* pjrt_device) {
+    return new ifrt::PjRtDevice(client, device_id, kind, to_string, debug_string, process_index, absl::flat_hash_map<std::string, PjRtDeviceAttribute>(), pjrt_device);
+}
+
+extern "C" void ifrt_pjrt_device_free(ifrt::PjRtDevice* device) {
+    delete device;
+}
+
+extern "C" xla::PjRtDevice* ifrt_pjrt_device_pjrt_device(ifrt::PjRtDevice* device) {
+    return device->pjrt_device();
+}
+#pragma endregion
+
 #pragma region xla::ifrt::Sharding
 // TODO ifrt_sharding_devices
 // TODO ifrt_sharding_memory_kind
@@ -936,6 +952,15 @@ extern "C" ifrt::DType ifrt_array_dtype(ifrt::Array* array) {
 }
 
 // ...
+#pragma endregion
+
+#pragma region xla::ifrt::PjRtArray
+// TODO constructors / `Create`
+
+extern "C" std::tuple<size_t, ifrt::PjRtBuffer*> ifrt_pjrt_array_pjrt_buffers(ifrt::PjRtArray* array) {
+    auto buffers = array->pjrt_buffers();
+    return std::make_tuple(buffers.size(), buffers.data());
+}
 #pragma endregion
 
 #pragma region xla::ifrt::Topology
@@ -1014,6 +1039,35 @@ extern "C" ifrt::Compiler* ifrt_client_default_compiler(ifrt::Client* client) {
 
 // TODO ifrt_client_topology_for_devices
 // TODO ifrt_client_default_layout_for_device
+#pragma endregion
+
+#pragma region xla::ifrt::PjRtClient
+// TODO support more parameters of `PjRtClient::CreateOptions`
+extern "C" ifrt::PjRtClient* ifrt_pjrt_client_ctor(xla::PjRtClient* pjrt_client) {
+    return new xla::ValueOrThrow(ifrt::PjRtClient(ifrt::PjRtClient::CreateOptions{pjrt_client}));
+}
+
+extern "C" void ifrt_pjrt_client_free(ifrt::PjRtClient* client) {
+    delete client;
+}
+
+extern "C" xla::PjRtClient* ifrt_pjrt_client_pjrt_client(ifrt::PjRtClient* client) {
+    return client->pjrt_client();
+}
+
+extern "C" ifrt::PjRtCompatibleArray* ifrt_pjrt_client_create_pjrt_array(ifrt::PjRtClient* client, ifrt::PjRtBuffer* pjrt_buffer) {
+    return new xla::ValueOrThrow(client->Create(pjrt_buffer));
+}
+
+// TODO extern "C" ifrt::PjRtCompatibleArray* ifrt_pjrt_client_create_pjrt_array_from_buffers(ifrt::Shape* shape, ifrt::PjRtBuffer** pjrt_buffers, int num_buffers) {}
+
+extern "C" ifrt::PjRtCompatibleDevice* ifrt_pjrt_client_lookup_pjrt_device(ifrt::PjRtClient* client, xla::PjRtDevice* pjrt_device) {
+    return xla::ValueOrThrow(client->LookupPjRtDevice(pjrt_device));
+}
+
+extern "C" ifrt::PjRtCompatibleMemory* ifrt_pjrt_client_lookup_pjrt_memory(ifrt::PjRtClient* client, xla::PjRtMemorySpace* pjrt_memory_space) {
+    return xla::ValueOrThrow(client->LookupPjRtMemory(pjrt_memory_space));
+}
 #pragma endregion
 
 #pragma region xla::ifrt::Executable
@@ -1213,6 +1267,16 @@ extern "C" ifrt::LoadedExecutable* ifrt_compiler_compile(ifrt::Compiler* compile
 extern "C" ifrt::LoadedExecutable* ifrt_compiler_deserialize_loadedexecutable(ifrt::Compiler* compiler, const char* data, size_t size, char** error) {
     // apparently ifrt::DeserializeExecutableOptions is a legacy artifact so we don't use it and set directly to the default
     return unwrap_absl_statusor(compiler->DeserializeLoadedExecutable(data, size, ifrt::DeserializeExecutableOptions()), error);
+}
+#pragma endregion
+
+#pragma region xla::ifrt::PjRtCompiler
+extern "C" ifrt::PjRtCompiler* ifrt_pjrt_compiler_ctor(ifrt::PjRtClient* client) {
+    return new ifrt::PjRtCompiler(client);
+}
+
+extern "C" void ifrt_pjrt_compiler_free(ifrt::PjRtCompiler* compiler) {
+    delete compiler;
 }
 #pragma endregion
 
