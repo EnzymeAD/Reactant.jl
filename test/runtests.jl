@@ -52,10 +52,12 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
     @safetestset "Buffer Donation" include("buffer_donation.jl")
     @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
 
-    @testset "Neural Networks" begin
-        @safetestset "NNlib Primitives" include("nn/nnlib.jl")
-        @safetestset "Flux.jl Integration" include("nn/flux.jl")
-        @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
-        @safetestset "Lux Integration" include("nn/lux.jl")
+   if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
+        @testset "Neural Networks" begin
+            @safetestset "NNlib Primitives" include("nn/nnlib.jl")
+            @safetestset "Flux.jl Integration" include("nn/flux.jl")
+            @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
+            @safetestset "Lux Integration" include("nn/lux.jl")
+        end
     end
 end
