@@ -61,6 +61,8 @@
 #include "llvm-c/TargetMachine.h"
 
 // IFRT
+#include "xla/python/ifrt/value.h"
+#include "xla/python/ifrt/tuple.h"
 #include "xla/python/ifrt/dtype.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/index.h"
@@ -74,6 +76,11 @@
 #include "xla/python/ifrt/executable.h"
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "xla/python/ifrt/compiler.h"
+
+// IFRT - PJRT
+#include "xla/python/pjrt_ifrt/pjrt_dtype.h"
+#include "xla/python/pjrt_ifrt/pjrt_memory.h"
+#include "xla/python/pjrt_ifrt/pjrt_topology.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -488,6 +495,52 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
 
 #pragma region xla::ifrt
 
+#pragma region xla::ifrt::Value
+extern "C" ifrt::Value* ifrt_value_ctor() {
+    return new ifrt::Value();
+}
+
+extern "C" void ifrt_value_free(ifrt::Value* value) {
+    delete value;
+}
+
+extern "C" ifrt::Client* ifrt_value_client(ifrt::Value* value) {
+    return value->client();
+}
+
+extern "C" ifrt::Future<> ifrt_value_get_ready_future(ifrt::Value* value) {
+    return value->GetReadyFuture();
+}
+
+extern "C" ifrt::Future<> ifrt_value_delete(ifrt::Value* value) {
+    return value->Delete();
+}
+
+extern "C" bool ifrt_value_is_deleted(ifrt::Value* value) {
+    return value->IsDeleted();
+}
+
+extern "C" const char* ifrt_value_debug_string(ifrt::Value* value) {
+    return cstr_from_string(value->DebugString());
+}
+#pragma endregion
+
+#pragma region xla::ifrt::Tuple
+extern "C" ifrt::Tuple* ifrt_tuple_ctor() {
+    return new ifrt::Tuple();
+}
+
+extern "C" void ifrt_tuple_free(ifrt::Tuple* tuple) {
+    delete tuple;
+}
+
+extern "C" int ifrt_tuple_arity(ifrt::Tuple* tuple) {
+    return tuple->Arity();
+}
+
+// TODO ifrt::Tuple::Unpack
+#pragma endregion
+
 #pragma region xla::ifrt::DType
 extern "C" ifrt::DType* ifrt_dtype_ctor(ifrt::DType::Kind kind) {
     return new ifrt::DType(kind);
@@ -529,6 +582,16 @@ extern "C" int ifrt_dtype_bit_size(ifrt::DType* dtype) {
 
 extern "C" const char* ifrt_dtype_debug_string(ifrt::DType* dtype) {
     return cstr_from_string(dtype->DebugString());
+}
+
+// xla::PrimitiveType is a enum, so we use int to represent it on Julia side
+extern "C" xla::PrimitiveType ifrt_to_primitive_type(ifrt::DType* dtype) {
+    return xla::ValueOrThrow(ifrt::ToPrimitiveType(*dtype));
+}
+
+// xla::PrimitiveType is a enum, so we use int to represent it on Julia side
+extern "C" ifrt::DType* ifrt_to_dtype(xla::PrimitiveType primitive_type) {
+    return new xla::ValueOrThrow(ifrt::ToDType(primitive_type));
 }
 #pragma endregion
 
@@ -700,10 +763,9 @@ extern "C" const char* ifrt_indexdomain_debug_string(ifrt::IndexDomain* index_do
 #pragma region xla::ifrt::MemoryKind
 // Pass a nullptr to create a `MemoryKind` with no memory chosen.
 extern "C" ifrt::MemoryKind* ifrt_memorykind_ctor(const char* memory_kind) {
-    ifrt::MemoryKind tmp{};
-    if (memory_kind != nullptr)
-        tmp = ifrt::MemoryKind(std::string(memory_kind));
-    return new ifrt::MemoryKind(tmp);
+    if (memory_kind == nullptr)
+        return new ifrt::MemoryKind();
+    return new ifrt::MemoryKind(std::string(memory_kind));
 }
 
 extern "C" void ifrt_memorykind_free(ifrt::MemoryKind* memory_kind) {
@@ -760,6 +822,24 @@ extern "C" const char* ifrt_memory_debug_string(ifrt::Memory* memory) {
 extern "C" std::tuple<size_t, const ifrt::Device**> ifrt_memory_devices(ifrt::Memory* memory) {
     auto devices = memory->Devices();
     return std::make_tuple<devices.size(), devices.data()>;
+}
+#pragma endregion
+
+#pragma region xla::ifrt::PjRtMemory
+extern "C" ifrt::PjRtMemory* ifrt_pjrt_memory_ctor(ifrt::PjRtClient* client, xla::PjRtMemorySpace* memory_space) {
+    return new ifrt::PjRtMemory(client, memory_space);
+}
+
+extern "C" void ifrt_pjrt_memory_free(ifrt::PjRtMemory* memory) {
+    delete memory;
+}
+
+extern "C" ifrt::PjRtClient* ifrt_pjrt_memory_client(ifrt::PjRtMemory* memory) {
+    return memory->client();
+}
+
+extern "C" xla::PjRtMemorySpace* ifrt_pjrt_memory_space(ifrt::PjRtMemory* memory) {
+    return memory->memory_space();
 }
 #pragma endregion
 
@@ -875,6 +955,16 @@ extern "C" const char* ifrt_topology_serialize(ifrt::Topology* topology) {
 
 // TODO xla::ifrt::Topology::Attributes
 
+#pragma endregion
+
+#pragma region xla::ifrt::PjRtTopology
+extern "C" ifrt::PjRtTopology* ifrt_pjrt_topology_ctor(const xla::PjRtTopologyDescription* description) {
+    return new ifrt::PjRtTopology(description);
+}
+
+extern "C" const xla::PjRtTopologyDescription* ifrt_pjrt_topology_description(ifrt::PjRtTopology* topology) {
+    return topology->description();
+}
 #pragma endregion
 
 #pragma region xla::ifrt::Client
@@ -1027,8 +1117,8 @@ extern "C" std::tuple<size_t, ifrt::HloModule*> ifrt_loadedexecutable_hlo_module
     return std::make_tuple(modules.size(), modules.data());
 }
 
-// TODO xla::ifrt::GetOutputMemoryKinds
-// TODO xla::ifrt::GetCostAnalysis
+// TODO xla::ifrt::LoadedExecutable::GetOutputMemoryKinds
+// TODO xla::ifrt::LoadedExecutable::GetCostAnalysis
 
 // extern "C" ifrt::LoadedExecutable::ExecuteResult* ifrt_loadedexecutable_execute(ifrt::LoadedExecutable* executable, ifrt::Array** args, size_t args_size, ifrt::Array** results, size_t results_size, ifrt::Future<*>** futures, size_t futures_size) {
 //     std::vector<ifrt::Array*> arguments(args, args + args_size);
