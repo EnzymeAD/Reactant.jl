@@ -23,8 +23,8 @@ jobs:
           Pkg.add("JuliaFormatter")
       - run: julia make-dialects.jl
         working-directory: ./deps/ReactantExtra
-      # - name: Set owner of working dir recurively
-      #   run: sudo chown -R $(whoami) ./deps/ReactantExtra
+      - name: Set owner of working dir recurively
+        run: sudo chown -R $(whoami) ./src/mlir/Dialects/
       - name: Format code
         shell: julia --color=yes {0}
         run: |
