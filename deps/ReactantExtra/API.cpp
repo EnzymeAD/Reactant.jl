@@ -541,6 +541,16 @@ extern "C" int ifrt_tuple_arity(ifrt::Tuple* tuple) {
 // TODO ifrt::Tuple::Unpack
 #pragma endregion
 
+#pragma region xla::ifrt::PjRtTuple
+extern "C" ifrt::PjRtTuple* ifrt_pjrt_tuple_ctor(ifrt::PjRtCompatibleClient* client, ifrt::Value* values, int nvalues) {
+    return new ifrt::PjRtTuple(client, values);
+}
+
+extern "C" void ifrt_pjrt_tuple_free(ifrt::PjRtTuple* tuple) {
+    delete tuple;
+}
+#pragma endregion
+
 #pragma region xla::ifrt::DType
 extern "C" ifrt::DType* ifrt_dtype_ctor(ifrt::DType::Kind kind) {
     return new ifrt::DType(kind);
@@ -1059,6 +1069,20 @@ extern "C" std::tuple<size_t, ifrt::HloModule*> ifrt_executable_hlo_modules(ifrt
 // TODO xla::ifrt::Executable::GetCostAnalysis
 #pragma endregion
 
+#pragma region xla::ifrt::PjRtExecutable
+extern "C" ifrt::PjRtExecutable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable* pjrt_executable, ifrt::XlaCompileOptions* compile_options) {
+    return new xla::ValueOrThrow(ifrt::PjRtExecutable(pjrt_executable, compile_options));
+}
+
+extern "C" void ifrt_pjrt_executable_free(ifrt::PjRtExecutable* executable) {
+    delete executable;
+}
+
+extern "C" xla::PjRtExecutable* ifrt_pjrt_executable_pjrt_executable(ifrt::PjRtExecutable* executable) {
+    return executable->pjrt_executable();
+}
+#pragma endregion
+
 #pragma region xla::ifrt::LoadedExecutable
 extern "C" ifrt::Client* ifrt_loadedexecutable_client(ifrt::LoadedExecutable* executable) {
     return executable->client();
@@ -1141,6 +1165,26 @@ extern "C" std::tuple<size_t, ifrt::Device*> ifrt_loadedexecutable_addressable_d
 }
 
 // TODO auxiliary functions for xla::ifrt::LoadedExecutable::ExecuteResult
+#pragma endregion
+
+#pragma region xla::ifrt::PjRtLoadedExecutable
+// TODO add support for LoadedHostCallback
+extern "C" ifrt::PjRtLoadedExecutable* ifrt_pjrt_loadedexecutable_ctor(ifrt::PjRtCompatibleClient* client, xla::PjRtLoadedExecutable* pjrt_loaded_executable) {
+    return new xla::ValueOrThrow(ifrt::PjRtLoadedExecutable(client, pjrt_loaded_executable, std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>()));
+}
+
+// TODO add support for LoadedHostCallback
+extern "C" ifrt::PjRtLoadedExecutable* ifrt_pjrt_loadedexecutable_ctor_from_mlir_module(ifrt::PjRtCompatibleClient* client, mlir::ModuleOp* module, xla::CompileOptions* compile_options) {
+    return new xla::ValueOrThrow(ifrt::PjRtLoadedExecutable(client, *module, *compile_options, std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>()));
+}
+
+extern "C" void ifrt_pjrt_loadedexecutable_free(ifrt::PjRtLoadedExecutable* executable) {
+    delete executable;
+}
+
+extern "C" xla::PjRtLoadedExecutable* ifrt_pjrt_loadedexecutable_pjrt_loadedexecutable(ifrt::PjRtLoadedExecutable* executable) {
+    return executable->pjrt_loadedexecutable();
+}
 #pragma endregion
 
 #pragma region xla::ifrt::CustomCallProgram
