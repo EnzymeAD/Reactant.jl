@@ -54,7 +54,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
     end
 
-   if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
+    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
         @testset "Neural Networks" begin
             @safetestset "NNlib Primitives" include("nn/nnlib.jl")
             @safetestset "Flux.jl Integration" include("nn/flux.jl")
