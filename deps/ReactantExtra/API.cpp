@@ -69,6 +69,7 @@
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/sharding.h"
 #include "xla/python/ifrt/array.h"
+#include "xla/python/ifrt/topology.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/executable.h"
 #include "xla/python/ifrt/hlo/hlo_program.h"
@@ -847,6 +848,35 @@ extern "C" ifrt::DType ifrt_array_dtype(ifrt::Array* array) {
 // ...
 #pragma endregion
 
+#pragma region xla::ifrt::Topology
+extern "C" const char* ifrt_topology_platform_name(ifrt::Topology* topology) {
+    return cstr_from_string(topology->platform_name());
+}
+
+extern "C" const char* ifrt_topology_platform_version(ifrt::Topology* topology) {
+    return cstr_from_string(topology->platform_version());
+}
+
+// returns PjRtPlatformId which is a type alias for uint64_t
+extern "C" uint64_t ifrt_topology_platform_id(ifrt::Topology* topology) {
+    return topology->platform_id();
+}
+
+extern "C" std::tuple<size_t, const xla::PjRtDeviceDescription*> ifrt_topology_device_descriptions(ifrt::Topology* topology) {
+    auto descriptions = topology->device_descriptions();
+    return std::make_tuple(descriptions.size(), descriptions.data());
+}
+
+// TODO xla::ifrt::Topology::GetDefaultLayout
+
+extern "C" const char* ifrt_topology_serialize(ifrt::Topology* topology) {
+    return cstr_from_string(xla::ValueOrThrow(topology->Serialize()));
+}
+
+// TODO xla::ifrt::Topology::Attributes
+
+#pragma endregion
+
 #pragma region xla::ifrt::Client
 extern "C" int ifrt_client_device_count(ifrt::Client* client) {
     return client->device_count();
@@ -910,11 +940,32 @@ extern "C" int64_t ifrt_executable_size(ifrt::Executable* executable) {
 }
 
 // TODO xla::ifrt::Executable::GetCompiledMemoryStats
-// TODO xla::ifrt::Executable::GetParameterShardings
-// TODO xla::ifrt::Executable::GetOutputShardings
-// TODO xla::ifrt::Executable::GetParameterLayouts
-// TODO xla::ifrt::Executable::GetOutputLayouts
-// TODO xla::ifrt::Executable::GetHloModules
+
+extern "C" std::tuple<size_t, ifrt::OpSharding*> ifrt_executable_parameter_shardings(ifrt::Executable* executable) {
+    auto shardings = unwrap_absl_statusor(executable->GetParameterShardings());
+    return std::make_tuple(shardings.size(), shardings.data());
+}
+
+extern "C" std::tuple<size_t, ifrt::OpSharding*> ifrt_executable_output_shardings(ifrt::Executable* executable) {
+    auto shardings = unwrap_absl_statusor(executable->GetOutputShardings());
+    return std::make_tuple(shardings.size(), shardings.data());
+}
+
+extern "C" std::tuple<size_t, xla::PjRtLayout*> ifrt_executable_parameter_layouts(ifrt::Executable* executable) {
+    auto layouts = unwrap_absl_statusor(executable->GetParameterLayouts());
+    return std::make_tuple(layouts.size(), layouts.data());
+}
+
+extern "C" std::tuple<size_t, xla::PjRtLayout*> ifrt_executable_output_layouts(ifrt::Executable* executable) {
+    auto layouts = unwrap_absl_statusor(executable->GetOutputLayouts());
+    return std::make_tuple(layouts.size(), layouts.data());
+}
+
+extern "C" std::tuple<size_t, ifrt::HloModule*> ifrt_executable_hlo_modules(ifrt::Executable* executable) {
+    auto modules = unwrap_absl_statusor(executable->GetHloModules());
+    return std::make_tuple(modules.size(), modules.data());
+}
+
 // TODO xla::ifrt::Executable::GetCostAnalysis
 #pragma endregion
 
@@ -950,11 +1001,32 @@ extern "C" int64_t ifrt_loadedexecutable_size(ifrt::LoadedExecutable* executable
 }
 
 // TODO xla::ifrt::GetCompiledMemoryStats
-// TODO xla::ifrt::GetParameterShardings
-// TODO xla::ifrt::GetOutputShardings
-// TODO xla::ifrt::GetParameterLayouts
-// TODO xla::ifrt::GetOutputLayouts
-// TODO xla::ifrt::GetHloModules
+
+extern "C" std::tuple<size_t, ifrt::OpSharding*> ifrt_loadedexecutable_parameter_shardings(ifrt::LoadedExecutable* executable) {
+    auto shardings = unwrap_absl_statusor(executable->GetParameterShardings());
+    return std::make_tuple(shardings.size(), shardings.data());
+}
+
+extern "C" std::tuple<size_t, ifrt::OpSharding*> ifrt_loadedexecutable_output_shardings(ifrt::LoadedExecutable* executable) {
+    auto shardings = unwrap_absl_statusor(executable->GetOutputShardings());
+    return std::make_tuple(shardings.size(), shardings.data());
+}
+
+extern "C" std::tuple<size_t, xla::PjRtLayout*> ifrt_loadedexecutable_parameter_layouts(ifrt::LoadedExecutable* executable) {
+    auto layouts = unwrap_absl_statusor(executable->GetParameterLayouts());
+    return std::make_tuple(layouts.size(), layouts.data());
+}
+
+extern "C" std::tuple<size_t, xla::PjRtLayout*> ifrt_loadedexecutable_output_layouts(ifrt::LoadedExecutable* executable) {
+    auto layouts = unwrap_absl_statusor(executable->GetOutputLayouts());
+    return std::make_tuple(layouts.size(), layouts.data());
+}
+
+extern "C" std::tuple<size_t, ifrt::HloModule*> ifrt_loadedexecutable_hlo_modules(ifrt::LoadedExecutable* executable) {
+    auto modules = unwrap_absl_statusor(executable->GetHloModules());
+    return std::make_tuple(modules.size(), modules.data());
+}
+
 // TODO xla::ifrt::GetOutputMemoryKinds
 // TODO xla::ifrt::GetCostAnalysis
 
@@ -973,8 +1045,10 @@ extern "C" bool ifrt_loadedexecutable_is_deleted(ifrt::LoadedExecutable* executa
     return executable->IsDeleted();
 }
 
-// TODO xla::ifrt::LoadedExecutable::addressable_device_logical_ids
-// TODO xla::ifrt::LoadedExecutable::addressable_devices
+extern "C" std::tuple<size_t, ifrt::Device*> ifrt_loadedexecutable_addressable_devices(ifrt::LoadedExecutable* executable) {
+    auto devices = executable->addressable_devices();
+    return std::make_tuple(devices.size(), devices.data());
+}
 
 // TODO auxiliary functions for xla::ifrt::LoadedExecutable::ExecuteResult
 #pragma endregion
