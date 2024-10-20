@@ -6,6 +6,12 @@ on:
     tags: '*'
   pull_request:
 
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: always.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   code-style:
     runs-on: ubuntu-latest
