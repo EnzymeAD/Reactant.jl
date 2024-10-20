@@ -1,14 +1,12 @@
 module ControlFlow
 
+using ..Reactant: Reactant, TracedRNumber, TracedRArray
 using ..MLIR: MLIR
 
 using MacroTools: MacroTools
 
 macro trace(expr)
-    if expr.head == :if
-        return esc(trace_if(__module__, expr))
-    end
-    # TODO: support loops
+    expr.head == :if && return esc(trace_if(__module__, expr))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
 end
 
@@ -65,29 +63,73 @@ function trace_if(mod, expr)
         return x
     end
 
-    rewritten_expr = quote
-        $(true_branch_fn)
-        $(false_branch_fn)
-        ($(all_output_vars...),) = $(custom_if_condition)(
-            $(expr.args[1]),
-            $(true_branch_fn_name),
-            $(false_branch_fn_name),
-            ($(all_input_vars...),),
-        )
+    return quote
+        if any($(is_traced), ($(all_input_vars...),))
+            $(true_branch_fn)
+            $(false_branch_fn)
+            ($(all_output_vars...),) = $(traced_if)(
+                $(expr.args[1]),
+                $(true_branch_fn_name),
+                $(false_branch_fn_name),
+                ($(all_input_vars...),),
+            )
+        else
+            $(expr)
+        end
     end
-
-    return rewritten_expr
 end
+
+is_traced(x) = false
+is_traced(::TracedRArray) = true
+is_traced(::TracedRNumber) = true
 
 makelet(x) = :($(x) = $(x))
 
 # Generate this dummy function and later we remove it during tracing
-function custom_if_condition(cond, true_fn::TFn, false_fn::FFn, args) where {TFn,FFn}
+function traced_if(cond, true_fn::TFn, false_fn::FFn, args) where {TFn,FFn}
     if cond
         return true_fn(args...)
     else
         return false_fn(args...)
     end
+end
+
+function traced_if(
+    cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args
+) where {TFn,FFn}
+    _, true_branch_compiled, true_branch_results, _, _, _, _, _, true_linear_results = Reactant.make_mlir_fn(
+        true_fn, args, (), string(gensym("true_branch")), false
+    )
+
+    _, false_branch_compiled, false_branch_results, _, _, _, _, _, false_linear_results = Reactant.make_mlir_fn(
+        false_fn, args, (), string(gensym("false_branch")), false
+    )
+
+    @assert length(true_branch_results) == length(false_branch_results) "true branch returned $(length(true_branch_results)) results, false branch returned $(length(false_branch_results)). This shouldn't happen."
+
+    for (i, (tr, fr)) in enumerate(zip(true_branch_results, false_branch_results))
+        @assert typeof(tr) == typeof(fr) "Result #$(i) for the branches have different \
+                                          types: true branch returned `$(typeof(tr))`, \
+                                          false branch returned `$(typeof(fr))`."
+    end
+
+    results = [MLIR.IR.type(tr.mlir_data) for tr in true_linear_results]
+
+    true_branch_region = MLIR.IR.Region(
+        MLIR.API.mlirOperationGetRegion(true_branch_compiled, 0), true
+    )
+    false_branch_region = MLIR.IR.Region(
+        MLIR.API.mlirOperationGetRegion(false_branch_compiled, 0), true
+    )
+
+    if_compiled = MLIR.Dialects.stablehlo.if_(
+        cond.mlir_data;
+        true_branch=true_branch_region,
+        false_branch=false_branch_region,
+        result_0=results,
+    )
+
+    return error("WIP")
 end
 
 # NOTE: Adapted from https://github.com/c42f/FastClosures.jl/blob/master/src/FastClosures.jl
