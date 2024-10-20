@@ -17,9 +17,10 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
+TracedRArray{T,N}(x::TracedRArray{T,N}) where {T,N} = x
+
 const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
-const AnyTracedRScalar{T} = AnyTracedRArray{T,0}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
@@ -34,19 +35,8 @@ ancestor(x::TracedRArray) = x
 ancestor(x::WrappedTracedRArray) = ancestor(parent(x))
 
 get_ancestor_indices(::TracedRArray, indices...) = indices
-function get_ancestor_indices(
-    x::SubArray{T,N,<:AnyTracedRArray{T,N}}, indices...
-) where {T,N}
-    return get_ancestor_indices(parent(x), Base.reindex(x.indices, indices)...)
-end
-
-Base.getindex(a::AnyTracedRScalar{T}) where {T} = a
-
-Base.zero(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T,0}, zero(T))
-Base.one(::AnyTracedRScalar{T}) where {T} = promote_to(TracedRArray{T,0}, one(T))
-
-function Base.convert(::Type{<:AnyTracedRScalar{T}}, x::Number) where {T}
-    return promote_to(TracedRArray{T,0}, T(x))
+function get_ancestor_indices(x::WrappedTracedRArray, indices...)
+    return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
 function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
@@ -73,7 +63,11 @@ and require expensive copies and synchronization each time and therefore should 
         ),
         1,
     )
-    return TracedRArray{T,0}((), res2, ())
+    return TracedRNumber{T}((), res2)
+end
+
+function Base.getindex(a::TracedRArray{T,0}) where {T}
+    return TracedRNumber{T}((), a.mlir_data)
 end
 
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
@@ -105,13 +99,17 @@ function Base.getindex(a::WrappedTracedRArray, indices...)
 end
 
 function Base.setindex!(
-    a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon},N}
+    a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int},N}
 ) where {T,N}
+    indices = map(enumerate(indices)) do (idx, i)
+        i isa Int ? (i:i) : (i isa Colon ? (1:size(a, idx)) : i)
+    end
+    v = broadcast_to_size(v, length.(indices))
+    v = promote_to(TracedRArray{T,N}, v)
     indices = [
-        (promote_to(TracedRArray{Int,0}, i isa Colon ? 1 : first(i)) - 1).mlir_data for
+        (promote_to(TracedRNumber{Int}, i isa Colon ? 1 : first(i)) - 1).mlir_data for
         i in indices
     ]
-    v = promote_to(TracedRArray{T,N}, v)
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_update_slice(a.mlir_data, v.mlir_data, indices), 1
     )
@@ -123,8 +121,11 @@ Base.size(x::TracedRArray) = x.shape
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
-function Base.similar(x::TracedRArray{T,N}, ::Type{T2}) where {T,N,T2}
-    return TracedRArray{T2,N}((), nothing, size(x))
+# TODO is there a way to create an unitialized `tensor`? does it show an advantage? maybe `fill`?
+function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
+    attr = MLIR.IR.DenseElementsAttribute(zeros(T, dims))
+    res = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
+    return TracedRArray{T,N}((), res, dims)
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
@@ -132,8 +133,6 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     # TODO this line segfaults if MLIR IR has not correctly been generated
     # return print(io, X.mlir_data, ")")
 end
-
-Base.only(A::AnyTracedRScalar{T}) where {T} = A
 
 function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
     if prod(dims) != prod(size(A))
@@ -195,21 +194,9 @@ function Base.transpose(A::AnyTracedRVecOrMat)
 end
 Base.adjoint(A::AnyTracedRVecOrMat{<:Real}) = transpose(A)
 
-function Base.promote_rule(
-    ::Type{TracedRArray{T,N}}, ::Type{TracedRArray{S,N}}
-) where {T,S,N}
-    return TracedRArray{Base.promote_type(T, S),N}
-end
-
-function Base.promote_rule(::Type{T}, ::Type{TracedRArray{S,N}}) where {T,S,N}
-    return TracedRArray{Base.promote_type(T, S),N}
-end
-
 function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     if isa(rhs, TracedRArray)
-        if typeof(rhs) == TracedRArray{T,N}
-            return rhs
-        end
+        rhs isa TracedRArray{T,N} && return rhs
         return TracedRArray{T,N}(
             (),
             MLIR.IR.result(
@@ -222,11 +209,8 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
         )
     end
     if isa(rhs, Number)
-        attr = fill(MLIR.IR.Attribute(T(rhs)), mlir_type(TracedRArray{T,N}, size(rhs)))
-        ta = TracedRArray{T,N}(
-            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(rhs)
-        )
-        return ta
+        throw(ArgumentError("Cannot promote number to `TracedRArray`. Use \
+                             `TracedRNumber` instead."))
     end
     T0 = eltype(rhs)
     attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
@@ -238,108 +222,23 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
     )
 end
 
-function promote_to(::TracedRArray{T,N}, rhs) where {T,N}
-    return promote_to(TracedRArray{T,N}, rhs)
-end
+promote_to(::TracedRArray{T,N}, rhs) where {T,N} = promote_to(TracedRArray{T,N}, rhs)
 
-for (jlop, hloop) in (
-    (:(Base.min), :minimum),
-    (:(Base.max), :maximum),
-    (:(Base.:+), :add),
-    (:(Base.:-), :subtract),
-    (:(Base.:*), :multiply),
-    (:(Base.:/), :divide),
-    (:(Base.:^), :power),
-)
-    @eval begin
-        function $(jlop)(
-            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::TracedRArray{T,0})
-        ) where {T}
-            return TracedRArray{T,0}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$(hloop)(lhs.mlir_data, rhs.mlir_data), 1
-                ),
-                (),
-            )
-        end
-
-        function $(jlop)(
-            @nospecialize(lhs::TracedRArray{T1,0}), @nospecialize(rhs::TracedRArray{T2,0})
-        ) where {T1,T2}
-            commonTy = TracedRArray{Base.promote_type(T1, T2),0}
-            lhs = promote_to(commonTy, lhs)
-            rhs = promote_to(commonTy, rhs)
-            return $(jlop)(lhs, rhs)
-        end
-    end
-
-    for otherType in (Number, Any)
-        @eval begin
-            function $(jlop)(
-                @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::$(otherType))
-            ) where {T}
-                rhs = promote_to(lhs, rhs)
-                return $(jlop)(lhs, rhs)
-            end
-
-            function $(jlop)(
-                @nospecialize(lhs::$(otherType)), @nospecialize(rhs::TracedRArray{T,0})
-            ) where {T}
-                lhs = promote_to(rhs, lhs)
-                return $(jlop)(lhs, rhs)
-            end
-        end
-    end
-end
-
-function Base.ifelse(
-    @nospecialize(pred::TracedRArray{Bool,0}),
-    @nospecialize(x::TracedRArray{T1,0}),
-    @nospecialize(y::TracedRArray{T2,0})
-) where {T1,T2}
-    return TracedRArray{promote_type(T1, T2),0}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.select(pred.mlir_data, x.mlir_data, y.mlir_data), 1
-        ),
-        size(pred),
-    )
-end
-
-Base.abs2(x::Reactant.TracedRArray{T,0}) where {T} = x * conj(x)
-
-function Base.literal_pow(
-    ::Base.RefValue{typeof(^)}, x::TracedRArray{T,0}, ::Base.RefValue{Val{P}}
-) where {T,P}
-    return Base.literal_pow(^, x, Val(P))
-end
-
-for (jlop, hloop) in (
-    (:(Base.abs), :abs),
-    (:(Base.:-), :negate),
-    (:(Base.sin), :sine),
-    (:(Base.cos), :cosine),
-    (:(Base.tanh), :tanh),
-    (:(Base.FastMath.tanh_fast), :tanh),
-    (:(Base.exp), :exponential),
-    (:(Base.FastMath.exp_fast), :exponential),
-    (:(Base.log), :log),
-    (:(Base.sqrt), :sqrt),
-)
-    @eval begin
-        function $jlop(@nospecialize(lhs::TracedRArray{T,0})) where {T}
-            return TracedRArray{T,0}(
-                (),
-                MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1),
-                size(lhs),
-            )
-        end
-    end
+elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
+function elem_apply(
+    ::Type{T}, x::TracedRArray{T2}
+) where {T<:ReactantPrimitive,T2<:ReactantPrimitive}
+    # Special Path to prevent going down a despecialized path
+    return elem_apply(TypeCast{T}(), x)
 end
 
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
-    all(iszero ∘ ndims, args) && return f(args...)
+    if all(iszero ∘ ndims, args)
+        scalar_args = map(args) do arg
+            return promote_to(TracedRNumber{eltype(arg)}, arg)
+        end
+        return f(scalar_args...)
+    end
 
     fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
         f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
@@ -350,7 +249,8 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         invmap[v] = k
     end
 
-    input_shapes = size.(keys(seen_args))
+    keys_seen = [k for k in keys(seen_args) if k isa TracedType]
+    input_shapes = size.(keys_seen)
     # by the time we reach here all args must have same size
     @assert allequal(input_shapes) "input shapes are $(input_shapes)"
     OutShape = isempty(seen_args) ? nothing : first(input_shapes)
@@ -416,56 +316,13 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-for (jlop, hloop, hlocomp, merge) in (
-    (:(Base.:(==)), :compare, "EQ", :all),
-    (:(Base.:(!=)), :compare, "NE", :any),
-    (:(Base.:(>=)), :compare, "GE", nothing),
-    (:(Base.:(>)), :compare, "GT", nothing),
-    (:(Base.:(<=)), :compare, "LE", nothing),
-    (:(Base.:(<)), :compare, "LT", nothing),
-)
-    @eval begin
-        function $(jlop)(
-            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs::TracedRArray{T,0})
-        ) where {T}
-            return TracedRArray{Bool,0}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$hloop(
-                        lhs.mlir_data,
-                        rhs.mlir_data;
-                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                            MLIR.IR.context(), $hlocomp
-                        ),
-                    ),
-                    1,
-                ),
-                size(lhs),
-            )
-        end
-
-        function $(jlop)(
-            @nospecialize(lhs::TracedRArray{T,0}), @nospecialize(rhs)
-        ) where {T}
-            return $(jlop)(lhs, promote_to(lhs, rhs))
-        end
-
-        function $(jlop)(
-            @nospecialize(lhs), @nospecialize(rhs::TracedRArray{T,0})
-        ) where {T}
-            return $(jlop)(promote_to(rhs, lhs), rhs)
-        end
-    end
-
-    if merge !== nothing
-        @eval begin
-            function $jlop(
-                @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::TracedRArray{T,N})
-            ) where {T,N}
-                elems = $(jlop).(lhs, rhs)
-                return N == 0 ? elems : $(merge)(elems)
-            end
-        end
+for (jlop, hloop, hlocomp, merge) in
+    ((:(Base.:(==)), :compare, "EQ", :all), (:(Base.:(!=)), :compare, "NE", :any))
+    @eval function $jlop(
+        @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::TracedRArray{T,N})
+    ) where {T,N}
+        elems = $(jlop).(lhs, rhs)
+        return N == 0 ? elems : $(merge)(elems)
     end
 end
 
@@ -544,8 +401,7 @@ function Base.mapreduce(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in in_tys])
 
     args = (
-        TracedRArray{T,0}((), MLIR.IR.argument(fnbody, i), ()) for
-        (i, ty) in enumerate(in_tys)
+        TracedRNumber{T}((), MLIR.IR.argument(fnbody, i)) for (i, ty) in enumerate(in_tys)
     )
 
     res = MLIR.IR.block!(fnbody) do
@@ -579,7 +435,11 @@ function Base.mapreduce(
         )
         red = TracedRArray{T,length(toonedims)}((), red, (toonedims...,))
     else
-        red = TracedRArray{T,length(outdims)}((), red, (outdims...,))
+        if length(outdims) == 0
+            red = TracedRNumber{T}((), red)
+        else
+            red = TracedRArray{T,length(outdims)}((), red, (outdims...,))
+        end
     end
     return red
 end
@@ -601,17 +461,16 @@ function Base.fill!(A::TracedRArray{T,N}, x) where {T,N}
     return A
 end
 
+function Base.fill!(A::TracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
+    bcast = broadcast_to_size(promote_to(TracedRNumber{T}, x), size(A))
+    A.mlir_data = bcast.mlir_data
+    return A
+end
+
 struct AbstractReactantArrayStyle{N} <: Base.Broadcast.AbstractArrayStyle{N} end
 
 AbstractReactantArrayStyle(::Val{N}) where {N} = AbstractReactantArrayStyle{N}()
 AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle{N}()
-
-# function Broadcast.materialize(bc::Broadcasted) 
-#    @show bc
-#    inst = instantiate(bc)
-#    @show inst
-#    copy(inst)
-# end
 
 function BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
     return AbstractReactantArrayStyle{N}()
@@ -619,7 +478,14 @@ end
 
 function Base.similar(
     bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
-) where {T,N}
+) where {T<:ReactantPrimitive,N}
+    @assert N isa Int
+    return TracedRArray{T,N}((), nothing, map(length, dims))
+end
+
+function Base.similar(
+    bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
+) where {T<:ReactantPrimitive,N}
     @assert N isa Int
     return TracedRArray{T,N}((), nothing, map(length, dims))
 end
@@ -696,6 +562,13 @@ function broadcast_to_size(arg::T, rsize) where {T<:Number}
     )
 end
 
+function broadcast_to_size(arg::TracedRNumber, rsize)
+    length(rsize) == 0 && return arg
+    return broadcast_to_size_internal(
+        TracedRArray{eltype(arg),0}((), arg.mlir_data, ()), rsize
+    )
+end
+
 function broadcast_to_size(arg::AnyTracedRArray, rsize)
     arg = materialize_traced_array(arg)
     size(arg) == rsize && return arg
@@ -749,32 +622,87 @@ function _copyto!(dest::TracedRArray, bc::Broadcasted)
     return dest
 end
 
-function Base._cat(dims::Val{D}, A::TracedRArray{T,N}, Bs::TracedRArray...) where {T,N,D}
-    @assert D isa Integer "Support for non-integer dimensions is not implemented yet."
+dispatch_val(x) = x
+dispatch_val(::Val{D}) where {D} = D
 
-    # MLIR expects the dimension `D` to be ≤ the rank of the input tensors
-    A = maybe_expand_dims(A, dims)
-    Bs = maybe_expand_dims.(Bs, (dims,))
+@inline function Base._typed_vcat(
+    ::Type{T}, X::Base.AbstractVecOrTuple{<:TracedRArray}
+) where {T}
+    return Base._cat_t(Val(1), T, X...)
+end
+@inline function Base._typed_hcat(
+    ::Type{T}, X::Base.AbstractVecOrTuple{<:TracedRArray}
+) where {T}
+    return Base._cat_t(Val(2), T, X...)
+end
+
+# `Base.typed_hvcat` is overloaded for `AbstractVecOrMat` using `setindex!` that breaks Reactant
+# generic implementation uses `typed_hcat` and `typed_vcat` which is alright
+@inline function Base.typed_hvcat(
+    ::Type{T}, rows::Tuple{Vararg{Int}}, as::TracedRArray...
+) where {T}
+    return invoke(
+        Base.typed_hvcat, Tuple{Type{T},Tuple{Vararg{Int}},Vararg{Any}}, T, rows, as...
+    )
+end
+
+function Base._typed_hvncat(
+    T::Type, dims::NTuple{N,Int}, row_first::Bool, as::TracedRArray...
+) where {N}
+    As = if row_first
+        perm = [2, 1, 3:N...]
+        dims = [dims[2], dims[1], dims[3:end]...]
+        permutedims(reshape(collect(as), dims...), perm)
+    else
+        reshape(collect(as), dims)
+    end
+
+    for d in 1:N
+        Bs = Array{Any,N - d}(undef, size(As)[2:end]...)
+
+        for (i, col) in
+            zip(eachindex(Bs), eachslice(As; dims=Tuple(2:ndims(As)), drop=true))
+            # TODO row_first affects the flattening?
+            Bs[i] = Base._cat_t(d, T, col...)
+        end
+
+        As = Bs
+    end
+
+    return only(As)
+end
+
+function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
+    dims = dispatch_val(dims)
+    @assert dims isa Integer "Support for non-integer dimensions is not implemented yet."
+
+    # MLIR expects the dimension `dims` to be ≤ the rank of the input tensors
+    X = maybe_expand_dims.(X, (dims,))
 
     catdims = Base.dims2cat(dims)
-    shape = Base.cat_size_shape(catdims, A, Bs...)
-    RT = Base.promote_eltype(A, Bs...)
-    Res = TracedRArray{RT,length(shape)}(
+    shape = Base.cat_size_shape(catdims, X...)
+    RT = Base.promote_eltype(T, X...)
+
+    # convert to the target eltype
+    X = map(Base.Fix1(promote_to, TracedRArray{RT,length(shape)}), X)
+
+    return TracedRArray{RT,length(shape)}(
         (),
         MLIR.IR.result(
+            # TODO maybe we should do some conversion?
             MLIR.Dialects.stablehlo.concatenate(
-                [A.mlir_data, [B.mlir_data for B in Bs]...];
+                collect(get_mlir_data.(X));
                 result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
-                dimension=D - 1, # stablehlo expects this to be zero-indexed
+                dimension=dims - 1, # stablehlo expects this to be zero-indexed
             ),
             1,
         ),
         shape,
     )
-    return Res
 end
 
-function maybe_expand_dims(x::AbstractArray{T,N}, ::Val{D}) where {T,N,D}
-    D ≤ N && return x
-    return reshape(x, ntuple(i -> i ≤ N ? size(x, i) : 1, Val(D)))
+function maybe_expand_dims(x::AbstractArray{T,N}, dims) where {T,N}
+    dims = dispatch_val(dims)
+    dims ≤ N && return x
+    return reshape(x, ntuple(i -> i ≤ N ? size(x, i) : 1, dims))
 end

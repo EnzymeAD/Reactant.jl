@@ -39,6 +39,8 @@ if do_gpu_list
     # TODO set which gpu
 end
 
+const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
+
 @testset "Reactant.jl Tests" begin
     @safetestset "Layout" include("layout.jl")
     @safetestset "Tracing" include("tracing.jl")

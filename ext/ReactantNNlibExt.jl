@@ -1,28 +1,21 @@
 module ReactantNNlibExt
 
 using NNlib
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR
+using Reactant:
+    Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR, TracedRNumber
 
 for (jlop, hloop) in (
     (:(NNlib.tanh_fast), :tanh),
     (:(NNlib.sigmoid_fast), :logistic),
     (:(NNlib.sigmoid), :logistic),
 )
-    @eval function $(jlop)(x::TracedRArray{T,0}) where {T}
-        return TracedRArray{T,0}(
+    @eval function $(jlop)(x::TracedRNumber{T}) where {T}
+        return TracedRNumber{T}(
             (),
             Reactant.MLIR.IR.result(
                 Reactant.MLIR.Dialects.stablehlo.$(hloop)(x.mlir_data), 1
             ),
-            (),
         )
-    end
-end
-
-# Don't confuse our poor scalar arrays, we no like numbers we like 0D arrays
-for nnlib_op in setdiff(Tuple(NNlib.ACTIVATIONS), (:tanh_fast, :sigmoid_fast, :sigmoid, :σ))
-    @eval function NNlib.$(nnlib_op)(x::TracedRArray{T,0}) where {T}
-        return invoke(NNlib.$(nnlib_op), Tuple{Any}, x)
     end
 end
 
@@ -37,6 +30,20 @@ function NNlib.softmax!(out::TracedRArray{T,N}, x::AbstractArray; dims=1) where 
     #end
     tmp = dims isa Colon ? sum(out) : sum!(max_, out)
     return out ./= tmp
+end
+
+function NNlib.logsoftmax!(out::TracedRArray{T}, x::AbstractArray; dims=1) where {T}
+    max_ = NNlib.fast_maximum(x; dims)
+    # if all(isfinite, max_)
+    @fastmath out .= x .- max_
+    # else
+    #     _zero, _minf, _inf = T(0), T(-Inf), T(Inf)
+    #     @. out = ifelse(
+    #         isequal(max_, _inf), ifelse(isequal(x, _inf), _zero, _minf), x - max_
+    #     )
+    # end
+    @fastmath log_ = log.(sum(exp, out; dims))
+    return out .-= log_
 end
 
 function NNlib.conv(

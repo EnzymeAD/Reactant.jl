@@ -57,6 +57,8 @@
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/Support/Process.h"
 
+#include "llvm-c/TargetMachine.h"
+
 using namespace mlir;
 using namespace llvm;
 using namespace xla;
@@ -86,6 +88,10 @@ extern "C" void SetLogLevel(int level) {
 
 extern "C" void SetModuleLogLevel(const char* module_pattern, int level) {
     //absl::SetVLOGLevel(module_pattern, level);
+}
+
+extern "C" char *GetDefaultTargetTriple(void) {
+  return LLVMGetDefaultTargetTriple();
 }
 
 extern "C"

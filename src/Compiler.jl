@@ -6,10 +6,12 @@ import ..Reactant:
     XLA,
     ConcreteRArray,
     TracedRArray,
+    TracedRNumber,
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
-    append_path
+    append_path,
+    TracedType
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 
@@ -29,9 +31,13 @@ function create_result(tocopy::T, path, result_stores) where {T}
 end
 
 function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
-    restore = result_stores[path]
-    delete!(result_stores, path)
-    return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
+    end
+    # We will set the data for this later
+    return :(ConcreteRArray{$T,$N}($(tocopy.data), $(tocopy.shape)))
 end
 
 function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
@@ -67,7 +73,9 @@ function create_result(tocopy::D, path, result_stores) where {K,V,D<:AbstractDic
 end
 
 function create_result(
-    tocopy::Union{Int,AbstractFloat,AbstractString,Nothing,Type,Symbol}, path, result_stores
+    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol},
+    path,
+    result_stores,
 )
     return Meta.quot(tocopy)
 end
@@ -141,7 +149,6 @@ const opt_passes::String = join(
                 "exp_simplify<16>",
                 "slice_simplify<16>",
                 "convert_simplify<16>",
-                "reshape_simplify<16>",
                 "dynamic_slice_to_static<16>",
                 "dynamic_update_slice_elim<16>",
                 "concat_to_broadcast<16>",
@@ -245,7 +252,7 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
-function compile_mlir!(mod, f, args; optimize=true)
+function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
@@ -260,7 +267,9 @@ function compile_mlir!(mod, f, args; optimize=true)
         concrete_seen, traced_result, ("result",), TracedToConcrete
     )
 
-    if optimize
+    optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
+
+    if optimize === :all
         run_pass_pipeline!(
             mod,
             join(
@@ -278,12 +287,62 @@ function compile_mlir!(mod, f, args; optimize=true)
                 ',',
             ),
         )
+    elseif optimize === :only_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "enzyme-batch",
+                    "enzyme",
+                    "arith-raise{stablehlo=true}",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :after_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "enzyme-batch",
+                    "enzyme",
+                    "arith-raise{stablehlo=true}",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :before_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes,
+                    "enzyme",
+                    "arith-raise{stablehlo=true}",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                ],
+                ',',
+            ),
+        )
+    elseif optimize !== :none
+        error("Invalid optimize option: $(Meta.quot(optimize))")
     end
 
-    preserved_args = Tuple{TracedRArray,Int}[]
+    preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
-    linear_results2 = TracedRArray[]
+    linear_results2 = TracedType[]
     for (i, op) in enumerate(results)
         if !MLIR.IR.is_block_arg(op)
             push!(nresults, op)
@@ -355,9 +414,10 @@ macro compile(options, maybe_call=nothing)
     options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
 
     quote
+        options = $(esc(options))
         f = $(esc(call.args[1]))
         args = $(esc(Expr(:tuple, call.args[2:end]...)))
-        compile(f, args)
+        compile(f, args; options.optimize)
     end
 end
 
@@ -564,17 +624,17 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     return concretized_res_names, xla_call_code
 end
 
-function compile_xla(f, args; client=nothing)
+function compile_xla(f, args; client=nothing, optimize=true)
     # register MLIR dialects
     ctx = MLIR.IR.Context()
-    Base.append!(Reactant.registry[]; context=ctx)
+    append!(Reactant.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     return MLIR.IR.context!(ctx) do
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
-            mod, f, args; optimize=true
+            mod, f, args; optimize
         )
 
         if isnothing(client)
@@ -596,9 +656,9 @@ function compile_xla(f, args; client=nothing)
     end
 end
 
-function compile(f, args; client=nothing)
+function compile(f, args; client=nothing, optimize=true)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
-        f, args
+        f, args; client, optimize
     )
 
     preserved_args_idx = last.(preserved_args)

@@ -16,6 +16,7 @@ for T in (
     Integer,
     AbstractString,
     RArray,
+    RNumber,
 )
     @eval function traced_type(::Type{T}, seen, mode) where {T<:$T}
         return T
@@ -182,7 +183,7 @@ function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode
     end
 end
 
-function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedRArray,mode}
+function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedType,mode}
     if mode == ConcreteToTraced
         throw("TracedRArray $T cannot be traced")
     elseif mode == TracedToConcrete
@@ -202,7 +203,7 @@ function traced_type(::Type{T}, seen, mode) where {T<:XLAArray}
 end
 
 function traced_type(::Type{A}, seen::ST, ::Val{mode}) where {T,N,A<:Array{T,N},ST,mode}
-    if mode == ArrayToConcrete && T <: AbstractFloat
+    if mode == ArrayToConcrete && T <: ReactantPrimitive
         return ConcreteRArray{T,N}
     else
         return Array{traced_type(T, seen, Val(mode)),N}
@@ -330,9 +331,9 @@ function make_tracer(
             return seen[prev]
         end
         res = if toscalar
-            TracedRArray{T,0}((path,), nothing, ())
-        elseif !isnothing(tobatch)
-            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+            TracedRNumber{T}((path,), nothing)
+        elseif tobatch !== nothing
+            error("This should not happen...")
         else
             TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
         end
@@ -345,6 +346,52 @@ function make_tracer(
             return seen[prev]::ConcreteRArray{T,N}
         end
         res = ConcreteRArray{T,N}(XLA.AsyncEmptyBuffer, size(prev))
+        seen[prev] = res
+        return res
+    end
+
+    throw("Cannot Unknown trace mode $mode")
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev::TracedRNumber{T}),
+    @nospecialize(path),
+    mode;
+    tobatch=nothing,
+    toscalar=false,
+    kwargs...,
+) where {T}
+    if mode == ConcreteToTraced
+        throw("Cannot trace existing trace type")
+    end
+    if mode == TracedTrack
+        prev.paths = (prev.paths..., path)
+        if !haskey(seen, prev)
+            return seen[prev] = prev
+        end
+        return prev
+    end
+    if mode == TracedSetPath
+        if haskey(seen, prev)
+            return seen[prev]
+        end
+        res = if toscalar
+            TracedRNumber{T}((path,), nothing)
+        elseif tobatch !== nothing
+            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+        else
+            TracedRNumber{T}((path,), prev.mlir_data)
+        end
+        seen[prev] = res
+        return res
+    end
+
+    if mode == TracedToConcrete
+        if haskey(seen, prev)
+            return seen[prev]::ConcreteRArray{T,0}
+        end
+        res = ConcreteRArray{T,0}(XLA.AsyncEmptyBuffer, size(prev))
         seen[prev] = res
         return res
     end
@@ -380,7 +427,7 @@ function make_tracer(
     if haskey(seen, prev)
         return seen[prev]
     end
-    if mode == ArrayToConcrete && eltype(RT) <: AbstractFloat
+    if mode == ArrayToConcrete && eltype(RT) <: ReactantPrimitive
         return seen[prev] = ConcreteRArray(prev)
     end
     TT = traced_type(eltype(RT), (), Val(mode))

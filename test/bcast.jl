@@ -112,3 +112,23 @@ pow(x, n) = x .^ n
 
     @test pow_compiled(x_ra) ≈ pow(x, 2)
 end
+
+struct CustomBCastFunction{X}
+    x::X
+end
+
+(f::CustomBCastFunction)(x::Number) = f.x + x
+
+function custombcast(x)
+    fn = CustomBCastFunction(3.0)
+    return fn.(x)
+end
+
+@testset "Broadcasting closures / functors" begin
+    x = rand(2, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    custombcast_compiled = @compile custombcast(x_ra)
+
+    @test custombcast_compiled(x_ra) ≈ custombcast(x)
+end

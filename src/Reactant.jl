@@ -7,7 +7,45 @@ include("OrderedIdDict.jl")
 
 using Enzyme
 
-abstract type RArray{T,N} <: AbstractArray{T,N} end
+@static if isdefined(Core, :BFloat16)
+    const ReactantPrimitive = Union{
+        Bool,
+        Int8,
+        UInt8,
+        Int16,
+        UInt16,
+        Int32,
+        UInt32,
+        Int64,
+        UInt64,
+        Float16,
+        Core.BFloat16,
+        Float32,
+        Float64,
+        Complex{Float32},
+        Complex{Float64},
+    }
+else
+    const ReactantPrimitive = Union{
+        Bool,
+        Int8,
+        UInt8,
+        Int16,
+        UInt16,
+        Int32,
+        UInt32,
+        Int64,
+        UInt64,
+        Float16,
+        Float32,
+        Float64,
+        Complex{Float32},
+        Complex{Float64},
+    }
+end
+
+abstract type RArray{T<:ReactantPrimitive,N} <: AbstractArray{T,N} end
+abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
 function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
@@ -45,8 +83,13 @@ include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")
 include("utils.jl")
+
 include("ConcreteRArray.jl")
+include("TracedRNumber.jl")
 include("TracedRArray.jl")
+
+const TracedType = Union{TracedRArray,TracedRNumber}
+
 include("Tracing.jl")
 include("Compiler.jl")
 
