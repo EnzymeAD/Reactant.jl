@@ -564,12 +564,12 @@ function DenseElementsAttribute(values::AbstractArray{Float16})
     )
 end
 
-function DenseElementsAttribute(values::AbstractArray{T}) where {T<:Complex}
-    shaped_type = TensorType(size(values), Type(T))
+function DenseElementsAttribute(values::AbstractArray{<:Complex})
+    shaped_type = TensorType(size(values), Type(eltype(values)))
     # TODO: row major
     return Attribute(
         API.mlirDenseElementsAttrRawBufferGet(
-            shaped_type, length(values) * sizeof(T), values
+            shaped_type, length(values) * Base.elsize(values), values
         ),
     )
 end
