@@ -27,7 +27,9 @@ function apply(f, args...; kwargs...)
     return f(args...; kwargs...)
 end
 
-function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=false)
+function make_mlir_fn(
+    f, args, kwargs, name="main", concretein=true; toscalar=false, return_dialect=:func
+)
     if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
         return (
             true,
@@ -144,7 +146,9 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
             push!(vals, col_maj)
         end
         @assert length(vals) == length(linear_results)
-        return MLIR.Dialects.func.return_(vals)
+
+        dialect = getfield(MLIR.Dialects, return_dialect)
+        return dialect.return_(vals)
     end
 
     name2 = name
