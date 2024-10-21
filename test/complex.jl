@@ -4,8 +4,8 @@ using Reactant
 @testset "conj" begin
     @testset "$(typeof(x))" for x in (1.0, 1.0 + 2.0im)
         x_concrete = Reactant.to_rarray(x)
-        f = @compile (conj ∘ only)(x_concrete)
-        @test f(x_concrete) == conj(x)
+        f = @compile conj(x_concrete)
+        @test only(f(x_concrete)) == conj(x)
     end
 
     @testset "$(typeof(x))" for x in (
