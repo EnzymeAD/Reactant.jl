@@ -115,12 +115,19 @@ function traced_if(
 
     results = [MLIR.IR.type(tr.mlir_data) for tr in true_linear_results]
 
-    true_branch_region = MLIR.IR.Region(
-        MLIR.API.mlirOperationGetRegion(true_branch_compiled, 0), true
-    )
-    false_branch_region = MLIR.IR.Region(
-        MLIR.API.mlirOperationGetRegion(false_branch_compiled, 0), true
-    )
+    true_branch_region = let reg = MLIR.IR.Region()
+        MLIR.API.mlirRegionTakeBody(
+            reg, MLIR.API.mlirOperationGetRegion(true_branch_compiled, 0)
+        )
+        reg
+    end
+
+    false_branch_region = let reg = MLIR.IR.Region()
+        MLIR.API.mlirRegionTakeBody(
+            reg, MLIR.API.mlirOperationGetRegion(false_branch_compiled, 0)
+        )
+        reg
+    end
 
     if_compiled = MLIR.Dialects.stablehlo.if_(
         cond.mlir_data;
@@ -129,9 +136,12 @@ function traced_if(
         result_0=results,
     )
 
+    @show if_compiled
+
     return error("WIP")
 end
 
+# XXX: Use `ExpressionExplorer.jl` instead
 # NOTE: Adapted from https://github.com/c42f/FastClosures.jl/blob/master/src/FastClosures.jl
 function find_var_uses!(varlist, bound_vars, ex)
     if isa(ex, Symbol)
