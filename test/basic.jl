@@ -437,7 +437,7 @@ end
     f = @compile similar(y)
     @test size(f(y)) == size(x)
     @test eltype(f(y)) == eltype(x)
-ebd
+end
 
 @testset "conj" begin
     @testset "$(typeof(x))" for x in [1, 1 + 2im]
