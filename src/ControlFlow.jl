@@ -98,11 +98,13 @@ function traced_if(
     cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args
 ) where {TFn,FFn}
     _, true_branch_compiled, true_branch_results, _, _, _, _, _, true_linear_results = Reactant.make_mlir_fn(
-        true_fn, args, (), string(gensym("true_branch")), false
+        true_fn, args, (), string(gensym("true_branch")), false;
+        return_dialect=:stablehlo
     )
 
     _, false_branch_compiled, false_branch_results, _, _, _, _, _, false_linear_results = Reactant.make_mlir_fn(
-        false_fn, args, (), string(gensym("false_branch")), false
+        false_fn, args, (), string(gensym("false_branch")), false;
+        return_dialect=:stablehlo
     )
 
     @assert length(true_branch_results) == length(false_branch_results) "true branch returned $(length(true_branch_results)) results, false branch returned $(length(false_branch_results)). This shouldn't happen."
@@ -136,9 +138,11 @@ function traced_if(
         result_0=results,
     )
 
-    @show if_compiled
-
-    return error("WIP")
+    return map(enumerate(true_linear_results)) do (i, res)
+        res = copy(res)
+        res.mlir_data = MLIR.IR.result(if_compiled, i)
+        return res
+    end
 end
 
 # XXX: Use `ExpressionExplorer.jl` instead
