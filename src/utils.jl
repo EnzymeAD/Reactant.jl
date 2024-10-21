@@ -33,7 +33,9 @@ function make_mlir_fn(
     if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
         return (
             true,
-            make_mlir_fn(apply, (f, args...), kwargs, name, concretein; toscalar)[2:end]...,
+            make_mlir_fn(
+                apply, (f, args...), kwargs, name, concretein; toscalar, return_dialect
+            )[2:end]...,
         )
     end
 
