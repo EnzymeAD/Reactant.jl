@@ -70,20 +70,26 @@ function setup_lux_forward_pass_benchmark!(
         reclaim($dev)
     end
 
-    suite[benchmark_name]["forward"][backend]["Reactant"] = @benchmarkable begin
-        y, _ = apply_compiled($model, x_ra, ps_ra, st_test_ra)
-        Reactant.synchronize(y)
-    end setup = begin
-        GC.gc()
-        reclaim($dev)
-        x, ps, st = general_lux_setup($model, $x_dims)
-        st_test = Lux.testmode(st)
-        x_ra = Reactant.to_rarray(x)
-        ps_ra = Reactant.to_rarray(ps)
-        st_test_ra = Reactant.to_rarray(st_test)
-        apply_compiled = @compile Lux.apply($model, x_ra, ps_ra, st_test_ra)
-        GC.gc()
-        reclaim($dev)
+    for opt_pass in (:all, :only_enzyme, :after_enzyme, :before_enzyme)
+        tag = opt_pass == :all ? "Reactant" : "Reactant (optimize = $(Meta.quot(opt_pass)))"
+
+        suite[benchmark_name]["forward"][backend][tag] = @benchmarkable begin
+            y, _ = apply_compiled($model, x_ra, ps_ra, st_test_ra)
+            Reactant.synchronize(y)
+        end setup = begin
+            GC.gc()
+            reclaim($dev)
+            x, ps, st = general_lux_setup($model, $x_dims)
+            st_test = Lux.testmode(st)
+            x_ra = Reactant.to_rarray(x)
+            ps_ra = Reactant.to_rarray(ps)
+            st_test_ra = Reactant.to_rarray(st_test)
+            apply_compiled = @compile optimize = $(Meta.quot(opt_pass)) Lux.apply(
+                $model, x_ra, ps_ra, st_test_ra
+            )
+            GC.gc()
+            reclaim($dev)
+        end
     end
 
     return nothing

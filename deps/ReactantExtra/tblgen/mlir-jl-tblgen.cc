@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
   }
   disableModuleWrap = disableModuleWrapOpt;
 
-  return TableGenMain(argv[0], [](raw_ostream& os, RecordKeeper &records) {
+  return TableGenMain(argv[0], [](raw_ostream& os, const RecordKeeper &records) {
     return generator(records, os);
   });
 }

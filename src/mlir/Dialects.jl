@@ -16,10 +16,8 @@ function operandsegmentsizes(segments)
     return namedattribute("operand_segment_sizes", Attribute(Int32.(segments)))
 end
 
-for path in readdir(Reactant_jll.artifact_dir; join=true)
-    if endswith("inc.jl")(path)
-        include(path)
-    end
+for file in readdir(joinpath(@__DIR__, "Dialects"))
+    include(joinpath(@__DIR__, "Dialects", file))
 end
 
 end # module Dialects

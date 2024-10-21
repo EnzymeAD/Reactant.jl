@@ -1,11 +1,10 @@
-name: Format `main`
+name: Regenerate MLIR Dialects
 on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
-
 jobs:
-  format:
+  make:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,21 +22,23 @@ jobs:
         run: |
           import Pkg
           Pkg.add("JuliaFormatter")
+      - run: julia make-dialects.jl
+        working-directory: ./deps/ReactantExtra
+      - run: chmod -R u+rw ./src/mlir/Dialects/
       - name: Format code
         shell: julia --color=yes {0}
         run: |
           using JuliaFormatter
-          format(".")
+          format("./src/mlir/Dialects/")
       - name: Create Pull Request
         id: cpr
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: Format code
-          title: 'Format code of branch "main"'
-          branch: format-main
+          commit-message: Regenerate MLIR Dialects
+          title: 'Regenerate MLIR Dialects'
+          branch: regenerate-dialects
           delete-branch: true
-          labels: format
       - name: Check outputs
         run: |
           echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"

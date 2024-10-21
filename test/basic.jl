@@ -431,6 +431,14 @@ sum_xxᵀ(x) = sum(x .* x')
     end
 end
 
+@testset "similar" begin
+    x = zeros(2, 3)
+    y = Reactant.to_rarray(x)
+    f = @compile similar(y)
+    @test size(f(y)) == size(x)
+    @test eltype(f(y)) == eltype(x)
+ebd
+
 @testset "conj" begin
     @testset "$(typeof(x))" for x in [1, 1 + 2im]
         x_concrete = Reactant.to_rarray(x)

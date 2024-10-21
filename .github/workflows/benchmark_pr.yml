@@ -6,6 +6,12 @@ on:
 permissions:
   pull-requests: write
 
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: always.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   generate_plots:
     runs-on: ubuntu-latest

@@ -406,7 +406,7 @@ gentbl_cc_library(
     name = "BuiltinJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Builtin.inc.jl"
+            "Builtin.jl"
         )
     ],
     td_file = "@llvm-project//mlir:include/mlir/IR/BuiltinOps.td",
@@ -420,7 +420,7 @@ gentbl_cc_library(
     name = "ArithJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Arith.inc.jl"
+            "Arith.jl"
         )
     ],
     td_file = "@llvm-project//mlir:include/mlir/Dialect/Arith/IR/ArithOps.td",
@@ -434,7 +434,7 @@ gentbl_cc_library(
     name = "AffineJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Affine.inc.jl"
+            "Affine.jl"
         )
     ],
     td_file = "@llvm-project//mlir:include/mlir/Dialect/Affine/IR/AffineOps.td",
@@ -448,7 +448,7 @@ gentbl_cc_library(
     name = "FuncJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Func.inc.jl"
+            "Func.jl"
         )
     ],
     td_file = "@llvm-project//mlir:include/mlir/Dialect/Func/IR/FuncOps.td",
@@ -462,7 +462,7 @@ gentbl_cc_library(
     name = "EnzymeJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Enzyme.inc.jl"
+            "Enzyme.jl"
         )
     ],
     td_file = "@enzyme//:Enzyme/MLIR/Dialect/EnzymeOps.td",
@@ -476,7 +476,7 @@ gentbl_cc_library(
     name = "StableHLOJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "StableHLO.inc.jl"
+            "StableHLO.jl"
         )
     ],
     td_file = "@stablehlo//:stablehlo/dialect/StablehloOps.td",
@@ -490,7 +490,7 @@ gentbl_cc_library(
     name = "CHLOJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "CHLO.inc.jl"
+            "CHLO.jl"
         )
     ],
     td_file = "@stablehlo//:stablehlo/dialect/ChloOps.td",
@@ -504,7 +504,7 @@ gentbl_cc_library(
     name = "VHLOJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "VHLO.inc.jl"
+            "VHLO.jl"
         )
     ],
     td_file = "@stablehlo//:stablehlo/dialect/VhloOps.td",

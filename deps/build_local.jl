@@ -84,8 +84,8 @@ if isempty(arg)
     run(
         Cmd(
             `bazel build -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
-    --repo_env HERMETIC_PYTHON_VERSION="3.10"
-    --check_visibility=false --verbose_failures :libReactantExtra.so :Builtin.inc.jl :Arith.inc.jl :Affine.inc.jl :Func.inc.jl :Enzyme.inc.jl :StableHLO.inc.jl :CHLO.inc.jl :VHLO.inc.jl`;
+            --repo_env HERMETIC_PYTHON_VERSION="3.10"
+            --check_visibility=false --verbose_failures :libReactantExtra.so`;
             dir=source_dir,
         ),
     )
@@ -93,8 +93,8 @@ else
     run(
         Cmd(
             `bazel build $(arg) -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
-    --repo_env HERMETIC_PYTHON_VERSION="3.10"
-    --check_visibility=false --verbose_failures :libReactantExtra.so :Builtin.inc.jl :Arith.inc.jl :Affine.inc.jl :Func.inc.jl :Enzyme.inc.jl :StableHLO.inc.jl :CHLO.inc.jl :VHLO.inc.jl`;
+            --repo_env HERMETIC_PYTHON_VERSION="3.10"
+            --check_visibility=false --verbose_failures :libReactantExtra.so`;
             dir=source_dir,
         ),
     )
