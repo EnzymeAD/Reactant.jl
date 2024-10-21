@@ -437,4 +437,45 @@ end
     f = @compile similar(y)
     @test size(f(y)) == size(x)
     @test eltype(f(y)) == eltype(x)
+ebd
+
+@testset "conj" begin
+    @testset "$(typeof(x))" for x in [1, 1 + 2im]
+        x_concrete = Reactant.to_rarray(x)
+        f = @compile (conj ∘ only)(x_concrete)
+        @test f(x_concrete) == conj(x)
+    end
+
+    @testset "$(typeof(x))" for x in [
+        fill(1 + 2im),
+        fill(1),
+        [1 + 2im; 3 + 4im],
+        [1; 3],
+        [1 + 2im 3 + 4im],
+        [1 2],
+        [1+2im 3+4im; 5+6im 7+8im],
+        [1 3; 5 7],
+    ]
+        x_concrete = Reactant.to_rarray(x)
+        f = @compile conj(x_concrete)
+        @test f(x_concrete) == conj(x)
+    end
+end
+
+@testset "conj!" begin
+    @testset "$(typeof(x))" for x in [
+        fill(1 + 2im),
+        fill(1),
+        [1 + 2im; 3 + 4im],
+        [1; 3],
+        [1 + 2im 3 + 4im],
+        [1 2],
+        [1+2im 3+4im; 5+6im 7+8im],
+        [1 3; 5 7],
+    ]
+        x_concrete = Reactant.to_rarray(x)
+        f = @compile conj!(x_concrete)
+        @test f(x_concrete) == conj(x)
+        @test x_concrete == conj(x)
+    end
 end
