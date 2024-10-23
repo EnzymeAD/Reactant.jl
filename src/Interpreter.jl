@@ -274,6 +274,8 @@ end
     outtys = MLIR.IR.Type[]
     @inline needs_primal(::Type{<:Enzyme.ReverseMode{ReturnPrimal}}) where {ReturnPrimal} =
         ReturnPrimal
+    @inline needs_primal(::Type{<:Enzyme.ForwardMode{ReturnPrimal}}) where {ReturnPrimal} =
+        ReturnPrimal
     for a in linear_results
         if has_residx(a)
             if needs_primal(CMode)
