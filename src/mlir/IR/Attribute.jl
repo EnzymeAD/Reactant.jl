@@ -564,6 +564,16 @@ function DenseElementsAttribute(values::AbstractArray{Float16})
     )
 end
 
+function DenseElementsAttribute(values::AbstractArray{Complex{T}}) where {T}
+    # TODO we might need to transpose because MLIR expects row-major order
+    shaped_type = TensorType(size(values), Type(Complex{T}))
+    return Attribute(
+        API.mlirDenseElementsAttrRawBufferGet(
+            shaped_type, length(values) * Base.elsize(values), pointer(values)
+        ),
+    )
+end
+
 """
     DenseElementsAttribute(array::AbstractArray{String})
 
