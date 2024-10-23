@@ -233,8 +233,8 @@ end
 
 @inline primitive_type(::Type{Float64}) = 12
 
-@inline primitive_type(::Type{Complex{Float32}}) = 24
-@inline primitive_type(::Type{Complex{Float64}}) = 25
+@inline primitive_type(::Type{Complex{Float32}}) = 15
+@inline primitive_type(::Type{Complex{Float64}}) = 18
 
 function ArrayFromHostBuffer(client::Client, array::Array{T,N}, device) where {T,N}
     sizear = Int64[s for s in reverse(size(array))]
