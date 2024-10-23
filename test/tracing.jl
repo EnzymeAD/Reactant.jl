@@ -1,6 +1,7 @@
 using Reactant
-using Reactant: traced_type, ConcreteRArray, TracedRArray, ConcreteToTraced
+using Reactant: to_rarray, traced_type, ConcreteRArray, TracedRArray, ConcreteToTraced
 using Test
+using JET: @test_opt
 
 @testset "Tracing" begin
     @testset "trace_type" begin
@@ -99,5 +100,13 @@ using Test
                 )
             end
         end
+    end
+    @testset "to_rarray" begin
+        @test to_rarray(1.0) isa Float64
+        @test to_rarray([1.0]) isa ConcreteRArray{Float64,1}
+        @test to_rarray(ConcreteRArray([1.0])) isa ConcreteRArray{Float64,1}
+        @test_opt to_rarray(1.0)
+        @test_opt to_rarray([1.0])
+        @test_opt to_rarray(ConcreteRArray([1.0]))
     end
 end
