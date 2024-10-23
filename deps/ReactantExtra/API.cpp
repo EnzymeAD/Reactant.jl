@@ -950,15 +950,32 @@ extern "C" ifrt::Array* ifrt_array_ctor() {
     return new ifrt::Array();
 }
 
-// extern "C" void ifrt_array_free(ifrt::Array* array) {
-//     delete array;
-// }
-
-extern "C" ifrt::DType ifrt_array_dtype(ifrt::Array* array) {
-    return array->dtype();
+extern "C" void ifrt_array_free(ifrt::Array* array) {
+    delete array;
 }
 
-// ...
+extern "C" ifrt::DType* ifrt_array_dtype(ifrt::Array* array) {
+    return new ifrt::DTypep(array->dtype());
+}
+
+extern "C" ifrt::Shape* ifrt_array_shape(ifrt::Array* array) {
+    return &array->shape();
+}
+
+extern "C" ifrt::Sharding* ifrt_array_sharding(ifrt::Array* array) {
+    return &array->sharding();
+}
+
+extern "C" ifrt::PjRtLayout* ifrt_array_layout(ifrt::Array* array) {
+    return array->layout().release();
+}
+
+// TODO xla::ifrt::Array::DisassembleIntoSingleDeviceArrays
+// TODO xla::ifrt::Array::FullyReplicatedShard
+
+extern "C" Future<> ifrt_array_copy_to_host_buffer(ifrt::Array* array, void* data, const int64_t* byte_strides, int semantics) {
+    return array->CopyToHostBuffer(data, absl::Span<const int64_t>(byte_strides, array->shape().num_elements()), semantics);
+}
 #pragma endregion
 
 #pragma region xla::ifrt::PjRtArray
