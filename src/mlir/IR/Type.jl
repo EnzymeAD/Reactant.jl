@@ -90,7 +90,7 @@ Type(T::Core.Type{<:Integer}; context::Context=context()) =
 
 Creates a complex type with the given element type.
 """
-Type(T::Core.Type{<:Complex}; context=context()) = Type(API.mlirComplexTypeGet(Type(T.parameters[1])))
+Type(::Core.Type{Complex{T}}; context=context()) where {T} = Type(API.mlirComplexTypeGet(Type(T)))
 
 """
     Type(T::Core.Type{<:Signed}; context=context()
