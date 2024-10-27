@@ -26,7 +26,7 @@ jobs:
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
-      - run: julia make-bindings.jl
+      - run: julia --project=. make-bindings.jl
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
