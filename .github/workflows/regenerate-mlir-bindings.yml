@@ -22,7 +22,7 @@ jobs:
         run: |
           import Pkg
           Pkg.add("JuliaFormatter")
-      - run: julia --project=. -e 'using Pkg; pkg"instantiate"'
+      - run: julia --project=. -e 'using Pkg; pkg"instantiate"; pkg"update"; pkg"precompile"'
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
