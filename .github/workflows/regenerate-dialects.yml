@@ -22,7 +22,7 @@ jobs:
         run: |
           import Pkg
           Pkg.add("JuliaFormatter")
-      - run: julia make-dialects.jl
+      - run: julia make-bindings.jl
         working-directory: ./deps/ReactantExtra
       - run: chmod -R u+rw ./src/mlir/Dialects/
       - name: Format code
