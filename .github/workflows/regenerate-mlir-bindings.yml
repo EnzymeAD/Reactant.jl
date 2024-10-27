@@ -24,8 +24,12 @@ jobs:
           Pkg.add("JuliaFormatter")
       - run: julia --project=. -e 'using Pkg; pkg"instantiate"'
         working-directory: ./deps/ReactantExtra
+        env:
+          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
       - run: julia make-bindings.jl
         working-directory: ./deps/ReactantExtra
+        env:
+          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
       - run: |
           chmod -R u+rw ./src/mlir/Dialects/
           chmod u+rw ./src/mlir/libMLIR_h.jl
