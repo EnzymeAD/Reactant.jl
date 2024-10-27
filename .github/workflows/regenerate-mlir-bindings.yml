@@ -22,7 +22,7 @@ jobs:
         run: |
           import Pkg
           Pkg.add("JuliaFormatter")
-      - run: julia --project=. -e 'using Pkg; pkg"instantiate"'
+      - run: julia --project=. -e 'using Pkg; Pkg.instantiate(); using Clang; Clang.JLLEnvs.get_system_includes()'
         working-directory: ./deps/ReactantExtra
       - run: julia make-bindings.jl
         working-directory: ./deps/ReactantExtra
