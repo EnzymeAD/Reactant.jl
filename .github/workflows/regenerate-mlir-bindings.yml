@@ -23,8 +23,8 @@ jobs:
           import Pkg
           Pkg.add("JuliaFormatter")
       - name: Instantiate dependencies
-        run: julia --project=. --color=yes {0}
-        shell: |
+        shell: julia --project=. --color=yes {0}
+        run: |
           using Pkg
           pkg"instantiate"
           pkg"update"
