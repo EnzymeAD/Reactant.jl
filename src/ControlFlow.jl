@@ -95,20 +95,27 @@ end
 function traced_if(
     cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args
 ) where {TFn,FFn}
-    (_, true_branch_compiled, true_branch_results, _, _, _, true_input_args, _, true_linear_results) = Reactant.make_mlir_fn(
-        true_fn, args, (), string(gensym("true_branch")), false; return_dialect=:stablehlo
+    (_, true_branch_compiled, true_branch_results, _, _, _, _, _, true_linear_results) = Reactant.make_mlir_fn(
+        true_fn,
+        args,
+        (),
+        string(gensym("true_branch")),
+        false;
+        return_dialect=:stablehlo,
+        no_args_in_result=true,
+        construct_function_without_args=true,
     )
 
-    (_, false_branch_compiled, false_branch_results, _, _, _, false_input_args, _, false_linear_results) = Reactant.make_mlir_fn(
-        false_fn, args, (), string(gensym("false_branch")), false; return_dialect=:stablehlo
+    (_, false_branch_compiled, false_branch_results, _, _, _, _, _, false_linear_results) = Reactant.make_mlir_fn(
+        false_fn,
+        args,
+        (),
+        string(gensym("false_branch")),
+        false;
+        return_dialect=:stablehlo,
+        no_args_in_result=true,
+        construct_function_without_args=true,
     )
-
-    for (of, with) in zip(true_input_args, args)
-        MLIR.API.mlirValueReplaceAllUsesOfWith(of.mlir_data, with.mlir_data)
-    end
-    for (of, with) in zip(false_input_args, args)
-        MLIR.API.mlirValueReplaceAllUsesOfWith(of.mlir_data, with.mlir_data)
-    end
 
     @assert length(true_branch_results) == length(false_branch_results) "true branch returned $(length(true_branch_results)) results, false branch returned $(length(false_branch_results)). This shouldn't happen."
 

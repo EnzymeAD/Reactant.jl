@@ -69,7 +69,7 @@ parent_op(operation::Operation) =
     Operation(API.mlirOperationGetParentOperation(operation), false)
 
 """
-    rmfromparent(op)
+    rmfromparent!(op)
 
 Removes the given operation from its parent block. The operation is not destroyed.
 The ownership of the operation is transferred to the caller.
