@@ -26,9 +26,8 @@ jobs:
         shell: julia --project=. --color=yes {0}
         run: |
           using Pkg
-          pkg"instantiate"
-          pkg"update"
-          pkg"precompile"
+          Pkg.instantiate()
+          Pkg.precompile()
           using Clang
           Clang.JLLEnvs.get_system_includes()
         working-directory: ./deps/ReactantExtra
