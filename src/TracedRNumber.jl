@@ -219,7 +219,7 @@ function Base.real(x::TracedRNumber{Complex{T}}) where {T}
     )
 end
 
-Base.imag(x::TracedRNumber) = x
+Base.imag(x::TracedRNumber) = zero(x)
 function Base.imag(x::TracedRNumber{Complex{T}}) where {T}
     return TracedRNumber{T}(
         (),
