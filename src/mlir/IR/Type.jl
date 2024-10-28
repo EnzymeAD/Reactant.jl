@@ -231,14 +231,6 @@ Checks whether the given type is an f64 type.
 """
 isf64(type::Type) = API.mlirTypeIsAF64(type)
 
-# Complex types
-"""
-    Type(Complex{T}) where {T}
-
-Creates a complex type with the given element type in the same context as the element type. The type is owned by the context.
-"""
-Type(::Core.Type{Complex{T}}) where {T} = Type(API.mlirComplexTypeGet(Type(T)))
-
 """
     iscomplex(type)
 
