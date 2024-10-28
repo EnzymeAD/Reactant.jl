@@ -38,7 +38,10 @@ jobs:
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
-      - run: git config core.fileMode false
+      - run: |
+          chmod -R u+rw ./src/mlir/Dialects/
+          chmod u+rw ./src/mlir/libMLIR_h.jl
+          git config core.fileMode false
       - name: Format code
         shell: julia --color=yes {0}
         run: |
