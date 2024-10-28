@@ -225,7 +225,7 @@ function Base.real(A::TracedRArray{Complex{T},N}) where {T,N}
     )
 end
 
-Base.imag(A::TracedRArray) = A
+Base.imag(A::TracedRArray) = zero(A)
 function Base.imag(A::TracedRArray{Complex{T},N}) where {T,N}
     return TracedRArray{T,N}(
         (),
