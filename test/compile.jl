@@ -11,7 +11,7 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
 
             f = @compile sum(x2)
 
-            @test f(x2) isa @NamedTuple{a::Reactant.ConcreteRArray{Float64,0}}
+            @test f(x2) isa @NamedTuple{a::Reactant.ConcreteRNumber{Float64}}
             @test isapprox(f(x2).a, sum(x.a))
         end
     end

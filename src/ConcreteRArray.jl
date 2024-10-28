@@ -95,13 +95,21 @@ end
 
 Base.convert(::Type{T}, x::ConcreteRNumberType{T}) where {T} = to_number(x)
 
-for jlop in (:(Base.isless), :(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.:^)),
+for jlop in (
+        :(Base.isless),
+        :(Base.:+),
+        :(Base.:-),
+        :(Base.:*),
+        :(Base.:/),
+        :(Base.:^),
+        :(Base.:(==)),
+    ),
     T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
 
     @eval begin
         $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
-        $(jlop)(x::$(T), y) = $(jlop)(to_number(x), y)
-        $(jlop)(x, y::$(T)) = $(jlop)(x, to_number(y))
+        $(jlop)(x::$(T), y::Number) = $(jlop)(to_number(x), y)
+        $(jlop)(x::Number, y::$(T)) = $(jlop)(x, to_number(y))
     end
 end
 

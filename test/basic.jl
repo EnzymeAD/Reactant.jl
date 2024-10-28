@@ -80,8 +80,7 @@ sum_compare(x) = sum(x) > 0
     # Ensure we are tracing as scalars. Else this will fail due to > not being defined on
     # arrays
     f = @compile sum_compare(a)
-    # We need to use [] to unwrap the scalar. We will fix this in the future.
-    @test f(a)[] == sum_compare(x)
+    @test f(a) == sum_compare(x)
 end
 
 function mysoftmax!(x)

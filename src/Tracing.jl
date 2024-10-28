@@ -189,7 +189,8 @@ function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedType,m
     elseif mode == TracedToConcrete
         @inline base_typec(TV::TT) where {TT<:UnionAll} =
             UnionAll(TV.var, base_typec(TV.body))
-        @inline base_typec(TV::TT) where {TT<:DataType} = ConcreteRArray{TV.parameters...}
+        @inline base_typec(TV::TT) where {TT<:DataType} =
+            (T <: TracedRArray ? ConcreteRArray : ConcreteRNumber){TV.parameters...}
         return base_typec(T)
     elseif mode == TracedTrack || mode == TracedSetPath
         return T
