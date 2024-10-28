@@ -567,8 +567,10 @@ end
 function DenseElementsAttribute(values::AbstractArray{<:Complex})
     shaped_type = TensorType(size(values), Type(eltype(values)))
     # TODO: row major
-    Attribute(
-        API.mlirDenseElementsAttrRawBufferGet(shaped_type, length(values) * sizeof(eltype(values)), values)
+    return Attribute(
+        API.mlirDenseElementsAttrRawBufferGet(
+            shaped_type, length(values) * Base.elsize(values), values
+        ),
     )
 end
 

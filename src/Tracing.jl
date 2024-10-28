@@ -492,3 +492,5 @@ end
 @inline function to_rarray(@nospecialize(x))
     return make_tracer(OrderedIdDict(), x, (), Reactant.ArrayToConcrete)
 end
+
+to_rarray(x::ReactantPrimitive) = ConcreteRArray(x)

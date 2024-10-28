@@ -86,13 +86,6 @@ Type(T::Core.Type{<:Integer}; context::Context=context()) =
     Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
 
 """
-    Type(T::Core.Type{<:Complex}; context=context())
-
-Creates a complex type with the given element type.
-"""
-Type(T::Core.Type{<:Complex}; context=context()) = Type(API.mlirComplexTypeGet(Type(T(im) |> real |> typeof)))
-
-"""
     Type(T::Core.Type{<:Signed}; context=context()
 
 Creates a signed integer type of the given bitwidth in the context. The type is owned by the context.

@@ -8,7 +8,7 @@ mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     shape::NTuple{N,Int}
 end
 
-ConcreteRArray(data::T) where {T<:Number} = ConcreteRArray{T,0}(data, ())
+ConcreteRArray(data::T) where {T<:Number} = ConcreteRArray(fill(data))
 
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x)
 
