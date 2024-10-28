@@ -445,3 +445,47 @@ end
     c = Reactant.compile(+, (a, b))(a, b)
     @test c == ones(CT, 2) + ones(CT, 2)
 end
+
+@testset "Scalars" begin
+    @testset "Only Scalars" begin
+        x = (3, 3.14)
+
+        f1(x) = x[1] * x[2]
+
+        x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+        f2 = @compile f1(x_ra)
+        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=(Number,))) ≈ 5 * 5.2
+        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=(Number,))) isa ConcreteRNumber
+
+        x_ra = Reactant.to_rarray(x)
+        f3 = @compile f1(x_ra)
+        @test f3(Reactant.to_rarray((5, 5.2))) ≈ f1(x)
+        @test !(f3(Reactant.to_rarray((5, 5.2))) isa ConcreteRNumber)
+        @test f3(Reactant.to_rarray((5, 5.2))) isa Number
+
+        x_ra = Reactant.to_rarray(x; track_numbers=(Int,))
+        f4 = @compile f1(x_ra)
+        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=(Int,))) ≈ 5 * 3.14
+        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=(Int,))) isa ConcreteRNumber
+    end
+
+    @testset "Mixed" begin
+        x = (3, [3.14])
+
+        f1(x) = x[1] * x[2]
+
+        x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+
+        f2 = @compile f1(x_ra)
+        res2 = f2(Reactant.to_rarray((5, [3.14]); track_numbers=(Number,)))
+        @test only(res2) ≈ 5 * 3.14
+        @test res2 isa ConcreteRArray
+
+        x_ra = Reactant.to_rarray(x)
+
+        f3 = @compile f1(x_ra)
+        res3 = f3(Reactant.to_rarray((5, [3.14])))
+        @test only(res3) ≈ only(f1(x))
+        @test res3 isa ConcreteRArray
+    end
+end

@@ -93,36 +93,32 @@ function to_number(X::ConcreteRNumberType{T}) where {T}
     return data[]
 end
 
-function Base.convert(::Type{T}, x::ConcreteRNumberType{T}) where {T}
-    return to_number(x)
-end
+Base.convert(::Type{T}, x::ConcreteRNumberType{T}) where {T} = to_number(x)
 
-for jlop in (:(Base.isless), :(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.:^))
+for jlop in (:(Base.isless), :(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.:^)),
+    T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
+
     @eval begin
-        function $jlop(x::ConcreteRNumberType{T}, y::ConcreteRNumberType{U}) where {T,U}
-            return $jlop(to_number(x), to_number(y))
-        end
-        function $jlop(x::ConcreteRNumberType{T}, y) where {T}
-            return $jlop(to_number(x), y)
-        end
-        function $jlop(x, y::ConcreteRNumberType{U}) where {U}
-            return $jlop(x, to_number(y))
-        end
+        $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
+        $(jlop)(x::$(T), y) = $(jlop)(to_number(x), y)
+        $(jlop)(x, y::$(T)) = $(jlop)(x, to_number(y))
     end
 end
 
-function Base.isapprox(x::ConcreteRNumberType{T}, y; kwargs...) where {T}
-    return Base.isapprox(to_number(x), y; kwargs...)
-end
+for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
+    @eval begin
+        function Base.isapprox(x::$(T), y::Number; kwargs...)
+            return Base.isapprox(to_number(x), y; kwargs...)
+        end
 
-function Base.isapprox(x, y::ConcreteRNumberType{T}; kwargs...) where {T}
-    return Base.isapprox(x, to_number(y); kwargs...)
-end
+        function Base.isapprox(x::Number, y::$(T); kwargs...)
+            return Base.isapprox(x, to_number(y); kwargs...)
+        end
 
-function Base.isapprox(
-    x::ConcreteRNumberType{T}, y::ConcreteRNumberType{T2}; kwargs...
-) where {T,T2}
-    return Base.isapprox(to_number(x), to_number(y); kwargs...)
+        function Base.isapprox(x::$(T), y::$(T); kwargs...)
+            return Base.isapprox(to_number(x), to_number(y); kwargs...)
+        end
+    end
 end
 
 function Base.show(io::IO, X::ConcreteRNumberType{T}) where {T}
