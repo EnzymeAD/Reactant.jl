@@ -6,10 +6,8 @@ function build_file(output_path)
             dir=@__DIR__,
         ),
     )
-    Base.Filesystem.cp(
-        joinpath(@__DIR__, "bazel-bin", file),
-        output_path;
-        force=true,
+    return Base.Filesystem.cp(
+        joinpath(@__DIR__, "bazel-bin", file), output_path; force=true
     )
 end
 

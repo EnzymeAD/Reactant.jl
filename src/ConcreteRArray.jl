@@ -4,11 +4,34 @@ end
 
 mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     data::XLA.AsyncBuffer
-    #	data::XLAArray{T, N}
+    #   data::XLAArray{T, N}
     shape::NTuple{N,Int}
 end
 
-ConcreteRArray(data::T) where {T<:Number} = ConcreteRArray(fill(data))
+mutable struct ConcreteRNumber{T} <: RNumber{T}
+    data::XLA.AsyncBuffer
+end
+
+function ConcreteRNumber(
+    data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[]
+) where {T<:Number}
+    crarray = ConcreteRArray(fill(data); client, idx)
+    return ConcreteRNumber{T}(crarray.data)
+end
+
+Base.size(::ConcreteRNumber) = ()
+
+function ConcreteRArray(
+    data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[]
+) where {T<:Number}
+    Base.depwarn(
+        "ConcreteRArray(data::Number) is deprecated, use ConcreteRNumber(data) instead",
+        :ConcreteRArray,
+    )
+    return ConcreteRArray(fill(data); client, idx)
+end
+
+const ConcreteRNumberType{T} = Union{ConcreteRArray{T,0},ConcreteRNumber{T}}
 
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x)
 
@@ -48,7 +71,7 @@ function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,El
     # XLA.from_row_major(data)
 end
 
-function synchronize(x::ConcreteRArray)
+function synchronize(x::Union{ConcreteRArray,ConcreteRNumber})
     XLA.synced_buffer(x.data)
     return nothing
 end
@@ -60,7 +83,7 @@ end
 #     return ConcreteRArray{T,N}(x.data)
 # end
 
-function to_float(X::ConcreteRArray{T,0}) where {T}
+function to_number(X::ConcreteRNumberType{T}) where {T}
     data = Ref{T}()
     XLA.await(X.data)
     buf = X.data.buffer
@@ -70,36 +93,45 @@ function to_float(X::ConcreteRArray{T,0}) where {T}
     return data[]
 end
 
-function Base.convert(::Type{T}, x::ConcreteRArray{T,0}) where {T}
-    return to_float(x)
+function Base.convert(::Type{T}, x::ConcreteRNumberType{T}) where {T}
+    return to_number(x)
 end
 
 for jlop in (:(Base.isless), :(Base.:+), :(Base.:-), :(Base.:*), :(Base.:/), :(Base.:^))
     @eval begin
-        function $jlop(x::ConcreteRArray{T,0}, y::ConcreteRArray{U,0}) where {T,U}
-            return $jlop(to_float(x), to_float(y))
+        function $jlop(x::ConcreteRNumberType{T}, y::ConcreteRNumberType{U}) where {T,U}
+            return $jlop(to_number(x), to_number(y))
         end
-        function $jlop(x::ConcreteRArray{T,0}, y) where {T}
-            return $jlop(to_float(x), y)
+        function $jlop(x::ConcreteRNumberType{T}, y) where {T}
+            return $jlop(to_number(x), y)
         end
-        function $jlop(x, y::ConcreteRArray{U,0}) where {U}
-            return $jlop(x, to_float(y))
+        function $jlop(x, y::ConcreteRNumberType{U}) where {U}
+            return $jlop(x, to_number(y))
         end
     end
 end
 
-function Base.isapprox(x::ConcreteRArray{T,0}, y; kwargs...) where {T}
-    return Base.isapprox(to_float(x), y; kwargs...)
+function Base.isapprox(x::ConcreteRNumberType{T}, y; kwargs...) where {T}
+    return Base.isapprox(to_number(x), y; kwargs...)
 end
 
-function Base.isapprox(x, y::ConcreteRArray{T,0}; kwargs...) where {T}
-    return Base.isapprox(x, to_float(y); kwargs...)
+function Base.isapprox(x, y::ConcreteRNumberType{T}; kwargs...) where {T}
+    return Base.isapprox(x, to_number(y); kwargs...)
 end
 
 function Base.isapprox(
-    x::ConcreteRArray{T,0}, y::ConcreteRArray{T2,0}; kwargs...
+    x::ConcreteRNumberType{T}, y::ConcreteRNumberType{T2}; kwargs...
 ) where {T,T2}
-    return Base.isapprox(to_float(x), to_float(y); kwargs...)
+    return Base.isapprox(to_number(x), to_number(y); kwargs...)
+end
+
+function Base.show(io::IO, X::ConcreteRNumberType{T}) where {T}
+    if X.data == XLA.AsyncEmptyBuffer
+        println(io, "<Empty buffer>")
+        return nothing
+    end
+    str = sprint(show, to_number(X))
+    return print(io, "$(typeof(X))($(str))")
 end
 
 function Base.print_array(io::IO, X::ConcreteRArray)
@@ -115,7 +147,8 @@ function Base.show(io::IO, X::ConcreteRArray)
         println(io, "<Empty buffer>")
         return nothing
     end
-    return Base.show(io, convert(Array, X))
+    str = sprint(show, convert(Array, X))
+    return print(io, "$(typeof(X))($(str))")
 end
 
 const getindex_warned = Ref(false)
