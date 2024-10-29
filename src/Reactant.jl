@@ -82,16 +82,18 @@ end
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")
+
+# XXX: Move to ReactantCore
+include("ControlFlow.jl")
+
+using .ControlFlow: @trace, MissingTracedValue
+export @trace
+
 include("utils.jl")
 
 include("ConcreteRArray.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
-
-include("ControlFlow.jl")
-
-using .ControlFlow: @trace, MissingTracedValue
-export @trace
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 

@@ -20,6 +20,15 @@ function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     end
 end
 
+function error_if_return(expr)
+    return MacroTools.postwalk(expr) do x
+        if x isa Expr && x.head == :return
+            error("Cannot use @trace on a block that contains a return statement")
+        end
+        return x
+    end
+end
+
 mutable struct MissingTracedValue
     paths
 end
@@ -27,6 +36,10 @@ end
 MissingTracedValue() = MissingTracedValue(())
 
 function trace_if(mod, expr)
+    expr.head == :if && error_if_return(expr)
+
+    condition_vars = [ExpressionExplorer.compute_symbols_state(expr.args[1]).references...]
+
     true_branch_symbols = ExpressionExplorer.compute_symbols_state(expr.args[2])
     true_branch_input_list = [true_branch_symbols.references...]
     true_branch_assignments = [true_branch_symbols.assignments...]
@@ -40,7 +53,11 @@ function trace_if(mod, expr)
             trace_if(mod, expr.args[3])
         end
     elseif length(expr.args) == 2
-        :(), nothing
+        tmp_expr = []
+        for var in true_branch_assignments
+            push!(tmp_expr, :($(var) = $(var)))
+        end
+        Expr(:block, tmp_expr...), nothing
     else
         dump(expr)
         error("This shouldn't happen")
@@ -108,8 +125,9 @@ function trace_if(mod, expr)
     expr.head != :if &&
         return reactant_code_block, (true_branch_fn_name, false_branch_fn_name)
 
+    all_check_vars = [all_input_vars..., condition_vars...]
     return quote
-        if any($(is_traced), ($(all_input_vars...),))
+        if any($(is_traced), ($(all_check_vars...),))
             $(reactant_code_block)
         else
             $(expr)
@@ -214,10 +232,10 @@ function get_region_removing_missing_values(compiled_fn, insertions)
     return_op = MLIR.IR.terminator(block)
     for (i, rt) in insertions
         if rt isa TracedRNumber
-            attr = MLIR.IR.DenseElementsAttribute(zeros(eltype(rt)))
+            attr = MLIR.IR.DenseElementsAttribute(Array{eltype(rt)}(undef, ()))
             op = MLIR.Dialects.stablehlo.constant(; value=attr)
         elseif rt isa TracedRArray
-            attr = MLIR.IR.DenseElementsAttribute(zeros(eltype(rt), size(rt)))
+            attr = MLIR.IR.DenseElementsAttribute(Array{eltype(rt)}(undef, size(rt)))
             op = MLIR.Dialects.stablehlo.constant(; value=attr)
         else
             error("Unknown type $(typeof(rt))")
