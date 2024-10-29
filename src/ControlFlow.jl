@@ -141,6 +141,9 @@ function traced_if(
         reg
     end
 
+    MLIR.IR.rmfromparent!(true_branch_compiled)
+    MLIR.IR.rmfromparent!(false_branch_compiled)
+
     if_compiled = MLIR.Dialects.stablehlo.if_(
         cond.mlir_data;
         true_branch=true_branch_region,
@@ -149,7 +152,11 @@ function traced_if(
     )
 
     return map(enumerate(true_linear_results)) do (i, res)
-        res = copy(res)
+        if res isa TracedRNumber
+            res = TracedRNumber{eltype(res)}((), nothing)
+        else
+            res = similar(res)
+        end
         res.mlir_data = MLIR.IR.result(if_compiled, i)
         return res
     end
