@@ -15,6 +15,7 @@
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Async/IR/Async.h"
+#include "mlir/Dialect/Complex/IR/Complex.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/Extensions/InlinerExtension.h"
@@ -62,6 +63,27 @@
 using namespace mlir;
 using namespace llvm;
 using namespace xla;
+
+// MLIR C-API extras
+#pragma region MLIR Extra
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexFloatAttrGet(MlirContext ctx, MlirType type, float real, float imag) {
+    return wrap(complex::NumberAttr::get(unwrap(type), static_cast<double>(real), static_cast<double>(imag)));
+}
+
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexFloatAttrGetChecked(MlirLocation loc, MlirType type, float real, float imag) {
+    return wrap(complex::NumberAttr::getChecked(unwrap(loc), unwrap(type), real, imag));
+}
+
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexDoubleAttrGet(MlirContext ctx, MlirType type, double real, double imag) {
+    return wrap(complex::NumberAttr::get(unwrap(type), real, imag));
+}
+
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexDoubleAttrGetChecked(MlirLocation loc, MlirType type, double real, double imag) {
+    return wrap(complex::NumberAttr::getChecked(unwrap(loc), unwrap(type), unwrap(type), real, imag));
+}
+
+MlirTypeID mlirComplexAttrGetTypeID(void) { return wrap(complex::NumberAttr::getTypeID()); }
+#pragma endregion
 
 // int google::protobuf::io::CodedInputStream::default_recursion_limit_ = 100;
 // int xla::_LayoutProto_default_instance_;
