@@ -94,7 +94,7 @@ include("Tracing.jl")
 include("Compiler.jl")
 
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
-export ConcreteRArray, @compile, @code_hlo, @jit
+export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit
 
 const registry = Ref{MLIR.IR.DialectRegistry}()
 function __init__()

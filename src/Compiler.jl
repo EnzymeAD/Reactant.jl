@@ -5,6 +5,7 @@ import ..Reactant:
     MLIR,
     XLA,
     ConcreteRArray,
+    ConcreteRNumber,
     TracedRArray,
     TracedRNumber,
     OrderedIdDict,
@@ -28,6 +29,16 @@ function create_result(tocopy::T, path, result_stores) where {T}
     end
 
     return Expr(:new, T, elems...)
+end
+
+function create_result(tocopy::ConcreteRNumber{T}, path, result_stores) where {T}
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        return :(ConcreteRNumber{$T}($restore))
+    end
+    # We will set the data for this later
+    return :(ConcreteRNumber{$T}($(tocopy.data)))
 end
 
 function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
