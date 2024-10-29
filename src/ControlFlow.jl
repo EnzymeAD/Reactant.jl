@@ -160,6 +160,8 @@ function traced_if(
 
     result_types = MLIR.IR.Type[]
     linear_results = []
+    true_block_insertions = []
+    false_block_insertions = []
     for (i, (tr, fr)) in enumerate(zip(true_branch_results, false_branch_results))
         if typeof(tr) != typeof(fr)
             if !(tr isa MissingTracedValue) && !(fr isa MissingTracedValue)
@@ -168,9 +170,11 @@ function traced_if(
             elseif tr isa MissingTracedValue
                 push!(result_types, MLIR.IR.type(fr.mlir_data))
                 push!(linear_results, new_traced_value(false_linear_results[i]))
+                push!(true_block_insertions, (i => linear_results[end]))
             else
                 push!(result_types, MLIR.IR.type(tr.mlir_data))
                 push!(linear_results, new_traced_value(true_linear_results[i]))
+                push!(false_block_insertions, (i => linear_results[end]))
             end
         else
             push!(result_types, MLIR.IR.type(tr.mlir_data))
@@ -178,19 +182,14 @@ function traced_if(
         end
     end
 
-    true_branch_region = let reg = MLIR.IR.Region()
-        MLIR.API.mlirRegionTakeBody(
-            reg, MLIR.API.mlirOperationGetRegion(true_branch_compiled, 0)
-        )
-        reg
-    end
+    # Replace all uses of missing values with the correct values
+    true_branch_region = get_region_removing_missing_values(
+        true_branch_compiled, true_block_insertions
+    )
 
-    false_branch_region = let reg = MLIR.IR.Region()
-        MLIR.API.mlirRegionTakeBody(
-            reg, MLIR.API.mlirOperationGetRegion(false_branch_compiled, 0)
-        )
-        reg
-    end
+    false_branch_region = get_region_removing_missing_values(
+        false_branch_compiled, false_block_insertions
+    )
 
     MLIR.IR.rmfromparent!(true_branch_compiled)
     MLIR.IR.rmfromparent!(false_branch_compiled)
@@ -206,6 +205,31 @@ function traced_if(
         res.mlir_data = MLIR.IR.result(if_compiled, i)
         return res
     end
+end
+
+function get_region_removing_missing_values(compiled_fn, insertions)
+    region = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(
+        region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0)
+    )
+    block = MLIR.IR.Block(MLIR.API.mlirRegionGetFirstBlock(region), false)
+    return_op = MLIR.IR.terminator(block)
+    for (i, rt) in insertions
+        if rt isa TracedRNumber
+            attr = MLIR.IR.DenseElementsAttribute(zeros(eltype(rt)))
+            op = MLIR.Dialects.stablehlo.constant(; value=attr)
+        elseif rt isa TracedRArray
+            attr = MLIR.IR.DenseElementsAttribute(zeros(eltype(rt), size(rt)))
+            op = MLIR.Dialects.stablehlo.constant(; value=attr)
+        else
+            error("Unknown type $(typeof(rt))")
+        end
+        MLIR.IR.rmfromparent!(op)
+        insert!(block, 1, op)
+        val = MLIR.IR.result(op, 1)
+        MLIR.API.mlirValueReplaceAllUsesOfWith(MLIR.IR.operand(return_op, i), val)
+    end
+    return region
 end
 
 export @trace
