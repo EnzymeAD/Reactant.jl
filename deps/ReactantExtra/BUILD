@@ -351,7 +351,7 @@ cc_library(
 
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
-        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
+        "@xla//xla/python/pjrt_ifrt:pjrt_ifrt",
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/ffi:call_frame",
         "@com_google_protobuf//:protobuf",
