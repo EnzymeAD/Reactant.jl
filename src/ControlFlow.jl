@@ -209,9 +209,7 @@ end
 
 function get_region_removing_missing_values(compiled_fn, insertions)
     region = MLIR.IR.Region()
-    MLIR.API.mlirRegionTakeBody(
-        region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0)
-    )
+    MLIR.API.mlirRegionTakeBody(region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0))
     block = MLIR.IR.Block(MLIR.API.mlirRegionGetFirstBlock(region), false)
     return_op = MLIR.IR.terminator(block)
     for (i, rt) in insertions
