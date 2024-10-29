@@ -66,19 +66,11 @@ using namespace xla;
 
 // MLIR C-API extras
 #pragma region MLIR Extra
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexFloatAttrGet(MlirContext ctx, MlirType type, float real, float imag) {
-    return wrap(complex::NumberAttr::get(unwrap(type), static_cast<double>(real), static_cast<double>(imag)));
-}
-
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexFloatAttrGetChecked(MlirLocation loc, MlirType type, float real, float imag) {
-    return wrap(complex::NumberAttr::getChecked(unwrap(loc), unwrap(type), real, imag));
-}
-
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexDoubleAttrGet(MlirContext ctx, MlirType type, double real, double imag) {
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx, MlirType type, double real, double imag) {
     return wrap(complex::NumberAttr::get(unwrap(type), real, imag));
 }
 
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexDoubleAttrGetChecked(MlirLocation loc, MlirType type, double real, double imag) {
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc, MlirType type, double real, double imag) {
     return wrap(complex::NumberAttr::getChecked(unwrap(loc), unwrap(type), unwrap(type), real, imag));
 }
 
