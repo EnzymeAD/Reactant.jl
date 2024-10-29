@@ -422,6 +422,30 @@ macro compile(options, maybe_call=nothing)
 end
 
 """
+    @jit f(args...)
+
+    Run @compile f(args..) then immediately execute it
+"""
+macro jit(options, maybe_call=nothing)
+    call = something(maybe_call, options)
+    options = isnothing(maybe_call) ? :(optimize = true) : options
+    Meta.isexpr(call, :call) || error("@compile: expected call, got $call")
+    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
+        error("@compile: expected options in format optimize=value, got $options")
+    end
+
+    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
+
+    quote
+        options = $(esc(options))
+        f = $(esc(call.args[1]))
+        args = $(esc(Expr(:tuple, call.args[2:end]...)))
+        fn = compile(f, args; options.optimize)
+        fn(args...)
+    end
+end
+
+"""
     codegen_flatten!
 
 Generate Julia code to extract the XLA buffers from input arguments.
