@@ -64,6 +64,7 @@ function make_mlir_fn(
             (:args, i),
             concretein ? ConcreteToTraced : TracedSetPath;
             toscalar,
+            track_numbers=construct_function_without_args ? (Number,) : (),
         )
     end
 
@@ -146,7 +147,11 @@ function make_mlir_fn(
     seen_results = OrderedIdDict()
 
     traced_result = make_tracer(
-        seen_results, result, (:result,), concretein ? TracedTrack : TracedSetPath
+        seen_results,
+        result,
+        (:result,),
+        concretein ? TracedTrack : TracedSetPath;
+        track_numbers=construct_function_without_args ? (Number,) : (),
     )
 
     # marks buffers to be donated

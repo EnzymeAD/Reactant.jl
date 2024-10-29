@@ -420,10 +420,27 @@ end
 function make_tracer(
     seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
 ) where {RT<:Number}
-    if mode == ArrayToConcrete
-        length(track_numbers) == 0 && return prev
-        should_convert = any(Base.Fix1(<:, RT), track_numbers)
-        return should_convert ? ConcreteRNumber(prev) : prev
+    length(track_numbers) == 0 && return prev
+    should_convert = any(Base.Fix1(<:, RT), track_numbers)
+    if should_convert
+        if mode == ArrayToConcrete
+            return ConcreteRNumber(prev)
+        else
+            if mode == TracedTrack
+                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                if !haskey(seen, prev)
+                    return seen[prev] = res
+                end
+                return res
+            elseif mode == TracedSetPath
+                haskey(seen, prev) && return seen[prev]
+                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                seen[prev] = res
+                return res
+            elseif mode == TracedToConcrete
+                error("Input is not a traced-type: $(RT)")
+            end
+        end
     end
     return prev
 end
