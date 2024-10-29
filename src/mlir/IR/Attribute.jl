@@ -138,11 +138,21 @@ end
 
 Creates a complex attribute in the given context with the given complex value and double-precision FP semantics.
 """
-function Attribute(c::T; context::Context=context(), location::Location=Location(), check::Bool = false) where {T<:Complex}
+function Attribute(
+    c::T; context::Context=context(), location::Location=Location(), check::Bool=false
+) where {T<:Complex}
     if check
-        Attribute(API.mlirComplexAttrDoubleGetChecked(location, Type(T), Float64(real(c)), Float64(imag(c))))
+        Attribute(
+            API.mlirComplexAttrDoubleGetChecked(
+                location, Type(T), Float64(real(c)), Float64(imag(c))
+            ),
+        )
     else
-        Attribute(API.mlirComplexAttrDoubleGet(context, Type(T), Float64(real(c)), Float64(imag(c))))
+        Attribute(
+            API.mlirComplexAttrDoubleGet(
+                context, Type(T), Float64(real(c)), Float64(imag(c))
+            ),
+        )
     end
 end
 
