@@ -17,6 +17,10 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
+ReactantCore.is_traced(::TracedRArray) = true
+
+new_traced_value(::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), nothing)
+
 TracedRArray{T,N}(x::TracedRArray{T,N}) where {T,N} = x
 
 const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
