@@ -31,7 +31,7 @@ function ConcreteRArray(
     return ConcreteRArray(fill(data); client, idx)
 end
 
-const ConcreteRNumberType{T} = Union{ConcreteRArray{T,0},ConcreteRNumber{T}}
+const ConcreteRScalar{T} = Union{ConcreteRArray{T,0},ConcreteRNumber{T}}
 
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x)
 
@@ -83,7 +83,7 @@ end
 #     return ConcreteRArray{T,N}(x.data)
 # end
 
-function to_number(X::ConcreteRNumberType{T}) where {T}
+function to_number(X::ConcreteRScalar{T}) where {T}
     data = Ref{T}()
     XLA.await(X.data)
     buf = X.data.buffer
@@ -93,7 +93,7 @@ function to_number(X::ConcreteRNumberType{T}) where {T}
     return data[]
 end
 
-Base.convert(::Type{T}, x::ConcreteRNumberType{T}) where {T} = to_number(x)
+Base.convert(::Type{T}, x::ConcreteRScalar{T}) where {T} = to_number(x)
 
 for jlop in (
         :(Base.isless),
@@ -129,7 +129,7 @@ for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
     end
 end
 
-function Base.show(io::IO, X::ConcreteRNumberType{T}) where {T}
+function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
     if X.data == XLA.AsyncEmptyBuffer
         println(io, "<Empty buffer>")
         return nothing
