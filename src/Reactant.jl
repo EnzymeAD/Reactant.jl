@@ -88,14 +88,15 @@ include("ConcreteRArray.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 
-const TracedType = Union{TracedRArray,TracedRNumber}
-
 include("ControlFlow.jl")
+
+using .ControlFlow: @trace, MissingTracedValue
+export @trace
+
+const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
+
 include("Tracing.jl")
 include("Compiler.jl")
-
-using .ControlFlow: @trace
-export @trace
 
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
 export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit

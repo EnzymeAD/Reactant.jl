@@ -4,6 +4,8 @@ end
 
 mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
 
+mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+
 function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
     return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
@@ -11,6 +13,10 @@ end
 
 function mlir_type(::Type{<:RNumber{T}}) where {T}
     return MLIR.IR.TensorType((), MLIR.IR.Type(T))
+end
+
+function mlir_type(::Type{<:MissingTracedValue})
+    return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 end
 
 function transpose_ty(mlirty)
@@ -174,7 +180,9 @@ function make_mlir_fn(
     ret = MLIR.IR.block!(fnbody) do
         vals = MLIR.IR.Value[]
         for res in linear_results
-            if construct_function_without_args
+            if res isa MissingTracedValue
+                col_maj = broadcast_to_size(false, ()).mlir_data
+            elseif construct_function_without_args
                 col_maj = res.mlir_data
             else
                 col_maj = transpose_val(res.mlir_data)

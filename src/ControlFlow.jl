@@ -20,23 +20,36 @@ function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     end
 end
 
-function trace_if(mod, expr)
-    @assert length(expr.args) == 3 "`@trace` expects an `else` block for `if` blocks."
+mutable struct MissingTracedValue
+    paths
+end
 
+MissingTracedValue() = MissingTracedValue(())
+
+function trace_if(mod, expr)
     true_branch_symbols = ExpressionExplorer.compute_symbols_state(expr.args[2])
     true_branch_input_list = [true_branch_symbols.references...]
     true_branch_assignments = [true_branch_symbols.assignments...]
+    all_true_branch_vars = true_branch_input_list ∪ true_branch_assignments
     true_branch_fn_name = gensym(:true_branch)
 
-    else_block, discard_vars = if expr.args[3].head != :elseif
-        expr.args[3], nothing
+    else_block, discard_vars = if length(expr.args) == 3
+        if expr.args[3].head != :elseif
+            expr.args[3], nothing
+        else
+            trace_if(mod, expr.args[3])
+        end
+    elseif length(expr.args) == 2
+        :(), nothing
     else
-        trace_if(mod, expr.args[3])
+        dump(expr)
+        error("This shouldn't happen")
     end
 
     false_branch_symbols = ExpressionExplorer.compute_symbols_state(else_block)
     false_branch_input_list = [false_branch_symbols.references...]
     false_branch_assignments = [false_branch_symbols.assignments...]
+    all_false_branch_vars = false_branch_input_list ∪ false_branch_assignments
     false_branch_fn_name = gensym(:false_branch)
 
     all_input_vars = true_branch_input_list ∪ false_branch_input_list
@@ -45,10 +58,17 @@ function trace_if(mod, expr)
 
     all_vars = all_input_vars ∪ all_output_vars
 
+    non_existant_true_branch_vars = setdiff(all_output_vars, all_true_branch_vars)
+    true_branch_extras = Expr(
+        :block,
+        [:($(var) = $(MissingTracedValue())) for var in non_existant_true_branch_vars]...,
+    )
+
     true_branch_fn = quote
         $(true_branch_fn_name) =
             ($(all_input_vars...),) -> begin
                 $(expr.args[2])
+                $(true_branch_extras)
                 return ($(all_output_vars...),)
             end
     end
@@ -56,10 +76,17 @@ function trace_if(mod, expr)
         true_branch_fn, true_branch_fn_name, all_vars
     )
 
+    non_existant_false_branch_vars = setdiff(all_output_vars, all_false_branch_vars)
+    false_branch_extras = Expr(
+        :block,
+        [:($(var) = $(MissingTracedValue())) for var in non_existant_false_branch_vars]...,
+    )
+
     false_branch_fn = quote
         $(false_branch_fn_name) =
             ($(all_input_vars...),) -> begin
                 $(else_block)
+                $(false_branch_extras)
                 return ($(all_output_vars...),)
             end
     end
@@ -96,6 +123,9 @@ is_traced(::TracedRNumber) = true
 
 makelet(x, prepend::Symbol) = :($(Symbol(prepend, x)) = $(x))
 
+new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
+new_traced_value(res::TracedRArray) = similar(res)
+
 # Generate this dummy function and later we remove it during tracing
 function traced_if(cond, true_fn::TFn, false_fn::FFn, args) where {TFn,FFn}
     return cond ? true_fn(args) : false_fn(args)
@@ -128,13 +158,25 @@ function traced_if(
 
     @assert length(true_branch_results) == length(false_branch_results) "true branch returned $(length(true_branch_results)) results, false branch returned $(length(false_branch_results)). This shouldn't happen."
 
+    result_types = MLIR.IR.Type[]
+    linear_results = []
     for (i, (tr, fr)) in enumerate(zip(true_branch_results, false_branch_results))
-        @assert typeof(tr) == typeof(fr) "Result #$(i) for the branches have different \
-                                          types: true branch returned `$(typeof(tr))`, \
-                                          false branch returned `$(typeof(fr))`."
+        if typeof(tr) != typeof(fr)
+            if !(tr isa MissingTracedValue) && !(fr isa MissingTracedValue)
+                error("Result #$(i) for the branches have different types: true branch \
+                       returned `$(typeof(tr))`, false branch returned `$(typeof(fr))`.")
+            elseif tr isa MissingTracedValue
+                push!(result_types, MLIR.IR.type(fr.mlir_data))
+                push!(linear_results, new_traced_value(false_linear_results[i]))
+            else
+                push!(result_types, MLIR.IR.type(tr.mlir_data))
+                push!(linear_results, new_traced_value(true_linear_results[i]))
+            end
+        else
+            push!(result_types, MLIR.IR.type(tr.mlir_data))
+            push!(linear_results, new_traced_value(tr))
+        end
     end
-
-    results = [MLIR.IR.type(tr.mlir_data) for tr in true_linear_results]
 
     true_branch_region = let reg = MLIR.IR.Region()
         MLIR.API.mlirRegionTakeBody(
@@ -157,15 +199,10 @@ function traced_if(
         cond.mlir_data;
         true_branch=true_branch_region,
         false_branch=false_branch_region,
-        result_0=results,
+        result_0=result_types,
     )
 
-    return map(enumerate(true_linear_results)) do (i, res)
-        if res isa TracedRNumber
-            res = TracedRNumber{eltype(res)}((), nothing)
-        else
-            res = similar(res)
-        end
+    return map(enumerate(linear_results)) do (i, res)
         res.mlir_data = MLIR.IR.result(if_compiled, i)
         return res
     end
