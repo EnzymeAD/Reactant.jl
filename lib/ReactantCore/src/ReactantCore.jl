@@ -28,6 +28,11 @@ if no traced value is found inside the expression, then there is no overhead.
 - `if` statements with a preceeding assignment (`@trace a = if ...`) (note the positioning
   of the macro needs to be before the assignment and not before the `if`)
 
+## Special Considerations
+
+- Apply `@trace` only at the outermost `if`. Nested `if` statements will be automatically
+  expanded into the correct form.
+
 # Extended Help
 
 ## Caveats (Deviations from Core Julia Semantics)
@@ -73,6 +78,7 @@ This will not compile since `y` is a `Float32` in one branch and a `Float64` in 
 You need to ensure that all branches have the same type.
 """
 macro trace(expr)
+    expr = macroexpand(__module__, expr)
     if expr.head == :(=)
         if expr.args[2] isa Expr && expr.args[2].head == :if
             return esc(trace_if_with_returns(__module__, expr))
@@ -97,7 +103,23 @@ function trace_if_with_returns(mod, expr)
 end
 
 function trace_if(mod, expr; store_last_line=nothing, depth=0)
-    expr.head == :if && error_if_return(expr)
+    discard_vars_from_expansion = []
+    original_expr = expr
+
+    if depth == 0
+        error_if_return(expr)
+
+        counter = 0
+        expr = MacroTools.prewalk(expr) do x
+            counter += 1
+            if x isa Expr && x.head == :if && counter > 1
+                ex_new, dv, _ = trace_if(mod, x; store_last_line, depth=depth + 1)
+                append!(discard_vars_from_expansion, dv)
+                return ex_new
+            end
+            return x
+        end
+    end
 
     cond_expr = remove_shortcircuiting(expr.args[1])
     condition_vars = [ExpressionExplorer.compute_symbols_state(cond_expr).references...]
@@ -122,7 +144,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
 
     else_block, discard_vars, _ = if length(expr.args) == 3
         if expr.args[3].head != :elseif
-            expr.args[3], nothing, nothing
+            expr.args[3], [], nothing
         else
             trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1)
         end
@@ -131,11 +153,13 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
         for var in true_branch_assignments
             push!(tmp_expr, :($(var) = $(var)))
         end
-        Expr(:block, tmp_expr...), nothing, nothing
+        Expr(:block, tmp_expr...), [], nothing
     else
         dump(expr)
         error("This shouldn't happen")
     end
+
+    discard_vars = unique(discard_vars_from_expansion) ∪ discard_vars
 
     false_block = if store_last_line !== nothing
         @assert else_block.head == :block "currently we only support blocks"
@@ -215,7 +239,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
         if any($(is_traced), ($(all_check_vars...),))
             $(reactant_code_block)
         else
-            $(expr)
+            $(original_expr)
         end
     end
 end

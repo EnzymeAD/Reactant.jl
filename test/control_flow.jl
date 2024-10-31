@@ -55,7 +55,7 @@ function condition2_nested_if(x, y)
     x_sum = sum(x)
     @trace if x_sum > 0
         y_sum = sum(y)
-        @trace if y_sum > 0
+        if y_sum > 0
             z = x_sum + y_sum
         else
             z = x_sum - y_sum
@@ -86,13 +86,13 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y) broken = true
+    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y)
     @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y)
 
     y = -rand(2, 10)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y) broken = true
+    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y)
     @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y)
 
     x = -rand(2, 10)
