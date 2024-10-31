@@ -265,3 +265,87 @@ end
     res = condition7_bare_elseif(x)
     @test res_ra ≈ res
 end
+
+function condition8_return_if(x)
+    @trace (y, z) = if sum(x) > 0
+        -1, 2.0
+    elseif sum(x) < 0
+        1, -2.0
+    else
+        0, 0.0
+    end
+    return y, z
+end
+
+@testset "condition8: return if" begin
+    x = rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit(condition8_return_if(x_ra))
+    res = condition8_return_if(x)
+    @test res_ra[1] ≈ res[1]
+    @test res_ra[2] ≈ res[2]
+
+    x = -rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit(condition8_return_if(x_ra))
+    res = condition8_return_if(x)
+    @test res_ra[1] ≈ res[1]
+    @test res_ra[2] ≈ res[2]
+
+    x = zeros(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit(condition8_return_if(x_ra))
+    res = condition8_return_if(x)
+    @test res_ra[1] ≈ res[1]
+    @test res_ra[2] ≈ res[2]
+end
+
+function condition9_if_ends_with_nothing(x)
+    @trace if sum(x) > 0
+        y = 1.0
+        nothing
+    else
+        y = 2.0
+    end
+    return y
+end
+
+@testset "condition9: if ends with nothing" begin
+    x = rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit(condition9_if_ends_with_nothing(x_ra))
+    res = condition9_if_ends_with_nothing(x)
+    @test res_ra ≈ res
+
+    x = -rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit(condition9_if_ends_with_nothing(x_ra))
+    res = condition9_if_ends_with_nothing(x)
+    @test res_ra ≈ res
+end
+
+# XXX: mutation is currently broken
+function condition10_condition_with_setindex(x)
+    @trace if sum(x) > 0
+        x[1, 1] = -1.0
+    else
+        x[1, 1] = 1.0
+    end
+    return x
+end
+
+@testset "condition10: condition with setindex!" begin
+    x = rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit(condition10_condition_with_setindex(x_ra))
+    @test res_ra[1, 1] == -1.0 broken = true
+    @test res_ra[2, 1] == 1.0 broken = true
+    @test x_ra[1, 1] == -1.0 broken = true
+    @test x_ra[2, 1] == 1.0 broken = true
+end
