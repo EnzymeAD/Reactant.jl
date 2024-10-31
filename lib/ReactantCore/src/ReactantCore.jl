@@ -150,7 +150,7 @@ function trace_if(mod, expr)
         )
     end
 
-    expr.head != :if &&
+    expr.head == :elseif &&
         return reactant_code_block, (true_branch_fn_name, false_branch_fn_name)
 
     all_check_vars = [all_input_vars..., condition_vars...]
