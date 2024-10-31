@@ -1,4 +1,4 @@
-name: Format `main`
+name: Format 'main'
 on:
   schedule:
     - cron: '0 0 * * *'
