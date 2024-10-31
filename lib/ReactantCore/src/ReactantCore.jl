@@ -16,6 +16,47 @@ end
 MissingTracedValue() = MissingTracedValue(())
 
 # Code generation
+"""
+    @trace <expr>
+
+Converts certain expressions like control flow into a Reactant friendly form. Importantly,
+if no traced value is found inside the expression, then there is no overhead.
+
+## Currently Supported
+
+- `if` conditions (with `elseif` and other niceties)
+
+# Extended Help
+
+## Caveats (Deviations from Core Julia Semantics)
+
+### New variables introduced
+
+```julia
+@trace if x > 0
+    y = x + 1
+    p = 1
+else
+    y = x - 1
+end
+```
+
+In the outer scope `p` is not defined if `x ≤ 0`. However, for the traced version, it is
+defined and set to a dummy value.
+
+### Short Circuiting Operations
+
+```julia
+@trace if x > 0 && z > 0
+    y = x + 1
+else
+    y = x - 1
+end
+```
+
+`&&` and `||` are short circuiting operations. In the traced version, we replace them with
+`&` and `|` respectively.
+"""
 macro trace(expr)
     expr.head == :if && return esc(trace_if(__module__, expr))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
@@ -24,7 +65,8 @@ end
 function trace_if(mod, expr)
     expr.head == :if && error_if_return(expr)
 
-    condition_vars = [ExpressionExplorer.compute_symbols_state(expr.args[1]).references...]
+    cond_expr = remove_shortcircuiting(expr.args[1])
+    condition_vars = [ExpressionExplorer.compute_symbols_state(cond_expr).references...]
 
     true_branch_symbols = ExpressionExplorer.compute_symbols_state(expr.args[2])
     true_branch_input_list = [true_branch_symbols.references...]
@@ -101,7 +143,7 @@ function trace_if(mod, expr)
         $(true_branch_fn)
         $(false_branch_fn)
         ($(all_output_vars...),) = $(traced_if)(
-            $(expr.args[1]),
+            $(cond_expr),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
             ($(all_input_vars...),),
@@ -112,12 +154,24 @@ function trace_if(mod, expr)
         return reactant_code_block, (true_branch_fn_name, false_branch_fn_name)
 
     all_check_vars = [all_input_vars..., condition_vars...]
+    unique!(all_check_vars)
     return quote
         if any($(is_traced), ($(all_check_vars...),))
             $(reactant_code_block)
         else
             $(expr)
         end
+    end
+end
+
+function remove_shortcircuiting(expr)
+    return MacroTools.prewalk(expr) do x
+        if MacroTools.@capture(x, a_ && b_)
+            return :($a & $b)
+        elseif MacroTools.@capture(x, a_ || b_)
+            return :($a | $b)
+        end
+        return x
     end
 end
 
