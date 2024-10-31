@@ -19,7 +19,7 @@ steps:
     commands: |
       julia --project=. -e 'println("--- :julia: Instantiating project")
           using Pkg
-          Pkg.develop([PackageSpec(path=pwd()), PackageSpec(path="lib/ReactantCore")])'
+          Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
 
       julia --project=. -e 'println("--- :julia: Run Tests")
           using Pkg
