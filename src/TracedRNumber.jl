@@ -198,8 +198,7 @@ Base.:|(x::TracedRNumber{Bool}, y::TracedRNumber{Bool}) = x + y
 function Base.:!(x::TracedRNumber{Bool})
     true_val = promote_to(TracedRNumber{Bool}, true)
     return TracedRNumber{Bool}(
-        (),
-        MLIR.IR.result(MLIR.Dialects.stablehlo.xor(x.mlir_data, true_val.mlir_data), 1),
+        (), MLIR.IR.result(MLIR.Dialects.stablehlo.xor(x.mlir_data, true_val.mlir_data), 1)
     )
 end
 
