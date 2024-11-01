@@ -571,7 +571,7 @@ end
 end
 
 function to_rarray_internal(@nospecialize(::TracedRArray), ::Tuple)
-    error("Cannot convert TracedRArray to ConcreteRArray")
+    return error("Cannot convert TracedRArray to ConcreteRArray")
 end
 @inline to_rarray_internal(@nospecialize(x::ConcreteRArray), ::Tuple) = x
 @inline function to_rarray_internal(
