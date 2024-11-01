@@ -329,10 +329,9 @@ end
     @test res_ra ≈ res
 end
 
-# XXX: mutation is currently broken
 function condition10_condition_with_setindex(x)
     @trace if sum(x) > 0
-        x[1, 1] = -1.0
+        x[:, 1] = -1.0
     else
         x[1, 1] = 1.0
     end
@@ -345,7 +344,57 @@ end
 
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
     @test res_ra[1, 1] == -1.0 broken = true
-    @test res_ra[2, 1] == 1.0 broken = true
+    @test res_ra[2, 1] == -1.0 broken = true
     @test x_ra[1, 1] == -1.0 broken = true
-    @test x_ra[2, 1] == 1.0 broken = true
+    @test x_ra[2, 1] == -1.0 broken = true
+
+    x = -rand(2, 10)
+    x[2, 1] = 0.0
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit(condition10_condition_with_setindex(x_ra))
+    @test res_ra[1, 1] == -1.0 broken = true
+    @test res_ra[2, 1] == 0.0 broken = true
+    @test x_ra[1, 1] == -1.0 broken = true
+    @test x_ra[2, 1] == 0.0 broken = true
+end
+
+function condition11_nested_ifff(x, y, z)
+    x_sum = sum(x)
+    @trace if x_sum > 0
+        y_sum = sum(y)
+        if y_sum > 0
+            if sum(z) > 0
+                z = x_sum + y_sum + sum(z)
+            else
+                z = x_sum + y_sum
+            end
+        else
+            z = x_sum - y_sum
+        end
+    else
+        y_sum = sum(y)
+        z = x_sum - y_sum
+    end
+    return z
+end
+
+@testset "condition11: nested if 3 levels deep" begin
+    x = rand(2, 10)
+    y = rand(2, 10)
+    z = rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+    z_ra = Reactant.to_rarray(z)
+
+    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z)
+
+    x = -rand(2, 10)
+    y = -rand(2, 10)
+    z = -rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+    z_ra = Reactant.to_rarray(z)
+
+    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z)
 end

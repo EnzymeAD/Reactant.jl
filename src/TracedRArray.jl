@@ -19,7 +19,7 @@ end
 
 ReactantCore.is_traced(::TracedRArray) = true
 
-new_traced_value(::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), nothing)
+new_traced_value(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), nothing, size(A))
 
 TracedRArray{T,N}(x::TracedRArray{T,N}) where {T,N} = x
 

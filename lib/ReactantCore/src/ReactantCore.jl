@@ -180,7 +180,9 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     false_branch_fn_name = gensym(:false_branch)
 
     all_input_vars = true_branch_input_list ∪ false_branch_input_list
-    all_output_vars = true_branch_assignments ∪ false_branch_assignments
+    filter!(x -> x != :(:), all_input_vars)
+    all_output_vars = all_true_branch_vars ∪ all_false_branch_vars
+    filter!(x -> x != :(:), all_output_vars)
     discard_vars !== nothing && setdiff!(all_output_vars, discard_vars)
 
     all_vars = all_input_vars ∪ all_output_vars
