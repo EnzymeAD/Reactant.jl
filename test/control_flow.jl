@@ -329,6 +329,27 @@ end
     @test res_ra ≈ res
 end
 
+function condition9_if_ends_with_pathological_nothing(x)
+    @trace if sum(x) > 0
+        y = 1.0
+        nothing = 2.0
+    else
+        y = 2.0
+        nothing = 3.0
+    end
+    return y, nothing
+end
+
+@testset "condition9: if ends with pathological nothing" begin
+    x = rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit(condition9_if_ends_with_pathological_nothing(x_ra))
+    res = condition9_if_ends_with_pathological_nothing(x)
+    @test res_ra[1] ≈ res[1]
+    @test res_ra[2] ≈ res[2]
+end
+
 function condition10_condition_with_setindex(x)
     @trace if sum(x) > 0
         x[:, 1] = -1.0
@@ -343,20 +364,20 @@ end
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
-    @test res_ra[1, 1] == -1.0 broken = true
-    @test res_ra[2, 1] == -1.0 broken = true
-    @test x_ra[1, 1] == -1.0 broken = true
-    @test x_ra[2, 1] == -1.0 broken = true
+    @test res_ra[1, 1] == -1.0
+    @test res_ra[2, 1] == -1.0
+    @test x_ra[1, 1] == -1.0
+    @test x_ra[2, 1] == -1.0
 
     x = -rand(2, 10)
     x[2, 1] = 0.0
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
-    @test res_ra[1, 1] == -1.0 broken = true
-    @test res_ra[2, 1] == 0.0 broken = true
-    @test x_ra[1, 1] == -1.0 broken = true
-    @test x_ra[2, 1] == 0.0 broken = true
+    @test res_ra[1, 1] == 1.0
+    @test res_ra[2, 1] == 0.0
+    @test x_ra[1, 1] == 1.0
+    @test x_ra[2, 1] == 0.0
 end
 
 function condition11_nested_ifff(x, y, z)
@@ -397,4 +418,38 @@ end
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z)
+end
+
+function condition12_compile_test(x, y, z)
+    x_sum = sum(x)
+    @trace if x_sum > 0
+        y_sum = sum(y)
+        z = x_sum + y_sum + sum(z)
+    else
+        y_sum = sum(y)
+        z = x_sum - y_sum
+    end
+    return z
+end
+
+@testset "condition12: compile test" begin
+    x = rand(2, 10)
+    y = rand(2, 10)
+    z = rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+    z_ra = Reactant.to_rarray(z)
+
+    @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
+        condition12_compile_test(x, y, z)
+
+    x = -rand(2, 10)
+    y = -rand(2, 10)
+    z = -rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+    z_ra = Reactant.to_rarray(z)
+
+    @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
+        condition12_compile_test(x, y, z)
 end

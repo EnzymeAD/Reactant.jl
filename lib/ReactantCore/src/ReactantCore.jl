@@ -76,6 +76,23 @@ end
 
 This will not compile since `y` is a `Float32` in one branch and a `Float64` in the other.
 You need to ensure that all branches have the same type.
+
+### Certain Symbols are Reserved
+
+Symbols like `nothing`, `missing` and `:` are not allowed as variables in `@trace` expressions. While certain cases might work but these are not guaranteed to work. For
+example, the following will not work:
+
+```julia
+function fn(x)
+    nothing = sum(x)
+    @trace if nothing > 0
+        y = 1.0
+    else
+        y = 2.0
+    end
+    return y, nothing
+end
+```
 """
 macro trace(expr)
     expr = macroexpand(__module__, expr)
@@ -138,6 +155,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
 
     true_branch_symbols = ExpressionExplorer.compute_symbols_state(true_block)
     true_branch_input_list = [true_branch_symbols.references...]
+    filter!(x -> x ∉ SPECIAL_SYMBOLS, true_branch_input_list)
     true_branch_assignments = [true_branch_symbols.assignments...]
     all_true_branch_vars = true_branch_input_list ∪ true_branch_assignments
     true_branch_fn_name = gensym(:true_branch)
@@ -175,14 +193,13 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
 
     false_branch_symbols = ExpressionExplorer.compute_symbols_state(false_block)
     false_branch_input_list = [false_branch_symbols.references...]
+    filter!(x -> x ∉ SPECIAL_SYMBOLS, false_branch_input_list)
     false_branch_assignments = [false_branch_symbols.assignments...]
     all_false_branch_vars = false_branch_input_list ∪ false_branch_assignments
     false_branch_fn_name = gensym(:false_branch)
 
     all_input_vars = true_branch_input_list ∪ false_branch_input_list
-    filter!(x -> x != :(:), all_input_vars)
     all_output_vars = all_true_branch_vars ∪ all_false_branch_vars
-    filter!(x -> x != :(:), all_output_vars)
     discard_vars !== nothing && setdiff!(all_output_vars, discard_vars)
 
     all_vars = all_input_vars ∪ all_output_vars
@@ -203,7 +220,9 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     )
     true_branch_fn = :($(true_branch_fn_name) = $(true_branch_fn))
 
-    non_existant_false_branch_vars = setdiff(all_output_vars, all_false_branch_vars)
+    non_existant_false_branch_vars = setdiff(
+        setdiff(all_output_vars, all_false_branch_vars), all_input_vars
+    )
     false_branch_extras = Expr(
         :block,
         [:($(var) = $(MissingTracedValue())) for var in non_existant_false_branch_vars]...,
@@ -279,5 +298,7 @@ function error_if_return(expr)
         return x
     end
 end
+
+const SPECIAL_SYMBOLS = [:(:), :nothing, :missing]
 
 end
