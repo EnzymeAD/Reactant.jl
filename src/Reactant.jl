@@ -1,5 +1,7 @@
 module Reactant
 
+using ReactantCore: ReactantCore, @trace, MissingTracedValue
+
 using Adapt: Adapt, WrappedArray
 
 # auxiliary types and functions
@@ -82,19 +84,21 @@ end
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")
+
 include("utils.jl")
 
 include("ConcreteRArray.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 
-const TracedType = Union{TracedRArray,TracedRNumber}
+const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
+include("ControlFlow.jl")
 include("Tracing.jl")
 include("Compiler.jl")
 
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
-export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit
+export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace
 
 const registry = Ref{MLIR.IR.DialectRegistry}()
 function __init__()

@@ -12,6 +12,10 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
+ReactantCore.is_traced(::TracedRNumber) = true
+
+new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
+
 Base.eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 Base.getindex(a::TracedRNumber{T}) where {T} = a
@@ -150,8 +154,18 @@ for (jlop, hloop, hlocomp) in (
         function $(jlop)(@nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs)) where {T}
             return $(jlop)(lhs, promote_to(lhs, rhs))
         end
+        function $(jlop)(
+            @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+        ) where {T}
+            return $(jlop)(lhs, promote_to(lhs, rhs))
+        end
 
         function $(jlop)(@nospecialize(lhs), @nospecialize(rhs::TracedRNumber{T})) where {T}
+            return $(jlop)(promote_to(rhs, lhs), rhs)
+        end
+        function $(jlop)(
+            @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
+        ) where {T}
             return $(jlop)(promote_to(rhs, lhs), rhs)
         end
 
@@ -176,6 +190,22 @@ function Base.ifelse(
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.select(pred.mlir_data, x.mlir_data, y.mlir_data), 1
         ),
+    )
+end
+
+function Base.:&(x::TracedRNumber{Bool}, y::TracedRNumber{Bool})
+    return TracedRNumber{Bool}(
+        (), MLIR.IR.result(MLIR.Dialects.stablehlo.and(x.mlir_data, y.mlir_data), 1)
+    )
+end
+function Base.:|(x::TracedRNumber{Bool}, y::TracedRNumber{Bool})
+    return TracedRNumber{Bool}(
+        (), MLIR.IR.result(MLIR.Dialects.stablehlo.or(x.mlir_data, y.mlir_data), 1)
+    )
+end
+function Base.:!(x::TracedRNumber{Bool})
+    return TracedRNumber{Bool}(
+        (), MLIR.IR.result(MLIR.Dialects.stablehlo.not(x.mlir_data), 1)
     )
 end
 

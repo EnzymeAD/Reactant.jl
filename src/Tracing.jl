@@ -184,6 +184,7 @@ function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode
 end
 
 function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedType,mode}
+    T <: MissingTracedValue && error("TODO")
     if mode == ConcreteToTraced
         throw("TracedRArray $T cannot be traced")
     elseif mode == TracedToConcrete
@@ -418,12 +419,55 @@ function make_tracer(
 end
 
 function make_tracer(
+    seen, @nospecialize(prev::MissingTracedValue), @nospecialize(path), mode; kwargs...
+)
+    if mode == ConcreteToTraced
+        throw("Cannot trace existing trace type")
+    end
+    if mode == TracedTrack
+        prev.paths = (prev.paths..., path)
+        if !haskey(seen, prev)
+            return seen[prev] = prev
+        end
+        return prev
+    end
+    if mode == TracedSetPath
+        haskey(seen, prev) && return seen[prev]
+        res = MissingTracedValue((path,))
+        seen[res] = res
+        return res
+    end
+    if mode == TracedToConcrete
+        error("Cannot convert MissingTracedValue to Concrete. This is meant to be an \
+               internal implementation detail not exposed to the user.")
+    end
+    throw("Cannot Unknown trace mode $mode")
+end
+
+function make_tracer(
     seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
 ) where {RT<:Number}
-    if mode == ArrayToConcrete
-        length(track_numbers) == 0 && return prev
-        should_convert = any(Base.Fix1(<:, RT), track_numbers)
-        return should_convert ? ConcreteRNumber(prev) : prev
+    length(track_numbers) == 0 && return prev
+    should_convert = any(Base.Fix1(<:, RT), track_numbers)
+    if should_convert
+        if mode == ArrayToConcrete
+            return ConcreteRNumber(prev)
+        else
+            if mode == TracedTrack
+                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                if !haskey(seen, prev)
+                    return seen[prev] = res
+                end
+                return res
+            elseif mode == TracedSetPath
+                haskey(seen, prev) && return seen[prev]
+                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                seen[prev] = res
+                return res
+            elseif mode == TracedToConcrete
+                throw("Input is not a traced-type: $(RT)")
+            end
+        end
     end
     return prev
 end
