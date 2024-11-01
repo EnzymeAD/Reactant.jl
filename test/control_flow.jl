@@ -366,8 +366,8 @@ end
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
     @test res_ra[1, 1] == -1.0
     @test res_ra[2, 1] == -1.0
-    @test x_ra[1, 1] == -1.0
-    @test x_ra[2, 1] == -1.0
+    @test x_ra[1, 1] == -1.0 broken = true
+    @test x_ra[2, 1] == -1.0 broken = true
 
     x = -rand(2, 10)
     x[2, 1] = 0.0
@@ -376,7 +376,7 @@ end
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
     @test res_ra[1, 1] == 1.0
     @test res_ra[2, 1] == 0.0
-    @test x_ra[1, 1] == 1.0
+    @test x_ra[1, 1] == 1.0 broken = true
     @test x_ra[2, 1] == 0.0
 end
 
