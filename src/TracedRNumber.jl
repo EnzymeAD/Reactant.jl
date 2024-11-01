@@ -52,6 +52,11 @@ function Base.convert(::Type{TracedRNumber{T}}, x::Number) where {T}
     return promote_to(TracedRNumber{T}, x)
 end
 
+TracedRNumber{T}(x::TracedRNumber{T}) where {T} = x
+function TracedRNumber{T}(x::Number) where {T}
+    return promote_to(TracedRNumber{T}, x)
+end
+
 function promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
     if isa(rhs, TracedRNumber)
         rhs isa TracedRNumber{T} && return rhs
