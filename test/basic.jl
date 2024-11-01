@@ -488,3 +488,13 @@ end
         @test res3 isa ConcreteRArray
     end
 end
+
+relu(x::T) where {T<:Number} = max(T(0), x)
+relu(x) = relu.(x)
+
+@testset "type casting" begin
+    x = randn(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(relu(x_ra)) ≈ relu(x)
+end
