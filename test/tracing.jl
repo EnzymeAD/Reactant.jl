@@ -100,4 +100,18 @@ using Test
             end
         end
     end
+
+    @testset "specialized dispatches" begin
+        @test @inferred Union{Float64,ConcreteRArray{Float64}} Reactant.to_rarray(
+            1.0; track_numbers=(Number,)
+        ) isa ConcreteRNumber
+        @test @inferred Reactant.to_rarray(1.0) isa Float64
+        @test @inferred Reactant.to_rarray(rand(3)) isa ConcreteRArray
+
+        x_ra = Reactant.to_rarray(rand(3))
+        @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRArray
+
+        x_ra = Reactant.to_rarray(1.0; track_numbers=(Number,))
+        @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRNumber
+    end
 end

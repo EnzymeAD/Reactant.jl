@@ -563,7 +563,29 @@ end
 
 @inline function to_rarray(@nospecialize(x); track_numbers::Union{Bool,Tuple}=())
     track_numbers isa Bool && (track_numbers = track_numbers ? (Number,) : ())
+    return to_rarray_internal(x, track_numbers)
+end
+
+@inline function to_rarray_internal(@nospecialize(x), track_numbers::Tuple)
     return make_tracer(OrderedIdDict(), x, (), Reactant.ArrayToConcrete; track_numbers)
 end
 
-to_rarray(x::ReactantPrimitive) = ConcreteRArray(x)
+function to_rarray_internal(@nospecialize(::TracedRArray), ::Tuple)
+    error("Cannot convert TracedRArray to ConcreteRArray")
+end
+@inline to_rarray_internal(@nospecialize(x::ConcreteRArray), ::Tuple) = x
+@inline function to_rarray_internal(
+    @nospecialize(x::AbstractArray{<:ReactantPrimitive}), ::Tuple
+)
+    return ConcreteRArray(x)
+end
+
+@inline to_rarray_internal(@nospecialize(x::ConcreteRNumber), ::Tuple) = x
+@inline function to_rarray_internal(
+    @nospecialize(x::ReactantPrimitive), track_numbers::Tuple
+)
+    for T in track_numbers
+        typeof(x) <: T && return ConcreteRNumber(x)
+    end
+    return x
+end
