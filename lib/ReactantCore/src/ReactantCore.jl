@@ -64,7 +64,7 @@ end
 `&&` and `||` are short circuiting operations. In the traced version, we replace them with
 `&` and `|` respectively.
 
-### Different Types in branches
+### Type-Unstable Branches
 
 ```julia
 @trace if x > 0
