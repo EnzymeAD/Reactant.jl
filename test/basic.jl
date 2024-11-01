@@ -489,7 +489,7 @@ end
     end
 end
 
-relu(x::T) where {T <: Number} = max(T(0), x)
+relu(x::T) where {T<:Number} = max(T(0), x)
 relu(x) = relu.(x)
 
 @testset "type casting" begin
