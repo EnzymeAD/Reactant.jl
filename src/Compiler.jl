@@ -458,7 +458,7 @@ function compile_call(args...)
         options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
         f = $(call.args[1])
         args = $(Expr(:tuple, call.args[2:end]...))
-        fn = compile(f, args; options.optimize, options.sync)
+        fn = $(compile)(f, args; options.optimize, options.sync)
     end
 end
 
