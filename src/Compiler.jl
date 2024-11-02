@@ -414,22 +414,12 @@ end
 """
     @compile f(args...)
 """
-macro compile(options, maybe_call=nothing)
-    call = something(maybe_call, options)
-    options = isnothing(maybe_call) ? :(optimize = true) : options
-    Meta.isexpr(call, :call) || error("@compile: expected call, got $call")
-    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@compile: expected options in format optimize=value, got $options")
-    end
-
-    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
-
-    quote
-        options = $(esc(options))
-        f = $(esc(call.args[1]))
-        args = $(esc(Expr(:tuple, call.args[2:end]...)))
-        compile(f, args; options.optimize)
-    end
+macro compile(args...)
+    compile_expr = compile_call(args...)
+    return esc(quote
+        $(compile_expr)
+        return fn
+    end)
 end
 
 """
@@ -437,22 +427,37 @@ end
 
     Run @compile f(args..) then immediately execute it
 """
-macro jit(options, maybe_call=nothing)
-    call = something(maybe_call, options)
-    options = isnothing(maybe_call) ? :(optimize = true) : options
-    Meta.isexpr(call, :call) || error("@compile: expected call, got $call")
-    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@compile: expected options in format optimize=value, got $options")
-    end
+macro jit(args...)
+    compile_expr = compile_call(args...)
+    return esc(quote
+        $(compile_expr)
+        fn(args...)
+    end)
+end
 
-    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
+function compile_call(args...)
+    options = Dict{Symbol,Any}(
+        :optimize => true,
+        :sync => false,
+    )
+    while length(args) > 1
+        option, args = args[1], args[2:end]
+        if !Meta.isexpr(option, :(=))
+            error("Invalid option $(option)")
+        else
+            option_name = option.args[1]
+            @assert haskey(options, option_name) "Invalid option $(option_name)"
+            options[option_name] = option.args[2]
+        end
+    end
+    call = only(args)
+    @assert Meta.isexpr(call, :call) "Expected call, got $(call)"
 
     quote
-        options = $(esc(options))
-        f = $(esc(call.args[1]))
-        args = $(esc(Expr(:tuple, call.args[2:end]...)))
-        fn = compile(f, args; options.optimize)
-        fn(args...)
+        options = (; optimize = $(options[:optimize]), sync = $(options[:sync]))
+        f = $(call.args[1])
+        args = $(Expr(:tuple, call.args[2:end]...))
+        fn = compile(f, args; options.optimize, options.sync)
     end
 end
 
@@ -691,7 +696,7 @@ function compile_xla(f, args; client=nothing, optimize=true)
     end
 end
 
-function compile(f, args; client=nothing, optimize=true, block_until_ready=false)
+function compile(f, args; client=nothing, optimize=true, sync=false)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
         f, args; client, optimize
     )
@@ -722,7 +727,7 @@ function compile(f, args; client=nothing, optimize=true, block_until_ready=false
         result_stores,
     )
 
-    sync_call = if block_until_ready
+    sync_call = if sync
         calls = []
         for name in concretized_res_names
             push!(calls, :(XLA.synced_buffer($(name))))
