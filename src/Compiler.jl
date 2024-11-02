@@ -691,7 +691,7 @@ function compile_xla(f, args; client=nothing, optimize=true)
     end
 end
 
-function compile(f, args; client=nothing, optimize=true)
+function compile(f, args; client=nothing, optimize=true, block_until_ready=false)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
         f, args; client, optimize
     )
@@ -722,8 +722,18 @@ function compile(f, args; client=nothing, optimize=true)
         result_stores,
     )
 
+    sync_call = if block_until_ready
+        calls = []
+        for name in concretized_res_names
+            push!(calls, :(XLA.synced_buffer($(name))))
+        end
+        Expr(:block, calls...)
+    else
+        :()
+    end
+
     fname = gensym(Symbol(Symbol(f), :_reactant))
-    expr = :(function $fname(args...)
+    expr = :(function $(fname)(args...)
         $(
             # if `f` is a closure, then prepend the closure into `args`
             # the closure fields will be correctly extracted from it as the tracer has already passed through it
@@ -732,7 +742,8 @@ function compile(f, args; client=nothing, optimize=true)
             end
         )
         $(flatten_code...)
-        $xla_call_code
+        $(xla_call_code)
+        $(sync_call)
         $(unflatten_code...)
         return result
     end)
