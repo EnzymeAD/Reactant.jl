@@ -75,7 +75,6 @@ function setup_lux_forward_pass_benchmark!(
 
         suite[benchmark_name]["forward"][backend][tag] = @benchmarkable begin
             y, _ = apply_compiled($model, x_ra, ps_ra, st_test_ra)
-            Reactant.synchronize(y)
         end setup = begin
             GC.gc()
             reclaim($dev)
@@ -84,7 +83,7 @@ function setup_lux_forward_pass_benchmark!(
             x_ra = Reactant.to_rarray(x)
             ps_ra = Reactant.to_rarray(ps)
             st_test_ra = Reactant.to_rarray(st_test)
-            apply_compiled = @compile optimize = $(Meta.quot(opt_pass)) Lux.apply(
+            apply_compiled = @compile sync = true optimize = $(Meta.quot(opt_pass)) Lux.apply(
                 $model, x_ra, ps_ra, st_test_ra
             )
             GC.gc()

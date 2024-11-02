@@ -415,13 +415,7 @@ end
     @compile f(args...)
 """
 macro compile(args...)
-    compile_expr = compile_call(args...)
-    return esc(
-        quote
-            $(compile_expr)
-            return fn
-        end,
-    )
+    return esc(compile_call_expr(args...))
 end
 
 """
@@ -430,16 +424,18 @@ end
     Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
-    compile_expr = compile_call(args...)
+    compile_expr = compile_call_expr(args...)
+    #! format: off
     return esc(
-        quote
-            $(compile_expr)
+        :(
+            $(compile_expr);
             fn(args...)
-        end,
+        )
     )
+    #! format: on
 end
 
-function compile_call(args...)
+function compile_call_expr(args...)
     options = Dict{Symbol,Any}(:optimize => true, :sync => false)
     while length(args) > 1
         option, args = args[1], args[2:end]
