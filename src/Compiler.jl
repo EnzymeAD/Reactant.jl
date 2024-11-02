@@ -416,10 +416,12 @@ end
 """
 macro compile(args...)
     compile_expr = compile_call(args...)
-    return esc(quote
-        $(compile_expr)
-        return fn
-    end)
+    return esc(
+        quote
+            $(compile_expr)
+            return fn
+        end,
+    )
 end
 
 """
@@ -429,17 +431,16 @@ end
 """
 macro jit(args...)
     compile_expr = compile_call(args...)
-    return esc(quote
-        $(compile_expr)
-        fn(args...)
-    end)
+    return esc(
+        quote
+            $(compile_expr)
+            fn(args...)
+        end,
+    )
 end
 
 function compile_call(args...)
-    options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-    )
+    options = Dict{Symbol,Any}(:optimize => true, :sync => false)
     while length(args) > 1
         option, args = args[1], args[2:end]
         if !Meta.isexpr(option, :(=))
@@ -454,7 +455,7 @@ function compile_call(args...)
     @assert Meta.isexpr(call, :call) "Expected call, got $(call)"
 
     quote
-        options = (; optimize = $(options[:optimize]), sync = $(options[:sync]))
+        options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
         f = $(call.args[1])
         args = $(Expr(:tuple, call.args[2:end]...))
         fn = compile(f, args; options.optimize, options.sync)
