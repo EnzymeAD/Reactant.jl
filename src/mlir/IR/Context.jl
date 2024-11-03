@@ -28,6 +28,11 @@ function Context(f::Core.Function)
     end
 end
 
+Context(threading::Bool) = Context(API.mlirContextCreateWithThreading(threading))
+function Context(registry::DialectRegistry, threading::Bool)
+    return Context(API.mlirContextCreateWithRegistry(registry, threading))
+end
+
 Base.convert(::Core.Type{API.MlirContext}, c::Context) = c.context
 
 # Global state
