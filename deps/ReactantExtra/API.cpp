@@ -2,6 +2,7 @@
 #include "mlir-c/Support.h"
 
 #include "mlir/CAPI/IR.h"
+#include "mlir/CAPI/Wrap.h"
 #include "mlir/Pass/PassManager.h"
 
 #include "Enzyme/MLIR/Dialect/Dialect.h"
@@ -66,15 +67,27 @@ using namespace xla;
 
 // MLIR C-API extras
 #pragma region MLIR Extra
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx, MlirType type, double real, double imag) {
+#define DEFINE_C_API_STRUCT(name, storage)                                     \
+  struct name {                                                                \
+    storage *ptr;                                                              \
+  };                                                                           \
+  typedef struct name name
+
+DEFINE_C_API_STRUCT(MlirComplexType, const void);
+DEFINE_C_API_METHODS(MlirComplexType, mlir::ComplexType)
+
+#undef DEFINE_C_API_STRUCT
+
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx, MlirComplexType type, double real, double imag) {
     return wrap(complex::NumberAttr::get(unwrap(type), real, imag));
 }
 
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc, MlirType type, double real, double imag) {
-    return wrap(complex::NumberAttr::getChecked(unwrap(loc), unwrap(type), unwrap(type), real, imag));
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc, MlirComplexType type, double real, double imag) {
+    return wrap(complex::NumberAttr::getChecked(unwrap(loc), unwrap(type), real, imag));
 }
 
-MlirTypeID mlirComplexAttrGetTypeID(void) { return wrap(complex::NumberAttr::getTypeID()); }
+// TODO mlirComplexAttrGetValue
+// TODO MLIR_CAPI_EXPORTED MlirTypeID mlirComplexAttrGetTypeID(void) { return wrap(complex::NumberAttr::getTypeID()); }
 #pragma endregion
 
 // int google::protobuf::io::CodedInputStream::default_recursion_limit_ = 100;
