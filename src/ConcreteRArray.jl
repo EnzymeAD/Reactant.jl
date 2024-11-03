@@ -21,6 +21,15 @@ end
 
 Base.size(::ConcreteRNumber) = ()
 
+Base.float(x::ConcreteRNumber{T}) where {T} = convert(ConcreteRNumber{float(T)}, x)
+
+# written like this to avoid ambiguity errors
+for T in Base.uniontypes(ReactantPrimitive)
+    @eval (::Type{$(T)})(x::ConcreteRNumber) = convert($T, x)
+end
+
+Base.convert(::Type{T}, x::ConcreteRNumber) where {T<:Number} = convert(T, to_number(x))
+
 function ConcreteRArray(
     data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[]
 ) where {T<:Number}
