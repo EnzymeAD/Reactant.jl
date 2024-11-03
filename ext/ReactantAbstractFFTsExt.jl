@@ -9,79 +9,66 @@ function contiguous_dims(dims, N)
     return true
 end
 
-for op in (:rfft, :fft)
-    contiguous_op = Symbol(:contiguous_, op)
+for op in (:rfft, :fft, :ifft)
     @eval function AbstractFFTs.$(op)(x::TracedRArray, dims)
         if dims isa Integer
             if dims != ndims(x)
                 error("Not yet implemented")
             end
-            return $(contiguous_op)(x, nothing, ndims(x) - dims + 1)
+            return generalized_fft(x, $(Meta.quot(op)), nothing, ndims(x) - dims + 1)
         end
         contiguous_dims(dims, ndims(x)) &&
-            return $(contiguous_op)(x, nothing, ndims(x) - first(dims) + 1)
+            return generalized_fft(x, $(Meta.quot(op)), nothing, ndims(x) - first(dims) + 1)
         return error("Not yet implemented")
     end
 end
 
-for op in (:irfft, :ifft)
-    contiguous_op = Symbol(:contiguous_, op)
+for op in (:irfft,)
     @eval function AbstractFFTs.$(op)(x::TracedRArray, d::Int, dims)
         if dims isa Integer
             if dims != ndims(x)
                 error("Not yet implemented")
             end
-            return $(contiguous_op)(x, d, ndims(x) - dims + 1)
+            return generalized_fft(x, $(Meta.quot(op)), d, ndims(x) - dims + 1)
         end
         contiguous_dims(dims, ndims(x)) &&
-            return $(contiguous_op)(x, d, ndims(x) - first(dims) + 1)
+            return generalized_fft(x, $(Meta.quot(op)), d, ndims(x) - first(dims) + 1)
         return error("Not yet implemented")
     end
 end
 
-for op in (:rfft, :irfft, :fft, :ifft)
-    fn_name = Symbol(:contiguous_, op)
-    fft_type_str = uppercase(string(op))
-    @eval function $(fn_name)(x::TracedRArray{T,N}, d, last_n::Int) where {T,N}
-        x = permutedims(x, reverse(1:N))
-        fft_type = MLIR.API.stablehloFftTypeAttrGet(MLIR.IR.context(), $(fft_type_str))
-        fft_length = [size(x, i) for i in (ndims(x) - last_n + 1):ndims(x)]
-        @assert 1 ≤ length(fft_length) ≤ 3 "stablehlo.fft only supports up to rank 3"
+function generalized_fft(x::TracedRArray{T,N}, mode::Symbol, d, last_n::Int) where {T,N}
+    @assert mode ∈ (:rfft, :irfft, :fft, :ifft)
 
-        if d === nothing
-            @assert $(Meta.quot(op)) ∈ (:rfft, :fft)
-            if $(Meta.quot(op)) == :rfft
-                @assert T <: Real
-            else
-                @assert T <: Complex
-            end
+    x = permutedims(x, reverse(1:N))
+    fft_type_str = uppercase(string(mode))
+    fft_type = MLIR.API.stablehloFftTypeAttrGet(MLIR.IR.context(), fft_type_str)
 
-            res = MLIR.IR.result(
-                MLIR.Dialects.stablehlo.fft(x.mlir_data; fft_type, fft_length), 1
-            )
-            mlir_type = MLIR.IR.type(res)
+    if d === nothing
+        @assert mode ∈ (:rfft, :fft, :ifft)
+        if mode == :rfft
+            @assert T <: Real
+            rT = Complex{T}
+            res_size = [size(x)[1:(end - 1)]..., size(x, N) ÷ 2 + 1]
         else
-            @assert $(Meta.quot(op)) ∈ (:irfft, :ifft)
-
-            if $(Meta.quot(op)) == :irfft
-                @assert T <: Complex
-                rT = real(T)
-            else
-                @assert T <: Complex
-                rT = T
-            end
-
-            res_size = [size(x)[1:(end - 1)]..., d]
-            mlir_type = MLIR.IR.TensorType(res_size, Reactant.MLIR.IR.Type(rT))
-            op = MLIR.Dialects.stablehlo.fft(
-                x.mlir_data; fft_type, fft_length, result_0=mlir_type
-            )
-            res = MLIR.IR.result(op, 1)
+            @assert T <: Complex
+            rT = T
+            res_size = [size(x)...]
         end
-
-        x = TracedRArray{MLIR.IR.julia_type(eltype(mlir_type)),N}((), res, size(mlir_type))
-        return permutedims(x, reverse(1:N))
+        fft_length = [size(x, i) for i in (ndims(x) - last_n + 1):ndims(x)]
+    else
+        @assert mode == :irfft
+        @assert T <: Complex
+        rT = real(T)
+        res_size = [size(x)[1:(end - 1)]..., d]
+        fft_length = [res_size[i] for i in (ndims(x) - last_n + 1):ndims(x)]
     end
+
+    @assert 1 ≤ length(fft_length) ≤ 3 "stablehlo.fft only supports up to rank 3"
+    mlir_type = MLIR.IR.TensorType(res_size, Reactant.MLIR.IR.Type(rT))
+    op = MLIR.Dialects.stablehlo.fft(x.mlir_data; fft_type, fft_length, result_0=mlir_type)
+    x = TracedRArray{rT,N}((), MLIR.IR.result(op, 1), Tuple(res_size))
+    return permutedims(x, reverse(1:N))
 end
 
 end
