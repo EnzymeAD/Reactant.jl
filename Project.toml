@@ -16,11 +16,13 @@ Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 Scratch = "6c6a2e73-6563-6170-7368-637461726353"
 
 [weakdeps]
+AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [extensions]
+ReactantAbstractFFTsExt = "AbstractFFTs"
 ReactantArrayInterfaceExt = "ArrayInterface"
 ReactantNNlibExt = "NNlib"
 ReactantStatisticsExt = "Statistics"
