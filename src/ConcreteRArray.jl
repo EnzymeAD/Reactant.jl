@@ -13,15 +13,20 @@ mutable struct ConcreteRNumber{T} <: RNumber{T}
 end
 
 function ConcreteRNumber(
-    data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[]
+    data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[], device=nothing
 ) where {T<:Number}
-    crarray = ConcreteRArray(fill(data); client, idx)
+    crarray = ConcreteRArray(fill(data); client, idx, device)
     return ConcreteRNumber{T}(crarray.data)
 end
 
 Base.size(::ConcreteRNumber) = ()
 
-Base.float(x::ConcreteRNumber{T}) where {T} = convert(ConcreteRNumber{float(T)}, x)
+# Ensure the device and client are the same as the input
+function Base.float(x::ConcreteRNumber{T}) where {T}
+    client = XLA.client(x.data)
+    device = XLA.device(x.data)
+    return ConcreteRNumber(float(T)(to_number(x)); client, device)
+end
 
 # written like this to avoid ambiguity errors
 for T in Base.uniontypes(ReactantPrimitive)
@@ -31,13 +36,13 @@ end
 Base.convert(::Type{T}, x::ConcreteRNumber) where {T<:Number} = convert(T, to_number(x))
 
 function ConcreteRArray(
-    data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[]
+    data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[], device=nothing
 ) where {T<:Number}
     Base.depwarn(
         "ConcreteRArray(data::Number) is deprecated, use ConcreteRNumber(data) instead",
         :ConcreteRArray,
     )
-    return ConcreteRArray(fill(data); client, idx)
+    return ConcreteRArray(fill(data); client, idx, device)
 end
 
 const ConcreteRScalar{T} = Union{ConcreteRArray{T,0},ConcreteRNumber{T}}
@@ -45,13 +50,15 @@ const ConcreteRScalar{T} = Union{ConcreteRArray{T,0},ConcreteRNumber{T}}
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x)
 
 function ConcreteRArray(
-    data::Array{T,N}; client=XLA.default_backend[], idx=XLA.default_device_idx[]
+    data::Array{T,N};
+    client=XLA.default_backend[],
+    idx=XLA.default_device_idx[],
+    device=nothing,
 ) where {T,N}
-    device = XLA.ClientGetDevice(client, idx)
+    device = device === nothing ? XLA.ClientGetDevice(client, idx) : device
     return ConcreteRArray{T,N}(
         XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing), size(data)
     )
-    # ConcreteRArray{T, size(data), N}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(data), device), nothing))
 end
 
 Base.size(x::ConcreteRArray) = x.shape

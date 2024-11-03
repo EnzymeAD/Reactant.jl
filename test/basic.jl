@@ -498,3 +498,16 @@ relu(x) = relu.(x)
 
     @test @jit(relu(x_ra)) ≈ relu(x)
 end
+
+@testset "concrete number to julia number" begin
+    x = ConcreteRNumber(3.14)
+    @test Float32(x) isa Float32
+    @test Float64(x) isa Float64
+    @test_throws InexactError Int(x)
+
+    x = ConcreteRNumber(3)
+    @test Float32(x) isa Float32
+    @test Float64(x) isa Float64
+    @test Int(x) isa Int
+    @test float(x) isa ConcreteRNumber{Float64}
+end
