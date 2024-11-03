@@ -67,23 +67,12 @@ using namespace xla;
 
 // MLIR C-API extras
 #pragma region MLIR Extra
-#define DEFINE_C_API_STRUCT(name, storage)                                     \
-  struct name {                                                                \
-    storage *ptr;                                                              \
-  };                                                                           \
-  typedef struct name name
-
-DEFINE_C_API_STRUCT(MlirComplexType, const void);
-DEFINE_C_API_METHODS(MlirComplexType, mlir::ComplexType)
-
-#undef DEFINE_C_API_STRUCT
-
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx, MlirComplexType type, double real, double imag) {
-    return wrap(complex::NumberAttr::get(unwrap(type), real, imag));
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx, MlirType type, double real, double imag) {
+    return wrap(complex::NumberAttr::get(cast<ComplexType>(unwrap(type)), real, imag));
 }
 
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc, MlirComplexType type, double real, double imag) {
-    return wrap(complex::NumberAttr::getChecked(unwrap(loc), unwrap(type), real, imag));
+MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc, MlirType type, double real, double imag) {
+    return wrap(complex::NumberAttr::getChecked(unwrap(loc), cast<ComplexType>(unwrap(type)), real, imag));
 }
 
 // TODO mlirComplexAttrGetValue
