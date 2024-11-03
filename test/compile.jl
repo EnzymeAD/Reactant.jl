@@ -45,9 +45,9 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
     end
 
     @testset "resource exhaustation bug (#190)" begin
-        x = rand(2,2)
+        x = rand(2, 2)
         y = Reactant.to_rarray(x)
-        @test try 
+        @test try
             for _ in 1:10_000
                 f = @compile sum(y)
             end
