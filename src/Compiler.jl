@@ -254,6 +254,7 @@ end
 
 function compile_mlir(f, args; kwargs...)
     ctx = MLIR.IR.Context()
+    MLIR.IR.enable_multithreading!(false; context=ctx)
     Base.append!(Reactant.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
@@ -662,6 +663,7 @@ end
 function compile_xla(f, args; client=nothing, optimize=true)
     # register MLIR dialects
     ctx = MLIR.IR.Context()
+    MLIR.IR.enable_multithreading!(false; context=ctx)
     append!(Reactant.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 

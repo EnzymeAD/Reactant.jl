@@ -23,6 +23,7 @@ end
 
 function test()
     ctx = MLIR.IR.Context()
+    MLIR.IR.enable_multithreading!(false; context=ctx)
     Base.append!(Reactant.registry[]; context=ctx)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
