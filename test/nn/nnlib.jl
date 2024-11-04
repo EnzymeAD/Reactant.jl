@@ -99,9 +99,7 @@ end
     x_ra = Reactant.ConcreteRArray(x)
     y_ra = Reactant.ConcreteRArray(y)
 
-    bmm_compiled = @compile batched_mul(x_ra, y_ra)
-
-    @test bmm_compiled(x_ra, y_ra) ≈ batched_mul(x, y)
+    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
     x = rand(Float32, 4, 3, 1)
     y = rand(Float32, 3, 2, 5)
@@ -109,9 +107,7 @@ end
     x_ra = Reactant.ConcreteRArray(x)
     y_ra = Reactant.ConcreteRArray(y)
 
-    bmm_compiled = @compile batched_mul(x_ra, y_ra)
-
-    @test bmm_compiled(x_ra, y_ra) ≈ batched_mul(x, y)
+    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
     x = rand(Float32, 4, 3, 5)
     y = rand(Float32, 3, 2, 1)
@@ -119,7 +115,5 @@ end
     x_ra = Reactant.ConcreteRArray(x)
     y_ra = Reactant.ConcreteRArray(y)
 
-    bmm_compiled = @compile batched_mul(x_ra, y_ra)
-
-    @test bmm_compiled(x_ra, y_ra) ≈ batched_mul(x, y)
+    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 end

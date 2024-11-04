@@ -413,22 +413,8 @@ end
 """
     @compile f(args...)
 """
-macro compile(options, maybe_call=nothing)
-    call = something(maybe_call, options)
-    options = isnothing(maybe_call) ? :(optimize = true) : options
-    Meta.isexpr(call, :call) || error("@compile: expected call, got $call")
-    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@compile: expected options in format optimize=value, got $options")
-    end
-
-    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
-
-    quote
-        options = $(esc(options))
-        f = $(esc(call.args[1]))
-        args = $(esc(Expr(:tuple, call.args[2:end]...)))
-        compile(f, args; options.optimize)
-    end
+macro compile(args...)
+    return esc(compile_call_expr(args...))
 end
 
 """
@@ -436,22 +422,38 @@ end
 
     Run @compile f(args..) then immediately execute it
 """
-macro jit(options, maybe_call=nothing)
-    call = something(maybe_call, options)
-    options = isnothing(maybe_call) ? :(optimize = true) : options
-    Meta.isexpr(call, :call) || error("@compile: expected call, got $call")
-    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@compile: expected options in format optimize=value, got $options")
-    end
+macro jit(args...)
+    compile_expr = compile_call_expr(args...)
+    #! format: off
+    return esc(
+        :(
+            $(compile_expr);
+            fn(args...)
+        )
+    )
+    #! format: on
+end
 
-    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
+function compile_call_expr(args...)
+    options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    while length(args) > 1
+        option, args = args[1], args[2:end]
+        if !Meta.isexpr(option, :(=))
+            error("Invalid option $(option)")
+        else
+            option_name = option.args[1]
+            @assert haskey(options, option_name) "Invalid option $(option_name)"
+            options[option_name] = option.args[2]
+        end
+    end
+    call = only(args)
+    @assert Meta.isexpr(call, :call) "Expected call, got $(call)"
 
     quote
-        options = $(esc(options))
-        f = $(esc(call.args[1]))
-        args = $(esc(Expr(:tuple, call.args[2:end]...)))
-        fn = compile(f, args; options.optimize)
-        fn(args...)
+        options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
+        f = $(call.args[1])
+        args = $(Expr(:tuple, call.args[2:end]...))
+        fn = $(compile)(f, args; options.optimize, options.sync)
     end
 end
 
@@ -689,7 +691,7 @@ function compile_xla(f, args; client=nothing, optimize=true)
     end
 end
 
-function compile(f, args; client=nothing, optimize=true)
+function compile(f, args; client=nothing, optimize=true, sync=false)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
         f, args; client, optimize
     )
@@ -720,8 +722,18 @@ function compile(f, args; client=nothing, optimize=true)
         result_stores,
     )
 
+    sync_call = if sync
+        calls = []
+        for name in concretized_res_names
+            push!(calls, :(XLA.synced_buffer($(name))))
+        end
+        Expr(:block, calls...)
+    else
+        :()
+    end
+
     fname = gensym(Symbol(Symbol(f), :_reactant))
-    expr = :(function $fname(args...)
+    expr = :(function $(fname)(args...)
         $(
             # if `f` is a closure, then prepend the closure into `args`
             # the closure fields will be correctly extracted from it as the tracer has already passed through it
@@ -730,7 +742,8 @@ function compile(f, args; client=nothing, optimize=true)
             end
         )
         $(flatten_code...)
-        $xla_call_code
+        $(xla_call_code)
+        $(sync_call)
         $(unflatten_code...)
         return result
     end)
