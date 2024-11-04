@@ -4,8 +4,7 @@ using Reactant
 @testset "conj" begin
     @testset "$(typeof(x))" for x in (1.0, 1.0 + 2.0im)
         x_concrete = Reactant.to_rarray(x)
-        f = @compile conj(x_concrete)
-        @test only(f(x_concrete)) == conj(x)
+        @test only(@jit(conj(x_concrete))) == conj(x)
     end
 
     @testset "$(typeof(x))" for x in (
@@ -19,8 +18,7 @@ using Reactant
         [1.0 3.0; 5.0 7.0],
     )
         x_concrete = Reactant.to_rarray(x)
-        f = @compile conj(x_concrete)
-        @test f(x_concrete) == conj(x)
+        @test @jit(conj(x_concrete)) == conj(x)
     end
 end
 
@@ -36,8 +34,7 @@ end
         [1.0 3.0; 5.0 7.0],
     )
         x_concrete = Reactant.to_rarray(x)
-        f = @compile conj!(x_concrete)
-        @test f(x_concrete) == conj(x)
+        @test @jit(conj!(x_concrete)) == conj(x)
         @test x_concrete == conj(x)
     end
 end
@@ -45,8 +42,7 @@ end
 @testset "real" begin
     @testset "$(typeof(x))" for x in (1.0, 1.0 + 2.0im)
         x_concrete = Reactant.to_rarray(x)
-        f = @compile real(x_concrete)
-        @test only(f(x_concrete)) == real(x)
+        @test only(@jit(real(x_concrete))) == real(x)
     end
 
     @testset "$(typeof(x))" for x in (
@@ -60,16 +56,14 @@ end
         [1.0 3.0; 5.0 7.0],
     )
         x_concrete = Reactant.to_rarray(x)
-        f = @compile real(x_concrete)
-        @test f(x_concrete) == real(x)
+        @test @jit(real(x_concrete)) == real(x)
     end
 end
 
 @testset "imag" begin
     @testset "$(typeof(x))" for x in (1.0, 1.0 + 2.0im)
         x_concrete = Reactant.to_rarray(x)
-        f = @compile imag(x_concrete)
-        @test only(f(x_concrete)) == imag(x)
+        @test only(@jit(imag(x_concrete))) == imag(x)
     end
 
     @testset "$(typeof(x))" for x in (
@@ -83,7 +77,6 @@ end
         [1.0 3.0; 5.0 7.0],
     )
         x_concrete = Reactant.to_rarray(x)
-        f = @compile imag(x_concrete)
-        @test f(x_concrete) == imag(x)
+        @test @jit(imag(x_concrete)) == imag(x)
     end
 end
