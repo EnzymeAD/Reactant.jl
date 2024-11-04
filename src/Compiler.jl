@@ -253,8 +253,7 @@ function run_pass_pipeline!(mod, pass_pipeline)
 end
 
 function compile_mlir(f, args; kwargs...)
-    ctx = MLIR.IR.Context()
-    Base.append!(Reactant.registry[]; context=ctx)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
@@ -712,8 +711,7 @@ end
 
 function compile_xla(f, args; client=nothing, optimize=true)
     # register MLIR dialects
-    ctx = MLIR.IR.Context()
-    append!(Reactant.registry[]; context=ctx)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     return MLIR.IR.context!(ctx) do

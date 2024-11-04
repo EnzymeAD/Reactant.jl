@@ -39,4 +39,18 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
         @test y1 ≈ Float64.(a)
         @test y2 ≈ Float32.(a)
     end
+
+    # disabled due to long test time (core tests go from 2m to 7m just with this test)
+    # @testset "resource exhaustation bug (#190)" begin
+    #     x = rand(2, 2)
+    #     y = Reactant.to_rarray(x)
+    #     @test try
+    #         for _ in 1:10_000
+    #             f = @compile sum(y)
+    #         end
+    #         true
+    #     catch e
+    #         false
+    #     end
+    # end
 end

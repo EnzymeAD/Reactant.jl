@@ -22,8 +22,7 @@ end
 end
 
 function test()
-    ctx = MLIR.IR.Context()
-    Base.append!(Reactant.registry[]; context=ctx)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     MLIR.IR.context!(ctx) do
