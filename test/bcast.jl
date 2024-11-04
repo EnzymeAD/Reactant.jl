@@ -66,10 +66,10 @@ test()
     y_ca = Reactant.ConcreteRArray(y)
 
     @testset "Broadcasting" begin
-        @test x .+ y ≈ @jit((+).(x_ca, y_ca))
-        @test x .- y ≈ @jit((.-).(x_ca, y_ca))
-        @test x .* y ≈ @jit((.*).(x_ca, y_ca))
-        @test x ./ y ≈ @jit((./).(x_ca, y_ca))
+        @test x .+ y ≈ @jit x_ca .+ y_ca
+        @test x .- y ≈ @jit x_ca .- y_ca
+        @test x .* y ≈ @jit x_ca .* y_ca
+        @test x ./ y ≈ @jit x_ca ./ y_ca
     end
 end
 
