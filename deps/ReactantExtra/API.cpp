@@ -1358,7 +1358,7 @@ extern "C" ifrt::LoadedExecutable* ifrt_compiler_compile_with_topology(ifrt::Com
     // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and set directly to the default
     auto options = std::make_unique<ifrt::CompileOptions>();
     auto program_ptr = std::make_unique<ifrt::Program>(*program);
-    auto exec_ptr = xla::ValueOrThrow(compiler->Compile(std::move(program_ptr), *topology, options)).release();
+    auto exec_ptr = xla::ValueOrThrow(compiler->Compile(std::move(program_ptr), *topology, std::move(options))).release();
     return exec_ptr;
 }
 
