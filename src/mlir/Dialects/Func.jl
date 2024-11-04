@@ -154,7 +154,7 @@ func.func private @scribble(i32, i64, memref<? x 128 x f32, #layout_map0>) -> f6
 
 // A function that returns its argument twice:
 func.func @count(%x: i64) -> (i64, i64)
-  attributes {fruit: \"banana\"} {
+  attributes {fruit = \"banana\"} {
   return %x, %x: i64, i64
 }
 
