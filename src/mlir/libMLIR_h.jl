@@ -4947,6 +4947,33 @@ function mlirFloat8E3M4TypeGet(ctx)
 end
 
 """
+    mlirFloat8E8M0FNUTypeGetTypeID()
+
+Returns the typeID of an Float8E8M0FNU type.
+"""
+function mlirFloat8E8M0FNUTypeGetTypeID()
+    @ccall mlir_c.mlirFloat8E8M0FNUTypeGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirTypeIsAFloat8E8M0FNU(type)
+
+Checks whether the given type is an f8E8M0FNU type.
+"""
+function mlirTypeIsAFloat8E8M0FNU(type)
+    @ccall mlir_c.mlirTypeIsAFloat8E8M0FNU(type::MlirType)::Bool
+end
+
+"""
+    mlirFloat8E8M0FNUTypeGet(ctx)
+
+Creates an f8E8M0FNU type in the given context. The type is owned by the context.
+"""
+function mlirFloat8E8M0FNUTypeGet(ctx)
+    @ccall mlir_c.mlirFloat8E8M0FNUTypeGet(ctx::MlirContext)::MlirType
+end
+
+"""
     mlirBFloat16TypeGetTypeID()
 
 Returns the typeID of an BFloat16 type.
@@ -7628,7 +7655,7 @@ function mlirLLVMDISubprogramAttrGetRecSelf(recId)
 end
 
 """
-    mlirLLVMDISubprogramAttrGet(ctx, recId, isRecSelf, id, compileUnit, scope, name, linkageName, file, line, scopeLine, subprogramFlags, type, nRetainedNodes, retainedNodes)
+    mlirLLVMDISubprogramAttrGet(ctx, recId, isRecSelf, id, compileUnit, scope, name, linkageName, file, line, scopeLine, subprogramFlags, type, nRetainedNodes, retainedNodes, nAnnotations, annotations)
 
 Creates a LLVM DISubprogramAttr attribute.
 """
@@ -7648,6 +7675,8 @@ function mlirLLVMDISubprogramAttrGet(
     type,
     nRetainedNodes,
     retainedNodes,
+    nAnnotations,
+    annotations,
 )
     @ccall mlir_c.mlirLLVMDISubprogramAttrGet(
         ctx::MlirContext,
@@ -7665,6 +7694,19 @@ function mlirLLVMDISubprogramAttrGet(
         type::MlirAttribute,
         nRetainedNodes::intptr_t,
         retainedNodes::Ptr{MlirAttribute},
+        nAnnotations::intptr_t,
+        annotations::Ptr{MlirAttribute},
+    )::MlirAttribute
+end
+
+"""
+    mlirLLVMDIAnnotationAttrGet(ctx, name, value)
+
+Creates a LLVM DIAnnotation attribute.
+"""
+function mlirLLVMDIAnnotationAttrGet(ctx, name, value)
+    @ccall mlir_c.mlirLLVMDIAnnotationAttrGet(
+        ctx::MlirContext, name::MlirAttribute, value::MlirAttribute
     )::MlirAttribute
 end
 
@@ -8426,6 +8468,7 @@ end
 @cenum MlirSparseTensorLevelPropertyNondefault::UInt32 begin
     MLIR_SPARSE_PROPERTY_NON_UNIQUE = 0x0000000000000001
     MLIR_SPARSE_PROPERTY_NON_ORDERED = 0x0000000000000002
+    MLIR_SPARSE_PROPERTY_SOA = 0x0000000000000004
 end
 
 """
