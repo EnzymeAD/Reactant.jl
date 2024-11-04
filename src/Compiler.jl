@@ -394,28 +394,51 @@ end
 macro code_hlo(options, maybe_call=nothing)
     call = something(maybe_call, options)
     options = isnothing(maybe_call) ? :(optimize = true) : options
-    Meta.isexpr(call, :call) || error("@code_hlo: expected call, got $call")
     if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
         error("@code_hlo: expected options in format optimize=value, got $options")
     end
 
     options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
 
-    quote
-        options = $(esc(options))
-        f = $(esc(call.args[1]))
-        args = $(esc(Expr(:vect, call.args[2:end]...)))
-
-        mod, _... = compile_mlir(f, args; optimize=options.optimize)
-        return mod
+    expr = if Meta.isexpr(call, :call)
+        bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
+        fname = if bcast
+            quote
+                if isdefined($(__module__), $(Meta.quot(fname_full)))
+                    $(fname_full)
+                else
+                    Base.Broadcast.BroadcastFunction($(fname))
+                end
+            end
+        else
+            :($(fname))
+        end
+        quote
+            options = $(options)
+            f = $(fname)
+            args = $(Expr(:vect, call.args[2:end]...))
+            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
+            return mode
+        end
+    elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
+        quote
+            options = $(options)
+            f = Base.Broadcast.BroadcastFunction($(call.args[1]))
+            args = $(call.args[2:end]...)
+            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
+            return mode
+        end
+    else
+        error("Invalid function call: $(call)")
     end
+    return esc(expr)
 end
 
 """
     @compile f(args...)
 """
 macro compile(args...)
-    return esc(compile_call_expr(args...))
+    return esc(compile_call_expr(__module__, args...))
 end
 
 """
@@ -424,7 +447,7 @@ end
     Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
-    compile_expr = compile_call_expr(args...)
+    compile_expr = compile_call_expr(__module__, args...)
     #! format: off
     return esc(
         :(
@@ -435,7 +458,7 @@ macro jit(args...)
     #! format: on
 end
 
-function compile_call_expr(args...)
+function compile_call_expr(mod, args...)
     options = Dict{Symbol,Any}(:optimize => true, :sync => false)
     while length(args) > 1
         option, args = args[1], args[2:end]
@@ -448,14 +471,40 @@ function compile_call_expr(args...)
         end
     end
     call = only(args)
-    @assert Meta.isexpr(call, :call) "Expected call, got $(call)"
-
-    quote
-        options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
-        f = $(call.args[1])
-        args = $(Expr(:tuple, call.args[2:end]...))
-        fn = $(compile)(f, args; options.optimize, options.sync)
+    if Meta.isexpr(call, :call)
+        bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
+        fname = if bcast
+            quote
+                if isdefined(mod, $(Meta.quot(fname_full)))
+                    $(fname_full)
+                else
+                    Base.Broadcast.BroadcastFunction($(fname))
+                end
+            end
+        else
+            :($(fname))
+        end
+        return quote
+            options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
+            f = $(fname)
+            args = $(Expr(:tuple, call.args[2:end]...))
+            fn = $(compile)(f, args; options.optimize, options.sync)
+        end
+    elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
+        return quote
+            options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
+            f = Base.Broadcast.BroadcastFunction($(call.args[1]))
+            args = $(call.args[2:end]...)
+            fn = $(compile)(f, args; options.optimize, options.sync)
+        end
+    else
+        error("Invalid function call: $(call)")
     end
+end
+
+function correct_maybe_bcast_call(fname)
+    startswith(string(fname), '.') || return false, fname, fname
+    return true, Symbol(string(fname)[2:end]), fname
 end
 
 """

@@ -66,11 +66,10 @@ test()
     y_ca = Reactant.ConcreteRArray(y)
 
     @testset "Broadcasting" begin
-        # TODO make `@compile` work with broadcasting syntax
-        @test x .+ y ≈ Reactant.compile(.+, (x_ca, y_ca))(x_ca, y_ca)
-        @test x .- y ≈ Reactant.compile(.-, (x_ca, y_ca))(x_ca, y_ca)
-        @test x .* y ≈ Reactant.compile(.*, (x_ca, y_ca))(x_ca, y_ca)
-        @test x ./ y ≈ Reactant.compile(./, (x_ca, y_ca))(x_ca, y_ca)
+        @test x .+ y ≈ @jit x_ca .+ y_ca
+        @test x .- y ≈ @jit x_ca .- y_ca
+        @test x .* y ≈ @jit x_ca .* y_ca
+        @test x ./ y ≈ @jit x_ca ./ y_ca
     end
 end
 
