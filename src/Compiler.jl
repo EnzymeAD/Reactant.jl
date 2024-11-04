@@ -394,21 +394,32 @@ end
 macro code_hlo(options, maybe_call=nothing)
     call = something(maybe_call, options)
     options = isnothing(maybe_call) ? :(optimize = true) : options
-    Meta.isexpr(call, :call) || error("@code_hlo: expected call, got $call")
     if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
         error("@code_hlo: expected options in format optimize=value, got $options")
     end
 
     options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
 
-    quote
-        options = $(esc(options))
-        f = $(esc(call.args[1]))
-        args = $(esc(Expr(:vect, call.args[2:end]...)))
-
-        mod, _... = compile_mlir(f, args; optimize=options.optimize)
-        return mod
+    expr = if Meta.isexpr(call, :call)
+        quote
+            options = $(options)
+            f = $(call.args[1])
+            args = $(Expr(:vect, call.args[2:end]...))
+            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
+            return mode
+        end
+    elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
+        quote
+            options = $(options)
+            f = Base.Broadcast.BroadcastFunction($(call.args[1]))
+            args = $(call.args[2:end]...)
+            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
+            return mode
+        end
+    else
+        error("Invalid function call: $(call)")
     end
+    return esc(expr)
 end
 
 """
@@ -448,13 +459,22 @@ function compile_call_expr(args...)
         end
     end
     call = only(args)
-    @assert Meta.isexpr(call, :call) "Expected call, got $(call)"
-
-    quote
-        options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
-        f = $(call.args[1])
-        args = $(Expr(:tuple, call.args[2:end]...))
-        fn = $(compile)(f, args; options.optimize, options.sync)
+    if Meta.isexpr(call, :call)
+        return quote
+            options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
+            f = $(call.args[1])
+            args = $(Expr(:tuple, call.args[2:end]...))
+            fn = $(compile)(f, args; options.optimize, options.sync)
+        end
+    elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
+        return quote
+            options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
+            f = Base.Broadcast.BroadcastFunction($(call.args[1]))
+            args = $(call.args[2:end]...)
+            fn = $(compile)(f, args; options.optimize, options.sync)
+        end
+    else
+        error("Invalid function call: $(call)")
     end
 end
 
