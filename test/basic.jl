@@ -154,6 +154,15 @@ end
     @test contains(res_repr, "stablehlo.dot_general")
 end
 
+@testset "Reactant.@code_hlo broadcasting" begin
+    x = Reactant.ConcreteRArray(randn(Float32, 2, 2))
+    y = Reactant.ConcreteRArray(randn(Float32, 2, 2))
+    res = Reactant.@code_hlo (.+)(x, y)
+    res_repr = sprint(show, res)
+
+    @test contains(res_repr, "stablehlo.add")
+end
+
 @testset "Statistics: `mean` & `var`" begin
     x = randn(2, 3, 4)
     x_ca = Reactant.ConcreteRArray(x)
