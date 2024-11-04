@@ -29,7 +29,7 @@ function Context(f::Core.Function)
 end
 
 Context(threading::Bool) = Context(API.mlirContextCreateWithThreading(threading))
-function Context(registry::DialectRegistry, threading::Bool)
+function Context(registry, threading)
     return Context(API.mlirContextCreateWithRegistry(registry, threading))
 end
 
