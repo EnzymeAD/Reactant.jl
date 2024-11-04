@@ -564,7 +564,7 @@ extern "C" ifrt::PjRtTuple* ifrt_pjrt_tuple_ctor(ifrt::PjRtCompatibleClient* cli
         values_ptr[i] = tsl::RCReference<ifrt::Value>(values[i]);
     }
     auto span = absl::Span<tsl::RCReference<ifrt::Value>>(values_ptr, nvalues);
-    return new ifrt::PjRtTuple(client, span);
+    return xla::ValueOrThrow(ifrt::PjRtTuple::Create(client, span)).release();
 }
 
 extern "C" void ifrt_pjrt_tuple_free(ifrt::PjRtTuple* tuple) {
@@ -814,7 +814,10 @@ extern "C" bool ifrt_memorykind_ne(ifrt::MemoryKind* mk1, ifrt::MemoryKind* mk2)
 }
 
 extern "C" const char* ifrt_memorykind_string(ifrt::MemoryKind* memory_kind) {
-    return cstr_from_string(memory_kind->memory_kind());
+    if (memory_kind->memory_kind().has_value())
+        return cstr_from_string(memory_kind->memory_kind().value());
+    else
+        return "";
 }
 
 extern "C" ifrt::MemoryKind* ifrt_memorykind_canonicalize(ifrt::MemoryKind* memory_kind, ifrt::Device* device) {
@@ -1110,10 +1113,8 @@ extern "C" const char* ifrt_loadedhostcallback_serialize(ifrt::LoadedHostCallbac
 
 #pragma region xla::ifrt::PjRtHostSendAndRecvLoadedHostCallback
 extern "C" ifrt::PjRtHostSendAndRecvLoadedHostCallback* ifrt_pjrt_hostsendandrecv_loadhostcallback_ctor(ifrt::PjRtClient* client, xla::HostCallback* host_callback) {
-    auto xla_callback_ptr = std::unique_ptr<xla::HostCallback>(host_callback);
-    auto callback = xla::ValueOrThrow(ifrt::PjRtHostSendAndRecvLoadedHostCallback(client, xla_callback_ptr));
-    xla_callback_ptr.release();
-    return new ifrt::PjRtHostSendAndRecvLoadedHostCallback(callback);
+    auto xla_callback_ptr = std::make_unique<xla::HostCallback>(*host_callback);
+    return new ifrt::PjRtHostSendAndRecvLoadedHostCallback(client, std::move(xla_callback_ptr));
 }
 
 extern "C" void ifrt_pjrt_hostsendandrecv_loadhostcallback_free(ifrt::PjRtHostSendAndRecvLoadedHostCallback* host_callback) {
@@ -1193,11 +1194,10 @@ extern "C" std::tuple<size_t, xla::HloModule**> ifrt_executable_hlo_modules(ifrt
 #pragma endregion
 
 #pragma region xla::ifrt::PjRtExecutable
-extern "C" ifrt::PjRtExecutable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable* pjrt_executable, ifrt::XlaCompileOptions* compile_options) {
+extern "C" ifrt::Executable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable* pjrt_executable, ifrt::XlaCompileOptions* compile_options) {
     auto pjrt_executable_shared = std::make_shared<xla::PjRtExecutable>(*pjrt_executable);
     auto options = std::make_unique<ifrt::XlaCompileOptions>(*compile_options);
-    auto executable = xla::ValueOrThrow(ifrt::PjRtExecutable(pjrt_executable_shared, options));
-    return new ifrt::PjRtExecutable(executable);
+    return xla::ValueOrThrow(ifrt::PjRtExecutable::Create(pjrt_executable_shared, std::move(options))).release();
 }
 
 extern "C" void ifrt_pjrt_executable_free(ifrt::PjRtExecutable* executable) {
@@ -1309,15 +1309,14 @@ extern "C" std::tuple<size_t, ifrt::Device* const*> ifrt_loadedexecutable_addres
 
 #pragma region xla::ifrt::PjRtLoadedExecutable
 // TODO add support for LoadedHostCallback
-extern "C" ifrt::PjRtLoadedExecutable* ifrt_pjrt_loadedexecutable_ctor(ifrt::PjRtCompatibleClient* client, xla::PjRtLoadedExecutable* pjrt_loaded_executable) {
-    auto executable = xla::ValueOrThrow(ifrt::PjRtLoadedExecutable(client, pjrt_loaded_executable, std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>()));
-    return new ifrt::PjRtLoadedExecutable(executable);
+extern "C" ifrt::LoadedExecutable* ifrt_pjrt_loadedexecutable_ctor(ifrt::PjRtCompatibleClient* client, xla::PjRtLoadedExecutable* pjrt_loaded_executable) {
+    auto pjrt_loaded_executable_ptr = std::make_shared<xla::PjRtLoadedExecutable>(*pjrt_loaded_executable);
+    return xla::ValueOrThrow(ifrt::PjRtLoadedExecutable::Create(client, pjrt_loaded_executable_ptr, std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>())).release();
 }
 
 // TODO add support for LoadedHostCallback
-extern "C" ifrt::PjRtLoadedExecutable* ifrt_pjrt_loadedexecutable_ctor_from_mlir_module(ifrt::PjRtCompatibleClient* client, mlir::ModuleOp* module, xla::CompileOptions* compile_options) {
-    auto executable = xla::ValueOrThrow(ifrt::PjRtLoadedExecutable(client, *module, *compile_options, std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>()));
-    return new ifrt::PjRtLoadedExecutable(executable);
+extern "C" ifrt::LoadedExecutable* ifrt_pjrt_loadedexecutable_ctor_from_mlir_module(ifrt::PjRtCompatibleClient* client, mlir::ModuleOp* module, xla::CompileOptions* compile_options) {
+    return xla::ValueOrThrow(ifrt::PjRtLoadedExecutable::Create(client, *module, *compile_options, std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>())).release();
 }
 
 extern "C" void ifrt_pjrt_loadedexecutable_free(ifrt::PjRtLoadedExecutable* executable) {
@@ -1338,33 +1337,35 @@ extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor() {
 }
 
 extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_module(mlir::ModuleOp* module) {
-    return new ifrt::HloProgram(module);
+    return new ifrt::HloProgram(*module);
 }
 
 extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_context_and_module(mlir::MLIRContext* context, mlir::ModuleOp* module) {
-    return new ifrt::HloProgram(context, module);
+    auto context_ptr = std::make_unique<mlir::MLIRContext>(*context);
+    return new ifrt::HloProgram(std::move(context_ptr), *module);
 }
 #pragma endregion
 
 #pragma region xla::ifrt::Compiler
 extern "C" ifrt::LoadedExecutable* ifrt_compiler_compile(ifrt::Compiler* compiler, ifrt::Program* program) {
     // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and set directly to the default
-    return xla::ValueOrThrow(compiler->Compile(*program, ifrt::CompileOptions())).release();
+    auto program_ptr = std::make_unique<ifrt::Program>(*program);
+    auto options = std::make_unique<ifrt::CompileOptions>();
+    return xla::ValueOrThrow(compiler->Compile(std::move(program_ptr), std::move(options))).release();
 }
 
 extern "C" ifrt::LoadedExecutable* ifrt_compiler_compile_with_topology(ifrt::Compiler* compiler, ifrt::Program* program, const ifrt::Topology* topology) {
     // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and set directly to the default
     auto options = std::make_unique<ifrt::CompileOptions>();
-    auto program_ptr = std::unique_ptr<ifrt::Program>(program);
-    auto exec_ptr = xla::ValueOrThrow(compiler->Compile(program, *topology, options)).release();
-    program_ptr.release();
+    auto program_ptr = std::make_unique<ifrt::Program>(*program);
+    auto exec_ptr = xla::ValueOrThrow(compiler->Compile(std::move(program_ptr), *topology, options)).release();
     return exec_ptr;
 }
 
 extern "C" ifrt::LoadedExecutable* ifrt_compiler_deserialize_loadedexecutable(ifrt::Compiler* compiler, const char* data) {
     // apparently ifrt::DeserializeExecutableOptions is a legacy artifact so we don't use it and set directly to the default
     auto options = std::make_unique<ifrt::DeserializeExecutableOptions>();
-    return xla::ValueOrThrow(compiler->DeserializeLoadedExecutable(std::string(data), options)).release();
+    return xla::ValueOrThrow(compiler->DeserializeLoadedExecutable(std::string(data), std::move(options))).release();
 }
 #pragma endregion
 
