@@ -9,10 +9,9 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
             x = (; a=rand(4, 3))
             x2 = Reactant.to_rarray(x)
 
-            f = @compile sum(x2)
-
-            @test f(x2) isa @NamedTuple{a::Reactant.ConcreteRNumber{Float64}}
-            @test isapprox(f(x2).a, sum(x.a))
+            res = @jit sum(x2)
+            @test res isa @NamedTuple{a::Reactant.ConcreteRNumber{Float64}}
+            @test isapprox(res.a, sum(x.a))
         end
     end
 
@@ -20,10 +19,7 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
         a = Reactant.ConcreteRArray(ones(2, 10))
         b = Reactant.ConcreteRArray(ones(10, 2))
 
-        function fworld(x, y)
-            g = @compile *(a, b)
-            return g(x, y)
-        end
+        fworld(x, y) = @jit(*(x, y))
 
         @test fworld(a, b) ≈ ones(2, 2) * 10
     end
@@ -34,13 +30,13 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
         ftype1(x) = Float64.(x)
         ftype2(x) = Float32.(x)
 
-        ftype1_compiled = @compile ftype1(a)
-        ftype2_compiled = @compile ftype2(a)
+        y1 = @jit ftype1(a)
+        y2 = @jit ftype2(a)
 
-        @test ftype1_compiled(a) isa Reactant.ConcreteRArray{Float64,2}
-        @test ftype2_compiled(a) isa Reactant.ConcreteRArray{Float32,2}
+        @test y1 isa Reactant.ConcreteRArray{Float64,2}
+        @test y2 isa Reactant.ConcreteRArray{Float32,2}
 
-        @test ftype1_compiled(a) ≈ Float64.(a)
-        @test ftype2_compiled(a) ≈ Float32.(a)
+        @test y1 ≈ Float64.(a)
+        @test y2 ≈ Float32.(a)
     end
 end

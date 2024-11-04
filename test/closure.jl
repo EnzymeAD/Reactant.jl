@@ -8,7 +8,5 @@ muler(x) = y -> x * y
     y = Reactant.ConcreteRArray(ones(2, 2))
 
     f = muler(x)
-    g = @compile f(y)
-
-    @test g(y) ≈ x * y
+    @test @jit(f(y)) ≈ x * y
 end
