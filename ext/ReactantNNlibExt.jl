@@ -260,4 +260,24 @@ function NNlib.batched_mul(x::AnyTracedRArray{T,3}, y::AnyTracedRArray{T,3}) whe
     return permutedims(res, (2, 3, 1))
 end
 
+function NNlib.pad_constant(
+    x::TracedRArray{T,N}, pad::NTuple{N,Tuple{Int,Int}}, value
+) where {T,N}
+    value = Reactant.promote_to(TracedRNumber{T}, value)
+    edge_padding_low = [i[1] for i in pad]
+    edge_padding_high = [i[2] for i in pad]
+    interior_padding = [0 for i in pad]
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.pad(
+            x.mlir_data,
+            value.mlir_data;
+            edge_padding_low,
+            edge_padding_high,
+            interior_padding,
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
+end
+
 end # module ReactantNNlibExt
