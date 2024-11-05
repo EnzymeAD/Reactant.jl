@@ -131,8 +131,7 @@ end
     @test @jit(NNlib.pad_constant(x_ra, (1, 0))) ≈ NNlib.pad_constant(x, (1, 0))
 
     # Symmetric Padding with value (test type-casting)
-    @test @jit(NNlib.pad_constant(x_ra, (1, 1), 2)) ≈
-        NNlib.pad_constant(x, (1, 1), 2)
+    @test @jit(NNlib.pad_constant(x_ra, (1, 1), 2)) ≈ NNlib.pad_constant(x, (1, 1), 2)
     @test @jit(NNlib.pad_constant(x_ra, (1, 1, 1, 1), 2)) ≈
         NNlib.pad_constant(x, (1, 1, 1, 1), 2)
 

@@ -33,6 +33,7 @@ end
 
 for op in (:rfft, :fft, :ifft)
     @eval function AbstractFFTs.$(op)(x::TracedRArray, dims)
+        @assert maximum(dims) ≤ ndims(x) "dims out of range"
         if dims isa Integer
             if dims != 1
                 pdims = compute_correct_pdims(x, dims)
@@ -54,6 +55,7 @@ end
 
 for op in (:irfft,)
     @eval function AbstractFFTs.$(op)(x::TracedRArray, d::Int, dims)
+        @assert maximum(dims) ≤ ndims(x) "dims out of range"
         if dims isa Integer
             if dims != 1
                 pdims = compute_correct_pdims(x, dims)

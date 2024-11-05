@@ -56,6 +56,10 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Control Flow" include("control_flow.jl")
     end
 
+    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
+        @safetestset "AbstractFFTs" include("integration/fft.jl")
+    end
+
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
         @testset "Neural Networks" begin
             @safetestset "NNlib Primitives" include("nn/nnlib.jl")
