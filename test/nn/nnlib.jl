@@ -117,3 +117,45 @@ end
 
     @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 end
+
+@testset "Constant Padding: NNlib.pad_constant" begin
+    x = rand(Float32, 4, 4)
+    x_ra = Reactant.ConcreteRArray(x)
+
+    # Symmetric Padding
+    @test @jit(NNlib.pad_constant(x_ra, (1, 1))) ≈ NNlib.pad_constant(x, (1, 1))
+    @test @jit(NNlib.pad_constant(x_ra, (1, 1, 1, 1))) ≈ NNlib.pad_constant(x, (1, 1, 1, 1))
+
+    # Asymmetric Padding
+    @test @jit(NNlib.pad_constant(x_ra, (1, 3, 2, 1))) ≈ NNlib.pad_constant(x, (1, 3, 2, 1))
+    @test @jit(NNlib.pad_constant(x_ra, (1, 0))) ≈ NNlib.pad_constant(x, (1, 0))
+
+    # Symmetric Padding with value (test type-casting)
+    @test @jit(NNlib.pad_constant(x_ra, (1, 1), 2)) ≈
+        NNlib.pad_constant(x, (1, 1), 2)
+    @test @jit(NNlib.pad_constant(x_ra, (1, 1, 1, 1), 2)) ≈
+        NNlib.pad_constant(x, (1, 1, 1, 1), 2)
+
+    # Asymmetric Padding with value (test type-casting)
+    @test @jit(NNlib.pad_constant(x_ra, (1, 3, 2, 1), 2)) ≈
+        NNlib.pad_constant(x, (1, 3, 2, 1), 2)
+    @test @jit(NNlib.pad_constant(x_ra, (1, 0), 2)) ≈ NNlib.pad_constant(x, (1, 0), 2)
+
+    # pad_zeros just forward to pad_constant
+    @test @jit(NNlib.pad_zeros(x_ra, (1, 1))) ≈ NNlib.pad_zeros(x, (1, 1))
+    @test @jit(NNlib.pad_zeros(x_ra, (1, 1, 1, 1))) ≈ NNlib.pad_zeros(x, (1, 1, 1, 1))
+
+    sumabs2(f, x) = sum(abs2, f(x))
+
+    function ∇sumabs2(f, x)
+        dx = Enzyme.make_zero(x)
+        Enzyme.autodiff(Reverse, sumabs2, Active, Const(f), Duplicated(x, dx))
+        return dx
+    end
+
+    pad_fn = Base.Fix2(NNlib.pad_constant, (1, 1, 1, 1))
+    @test @jit(∇sumabs2(pad_fn, x_ra)) ≈ ∇sumabs2(pad_fn, x)
+
+    pad_fn2 = Base.Fix2(NNlib.pad_constant, (1, 0, 1, 3))
+    @test @jit(∇sumabs2(pad_fn2, x_ra)) ≈ ∇sumabs2(pad_fn2, x)
+end
