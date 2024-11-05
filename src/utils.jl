@@ -43,6 +43,7 @@ function make_mlir_fn(
     return_dialect=:func,
     no_args_in_result::Bool=false,
     construct_function_without_args::Bool=false,
+    track_numbers=construct_function_without_args ? (Number,) : (),
 )
     if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
         return (
@@ -70,7 +71,7 @@ function make_mlir_fn(
             (:args, i),
             concretein ? ConcreteToTraced : TracedSetPath;
             toscalar,
-            track_numbers=construct_function_without_args ? (Number,) : (),
+            track_numbers,
         )
     end
 
@@ -129,6 +130,7 @@ function make_mlir_fn(
         end
 
         # TODO replace with `Base.invoke_within` if julia#52964 lands
+        @show Base.code_ircode(f, map(typeof, traced_args); interp)
         ir, ty = only(
             # TODO fix it for kwargs
             Base.code_ircode(f, map(typeof, traced_args); interp),
@@ -157,7 +159,7 @@ function make_mlir_fn(
         result,
         (:result,),
         concretein ? TracedTrack : TracedSetPath;
-        track_numbers=construct_function_without_args ? (Number,) : (),
+        track_numbers,
     )
 
     # marks buffers to be donated
