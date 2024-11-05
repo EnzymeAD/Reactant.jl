@@ -67,16 +67,16 @@ using namespace xla;
 
 // MLIR C-API extras
 #pragma region MLIR Extra
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx, MlirType type, double real, double imag) {
+extern "C" MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx, MlirType type, double real, double imag) {
     return wrap(complex::NumberAttr::get(cast<ComplexType>(unwrap(type)), real, imag));
 }
 
-MLIR_CAPI_EXPORTED MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc, MlirType type, double real, double imag) {
+extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc, MlirType type, double real, double imag) {
     return wrap(complex::NumberAttr::getChecked(unwrap(loc), cast<ComplexType>(unwrap(type)), real, imag));
 }
 
 // TODO mlirComplexAttrGetValue
-// TODO MLIR_CAPI_EXPORTED MlirTypeID mlirComplexAttrGetTypeID(void) { return wrap(complex::NumberAttr::getTypeID()); }
+// TODO extern "C" MlirTypeID mlirComplexAttrGetTypeID(void) { return wrap(complex::NumberAttr::getTypeID()); }
 #pragma endregion
 
 // int google::protobuf::io::CodedInputStream::default_recursion_limit_ = 100;
