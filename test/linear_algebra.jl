@@ -29,7 +29,7 @@ function mul_with_view1(A, x)
     return C
 end
 
-function  mul_with_view2(A, x)
+function mul_with_view2(A, x)
     B = view(A, 1:2, 1:2)
     x = view(x, 1:2)
     C = similar(B, promote_type(eltype(A), eltype(x)), size(B, 1), size(x, 2))
@@ -37,7 +37,7 @@ function  mul_with_view2(A, x)
     return C
 end
 
-function  mul_with_view3(A, x)
+function mul_with_view3(A, x)
     B = view(A, 1:2, 1:2)
     x = view(x, 1:2)
     C = similar(B, promote_type(eltype(A), eltype(x)), size(B, 1))
