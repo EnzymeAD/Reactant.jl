@@ -382,6 +382,31 @@ for (jlop, hloop, hlocomp, merge) in
 end
 
 function LinearAlgebra.mul!(
+    @nospecialize(C::TracedRArray{T1,1}),
+    @nospecialize(A::AnyTracedRArray{T2,2}),
+    @nospecialize(B::AnyTracedRArray{T3,1}),
+    α::Number=true,
+    β::Number=false,
+) where {T1,T2,T3}
+    # TODO: The reshape operations are not getting optimized, we should directly call dot_general
+    rC = reshape(C, :, 1)
+    LinearAlgebra.mul!(rC, A, reshape(B, :, 1), α, β)
+    C.mlir_data = get_mlir_data(vec(rC))
+    return C
+end
+
+function LinearAlgebra.mul!(
+    @nospecialize(C::TracedRArray{T1,2}),
+    @nospecialize(A::AnyTracedRArray{T2,2}),
+    @nospecialize(B::AnyTracedRArray{T3,1}),
+    α::Number=true,
+    β::Number=false,
+) where {T1,T2,T3}
+    LinearAlgebra.mul!(C, A, reshape(B, :, 1), α, β)
+    return C
+end
+
+function LinearAlgebra.mul!(
     @nospecialize(C::TracedRArray{T1,2}),
     @nospecialize(A::AnyTracedRArray{T2,2}),
     @nospecialize(B::AnyTracedRArray{T3,2}),

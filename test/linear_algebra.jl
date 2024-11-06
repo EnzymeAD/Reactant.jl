@@ -21,6 +21,30 @@ function muladd_5arg2(A, x, b)
     return C
 end
 
+function mul_with_view1(A, x)
+    B = view(A, 1:2, 1:2)
+    x = view(x, 1:2, :)
+    C = similar(B, promote_type(eltype(A), eltype(x)), size(B, 1), size(x, 2))
+    mul!(C, B, x)
+    return C
+end
+
+function  mul_with_view2(A, x)
+    B = view(A, 1:2, 1:2)
+    x = view(x, 1:2)
+    C = similar(B, promote_type(eltype(A), eltype(x)), size(B, 1), size(x, 2))
+    mul!(C, B, x)
+    return C
+end
+
+function  mul_with_view3(A, x)
+    B = view(A, 1:2, 1:2)
+    x = view(x, 1:2)
+    C = similar(B, promote_type(eltype(A), eltype(x)), size(B, 1))
+    mul!(C, B, x)
+    return C
+end
+
 @testset begin
     A = Reactant.to_rarray(rand(4, 4))
     x = Reactant.to_rarray(rand(4, 2))
@@ -29,6 +53,12 @@ end
     @test @jit(muladd2(A, x, b)) ≈ muladd2(A, x, b)
     @test @jit(muladd_5arg(A, x, b)) ≈ muladd2(A, x, b)
     @test @jit(muladd_5arg2(A, x, b)) ≈ 2 .* A * x .+ b
+
+    @test @jit(mul_with_view1(A, x)) ≈ mul_with_view1(A, x)
+
+    x2 = Reactant.to_rarray(rand(4))
+    @test @jit(mul_with_view2(A, x2)) ≈ mul_with_view2(A, x2)
+    @test @jit(mul_with_view3(A, x2)) ≈ mul_with_view3(A, x2)
 
     # Mixed Precision
     x = Reactant.to_rarray(rand(Float32, 4, 2))
