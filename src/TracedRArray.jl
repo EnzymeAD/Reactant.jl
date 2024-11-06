@@ -381,12 +381,22 @@ for (jlop, hloop, hlocomp, merge) in
     end
 end
 
-function Base.:*(
-    @nospecialize(lhs::TracedRArray{T,2}), @nospecialize(rhs::TracedRArray{T,2})
-) where {T}
-    lhsty = MLIR.IR.type(lhs.mlir_data)
-    rhsty = MLIR.IR.type(rhs.mlir_data)
-    resty = MLIR.IR.TensorType((size(lhs, 1), size(rhs, 2)), eltype(lhsty))
+function LinearAlgebra.mul!(
+    @nospecialize(C::TracedRArray{T1,2}),
+    @nospecialize(A::TracedRArray{T2,2}),
+    @nospecialize(B::TracedRArray{T3,2}),
+) where {T1,T2,T3}
+    if size(C) != (size(A, 1), size(B, 2))
+        throw(
+            DimensionMismatch(
+                "C has size $(size(C)), A has size $(size(A)), B has size $(size(B))"
+            ),
+        )
+    end
+    if size(A, 2) != size(B, 1)
+        throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
+    end
+    resty = MLIR.IR.TensorType(size(C), MLIR.IR.Type(T1))
     dot_dimension_numbers = MLIR.API.stablehloDotDimensionNumbersGet(
         MLIR.IR.context(), 0, [], 0, [], 1, [1], 1, [0]
     )
@@ -394,17 +404,17 @@ function Base.:*(
         MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.context(), "DEFAULT")
     )
     precar = MLIR.IR.Attribute([prec, prec])
-    res = MLIR.IR.result(
+    C.mlir_data = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dot_general(
-            lhs.mlir_data,
-            rhs.mlir_data;
+            A.mlir_data,
+            B.mlir_data;
             result_0=resty,
             dot_dimension_numbers=dot_dimension_numbers,
             precision_config=precar,
         ),
         1,
     )
-    return TracedRArray{T,2}((), res, (size(lhs, 1), size(rhs, 2)))
+    return C
 end
 
 function Enzyme.Compiler.active_reg_inner(
