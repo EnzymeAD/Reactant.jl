@@ -33,6 +33,7 @@ function apply(f, args...; kwargs...)
     return f(args...; kwargs...)
 end
 
+# TODO: Generalize batchdims to be propagated to args differently?
 function make_mlir_fn(
     f,
     args,
@@ -40,6 +41,7 @@ function make_mlir_fn(
     name="main",
     concretein=true;
     toscalar=false,
+    batchdims=nothing,
     return_dialect=:func,
     no_args_in_result::Bool=false,
     construct_function_without_args::Bool=false,
@@ -54,6 +56,7 @@ function make_mlir_fn(
                 name,
                 concretein;
                 toscalar,
+                batchdims,
                 return_dialect,
                 no_args_in_result,
                 construct_function_without_args,
@@ -70,6 +73,7 @@ function make_mlir_fn(
             (:args, i),
             concretein ? ConcreteToTraced : TracedSetPath;
             toscalar,
+            batchdims,
             track_numbers=construct_function_without_args ? (Number,) : (),
         )
     end

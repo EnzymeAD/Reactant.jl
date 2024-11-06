@@ -228,13 +228,7 @@ end
 append_path(path, i) = (path..., i)
 
 function make_tracer(
-    seen,
-    @nospecialize(prev::RT),
-    @nospecialize(path),
-    mode;
-    toscalar=false,
-    tobatch=nothing,
-    kwargs...,
+    seen, @nospecialize(prev::RT), @nospecialize(path), mode; kwargs...
 ) where {RT}
     if haskey(seen, prev)
         return seen[prev]
@@ -251,7 +245,7 @@ function make_tracer(
         for i in 1:nf
             if isdefined(prev, i)
                 xi = Base.getfield(prev, i)
-                xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
+                xi2 = make_tracer(seen, xi, append_path(path, i), mode; kwargs...)
                 if xi !== xi2
                     changed = true
                 end
@@ -274,7 +268,7 @@ function make_tracer(
     for i in 1:nf
         if isdefined(prev, i)
             xi = Base.getfield(prev, i)
-            xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
+            xi2 = make_tracer(seen, xi, append_path(path, i), mode; kwargs...)
             if xi !== xi2
                 changed = true
             end
@@ -333,6 +327,7 @@ function make_tracer(
     mode;
     toscalar=false,
     tobatch=nothing,
+    batchdims=nothing,
     kwargs...,
 ) where {T,N}
     if mode == ConcreteToTraced
@@ -349,10 +344,16 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]
         end
+        # TODO: Check `toscalar` is not set together with `batchdims`?
+        # TODO: Unify toscalar and batchdims?
         res = if toscalar
             TracedRNumber{T}((path,), nothing)
+        elseif batchdims !== nothing
+            TracedRArray{T,length(batchdims)}(
+                (path,), nothing, map(Base.Fix1(size, prev), batchdims)
+            )
         elseif tobatch !== nothing
-            error("This should not happen...")
+            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
         else
             TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
         end
@@ -379,6 +380,7 @@ function make_tracer(
     mode;
     tobatch=nothing,
     toscalar=false,
+    batchdims=nothing,
     kwargs...,
 ) where {T}
     if mode == ConcreteToTraced
@@ -397,6 +399,8 @@ function make_tracer(
         end
         res = if toscalar
             TracedRNumber{T}((path,), nothing)
+        elseif batchdims !== nothing
+            error("This should not happen...")
         elseif tobatch !== nothing
             TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
         else
@@ -475,21 +479,11 @@ end
 make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...) = prev
 
 function make_tracer(
-    seen,
-    @nospecialize(prev::Complex{RT}),
-    @nospecialize(path),
-    mode;
-    toscalar=false,
-    tobatch=nothing,
-    kwargs...,
+    seen, @nospecialize(prev::Complex{RT}), @nospecialize(path), mode; kwargs...
 ) where {RT}
     return Complex(
-        make_tracer(
-            seen, prev.re, append_path(path, :re), mode; toscalar, tobatch, kwargs...
-        ),
-        make_tracer(
-            seen, prev.im, append_path(path, :im), mode; toscalar, tobatch, kwargs...
-        ),
+        make_tracer(seen, prev.re, append_path(path, :re), mode; kwargs...),
+        make_tracer(seen, prev.im, append_path(path, :im), mode; kwargs...),
     )
 end
 

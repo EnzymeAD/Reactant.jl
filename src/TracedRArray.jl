@@ -391,72 +391,96 @@ function Base.mapslices(f, A::TracedRArray; dims)
         )
     end
 
-    # Apply the function to the first slice in order to determine the next steps
-    batch_inputs = eachslice(A; dims)
-
+    args = (A,)
     fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
-        f, (first(batch_inputs),), (), string(f) * "_mapslice", false
+        f,
+        args,
+        (),
+        string(f) * "_mapslice",
+        false;
+        batchdims=filter(d -> d ∉ dims, 1:ndims(A)),
     )
 
-    @assert traced_result isa Union{TracedRArray,TracedRNumber} "Expected TracedRArray or TracedRNumber as result."
+    invmap = IdDict()
+    for (k, v) in seen_args
+        invmap[v] = k
+    end
 
-    input_shapes = size.(batch_inputs)
-    output_shape = size(traced_result)
+    keys_seen = [k for k in keys(seen_args) if k isa TracedType]
+    input_shapes = size.(keys_seen)
 
-    input_types = map(mlir_type, batch_inputs)
-    output_types = [mlir_type(traced_result) for _ in 1:length(batch_inputs)]
+    function shape_fn(x)
+        counter = 0
+        return ntuple(ndims(A)) do d
+            d in dims && return size(A, d)
+            counter += 1
+            return size(x, counter)
+        end
+    end
 
-    @show func2
+    out_shapes = map(shape_fn, linear_results)
+    @assert allequal(out_shapes) "out_shapes are $(out_shapes)"
+    out_shape = first(out_shapes)
+
+    in_tys2 = [mlir_type(invmap[arg]) for arg in linear_args]
+
+    out_tys2 = [
+        MLIR.IR.TensorType(out_shapes[i], MLIR.IR.Type(eltype(arg))) for
+        (i, arg) in enumerate(linear_results)
+    ]
 
     fname = get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
 
-    counter = 0
-    batch_shape = ntuple(ndims(A)) do d
-        d in dims && return size(A, d)
-        counter += 1
-        return size(traced_result, counter)
+    batch_inputs = MLIR.IR.Value[]
+
+    for a in linear_args
+        idx, path = get_argidx(a)
+        if idx == 1 && fnwrap
+            push_val!(batch_inputs, f, path[3:end])
+        else
+            if fnwrap
+                idx -= 1
+            end
+            push_val!(batch_inputs, args[idx], path[3:end])
+        end
     end
 
     res = MLIR.Dialects.enzyme.batch(
-        map(get_mlir_data, batch_inputs);
-        outputs=[mlir_type(traced_result)],
+        batch_inputs;
+        outputs=out_tys2,
         fn=fname,
-        batch_shape=MLIR.IR.DenseArrayAttribute([Int64(i) for i in batch_shape]),
+        batch_shape=MLIR.IR.DenseArrayAttribute([Int64(i) for i in out_shape]),
     )
 
-    @show res
+    residx = 1
 
-    # residx = 1
+    for a in linear_results
+        if has_residx(a)
+            path = get_residx(a)
+            set!(result, path[2:end], MLIR.IR.result(res, residx))
+            residx += 1
+        else
+            idx, path = get_argidx(a)
+            if idx == 1 && fnwrap
+                set!(f, path[3:end], MLIR.IR.result(res, residx))
+                residx += 1
+            else
+                if fnwrap
+                    idx -= 1
+                end
+                set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
+                residx += 1
+            end
+        end
+    end
 
-    # for a in linear_results
-    #     if has_residx(a)
-    #         path = get_residx(a)
-    #         set!(result, path[2:end], MLIR.IR.result(res, residx))
-    #         residx += 1
-    #     else
-    #         idx, path = get_argidx(a)
-    #         if idx == 1 && fnwrap
-    #             set!(f, path[3:end], MLIR.IR.result(res, residx))
-    #             residx += 1
-    #         else
-    #             if fnwrap
-    #                 idx -= 1
-    #             end
-    #             set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
-    #             residx += 1
-    #         end
-    #     end
-    # end
+    seen_results = OrderedIdDict()
+    traced2_result = make_tracer(seen_results, result, (), TracedSetPath; tobatch=out_shape)
 
-    # seen_results = OrderedIdDict()
-    # traced2_result = make_tracer(seen_results, result, (), TracedSetPath; tobatch=OutShape)
+    func2.operation = MLIR.API.MlirOperation(C_NULL)
 
-    # func2.operation = MLIR.API.MlirOperation(C_NULL)
-
-    # return traced2_result
-
-    return error(1)
+    return traced2_result
 end
 
 function Base._eachslice(
