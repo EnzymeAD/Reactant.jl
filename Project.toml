@@ -28,6 +28,7 @@ ReactantNNlibExt = "NNlib"
 ReactantStatisticsExt = "Statistics"
 
 [compat]
+AbstractFFTs = "1"
 Adapt = "4"
 ArrayInterface = "7.10"
 CEnum = "0.4, 0.5"
