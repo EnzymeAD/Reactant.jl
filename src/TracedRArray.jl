@@ -383,8 +383,8 @@ end
 
 function LinearAlgebra.mul!(
     @nospecialize(C::TracedRArray{T1,2}),
-    @nospecialize(A::TracedRArray{T2,2}),
-    @nospecialize(B::TracedRArray{T3,2}),
+    @nospecialize(A::AnyTracedRArray{T2,2}),
+    @nospecialize(B::AnyTracedRArray{T3,2}),
     α::Number=true,
     β::Number=false,
 ) where {T1,T2,T3}
@@ -408,8 +408,8 @@ function LinearAlgebra.mul!(
     precar = MLIR.IR.Attribute([prec, prec])
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dot_general(
-            A.mlir_data,
-            B.mlir_data;
+            get_mlir_data(A),
+            get_mlir_data(B);
             result_0=resty,
             dot_dimension_numbers=dot_dimension_numbers,
             precision_config=precar,
