@@ -2,6 +2,7 @@ module Reactant
 
 using ReactantCore: ReactantCore, @trace, MissingTracedValue
 
+using LinearAlgebra: LinearAlgebra
 using Adapt: Adapt, WrappedArray
 
 # auxiliary types and functions
