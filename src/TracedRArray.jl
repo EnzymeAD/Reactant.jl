@@ -385,6 +385,8 @@ function LinearAlgebra.mul!(
     @nospecialize(C::TracedRArray{T1,2}),
     @nospecialize(A::TracedRArray{T2,2}),
     @nospecialize(B::TracedRArray{T3,2}),
+    α::Number = 1,
+    β::Number = 0
 ) where {T1,T2,T3}
     if size(C) != (size(A, 1), size(B, 2))
         throw(
@@ -404,7 +406,7 @@ function LinearAlgebra.mul!(
         MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.context(), "DEFAULT")
     )
     precar = MLIR.IR.Attribute([prec, prec])
-    C.mlir_data = MLIR.IR.result(
+    res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dot_general(
             A.mlir_data,
             B.mlir_data;
@@ -414,6 +416,8 @@ function LinearAlgebra.mul!(
         ),
         1,
     )
+    res = TracedRArray{T1,2}((), res, size(C))
+    @. C = C * β + res * α
     return C
 end
 
