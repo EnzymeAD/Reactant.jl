@@ -385,8 +385,8 @@ function LinearAlgebra.mul!(
     @nospecialize(C::TracedRArray{T1,2}),
     @nospecialize(A::TracedRArray{T2,2}),
     @nospecialize(B::TracedRArray{T3,2}),
-    α::Number = 1,
-    β::Number = 0
+    α::Number=true,
+    β::Number=false,
 ) where {T1,T2,T3}
     if size(C) != (size(A, 1), size(B, 2))
         throw(
@@ -416,8 +416,16 @@ function LinearAlgebra.mul!(
         ),
         1,
     )
-    res = TracedRArray{T1,2}((), res, size(C))
-    @. C = C * β + res * α
+    if iszero(β)
+        if isone(α)
+            C.mlir_data = res
+        else
+            C.mlir_data = (TracedRArray{T1,2}((), res, size(C)) .* α).mlir_data
+        end
+    else
+        res = TracedRArray{T1,2}((), res, size(C))
+        @. C = C * β + res * α
+    end
     return C
 end
 
