@@ -14,6 +14,13 @@ function muladd_5arg(A, x, b)
     return C
 end
 
+function muladd_5arg2(A, x, b)
+    C = similar(A, promote_type(eltype(A), eltype(b)), size(A, 1), size(x, 2))
+    C .= b
+    mul!(C, A, x, 2.0f0, 1)
+    return C
+end
+
 @testset begin
     A = Reactant.to_rarray(rand(4, 4))
     x = Reactant.to_rarray(rand(4, 2))
@@ -21,6 +28,7 @@ end
 
     @test @jit(muladd2(A, x, b)) ≈ muladd2(A, x, b)
     @test @jit(muladd_5arg(A, x, b)) ≈ muladd2(A, x, b)
+    @test @jit(muladd_5arg2(A, x, b)) ≈ 2 .* A * x .+ b
 
     # Mixed Precision
     x = Reactant.to_rarray(rand(Float32, 4, 2))

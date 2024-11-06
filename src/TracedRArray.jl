@@ -420,11 +420,27 @@ function LinearAlgebra.mul!(
         if isone(α)
             C.mlir_data = res
         else
-            C.mlir_data = (TracedRArray{T1,2}((), res, size(C)) .* α).mlir_data
+            C.mlir_data = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.multiply(
+                    res, broadcast_to_size(T1(α), size(C)).mlir_data
+                ),
+                1,
+            )
         end
     else
-        res = TracedRArray{T1,2}((), res, size(C))
-        @. C = C * β + res * α
+        α_res = MLIR.IR.result(
+            MLIR.Dialects.stablehlo.multiply(
+                res, broadcast_to_size(T1(α), size(C)).mlir_data
+            ),
+            1,
+        )
+        β_C = MLIR.IR.result(
+            MLIR.Dialects.stablehlo.multiply(
+                C.mlir_data, broadcast_to_size(T1(β), size(C)).mlir_data
+            ),
+            1,
+        )
+        C.mlir_data = MLIR.IR.result(MLIR.Dialects.stablehlo.add(α_res, β_C), 1)
     end
     return C
 end
