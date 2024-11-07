@@ -61,7 +61,7 @@ function ConcreteRArray(
     )
 end
 
-function ConcreteRArray{T, N}(
+function ConcreteRArray{T,N}(
     data::Array{T,N};
     client=XLA.default_backend[],
     idx=XLA.default_device_idx[],
