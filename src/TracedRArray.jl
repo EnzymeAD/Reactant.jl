@@ -35,6 +35,19 @@ materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
 get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
 
+function set_mlir_data!(x::TracedRArray, data)
+    x.mlir_data = data
+    return x
+end
+function set_mlir_data!(x::AnyTracedRArray, data)
+    data_type = MLIR.IR.type(data)
+    data = TracedRArray{eltype(MLIR.IR.julia_type(data_type)),ndims(data_type)}(
+        (), data, size(data_type)
+    )
+    setindex!(x, data, axes(x)...)
+    return x
+end
+
 ancestor(x::TracedRArray) = x
 ancestor(x::WrappedTracedRArray) = ancestor(parent(x))
 
@@ -115,10 +128,21 @@ function Base.setindex!(
         i in indices
     ]
     res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dynamic_update_slice(a.mlir_data, v.mlir_data, indices), 1
+        MLIR.Dialects.stablehlo.dynamic_update_slice(
+            a.mlir_data, get_mlir_data(v), indices
+        ),
+        1,
     )
     a.mlir_data = res
     return v
+end
+
+function Base.setindex!(
+    a::AnyTracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int},N}
+) where {T,N}
+    ancestor_indices = get_ancestor_indices(a, indices...)
+    setindex!(ancestor(a), v, ancestor_indices...)
+    return a
 end
 
 Base.size(x::TracedRArray) = x.shape
@@ -727,7 +751,7 @@ function broadcast_to_size_internal(x::TracedRArray, rsize)
     )
 end
 
-function _copyto!(dest::TracedRArray, bc::Broadcasted)
+function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
 
@@ -736,7 +760,7 @@ function _copyto!(dest::TracedRArray, bc::Broadcasted)
     args = (broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
     res = elem_apply(bc.f, args...)
-    dest.mlir_data = res.mlir_data
+    set_mlir_data!(dest, res.mlir_data)
     return dest
 end
 
