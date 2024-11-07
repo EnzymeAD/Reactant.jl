@@ -50,6 +50,31 @@ end
 abstract type RArray{T<:ReactantPrimitive,N} <: AbstractArray{T,N} end
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
+function Enzyme.Compiler.active_reg_inner(
+    ::Type{<:RNumber{T}},
+    seen::ST,
+    world::Union{Nothing,UInt},
+    ::Val{justActive}=Val(false),
+    ::Val{UnionSret}=Val(false),
+)::Enzyme.Compiler.ActivityState where {ST,T,justActive,UnionSret}
+    if Enzyme.Compiler.active_reg_inner(T, seen, world, Val(justActive), Val(UnionSret)) ==
+        Enzyme.Compiler.AnyState
+        return Enzyme.Compiler.AnyState
+    else
+        return Enzyme.Compiler.DupState
+    end
+end
+
+function Enzyme.Compiler.active_reg_inner(
+    ::Type{<:RNumber{T}},
+    seen::ST,
+    world::Union{Nothing,UInt},
+    ::Val{justActive}=Val(false),
+    ::Val{UnionSret}=Val(false),
+)::Enzyme.Compiler.ActivityState where {ST,T,justActive,UnionSret}
+    return Enzyme.Compiler.active_reg_inner(T, seen, world, Val(justActive), Val(UnionSret))
+end
+
 function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
 end
