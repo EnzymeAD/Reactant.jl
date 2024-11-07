@@ -409,7 +409,7 @@ function masking!(x)
     return x
 end
 
-@testset "setindex with views" begin
+@testset "setindex! with views" begin
     x = rand(4, 4) .+ 2.0
     x_ra = Reactant.to_rarray(x)
 
