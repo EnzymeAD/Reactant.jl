@@ -396,6 +396,43 @@ end
     # get_view_compiled = @compile get_view(x_concrete)
 end
 
+function masking(x)
+    y = similar(x)
+    y[1:2, :] .= 0
+    y[3:4, :] .= 1
+    return y
+end
+
+function masking!(x)
+    x[1:2, :] .= 0
+    x[3:4, :] .= 1
+    return x
+end
+
+@testset "setindex! with views" begin
+    x = rand(4, 4) .+ 2.0
+    x_ra = Reactant.to_rarray(x)
+
+    y = masking(x)
+    y_ra = @jit(masking(x_ra))
+    @test y ≈ y_ra
+
+    x_ra_array = Array(x_ra)
+    @test !(any(iszero, x_ra_array[1, :]))
+    @test !(any(iszero, x_ra_array[2, :]))
+    @test !(any(isone, x_ra_array[3, :]))
+    @test !(any(isone, x_ra_array[4, :]))
+
+    y_ra = @jit(masking!(x_ra))
+    @test y ≈ y_ra
+
+    x_ra_array = Array(x_ra)
+    @test all(iszero, x_ra_array[1, :])
+    @test all(iszero, x_ra_array[2, :])
+    @test all(isone, x_ra_array[3, :])
+    @test all(isone, x_ra_array[4, :])
+end
+
 tuple_byref(x) = (; a=(; b=x))
 tuple_byref2(x) = abs2.(x), tuple_byref2(x)
 
