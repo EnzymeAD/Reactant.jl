@@ -228,7 +228,8 @@ for (jlop, hloop) in (
     (:(Base.sqrt), :sqrt),
 )
     @eval function $(jlop)(@nospecialize(lhs::TracedRNumber{T})) where {T}
-        return TracedRNumber{T}(
+        OutTy = $(hloop === :abs) ? real(T) : T
+        return TracedRNumber{OutTy}(
             (), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1)
         )
     end

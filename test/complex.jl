@@ -80,3 +80,9 @@ end
         @test @jit(imag(x_concrete)) == imag(x)
     end
 end
+
+@testset "abs: $T" for T in (Float32, ComplexF32)
+    x = randn(T, 10)
+    x_concrete = Reactant.to_rarray(x)
+    @test @jit(abs.(x_concrete)) ≈ abs.(x)
+end
