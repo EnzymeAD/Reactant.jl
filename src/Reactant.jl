@@ -51,7 +51,7 @@ abstract type RArray{T<:ReactantPrimitive,N} <: AbstractArray{T,N} end
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
 function Enzyme.Compiler.active_reg_inner(
-    ::Type{<:RNumber{T}},
+    ::Type{<:RArray{T}},
     seen::ST,
     world::Union{Nothing,UInt},
     ::Val{justActive}=Val(false),
