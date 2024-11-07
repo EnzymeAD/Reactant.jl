@@ -61,6 +61,15 @@ function ConcreteRArray(
     )
 end
 
+function ConcreteRArray{T, N}(
+    data::Array{T,N};
+    client=XLA.default_backend[],
+    idx=XLA.default_device_idx[],
+    device=nothing,
+) where {T,N}
+    return ConcreteRArray(data; client, idx, device)
+end
+
 Base.size(x::ConcreteRArray) = x.shape
 
 function Base.reshape(A::ConcreteRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
