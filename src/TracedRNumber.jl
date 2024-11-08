@@ -270,8 +270,8 @@ Base.abs2(x::TracedRNumber{<:Real}) = x^2
 
 Base.log1p(x::TracedRNumber{T}) where {T} = log(x + one(T))
 
-for nT in (Number, TracedRNumber)
-    @eval function Base.clamp(x::TracedRNumber{T}, min::$(nT), max::$(nT)) where {T}
+for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
+    @eval function Base.clamp(x::TracedRNumber{T}, min::$(minT), max::$(maxT)) where {T}
         min = promote_to(TracedRNumber{T}, min)
         max = promote_to(TracedRNumber{T}, max)
         return TracedRNumber{T}(

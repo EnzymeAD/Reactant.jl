@@ -849,8 +849,8 @@ function maybe_expand_dims(x::AbstractArray{T,N}, dims) where {T,N}
     return reshape(x, ntuple(i -> i ≤ N ? size(x, i) : 1, dims))
 end
 
-for nT in (Number, TracedRNumber)
-    @eval function Base.clamp!(x::TracedRArray{T}, min::$(nT), max::$(nT)) where {T}
+for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
+    @eval function Base.clamp!(x::TracedRArray{T}, min::$(minT), max::$(maxT)) where {T}
         y = clamp.(x, min, max)
         x.mlir_data = y.mlir_data
         return x
