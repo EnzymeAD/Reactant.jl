@@ -697,7 +697,7 @@ function broadcast_to_size(arg::Base.RefValue, rsize)
 end
 
 function broadcast_to_size(arg::T, rsize) where {T<:Number}
-    attr = MLIR.IR.DenseElementsAttribute(Base.fill(arg, rsize))
+    attr = MLIR.IR.DenseElementsAttribute(Base.fill(arg, Tuple(rsize)))
     return arg = TracedRArray{T,length(rsize)}(
         (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), rsize
     )
