@@ -697,8 +697,7 @@ function broadcast_to_size(arg::Base.RefValue, rsize)
 end
 
 function broadcast_to_size(arg::T, rsize) where {T<:Number}
-    TT = MLIR.IR.TensorType([Int64(s) for s in rsize], MLIR.IR.Type(typeof(arg)))
-    attr = Base.fill(arg, TT)
+    attr = MLIR.IR.DenseElementsAttribute(Base.fill(arg, Tuple(rsize)))
     return arg = TracedRArray{T,length(rsize)}(
         (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), rsize
     )
