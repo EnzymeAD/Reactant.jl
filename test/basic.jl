@@ -538,3 +538,23 @@ end
     @test Int(x) isa Int
     @test float(x) isa ConcreteRNumber{Float64}
 end
+
+@testset "clamp" begin
+    x = randn(2, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    y = @jit(clamp!(x_ra, 0.0, 0.25))
+    @test maximum(y) ≤ 0.25
+    @test minimum(y) ≥ 0.0
+    @test maximum(x_ra) == maximum(y)
+    @test minimum(x_ra) == minimum(y)
+    @test y === x_ra
+
+    x = randn(2, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    y = @jit(clamp.(x_ra, 0.0, 0.25))
+    @test maximum(y) ≤ 0.25
+    @test minimum(y) ≥ 0.0
+    @test x_ra == x
+end
