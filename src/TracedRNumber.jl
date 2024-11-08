@@ -270,6 +270,17 @@ Base.abs2(x::TracedRNumber{<:Real}) = x^2
 
 Base.log1p(x::TracedRNumber{T}) where {T} = log(x + one(T))
 
+function Base.clamp(x::TracedRNumber{T}, min::Number, max::Number) where {T}
+    min = promote_to(TracedRNumber{T}, min)
+    max = promote_to(TracedRNumber{T}, max)
+    return TracedRNumber{T}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.clamp(min.mlir_data, x.mlir_data, max.mlir_data), 1
+        ),
+    )
+end
+
 struct TypeCast{T<:ReactantPrimitive} <: Function end
 
 (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = promote_to(TracedRNumber{T}, x)
