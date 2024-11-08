@@ -86,7 +86,7 @@ function promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
         )
     end
     if isa(rhs, Number)
-        attr = fill(MLIR.IR.Attribute(T(rhs)), mlir_type(TracedRNumber{T}))
+        attr = MLIR.IR.DenseElementsAttribute(fill(T(rhs)))
         return TracedRNumber{T}(
             (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
         )

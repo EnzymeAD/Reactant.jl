@@ -157,4 +157,9 @@ end
 
     pad_fn2 = Base.Fix2(NNlib.pad_constant, (1, 0, 1, 3))
     @test @jit(∇sumabs2(pad_fn2, x_ra)) ≈ ∇sumabs2(pad_fn2, x)
+
+    x = rand(ComplexF32, 4, 4)
+    x_ra = Reactant.ConcreteRArray(x)
+
+    @test @jit(NNlib.pad_constant(x_ra, (1, 1))) ≈ NNlib.pad_constant(x, (1, 1))
 end
