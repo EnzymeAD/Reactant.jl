@@ -13,7 +13,7 @@ using NNlib, Reactant, Enzyme
     x_act_ca = Reactant.ConcreteRArray(x_act)
 
     @testset "Activation: $act" for act in (
-        identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2
+        identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2, relu6
     )
         f_compile = Reactant.compile(sumabs2, (act, x_act))
 
