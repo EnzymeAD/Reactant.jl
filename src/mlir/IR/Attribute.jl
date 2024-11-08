@@ -501,7 +501,7 @@ end
 
 Creates a dense elements attribute with the given shaped type from elements of a specific type. Expects the element type of the shaped type to match the data element type.
 """
-function DenseElementsAttribute(values::AbstractVector{Bool})
+function DenseElementsAttribute(values::AbstractArray{Bool})
     shaped_type = TensorType(size(values), Type(Bool))
     return Attribute(
         API.mlirDenseElementsAttrBoolGet(shaped_type, length(values), pointer(values))
