@@ -521,7 +521,7 @@ function Base.mapreduce(
     end
 
     if isnothing(init)
-        init = Base.reduce_empty(Base.BottomRF(op), T)
+        init = Base.reduce_empty(Base.BottomRF(op), Core.Compiler.return_type(f, Tuple{T}))
     else
         init = init::T
     end
@@ -567,6 +567,7 @@ function Base.mapreduce(
     )
 
     red = MLIR.IR.result(red, 1)
+    redT = eltype(MLIR.IR.julia_type(MLIR.IR.type(red)))
 
     if dims != (:)
         red = MLIR.IR.result(
@@ -575,12 +576,12 @@ function Base.mapreduce(
             ),
             1,
         )
-        red = TracedRArray{T,length(toonedims)}((), red, (toonedims...,))
+        red = TracedRArray{redT,length(toonedims)}((), red, (toonedims...,))
     else
         if length(outdims) == 0
-            red = TracedRNumber{T}((), red)
+            red = TracedRNumber{redT}((), red)
         else
-            red = TracedRArray{T,length(outdims)}((), red, (outdims...,))
+            red = TracedRArray{redT,length(outdims)}((), red, (outdims...,))
         end
     end
     return red

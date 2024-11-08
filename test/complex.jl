@@ -97,3 +97,8 @@ end
 
     @test isapprox(f(y), 2.0 - 1.0im)
 end
+
+@testset "complex reduction" begin
+    x_ra = Reactant.ConcreteRArray(randn(ComplexF32, 10, 10))
+    @test @jit(sum(abs2, x_ra)) ≈ sum(abs2, x_ra)
+end
