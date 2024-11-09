@@ -100,13 +100,70 @@ end
 """
 macro trace(expr)
     expr = macroexpand(__module__, expr)
-    if expr.head == :(=)
-        if expr.args[2] isa Expr && expr.args[2].head == :if
+    if Meta.isexpr(expr, :(=))
+        if Meta.isexpr(expr.args[2], :if)
             return esc(trace_if_with_returns(__module__, expr))
         end
     end
-    expr.head == :if && return esc(trace_if(__module__, expr))
+    Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
+    Meta.isexpr(expr, :for) && return(esc(trace_for(__module__, expr)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
+end
+
+function trace_for(mod, expr)
+    Meta.isexpr(expr, :for, 2) || error("expected for expr")
+    assign, body = expr.args
+
+    if !Meta.isexpr(assign, :(=)) ||
+        !(assign.args[1] isa Symbol) ||
+        !Meta.isexpr(assign.args[2], :call) ||
+        assign.args[2].args[1] !== :(:)
+
+        error("malformed for loop assignment")
+    end
+
+    new_var, range = assign.args
+
+    start = range.args[2]
+    step = length(range.args) == 3 ? 1 : range.args[3]
+    limit = range.args[end]
+
+    body_symbols = ExpressionExplorer.compute_symbols_state(quote
+        for _ = $(start):$(step):$(limit)
+            $body
+        end
+    end)
+
+    induction = gensym(:i)
+
+    all_syms = Expr(:tuple,
+        induction,
+        (body_symbols.assignments ∪ body_symbols.references)...,
+    )
+
+    reactant_code_block = quote
+        let $induction = Reactant.promote_to(Reactant.TracedRNumber{Int64}, $(range.args[2])),
+            args = $(all_syms)
+
+            cond_fn = $(all_syms) -> begin
+                $induction < Reactant.promote_to(Reactant.TracedRNumber{Int64}, $limit)
+            end
+            body_fn = $(all_syms) -> begin
+                $body
+                ($induction + Reactant.promote_to(Reactant.TracedRNumber{Int64}, $step), $(all_syms.args[begin+1:end]...))
+            end
+
+            ReactantCore.traced_while(cond_fn, body_fn, args)
+        end
+    end
+
+    return quote
+        if any($(is_traced), ($(all_syms.args[begin+1:end]...),))
+            $(reactant_code_block)
+        else
+            $(expr)
+        end
+    end
 end
 
 # ... = if ... style expressions
@@ -283,6 +340,13 @@ end
 # Generate this dummy function and later we remove it during tracing
 function traced_if(cond, true_fn::TFn, false_fn::FFn, args) where {TFn,FFn}
     return cond ? true_fn(args) : false_fn(args)
+end
+
+function traced_while(cond_fn::CFn, body_fn::BFn, args) where {CFn, BFn}
+    while cond_fn(args...)
+        args = body_fn(args...)
+    end
+    return args
 end
 
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)

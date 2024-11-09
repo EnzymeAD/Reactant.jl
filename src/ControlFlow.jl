@@ -74,9 +74,56 @@ function ReactantCore.traced_if(
     end
 end
 
-function get_region_removing_missing_values(compiled_fn, insertions)
+function ReactantCore.traced_while(cond_fn::CFn, body_fn::BFn, args) where {CFn, BFn}
+    (_, cond_fn_compiled, cond_fn_results, _, _, _, _, _, cond_fn_linear_results) = Reactant.make_mlir_fn(
+        cond_fn,
+        args,
+        (),
+        string(gensym("cond_fn")),
+        false;
+        no_args_in_result=true,
+        return_dialect=:stablehlo,
+    )
+
+    (_, body_fn_compiled, body_fn_results, _, _, _, _, _, body_fn_linear_results) = Reactant.make_mlir_fn(
+        body_fn,
+        args,
+        (),
+        string(gensym("body_fn")),
+        false;
+        no_args_in_result=true,
+        return_dialect=:stablehlo,
+    )
+
+    cond_reg = take_region(cond_fn_compiled)
+    body_reg = take_region(body_fn_compiled)
+
+    MLIR.IR.rmfromparent!(cond_fn_compiled)
+    MLIR.IR.rmfromparent!(body_fn_compiled)
+
+    result_0 = [MLIR.IR.type(v.mlir_data) for v in args]
+
+    while_compiled = MLIR.Dialects.stablehlo.while_(
+        [v.mlir_data for v in args];
+        result_0,
+        cond=cond_reg,
+        body=body_reg,
+    )
+
+    return map(enumerate(args)) do (i, res)
+        res.mlir_data = MLIR.IR.result(while_compiled, i)
+        return res
+    end
+end
+
+function take_region(compiled_fn)
     region = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0))
+    return region
+end
+
+function get_region_removing_missing_values(compiled_fn, insertions)
+    region = take_region(compiled_fn)
     block = MLIR.IR.Block(MLIR.API.mlirRegionGetFirstBlock(region), false)
     return_op = MLIR.IR.terminator(block)
     for (i, rt) in insertions

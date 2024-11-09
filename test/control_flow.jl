@@ -453,3 +453,20 @@ end
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
         condition12_compile_test(x, y, z)
 end
+
+function nnorm(x, n)
+    @trace for i in 1:n
+       x = x ./ sum(x)
+   end
+   x
+end
+
+@testset "for loops" begin
+    x = randn(Float32, 10)
+    x_ra = Reactant.to_rarray(x);
+
+    n = 10
+    n_ra = Reactant.to_rarray(fill(n));
+
+    @test @jit(nnorm(x_ra, n_ra)) ≈ nnorm(x, n)
+end
