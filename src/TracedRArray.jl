@@ -148,7 +148,9 @@ function Base.setindex!(
 end
 
 function Base.setindex!(
-    a::AnyTracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int},N}
+    a::AnyTracedRArray{T,N},
+    v,
+    indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int,TracedRNumber{Int}},N},
 ) where {T,N}
     ancestor_indices = get_ancestor_indices(a, indices...)
     setindex!(ancestor(a), v, ancestor_indices...)
