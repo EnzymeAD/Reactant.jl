@@ -163,3 +163,13 @@ end
 
     @test @jit(NNlib.pad_constant(x_ra, (1, 1))) ≈ NNlib.pad_constant(x, (1, 1))
 end
+
+@testset "make_causal_mask" begin
+    x = rand(2, 10)
+    x_ra = Reactant.ConcreteRArray(x)
+
+    @test @jit(NNlib.make_causal_mask(x_ra)) ≈ NNlib.make_causal_mask(x)
+
+    causal_mask2(x) = NNlib.make_causal_mask(x; dims=1)
+    @test @jit(causal_mask2(x_ra)) ≈ causal_mask2(x)
+end

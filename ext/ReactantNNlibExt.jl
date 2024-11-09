@@ -3,6 +3,7 @@ module ReactantNNlibExt
 using NNlib
 using Reactant:
     Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR, TracedRNumber
+using LinearAlgebra: LinearAlgebra, triu
 
 for (jlop, hloop) in (
     (:(NNlib.tanh_fast), :tanh),
@@ -278,6 +279,21 @@ function NNlib.pad_constant(
         1,
     )
     return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
+end
+
+function NNlib.make_causal_mask(x::AnyTracedRArray; dims::Int=2)
+    len = size(x, dims)
+    # directly generating booleans were causing an incorrect constant attribute generation
+    # but the optimized IR removes the type case so we are probably ok
+    mask = MLIR.IR.DenseElementsAttribute(collect(triu(fill(1, (len, len)))'))
+    return Reactant.promote_to(
+        TracedRArray{Bool,2},
+        TracedRArray{Int,2}(
+            (),
+            MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=mask), 1),
+            (len, len),
+        ),
+    )
 end
 
 end # module ReactantNNlibExt
