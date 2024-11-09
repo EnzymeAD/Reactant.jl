@@ -155,6 +155,8 @@ function Base.setindex!(
     return a
 end
 
+Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(Base.getindex, x), length(x))
+
 Base.size(x::TracedRArray) = x.shape
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
