@@ -296,4 +296,19 @@ function NNlib.make_causal_mask(x::AnyTracedRArray; dims::Int=2)
     )
 end
 
+# XXX: For performance to use `stablehlo.dynamic_gather` or atleast use traced loop
+#      instead of unrolling the loop (the case for AbstractArray can just use
+#      `stablehlo.gather`)
+function NNlib.gather!(
+    dst::TracedRArray{T1,N}, src::AnyTracedRArray{T2,N}, idxs::AbstractArray
+) where {T1,T2,N}
+    dims = NNlib.scatter_dims(src, dst, idxs)
+    colons = ntuple(i -> Colon(), dims)
+    start_sizes = ntuple(i -> size(src, i), dims)
+    results = [reshape(src[colons..., Tuple(idxs[k])...], start_sizes..., :) for k in idxs]
+    res = reshape(cat(results...; dims=(dims + 1)), size(dst))
+    dst.mlir_data = res.mlir_data
+    return dst
+end
+
 end # module ReactantNNlibExt
