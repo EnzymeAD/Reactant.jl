@@ -10,6 +10,11 @@ function condition1(x)
     return z
 end
 
+x = rand(2, 10)
+x_ra = Reactant.to_rarray(x)
+
+@code_hlo condition1(x_ra)
+
 @testset "condition1" begin
     x = rand(2, 10)
     x_ra = Reactant.to_rarray(x)
