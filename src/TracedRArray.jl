@@ -75,7 +75,7 @@ and require expensive copies and synchronization each time and therefore should 
     )
     res2 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.reshape(
-            res1; result_0=MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(res1)))
+            res1; result_0=MLIR.IR.TensorType(Int[], eltype(MLIR.IR.type(res1)))
         ),
         1,
     )
