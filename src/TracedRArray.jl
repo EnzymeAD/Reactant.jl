@@ -699,7 +699,7 @@ end
 
 function broadcast_to_size(arg::T, rsize) where {T<:Number}
     attr = MLIR.IR.DenseElementsAttribute(Base.fill(arg, Tuple(rsize)))
-    return arg = TracedRArray{T,length(rsize)}(
+    return TracedRArray{T,length(rsize)}(
         (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), rsize
     )
 end
@@ -709,6 +709,11 @@ function broadcast_to_size(arg::TracedRNumber, rsize)
     return broadcast_to_size_internal(
         TracedRArray{eltype(arg),0}((), arg.mlir_data, ()), rsize
     )
+end
+
+function broadcast_to_size(arg::AnyTracedRArray{T, 0}, rsize) where {T}
+    arg = materialize_traced_array(arg)
+    return broadcast_to_size(TracedRNumber{T}((), arg.mlir_data), rsize)
 end
 
 function broadcast_to_size(arg::AnyTracedRArray, rsize)
