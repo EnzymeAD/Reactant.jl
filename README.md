@@ -63,3 +63,12 @@ Reactant.set_default_backend("gpu")
 # ones favorite code will now all be executed on GPU, no CUDA.jl dependency even required!
 ```
 
+## High-Level Usage Examples
+
+### Neural Networks
+
+1. [General Usage with Lux.jl](https://lux.csail.mit.edu/stable/manual/compiling_lux_models)
+2. [Compiling NeuralOperators.jl with Reactant](https://docs.sciml.ai/NeuralOperators/stable/tutorials/reactant/)
+3. End-to-End Training & Inference Examples
+    1. [Conv Mixer on CIFAR-10](https://github.com/LuxDL/Lux.jl/tree/main/examples/ConvMixer)
+    2. [Text Generation using NanoGPT](https://github.com/LuxDL/Lux.jl/tree/main/examples/NanoGPT)
