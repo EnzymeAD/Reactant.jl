@@ -96,7 +96,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     end
 
     foreach(indices) do idxs
-        idxs isa Number && return
+        idxs isa Number && return nothing
         all(isone, diff(idxs)) || error("non-contiguous indexing is not supported")
     end
 
