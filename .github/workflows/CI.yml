@@ -49,6 +49,16 @@ jobs:
             version: '1.10'
             assertions: true
             test_group: neural_networks
+          - os: ubuntu-20.04
+            arch: x86
+            libReactant: packaged
+            version: '1.10'
+            test_group: core
+          - os: ubuntu-20.04
+            arch: x86
+            libReactant: packaged
+            version: '1.10'
+            test_group: neural_networks
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
