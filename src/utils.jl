@@ -34,29 +34,13 @@ function apply(f, args...; kwargs...)
 end
 
 function make_mlir_fn(
-    f,
-    args,
-    kwargs,
-    name="main",
-    concretein=true;
-    toscalar=false,
-    return_dialect=:func,
-    no_args_in_result::Bool=false,
-    construct_function_without_args::Bool=false,
+    f, args, kwargs, name="main", concretein=true; toscalar=false, return_dialect=:func
 )
     if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
         return (
             true,
             make_mlir_fn(
-                apply,
-                (f, args...),
-                kwargs,
-                name,
-                concretein;
-                toscalar,
-                return_dialect,
-                no_args_in_result,
-                construct_function_without_args,
+                apply, (f, args...), kwargs, name, concretein; toscalar, return_dialect
             )[2:end]...,
         )
     end
@@ -70,7 +54,6 @@ function make_mlir_fn(
             (:args, i),
             concretein ? ConcreteToTraced : TracedSetPath;
             toscalar,
-            track_numbers=construct_function_without_args ? (Number,) : (),
         )
     end
 
@@ -100,24 +83,16 @@ function make_mlir_fn(
         )
     end
 
-    if construct_function_without_args
-        fnbody = MLIR.IR.Block()
-    else
-        fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
-    end
+    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
 
     @assert MLIR.IR._has_block()
 
     result = MLIR.IR.block!(fnbody) do
         for (i, arg) in enumerate(linear_args)
-            if construct_function_without_args
-                arg.mlir_data = args[i].mlir_data
-            else
-                raw_arg = MLIR.IR.argument(fnbody, i)
-                row_maj_arg = transpose_val(raw_arg)
-                arg.mlir_data = row_maj_arg
-            end
+            raw_arg = MLIR.IR.argument(fnbody, i)
+            row_maj_arg = transpose_val(raw_arg)
+            arg.mlir_data = row_maj_arg
         end
 
         # NOTE an `AbstractInterpreter` cannot process methods with more recent world-ages than it
@@ -153,11 +128,7 @@ function make_mlir_fn(
     seen_results = OrderedIdDict()
 
     traced_result = make_tracer(
-        seen_results,
-        result,
-        (:result,),
-        concretein ? TracedTrack : TracedSetPath;
-        track_numbers=construct_function_without_args ? (Number,) : (),
+        seen_results, result, (:result,), concretein ? TracedTrack : TracedSetPath
     )
 
     # marks buffers to be donated
@@ -171,7 +142,6 @@ function make_mlir_fn(
 
     for (k, v) in seen_results
         v isa TracedType || continue
-        (no_args_in_result && length(v.paths) > 0 && v.paths[1][1] == :args) && continue
         push!(linear_results, v)
     end
 
@@ -180,16 +150,10 @@ function make_mlir_fn(
     ret = MLIR.IR.block!(fnbody) do
         vals = MLIR.IR.Value[]
         for res in linear_results
-            if res isa MissingTracedValue
-                col_maj = broadcast_to_size(false, ()).mlir_data
-            elseif construct_function_without_args
-                col_maj = res.mlir_data
-            else
-                col_maj = transpose_val(res.mlir_data)
-            end
+            col_maj = transpose_val(res.mlir_data)
             push!(vals, col_maj)
         end
-        !no_args_in_result && @assert length(vals) == length(linear_results)
+        @assert length(vals) == length(linear_results)
 
         dialect = getfield(MLIR.Dialects, return_dialect)
         return dialect.return_(vals)

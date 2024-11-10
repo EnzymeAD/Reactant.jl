@@ -1,65 +1,74 @@
-function ReactantCore.traced_if(
-    cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args
-) where {TFn,FFn}
-    (_, true_branch_compiled, true_branch_results, _, _, _, _, _, true_linear_results) = Reactant.make_mlir_fn(
-        true_fn,
-        args,
-        (),
-        string(gensym("true_branch")),
-        false;
-        return_dialect=:stablehlo,
-        no_args_in_result=true,
-        construct_function_without_args=true,
-    )
+function ReactantCore.traced_if(cond::TracedRNumber{Bool}, true_fn, false_fn, args)
+    # NOTE: This behavior is different from how we compile other functions, i.e., we keep
+    #       things as constants if possible, but from a block we do need to return a
+    #       traced value, so we force a conversion to a TracedType.
+    # XXX: Eventually we would want to support nested structures as block arguments
+    #      but we will have to do a flatten/unflatten pass to make this work.
+    args_traced = map(args) do arg
+        arg isa TracedType && return arg
+        arg isa Number && return promote_to(TracedRNumber{eltype(arg)}, arg)
+        arg isa AbstractArray &&
+            return promote_to(TracedRArray{eltype(arg),ndims(arg)}, arg)
+        @warn "Argument $(arg) is not a TracedType, TracedRNumber, or TracedRArray. It \
+               will be promoted to a TracedRNumber. Please open an issue in Reactant.jl \
+               with an example of this behavior."
+        return arg
+    end
 
-    (_, false_branch_compiled, false_branch_results, _, _, _, _, _, false_linear_results) = Reactant.make_mlir_fn(
-        false_fn,
-        args,
-        (),
-        string(gensym("false_branch")),
-        false;
-        return_dialect=:stablehlo,
-        no_args_in_result=true,
-        construct_function_without_args=true,
-    )
+    true_block = MLIR.IR.Block()
+    true_res = MLIR.IR.block!(true_block) do
+        results = map(true_fn(args_traced...)) do r
+            r isa TracedType && return r
+            r isa Number && return promote_to(TracedRNumber{typeof(r)}, r)
+            r isa AbstractArray &&
+                return promote_to(TracedRArray{eltype(r),ndims(r)}, r)
+            error("Unsupported return type $(typeof(r))")
+        end
+        MLIR.Dialects.stablehlo.return_([x.mlir_data for x in results])
+        return results
+    end
 
-    @assert length(true_branch_results) == length(false_branch_results) "true branch returned $(length(true_branch_results)) results, false branch returned $(length(false_branch_results)). This shouldn't happen."
+    false_block = MLIR.IR.Block()
+    false_res = MLIR.IR.block!(false_block) do
+        results = map(false_fn(args_traced...)) do r
+            r isa TracedType && return r
+            r isa Number && return promote_to(TracedRNumber{typeof(r)}, r)
+            r isa AbstractArray &&
+                return promote_to(TracedRArray{eltype(r),ndims(r)}, r)
+            error("Unsupported return type $(typeof(r))")
+        end
+        MLIR.Dialects.stablehlo.return_([x.mlir_data for x in results])
+        return results
+    end
+
+    @assert length(true_res) == length(false_res) "true branch returned $(length(true_res)) results, false branch returned $(length(false_res)). This shouldn't happen."
 
     result_types = MLIR.IR.Type[]
-    linear_results = []
     true_block_insertions = []
     false_block_insertions = []
-    for (i, (tr, fr)) in enumerate(zip(true_branch_results, false_branch_results))
+    for (i, (tr, fr)) in enumerate(zip(true_res, false_res))
         if typeof(tr) != typeof(fr)
             if !(tr isa MissingTracedValue) && !(fr isa MissingTracedValue)
                 error("Result #$(i) for the branches have different types: true branch \
                        returned `$(typeof(tr))`, false branch returned `$(typeof(fr))`.")
             elseif tr isa MissingTracedValue
                 push!(result_types, MLIR.IR.type(fr.mlir_data))
-                push!(linear_results, new_traced_value(false_linear_results[i]))
-                push!(true_block_insertions, (i => linear_results[end]))
+                push!(true_block_insertions, (i => new_traced_value(false_res[i])))
             else
                 push!(result_types, MLIR.IR.type(tr.mlir_data))
-                push!(linear_results, new_traced_value(true_linear_results[i]))
-                push!(false_block_insertions, (i => linear_results[end]))
+                push!(false_block_insertions, (i => new_traced_value(true_res[i])))
             end
         else
             push!(result_types, MLIR.IR.type(tr.mlir_data))
-            push!(linear_results, new_traced_value(tr))
         end
     end
 
-    # Replace all uses of missing values with the correct values
     true_branch_region = get_region_removing_missing_values(
-        true_branch_compiled, true_block_insertions
+        true_block, true_block_insertions
     )
-
     false_branch_region = get_region_removing_missing_values(
-        false_branch_compiled, false_block_insertions
+        false_block, false_block_insertions
     )
-
-    MLIR.IR.rmfromparent!(true_branch_compiled)
-    MLIR.IR.rmfromparent!(false_branch_compiled)
 
     if_compiled = MLIR.Dialects.stablehlo.if_(
         cond.mlir_data;
@@ -68,16 +77,18 @@ function ReactantCore.traced_if(
         result_0=result_types,
     )
 
-    return map(enumerate(linear_results)) do (i, res)
-        res.mlir_data = MLIR.IR.result(if_compiled, i)
-        return res
+    return map(1:MLIR.IR.nresults(if_compiled)) do i
+        res = MLIR.IR.result(if_compiled, i)
+        sz = size(MLIR.IR.type(res))
+        T = MLIR.IR.julia_type(eltype(MLIR.IR.type(res)))
+        isempty(sz) && return TracedRNumber{T}((), res)
+        return TracedRArray{T,length(sz)}((), res, sz)
     end
 end
 
-function get_region_removing_missing_values(compiled_fn, insertions)
+function get_region_removing_missing_values(block, insertions)
     region = MLIR.IR.Region()
-    MLIR.API.mlirRegionTakeBody(region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0))
-    block = MLIR.IR.Block(MLIR.API.mlirRegionGetFirstBlock(region), false)
+    push!(region, block)
     return_op = MLIR.IR.terminator(block)
     for (i, rt) in insertions
         if rt isa TracedRNumber
