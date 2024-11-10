@@ -57,6 +57,7 @@ function get_ancestor_indices(x::WrappedTracedRArray, indices...)
 end
 
 function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
+    error(1)
     @warn(
         """Performing scalar indexing on task $(current_task()).
 Invocation resulted in scalar indexing of a TracedRArray.
@@ -393,6 +394,135 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     func2.operation = MLIR.API.MlirOperation(C_NULL)
 
     return traced2_result
+end
+
+# TODO: once we have a generic implementation of `vmap`/`batch` we can simply call that
+#       from here
+function Base.mapslices(f, A::TracedRArray; dims)
+    isempty(dims) && return map(f, A)
+
+    for d in dims
+        d isa Integer ||
+            throw(ArgumentError("mapslices: dimension must be an integer, got $d"))
+        d >= 1 || throw(ArgumentError("mapslices: dimension must be ≥ 1, got $d"))
+        # Indexing a matrix M[:,1,:] produces a 1-column matrix, but dims=(1,3) here
+        # would otherwise ignore 3, and slice M[:,i]. Previously this gave error:
+        # BoundsError: attempt to access 2-element Vector{Any} at index [3]
+        d > ndims(A) && throw(
+            ArgumentError(
+                "mapslices does not accept dimensions > ndims(A) = $(ndims(A)), got $d"
+            ),
+        )
+    end
+
+    args = (A,)
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
+        f,
+        args,
+        (),
+        string(f) * "_mapslice",
+        false;
+        batchdims=filter(d -> d ∉ dims, 1:ndims(A)),
+    )
+
+    invmap = IdDict()
+    for (k, v) in seen_args
+        invmap[v] = k
+    end
+
+    keys_seen = [k for k in keys(seen_args) if k isa TracedType]
+    input_shapes = size.(keys_seen)
+
+    function shape_fn(x)
+        counter = 0
+        return ntuple(ndims(A)) do d
+            d in dims && return size(A, d)
+            counter += 1
+            return size(x, counter)
+        end
+    end
+
+    out_shapes = map(shape_fn, linear_results)
+    @assert allequal(out_shapes) "out_shapes are $(out_shapes)"
+    out_shape = first(out_shapes)
+
+    in_tys2 = [mlir_type(invmap[arg]) for arg in linear_args]
+
+    out_tys2 = [
+        MLIR.IR.TensorType(out_shapes[i], MLIR.IR.Type(eltype(arg))) for
+        (i, arg) in enumerate(linear_results)
+    ]
+
+    fname = get_attribute_by_name(func2, "sym_name")
+    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+
+    batch_inputs = MLIR.IR.Value[]
+
+    for a in linear_args
+        idx, path = get_argidx(a)
+        if idx == 1 && fnwrap
+            push_val!(batch_inputs, f, path[3:end])
+        else
+            if fnwrap
+                idx -= 1
+            end
+            push_val!(batch_inputs, args[idx], path[3:end])
+        end
+    end
+
+    res = MLIR.Dialects.enzyme.batch(
+        batch_inputs;
+        outputs=out_tys2,
+        fn=fname,
+        batch_shape=MLIR.IR.DenseArrayAttribute([Int64(i) for i in out_shape]),
+    )
+
+    residx = 1
+
+    for a in linear_results
+        if has_residx(a)
+            path = get_residx(a)
+            set!(result, path[2:end], MLIR.IR.result(res, residx))
+            residx += 1
+        else
+            idx, path = get_argidx(a)
+            if idx == 1 && fnwrap
+                set!(f, path[3:end], MLIR.IR.result(res, residx))
+                residx += 1
+            else
+                if fnwrap
+                    idx -= 1
+                end
+                set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
+                residx += 1
+            end
+        end
+    end
+
+    seen_results = OrderedIdDict()
+    traced2_result = make_tracer(seen_results, result, (), TracedSetPath; tobatch=out_shape)
+
+    func2.operation = MLIR.API.MlirOperation(C_NULL)
+
+    return traced2_result
+end
+
+function Base._eachslice(
+    A::AnyTracedRArray{T,N}, dims::NTuple{M,Integer}, drop::Bool
+) where {T,N,M}
+    Base._slice_check_dims(N, dims...)
+    all_slices = [A]
+    for dim in dims
+        partial_slices = []
+        for i in axes(A, dim)
+            for slice in all_slices
+                push!(partial_slices, selectdim(slice, dim, i:i))
+            end
+        end
+        all_slices = partial_slices
+    end
+    drop && (all_slices = map(x -> dropdims(x; dims), all_slices))
+    return all_slices
 end
 
 for (jlop, hloop, hlocomp, merge) in
