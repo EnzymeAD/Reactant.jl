@@ -315,13 +315,17 @@ function NNlib.gather!(
     idxs = (Reactant.promote_to(TracedRArray{Int,1}, idxs) .- 1).mlir_data
     slice_sizes = Reactant.promote_to(TracedRArray{Int,1}, [size(src, 1), 1]).mlir_data
 
-    dimension_numbers = """
-        #stablehlo.gather<
-            offset_dims = [0],
-            collapsed_slice_dims = [1],
-            start_index_map = [1],
-            index_vector_dim = 1>"""
-    dimension_numbers = parse(Reactant.MLIR.IR.Attribute, dimension_numbers)
+    #! format: off
+    dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(1), Int64[0],
+        Int64(1), Int64[1],
+        Int64(0), Int64[],
+        Int64(0), Int64[],
+        Int64(1), Int64[1],
+        Int64(1)
+    )
+    #! format: on
 
     res = MLIR.IR.result(
         Reactant.MLIR.Dialects.stablehlo.dynamic_gather(
