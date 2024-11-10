@@ -23,15 +23,16 @@ end
 
 function NNlib.softmax!(out::TracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     max_ = NNlib.fast_maximum(x; dims)
-    zero_num = Reactant.promote_to(TracedRNumber{T}, 0)
-    one_num = Reactant.promote_to(TracedRNumber{T}, 1)
-    @trace if all(isfinite, max_)
-        @. out = exp(x - max_)
-    else
-        cond = max_ .== Inf
-        true_pred = ifelse.(x .== Inf, one_num, zero_num)
-        @. out = ifelse(cond, true_pred, exp(x - max_))
-    end
+    # XXX: Once reverse mode of if is properly supported, we can make it @trace
+    # zero_num = Reactant.promote_to(TracedRNumber{T}, 0)
+    # one_num = Reactant.promote_to(TracedRNumber{T}, 1)
+    # @trace if all(isfinite, max_)
+    @. out = exp(x - max_)
+    # else
+    #     cond = max_ .== Inf
+    #     true_pred = ifelse.(x .== Inf, one_num, zero_num)
+    #     @. out = ifelse(cond, true_pred, exp(x - max_))
+    # end
     tmp = dims isa Colon ? sum(out) : sum!(max_, out)
     out ./= tmp
     return out
@@ -39,15 +40,16 @@ end
 
 function NNlib.logsoftmax!(out::TracedRArray{T}, x::AbstractArray; dims=1) where {T}
     max_ = NNlib.fast_maximum(x; dims)
-    inf_num = Reactant.promote_to(TracedRNumber{T}, Inf)
-    zero_num = Reactant.promote_to(TracedRNumber{T}, 0)
-    @trace if all(isfinite, max_)
-        @. out = x - max_
-    else
-        cond = max_ .== Inf
-        true_pred = ifelse.(x .== Inf, zero_num, -inf_num)
-        @. out = ifelse(cond, true_pred, x - max_)
-    end
+    # XXX: Once reverse mode of if is properly supported, we can make it @trace
+    # inf_num = Reactant.promote_to(TracedRNumber{T}, Inf)
+    # zero_num = Reactant.promote_to(TracedRNumber{T}, 0)
+    # @trace if all(isfinite, max_)
+    @. out = x - max_
+    # else
+    #     cond = max_ .== Inf
+    #     true_pred = ifelse.(x .== Inf, zero_num, -inf_num)
+    #     @. out = ifelse(cond, true_pred, x - max_)
+    # end
     @fastmath log_ = log.(sum(exp, out; dims))
     out .-= log_
     return out
