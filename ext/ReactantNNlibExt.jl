@@ -203,16 +203,22 @@ function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
     return TracedRArray{T,N}((), Reactant.MLIR.IR.result(reduction), size(result_type))
 end
 
-function NNlib.maxpool(x::AnyTracedRArray{T}, pdims::NNlib.PoolDims) where {T}
-    return reduce_window(
-        Reactant.MLIR.Dialects.stablehlo.maximum, x, pdims; init=typemin(T)
-    )
+function NNlib.maxpool!(
+    y::TracedRArray{T}, x::AnyTracedRArray, pdims::NNlib.PoolDims
+) where {T}
+    y.mlir_data =
+        reduce_window(
+            Reactant.MLIR.Dialects.stablehlo.maximum, T.(x), pdims; init=typemin(T)
+        ).mlir_data
+    return y
 end
 
-function NNlib.meanpool(x::AnyTracedRArray{T}, pdims::NNlib.PoolDims) where {T}
-    numel = prod(NNlib.kernel_size(pdims))
-    return reduce_window(Reactant.MLIR.Dialects.stablehlo.add, x, pdims; init=zero(T)) ./
-           T(numel)
+function NNlib.meanpool!(
+    y::TracedRArray{T}, x::AnyTracedRArray, pdims::NNlib.PoolDims
+) where {T}
+    res = reduce_window(Reactant.MLIR.Dialects.stablehlo.add, T.(x), pdims; init=zero(T))
+    y.mlir_data = (res ./ T(prod(NNlib.kernel_size(pdims)))).mlir_data
+    return y
 end
 
 NNlib.batched_transpose(x::AnyTracedRArray{T,3}) where {T} = permutedims(x, (2, 1, 3))
