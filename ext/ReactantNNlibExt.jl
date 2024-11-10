@@ -3,6 +3,7 @@ module ReactantNNlibExt
 using NNlib
 using Reactant:
     Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR, TracedRNumber
+using ReactantCore: @trace
 using LinearAlgebra: LinearAlgebra, triu
 
 for (jlop, hloop) in (
@@ -20,31 +21,36 @@ for (jlop, hloop) in (
     end
 end
 
-# TODO handle non finite cases
 function NNlib.softmax!(out::TracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     max_ = NNlib.fast_maximum(x; dims)
-    #if all(isfinite, max_)
-    @fastmath out .= exp.(x .- max_)
-    #else
-    #    _zero, _one, _inf = T(0), T(1), T(Inf)
-    #    @fastmath @. out = ifelse(isequal(max_,_inf), ifelse(isequal(x,_inf), _one, _zero), exp(x - max_))
-    #end
+    zero_num = Reactant.promote_to(TracedRNumber{T}, 0)
+    one_num = Reactant.promote_to(TracedRNumber{T}, 1)
+    @trace if all(isfinite, max_)
+        @. out = exp(x - max_)
+    else
+        cond = max_ .== Inf
+        true_pred = ifelse.(x .== Inf, one_num, zero_num)
+        @. out = ifelse(cond, true_pred, exp(x - max_))
+    end
     tmp = dims isa Colon ? sum(out) : sum!(max_, out)
-    return out ./= tmp
+    out ./= tmp
+    return out
 end
 
 function NNlib.logsoftmax!(out::TracedRArray{T}, x::AbstractArray; dims=1) where {T}
     max_ = NNlib.fast_maximum(x; dims)
-    # if all(isfinite, max_)
-    @fastmath out .= x .- max_
-    # else
-    #     _zero, _minf, _inf = T(0), T(-Inf), T(Inf)
-    #     @. out = ifelse(
-    #         isequal(max_, _inf), ifelse(isequal(x, _inf), _zero, _minf), x - max_
-    #     )
-    # end
+    inf_num = Reactant.promote_to(TracedRNumber{T}, Inf)
+    zero_num = Reactant.promote_to(TracedRNumber{T}, 0)
+    @trace if all(isfinite, max_)
+        @. out = x - max_
+    else
+        cond = max_ .== Inf
+        true_pred = ifelse.(x .== Inf, zero_num, -inf_num)
+        @. out = ifelse(cond, true_pred, x - max_)
+    end
     @fastmath log_ = log.(sum(exp, out; dims))
-    return out .-= log_
+    out .-= log_
+    return out
 end
 
 function NNlib.conv(
