@@ -120,13 +120,7 @@ function make_mlir_fn(
             end
         end
 
-        # NOTE an `AbstractInterpreter` cannot process methods with more recent world-ages than it
-        # solution is to use a new interpreter, but we reuse the `code_cache` to minimize comptime in Julia <= 1.10
-        @static if !HAS_INTEGRATED_CACHE
-            interp = ReactantInterpreter(; code_cache=REACTANT_CACHE)
-        else
-            interp = ReactantInterpreter()
-        end
+        interp = ReactantInterpreter()
 
         # TODO replace with `Base.invoke_within` if julia#52964 lands
         ir, ty = only(

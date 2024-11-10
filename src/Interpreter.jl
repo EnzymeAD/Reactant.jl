@@ -6,94 +6,99 @@
 const CC = Core.Compiler
 using Enzyme
 
-const HAS_INTEGRATED_CACHE = VERSION >= v"1.11.0-DEV.1552"
+import Core.Compiler:
+    AbstractInterpreter,
+    abstract_call,
+    abstract_call_known,
+    ArgInfo,
+    StmtInfo,
+    AbsIntState,
+    get_max_methods,
+    CallMeta,
+    Effects,
+    NoCallInfo,
+    widenconst,
+    mapany,
+    MethodResultPure
 
-Base.Experimental.@MethodTable(ReactantMethodTable)
+function set_reactant_abi(
+    interp,
+    @nospecialize(f),
+    arginfo::ArgInfo,
+    si::StmtInfo,
+    sv::AbsIntState,
+    max_methods::Int = get_max_methods(interp, f, sv),
+)
 
-function var"@reactant_override"(__source__::LineNumberNode, __module__::Module, def)
-    return Base.Experimental.var"@overlay"(
-        __source__, __module__, :(Reactant.ReactantMethodTable), def
+    (; fargs, argtypes) = arginfo
+
+    if (f === Enzyme.autodiff || f === Enzyme.autodiff_deferred || f === Enzyme.gradient || f === Enzyme.jacobian) && length(argtypes) >= 2
+        if widenconst(argtypes[1]) <: Enzyme.Mode &&
+            Enzyme.set_abi(widenconst(argtypes[1]), ReactantABI) != widenconst(argtypes[1])
+            newmode = Enzyme.set_abi(widenconst(argtypes[1]), ReactantABI)
+            arginfo2 = ArgInfo(
+                fargs isa Nothing ? nothing :
+                [fargs[1], :($(newmode)), fargs[3:end]...],
+                [argtypes[1], Core.Const(newmode), argtypes[3:end]...],
+            )
+            return abstract_call_known(
+                interp,
+                f,
+                arginfo2,
+                si,
+                sv,
+                max_methods,
+            )
+        end
+    end
+    return Base.@invoke abstract_call_known(
+        interp::AbstractInterpreter,
+        f,
+        arginfo::ArgInfo,
+        si::StmtInfo,
+        sv::AbsIntState,
+        max_methods::Int,
     )
 end
 
-@static if !HAS_INTEGRATED_CACHE
-    struct ReactantCache
-        dict::IdDict{Core.MethodInstance,Core.CodeInstance}
-    end
-    ReactantCache() = ReactantCache(IdDict{Core.MethodInstance,Core.CodeInstance}())
+function set_reactant_abi end
 
-    const REACTANT_CACHE = ReactantCache()
+@static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE
+    struct ReactantCacheToken
+    end
 
-    function CC.get(wvc::CC.WorldView{ReactantCache}, mi::Core.MethodInstance, default)
-        return get(wvc.cache.dict, mi, default)
-    end
-    function CC.getindex(wvc::CC.WorldView{ReactantCache}, mi::Core.MethodInstance)
-        return getindex(wvc.cache.dict, mi)
-    end
-    function CC.haskey(wvc::CC.WorldView{ReactantCache}, mi::Core.MethodInstance)
-        return haskey(wvc.cache.dict, mi)
-    end
-    function CC.setindex!(
-        wvc::CC.WorldView{ReactantCache}, ci::Core.CodeInstance, mi::Core.MethodInstance
+    function ReactantInterpreter(;
+        world::UInt=Base.get_world_counter(),
     )
-        return setindex!(wvc.cache.dict, ci, mi)
-    end
-end
-
-struct ReactantInterpreter <: CC.AbstractInterpreter
-    world::UInt
-    inf_params::CC.InferenceParams
-    opt_params::CC.OptimizationParams
-    inf_cache::Vector{CC.InferenceResult}
-    @static if !HAS_INTEGRATED_CACHE
-        code_cache::ReactantCache
-    end
-
-    @static if HAS_INTEGRATED_CACHE
-        function ReactantInterpreter(;
-            world::UInt=Base.get_world_counter(),
-            inf_params::CC.InferenceParams=CC.InferenceParams(),
-            opt_params::CC.OptimizationParams=CC.OptimizationParams(),
-            inf_cache::Vector{CC.InferenceResult}=CC.InferenceResult[],
+        return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
+            ReactantCacheToken(),
+            #=mt=#nothing,
+            world,
+            #=forward_rules=#true,
+            #=forward_rules=#false,
+            #=deferred_lower=#true,
+            set_reactant_abi
         )
-            return new(world, inf_params, opt_params, inf_cache)
-        end
-    else
-        function ReactantInterpreter(;
-            world::UInt=Base.get_world_counter(),
-            inf_params::CC.InferenceParams=CC.InferenceParams(),
-            opt_params::CC.OptimizationParams=CC.OptimizationParams(),
-            inf_cache::Vector{CC.InferenceResult}=CC.InferenceResult[],
-            code_cache=ReactantCache(),
+    end
+else
+    const REACTANT_CACHE = Enzyme.GPUCompiler.CodeCache()
+
+    function ReactantInterpreter(;
+        world::UInt=Base.get_world_counter(),
+        code_cache=REACTANT_CACHE
+    )
+        return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
+            REACTANT_CACHE,
+            #=mt=#nothing,
+            world,
+            #=forward_rules=#true,
+            #=forward_rules=#false,
+            #=deferred_lower=#true,
+            set_reactant_abi
         )
-            return new(world, inf_params, opt_params, inf_cache, code_cache)
-        end
     end
 end
 
-@static if HAS_INTEGRATED_CACHE
-    CC.get_inference_world(interp::ReactantInterpreter) = interp.world
-else
-    CC.get_world_counter(interp::ReactantInterpreter) = interp.world
-end
-
-CC.InferenceParams(interp::ReactantInterpreter) = interp.inf_params
-CC.OptimizationParams(interp::ReactantInterpreter) = interp.opt_params
-CC.get_inference_cache(interp::ReactantInterpreter) = interp.inf_cache
-
-@static if HAS_INTEGRATED_CACHE
-    # TODO what does this do? taken from https://github.com/JuliaLang/julia/blob/v1.11.0-rc1/test/compiler/newinterp.jl
-    @eval CC.cache_owner(interp::ReactantInterpreter) =
-        $(QuoteNode(gensym(:ReactantInterpreterCache)))
-else
-    function CC.code_cache(interp::ReactantInterpreter)
-        return CC.WorldView(interp.code_cache, CC.WorldRange(interp.world))
-    end
-end
-
-function CC.method_table(interp::ReactantInterpreter)
-    return CC.OverlayMethodTable(interp.world, ReactantMethodTable)
-end
 
 const enzyme_out = 0
 const enzyme_dup = 1
@@ -242,7 +247,7 @@ function get_attribute_by_name(operation, name)
     return MLIR.IR.Attribute(MLIR.API.mlirOperationGetAttributeByName(operation, name))
 end
 
-@reactant_override function Enzyme.autodiff(
+function overload_autodiff(
     ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation,Nargs}
 ) where {CMode<:Enzyme.Mode,FA<:Enzyme.Annotation,A<:Enzyme.Annotation,Nargs}
     reverse = CMode <: Enzyme.ReverseMode
@@ -422,4 +427,38 @@ end
             end
         end
     end
+end
+
+
+@inline function Enzyme.autodiff(
+    rmode::Enzyme.ReverseMode{ReturnPrimal,RuntimeActivity,ReactantABI,Holomorphic,ErrIfFuncWritten},
+    f::FA,
+    rt::Type{A},
+    args::Vararg{Annotation,Nargs},
+) where {
+    FA<:Annotation,
+    A<:Annotation,
+    ReturnPrimal,
+    RuntimeActivity,
+    Holomorphic,
+    Nargs,
+    ErrIfFuncWritten,
+}
+    overload_autodiff(rmode, f, rt, args...)
+end
+
+@inline function Enzyme.autodiff(
+    rmode::ForwardMode{ReturnPrimal,ReactantABI,ErrIfFuncWritten,RuntimeActivity},
+    f::FA,
+    rt::Type{A},
+    args::Vararg{Annotation,Nargs},
+) where {
+    FA<:Annotation,
+    A<:Annotation,
+    ReturnPrimal,
+    Nargs,
+    ErrIfFuncWritten,
+    RuntimeActivity
+}
+    overload_autodiff(rmode, f, rt, args...)
 end
