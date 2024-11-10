@@ -193,20 +193,24 @@ function Base.ifelse(
     )
 end
 
-function Base.:&(x::TracedRNumber{Bool}, y::TracedRNumber{Bool})
-    return TracedRNumber{Bool}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.and(x.mlir_data, y.mlir_data), 1)
-    )
-end
-function Base.:|(x::TracedRNumber{Bool}, y::TracedRNumber{Bool})
-    return TracedRNumber{Bool}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.or(x.mlir_data, y.mlir_data), 1)
-    )
-end
-function Base.:!(x::TracedRNumber{Bool})
-    return TracedRNumber{Bool}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.not(x.mlir_data), 1)
-    )
+for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
+    @eval begin
+        function Base.:&(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+            return TracedRNumber{promote_type(eltype(x), eltype(y))}(
+                (), MLIR.IR.result(MLIR.Dialects.stablehlo.and(x.mlir_data, y.mlir_data), 1)
+            )
+        end
+        function Base.:|(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+            return TracedRNumber{promote_type(eltype(x), eltype(y))}(
+                (), MLIR.IR.result(MLIR.Dialects.stablehlo.or(x.mlir_data, y.mlir_data), 1)
+            )
+        end
+        function Base.:!(x::TracedRNumber{<:$(T1)})
+            return TracedRNumber{eltype(x)}(
+                (), MLIR.IR.result(MLIR.Dialects.stablehlo.not(x.mlir_data), 1)
+            )
+        end
+    end
 end
 
 function Base.literal_pow(

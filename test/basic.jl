@@ -557,3 +557,14 @@ end
     @test minimum(y) ≥ 0.0
     @test x_ra ≈ x
 end
+
+@testset "dynamic indexing" begin
+    x = randn(5, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    idx = [1, 2, 3]
+    idx_ra = Reactant.to_rarray(idx)
+
+    y = @jit(getindex(x_ra, idx_ra, :))
+    @test y ≈ x[idx, :]
+end
