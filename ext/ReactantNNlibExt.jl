@@ -336,15 +336,17 @@ end
 # XXX: For performance to use `stablehlo.dynamic_gather` or atleast use traced loop
 #      instead of unrolling the loop (the case for AbstractArray can just use
 #      `stablehlo.gather`). See above for the special case implementation that is optimized.
-function NNlib.gather!(
-    dst::TracedRArray{T1,N}, src::AnyTracedRArray{T2,N}, idxs::AbstractArray
-) where {T1,T2,N}
+function NNlib.gather!(dst::TracedRArray, src::AnyTracedRArray, idxs::AbstractArray)
     @warn "Using fallback implementation of `gather!` for using `stablehlo.dynamic_slice`. \
            This case is not optimized and will be slow." maxlog = 1
     dims = NNlib.scatter_dims(src, dst, idxs)
     colons = ntuple(Returns(Colon()), dims)
     start_sizes = ntuple(i -> size(src, i), dims)
-    results = [reshape(src[colons..., Tuple(idxs[k])...], start_sizes..., :) for k in idxs]
+    results = map(CartesianIndices(idxs)) do k
+        res = src[colons..., Tuple(idxs[k])...]
+        res isa TracedRNumber && (res = Reactant.broadcast_to_size(res, (1,)))
+        return reshape(res, start_sizes..., :)
+    end
     res = reshape(cat(results...; dims=(dims + 1)), size(dst))
     dst.mlir_data = res.mlir_data
     return dst
