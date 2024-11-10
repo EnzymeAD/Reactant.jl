@@ -265,7 +265,7 @@ function Base.imag(x::TracedRNumber{Complex{T}}) where {T}
     )
 end
 
-Base.abs2(x::TracedRNumber) = abs(x) ^ 2
+Base.abs2(x::TracedRNumber) = abs(x)^2
 
 Base.log1p(x::TracedRNumber{T}) where {T} = log(x + one(T))
 
