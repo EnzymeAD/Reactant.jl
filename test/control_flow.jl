@@ -456,7 +456,7 @@ end
 
 function nnorm(x, n)
     @trace for i in 1:n
-       x = x ./ sum(x)
+       x = x * i ./ sum(x)
    end
    x
 end

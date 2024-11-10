@@ -122,23 +122,18 @@ function trace_for(mod, expr)
         error("malformed for loop assignment")
     end
 
-    new_var, range = assign.args
+    induction, range = assign.args
 
     start = range.args[2]
     step = length(range.args) == 3 ? 1 : range.args[3]
     limit = range.args[end]
 
-    body_symbols = ExpressionExplorer.compute_symbols_state(quote
-        for _ = $(start):$(step):$(limit)
-            $body
-        end
-    end)
+    body_symbols = ExpressionExplorer.compute_symbols_state(expr)
 
-    induction = gensym(:i)
-
+    external_syms = body_symbols.assignments ∪ body_symbols.references
     all_syms = Expr(:tuple,
         induction,
-        (body_symbols.assignments ∪ body_symbols.references)...,
+        external_syms...,
     )
 
     reactant_code_block = quote
@@ -146,19 +141,19 @@ function trace_for(mod, expr)
             args = $(all_syms)
 
             cond_fn = $(all_syms) -> begin
-                $induction < Reactant.promote_to(Reactant.TracedRNumber{Int64}, $limit)
+                $induction <= Reactant.promote_to(Reactant.TracedRNumber{Int64}, $limit)
             end
             body_fn = $(all_syms) -> begin
                 $body
                 ($induction + Reactant.promote_to(Reactant.TracedRNumber{Int64}, $step), $(all_syms.args[begin+1:end]...))
             end
 
-            ReactantCore.traced_while(cond_fn, body_fn, args)
+            $(ReactantCore).traced_while(cond_fn, body_fn, args)
         end
     end
 
     return quote
-        if any($(is_traced), ($(all_syms.args[begin+1:end]...),))
+        if any($(is_traced), $(Expr(:tuple, all_syms.args[begin+1:end]...)))
             $(reactant_code_block)
         else
             $(expr)
