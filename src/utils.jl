@@ -4,8 +4,6 @@ end
 
 mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
 
-mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
-
 function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
     return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
@@ -13,10 +11,6 @@ end
 
 function mlir_type(::Type{<:RNumber{T}}) where {T}
     return MLIR.IR.TensorType((), MLIR.IR.Type(T))
-end
-
-function mlir_type(::Type{<:MissingTracedValue})
-    return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 end
 
 function transpose_ty(mlirty)
@@ -33,31 +27,11 @@ function apply(f, args...; kwargs...)
     return f(args...; kwargs...)
 end
 
-function make_mlir_fn(
-    f,
-    args,
-    kwargs,
-    name="main",
-    concretein=true;
-    toscalar=false,
-    return_dialect=:func,
-    no_args_in_result::Bool=false,
-    construct_function_without_args::Bool=false,
-)
+function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=false)
     if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
         return (
             true,
-            make_mlir_fn(
-                apply,
-                (f, args...),
-                kwargs,
-                name,
-                concretein;
-                toscalar,
-                return_dialect,
-                no_args_in_result,
-                construct_function_without_args,
-            )[2:end]...,
+            make_mlir_fn(apply, (f, args...), kwargs, name, concretein; toscalar)[2:end]...,
         )
     end
 
@@ -70,7 +44,6 @@ function make_mlir_fn(
             (:args, i),
             concretein ? ConcreteToTraced : TracedSetPath;
             toscalar,
-            track_numbers=construct_function_without_args ? (Number,) : (),
         )
     end
 
@@ -100,64 +73,12 @@ function make_mlir_fn(
         )
     end
 
-    if construct_function_without_args
-        fnbody = MLIR.IR.Block()
-    else
-        fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
-    end
+    fnbody, result = generate_mlir_block(f, linear_args, in_tys, traced_args)
     push!(MLIR.IR.region(func, 1), fnbody)
 
-    @assert MLIR.IR._has_block()
-
-    result = MLIR.IR.block!(fnbody) do
-        for (i, arg) in enumerate(linear_args)
-            if construct_function_without_args
-                arg.mlir_data = args[i].mlir_data
-            else
-                raw_arg = MLIR.IR.argument(fnbody, i)
-                row_maj_arg = transpose_val(raw_arg)
-                arg.mlir_data = row_maj_arg
-            end
-        end
-
-        # NOTE an `AbstractInterpreter` cannot process methods with more recent world-ages than it
-        # solution is to use a new interpreter, but we reuse the `code_cache` to minimize comptime in Julia <= 1.10
-        @static if !HAS_INTEGRATED_CACHE
-            interp = ReactantInterpreter(; code_cache=REACTANT_CACHE)
-        else
-            interp = ReactantInterpreter()
-        end
-
-        # TODO replace with `Base.invoke_within` if julia#52964 lands
-        ir, ty = only(
-            # TODO fix it for kwargs
-            Base.code_ircode(f, map(typeof, traced_args); interp),
-        )
-        oc = Core.OpaqueClosure(ir)
-
-        if f === Reactant.apply
-            oc(traced_args[1], (traced_args[2:end]...,))
-        else
-            if length(traced_args) + 1 != length(ir.argtypes)
-                @assert ir.argtypes[end] <: Tuple
-                oc(
-                    traced_args[1:(length(ir.argtypes) - 2)]...,
-                    (traced_args[(length(ir.argtypes) - 1):end]...,),
-                )
-            else
-                oc(traced_args...)
-            end
-        end
-    end
-
     seen_results = OrderedIdDict()
-
     traced_result = make_tracer(
-        seen_results,
-        result,
-        (:result,),
-        concretein ? TracedTrack : TracedSetPath;
-        track_numbers=construct_function_without_args ? (Number,) : (),
+        seen_results, result, (:result,), concretein ? TracedTrack : TracedSetPath
     )
 
     # marks buffers to be donated
@@ -171,7 +92,6 @@ function make_mlir_fn(
 
     for (k, v) in seen_results
         v isa TracedType || continue
-        (no_args_in_result && length(v.paths) > 0 && v.paths[1][1] == :args) && continue
         push!(linear_results, v)
     end
 
@@ -180,19 +100,11 @@ function make_mlir_fn(
     ret = MLIR.IR.block!(fnbody) do
         vals = MLIR.IR.Value[]
         for res in linear_results
-            if res isa MissingTracedValue
-                col_maj = broadcast_to_size(false, ()).mlir_data
-            elseif construct_function_without_args
-                col_maj = res.mlir_data
-            else
-                col_maj = transpose_val(res.mlir_data)
-            end
+            col_maj = transpose_val(res.mlir_data)
             push!(vals, col_maj)
         end
-        !no_args_in_result && @assert length(vals) == length(linear_results)
-
-        dialect = getfield(MLIR.Dialects, return_dialect)
-        return dialect.return_(vals)
+        @assert length(vals) == length(linear_results)
+        return MLIR.Dialects.func.return_(vals)
     end
 
     name2 = name
@@ -232,4 +144,51 @@ function make_mlir_fn(
         in_tys,
         linear_results,
     )
+end
+
+function generate_mlir_block(f, linear_args, input_types, traced_args)
+    if length(input_types) != length(traced_args)
+        @assert length(input_types) == 0
+    end
+    fnbody = MLIR.IR.Block(input_types, [MLIR.IR.Location() for _ in input_types])
+    @assert MLIR.IR._has_block()
+
+    results = MLIR.IR.block!(fnbody) do
+        if length(input_types) != 0
+            for (i, arg) in enumerate(linear_args)
+                arg.mlir_data = transpose_val(MLIR.IR.argument(fnbody, i))
+            end
+        end
+
+        # NOTE an `AbstractInterpreter` cannot process methods with more recent world-ages than it
+        # solution is to use a new interpreter, but we reuse the `code_cache` to minimize comptime in Julia <= 1.10
+        @static if !HAS_INTEGRATED_CACHE
+            interp = ReactantInterpreter(; code_cache=REACTANT_CACHE)
+        else
+            interp = ReactantInterpreter()
+        end
+
+        # TODO replace with `Base.invoke_within` if julia#52964 lands
+        ir, ty = only(
+            # TODO fix it for kwargs
+            Base.code_ircode(f, map(typeof, traced_args); interp),
+        )
+        oc = Core.OpaqueClosure(ir)
+
+        if f === Reactant.apply
+            oc(traced_args[1], (traced_args[2:end]...,))
+        else
+            if length(traced_args) + 1 != length(ir.argtypes)
+                @assert ir.argtypes[end] <: Tuple
+                oc(
+                    traced_args[1:(length(ir.argtypes) - 2)]...,
+                    (traced_args[(length(ir.argtypes) - 1):end]...,),
+                )
+            else
+                oc(traced_args...)
+            end
+        end
+    end
+
+    return fnbody, results
 end

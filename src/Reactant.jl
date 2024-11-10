@@ -92,6 +92,11 @@ include("ConcreteRArray.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 
+function Base.getproperty(x::MissingTracedValue, s::Symbol)
+    s === :mlir_data && return broadcast_to_size(false, ()).mlir_data
+    return getfield(x, s)
+end
+
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")

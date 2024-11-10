@@ -14,7 +14,9 @@ end
 
 ReactantCore.is_traced(::TracedRNumber) = true
 
-new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
+function new_traced_value(::TracedRNumber{T}) where {T}
+    return TracedRNumber{T}((), broadcast_to_size(T(true), ()).mlir_data)
+end
 
 Base.eltype(::Type{TracedRNumber{T}}) where {T} = T
 

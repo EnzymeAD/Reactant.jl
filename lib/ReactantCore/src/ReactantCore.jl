@@ -5,6 +5,10 @@ using MacroTools: MacroTools
 
 export @trace, MissingTracedValue
 
+const SPECIAL_SYMBOLS = [
+    :(:), :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
+]
+
 # Traits
 is_traced(x) = false
 
@@ -79,7 +83,8 @@ You need to ensure that all branches have the same type.
 
 ### Certain Symbols are Reserved
 
-Symbols like `nothing`, `missing` and `:` are not allowed as variables in `@trace` expressions. While certain cases might work but these are not guaranteed to work. For
+Symbols like $(SPECIAL_SYMBOLS) are not allowed as variables in `@trace` expressions.
+While certain cases might work but these are not guaranteed to work. For
 example, the following will not work:
 
 ```julia
@@ -298,7 +303,5 @@ function error_if_return(expr)
         return x
     end
 end
-
-const SPECIAL_SYMBOLS = [:(:), :nothing, :missing]
 
 end
