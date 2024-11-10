@@ -32,23 +32,25 @@ function set_reactant_abi(
 
     (; fargs, argtypes) = arginfo
 
-    if (f === Enzyme.autodiff || f === Enzyme.autodiff_deferred || f === Enzyme.gradient || f === Enzyme.jacobian) && length(argtypes) >= 2
-        if widenconst(argtypes[1]) <: Enzyme.Mode &&
-            Enzyme.set_abi(widenconst(argtypes[1]), ReactantABI) != widenconst(argtypes[1])
-            newmode = Enzyme.set_abi(widenconst(argtypes[1]), ReactantABI)
-            arginfo2 = ArgInfo(
-                fargs isa Nothing ? nothing :
-                [fargs[1], :($(newmode)), fargs[3:end]...],
-                [argtypes[1], Core.Const(newmode), argtypes[3:end]...],
-            )
-            return abstract_call_known(
-                interp,
-                f,
-                arginfo2,
-                si,
-                sv,
-                max_methods,
-            )
+    if ((f === Enzyme.autodiff) || (f === Enzyme.autodiff_deferred) || (f === Enzyme.gradient) || (f === Enzyme.jacobian)) && (length(argtypes) >= 2)
+        if widenconst(argtypes[2]) <: Enzyme.Mode
+            newmode = Enzyme.set_abi(widenconst(argtypes[2]), ReactantABI)
+            if newmode != widenconst(argtypes[2])
+                newmodev = newmode()
+                arginfo2 = ArgInfo(
+                    fargs isa Nothing ? nothing :
+                    [fargs[1], :($(newmodev)), fargs[3:end]...],
+                    [argtypes[1], Core.Const(newmodev), argtypes[3:end]...],
+                )
+                return abstract_call_known(
+                    interp,
+                    f,
+                    arginfo2,
+                    si,
+                    sv,
+                    max_methods,
+                )
+            end
         end
     end
     return Base.@invoke abstract_call_known(
@@ -430,7 +432,7 @@ function overload_autodiff(
 end
 
 
-@inline function Enzyme.autodiff(
+@inline function Enzyme.autodiff_deferred(
     rmode::Enzyme.ReverseMode{ReturnPrimal,RuntimeActivity,ReactantABI,Holomorphic,ErrIfFuncWritten},
     f::FA,
     rt::Type{A},
@@ -447,7 +449,7 @@ end
     overload_autodiff(rmode, f, rt, args...)
 end
 
-@inline function Enzyme.autodiff(
+@inline function Enzyme.autodiff_deferred(
     rmode::ForwardMode{ReturnPrimal,ReactantABI,ErrIfFuncWritten,RuntimeActivity},
     f::FA,
     rt::Type{A},
