@@ -4,6 +4,7 @@
     TracedToConcrete = 3
     ArrayToConcrete = 4
     TracedSetPath = 5
+    ArrayToTracedUnsafe = 6
 end
 
 for T in (
@@ -171,7 +172,7 @@ function traced_type(::Type{T}, seen, mode) where {T}
 end
 
 function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode}
-    if mode == ConcreteToTraced
+    if mode == ConcreteToTraced || mode == ArrayToTracedUnsafe
         @inline base_typet(TV::TT) where {TT<:UnionAll} =
             UnionAll(TV.var, base_typet(TV.body))
         @inline base_typet(TV::TT) where {TT<:DataType} = TracedRArray{TV.parameters...}
@@ -193,7 +194,7 @@ function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedType,m
         @inline base_typec(TV::TT) where {TT<:DataType} =
             (T <: TracedRArray ? ConcreteRArray : ConcreteRNumber){TV.parameters...}
         return base_typec(T)
-    elseif mode == TracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack || mode == TracedSetPath || mode == ArrayToTracedUnsafe
         return T
     else
         throw("Abstract RArray $T cannot be made concrete in mode $mode")
@@ -207,6 +208,8 @@ end
 function traced_type(::Type{A}, seen::ST, ::Val{mode}) where {T,N,A<:Array{T,N},ST,mode}
     if mode == ArrayToConcrete && T <: ReactantPrimitive
         return ConcreteRArray{T,N}
+    elseif mode == ArrayToTracedUnsafe && T <: ReactantPrimitive
+        return TracedRArray{T,N}
     else
         return Array{traced_type(T, seen, Val(mode)),N}
     end
@@ -299,7 +302,7 @@ function make_tracer(
     if mode == ArrayToConcrete
         return prev
     end
-    if mode != ConcreteToTraced
+    if mode != ConcreteToTraced && mode != ArrayToTracedUnsafe
         throw("Cannot trace concrete")
     end
     if haskey(seen, prev)
@@ -315,7 +318,7 @@ function make_tracer(seen, prev::ConcreteRNumber{T}, path, mode; kwargs...) wher
     if mode == ArrayToConcrete
         return prev
     end
-    if mode != ConcreteToTraced
+    if mode != ConcreteToTraced && mode != ArrayToTracedUnsafe
         throw("Cannot trace existing trace type")
     end
     if haskey(seen, prev)
@@ -335,9 +338,10 @@ function make_tracer(
     tobatch=nothing,
     kwargs...,
 ) where {T,N}
-    if mode == ConcreteToTraced
-        throw("Cannot trace existing trace type")
-    end
+    mode == ArrayToTracedUnsafe && return prev
+    mode == ArrayToConcrete && error("Cannot convert TracedRArray to Concrete")
+    mode == ConcreteToTraced && throw("Cannot trace existing trace type")
+
     if mode == TracedTrack
         prev.paths = (prev.paths..., path)
         if !haskey(seen, prev)
@@ -381,9 +385,10 @@ function make_tracer(
     toscalar=false,
     kwargs...,
 ) where {T}
-    if mode == ConcreteToTraced
-        throw("Cannot trace existing trace type")
-    end
+    mode == ArrayToTracedUnsafe && return prev
+    mode == ArrayToConcrete && error("Cannot convert TracedRNumber to Concrete")
+    mode == ConcreteToTraced && throw("Cannot trace existing trace type")
+
     if mode == TracedTrack
         prev.paths = (prev.paths..., path)
         if !haskey(seen, prev)
@@ -421,6 +426,7 @@ end
 function make_tracer(
     seen, @nospecialize(prev::MissingTracedValue), @nospecialize(path), mode; kwargs...
 )
+    mode == ArrayToTracedUnsafe && return prev
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
@@ -452,6 +458,8 @@ function make_tracer(
     if should_convert
         if mode == ArrayToConcrete
             return ConcreteRNumber(prev)
+        elseif mode == ArrayToTracedUnsafe
+            return TracedRNumber{RT}((), broadcast_to_size(prev, ()).mlir_data)
         else
             if mode == TracedTrack
                 res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
@@ -501,6 +509,11 @@ function make_tracer(
     end
     if mode == ArrayToConcrete && eltype(RT) <: ReactantPrimitive
         return seen[prev] = ConcreteRArray(prev)
+    end
+    if mode == ArrayToTracedUnsafe && eltype(RT) <: ReactantPrimitive
+        res = MLIR.IR.DenseElementsAttribute(prev)
+        op = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=res), 1)
+        return seen[prev] = TracedRArray{eltype(RT),ndims(RT)}((), op, size(prev))
     end
     TT = traced_type(eltype(RT), (), Val(mode))
     newa = Array{TT,ndims(RT)}(undef, size(prev))
