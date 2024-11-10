@@ -31,6 +31,7 @@ if no traced value is found inside the expression, then there is no overhead.
 - `if` conditions (with `elseif` and other niceties) (`@trace if ...`)
 - `if` statements with a preceeding assignment (`@trace a = if ...`) (note the positioning
   of the macro needs to be before the assignment and not before the `if`)
+- `for` statements with a single induction variable iterating over a syntactic `StepRange`.
 
 ## Special Considerations
 
@@ -80,6 +81,15 @@ end
 
 This will not compile since `y` is a `Float32` in one branch and a `Float64` in the other.
 You need to ensure that all branches have the same type.
+
+Another example is the following for loop which changes the type of `x` between iterations.
+
+```julia
+x = ... # ConcreteRArray{Int64, 1}
+for i in 1f0:0.5f0:10f0
+    x = x .+ i # ConcreteRArray{Float32, 1}
+end
+```
 
 ### Certain Symbols are Reserved
 
@@ -137,15 +147,15 @@ function trace_for(mod, expr)
     )
 
     reactant_code_block = quote
-        let $induction = Reactant.promote_to(Reactant.TracedRNumber{Int64}, $(range.args[2])),
+        let $induction = Reactant.promote_to(Reactant.TracedRNumber{typeof($start)}, $start),
             args = $(all_syms)
 
             cond_fn = $(all_syms) -> begin
-                $induction <= Reactant.promote_to(Reactant.TracedRNumber{Int64}, $limit)
+                $induction <= Reactant.promote_to(Reactant.TracedRNumber{typeof($limit)}, $limit)
             end
             body_fn = $(all_syms) -> begin
                 $body
-                ($induction + Reactant.promote_to(Reactant.TracedRNumber{Int64}, $step), $(all_syms.args[begin+1:end]...))
+                ($induction + Reactant.promote_to(Reactant.TracedRNumber{typeof($step)}, $step), $(all_syms.args[begin+1:end]...))
             end
 
             $(ReactantCore).traced_while(cond_fn, body_fn, args)
