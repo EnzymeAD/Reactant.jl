@@ -94,7 +94,7 @@ else
             #=mt=#nothing,
             world,
             #=forward_rules=#true,
-            #=forward_rules=#false,
+            #=forward_rules=#true,
             #=deferred_lower=#true,
             set_reactant_abi
         )
