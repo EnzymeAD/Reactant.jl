@@ -461,7 +461,7 @@ function nnorm(x, n)
    x
 end
 
-@testset "for loops" begin
+@testset "for: induction" begin
     x = randn(Float32, 10)
     x_ra = Reactant.to_rarray(x);
 
@@ -469,4 +469,34 @@ end
     n_ra = Reactant.to_rarray(fill(n));
 
     @test @jit(nnorm(x_ra, n_ra)) ≈ nnorm(x, n)
+end
+
+function sinkhorn(μ, ν, C)
+    λ = eltype(C)(0.8)
+    K = @. exp(-C/λ)
+
+    u = fill!(similar(μ), one(eltype(μ)))
+    v = similar(ν)
+
+    @trace for _ in 1:10
+        v = ν ./ (K' * u)
+        u = μ ./ (K * v)
+    end
+
+    Diagonal(u) * K * Diagonal(v)
+end
+
+@testset "for: sinkhorn" begin
+    Nμ = 10
+    Nν = 5
+
+    μ = ones(Float32, Nμ) ./ Nμ
+    ν = ones(Float32, Nν) ./ Nν
+    C = randn(Float32, Nμ, Nν)
+
+    μ_ra = Reactant.to_rarray(μ)
+    ν_ra = Reactant.to_rarray(ν)
+    C_ra = Reactant.to_rarray(C)
+
+    @test @jit(sinkhorn(μ_ra, ν_ra, C_ra)) ≈ sinkhorn(μ, ν, C)
 end

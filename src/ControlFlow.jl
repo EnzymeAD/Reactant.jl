@@ -83,6 +83,7 @@ function ReactantCore.traced_while(cond_fn, body_fn, args)
         false;
         no_args_in_result=true,
         return_dialect=:stablehlo,
+        do_transpose=false,
     )
 
     (_, body_fn_compiled, body_fn_results, _, _, _, _, _, body_fn_linear_results) = Reactant.make_mlir_fn(
@@ -93,6 +94,7 @@ function ReactantCore.traced_while(cond_fn, body_fn, args)
         false;
         no_args_in_result=true,
         return_dialect=:stablehlo,
+        do_transpose=false,
     )
 
     cond_reg = take_region(cond_fn_compiled)

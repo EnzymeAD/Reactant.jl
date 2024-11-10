@@ -133,12 +133,16 @@ function trace_for(mod, expr)
     end
 
     induction, range = assign.args
+    induction = induction === :(_) ? gensym(:i) : induction
 
     start = range.args[2]
     step = length(range.args) == 3 ? 1 : range.args[3]
     limit = range.args[end]
 
-    body_symbols = ExpressionExplorer.compute_symbols_state(expr)
+    body_symbols = ExpressionExplorer.compute_symbols_state(quote
+        $(assign)
+        $body
+    end)
 
     external_syms = body_symbols.assignments ∪ body_symbols.references
     all_syms = Expr(:tuple,
