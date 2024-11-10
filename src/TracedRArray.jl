@@ -97,7 +97,11 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 
     foreach(indices) do idxs
         idxs isa Number && return nothing
-        all(isone, diff(idxs)) || error("non-contiguous indexing is not supported")
+        contiguous = all(isone, diff(idxs))
+        # XXX: We want to throw error even for dynamic indexing
+        if typeof(a) <: Bool
+            contiguous || error("non-contiguous indexing is not supported")
+        end
     end
 
     start_indices = map(indices) do i
@@ -875,3 +879,6 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
         return x
     end
 end
+
+Base.all(f::Function, x::TracedRArray) = mapreduce(f, &, x)
+Base.any(f::Function, x::TracedRArray) = mapreduce(f, |, x)
