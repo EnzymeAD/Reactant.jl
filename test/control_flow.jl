@@ -1,4 +1,5 @@
 using Reactant, Test
+using LinearAlgebra
 
 function condition1(x)
     y = sum(x)
