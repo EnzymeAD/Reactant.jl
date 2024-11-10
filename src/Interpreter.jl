@@ -75,7 +75,7 @@ function set_reactant_abi end
             #=mt=#nothing,
             world,
             #=forward_rules=#true,
-            #=forward_rules=#false,
+            #=reverse_rules=#true,
             #=deferred_lower=#true,
             set_reactant_abi
         )
