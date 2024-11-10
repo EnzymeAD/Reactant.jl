@@ -68,7 +68,7 @@ and require expensive copies and synchronization each time and therefore should 
     )
 
     start_indices = [promote_to(TracedRNumber{Int}, i - 1).mlir_data for i in index]
-    slice_sizes = [1 for _ in index]
+    slice_sizes = [Int64(1) for _ in index]
 
     res1 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_slice(a.mlir_data, start_indices; slice_sizes), 1
@@ -107,7 +107,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     start_indices = map(indices) do i
         return promote_to(TracedRNumber{Int}, first(i) - 1).mlir_data
     end
-    slice_sizes = [length(i) for i in indices]
+    slice_sizes = [Int64(length(i)) for i in indices]
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_slice(a.mlir_data, start_indices; slice_sizes), 1
     )
