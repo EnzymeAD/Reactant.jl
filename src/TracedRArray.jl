@@ -538,8 +538,10 @@ function Base.mapreduce(
         dims = [dims]
     end
 
+    op_in_T = Core.Compiler.return_type(f, Tuple{T})
+
     if isnothing(init)
-        init = Base.reduce_empty(Base.BottomRF(op), Core.Compiler.return_type(f, Tuple{T}))
+        init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
     else
         init = init::T
     end
@@ -561,7 +563,8 @@ function Base.mapreduce(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in in_tys])
 
     args = (
-        TracedRNumber{T}((), MLIR.IR.argument(fnbody, i)) for (i, ty) in enumerate(in_tys)
+        TracedRNumber{op_in_T}((), MLIR.IR.argument(fnbody, i)) for
+        (i, ty) in enumerate(in_tys)
     )
 
     res = MLIR.IR.block!(fnbody) do
