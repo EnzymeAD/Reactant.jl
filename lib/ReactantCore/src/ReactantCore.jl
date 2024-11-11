@@ -31,6 +31,7 @@ if no traced value is found inside the expression, then there is no overhead.
 - `if` conditions (with `elseif` and other niceties) (`@trace if ...`)
 - `if` statements with a preceeding assignment (`@trace a = if ...`) (note the positioning
   of the macro needs to be before the assignment and not before the `if`)
+- Short circuiting `@trace a && b` or `@trace a || b`
 
 ## Special Considerations
 
@@ -100,6 +101,9 @@ end
 """
 macro trace(expr)
     expr = macroexpand(__module__, expr)
+    if Meta.isexpr(expr, :(&&), 2) || Meta.isexpr(expr, :(||), 2)
+        return esc(trace_short_circuit(__module__, expr))
+    end
     if Meta.isexpr(expr, :(=))
         if Meta.isexpr(expr.args[2], :if)
             return esc(trace_if_with_returns(__module__, expr))
@@ -107,6 +111,39 @@ macro trace(expr)
     end
     Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
+end
+
+function trace_short_circuit(mod, expr)
+    if_expr, lhs, varname = generate_if_from_short_circuit(mod, expr)
+    new_expr = trace_if(mod, if_expr)
+    return quote
+        $(varname) = $(lhs)
+        $(new_expr)
+    end
+end
+
+function generate_if_from_short_circuit(mod, expr; depth=0)
+    varname = gensym(:short_circuit_result)
+    lhs = expr.args[1]
+    rhs = expr.args[2]
+    if Meta.isexpr(rhs, :(&&), 2) || Meta.isexpr(rhs, :(||), 2)
+        rhs = generate_if_from_short_circuit(mod, rhs; depth=depth + 1)
+    end
+    if Meta.isexpr(expr, :(&&), 2)
+        expr = :(
+            if $(varname)
+                $(rhs)
+            end
+        )
+    else
+        expr = :(
+            if !$(varname)
+                $(rhs)
+            end
+        )
+    end
+    depth == 0 && return expr, lhs, varname
+    return :($(varname) = $(lhs); $(expr))
 end
 
 # ... = if ... style expressions
