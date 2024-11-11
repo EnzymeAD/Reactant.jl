@@ -361,7 +361,7 @@ function traced_if(cond, true_fn::TFn, false_fn::FFn, args) where {TFn,FFn}
     return cond ? true_fn(args) : false_fn(args)
 end
 
-function traced_while(cond_fn::CFn, body_fn::BFn, args) where {CFn, BFn}
+function traced_while(cond_fn, body_fn, args) where {CFn, BFn}
     while cond_fn(args...)
         args = body_fn(args...)
     end

@@ -74,7 +74,7 @@ function ReactantCore.traced_if(
     end
 end
 
-function ReactantCore.traced_while(cond_fn::CFn, body_fn::BFn, args) where {CFn, BFn}
+function ReactantCore.traced_while(cond_fn::CFn, body_fn::BFn, args) where {CFn <: Function, BFn <: Function}
     (_, cond_fn_compiled, cond_fn_results, _, _, _, _, _, cond_fn_linear_results) = Reactant.make_mlir_fn(
         cond_fn,
         args,
