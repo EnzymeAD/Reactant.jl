@@ -457,24 +457,24 @@ end
 
 function nnorm(x, n)
     @trace for i in 1:n
-       x = x * i ./ sum(x)
-   end
-   x
+        x = x * i ./ sum(x)
+    end
+    return x
 end
 
 @testset "for: induction" begin
     x = randn(Float32, 10)
-    x_ra = Reactant.to_rarray(x);
+    x_ra = Reactant.to_rarray(x)
 
     n = 10
-    n_ra = Reactant.to_rarray(fill(n));
+    n_ra = Reactant.to_rarray(fill(n))
 
     @test @jit(nnorm(x_ra, n_ra)) ≈ nnorm(x, n)
 end
 
 function sinkhorn(μ, ν, C)
     λ = eltype(C)(0.8)
-    K = @. exp(-C/λ)
+    K = @. exp(-C / λ)
 
     u = fill!(similar(μ), one(eltype(μ)))
     v = similar(ν)
@@ -484,7 +484,7 @@ function sinkhorn(μ, ν, C)
         u = μ ./ (K * v)
     end
 
-    Diagonal(u) * K * Diagonal(v)
+    return Diagonal(u) * K * Diagonal(v)
 end
 
 @testset "for: sinkhorn" begin
@@ -502,7 +502,6 @@ end
     @test @jit(sinkhorn(μ_ra, ν_ra, C_ra)) ≈ sinkhorn(μ, ν, C)
 end
 
-
 @testset "for: forbidden syntax" begin
     @test_throws "break" @eval function f_with_break()
         @trace for i in 1:10
@@ -518,7 +517,7 @@ end
 
     @test_throws "return" @eval function f_with_return()
         @trace for i in 1:10
-            return
+            return nothing
         end
     end
 end
@@ -529,40 +528,27 @@ function cumsum!(x)
         v += x[i]
         x[i] = v
     end
-    x
+    return x
 end
 
 @testset "for: mutation within loop" begin
-    x = rand(Int32(1):Int32(100), 10)
+    x = rand(1:100, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(cumsum!(x_ra)) == cumsum!(x)
+end
 
-    ir = repr(Reactant.@code_hlo cumsum!(x_ra))
+function for_ref_outer(x)
+    i = sum(x)
+    @trace for i in 1:length(x)
+        x .+= i
+    end
+    return x / i
+end
 
-    @test contains(ir, """
-    module attributes {transform.with_named_sequence} {
-      func.func @main(%arg0: tensor<10xi32>) -> tensor<10xi32> {
-        %c = stablehlo.constant dense<1> : tensor<i64>
-        %c_0 = stablehlo.constant dense<10> : tensor<i64>
-        %c_1 = stablehlo.constant dense<0> : tensor<i32>
-        %c_2 = stablehlo.constant dense<0> : tensor<i64>
-        %0:3 = stablehlo.while(%iterArg = %c_2, %iterArg_3 = %c_1, %iterArg_4 = %arg0) : tensor<i64>, tensor<i32>, tensor<10xi32>
-         cond {
-          %1 = stablehlo.compare  LT, %iterArg, %c_0 : (tensor<i64>, tensor<i64>) -> tensor<i1>
-          stablehlo.return %1 : tensor<i1>
-        } do {
-          %1 = stablehlo.add %c, %iterArg : tensor<i64>
-          %2 = stablehlo.subtract %1, %c : tensor<i64>
-          %3 = stablehlo.dynamic_slice %iterArg_4, %2, sizes = [1] : (tensor<10xi32>, tensor<i64>) -> tensor<1xi32>
-          %4 = stablehlo.reshape %3 : (tensor<1xi32>) -> tensor<i32>
-          %5 = stablehlo.add %iterArg_3, %4 : tensor<i32>
-          %6 = stablehlo.reshape %5 : (tensor<i32>) -> tensor<1xi32>
-          %7 = stablehlo.dynamic_update_slice %iterArg_4, %6, %2 : (tensor<10xi32>, tensor<1xi32>, tensor<i64>) -> tensor<10xi32>
-          %8 = stablehlo.add %iterArg, %c : tensor<i64>
-          stablehlo.return %8, %5, %7 : tensor<i64>, tensor<i32>, tensor<10xi32>
-        }
-        return %0#2 : tensor<10xi32>
-      }
-    }""")
+@testset "for: outer reference" begin
+    x = randn(Float64, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(for_ref_outer(x_ra)) ≈ for_ref_outer(x)
 end

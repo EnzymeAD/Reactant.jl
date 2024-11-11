@@ -116,7 +116,7 @@ macro trace(expr)
         end
     end
     Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
-    Meta.isexpr(expr, :for) && return(esc(trace_for(__module__, expr)))
+    Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
 end
 
@@ -129,7 +129,6 @@ function trace_for(mod, expr)
         !(assign.args[1] isa Symbol) ||
         !Meta.isexpr(assign.args[2], :call) ||
         assign.args[2].args[1] !== :(:)
-
         error("malformed for loop assignment")
     end
 
@@ -142,42 +141,45 @@ function trace_for(mod, expr)
     step = length(range.args) == 3 ? 1 : range.args[3]
     limit = range.args[end]
 
-    body_symbols = ExpressionExplorer.compute_symbols_state(quote
-        $(Expr(:local, assign))
-        $body
-    end)
-
-    external_syms = body_symbols.assignments ∪ body_symbols.references
-    all_syms = Expr(:tuple,
-        counter,
-        external_syms...,
+    body_symbols = ExpressionExplorer.compute_symbols_state(
+        quote
+            $(Expr(:local, assign))
+            $body
+        end,
     )
 
-    args_init = Expr(:tuple, :(Reactant.promote_to(Reactant.TracedRNumber{Int}, 0)), external_syms...)
+    external_syms = body_symbols.assignments ∪ body_symbols.references
+    all_syms = Expr(:tuple, counter, external_syms...)
+
+    args_init = Expr(
+        :tuple, :(Reactant.promote_to(Reactant.TracedRNumber{Int}, 0)), external_syms...
+    )
 
     reactant_code_block = quote
         let args = $(args_init)
-
-            cond_fn = $(all_syms) -> begin
-                num_iters = ($limit - $start) ÷ $step
-                num_iters = Reactant.promote_to(Reactant.TracedRNumber{Int64}, num_iters)
-                $counter < num_iters + 1
-            end
-            body_fn = $(all_syms) -> begin
-                step_ = $step
-                start_ = $start
-                $induction = start_ + $counter * step_
-                $body
-                ($counter + 1,
-                    $(all_syms.args[begin+1:end]...))
-            end
+            cond_fn =
+                $(all_syms) -> begin
+                    num_iters = ($limit - $start) ÷ $step
+                    num_iters = Reactant.promote_to(
+                        Reactant.TracedRNumber{Int64}, num_iters
+                    )
+                    $counter < num_iters + 1
+                end
+            body_fn =
+                $(all_syms) -> begin
+                    local step_ = $step
+                    local start_ = $start
+                    local $induction = start_ + $counter * step_
+                    $body
+                    ($counter + 1, $(all_syms.args[(begin + 1):end]...))
+                end
 
             $(ReactantCore).traced_while(cond_fn, body_fn, args)
         end
     end
 
     return quote
-        if any($(is_traced), $(Expr(:tuple, all_syms.args[begin+1:end]...)))
+        if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -361,7 +363,7 @@ function traced_if(cond, true_fn::TFn, false_fn::FFn, args) where {TFn,FFn}
     return cond ? true_fn(args) : false_fn(args)
 end
 
-function traced_while(cond_fn, body_fn, args) where {CFn, BFn}
+function traced_while(cond_fn, body_fn, args) where {CFn,BFn}
     while cond_fn(args...)
         args = body_fn(args...)
     end
