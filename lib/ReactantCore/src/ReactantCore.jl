@@ -159,8 +159,9 @@ function trace_for(mod, expr)
         let args = $(args_init)
 
             cond_fn = $(all_syms) -> begin
-                num_iters = ($limit - $start) ÷ $step + 1
-                $counter < Reactant.promote_to(Reactant.TracedRNumber{typeof(num_iters)}, num_iters)
+                num_iters = ($limit - $start) ÷ $step
+                num_iters = Reactant.promote_to(Reactant.TracedRNumber{Int64}, num_iters)
+                $counter < num_iters + 1
             end
             body_fn = $(all_syms) -> begin
                 step_ = $step
