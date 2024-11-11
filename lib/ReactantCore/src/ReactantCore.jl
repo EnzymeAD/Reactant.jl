@@ -124,6 +124,7 @@ function trace_for(mod, expr)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
+    error_if_any_control_flow(body)
     if !Meta.isexpr(assign, :(=)) ||
         !(assign.args[1] isa Symbol) ||
         !Meta.isexpr(assign.args[2], :call) ||
@@ -133,33 +134,41 @@ function trace_for(mod, expr)
     end
 
     induction, range = assign.args
-    induction = induction === :(_) ? gensym(:i) : induction
+
+    counter = gensym(:i)
+    num_iters = gensym(:num_iters)
 
     start = range.args[2]
     step = length(range.args) == 3 ? 1 : range.args[3]
     limit = range.args[end]
 
     body_symbols = ExpressionExplorer.compute_symbols_state(quote
-        $(assign)
+        $(Expr(:local, assign))
         $body
     end)
 
     external_syms = body_symbols.assignments ∪ body_symbols.references
     all_syms = Expr(:tuple,
-        induction,
+        counter,
         external_syms...,
     )
 
+    args_init = Expr(:tuple, :(Reactant.promote_to(Reactant.TracedRNumber{Int}, 0)), external_syms...)
+
     reactant_code_block = quote
-        let $induction = Reactant.promote_to(Reactant.TracedRNumber{typeof($start)}, $start),
-            args = $(all_syms)
+        let args = $(args_init)
 
             cond_fn = $(all_syms) -> begin
-                $induction <= Reactant.promote_to(Reactant.TracedRNumber{typeof($limit)}, $limit)
+                num_iters = ($limit - $start) ÷ $step + 1
+                $counter < Reactant.promote_to(Reactant.TracedRNumber{typeof(num_iters)}, num_iters)
             end
             body_fn = $(all_syms) -> begin
+                step_ = $step
+                start_ = $start
+                $induction = start_ + $counter * step_
                 $body
-                ($induction + Reactant.promote_to(Reactant.TracedRNumber{typeof($step)}, $step), $(all_syms.args[begin+1:end]...))
+                ($counter + 1,
+                    $(all_syms.args[begin+1:end]...))
             end
 
             $(ReactantCore).traced_while(cond_fn, body_fn, args)
@@ -194,7 +203,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     original_expr = expr
 
     if depth == 0
-        error_if_return(expr)
+        error_if_any_control_flow(expr)
 
         counter = 0
         expr = MacroTools.prewalk(expr) do x
@@ -367,10 +376,14 @@ function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     end
 end
 
-function error_if_return(expr)
+const CONTROL_FLOW_EXPRS = [:return, :break, :continue, :symbolicgoto]
+
+function error_if_any_control_flow(expr)
     return MacroTools.postwalk(expr) do x
-        if x isa Expr && x.head == :return
-            error("Cannot use @trace on a block that contains a return statement")
+        for head in CONTROL_FLOW_EXPRS
+            if Meta.isexpr(x, head)
+                error("Cannot use @trace on a block that contains a $head statement")
+            end
         end
         return x
     end

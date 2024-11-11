@@ -75,6 +75,9 @@ function ReactantCore.traced_if(
 end
 
 function ReactantCore.traced_while(cond_fn, body_fn, args)
+    args = [arg isa Number && !(arg isa TracedRNumber) ?
+    Reactant.promote_to(TracedRNumber{typeof(arg)}, arg) : arg for arg in args]
+
     (_, cond_fn_compiled, cond_fn_results, _, _, _, _, _, cond_fn_linear_results) = Reactant.make_mlir_fn(
         cond_fn,
         args,

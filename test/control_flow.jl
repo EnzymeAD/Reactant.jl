@@ -501,3 +501,40 @@ end
 
     @test @jit(sinkhorn(μ_ra, ν_ra, C_ra)) ≈ sinkhorn(μ, ν, C)
 end
+
+
+@testset "for: forbidden syntax" begin
+    @test_throws "break" @eval function f_with_break()
+        @trace for i in 1:10
+            break
+        end
+    end
+
+    @test_throws "continue" @eval function f_with_continue()
+        @trace for i in 1:10
+            continue
+        end
+    end
+
+    @test_throws "return" @eval function f_with_return()
+        @trace for i in 1:10
+            return
+        end
+    end
+end
+
+function cumsum!(x)
+    v = zero(eltype(x))
+    @trace for i in 1:length(x)
+        v += x[i]
+        x[i] = v
+    end
+    x
+end
+
+@testset "for: mutation within loop" begin
+    x = rand(1:100, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(cumsum!(x_ra)) == cumsum!(x)
+end
