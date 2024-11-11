@@ -201,18 +201,24 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     all_true_branch_vars = true_branch_input_list ∪ true_branch_assignments
     true_branch_fn_name = gensym(:true_branch)
 
-    else_block, discard_vars, _ = if length(expr.args) == 3
+    else_block, discard_vars, _, fake_assignments = if length(expr.args) == 3
         if Meta.isexpr(expr.args[3], :elseif)
-            expr.args[3], [], nothing
+            expr.args[3], [], nothing, :()
         else
-            trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1)
+            (trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1)..., :())
         end
     elseif length(expr.args) == 2
         tmp_expr = []
+        extra_assignments = []
         for var in true_branch_assignments
             push!(tmp_expr, :($(var) = $(var)))
+            push!(extra_assignments, :(
+                if !isdefined($(mod), $(Meta.quot(var)))
+                    $(var) = nothing
+                end
+            ))
         end
-        Expr(:block, tmp_expr...), [], nothing
+        Expr(:block, tmp_expr...), [], nothing, Expr(:block, extra_assignments...)
     else
         dump(expr)
         error("This shouldn't happen")
@@ -280,6 +286,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     false_branch_fn = :($(false_branch_fn_name) = $(false_branch_fn))
 
     reactant_code_block = quote
+        $(fake_assignments)
         $(true_branch_fn)
         $(false_branch_fn)
         ($(all_output_vars...),) = $(traced_if)(
