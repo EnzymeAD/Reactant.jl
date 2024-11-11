@@ -100,12 +100,12 @@ end
 """
 macro trace(expr)
     expr = macroexpand(__module__, expr)
-    if expr.head == :(=)
-        if expr.args[2] isa Expr && expr.args[2].head == :if
+    if Meta.isexpr(expr, :(=))
+        if Meta.isexpr(expr.args[2], :if)
             return esc(trace_if_with_returns(__module__, expr))
         end
     end
-    expr.head == :if && return esc(trace_if(__module__, expr))
+    Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
 end
 
@@ -133,7 +133,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
         counter = 0
         expr = MacroTools.prewalk(expr) do x
             counter += 1
-            if x isa Expr && x.head == :if && counter > 1
+            if Meta.isexpr(x, :if) && counter > 1
                 ex_new, dv, _ = trace_if(mod, x; store_last_line, depth=depth + 1)
                 append!(discard_vars_from_expansion, dv)
                 return ex_new
@@ -165,7 +165,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     true_branch_fn_name = gensym(:true_branch)
 
     else_block, discard_vars, _ = if length(expr.args) == 3
-        if expr.args[3].head != :elseif
+        if Meta.isexpr(expr.args[3], :elseif)
             expr.args[3], [], nothing
         else
             trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1)
@@ -296,10 +296,8 @@ end
 
 function error_if_return(expr)
     return MacroTools.postwalk(expr) do x
-        if x isa Expr && x.head == :return
-            error("Cannot use @trace on a block that contains a return statement")
-        end
-        return x
+        Meta.isexpr(x, :return) || return x
+        error("Cannot use @trace on a block that contains a return statement")
     end
 end
 
