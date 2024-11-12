@@ -244,12 +244,25 @@ const opt_passes::String = join(
     ',',
 )
 
-function run_pass_pipeline!(mod, pass_pipeline)
+function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     pm = MLIR.IR.PassManager()
+    MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
     MLIR.IR.run!(pm, mod)
     return mod
+end
+
+# helper for debug purposes: String -> Text
+function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
+    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    MLIR.IR.context!(ctx) do
+        mod = parse(MLIR.IR.Module, source)
+        run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
+        MLIR.IR.verifyall(mod)
+        Text(repr(mod))
+    end
 end
 
 function compile_mlir(f, args; kwargs...)
@@ -295,7 +308,8 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     opt_passes,
                 ],
                 ',',
-            ),
+            );
+            enable_verifier=false,
         )
     elseif optimize === :only_enzyme
         run_pass_pipeline!(
@@ -310,7 +324,8 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "enzyme-simplify-math",
                 ],
                 ',',
-            ),
+            );
+            enable_verifier=false,
         )
     elseif optimize === :after_enzyme
         run_pass_pipeline!(
@@ -326,7 +341,8 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     opt_passes,
                 ],
                 ',',
-            ),
+            );
+            enable_verifier=false,
         )
     elseif optimize === :before_enzyme
         run_pass_pipeline!(
@@ -343,7 +359,8 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "enzyme-simplify-math",
                 ],
                 ',',
-            ),
+            );
+            enable_verifier=false,
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
