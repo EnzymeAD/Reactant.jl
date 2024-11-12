@@ -24,7 +24,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] collective_broadcast
 # [ ] collective_permute
 # [ ] compare
-# [ ] complex
+# [x] complex
 # [ ] composite
 # [ ] concatenate
 # [ ] constant
@@ -312,6 +312,43 @@ function stablehlo.abs(
 ) where {T}
     res = MLIR.IR.result(
         stablehlo.abs(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+    )
+    return TracedRNumber{T}((), res)
+end
+
+# miscelaneous
+function stablehlo.complex(
+    real::TracedRArray{T,N},
+    imag::TracedRArray{T,N};
+    location=MLIR.IR.Location(
+        "stablehlo.complex", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T,N}
+    res = MLIR.IR.result(
+        $op(
+            real.mlir_data,
+            imag.mlir_data;
+            result=mlir_type(TracedRArray{T,N}, size(real)),
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(real))
+end
+
+function stablehlo.complex(
+    real::TracedRNumber{T},
+    imag::TracedRNumber{T};
+    location=MLIR.IR.Location(
+        "stablehlo.complex", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T}
+    res = MLIR.IR.result(
+        $op(
+            real.mlir_data,
+            imag.mlir_data;
+            result=mlir_type(TracedRArray{T,0}, ()),
+            location,
+        ),
     )
     return TracedRNumber{T}((), res)
 end
