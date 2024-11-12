@@ -354,7 +354,7 @@ function stablehlo.complex(
     ),
 ) where {T,N}
     res = MLIR.IR.result(
-        $op(
+        stablehlo.complex(
             real.mlir_data,
             imag.mlir_data;
             result=mlir_type(TracedRArray{T,N}, size(real)),
@@ -372,7 +372,7 @@ function stablehlo.complex(
     ),
 ) where {T}
     res = MLIR.IR.result(
-        $op(
+        stablehlo.complex(
             real.mlir_data,
             imag.mlir_data;
             result=mlir_type(TracedRArray{T,0}, ()),
