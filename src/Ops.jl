@@ -27,7 +27,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] complex
 # [ ] composite
 # [ ] concatenate
-# [ ] constant
+# [x] constant
 # [ ] convert
 # [ ] convolution
 # [x] cosine
@@ -71,7 +71,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] or
 # [ ] outfeed
 # [ ] pad
-# [ ] partition_id
+# [x] partition_id
 # [x] popcnt
 # [x] power
 # [ ] real_dynamic_slice
@@ -82,7 +82,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] reduce_scatter
 # [ ] reduce_window
 # [x] remainder
-# [ ] replica_id
+# [x] replica_id
 # [ ] reshape
 # [ ] reverse
 # [ ] rng_bit_generator
@@ -164,6 +164,53 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] tan
 # [ ] top_k
 # [x] zeta
+
+# zeroary ops
+function stablehlo.constant(
+    x::DenseArray{T,N};
+    location=MLIR.IR.Location(
+        "stablehlo.constant", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T,N}
+    value = MLIR.IR.DenseElementsAttribute(x)
+    output = mlir_type(TracedRArray{T,N}, size(x))
+    res = MLIR.IR.result(stablehlo.constant(; output, value, location))
+    return TracedRArray{T,N}((), res, size(x))
+end
+
+function stablehlo.constant(x::ConcreteRArray; kwargs...)
+    return stablehlo.constant(convert(Array, x); kwargs...)
+end
+
+function stablehlo.constant(
+    x::ConcreteRNumber{T};
+    location=MLIR.IR.Location(
+        "stablehlo.constant", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T,N}
+    output = mlir_type(TracedRArray{T,0}, ())
+    value = MLIR.IR.DenseElementsAttribute(fill(MLIR.IR.Attribute(convert(T, x)), output))
+    res = MLIR.IR.result(stablehlo.constant(; output, value, location))
+    return TracedRNumber{T,N}((), res)
+end
+
+function stablehlo.partition_id(;
+    location=MLIR.IR.Location(
+        "stablehlo.partition_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    res = MLIR.IR.result(stablehlo.partition_id(location))
+    return TracedRNumber{UInt32}((), res)
+end
+
+function stablehlo.replica_id(;
+    location=MLIR.IR.Location(
+        "stablehlo.replica_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    res = MLIR.IR.result(stablehlo.replica_id(location))
+    return TracedRNumber{UInt32}((), res)
+end
 
 # unary elementwise ops
 for op in [
