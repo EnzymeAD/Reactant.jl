@@ -31,7 +31,7 @@ if no traced value is found inside the expression, then there is no overhead.
 - `if` conditions (with `elseif` and other niceties) (`@trace if ...`)
 - `if` statements with a preceeding assignment (`@trace a = if ...`) (note the positioning
   of the macro needs to be before the assignment and not before the `if`)
-- `for` statements with a single induction variable iterating over a syntactic `StepRange`.
+- `for` statements with a single induction variable iterating over a syntactic `StepRange` of integers.
 
 ## Special Considerations
 
