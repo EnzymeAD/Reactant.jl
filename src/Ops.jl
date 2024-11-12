@@ -268,11 +268,11 @@ for op in [
                 $op(
                     a.mlir_data,
                     b.mlir_data;
-                    result=mlir_type(TracedRArray{T,N}, size(x)),
+                    result=mlir_type(TracedRArray{T,N}, size(a)),
                     location,
                 ),
             )
-            return TracedRArray{T,N}((), res, size(x))
+            return TracedRArray{T,N}((), res, size(a))
         end
 
         function $op(
