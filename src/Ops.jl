@@ -235,3 +235,24 @@ for op in [
         end
     end
 end
+
+# fixes to default automated implementations
+function stablehlo.abs(
+    x::TracedRArray{Complex{T},N};
+    location=MLIR.IR.Location("stablehlo.abs", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T,N}
+    res = MLIR.IR.result(
+        stablehlo.abs(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
+    )
+    return TracedRArray{T,N}((), res, size(x))
+end
+
+function stablehlo.abs(
+    x::TracedRNumber{Complex{T}};
+    location=MLIR.IR.Location("stablehlo.abs", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T}
+    res = MLIR.IR.result(
+        stablehlo.abs(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+    )
+    return TracedRNumber{T}((), res)
+end
