@@ -14,7 +14,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] batch_norm_training
 # [ ] bitcast_convert
 # [ ] broadcast_in_dim
-# [ ] broadcast
+# [-] broadcast -> on deprecation process
 # [ ] case
 # [x] cbrt
 # [x] ceil
@@ -31,12 +31,12 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] convert
 # [ ] convolution
 # [x] cosine
-# [ ] create_token
-# [ ] cross_replica_sum
+# [-] create_token -> on deprecation process
+# [-] cross_replica_sum -> on deprecation process
 # [ ] custom_call
 # [x] divide
 # [ ] dot_general
-# [ ] dot
+# [-] dot -> on deprecation process
 # [ ] dynamic_broadcast_in_dim
 # [ ] dynamic_conv
 # [ ] dynamic_gather
@@ -45,14 +45,14 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] dynamic_reshape
 # [ ] dynamic_slice
 # [ ] dynamic_update_slice
-# [ ] einsum
+# [ ] einsum -> on deprecation process, but used by Tenet
 # [x] exponential
 # [x] exponential_minus_one
 # [ ] fft
 # [x] floor
 # [ ] gather
 # [ ] get_dimension_size
-# [ ] get_tuple_element
+# [-] get_tuple_element -> on deprecation process
 # [ ] if_
 # [x] imag
 # [ ] infeed
@@ -61,7 +61,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] log_plus_one
 # [x] log
 # [x] logistic
-# [ ] map
+# [-] map -> on deprecation process
 # [x] maximum
 # [x] minimum
 # [x] multiply
@@ -74,7 +74,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] partition_id
 # [x] popcnt
 # [x] power
-# [ ] real_dynamic_slice
+# [-] real_dynamic_slice -> on deprecation process
 # [x] real
 # [ ] recv
 # [ ] reduce
@@ -86,7 +86,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] reshape
 # [ ] reverse
 # [ ] rng_bit_generator
-# [ ] rng
+# [-] rng -> on deprecation process
 # [x] round_nearest_even
 # [x] round_nearest_afz
 # [x] rsqrt
@@ -106,11 +106,11 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] subtract
 # [x] tan
 # [x] tanh
-# [ ] torch_index_select
+# [-] torch_index_select -> on deprecation process
 # [ ] transpose
 # [ ] triangular_solve
-# [ ] tuple
-# [ ] unary_einsum
+# [-] tuple -> on deprecation process
+# [ ] unary_einsum -> on deprecation process, but used by Tenet
 # [ ] uniform_dequantize
 # [ ] uniform_quantize
 # [ ] while_
@@ -119,7 +119,7 @@ using .MLIR.Dialects: stablehlo, chlo
 ## chlo
 # [x] acos
 # [x] acosh
-# [ ] _asin_acos_kernel
+# [-] _asin_acos_kernel --> should not be used directly
 # [x] asin
 # [x] asinh
 # [x] atan
