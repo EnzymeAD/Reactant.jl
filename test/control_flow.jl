@@ -442,7 +442,7 @@ end
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
-        condition12_compile_test(x, y, z)
+          condition12_compile_test(x, y, z)
 
     x = -rand(2, 10)
     y = -rand(2, 10)
@@ -452,7 +452,21 @@ end
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
-        condition12_compile_test(x, y, z)
+          condition12_compile_test(x, y, z)
+end
+
+function for_with_step(x)
+    @trace for i in 10:3:22
+        x[i] = i * i
+    end
+    return x
+end
+
+@testset "for: for with step" begin
+    x = rand(1:100, 22)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(for_with_step(x_ra)) == for_with_step(x)
 end
 
 function nnorm(x, n)
