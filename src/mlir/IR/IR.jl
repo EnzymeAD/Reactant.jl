@@ -100,13 +100,15 @@ Base.String(str::API.MlirIdentifier) = String(API.mlirIdentifierStr(str))
 ### Utils
 
 function visit(f, op)
+    all_ok = true
     for region in RegionIterator(op)
         for block in BlockIterator(region)
             for op in OperationIterator(block)
-                f(op)
+                all_ok &= f(op)
             end
         end
     end
+    return all_ok
 end
 
 """
@@ -115,13 +117,20 @@ end
 Prints the operations which could not be verified.
 """
 function verifyall(operation::Operation; debug=false)
-    io = IOContext(stdout, :debug => debug)
+    io = IOBuffer()
     visit(operation) do op
-        if !verify(op)
-            show(io, op)
+        ok = verifyall(op; debug)
+        if !ok || !verify(op)
+            if ok
+                show(IOContext(io, :debug => debug), op)
+                error(String(take!(io)))
+            end
+            false
+        else
+            true
         end
     end
 end
-verifyall(module_::IR.Module) = verifyall(Operation(module_))
+verifyall(module_::IR.Module; debug=false) = verifyall(Operation(module_); debug)
 
 end # module IR

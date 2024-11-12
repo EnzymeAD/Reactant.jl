@@ -250,6 +250,7 @@ function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
     MLIR.IR.run!(pm, mod)
+    MLIR.IR.verifyall(mod; debug=false)
     return mod
 end
 
@@ -260,7 +261,7 @@ function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true
     MLIR.IR.context!(ctx) do
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
-        MLIR.IR.verifyall(mod)
+        MLIR.IR.verifyall(MLIR.IR.Operation(mod), debug=true)
         Text(repr(mod))
     end
 end
