@@ -57,7 +57,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] imag
 # [ ] infeed
 # [ ] iota
-# [ ] is_finite
+# [x] is_finite
 # [x] log_plus_one
 # [x] log
 # [x] logistic
@@ -154,9 +154,9 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] erf_inv
 # [x] erf
 # [x] erfc
-# [ ] is_inf
-# [ ] is_neg_inf
-# [ ] is_pos_inf
+# [x] is_inf
+# [x] is_neg_inf
+# [x] is_pos_inf
 # [x] lgamma
 # [x] next_after
 # [x] polygamma
@@ -291,6 +291,35 @@ for op in [
                 ),
             )
             return TracedRNumber{T}((), res)
+        end
+    end
+end
+
+# is* checks
+for op in [:(stablehlo.is_finite), :(chlo.is_inf), :(chlo.is_neg_inf), :(chlo.is_pos_inf)]
+    @eval begin
+        function $op(
+            x::TracedRArray{T,N};
+            location=MLIR.IR.Location(
+                string($op), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+            ),
+        ) where {T,N}
+            res = MLIR.IR.result(
+                $op(x.mlir_data; result=mlir_type(TracedRArray{Bool,N}, size(x)), location)
+            )
+            return TracedRArray{Bool,N}((), res, size(x))
+        end
+
+        function $op(
+            x::TracedRNumber{T};
+            location=MLIR.IR.Location(
+                string($op), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+            ),
+        ) where {T}
+            res = MLIR.IR.result(
+                $op(x.mlir_data; result=mlir_type(TracedRArray{Bool,0}, ()), location)
+            )
+            return TracedRNumber{Bool}((), res)
         end
     end
 end
