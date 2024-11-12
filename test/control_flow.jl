@@ -467,9 +467,8 @@ end
     x_ra = Reactant.to_rarray(x)
 
     n = 10
-    n_ra = Reactant.to_rarray(fill(n))
 
-    @test @jit(nnorm(x_ra, n_ra)) ≈ nnorm(x, n)
+    @test @jit(nnorm(x_ra, n)) ≈ nnorm(x, n)
 end
 
 function sinkhorn(μ, ν, C)
