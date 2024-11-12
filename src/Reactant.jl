@@ -4,6 +4,7 @@ using ReactantCore: ReactantCore, @trace, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
 using Adapt: Adapt, WrappedArray
+using GPUArraysCore: GPUArraysCore
 
 # auxiliary types and functions
 include("OrderedIdDict.jl")
@@ -110,12 +111,19 @@ function __init__()
 end
 
 function set_default_backend(backend::XLA.Client)
+    if backend === XLA.backends["cpu"]
+        setting = GPUArraysCore.ScalarAllowed
+    else
+        setting = GPUArraysCore.default_scalar_indexing()
+    end
+    task_local_storage(:ScalarIndexing, setting)
+    GPUArraysCore.requested_scalar_indexing[] = setting
+
     return XLA.default_backend[] = backend
 end
 
 function set_default_backend(backend::String)
-    backend = XLA.backends[backend]
-    return XLA.default_backend[] = backend
+    return set_default_backend(XLA.backends[backend])
 end
 
 end # module

@@ -59,13 +59,7 @@ end
 function Base.getindex(
     a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
-    @warn(
-        """Performing scalar indexing on task $(current_task()).
-Invocation resulted in scalar indexing of a TracedRArray.
-This is typically caused by calling an iterating implementation of a method.
-Such implementations *do not* execute on device, but very slowly on the CPU,
-and require expensive copies and synchronization each time and therefore should be avoided."""
-    )
+    GPUArraysCore.assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
 
     start_indices = [promote_to(TracedRNumber{Int}, i - 1).mlir_data for i in index]
     slice_sizes = [Int64(1) for _ in index]
