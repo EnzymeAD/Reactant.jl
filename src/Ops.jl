@@ -2,13 +2,13 @@ using .MLIR.Dialects: stablehlo, chlo
 
 ## stablehlo
 # [x] abs
-# [ ] add
+# [x] add
 # [ ] after_all
 # [ ] all_gather
 # [ ] all_reduce
 # [ ] all_to_all
-# [ ] and
-# [ ] atan2
+# [x] and
+# [x] atan2
 # [ ] batch_norm_grad
 # [ ] batch_norm_inference
 # [ ] batch_norm_training
@@ -34,7 +34,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] create_token
 # [ ] cross_replica_sum
 # [ ] custom_call
-# [ ] divide
+# [x] divide
 # [ ] dot_general
 # [ ] dot
 # [ ] dynamic_broadcast_in_dim
@@ -49,7 +49,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] exponential
 # [x] exponential_minus_one
 # [ ] fft
-# [ ] floor
+# [x] floor
 # [ ] gather
 # [ ] get_dimension_size
 # [ ] get_tuple_element
@@ -62,18 +62,18 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] log
 # [x] logistic
 # [ ] map
-# [ ] maximum
-# [ ] minimum
-# [ ] multiply
+# [x] maximum
+# [x] minimum
+# [x] multiply
 # [x] negate
 # [x] not
 # [ ] optimization_barrier
-# [ ] or
+# [x] or
 # [ ] outfeed
 # [ ] pad
 # [ ] partition_id
 # [x] popcnt
-# [ ] power
+# [x] power
 # [ ] real_dynamic_slice
 # [x] real
 # [ ] recv
@@ -81,7 +81,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] reduce_precision
 # [ ] reduce_scatter
 # [ ] reduce_window
-# [ ] remainder
+# [x] remainder
 # [ ] replica_id
 # [ ] reshape
 # [ ] reverse
@@ -95,15 +95,15 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] select
 # [ ] send
 # [ ] set_dimension_size
-# [ ] shift_left
-# [ ] shift_right_arithmetic
-# [ ] shift_right_logical
+# [x] shift_left
+# [x] shift_right_arithmetic
+# [x] shift_right_logical
 # [x] sign
 # [x] sine
 # [ ] slice
 # [ ] sort
 # [x] sqrt
-# [ ] subtract
+# [x] subtract
 # [x] tan
 # [x] tanh
 # [ ] torch_index_select
@@ -114,7 +114,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] uniform_dequantize
 # [ ] uniform_quantize
 # [ ] while_
-# [ ] xor
+# [x] xor
 
 ## chlo
 # [x] acos
@@ -158,8 +158,8 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] is_neg_inf
 # [ ] is_pos_inf
 # [x] lgamma
-# [ ] next_after
-# [ ] polygamma
+# [x] next_after
+# [x] polygamma
 # [x] sinh
 # [x] tan
 # [ ] top_k
@@ -230,6 +230,65 @@ for op in [
         ) where {T}
             res = MLIR.IR.result(
                 $op(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+            )
+            return TracedRNumber{T}((), res)
+        end
+    end
+end
+
+# binary elementwise ops
+for op in [
+    :(stablehlo.add),
+    :(stablehlo.and),
+    :(stablehlo.atan2),
+    :(stablehlo.divide),
+    :(stablehlo.maximum),
+    :(stablehlo.minimum),
+    :(stablehlo.multiply),
+    :(stablehlo.or),
+    :(stablehlo.power),
+    :(stablehlo.remainder),
+    :(stablehlo.shift_left),
+    :(stablehlo.shift_right_arithmetic),
+    :(stablehlo.shift_right_logical),
+    :(stablehlo.subtract),
+    :(stablehlo.xor),
+    :(chlo.next_after),
+    :(chlo.polygamma),
+]
+    @eval begin
+        function $op(
+            a::TracedRArray{T,N},
+            b::TracedRArray{T,N};
+            location=MLIR.IR.Location(
+                string($op), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+            ),
+        ) where {T,N}
+            res = MLIR.IR.result(
+                $op(
+                    a.mlir_data,
+                    b.mlir_data;
+                    result=mlir_type(TracedRArray{T,N}, size(x)),
+                    location,
+                ),
+            )
+            return TracedRArray{T,N}((), res, size(x))
+        end
+
+        function $op(
+            a::TracedRNumber{T},
+            b::TracedRNumber{T};
+            location=MLIR.IR.Location(
+                string($op), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+            ),
+        ) where {T}
+            res = MLIR.IR.result(
+                $op(
+                    a.mlir_data,
+                    b.mlir_data;
+                    result=mlir_type(TracedRArray{T,0}, ()),
+                    location,
+                ),
             )
             return TracedRNumber{T}((), res)
         end
