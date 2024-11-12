@@ -417,7 +417,7 @@ macro code_hlo(options, maybe_call=nothing)
             f = $(fname)
             args = $(Expr(:vect, call.args[2:end]...))
             mode = first($(compile_mlir)(f, args; optimize=options.optimize))
-            return mode
+            mode
         end
     elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
         quote
@@ -425,7 +425,7 @@ macro code_hlo(options, maybe_call=nothing)
             f = Base.Broadcast.BroadcastFunction($(call.args[1]))
             args = $(call.args[2:end]...)
             mode = first($(compile_mlir)(f, args; optimize=options.optimize))
-            return mode
+            mode
         end
     else
         error("Invalid function call: $(call)")

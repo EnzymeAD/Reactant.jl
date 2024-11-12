@@ -124,6 +124,20 @@ for (jlop, hloop) in (
     end
 end
 
+function Base.div(
+    @nospecialize(lhs::TracedRNumber{T}), rhs, ::typeof(RoundDown)
+) where {T<:Integer}
+    return TracedRNumber{T}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.divide(
+                lhs.mlir_data, promote_to(TracedRNumber{T}, rhs).mlir_data
+            ),
+            1,
+        ),
+    )
+end
+
 for (jlop, hloop, hlocomp) in (
     (:(Base.:(==)), :compare, "EQ"),
     (:(Base.:(!=)), :compare, "NE"),
