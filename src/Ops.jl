@@ -67,7 +67,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] multiply
 # [x] negate
 # [x] not
-# [ ] optimization_barrier
+# [x] optimization_barrier
 # [x] or
 # [ ] outfeed
 # [ ] pad
@@ -187,29 +187,11 @@ function stablehlo.constant(
     location=MLIR.IR.Location(
         "stablehlo.constant", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
     ),
-) where {T,N}
+) where {T}
     output = mlir_type(TracedRArray{T,0}, ())
     value = MLIR.IR.DenseElementsAttribute(fill(MLIR.IR.Attribute(convert(T, x)), output))
     res = MLIR.IR.result(stablehlo.constant(; output, value, location))
     return TracedRNumber{T,N}((), res)
-end
-
-function stablehlo.partition_id(;
-    location=MLIR.IR.Location(
-        "stablehlo.partition_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
-    ),
-)
-    res = MLIR.IR.result(stablehlo.partition_id(location))
-    return TracedRNumber{UInt32}((), res)
-end
-
-function stablehlo.replica_id(;
-    location=MLIR.IR.Location(
-        "stablehlo.replica_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
-    ),
-)
-    res = MLIR.IR.result(stablehlo.replica_id(location))
-    return TracedRNumber{UInt32}((), res)
 end
 
 # unary elementwise ops
@@ -427,4 +409,46 @@ function stablehlo.complex(
         ),
     )
     return TracedRNumber{Complex{T}}((), res)
+end
+
+# paralell ops
+function stablehlo.partition_id(;
+    location=MLIR.IR.Location(
+        "stablehlo.partition_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    res = MLIR.IR.result(stablehlo.partition_id(; location))
+    return TracedRNumber{UInt32}((), res)
+end
+
+function stablehlo.replica_id(;
+    location=MLIR.IR.Location(
+        "stablehlo.replica_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    res = MLIR.IR.result(stablehlo.replica_id(; location))
+    return TracedRNumber{UInt32}((), res)
+end
+
+function stablehlo.optimization_barrier(
+    operands::Union{TracedRNumber,TracedRArray}...;
+    location=MLIR.IR.Location(
+        "stablehlo.optimization_barrier", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    values = [operand.mlir_data for operand in operands]
+    op = stablehlo.optimization_barrier(values; location)
+    return Tuple(
+        map(enumerate(operands)) do (i, operand)
+            typ = typeof(operand)
+            res = MLIR.IR.result(op, i)
+            if typ <: TracedRArray
+                return typ((), res, size(operand))
+            elseif typ <: TracedRNumber
+                return typ((), res)
+            else
+                error("Invalid type: $typ")
+            end
+        end,
+    )
 end
