@@ -408,7 +408,7 @@ function stablehlo.complex(
             location,
         ),
     )
-    return TracedRArray{T,N}((), res, size(real))
+    return TracedRArray{Complex{T},N}((), res, size(real))
 end
 
 function stablehlo.complex(
@@ -426,5 +426,5 @@ function stablehlo.complex(
             location,
         ),
     )
-    return TracedRNumber{T}((), res)
+    return TracedRNumber{Complex{T}}((), res)
 end
