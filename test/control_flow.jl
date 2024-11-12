@@ -442,7 +442,7 @@ end
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
-          condition12_compile_test(x, y, z)
+        condition12_compile_test(x, y, z)
 
     x = -rand(2, 10)
     y = -rand(2, 10)
@@ -452,7 +452,7 @@ end
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
-          condition12_compile_test(x, y, z)
+        condition12_compile_test(x, y, z)
 end
 
 function for_with_step(x)

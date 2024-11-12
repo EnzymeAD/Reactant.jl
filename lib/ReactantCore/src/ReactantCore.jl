@@ -126,9 +126,9 @@ function trace_for(mod, expr)
 
     error_if_any_control_flow(body)
     if !Meta.isexpr(assign, :(=)) ||
-       !(assign.args[1] isa Symbol) ||
-       !Meta.isexpr(assign.args[2], :call) ||
-       assign.args[2].args[1] !== :(:)
+        !(assign.args[1] isa Symbol) ||
+        !Meta.isexpr(assign.args[2], :call) ||
+        assign.args[2].args[1] !== :(:)
         error("malformed for loop assignment")
     end
 
@@ -172,7 +172,7 @@ function trace_for(mod, expr)
                     local start_ = $start
                     local $induction = start_ + $counter * step_
                     $body
-                    ($counter + 1, $(all_syms.args[(begin+1):end]...))
+                    ($counter + 1, $(all_syms.args[(begin + 1):end]...))
                 end
 
             $(ReactantCore).traced_while(cond_fn, body_fn, args)
@@ -180,7 +180,7 @@ function trace_for(mod, expr)
     end
 
     return quote
-        if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin+1):end]...)))
+        if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -227,7 +227,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     true_block = if store_last_line !== nothing
         @assert expr.args[2].head == :block "currently we only support blocks"
         true_last_line = expr.args[2].args[end]
-        remaining_lines = expr.args[2].args[1:(end-1)]
+        remaining_lines = expr.args[2].args[1:(end - 1)]
         quote
             $(remaining_lines...)
             $(store_last_line) = $(true_last_line)
@@ -265,7 +265,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     false_block = if store_last_line !== nothing
         @assert else_block.head == :block "currently we only support blocks"
         false_last_line = else_block.args[end]
-        remaining_lines = else_block.args[1:(end-1)]
+        remaining_lines = else_block.args[1:(end - 1)]
         quote
             $(remaining_lines...)
             $(store_last_line) = $(false_last_line)
