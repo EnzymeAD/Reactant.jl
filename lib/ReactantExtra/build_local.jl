@@ -1,5 +1,5 @@
 # Invoke with
-# `julia --project=deps deps/build_local.jl [dbg/opt] [auto/cpu/cuda]`
+# `julia --project=lib/ReactantExtra lib/ReactantExtra/build_local.jl [dbg/opt] [auto/cpu/cuda]`
 
 # the pre-built ReactantExtra_jll might not be loadable on this platform
 Reactant_jll = Base.UUID("0192cb87-2b54-54ad-80e0-3be72ad8a3c0")

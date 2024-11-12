@@ -265,8 +265,8 @@ Manifest.toml
 # Built Visual Studio Code Extensions
 *.vsix
 
-deps/ReactantExtra/bazel-*
-deps/ReactantExtra/MODULE.bazel.lock
+lib/ReactantExtra/bazel-*
+lib/ReactantExtra/MODULE.bazel.lock
 *.swp
 *.swo
 external

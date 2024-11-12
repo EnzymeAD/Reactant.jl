@@ -183,8 +183,6 @@ cc_toolchain_config(
     target_system_name = "x86_64-unknown-linux-gnu",
     tool_paths = {
         "/usr/bin/gcc": "/home/wmoses/llvms/llvm16/install/bin/clang",
-        # "/usr/bin/gcc": "/home/wmoses/git/Reactant.jl/deps/clang",
-        # "gcc": "/home/wmoses/git/Reactant.jl/deps/clang",
         "gcc": "/home/wmoses/llvms/llvm16/install/bin/clang",
 		"g++": "/home/wmoses/llvms/llvm16/install/bin/clang++",
 		"cpp": "/home/wmoses/llvms/llvm16/install/bin/clang++",

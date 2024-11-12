@@ -89,16 +89,16 @@ jobs:
         id: build_libreactant
         run: |
           python -m pip install numpy
-          julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl
+          julia --color=yes --project=lib/ReactantExtra -e 'using Pkg; Pkg.instantiate()'
+          julia --color=yes --project=lib/ReactantExtra lib/ReactantExtra/build_local.jl
           cp LocalPreferences.toml test/
       - name: Build libReactant MacOS
         if: ${{ matrix.libReactant == 'local' && matrix.os == 'macOS-latest'}}
         id: build_libreactant_mac
         run: |
           python -m pip install numpy
-          julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          SDKROOT=`xcrun --show-sdk-path` julia --color=yes --project=deps deps/build_local.jl
+          julia --color=yes --project=lib/ReactantExtra -e 'using Pkg; Pkg.instantiate()'
+          SDKROOT=`xcrun --show-sdk-path` julia --color=yes --project=lib/ReactantExtra lib/ReactantExtra/build_local.jl
           cp LocalPreferences.toml test/
       - name: "Install Dependencies and Run Tests"
         run: |
