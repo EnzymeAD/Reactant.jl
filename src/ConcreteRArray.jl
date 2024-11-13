@@ -145,6 +145,13 @@ for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
     end
 end
 
+function Base.isapprox(x::ConcreteRArray, y::Array; kwargs...)
+    return Base.isapprox(convert(Array, x), y; kwargs...)
+end
+function Base.isapprox(x::Array, y::ConcreteRArray; kwargs...)
+    return Base.isapprox(x, convert(Array, y); kwargs...)
+end
+
 function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
     if X.data == XLA.AsyncEmptyBuffer
         println(io, "<Empty buffer>")
