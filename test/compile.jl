@@ -16,22 +16,25 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
     end
 
     @testset "world-age" begin
-        a = Reactant.ConcreteRArray(ones(2, 10))
-        b = Reactant.ConcreteRArray(ones(10, 2))
+        a = ones(2, 10)
+        b = ones(10, 2)
+        a_ra = Reactant.ConcreteRArray(a)
+        b_ra = Reactant.ConcreteRArray(b)
 
-        fworld(x, y) = @jit(*(x, y))
+        fworld(x, y) = @jit(x * y)
 
-        @test fworld(a, b) ≈ ones(2, 2) * 10
+        @test fworld(a_ra, b_ra) ≈ ones(2, 2) * 10
     end
 
     @testset "type casting & optimized out returns" begin
-        a = Reactant.ConcreteRArray(rand(2, 10))
+        a = ones(2, 10)
+        a_ra = Reactant.ConcreteRArray(a)
 
         ftype1(x) = Float64.(x)
         ftype2(x) = Float32.(x)
 
-        y1 = @jit ftype1(a)
-        y2 = @jit ftype2(a)
+        y1 = @jit ftype1(a_ra)
+        y2 = @jit ftype2(a_ra)
 
         @test y1 isa Reactant.ConcreteRArray{Float64,2}
         @test y2 isa Reactant.ConcreteRArray{Float32,2}

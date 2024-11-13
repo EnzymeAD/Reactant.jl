@@ -86,6 +86,7 @@ function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,El
     return data
     # XLA.from_row_major(data)
 end
+Base.Array(x::ConcreteRArray) = convert(Array, x)
 
 function synchronize(x::Union{ConcreteRArray,ConcreteRNumber})
     XLA.synced_buffer(x.data)
@@ -145,6 +146,20 @@ for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
     end
 end
 
+function Base.isapprox(x::ConcreteRArray, y::AbstractArray; kwargs...)
+    return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
+end
+function Base.isapprox(x::AbstractArray, y::ConcreteRArray; kwargs...)
+    return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
+end
+function Base.isapprox(x::ConcreteRArray, y::ConcreteRArray; kwargs...)
+    return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
+end
+
+Base.:(==)(x::ConcreteRArray, y::AbstractArray) = convert(Array, x) == convert(Array, y)
+Base.:(==)(x::AbstractArray, y::ConcreteRArray) = convert(Array, x) == convert(Array, y)
+Base.:(==)(x::ConcreteRArray, y::ConcreteRArray) = convert(Array, x) == convert(Array, y)
+
 function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
     if X.data == XLA.AsyncEmptyBuffer
         println(io, "<Empty buffer>")
@@ -171,12 +186,11 @@ function Base.show(io::IO, X::ConcreteRArray)
     return print(io, "$(typeof(X))($(str))")
 end
 
-const getindex_warned = Ref(false)
 function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     if a.data == XLA.AsyncEmptyBuffer
         throw("Cannot getindex from empty buffer")
     end
-    # error("""Scalar indexing is disallowed.""")
+
     XLA.await(a.data)
     if XLA.BufferOnCPU(a.data.buffer)
         buf = a.data.buffer
@@ -193,16 +207,8 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
             return unsafe_load(ptr, start)
         end
     end
-    if !getindex_warned[]
-        @warn(
-            """Performing scalar get-indexing on task $(current_task()).
-    Invocation resulted in scalar indexing of a ConcreteRArray.
-    This is typically caused by calling an iterating implementation of a method.
-    Such implementations *do not* execute on device, but very slowly on the CPU,
-    and require expensive copies and synchronization each time and therefore should be avoided."""
-        )
-        getindex_warned[] = true
-    end
+
+    GPUArraysCore.assertscalar("getindex(::ConcreteRArray, ::Vararg{Int, N})")
     return convert(Array, a)[args...]
 end
 
@@ -211,12 +217,11 @@ function mysetindex!(a, v, args::Vararg{Int,N}) where {N}
     return nothing
 end
 
-const setindex_warned = Ref(false)
-
 function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N}
     if a.data == XLA.AsyncEmptyBuffer
         throw("Cannot setindex! to empty buffer")
     end
+
     XLA.await(a.data)
     if XLA.BufferOnCPU(a.data.buffer)
         buf = a.data.buffer
@@ -234,19 +239,8 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
         end
         return a
     end
-    if !setindex_warned[]
-        @warn(
-            """Performing scalar set-indexing on task $(current_task()).
-    Invocation resulted in scalar indexing of a ConcreteRArray.
-    This is typically caused by calling an iterating implementation of a method.
-    Such implementations *do not* execute on device, but very slowly on the CPU,
-    and require expensive copies and synchronization each time and therefore should be avoided.
- 
-    This error message will only be printed for the first invocation for brevity.
-"""
-        )
-        setindex_warned[] = true
-    end
+
+    GPUArraysCore.assertscalar("setindex!(::ConcreteRArray, ::Any, ::Vararg{Int, N})")
     fn = Reactant.compile(mysetindex!, (a, v, args...))
     fn(a, v, args...)
     return a

@@ -99,6 +99,7 @@ end
 end
 
 @testset "complex reduction" begin
-    x_ra = Reactant.ConcreteRArray(randn(ComplexF32, 10, 10))
-    @test @jit(sum(abs2, x_ra)) ≈ sum(abs2, x_ra)
+    x = randn(ComplexF32, 10, 10)
+    x_ra = Reactant.ConcreteRArray(x)
+    @test @jit(sum(abs2, x_ra)) ≈ sum(abs2, x)
 end

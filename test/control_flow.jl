@@ -365,20 +365,20 @@ end
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
-    @test res_ra[1, 1] == -1.0
-    @test res_ra[2, 1] == -1.0
-    @test x_ra[1, 1] == -1.0 broken = true
-    @test x_ra[2, 1] == -1.0 broken = true
+    @test @allowscalar(res_ra[1, 1]) == -1.0
+    @test @allowscalar(res_ra[2, 1]) == -1.0
+    @test @allowscalar(x_ra[1, 1]) == -1.0 broken = true
+    @test @allowscalar(x_ra[2, 1]) == -1.0 broken = true
 
     x = -rand(2, 10)
     x[2, 1] = 0.0
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
-    @test res_ra[1, 1] == 1.0
-    @test res_ra[2, 1] == 0.0
-    @test x_ra[1, 1] == 1.0 broken = true
-    @test x_ra[2, 1] == 0.0
+    @test @allowscalar(res_ra[1, 1]) == 1.0
+    @test @allowscalar(res_ra[2, 1]) == 0.0
+    @test @allowscalar(x_ra[1, 1]) == 1.0 broken = true
+    @test @allowscalar(x_ra[2, 1]) == 0.0
 end
 
 function condition11_nested_ifff(x, y, z)
@@ -538,7 +538,7 @@ end
 function cumsum!(x)
     v = zero(eltype(x))
     @trace for i in 1:length(x)
-        v += x[i]
+        v += @allowscalar x[i]
         x[i] = v
     end
     return x
