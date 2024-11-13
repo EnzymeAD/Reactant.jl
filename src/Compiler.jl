@@ -244,12 +244,25 @@ const opt_passes::String = join(
     ',',
 )
 
-function run_pass_pipeline!(mod, pass_pipeline)
+function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     pm = MLIR.IR.PassManager()
+    MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
     MLIR.IR.run!(pm, mod)
     return mod
+end
+
+# helper for debug purposes: String -> Text
+function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
+    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    MLIR.IR.context!(ctx) do
+        mod = parse(MLIR.IR.Module, source)
+        run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
+        MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
+        Text(repr(mod))
+    end
 end
 
 function compile_mlir(f, args; kwargs...)
@@ -280,15 +293,12 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
     if optimize === :all
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
-                    opt_passes,
-                    "enzyme-batch",
-                    opt_passes,
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -298,28 +308,22 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
             ),
         )
     elseif optimize === :only_enzyme
+        run_pass_pipeline!(mod, "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "enzyme-batch",
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                ],
+                ["canonicalize", "remove-unnecessary-enzyme-ops", "enzyme-simplify-math"],
                 ',',
             ),
         )
     elseif optimize === :after_enzyme
+        run_pass_pipeline!(mod, "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
-                    "enzyme-batch",
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -329,21 +333,10 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
             ),
         )
     elseif optimize === :before_enzyme
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes]))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
-            mod,
-            join(
-                [
-                    opt_passes,
-                    "enzyme-batch",
-                    opt_passes,
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                ],
-                ',',
-            ),
+            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math"
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
