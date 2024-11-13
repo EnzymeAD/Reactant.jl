@@ -12,8 +12,10 @@ using Test
 
     # @show [y[1,1], y[1,2], y[2, 1], y[2, 2]]
 
-    @test y[1, 1] == x[1, 1]
-    @test y[1, 2] == x[1, 2]
-    @test y[2, 1] == x[2, 1]
-    @test y[2, 2] == x[2, 2]
+    @allowscalar begin
+        @test y[1, 1] == x[1, 1]
+        @test y[1, 2] == x[1, 2]
+        @test y[2, 1] == x[2, 1]
+        @test y[2, 2] == x[2, 2]
+    end
 end
