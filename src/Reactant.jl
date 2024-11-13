@@ -4,7 +4,9 @@ using ReactantCore: ReactantCore, @trace, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
 using Adapt: Adapt, WrappedArray
-using GPUArraysCore: GPUArraysCore
+using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
+
+export @allowscalar # re-exported from GPUArraysCore
 
 # auxiliary types and functions
 include("OrderedIdDict.jl")
