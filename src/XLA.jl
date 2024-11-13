@@ -124,6 +124,7 @@ function __init__()
             try
                 gpu = GPUClient()
                 backends["gpu"] = gpu
+                default_backend[] = gpu
             catch e
                 println(stdout, e)
             end
