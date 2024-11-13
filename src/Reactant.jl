@@ -111,14 +111,6 @@ function __init__()
 end
 
 function set_default_backend(backend::XLA.Client)
-    if backend === XLA.backends["cpu"]
-        setting = GPUArraysCore.ScalarAllowed
-    else
-        setting = GPUArraysCore.default_scalar_indexing()
-    end
-    task_local_storage(:ScalarIndexing, setting)
-    GPUArraysCore.requested_scalar_indexing[] = setting
-
     return XLA.default_backend[] = backend
 end
 

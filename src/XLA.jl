@@ -2,8 +2,6 @@ module XLA
 
 import ...MLIR
 
-using GPUArraysCore: GPUArraysCore
-
 mutable struct Client
     client::Ptr{Cvoid}
 
@@ -131,15 +129,6 @@ function __init__()
                 println(stdout, e)
             end
         end
-    end
-
-    # If we are on CPU we will allow scalar indexing, in other cases we inherit the behavior
-    # from GPUArrays: disallowed in scripts and allowed with warning in REPL
-    if default_backend[] === cpu
-        # GPUArraysCore.allowscalar(true) # This will print a warning so bypass it
-        setting = GPUArraysCore.ScalarAllowed
-        task_local_storage(:ScalarIndexing, setting)
-        GPUArraysCore.requested_scalar_indexing[] = setting
     end
 
     return nothing
