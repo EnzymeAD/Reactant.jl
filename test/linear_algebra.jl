@@ -46,27 +46,34 @@ function mul_with_view3(A, x)
 end
 
 @testset begin
-    A = Reactant.to_rarray(rand(4, 4))
-    x = Reactant.to_rarray(rand(4, 2))
-    b = Reactant.to_rarray(rand(4))
+    A = rand(4, 4)
+    x = rand(4, 2)
+    b = rand(4)
 
-    @test @jit(muladd2(A, x, b)) ≈ muladd2(A, x, b)
-    @test @jit(muladd_5arg(A, x, b)) ≈ muladd2(A, x, b)
-    @test @jit(muladd_5arg2(A, x, b)) ≈ 2 .* A * x .+ b
+    A_ra = Reactant.to_rarray(A)
+    x_ra = Reactant.to_rarray(x)
+    b_ra = Reactant.to_rarray(b)
 
-    @test @jit(mul_with_view1(A, x)) ≈ mul_with_view1(A, x)
+    @test @jit(muladd2(A_ra, x_ra, b_ra)) ≈ muladd2(A, x, b)
+    @test @jit(muladd_5arg(A_ra, x_ra, b_ra)) ≈ muladd2(A, x, b)
+    @test @jit(muladd_5arg2(A_ra, x_ra, b_ra)) ≈ 2 .* A * x .+ b
 
-    x2 = Reactant.to_rarray(rand(4))
-    @test @jit(mul_with_view2(A, x2)) ≈ mul_with_view2(A, x2)
-    @test @jit(mul_with_view3(A, x2)) ≈ mul_with_view3(A, x2)
+    @test @jit(mul_with_view1(A_ra, x_ra)) ≈ mul_with_view1(A, x)
+
+    x2 = rand(4)
+    x2_ra = Reactant.to_rarray(x2)
+
+    @test @jit(mul_with_view2(A_ra, x2_ra)) ≈ mul_with_view2(A, x2)
+    @test @jit(mul_with_view3(A_ra, x2_ra)) ≈ mul_with_view3(A, x2)
 
     # Mixed Precision
-    x = Reactant.to_rarray(rand(Float32, 4, 2))
+    x = rand(Float32, 4, 2)
+    x_ra = Reactant.to_rarray(x)
 
-    @test @jit(muladd2(A, x, b)) ≈ muladd2(A, x, b)
-    @test @jit(muladd_5arg(A, x, b)) ≈ muladd2(A, x, b)
+    @test @jit(muladd2(A_ra, x_ra, b_ra)) ≈ muladd2(A, x, b)
+    @test @jit(muladd_5arg(A_ra, x_ra, b_ra)) ≈ muladd2(A, x, b)
 
-    C = similar(A, Float32, size(A, 1), size(x, 2))
-    @jit(mul!(C, A, x))
-    @test C ≈ A * x
+    C_ra = similar(A_ra, Float32, size(A, 1), size(x, 2))
+    @jit(mul!(C_ra, A_ra, x_ra))
+    @test C_ra ≈ A * x
 end
