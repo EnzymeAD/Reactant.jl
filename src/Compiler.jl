@@ -250,7 +250,6 @@ function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
     MLIR.IR.run!(pm, mod)
-    MLIR.IR.verifyall(mod; debug=false)
     return mod
 end
 
@@ -261,7 +260,7 @@ function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true
     MLIR.IR.context!(ctx) do
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
-        MLIR.IR.verifyall(MLIR.IR.Operation(mod), debug=true)
+        MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
         Text(repr(mod))
     end
 end
@@ -294,74 +293,54 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
     if optimize === :all
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
-                    opt_passes,
-                    "enzyme-batch",
-                    opt_passes,
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
                 ],
                 ',',
-            );
-            enable_verifier=false,
+            ),
         )
     elseif optimize === :only_enzyme
+        run_pass_pipeline!(mod, join(["enzyme-batch"]))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "enzyme-batch",
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                ],
+                ["canonicalize", "remove-unnecessary-enzyme-ops", "enzyme-simplify-math"],
                 ',',
-            );
-            enable_verifier=false,
+            ),
         )
     elseif optimize === :after_enzyme
+        run_pass_pipeline!(mod, "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
-                    "enzyme-batch",
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
                 ],
                 ',',
-            );
-            enable_verifier=false,
+            ),
         )
     elseif optimize === :before_enzyme
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes]))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    opt_passes,
-                    "enzyme-batch",
-                    opt_passes,
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                ],
+                ["canonicalize", "remove-unnecessary-enzyme-ops", "enzyme-simplify-math"],
                 ',',
-            );
-            enable_verifier=false,
+            ),
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
