@@ -1,7 +1,7 @@
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme
-using ..Reactant: ConcreteRArray, ConcreteRNumber, TracedRArray, TracedRNumber
+using ..Reactant: ConcreteRArray, ConcreteRNumber, TracedRArray, TracedRNumber, mlir_type
 
 struct Token
     mlir_data::MLIR.IR.Value
