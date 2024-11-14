@@ -43,6 +43,14 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
         @test y2 ≈ Float32.(a)
     end
 
+    @testset "no variable name collisions in compile macros (#237)" begin
+        f(x) = x
+        g(x) = f(x)
+        x = rand(2, 2)
+        y = Reactant.to_rarray(x)
+        @test (@jit g(y); true)
+    end
+
     # disabled due to long test time (core tests go from 2m to 7m just with this test)
     # @testset "resource exhaustation bug (#190)" begin
     #     x = rand(2, 2)
