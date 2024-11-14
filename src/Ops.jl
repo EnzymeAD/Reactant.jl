@@ -1,4 +1,4 @@
-using .MLIR.Dialects: stablehlo, chlo
+using .MLIR.Dialects: stablehlo, chlo, enzyme
 
 struct Token
     mlir_data::MLIR.IR.Value
@@ -22,8 +22,8 @@ end
 # [ ] case
 # [x] cbrt
 # [x] ceil
-# [ ] cholesky
-# [ ] clamp
+# [x] cholesky
+# [x] clamp
 # [x] count_leading_zeros
 # [ ] collective_broadcast
 # [ ] collective_permute
@@ -391,7 +391,7 @@ function stablehlo.abs(
     return TracedRNumber{T}((), res)
 end
 
-# miscelaneous
+# numerics
 function stablehlo.complex(
     real::TracedRArray{T,N},
     imag::TracedRArray{T,N};
