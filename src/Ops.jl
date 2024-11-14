@@ -1,5 +1,9 @@
 using .MLIR.Dialects: stablehlo, chlo
 
+struct Token
+    mlir_data::MLIR.IR.Value
+end
+
 ## stablehlo
 # [x] abs
 # [x] add
@@ -69,7 +73,7 @@ using .MLIR.Dialects: stablehlo, chlo
 # [x] not
 # [x] optimization_barrier
 # [x] or
-# [ ] outfeed
+# [x] outfeed
 # [ ] pad
 # [x] partition_id
 # [x] popcnt
@@ -592,6 +596,22 @@ function stablehlo.optimization_barrier(
             end
         end,
     )
+end
+
+function stablehlo.outfeed(
+    operands::Union{TracedRNumber,TracedRArray}...;
+    token,
+    config="",
+    location=MLIR.IR.Location(
+        "stablehlo.outfeed", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    values = [operand.mlir_data for operand in operands]
+    outfeed_config = MLIR.IR.Attribute(config)
+    res = MLIR.IR.result(
+        stablehlo.outfeed(values, token.mlir_data; outfeed_config, location)
+    )
+    return Token(res)
 end
 
 # broadcast ops
