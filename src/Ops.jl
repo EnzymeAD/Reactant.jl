@@ -424,6 +424,21 @@ function stablehlo.complex(
     return TracedRNumber{Complex{T}}((), res)
 end
 
+# function stablehlo.bitcast_convert(
+#     ::Type{TracedRArray{U,N}},
+#     x::TracedRArray{T,N};
+#     location=MLIR.IR.Location(
+#         "stablehlo.bitcast_convert", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+#     ),
+# ) where {T,N}
+#     res = MLIR.IR.result(
+#         stablehlo.bitcast_convert(
+#             x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location
+#         ),
+#     )
+#     return TracedRArray{T,N}((), res, size(x))
+# end
+
 function stablehlo.cholesky(
     x::TracedRArray{T,N};
     lower::Bool=false,
@@ -457,6 +472,85 @@ function stablehlo.clamp(
     )
     return TracedRArray{T,N}((), res, size(x))
 end
+
+# function stablehlo.convolution(
+#     lhs::TracedRArray{T,N},
+#     rhs::TracedRArray{T,N};
+#     dimension_numbers,
+#     feature_group_count,
+#     batch_group_count,
+#     window_strides=nothing,
+#     padding=nothing,
+#     lhs_dilation=nothing,
+#     rhs_dilation=nothing,
+#     location=MLIR.IR.Location(
+#         "stablehlo.convolution", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+#     ),
+# ) where {T,N}
+#     res = MLIR.IR.result(
+#         stablehlo.convolution(
+#             lhs.mlir_data,
+#             rhs.mlir_data;
+#             result=mlir_type(TracedRArray{T,N}, ...), # TODO size of result
+#             window_strides, #*MLIR.IR.DenseArrayAttribute(window_strides)*#,
+#             padding, #*MLIR.IR.DenseArrayAttribute(padding)*#,
+#             lhs_dilation, #*MLIR.IR.DenseArrayAttribute(lhs_dilation)*#,
+#             rhs_dilation, #*MLIR.IR.DenseArrayAttribute(rhs_dilation)*#,
+#             feature_group_count=feature_group_count,
+#             location,
+#         ),
+#     )
+#     return TracedRArray{T,N}((), res, size(lhs))
+# end
+
+# function stablehlo.dot_general(
+#     lhs::TracedRArray{T,N},
+#     rhs::TracedRArray{T,N};
+#     dimension_numbers,
+#     lhs_contracting_dimensions,
+#     rhs_contracting_dimensions,
+#     result_permutation,
+#     location=MLIR.IR.Location(
+#         "stablehlo.dot_general", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+#     ),
+# ) where {T,N}
+#     res = MLIR.IR.result(
+#         stablehlo.dot_general(
+#             lhs.mlir_data,
+#             rhs.mlir_data;
+#             result=mlir_type(TracedRArray{T,N}, ...), # TODO size of result
+#             dimension_numbers,
+#             lhs_contracting_dimensions,
+#             rhs_contracting_dimensions,
+#             result_permutation,
+#             location,
+#         ),
+#     )
+#     return TracedRArray{T,N}((), res, size(lhs))
+# end
+
+# function stablehlo.einsum(
+#     equation::String,
+#     operands::Union{TracedRNumber,TracedRArray}...;
+#     location=MLIR.IR.Location(
+#         "stablehlo.einsum", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+#     ),
+# )
+#     values = [operand.mlir_data for operand in operands]
+#     res = MLIR.IR.result(stablehlo.einsum(equation, values; location))
+#     return TracedRArray{Float64,1}((), res, (1,))
+# end
+
+# function stablehlo.unary_einsum(
+#     equation::String,
+#     operand::Union{TracedRNumber,TracedRArray};
+#     location=MLIR.IR.Location(
+#         "stablehlo.unary_einsum", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+#     ),
+# )
+#     res = MLIR.IR.result(stablehlo.unary_einsum(equation, operand.mlir_data; location))
+#     return TracedRArray{Float64,1}((), res, (1,))
+# end
 
 # paralell ops
 function stablehlo.partition_id(;
@@ -499,3 +593,23 @@ function stablehlo.optimization_barrier(
         end,
     )
 end
+
+# broadcast ops
+# function stablehlo.broadcast_in_dim(
+#     x::TracedRArray{T,N},
+#     dims::Vector{Int};
+#     location=MLIR.IR.Location(
+#         "stablehlo.broadcast_in_dim", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+#     ),
+# ) where {T,N}
+#     rsize = restype = MLIR.IR.TensorType([...], mlir_type(T)) # mlir_type(TracedRArray{T,N}, size(x))
+#     res = MLIR.IR.result(
+#         stablehlo.broadcast_in_dim(
+#             x.mlir_data;
+#             result_0=restype,
+#             broadcast_dimensions=MLIR.IR.DenseArrayAttribute(dims),
+#             location,
+#         ),
+#     )
+#     return TracedRArray{T,N}((), res, size(x))
+# end
