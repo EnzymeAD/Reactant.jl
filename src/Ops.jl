@@ -411,6 +411,22 @@ function stablehlo.complex(
     return TracedRNumber{Complex{T}}((), res)
 end
 
+function stablehlo.cholesky(
+    x::TracedRArray{T,N};
+    lower::Bool=false,
+    location=MLIR.IR.Location(
+        "stablehlo.cholesky", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T,N}
+    lower = MLIR.IR.Attribute(lower)
+    res = MLIR.IR.result(
+        stablehlo.cholesky(
+            x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), lower, location
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(x))
+end
+
 # paralell ops
 function stablehlo.partition_id(;
     location=MLIR.IR.Location(
