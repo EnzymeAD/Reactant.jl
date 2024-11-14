@@ -55,7 +55,7 @@ end
 # [ ] fft
 # [x] floor
 # [ ] gather
-# [ ] get_dimension_size
+# [x] get_dimension_size
 # [-] get_tuple_element -> on deprecation process
 # [ ] if_
 # [x] imag
