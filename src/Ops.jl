@@ -427,6 +427,24 @@ function stablehlo.cholesky(
     return TracedRArray{T,N}((), res, size(x))
 end
 
+function stablehlo.clamp(
+    min::TracedRArray{T,N},
+    x::TracedRArray{T,N},
+    max::TracedRArray{T,N};
+    location=MLIR.IR.Location("stablehlo.clamp", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T,N}
+    res = MLIR.IR.result(
+        stablehlo.clamp(
+            min.mlir_data,
+            x.mlir_data,
+            max.mlir_data;
+            result=mlir_type(TracedRArray{T,N}, size(x)),
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(x))
+end
+
 # paralell ops
 function stablehlo.partition_id(;
     location=MLIR.IR.Location(
