@@ -60,7 +60,7 @@ end
 # [ ] if_
 # [x] imag
 # [ ] infeed
-# [ ] iota
+# [x] iota
 # [x] is_finite
 # [x] log_plus_one
 # [x] log
@@ -105,7 +105,7 @@ end
 # [x] sign
 # [x] sine
 # [ ] slice
-# [ ] sort
+# [x] sort
 # [x] sqrt
 # [x] subtract
 # [x] tan
@@ -166,7 +166,7 @@ end
 # [x] polygamma
 # [x] sinh
 # [x] tan
-# [ ] top_k
+# [x] top_k
 # [x] zeta
 
 ## enzyme
@@ -703,3 +703,54 @@ end
 #     )
 #     return TracedRArray{T,N}((), res, size(x))
 # end
+
+# sorting ops
+# TODO need to trace over `comparator`
+# function stablehlo.sort(
+#     x::TracedRArray{T,N};
+#     comparator,
+#     dimension=-1,
+#     is_stable=false,
+#     location=MLIR.IR.Location("stablehlo.sort", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+# ) where {T,N}
+#     dimension = MLIR.IR.Attribute(dimension)
+#     is_stable = MLIR.IR.Attribute(is_stable)
+#     res = MLIR.IR.result(
+#         stablehlo.sort(
+#             x.mlir_data;
+#             result=mlir_type(TracedRArray{T,N}, size(x)),
+#             dimension,
+#             is_stable,
+#             location,
+#         ),
+#     )
+#     return TracedRArray{T,N}((), res, size(x))
+# end
+
+function chlo.top_k(
+    x::TracedRArray{T,N},
+    k;
+    location=MLIR.IR.Location("chlo.top_k", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T,N}
+    rsize = [size(x)[1:(end - 1)]..., k]
+    values = MLIR.IR.TensorType(rsize, mlir_type(T))
+    indices = MLIR.IR.TensorType(rsize, mlir_type(Int))
+    op = chlo.top_k(x.mlir_data; values, indices, location)
+    return (;
+        values=TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize),
+        indices=TracedRArray{Int,N}((), MLIR.IR.result(op, 2), rsize),
+    )
+end
+
+function stablehlo.iota(
+    T::Type,
+    shape::Vector{Int};
+    iota_dimension,
+    location=MLIR.IR.Location("stablehlo.iota", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+)
+    N = length(shape)
+    output = mlir_type(TracedRArray{T,N}, shape)
+    iota_dimension = MLIR.IR.Attribute(iota_dimension)
+    res = MLIR.IR.result(stablehlo.iota(; output, iota_dimension, location))
+    return TracedRArray{T,N}((), res, shape)
+end
