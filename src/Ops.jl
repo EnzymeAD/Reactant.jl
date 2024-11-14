@@ -182,7 +182,7 @@ end
 # [ ] push
 # [ ] set
 
-# zeroary ops
+# constant ops
 function stablehlo.constant(
     x::DenseArray{T,N};
     location=MLIR.IR.Location(
