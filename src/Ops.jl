@@ -807,3 +807,13 @@ function stablehlo.rng_bit_generator(
         output=TracedRArray{T,length(shape)}((), MLIR.IR.result(op, 2), shape),
     )
 end
+
+# functional ops
+function stablehlo.return_(
+    results::Union{TracedRArray,TracedRNumber}...;
+    location=MLIR.IR.Location(
+        "stablehlo.return_", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    return stablehlo.return_([x.mlir_data for x in results]; location)
+end
