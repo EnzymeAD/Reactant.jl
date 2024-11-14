@@ -111,7 +111,7 @@ end
 # [x] tan
 # [x] tanh
 # [-] torch_index_select -> on deprecation process
-# [ ] transpose
+# [x] transpose
 # [ ] triangular_solve
 # [-] tuple -> on deprecation process
 # [ ] unary_einsum -> on deprecation process, but used by Tenet
@@ -443,6 +443,20 @@ function stablehlo.set_dimension_size(
         ),
     )
     return TracedRArray{T,N}((), res, size(x))
+end
+
+function stablehlo.transpose(
+    x::TracedRArray{T,N},
+    permutation;
+    location=MLIR.IR.Location(
+        "stablehlo.transpose", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T,N}
+    rsize = permute!(size(x), permutation)
+    result = mlir_type(TracedRArray{T,N}, rsize)
+    permutation = MLIR.IR.DenseArrayAttribute(permutation)
+    res = MLIR.IR.result(stablehlo.transpose(x.mlir_data; result, permutation, location))
+    return TracedRArray{T,N}((), res, rsize)
 end
 
 # numerics
