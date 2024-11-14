@@ -645,23 +645,23 @@ function stablehlo.unary_einsum(
 end
 
 # paralell ops
-function stablehlo.partition_id(;
-    location=MLIR.IR.Location(
-        "stablehlo.partition_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
-    ),
-)
-    res = MLIR.IR.result(stablehlo.partition_id(; location))
-    return TracedRNumber{UInt32}((), res)
-end
+# function stablehlo.partition_id(;
+#     location=MLIR.IR.Location(
+#         "stablehlo.partition_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+#     ),
+# )
+#     res = MLIR.IR.result(stablehlo.partition_id(; location))
+#     return TracedRNumber{UInt32}((), res)
+# end
 
-function stablehlo.replica_id(;
-    location=MLIR.IR.Location(
-        "stablehlo.replica_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
-    ),
-)
-    res = MLIR.IR.result(stablehlo.replica_id(; location))
-    return TracedRNumber{UInt32}((), res)
-end
+# function stablehlo.replica_id(;
+#     location=MLIR.IR.Location(
+#         "stablehlo.replica_id", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+#     ),
+# )
+#     res = MLIR.IR.result(stablehlo.replica_id(; location))
+#     return TracedRNumber{UInt32}((), res)
+# end
 
 function stablehlo.optimization_barrier(
     operands::Union{TracedRNumber,TracedRArray}...;
