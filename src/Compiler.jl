@@ -482,14 +482,26 @@ function compile_call_expr(mod, args...)
         return quote
             $(f_symbol) = $(fname)
             $(args_symbol) = $(Expr(:tuple, call.args[2:end]...))
-            $(f_compiled_symbol) = $(compile)($(f_symbol), $(args_symbol); optimize=$(options[:optimize]), sync=$(options[:sync]))
-        end, (; f=f_compiled_symbol, args=args_symbol)
+            $(f_compiled_symbol) = $(compile)(
+                $(f_symbol),
+                $(args_symbol);
+                optimize=$(options[:optimize]),
+                sync=$(options[:sync]),
+            )
+        end,
+        (; f=f_compiled_symbol, args=args_symbol)
     elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
         return quote
             $(f_symbol) = Base.Broadcast.BroadcastFunction($(call.args[1]))
             $(args_symbol) = $(call.args[2:end]...)
-            $(f_compiled_symbol) = $(compile)($(f_symbol), $(args_symbol); optimize=$(options[:optimize]), sync=$(options[:sync]))
-        end, (; f=f_compiled_symbol, args=args_symbol)
+            $(f_compiled_symbol) = $(compile)(
+                $(f_symbol),
+                $(args_symbol);
+                optimize=$(options[:optimize]),
+                sync=$(options[:sync]),
+            )
+        end,
+        (; f=f_compiled_symbol, args=args_symbol)
     else
         error("Invalid function call: $(call)")
     end

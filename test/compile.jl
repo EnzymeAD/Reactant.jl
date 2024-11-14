@@ -43,7 +43,7 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
     @testset "no variable name collisions in compile macros (#237)" begin
         f(x) = x
         g(x) = f(x)
-        x = rand(2,2)
+        x = rand(2, 2)
         y = Reactant.to_rarray(x)
         @test (@jit g(y); true)
     end
