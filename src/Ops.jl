@@ -98,7 +98,7 @@ end
 # [ ] select_and_scatter
 # [ ] select
 # [ ] send
-# [ ] set_dimension_size
+# [x] set_dimension_size
 # [x] shift_left
 # [x] shift_right_arithmetic
 # [x] shift_right_logical
@@ -389,6 +389,60 @@ function stablehlo.abs(
         stablehlo.abs(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
     )
     return TracedRNumber{T}((), res)
+end
+
+# shape ops
+function stablehlo.reshape(x::TracedRArray, dims...; kwargs...)
+    return stablehlo.reshape(x, collect(dims); kwargs...)
+end
+
+function stablehlo.reshape(
+    x::TracedRArray{T,N},
+    dims::Vector{Int};
+    location=MLIR.IR.Location(
+        "stablehlo.reshape", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T,N}
+    restype = MLIR.IR.TensorType(dims, mlir_type(T))
+    res = MLIR.IR.result(stablehlo.reshape(x.mlir_data; result_0=restype, location))
+    return TracedRArray{T,N}((), res, dims)
+end
+
+function stablehlo.get_dimension_size(
+    x::TracedRArray{T,N},
+    dim;
+    location=MLIR.IR.Location(
+        "stablehlo.get_dimension_size", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T,N}
+    dimension = MLIR.IR.Attribute(dim)
+    res = MLIR.IR.result(
+        stablehlo.get_dimension_size(
+            x.mlir_data; result=mlir_type(TracedRNumber{Int}, ()), dimension, location
+        ),
+    )
+    return TracedRNumber{Int}((), res)
+end
+
+function stablehlo.set_dimension_size(
+    x::TracedRArray{T,N},
+    size::TracedRNumber{Int},
+    dim::Int;
+    location=MLIR.IR.Location(
+        "stablehlo.set_dimension_size", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T,N}
+    dimension = MLIR.IR.Attribute(dim)
+    res = MLIR.IR.result(
+        stablehlo.set_dimension_size(
+            x.mlir_data,
+            size.mlir_data;
+            result=mlir_type(TracedRArray{T,N}, size(x)),
+            dimension,
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(x))
 end
 
 # numerics
