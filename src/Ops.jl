@@ -89,7 +89,7 @@ end
 # [x] replica_id
 # [x] reshape
 # [ ] reverse
-# [ ] rng_bit_generator
+# [x] rng_bit_generator
 # [-] rng -> on deprecation process
 # [x] round_nearest_even
 # [x] round_nearest_afz
@@ -764,4 +764,22 @@ function stablehlo.iota(
     iota_dimension = MLIR.IR.Attribute(iota_dimension)
     res = MLIR.IR.result(stablehlo.iota(; output, iota_dimension, location))
     return TracedRArray{T,N}((), res, shape)
+end
+
+# random ops
+function stablehlo.rng_bit_generator(
+    seed::TracedRArray{UInt64,1},
+    shape;
+    algorithm=RngDefault,
+    location=MLIR.IR.Location(
+        "stablehlo.rng_bit_generator", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    output = MLIR.IR.TensorType(TracedRArray{UInt64,1}, shape)
+    rng_algorithm = MLIR.IR.Attribute(algorithm)
+    op = stablehlo.rng_bit_generator(seed.mlir_data; output, rng_algorithm, location)
+    return (;
+        output_state=TracedRArray{UInt64,1}((), MLIR.IR.result(op, 1), MLIR.IR.size(seed)),
+        output=TracedRArray{T,length(shape)}((), MLIR.IR.result(op, 2), shape),
+    )
 end
