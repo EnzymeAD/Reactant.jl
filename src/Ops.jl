@@ -165,6 +165,19 @@ using .MLIR.Dialects: stablehlo, chlo
 # [ ] top_k
 # [x] zeta
 
+## enzyme
+# [ ] addTo
+# [ ] autodiff
+# [ ] batch
+# [ ] fwddiff
+# [ ] genericAdjoint
+# [ ] get
+# [ ] init
+# [ ] placeholder
+# [ ] pop
+# [ ] push
+# [ ] set
+
 # zeroary ops
 function stablehlo.constant(
     x::DenseArray{T,N};
