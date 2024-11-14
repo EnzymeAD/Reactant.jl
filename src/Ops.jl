@@ -482,22 +482,6 @@ function stablehlo.complex(
     return TracedRNumber{Complex{T}}((), res)
 end
 
-function stablehlo.reshape(x::TracedRArray, dims...; kwargs...)
-    return stablehlo.reshape(x, collect(dims); kwargs...)
-end
-
-function stablehlo.reshape(
-    x::TracedRArray{T,N},
-    dims::Vector{Int};
-    location=MLIR.IR.Location(
-        "stablehlo.reshape", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
-    ),
-) where {T,N}
-    restype = MLIR.IR.TensorType(dims, mlir_type(T))
-    res = MLIR.IR.result(stablehlo.reshape(x.mlir_data; result_0=restype, location))
-    return TracedRArray{T,N}((), res, dims)
-end
-
 # function stablehlo.bitcast_convert(
 #     ::Type{TracedRArray{U,N}},
 #     x::TracedRArray{T,N};
