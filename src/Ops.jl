@@ -55,7 +55,7 @@ end
 # [ ] dynamic_reshape
 # [ ] dynamic_slice
 # [ ] dynamic_update_slice
-# [ ] einsum -> on deprecation process, but used by Tenet
+# [x] einsum -> on deprecation process, but used by Tenet
 # [x] exponential
 # [x] exponential_minus_one
 # [ ] fft
@@ -120,7 +120,7 @@ end
 # [x] transpose
 # [ ] triangular_solve
 # [-] tuple -> on deprecation process
-# [ ] unary_einsum -> on deprecation process, but used by Tenet
+# [x] unary_einsum -> on deprecation process, but used by Tenet
 # [ ] uniform_dequantize
 # [ ] uniform_quantize
 # [ ] while_
@@ -607,28 +607,42 @@ end
 #     return TracedRArray{T,N}((), res, size(lhs))
 # end
 
-# function stablehlo.einsum(
-#     equation::String,
-#     operands::Union{TracedRNumber,TracedRArray}...;
-#     location=MLIR.IR.Location(
-#         "stablehlo.einsum", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
-#     ),
-# )
-#     values = [operand.mlir_data for operand in operands]
-#     res = MLIR.IR.result(stablehlo.einsum(equation, values; location))
-#     return TracedRArray{Float64,1}((), res, (1,))
-# end
+function stablehlo.einsum(
+    lhs::TracedRArray{T},
+    rhs::TracedRArray{T};
+    equation::String,
+    location=MLIR.IR.Location(
+        "stablehlo.einsum", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T}
+    res = MLIR.IR.result(
+        stablehlo.einsum(
+            lhs.mlir_data,
+            rhs.mlir_data;
+            einsum_config=MLIR.IR.Attribute(equation),
+            location,
+        ),
+    )
+    # computing the result size is not trivial
+    rsize = size(res)
+    return TracedRArray{T,length(rsize)}((), res, rsize)
+end
 
-# function stablehlo.unary_einsum(
-#     equation::String,
-#     operand::Union{TracedRNumber,TracedRArray};
-#     location=MLIR.IR.Location(
-#         "stablehlo.unary_einsum", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
-#     ),
-# )
-#     res = MLIR.IR.result(stablehlo.unary_einsum(equation, operand.mlir_data; location))
-#     return TracedRArray{Float64,1}((), res, (1,))
-# end
+function stablehlo.unary_einsum(
+    x::Union{TracedRNumber,TracedRArray};
+    equation::String,
+    location=MLIR.IR.Location(
+        "stablehlo.unary_einsum", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    res = MLIR.IR.result(
+        stablehlo.unary_einsum(
+            x.mlir_data; einsum_config=MLIR.IR.Attribute(equation), location
+        ),
+    )
+    # computing the result size is not trivial
+    return TracedRArray{Float64,1}((), res, (1,))
+end
 
 # paralell ops
 function stablehlo.partition_id(;
