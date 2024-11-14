@@ -333,7 +333,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
             ),
         )
     elseif optimize === :before_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes]))
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math"
