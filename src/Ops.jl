@@ -668,6 +668,19 @@ function stablehlo.outfeed(
     return Token(res)
 end
 
+# function stablehlo.send(
+#     operands::Union{TracedRNumber,TracedRArray}...;
+#     token,
+#     channel_id,
+#     channel_type,
+#     location=MLIR.IR.Location("stablehlo.send", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+# )
+#     values = [operand.mlir_data for operand in operands]
+#     channel_handle = ... # MLIR.IR.Attribute(channel_id)
+#     res = MLIR.IR.result(stablehlo.send(values, token.mlir_data; send_config, location))
+#     return Token(res)
+# end
+
 # broadcast ops
 # function stablehlo.broadcast_in_dim(
 #     x::TracedRArray{T,N},
