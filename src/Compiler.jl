@@ -430,7 +430,7 @@ end
     @compile f(args...)
 """
 macro compile(args...)
-    return esc(compile_call_expr(__module__, args...))
+    return esc(first(compile_call_expr(__module__, args...)))
 end
 
 """
@@ -439,12 +439,12 @@ end
     Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
-    compile_expr = compile_call_expr(__module__, args...)
+    compile_expr, (; f, args) = compile_call_expr(__module__, args...)
     #! format: off
     return esc(
         :(
             $(compile_expr);
-            fn(args...)
+            $(f)($(args)...)
         )
     )
     #! format: on
@@ -463,6 +463,9 @@ function compile_call_expr(mod, args...)
         end
     end
     call = only(args)
+    f_symbol = gensym(:f)
+    args_symbol = gensym(:args)
+    f_compiled_symbol = gensym(:f_compiled)
     if Meta.isexpr(call, :call)
         bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
         fname = if bcast
@@ -477,18 +480,16 @@ function compile_call_expr(mod, args...)
             :($(fname))
         end
         return quote
-            options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
-            f = $(fname)
-            args = $(Expr(:tuple, call.args[2:end]...))
-            fn = $(compile)(f, args; options.optimize, options.sync)
-        end
+            $(f_symbol) = $(fname)
+            $(args_symbol) = $(Expr(:tuple, call.args[2:end]...))
+            $(f_compiled_symbol) = $(compile)($(f_symbol), $(args_symbol); optimize=$(options[:optimize]), sync=$(options[:sync]))
+        end, (; f=f_compiled_symbol, args=args_symbol)
     elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
         return quote
-            options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
-            f = Base.Broadcast.BroadcastFunction($(call.args[1]))
-            args = $(call.args[2:end]...)
-            fn = $(compile)(f, args; options.optimize, options.sync)
-        end
+            $(f_symbol) = Base.Broadcast.BroadcastFunction($(call.args[1]))
+            $(args_symbol) = $(call.args[2:end]...)
+            $(f_compiled_symbol) = $(compile)($(f_symbol), $(args_symbol); optimize=$(options[:optimize]), sync=$(options[:sync]))
+        end, (; f=f_compiled_symbol, args=args_symbol)
     else
         error("Invalid function call: $(call)")
     end
