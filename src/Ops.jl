@@ -4,6 +4,12 @@ struct Token
     mlir_data::MLIR.IR.Value
 end
 
+@enum RngAlgorithm begin
+    RngDefault = 0
+    RngThreeFry = 1
+    RngPhilox = 2
+end
+
 ## stablehlo
 # [x] abs
 # [x] add
