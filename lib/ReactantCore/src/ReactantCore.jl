@@ -360,11 +360,11 @@ function remove_shortcircuiting(expr)
 end
 
 # Generate this dummy function and later we remove it during tracing
-function traced_if(cond, true_fn::TFn, false_fn::FFn, args) where {TFn,FFn}
+function traced_if(cond, true_fn, false_fn, args)
     return cond ? true_fn(args) : false_fn(args)
 end
 
-function traced_while(cond_fn, body_fn, args) where {CFn,BFn}
+function traced_while(cond_fn, body_fn, args)
     while cond_fn(args...)
         args = body_fn(args...)
     end
