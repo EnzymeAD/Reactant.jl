@@ -572,3 +572,11 @@ end
     y = @jit(fn(x_ra, idx_ra))
     @test y ≈ x[idx, :]
 end
+
+@testset "iszero bool #277" begin
+    x_ra = Reactant.to_rarray(false; track_numbers=(Number,))
+
+    for i in 1:100
+        @test @jit(iszero(x_ra)) == ConcreteRNumber(true)
+    end
+end
