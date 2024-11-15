@@ -9,8 +9,8 @@ end
 
 @enum RngAlgorithm begin
     RngDefault = 0
-    RngThreeFry = 1
-    RngPhilox = 2
+    ThreeFry = 1
+    Philox = 2
 end
 
 # constant ops
