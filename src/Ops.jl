@@ -495,6 +495,17 @@ function replica_id(;
     return TracedRNumber{UInt32}((), res)
 end
 
+function after_all(
+    tokens...;
+    location=MLIR.IR.Location(
+        "stablehlo.after_all", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+)
+    tokens = [token.mlir_data for token in tokens]
+    res = MLIR.IR.result(stablehlo.after_all(tokens; location))
+    return Token(res)
+end
+
 function optimization_barrier(
     operands::Union{TracedRNumber,TracedRArray}...;
     location=MLIR.IR.Location(
@@ -534,18 +545,60 @@ function outfeed(
     return Token(res)
 end
 
-# function send(
-#     operands::Union{TracedRNumber,TracedRArray}...;
-#     token,
-#     channel_id,
-#     channel_type,
-#     location=MLIR.IR.Location("stablehlo.send", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
-# )
-#     values = [operand.mlir_data for operand in operands]
-#     channel_handle = ... # MLIR.IR.Attribute(channel_id)
-#     res = MLIR.IR.result(stablehlo.send(values, token.mlir_data; send_config, location))
-#     return Token(res)
-# end
+function send(
+    operands::Union{TracedRNumber,TracedRArray}...;
+    token,
+    channel_id,
+    channel_type,
+    is_host_transfer=nothing,
+    location=MLIR.IR.Location("stablehlo.send", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+)
+    values = [operand.mlir_data for operand in operands]
+    channel_handle = MLIR.API.stablehloChannelHandleGet(channel_id, channel_type)
+    is_host_transfer = if isnothing(is_host_transfer)
+        nothing
+    else
+        MLIR.IR.Attribute(is_host_transfer)
+    end
+    res = MLIR.IR.result(
+        stablehlo.send(values, token.mlir_data; channel_handle, is_host_transfer, location)
+    )
+    return Token(res)
+end
+
+function recv(
+    results::Tuple{Type,Vector{Int}}...;
+    token,
+    channel_id,
+    channel_type,
+    is_host_transfer=nothing,
+    location=MLIR.IR.Location("stablehlo.recv", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+)
+    channel_handle = MLIR.API.stablehloChannelHandleGet(channel_id, channel_type)
+    is_host_transfer = if isnothing(is_host_transfer)
+        nothing
+    else
+        MLIR.IR.Attribute(is_host_transfer)
+    end
+    result_0 = map(results) do (typ, shape)
+        MLIR.IR.TensorType(shape, mlir_type(typ))
+    end
+    op = stablehlo.recv(
+        token.mlir_data; result_0, channel_handle, is_host_transfer, location
+    )
+    return tuple(
+        map(enumerate(results)) do (i, (typ, shape))
+            typ = MLIR.IR.TensorType(shape, mlir_type(typ))
+            res = MLIR.IR.result(op, i)
+            if shape === ()
+                return TracedRNumber{typ}((), res)
+            else
+                return TracedRArray{typ,length(shape)}((), res, shape)
+            end
+        end...,
+        Token(MLIR.IR.result(op, length(results) + 1)),
+    )
+end
 
 # broadcast ops
 # function broadcast_in_dim(
