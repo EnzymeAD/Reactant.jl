@@ -430,7 +430,8 @@ end
     @compile f(args...)
 """
 macro compile(args...)
-    return esc(first(compile_call_expr(__module__, args...)))
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
 """
@@ -439,19 +440,19 @@ end
     Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
-    compile_expr, (; f, args) = compile_call_expr(__module__, args...)
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    compile_expr, (; compiled, args) = compile_call_expr(__module__, compile, default_options, args...)
     #! format: off
     return esc(
         :(
             $(compile_expr);
-            $(f)($(args)...)
+            $(compiled)($(args)...)
         )
     )
     #! format: on
 end
 
-function compile_call_expr(mod, args...)
-    options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+function compile_call_expr(mod, compiler, options, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
         if !Meta.isexpr(option, :(=))
@@ -465,7 +466,7 @@ function compile_call_expr(mod, args...)
     call = only(args)
     f_symbol = gensym(:f)
     args_symbol = gensym(:args)
-    f_compiled_symbol = gensym(:f_compiled)
+    compiled_symbol = gensym(:compiled)
 
     if Meta.isexpr(call, :call)
         bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
@@ -480,22 +481,24 @@ function compile_call_expr(mod, args...)
         else
             :($(fname))
         end
+        args_rhs = Expr(:tuple, call.args[2:end]...)
     elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
         fname = :($(Base.Broadcast.BroadcastFunction)($(call.args[1])))
+        args_rhs = only(call.args[2:end])
     else
         error("Invalid function call: $(call)")
     end
 
     return quote
         $(f_symbol) = $(fname)
-        $(args_symbol) = $(Expr(:tuple, call.args[2:end]...))
-        $(f_compiled_symbol) = $(compile)(
+        $(args_symbol) = $(args_rhs)
+        $(compiled_symbol) = $(compiler)(
             $(f_symbol),
             $(args_symbol);
             $(Expr.(:kw, keys(options), values(options))...)
         )
     end,
-    (; f=f_compiled_symbol, args=args_symbol)
+    (; compiled=compiled_symbol, args=args_symbol)
 end
 
 function correct_maybe_bcast_call(fname)
