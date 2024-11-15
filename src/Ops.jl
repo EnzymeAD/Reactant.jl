@@ -349,6 +349,41 @@ end
 #     return TracedRArray{T,N}((), res, size(x))
 # end
 
+function fft(
+    x::TracedRArray{T,N};
+    type,
+    length,
+    location=MLIR.IR.Location("stablehlo.fft", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T,N}
+    if type ∈ ("FFT", "IFFT")
+        @assert T <: Complex
+        Tout = T
+    elseif type == "RFFT"
+        @assert T <: Real
+        Tout = Complex{T}
+    elseif type == "IRFFT"
+        @assert T <: Complex
+        Tout = real(T)
+    else
+        error("Invalid FFT type: $type")
+    end
+
+    @assert 1 <= Base.length(length) <= 3 "stablehlo.fft only supports up to rank 3"
+
+    rsize = size(x)
+
+    res = MLIR.IR.result(
+        stablehlo.fft(
+            x.mlir_data;
+            result_0=MLIR.IR.TensorType(rsize, mlir_type(Tout)),
+            fft_type=MLIR.API.stablehloFftTypeAttrGet(type),
+            fft_length=MLIR.IR.DenseArrayAttribute(length),
+            location,
+        ),
+    )
+    return TracedRArray{Tout,N}((), res, rsize, mlir_type(Tout))
+end
+
 function cholesky(
     x::TracedRArray{T,N};
     lower::Bool=false,
