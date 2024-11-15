@@ -1,5 +1,5 @@
 using Reactant, Test
-using Reactan: Ops
+using Reactant: Ops
 
 @testset "abs" begin
     x = ConcreteRArray([1.0, -1.0])
