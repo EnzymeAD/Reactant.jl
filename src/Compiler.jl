@@ -383,47 +383,17 @@ end
 """
     @code_hlo [optimize = ...] f(args...)
 """
-macro code_hlo(options, maybe_call=nothing)
-    call = something(maybe_call, options)
-    options = isnothing(maybe_call) ? :(optimize = true) : options
-    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@code_hlo: expected options in format optimize=value, got $options")
-    end
+macro code_hlo(args...)
+    default_options = Dict{Symbol,Any}(:optimize => true)
+    compile_expr, (; compiled) = compile_call_expr(__module__, compile_mlir, default_options, args...)
+    return esc(
+        :(
+            $(compile_expr);
+            $(first)($(compiled))
+        )
+    )
 
-    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
-
-    expr = if Meta.isexpr(call, :call)
-        bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
-        fname = if bcast
-            quote
-                if isdefined($(__module__), $(Meta.quot(fname_full)))
-                    $(fname_full)
-                else
-                    Base.Broadcast.BroadcastFunction($(fname))
-                end
-            end
-        else
-            :($(fname))
-        end
-        quote
-            options = $(options)
-            f = $(fname)
-            args = $(Expr(:vect, call.args[2:end]...))
-            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
-            mode
-        end
-    elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
-        quote
-            options = $(options)
-            f = Base.Broadcast.BroadcastFunction($(call.args[1]))
-            args = $(call.args[2:end]...)
-            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
-            mode
-        end
-    else
-        error("Invalid function call: $(call)")
-    end
-    return esc(expr)
+    return esc(first(compile_call_expr(__module__, compile_mlir, default_options, args...)))
 end
 
 """
