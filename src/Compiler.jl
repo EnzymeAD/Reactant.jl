@@ -466,6 +466,7 @@ function compile_call_expr(mod, args...)
     f_symbol = gensym(:f)
     args_symbol = gensym(:args)
     f_compiled_symbol = gensym(:f_compiled)
+
     if Meta.isexpr(call, :call)
         bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
         fname = if bcast
@@ -479,32 +480,22 @@ function compile_call_expr(mod, args...)
         else
             :($(fname))
         end
-        return quote
-            $(f_symbol) = $(fname)
-            $(args_symbol) = $(Expr(:tuple, call.args[2:end]...))
-            $(f_compiled_symbol) = $(compile)(
-                $(f_symbol),
-                $(args_symbol);
-                optimize=$(options[:optimize]),
-                sync=$(options[:sync]),
-            )
-        end,
-        (; f=f_compiled_symbol, args=args_symbol)
     elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
-        return quote
-            $(f_symbol) = Base.Broadcast.BroadcastFunction($(call.args[1]))
-            $(args_symbol) = $(call.args[2:end]...)
-            $(f_compiled_symbol) = $(compile)(
-                $(f_symbol),
-                $(args_symbol);
-                optimize=$(options[:optimize]),
-                sync=$(options[:sync]),
-            )
-        end,
-        (; f=f_compiled_symbol, args=args_symbol)
+        fname = :($(Base.Broadcast.BroadcastFunction)($(call.args[1])))
     else
         error("Invalid function call: $(call)")
     end
+
+    return quote
+        $(f_symbol) = $(fname)
+        $(args_symbol) = $(Expr(:tuple, call.args[2:end]...))
+        $(f_compiled_symbol) = $(compile)(
+            $(f_symbol),
+            $(args_symbol);
+            $(Expr.(:kw, keys(options), values(options))...)
+        )
+    end,
+    (; f=f_compiled_symbol, args=args_symbol)
 end
 
 function correct_maybe_bcast_call(fname)
