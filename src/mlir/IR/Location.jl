@@ -24,7 +24,7 @@ end
 # TODO rename to merge?
 function fuse(locations::Vector{Location}, metadata; context::Context=context())
     return Location(
-        API.mlirLocationFusedGet(context, length(locations), pointer(locations), metadata)
+        API.mlirLocationFusedGet(context, length(locations), locations, metadata)
     )
 end
 
