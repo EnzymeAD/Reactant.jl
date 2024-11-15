@@ -24,12 +24,7 @@ Both `constraints` and `eqflags` need to be arrays of the same length.
 """
 IntegerSet(ndims, nsymbols, constraints, eqflags; context::Context=context()) = IntegerSet(
     API.mlirIntegerSetGet(
-        context,
-        ndims,
-        nsymbols,
-        length(constraints),
-        pointer(constraints),
-        pointer(eqflags),
+        context, ndims, nsymbols, length(constraints), constraints, eqflags
     ),
 )
 

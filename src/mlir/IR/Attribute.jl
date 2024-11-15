@@ -81,7 +81,7 @@ isarray(attr::Attribute) = API.mlirAttributeIsAArray(attr)
 Creates an array element containing the given list of elements in the given context.
 """
 Attribute(attrs::Vector{Attribute}; context::Context=context()) =
-    Attribute(API.mlirArrayAttrGet(context, length(attrs), pointer(attrs)))
+    Attribute(API.mlirArrayAttrGet(context, length(attrs), attrs))
 
 """
     isdict(attr)
@@ -97,7 +97,7 @@ Creates a dictionary attribute containing the given list of elements in the prov
 """
 function Attribute(attrs::Dict; context::Context=context())
     attrs = map(splat(NamedAttribute), attrs)
-    return Attribute(API.mlirDictionaryAttrGet(context, length(attrs), pointer(attrs)))
+    return Attribute(API.mlirDictionaryAttrGet(context, length(attrs), attrs))
 end
 
 """
@@ -309,9 +309,7 @@ Each of the references in the list must not be nested.
 """
 SymbolRefAttribute(
     symbol::String, references::Vector{Attribute}; context::Context=context()
-) = Attribute(
-    API.mlirSymbolRefAttrGet(context, symbol, length(references), pointer(references))
-)
+) = Attribute(API.mlirSymbolRefAttrGet(context, symbol, length(references), references))
 
 """
     rootref(attr)
@@ -429,9 +427,7 @@ Creates a dense elements attribute with the given Shaped type and elements in th
 """
 function DenseElementsAttribute(shaped_type::Type, elements::AbstractArray)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return Attribute(
-        API.mlirDenseElementsAttrGet(shaped_type, length(elements), pointer(elements))
-    )
+    return Attribute(API.mlirDenseElementsAttrGet(shaped_type, length(elements), elements))
 end
 
 # TODO mlirDenseElementsAttrRawBufferGet
