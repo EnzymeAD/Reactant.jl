@@ -7,12 +7,6 @@ struct Token
     mlir_data::MLIR.IR.Value
 end
 
-@enum RngAlgorithm begin
-    RngDefault = 0
-    ThreeFry = 1
-    Philox = 2
-end
-
 # constant ops
 function constant(
     x::DenseArray{T,N};
@@ -351,7 +345,7 @@ end
 
 function fft(
     x::TracedRArray{T,N};
-    type,
+    type::String,
     length,
     location=MLIR.IR.Location("stablehlo.fft", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
 ) where {T,N}
@@ -376,7 +370,7 @@ function fft(
         stablehlo.fft(
             x.mlir_data;
             result_0=MLIR.IR.TensorType(rsize, mlir_type(Tout)),
-            fft_type=MLIR.API.stablehloFftTypeAttrGet(type),
+            fft_type=MLIR.API.stablehloFftTypeAttrGet(MLIR.IR.context(), type),
             fft_length=MLIR.IR.DenseArrayAttribute(length),
             location,
         ),
@@ -583,13 +577,15 @@ end
 function send(
     operands::Union{TracedRNumber,TracedRArray}...;
     token,
-    channel_id,
-    channel_type,
+    channel_id::Int,
+    channel_type::Int,
     is_host_transfer=nothing,
     location=MLIR.IR.Location("stablehlo.send", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
 )
     values = [operand.mlir_data for operand in operands]
-    channel_handle = MLIR.API.stablehloChannelHandleGet(channel_id, channel_type)
+    channel_handle = MLIR.API.stablehloChannelHandleGet(
+        MLIR.IR.context(), channel_id, channel_type
+    )
     is_host_transfer = if isnothing(is_host_transfer)
         nothing
     else
@@ -604,12 +600,14 @@ end
 function recv(
     results::Tuple{Type,Vector{Int}}...;
     token,
-    channel_id,
-    channel_type,
+    channel_id::Int,
+    channel_type::Int,
     is_host_transfer=nothing,
     location=MLIR.IR.Location("stablehlo.recv", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
 )
-    channel_handle = MLIR.API.stablehloChannelHandleGet(channel_id, channel_type)
+    channel_handle = MLIR.API.stablehloChannelHandleGet(
+        MLIR.IR.context(), channel_id, channel_type
+    )
     is_host_transfer = if isnothing(is_host_transfer)
         nothing
     else
@@ -728,13 +726,13 @@ end
 function rng_bit_generator(
     seed::TracedRArray{UInt64,1},
     shape;
-    algorithm=RngDefault,
+    algorithm::String="DEFAULT",
     location=MLIR.IR.Location(
         "stablehlo.rng_bit_generator", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
     ),
 )
     output = MLIR.IR.TensorType(TracedRArray{UInt64,1}, shape)
-    rng_algorithm = MLIR.IR.Attribute(algorithm)
+    rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
     op = stablehlo.rng_bit_generator(seed.mlir_data; output, rng_algorithm, location)
     return (;
         output_state=TracedRArray{UInt64,1}((), MLIR.IR.result(op, 1), MLIR.IR.size(seed)),
