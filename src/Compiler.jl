@@ -385,13 +385,11 @@ end
 """
 macro code_hlo(args...)
     default_options = Dict{Symbol,Any}(:optimize => true)
-    compile_expr, (; compiled) = compile_call_expr(__module__, compile_mlir, default_options, args...)
-    return esc(
-        :(
-            $(compile_expr);
-            $(first)($(compiled))
-        )
+    compile_expr, (; compiled) = compile_call_expr(
+        __module__, compile_mlir, default_options, args...
     )
+    return esc(:($(compile_expr);
+    $(first)($(compiled))))
 
     return esc(first(compile_call_expr(__module__, compile_mlir, default_options, args...)))
 end
@@ -411,7 +409,9 @@ end
 """
 macro jit(args...)
     default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
-    compile_expr, (; compiled, args) = compile_call_expr(__module__, compile, default_options, args...)
+    compile_expr, (; compiled, args) = compile_call_expr(
+        __module__, compile, default_options, args...
+    )
     #! format: off
     return esc(
         :(
@@ -463,9 +463,7 @@ function compile_call_expr(mod, compiler, options, args...)
         $(f_symbol) = $(fname)
         $(args_symbol) = $(args_rhs)
         $(compiled_symbol) = $(compiler)(
-            $(f_symbol),
-            $(args_symbol);
-            $(Expr.(:kw, keys(options), values(options))...)
+            $(f_symbol), $(args_symbol); $(Expr.(:kw, keys(options), values(options))...)
         )
     end,
     (; compiled=compiled_symbol, args=args_symbol)
