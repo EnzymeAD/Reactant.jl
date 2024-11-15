@@ -291,6 +291,55 @@ function transpose(
     return TracedRArray{T,N}((), res, rsize)
 end
 
+# indexing ops
+function pad(
+    x::TracedRArray{T,N},
+    padding_value::TracedRNumber{T};
+    low,
+    high,
+    interior,
+    location=MLIR.IR.Location("stablehlo.pad", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T,N}
+    low = low .- 1
+    high = high .- 1
+    interior = interior .- 1
+    rsize = size(x) .+ low .+ high .+ max.(size(x) .- 1, 0) .* interior
+    res = MLIR.IR.result(
+        stablehlo.pad(
+            x.mlir_data,
+            padding_value.mlir_data;
+            edge_padding_low=MLIR.IR.DenseArrayAttribute(low),
+            edge_padding_high=MLIR.IR.DenseArrayAttribute(high),
+            interior_padding=MLIR.IR.DenseArrayAttribute(interior),
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, rsize)
+end
+
+function slice(
+    x::TracedRArray{T,N},
+    start_indices,
+    limit_indices;
+    strides=nothing,
+    location=MLIR.IR.Location("stablehlo.slice", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T,N}
+    start_indices = start_indices .- 1
+    limit_indices = limit_indices .- 1
+    rsize = limit_indices .- start_indices
+    res = MLIR.IR.result(
+        stablehlo.slice(
+            x.mlir_data;
+            result=mlir_type(TracedRArray{T,N}, rsize),
+            start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
+            limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
+            strides=MLIR.IR.DenseArrayAttribute(strides),
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, rsize)
+end
+
 # numerics
 function complex(
     real::TracedRArray{T,N},
