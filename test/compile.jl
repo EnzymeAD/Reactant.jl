@@ -66,6 +66,15 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
     # end
 end
 
+@testset "Module export" begin
+    f(x) = sin.(cos.(x))
+    x_ra = Reactant.to_rarray(rand(3))
+
+    hlo_code = @code_hlo f(x_ra)
+    @test !startswith(string(hlo_code), "Module")
+    @test startswith(string(hlo_code), "module {")
+end
+
 @testset "Bool attributes" begin
     x_ra = Reactant.to_rarray(false; track_numbers=(Number,))
     @test @jit(iszero(x_ra)) == true
