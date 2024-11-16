@@ -390,8 +390,6 @@ macro code_hlo(args...)
     )
     return esc(:($(compile_expr);
     $(first)($(compiled))))
-
-    return esc(first(compile_call_expr(__module__, compile_mlir, default_options, args...)))
 end
 
 """
