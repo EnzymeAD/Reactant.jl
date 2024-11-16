@@ -55,7 +55,6 @@ Views the module as a generic operation.
 Operation(module_::Module) = Operation(API.mlirModuleGetOperation(module_), false)
 
 function Base.show(io::IO, module_::Module)
-    println(io, "Module:")
     return show(io, Operation(module_))
 end
 
