@@ -1,5 +1,5 @@
 using Reactant
-using Reactant: traced_type, ConcreteRArray, TracedRArray, ConcreteToTraced
+using Reactant: traced_type, ConcreteRArray, TracedRArray, ConcreteToTraced, ArrayToConcrete
 using Test
 
 @testset "Tracing" begin
@@ -98,6 +98,15 @@ using Test
                     type, Reactant.OrderedIdDict(), Val(ConcreteToTraced)
                 )
             end
+        end
+        @testset "mode = ArrayToConcrete" begin
+            struct Node
+                x::Vector{Float64}
+                y::Union{Nothing,Node}
+            end
+            @test_throws TypeError traced_type(
+                Node, Reactant.OrderedIdDict(), Val(ArrayToConcrete)
+            )
         end
     end
 
