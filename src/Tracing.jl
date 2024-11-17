@@ -148,7 +148,7 @@ function traced_type(::Type{T}, seen, mode) where {T}
         end
     end
 
-    if T isa UnionAll
+    if !isempty(subParms)
         TT2 = Core.apply_type(T.name.wrapper, subParms...)
     else
         TT2 = T
