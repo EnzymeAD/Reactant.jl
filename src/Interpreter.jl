@@ -54,6 +54,26 @@ function set_reactant_abi(
         end
     end
 
+    if length(argtypes) >= 5 && f === Core.kwcall && (widenconst(argtypes[3]) == typeof(Enzyme.gradient) || widenconst(argtypes[3]) == typeof(Enzyme.jacobian)) && widenconst(argtypes[4]) <: Enzyme.Mode
+        newmode = Enzyme.set_abi(widenconst(argtypes[4]), ReactantABI)
+        if newmode != widenconst(argtypes[4])
+            newmodev = newmode()
+            arginfo2 = ArgInfo(
+                fargs isa Nothing ? nothing :
+                [fargs[1:3]..., :($(newmodev)), fargs[5:end]...],
+                [argtypes[1:3]..., Core.Const(newmodev), argtypes[5:end]...],
+            )
+            return abstract_call_known(
+                interp,
+                f,
+                arginfo2,
+                si,
+                sv,
+                max_methods,
+            )
+        end
+    end
+
     if length(argtypes) >= 5 && methods(f)[1].module == Enzyme && widenconst(argtypes[5]) <: Enzyme.Mode && (widenconst(argtypes[4]) == typeof(Enzyme.gradient) || widenconst(argtypes[4]) == typeof(Enzyme.jacobian))
         newmode = Enzyme.set_abi(widenconst(argtypes[5]), ReactantABI)
         if newmode != widenconst(argtypes[5])
@@ -216,7 +236,6 @@ function push_acts!(ad_inputs, x::BatchDuplicated, path, reverse)
         predims = size(x.val)
         cval = MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate([
             MLIR.IR.result(MLIR.Dialects.stablehlo.reshape(v.mlir_data; result_0=MLIR.IR.TensorType(Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))))) for v in x.dval]; dimension=Int64(0)))
-        @show cval, length(size(x.val))+1
         tval = TracedRArray{ET, length(predims)+1}((), cval, (length(x.dval), predims...))
         push_val!(ad_inputs, tval, path)
     end
@@ -229,7 +248,6 @@ function push_acts!(ad_inputs, x::BatchDuplicatedNoNeed, path, reverse)
         predims = size(x.val)
         cval = MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate([
             MLIR.IR.result(MLIR.Dialects.stablehlo.reshape(v.mlir_data; result_0=MLIR.IR.TensorType(Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))))) for v in x.dval]; dimension=Int64(0)))
-        @show cval, length(size(x.val))+1
         tval = TracedRArray{ET, length(predims)+1}((), cval, (length(x.dval), predims...))
         push_val!(ad_inputs, tval, path)
     end
@@ -316,6 +334,8 @@ function overload_autodiff(
     width = Enzyme.same_or_one(1, args...)
     if width == 0
         throw(ErrorException("Cannot differentiate with a batch size of 0"))
+    elseif width != 1
+        throw(ErrorException("EnzymeMLIR does not presently support width=$width, please rewrite your code to not use BatchDuplicated and/or call gradient(; chunk=1)"))
     end
 
     primf = f.val
@@ -441,13 +461,15 @@ function overload_autodiff(
         if has_residx(a)
             if needs_primal(CMode)
                 path = get_residx(a)
-                set!(result, path[2:end], transpose_val(MLIR.IR.result(res, residx)))
+                tval = transpose_val(MLIR.IR.result(res, residx))
+                set!(result, path[2:end], tval)
+                residx += 1
             end
             if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
                 path = get_residx(a)
                 if width == 1
-                    set!(dresult, path[2:end], transpose_val(MLIR.IR.result(res, residx)))
-                    residx += 1
+                    tval = transpose_val(MLIR.IR.result(res, residx))
+                    set!(dresult, path[2:end], tval)
                 else
                     tval = transpose_val(MLIR.IR.result(res, residx))
                     for i in 1:width
@@ -464,9 +486,9 @@ function overload_autodiff(
                             MLIR.Dialects.stablehlo.slice(sval; start_indices=starts, limit_indices=limits, stride_indices=strides), 1
                         )
                         set!(dresult[i], path[2:end], sval)
-                        residx += 1
                     end
                 end
+                residx += 1
             end
         else
             idx, path = get_argidx(a)

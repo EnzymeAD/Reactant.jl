@@ -12,6 +12,13 @@ mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
 end
 
+function ConcreteRNumber{T}(
+    data::T2; client=XLA.default_backend[], idx=XLA.default_device_idx[], device=nothing
+) where {T<:Number, T2<:Number}
+    data = convert(T, data)
+    crarray = ConcreteRArray(fill(data); client, idx, device)
+    return ConcreteRNumber{T}(crarray.data)
+end
 function ConcreteRNumber(
     data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[], device=nothing
 ) where {T<:Number}
@@ -20,6 +27,8 @@ function ConcreteRNumber(
 end
 
 Base.size(::ConcreteRNumber) = ()
+Base.real(x::ConcreteRNumber{<:Real}) = x
+Base.rtoldefault(::Type{ConcreteRNumber{T}}) where T = ConcreteRNumber(Base.rtoldefault(T))
 
 # Ensure the device and client are the same as the input
 function Base.float(x::ConcreteRNumber{T}) where {T}
