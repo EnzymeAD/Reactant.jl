@@ -53,6 +53,27 @@ function set_reactant_abi(
             end
         end
     end
+
+    if length(argtypes) >= 5 && methods(f)[1].module == Enzyme && widenconst(argtypes[5]) <: Enzyme.Mode && (widenconst(argtypes[4]) == typeof(Enzyme.gradient) || widenconst(argtypes[4]) == typeof(Enzyme.jacobian))
+        newmode = Enzyme.set_abi(widenconst(argtypes[5]), ReactantABI)
+        if newmode != widenconst(argtypes[5])
+            newmodev = newmode()
+            arginfo2 = ArgInfo(
+                fargs isa Nothing ? nothing :
+                [fargs[1:4]..., :($(newmodev)), fargs[6:end]...],
+                [argtypes[1:4]..., Core.Const(newmodev), argtypes[6:end]...],
+            )
+            return abstract_call_known(
+                interp,
+                f,
+                arginfo2,
+                si,
+                sv,
+                max_methods,
+            )
+        end
+    end
+
     return Base.@invoke abstract_call_known(
         interp::AbstractInterpreter,
         f,
@@ -79,6 +100,7 @@ function set_reactant_abi end
             #=forward_rules=#true,
             #=reverse_rules=#true,
             #=deferred_lower=#true,
+            #=broadcast_rewrite=#false,
             set_reactant_abi
         )
     end
@@ -96,6 +118,7 @@ else
             #=forward_rules=#true,
             #=forward_rules=#true,
             #=deferred_lower=#true,
+            #=broadcast_rewrite=#false,
             set_reactant_abi
         )
     end
@@ -116,6 +139,10 @@ const enzyme_constnoneed = 5
 @inline act_from_type(::Enzyme.Duplicated, reverse, needs_primal=true) =
     act_from_type(Enzyme.Duplicated, reverse, needs_primal)
 @inline act_from_type(::Enzyme.DuplicatedNoNeed, reverse, needs_primal=true) =
+    reverse ? enzyme_out : enzyme_dupnoneed
+@inline act_from_type(::Enzyme.BatchDuplicated, reverse, needs_primal=true) =
+    act_from_type(Enzyme.Duplicated, reverse, needs_primal)
+@inline act_from_type(::Enzyme.BatchDuplicatedNoNeed, reverse, needs_primal=true) =
     reverse ? enzyme_out : enzyme_dupnoneed
 @inline act_from_type(::Enzyme.Active, reverse, needs_primal=true) =
     act_from_tuple(Enzyme.Active, reverse, needs_primal)
@@ -139,6 +166,12 @@ const enzyme_constnoneed = 5
             enzyme_dupnoneed
         end
     end
+
+@inline act_from_type(::Type{<:Enzyme.BatchDuplicated}, reverse, needs_primal) =
+    act_from_type(Enzyme.Duplicated, reverse, needs_primal)
+@inline act_from_type(::Type{<:Enzyme.BatchDuplicatedNoNeed}, reverse, needs_primal) =
+    act_from_type(Enzyme.DuplicatedNoNeed, Reverse, needs_primal)
+
 @inline act_from_type(::Type{<:Enzyme.Active}, reverse, needs_primal) =
     if needs_primal
         enzyme_out
@@ -173,6 +206,32 @@ function push_acts!(ad_inputs, x::DuplicatedNoNeed, path, reverse)
     push_val!(ad_inputs, x.val, path)
     if !reverse
         push_val!(ad_inputs, x.dval, path)
+    end
+end
+
+function push_acts!(ad_inputs, x::BatchDuplicated, path, reverse)
+    push_val!(ad_inputs, x.val, path)
+    if !reverse
+        ET = eltype(x.val)
+        predims = size(x.val)
+        cval = MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate([
+            MLIR.IR.result(MLIR.Dialects.stablehlo.reshape(v.mlir_data; result_0=MLIR.IR.TensorType(Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))))) for v in x.dval]; dimension=Int64(0)))
+        @show cval, length(size(x.val))+1
+        tval = TracedRArray{ET, length(predims)+1}((), cval, (length(x.dval), predims...))
+        push_val!(ad_inputs, tval, path)
+    end
+end
+
+function push_acts!(ad_inputs, x::BatchDuplicatedNoNeed, path, reverse)
+    push_val!(ad_inputs, x.val, path)
+    if !reverse
+        ET = eltype(x.val)
+        predims = size(x.val)
+        cval = MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate([
+            MLIR.IR.result(MLIR.Dialects.stablehlo.reshape(v.mlir_data; result_0=MLIR.IR.TensorType(Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))))) for v in x.dval]; dimension=Int64(0)))
+        @show cval, length(size(x.val))+1
+        tval = TracedRArray{ET, length(predims)+1}((), cval, (length(x.dval), predims...))
+        push_val!(ad_inputs, tval, path)
     end
 end
 
@@ -254,6 +313,11 @@ function overload_autodiff(
 ) where {CMode<:Enzyme.Mode,FA<:Enzyme.Annotation,A<:Enzyme.Annotation,Nargs}
     reverse = CMode <: Enzyme.ReverseMode
 
+    width = Enzyme.same_or_one(1, args...)
+    if width == 0
+        throw(ErrorException("Cannot differentiate with a batch size of 0"))
+    end
+
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
@@ -288,13 +352,24 @@ function overload_autodiff(
             if needs_primal(CMode)
                 push!(outtys, transpose_ty(MLIR.IR.type(a.mlir_data)))
             end
+            if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+                if width == 1
+                    push!(outtys, transpose_ty(MLIR.IR.type(a.mlir_data)))
+                else
+                    push!(outtys, batch_ty(width, transpose_ty(MLIR.IR.type(a.mlir_data))))
+                end
+            end
         else
             push!(outtys, transpose_ty(MLIR.IR.type(a.mlir_data)))
         end
     end
     for (i, act) in enumerate(activity)
         if act == enzyme_out || (reverse && (act == enzyme_dup || act == enzyme_dupnoneed))
-            push!(outtys, in_tys[i])# transpose_ty(MLIR.IR.type(MLIR.IR.operand(ret, i))))
+            if width == 1
+                push!(outtys, in_tys[i])
+            else
+                push!(outtys, batch_ty(width, in_tys[i]))
+            end
         end
     end
 
@@ -349,12 +424,49 @@ function overload_autodiff(
 
     residx = 1
 
+    dresult = if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+        if width == 1
+            deepcopy(result)
+        else
+            ntuple(Val(width)) do i
+                Base.@_inline_meta
+                deepcopy(result)
+            end
+        end
+    else
+        nothing
+    end
+
     for a in linear_results
         if has_residx(a)
             if needs_primal(CMode)
                 path = get_residx(a)
                 set!(result, path[2:end], transpose_val(MLIR.IR.result(res, residx)))
-                residx += 1
+            end
+            if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+                path = get_residx(a)
+                if width == 1
+                    set!(dresult, path[2:end], transpose_val(MLIR.IR.result(res, residx)))
+                    residx += 1
+                else
+                    tval = transpose_val(MLIR.IR.result(res, residx))
+                    for i in 1:width
+                        sz = size(a)                        
+                        starts = Int64[i]
+                        strides = Int64[1]           
+                        limits = Int64[i]
+                        for v in sz
+                            push!(starts, 0)
+                            push!(limits, v)
+                            push!(strides, 1)
+                        end
+                        sval = MLIR.IR.result(
+                            MLIR.Dialects.stablehlo.slice(sval; start_indices=starts, limit_indices=limits, stride_indices=strides), 1
+                        )
+                        set!(dresult[i], path[2:end], sval)
+                        residx += 1
+                    end
+                end
             end
         else
             idx, path = get_argidx(a)
@@ -419,13 +531,17 @@ function overload_autodiff(
         end
         return ((restup...,), resv)
     else
-        if A <: Const
-            return result
+        if needs_primal(CMode)
+            if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+                (dresult, result)
+            else
+                (result, )
+            end
         else
-            dres = copy(result)
-            throw(AssertionError("TODO implement forward mode handler"))
-            if A <: Duplicated
-                return ()
+            if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+                (dresult,)
+            else
+                ()
             end
         end
     end
@@ -450,6 +566,39 @@ end
 end
 
 @inline function Enzyme.autodiff_deferred(
+    rmode::ForwardMode{ReturnPrimal,ReactantABI,ErrIfFuncWritten,RuntimeActivity},
+    f::FA,
+    rt::Type{A},
+    args::Vararg{Annotation,Nargs},
+) where {
+    FA<:Annotation,
+    A<:Annotation,
+    ReturnPrimal,
+    Nargs,
+    ErrIfFuncWritten,
+    RuntimeActivity
+}
+    overload_autodiff(rmode, f, rt, args...)
+end
+
+@inline function Enzyme.autodiff(
+    rmode::Enzyme.ReverseMode{ReturnPrimal,RuntimeActivity,ReactantABI,Holomorphic,ErrIfFuncWritten},
+    f::FA,
+    rt::Type{A},
+    args::Vararg{Annotation,Nargs},
+) where {
+    FA<:Annotation,
+    A<:Annotation,
+    ReturnPrimal,
+    RuntimeActivity,
+    Holomorphic,
+    Nargs,
+    ErrIfFuncWritten,
+}
+    overload_autodiff(rmode, f, rt, args...)
+end
+
+@inline function Enzyme.autodiff(
     rmode::ForwardMode{ReturnPrimal,ReactantABI,ErrIfFuncWritten,RuntimeActivity},
     f::FA,
     rt::Type{A},

@@ -94,6 +94,10 @@ function traced_type(::Type{T}, seen, mode) where {T}
         return T
     end
 
+    if T == Type || T == DataType
+        return T
+    end
+
     # unknown number of fields
     if T isa UnionAll
         aT = Base.argument_datatype(T)
@@ -472,6 +476,7 @@ function make_tracer(
     return prev
 end
 
+make_tracer(seen, prev::Type, @nospecialize(path), mode; kwargs...) = prev
 make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...) = prev
 
 function make_tracer(
