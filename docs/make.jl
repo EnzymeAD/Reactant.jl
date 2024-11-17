@@ -1,7 +1,8 @@
-pushfirst!(LOAD_PATH, joinpath(@__DIR__, "..")) # add Enzyme to environment stack
+pushfirst!(LOAD_PATH, joinpath(@__DIR__, ".."))
+pushfirst!(LOAD_PATH, joinpath(@__DIR__, "../lib/ReactantCore/"))
 
-using Reactant
-using Documenter
+using Reactant, ReactantCore
+using Documenter, DocumenterVitepress
 
 DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
 
@@ -23,11 +24,29 @@ examples = [
     title => joinpath("generated", string(name, ".md")) for (title, name) in examples
 ]
 
-gh = Documenter.Remotes.GitHub("EnzymeAD", "Reactant.jl")
+pages = [
+    "Reactant.jl" => "index.md",
+    "API Reference" => [
+        "Reactant API" => "api/api.md",
+        "Dialects" => [
+            "ArithOps" => "api/arith.md",
+            "Affine" => "api/affine.md",
+            "Builtin" => "api/builtin.md",
+            "Chlo" => "api/chlo.md",
+            "Enzyme" => "api/enzyme.md",
+            "Func" => "api/func.md",
+            "StableHLO" => "api/stablehlo.md",
+            "VHLO" => "api/vhlo.md",
+        ],
+        "MLIR API" => "api/mlirc.md",
+        "XLA" => "api/xla.md",
+    ],
+]
 
 makedocs(;
     modules=[
         Reactant,
+        ReactantCore,
         Reactant.XLA,
         Reactant.MLIR,
         Reactant.MLIR.API,
@@ -43,21 +62,17 @@ makedocs(;
     ],
     authors="William Moses <wsmoses@illinois.edu>, Valentin Churavy <vchuravy@mit.edu>",
     sitename="Reactant.jl",
-    format=Documenter.HTML(;
-        prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://enzymead.github.io/Reactant.jl/",
-        size_threshold_ignore=["api.md"],
-        assets=[
-            asset(
-                "https://plausible.io/js/plausible.js";
-                class=:js,
-                attributes=Dict(Symbol("data-domain") => "enzyme.mit.edu", :defer => ""),
-            ),
-        ],
+    format=MarkdownVitepress(;
+        repo="github.com/EnzymeAD/Reactant.jl",
+        devbranch="main",
+        devurl="dev",
+        # md_output_path=".",    # Uncomment for local testing
+        # build_vitepress=false, # Uncomment for local testing
     ),
-    pages=["Home" => "index.md", "API reference" => "api.md"],
+    # clean=false, # Uncomment for local testing
+    pages=pages,
     doctest=true,
-    warnonly=true,
+    warnonly=[:cross_references],
 )
 
 deploydocs(; repo="github.com/EnzymeAD/Reactant.jl", devbranch="main", push_preview=true)
