@@ -383,54 +383,21 @@ end
 """
     @code_hlo [optimize = ...] f(args...)
 """
-macro code_hlo(options, maybe_call=nothing)
-    call = something(maybe_call, options)
-    options = isnothing(maybe_call) ? :(optimize = true) : options
-    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@code_hlo: expected options in format optimize=value, got $options")
-    end
-
-    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
-
-    expr = if Meta.isexpr(call, :call)
-        bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
-        fname = if bcast
-            quote
-                if isdefined($(__module__), $(Meta.quot(fname_full)))
-                    $(fname_full)
-                else
-                    Base.Broadcast.BroadcastFunction($(fname))
-                end
-            end
-        else
-            :($(fname))
-        end
-        quote
-            options = $(options)
-            f = $(fname)
-            args = $(Expr(:vect, call.args[2:end]...))
-            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
-            mode
-        end
-    elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
-        quote
-            options = $(options)
-            f = Base.Broadcast.BroadcastFunction($(call.args[1]))
-            args = $(call.args[2:end]...)
-            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
-            mode
-        end
-    else
-        error("Invalid function call: $(call)")
-    end
-    return esc(expr)
+macro code_hlo(args...)
+    default_options = Dict{Symbol,Any}(:optimize => true)
+    compile_expr, (; compiled) = compile_call_expr(
+        __module__, compile_mlir, default_options, args...
+    )
+    return esc(:($(compile_expr);
+    $(first)($(compiled))))
 end
 
 """
     @compile f(args...)
 """
 macro compile(args...)
-    return esc(first(compile_call_expr(__module__, args...)))
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
 """
@@ -439,19 +406,21 @@ end
     Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
-    compile_expr, (; f, args) = compile_call_expr(__module__, args...)
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    compile_expr, (; compiled, args) = compile_call_expr(
+        __module__, compile, default_options, args...
+    )
     #! format: off
     return esc(
         :(
             $(compile_expr);
-            $(f)($(args)...)
+            $(compiled)($(args)...)
         )
     )
     #! format: on
 end
 
-function compile_call_expr(mod, args...)
-    options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+function compile_call_expr(mod, compiler, options, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
         if !Meta.isexpr(option, :(=))
@@ -465,7 +434,8 @@ function compile_call_expr(mod, args...)
     call = only(args)
     f_symbol = gensym(:f)
     args_symbol = gensym(:args)
-    f_compiled_symbol = gensym(:f_compiled)
+    compiled_symbol = gensym(:compiled)
+
     if Meta.isexpr(call, :call)
         bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
         fname = if bcast
@@ -479,32 +449,22 @@ function compile_call_expr(mod, args...)
         else
             :($(fname))
         end
-        return quote
-            $(f_symbol) = $(fname)
-            $(args_symbol) = $(Expr(:tuple, call.args[2:end]...))
-            $(f_compiled_symbol) = $(compile)(
-                $(f_symbol),
-                $(args_symbol);
-                optimize=$(options[:optimize]),
-                sync=$(options[:sync]),
-            )
-        end,
-        (; f=f_compiled_symbol, args=args_symbol)
+        args_rhs = Expr(:tuple, call.args[2:end]...)
     elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
-        return quote
-            $(f_symbol) = Base.Broadcast.BroadcastFunction($(call.args[1]))
-            $(args_symbol) = $(call.args[2:end]...)
-            $(f_compiled_symbol) = $(compile)(
-                $(f_symbol),
-                $(args_symbol);
-                optimize=$(options[:optimize]),
-                sync=$(options[:sync]),
-            )
-        end,
-        (; f=f_compiled_symbol, args=args_symbol)
+        fname = :($(Base.Broadcast.BroadcastFunction)($(call.args[1])))
+        args_rhs = only(call.args[2:end])
     else
         error("Invalid function call: $(call)")
     end
+
+    return quote
+        $(f_symbol) = $(fname)
+        $(args_symbol) = $(args_rhs)
+        $(compiled_symbol) = $(compiler)(
+            $(f_symbol), $(args_symbol); $(Expr.(:kw, keys(options), values(options))...)
+        )
+    end,
+    (; compiled=compiled_symbol, args=args_symbol)
 end
 
 function correct_maybe_bcast_call(fname)
