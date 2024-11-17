@@ -1,4 +1,5 @@
 using Reactant, Test
+using LinearAlgebra
 
 function condition1(x)
     y = sum(x)
@@ -364,20 +365,20 @@ end
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
-    @test res_ra[1, 1] == -1.0
-    @test res_ra[2, 1] == -1.0
-    @test x_ra[1, 1] == -1.0 broken = true
-    @test x_ra[2, 1] == -1.0 broken = true
+    @test @allowscalar(res_ra[1, 1]) == -1.0
+    @test @allowscalar(res_ra[2, 1]) == -1.0
+    @test @allowscalar(x_ra[1, 1]) == -1.0 broken = true
+    @test @allowscalar(x_ra[2, 1]) == -1.0 broken = true
 
     x = -rand(2, 10)
     x[2, 1] = 0.0
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
-    @test res_ra[1, 1] == 1.0
-    @test res_ra[2, 1] == 0.0
-    @test x_ra[1, 1] == 1.0 broken = true
-    @test x_ra[2, 1] == 0.0
+    @test @allowscalar(res_ra[1, 1]) == 1.0
+    @test @allowscalar(res_ra[2, 1]) == 0.0
+    @test @allowscalar(x_ra[1, 1]) == 1.0 broken = true
+    @test @allowscalar(x_ra[2, 1]) == 0.0
 end
 
 function condition11_nested_ifff(x, y, z)
@@ -452,4 +453,115 @@ end
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
         condition12_compile_test(x, y, z)
+end
+
+function for_with_step(x)
+    @trace for i in 10:3:22
+        x[i] = i * i
+    end
+    return x
+end
+
+@testset "for: for with step" begin
+    x = rand(1:100, 22)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(for_with_step(x_ra)) == for_with_step(x)
+end
+
+function nnorm(x, n)
+    @trace for i in 1:n
+        x = x * i ./ sum(x)
+    end
+    return x
+end
+
+@testset "for: induction" begin
+    x = randn(Float32, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    n = 10
+
+    @test @jit(nnorm(x_ra, n)) ≈ nnorm(x, n)
+end
+
+function sinkhorn(μ, ν, C)
+    λ = eltype(C)(0.8)
+    K = @. exp(-C / λ)
+
+    u = fill!(similar(μ), one(eltype(μ)))
+    v = similar(ν)
+
+    @trace for _ in 1:10
+        v = ν ./ (K' * u)
+        u = μ ./ (K * v)
+    end
+
+    return Diagonal(u) * K * Diagonal(v)
+end
+
+@testset "for: sinkhorn" begin
+    Nμ = 10
+    Nν = 5
+
+    μ = ones(Float32, Nμ) ./ Nμ
+    ν = ones(Float32, Nν) ./ Nν
+    C = randn(Float32, Nμ, Nν)
+
+    μ_ra = Reactant.to_rarray(μ)
+    ν_ra = Reactant.to_rarray(ν)
+    C_ra = Reactant.to_rarray(C)
+
+    @test @jit(sinkhorn(μ_ra, ν_ra, C_ra)) ≈ sinkhorn(μ, ν, C)
+end
+
+@testset "for: forbidden syntax" begin
+    @test_throws "break" @eval function f_with_break()
+        @trace for i in 1:10
+            break
+        end
+    end
+
+    @test_throws "continue" @eval function f_with_continue()
+        @trace for i in 1:10
+            continue
+        end
+    end
+
+    @test_throws "return" @eval function f_with_return()
+        @trace for i in 1:10
+            return nothing
+        end
+    end
+end
+
+function cumsum!(x)
+    v = zero(eltype(x))
+    @trace for i in 1:length(x)
+        v += @allowscalar x[i]
+        x[i] = v
+    end
+    return x
+end
+
+@testset "for: mutation within loop" begin
+    x = rand(1:100, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(cumsum!(x_ra)) == cumsum!(x)
+end
+
+function for_ref_outer(x)
+    i = sum(x)
+    @trace for i in 1:length(x)
+        x .+= i
+    end
+    return x / i
+end
+
+@testset "for: outer reference" begin
+    x = randn(Float64, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(for_ref_outer(x_ra)) ≈ for_ref_outer(x)
 end

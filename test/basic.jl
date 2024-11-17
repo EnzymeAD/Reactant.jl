@@ -3,8 +3,6 @@ using Test
 using Enzyme
 using Statistics
 
-# Reactant.set_default_backend("gpu")
-
 fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
 
 using InteractiveUtils
@@ -16,7 +14,7 @@ using InteractiveUtils
 
     a = Reactant.ConcreteRArray(x)
 
-    c_res = sum(a)
+    c_res = @allowscalar sum(a)
     @test c_res ≈ r_res
 
     @test @jit(sum(a)) ≈ r_res
@@ -29,7 +27,7 @@ end
 
     a = Reactant.ConcreteRArray(x)
 
-    c_res = fastmax(a)
+    c_res = @allowscalar fastmax(a)
     @test c_res ≈ r_res
 
     @test @jit(fastmax(a)) ≈ r_res
@@ -45,7 +43,7 @@ sinexpbc(x) = sinexp.(x)
 
     a = Reactant.ConcreteRArray(x)
 
-    c_res = sinexpbc(a)
+    c_res = @allowscalar sinexpbc(a)
     @test c_res ≈ r_res
 
     @test @jit(sinexpbc(a)) ≈ r_res
@@ -427,10 +425,10 @@ end
     @test y ≈ y_ra
 
     x_ra_array = Array(x_ra)
-    @test all(iszero, x_ra_array[1, :])
-    @test all(iszero, x_ra_array[2, :])
-    @test all(isone, x_ra_array[3, :])
-    @test all(isone, x_ra_array[4, :])
+    @test @allowscalar all(iszero, x_ra_array[1, :])
+    @test @allowscalar all(iszero, x_ra_array[2, :])
+    @test @allowscalar all(isone, x_ra_array[3, :])
+    @test @allowscalar all(isone, x_ra_array[4, :])
 end
 
 tuple_byref(x) = (; a=(; b=x))
@@ -504,14 +502,14 @@ end
 
         f2 = @compile f1(x_ra)
         res2 = f2(Reactant.to_rarray((5, [3.14]); track_numbers=(Number,)))
-        @test only(res2) ≈ 5 * 3.14
+        @test @allowscalar(only(res2)) ≈ 5 * 3.14
         @test res2 isa ConcreteRArray
 
         x_ra = Reactant.to_rarray(x)
 
         f3 = @compile f1(x_ra)
         res3 = f3(Reactant.to_rarray((5, [3.14])))
-        @test only(res3) ≈ only(f1(x))
+        @test @allowscalar(only(res3)) ≈ only(f1(x))
         @test res3 isa ConcreteRArray
     end
 end
@@ -544,16 +542,33 @@ end
     x_ra = Reactant.to_rarray(x)
 
     y = @jit(clamp!(x_ra, 0.0, 0.25))
-    @test maximum(y) ≤ 0.25
-    @test minimum(y) ≥ 0.0
-    @test maximum(x_ra) == maximum(y)
-    @test minimum(x_ra) == minimum(y)
+    @allowscalar begin
+        @test maximum(y) ≤ 0.25
+        @test minimum(y) ≥ 0.0
+        @test maximum(x_ra) == maximum(y)
+        @test minimum(x_ra) == minimum(y)
+    end
 
     x = randn(2, 3)
     x_ra = Reactant.to_rarray(x)
 
     y = @jit(clamp.(x_ra, 0.0, 0.25))
-    @test maximum(y) ≤ 0.25
-    @test minimum(y) ≥ 0.0
-    @test x_ra ≈ x
+    @allowscalar begin
+        @test maximum(y) ≤ 0.25
+        @test minimum(y) ≥ 0.0
+        @test x_ra ≈ x
+    end
+end
+
+@testset "dynamic indexing" begin
+    x = randn(5, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    idx = [1, 2, 3]
+    idx_ra = Reactant.to_rarray(idx)
+
+    fn(x, idx) = @allowscalar x[idx, :]
+
+    y = @jit(fn(x_ra, idx_ra))
+    @test y ≈ x[idx, :]
 end

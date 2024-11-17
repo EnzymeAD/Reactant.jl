@@ -4,6 +4,9 @@ using ReactantCore: ReactantCore, @trace, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
 using Adapt: Adapt, WrappedArray
+using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
+
+export @allowscalar # re-exported from GPUArraysCore
 
 # auxiliary types and functions
 include("OrderedIdDict.jl")
@@ -116,8 +119,7 @@ function set_default_backend(backend::XLA.Client)
 end
 
 function set_default_backend(backend::String)
-    backend = XLA.backends[backend]
-    return XLA.default_backend[] = backend
+    return set_default_backend(XLA.backends[backend])
 end
 
 end # module

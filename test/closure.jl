@@ -4,9 +4,11 @@ using Reactant
 muler(x) = y -> x * y
 
 @testset "closure" begin
-    x = Reactant.ConcreteRArray(ones(2, 2))
-    y = Reactant.ConcreteRArray(ones(2, 2))
+    x = ones(2, 2)
+    y = ones(2, 2)
+    x_ra = Reactant.ConcreteRArray(x)
+    y_ra = Reactant.ConcreteRArray(y)
 
-    f = muler(x)
-    @test @jit(f(y)) ≈ x * y
+    f = muler(x_ra)
+    @test @jit(f(y_ra)) ≈ x * y
 end

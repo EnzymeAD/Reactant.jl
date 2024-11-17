@@ -20,7 +20,7 @@ end
     x = rand(4, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(view_getindex_1(x_ra)) ≈ view_getindex_1(x)
+    @test @allowscalar(@jit(view_getindex_1(x_ra))) ≈ view_getindex_1(x)
     @test @jit(view_getindex_2(x_ra)) ≈ view_getindex_2(x)
     @test @jit(view_getindex_3(x_ra)) ≈ view_getindex_3(x)
 end
@@ -97,5 +97,6 @@ end
 @testset "PermutedDimsArray" begin
     x = rand(4, 4, 3)
     x_ra = Reactant.to_rarray(x)
-    @test @jit(bypass_permutedims(x_ra)) ≈ bypass_permutedims(x)
+    y_ra = @jit(bypass_permutedims(x_ra))
+    @test @allowscalar(Array(y_ra)) ≈ bypass_permutedims(x)
 end

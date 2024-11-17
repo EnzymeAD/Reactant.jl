@@ -244,12 +244,25 @@ const opt_passes::String = join(
     ',',
 )
 
-function run_pass_pipeline!(mod, pass_pipeline)
+function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     pm = MLIR.IR.PassManager()
+    MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
     MLIR.IR.run!(pm, mod)
     return mod
+end
+
+# helper for debug purposes: String -> Text
+function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
+    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    MLIR.IR.context!(ctx) do
+        mod = parse(MLIR.IR.Module, source)
+        run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
+        MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
+        Text(repr(mod))
+    end
 end
 
 function compile_mlir(f, args; kwargs...)
@@ -280,15 +293,12 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
     if optimize === :all
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
-                    opt_passes,
-                    "enzyme-batch",
-                    opt_passes,
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -298,28 +308,22 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
             ),
         )
     elseif optimize === :only_enzyme
+        run_pass_pipeline!(mod, "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "enzyme-batch",
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                ],
+                ["canonicalize", "remove-unnecessary-enzyme-ops", "enzyme-simplify-math"],
                 ',',
             ),
         )
     elseif optimize === :after_enzyme
+        run_pass_pipeline!(mod, "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
-                    "enzyme-batch",
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -329,21 +333,10 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
             ),
         )
     elseif optimize === :before_enzyme
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
-            mod,
-            join(
-                [
-                    opt_passes,
-                    "enzyme-batch",
-                    opt_passes,
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                ],
-                ',',
-            ),
+            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math"
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
@@ -390,54 +383,21 @@ end
 """
     @code_hlo [optimize = ...] f(args...)
 """
-macro code_hlo(options, maybe_call=nothing)
-    call = something(maybe_call, options)
-    options = isnothing(maybe_call) ? :(optimize = true) : options
-    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@code_hlo: expected options in format optimize=value, got $options")
-    end
-
-    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
-
-    expr = if Meta.isexpr(call, :call)
-        bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
-        fname = if bcast
-            quote
-                if isdefined($(__module__), $(Meta.quot(fname_full)))
-                    $(fname_full)
-                else
-                    Base.Broadcast.BroadcastFunction($(fname))
-                end
-            end
-        else
-            :($(fname))
-        end
-        quote
-            options = $(options)
-            f = $(fname)
-            args = $(Expr(:vect, call.args[2:end]...))
-            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
-            return mode
-        end
-    elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
-        quote
-            options = $(options)
-            f = Base.Broadcast.BroadcastFunction($(call.args[1]))
-            args = $(call.args[2:end]...)
-            mode = first($(compile_mlir)(f, args; optimize=options.optimize))
-            return mode
-        end
-    else
-        error("Invalid function call: $(call)")
-    end
-    return esc(expr)
+macro code_hlo(args...)
+    default_options = Dict{Symbol,Any}(:optimize => true)
+    compile_expr, (; compiled) = compile_call_expr(
+        __module__, compile_mlir, default_options, args...
+    )
+    return esc(:($(compile_expr);
+    $(first)($(compiled))))
 end
 
 """
     @compile f(args...)
 """
 macro compile(args...)
-    return esc(compile_call_expr(__module__, args...))
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
 """
@@ -446,19 +406,21 @@ end
     Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
-    compile_expr = compile_call_expr(__module__, args...)
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    compile_expr, (; compiled, args) = compile_call_expr(
+        __module__, compile, default_options, args...
+    )
     #! format: off
     return esc(
         :(
             $(compile_expr);
-            fn(args...)
+            $(compiled)($(args)...)
         )
     )
     #! format: on
 end
 
-function compile_call_expr(mod, args...)
-    options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+function compile_call_expr(mod, compiler, options, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
         if !Meta.isexpr(option, :(=))
@@ -470,6 +432,10 @@ function compile_call_expr(mod, args...)
         end
     end
     call = only(args)
+    f_symbol = gensym(:f)
+    args_symbol = gensym(:args)
+    compiled_symbol = gensym(:compiled)
+
     if Meta.isexpr(call, :call)
         bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
         fname = if bcast
@@ -483,22 +449,22 @@ function compile_call_expr(mod, args...)
         else
             :($(fname))
         end
-        return quote
-            options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
-            f = $(fname)
-            args = $(Expr(:tuple, call.args[2:end]...))
-            fn = $(compile)(f, args; options.optimize, options.sync)
-        end
+        args_rhs = Expr(:tuple, call.args[2:end]...)
     elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
-        return quote
-            options = (; optimize=$(options[:optimize]), sync=$(options[:sync]))
-            f = Base.Broadcast.BroadcastFunction($(call.args[1]))
-            args = $(call.args[2:end]...)
-            fn = $(compile)(f, args; options.optimize, options.sync)
-        end
+        fname = :($(Base.Broadcast.BroadcastFunction)($(call.args[1])))
+        args_rhs = only(call.args[2:end])
     else
         error("Invalid function call: $(call)")
     end
+
+    return quote
+        $(f_symbol) = $(fname)
+        $(args_symbol) = $(args_rhs)
+        $(compiled_symbol) = $(compiler)(
+            $(f_symbol), $(args_symbol); $(Expr.(:kw, keys(options), values(options))...)
+        )
+    end,
+    (; compiled=compiled_symbol, args=args_symbol)
 end
 
 function correct_maybe_bcast_call(fname)

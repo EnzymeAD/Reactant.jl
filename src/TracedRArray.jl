@@ -56,23 +56,16 @@ function get_ancestor_indices(x::WrappedTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
-function Base.getindex(a::TracedRArray{T,N}, index::Vararg{Int,N}) where {T,N}
-    @warn(
-        """Performing scalar indexing on task $(current_task()).
-Invocation resulted in scalar indexing of a TracedRArray.
-This is typically caused by calling an iterating implementation of a method.
-Such implementations *do not* execute on device, but very slowly on the CPU,
-and require expensive copies and synchronization each time and therefore should be avoided."""
-    )
+function Base.getindex(
+    a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
+) where {T,N}
+    GPUArraysCore.assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
+
+    start_indices = [promote_to(TracedRNumber{Int}, i - 1).mlir_data for i in index]
+    slice_sizes = [Int64(1) for _ in index]
 
     res1 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.slice(
-            a.mlir_data;
-            start_indices=MLIR.IR.DenseArrayAttribute([Int64(i - 1) for i in index]),
-            limit_indices=MLIR.IR.DenseArrayAttribute([Int64(i) for i in index]),
-            strides=MLIR.IR.DenseArrayAttribute([Int64(1) for i in index]),
-        ),
-        1,
+        MLIR.Dialects.stablehlo.dynamic_slice(a.mlir_data, start_indices; slice_sizes), 1
     )
     res2 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.reshape(
@@ -80,6 +73,7 @@ and require expensive copies and synchronization each time and therefore should 
         ),
         1,
     )
+
     return TracedRNumber{T}((), res2)
 end
 
@@ -87,27 +81,39 @@ function Base.getindex(a::TracedRArray{T,0}) where {T}
     return TracedRNumber{T}((), a.mlir_data)
 end
 
+# XXX: We want to support https://github.com/EnzymeAD/Reactant.jl/issues/242 eventually
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
-    indices = [i isa Colon ? (1:size(a, idx)) : i for (idx, i) in enumerate(indices)]
+    indices = map(enumerate(indices)) do (idx, i)
+        i isa Colon && return 1:size(a, idx)
+        i isa CartesianIndex && return Tuple(i)
+        return i
+    end
+
+    foreach(indices) do idxs
+        idxs isa Number && return nothing
+        contiguous = all(isone, diff(idxs))
+        # XXX: We want to throw error even for dynamic indexing
+        if typeof(a) <: Bool
+            contiguous || error("non-contiguous indexing is not supported")
+        end
+    end
+
+    start_indices = map(indices) do i
+        return promote_to(TracedRNumber{Int}, first(i) - 1).mlir_data
+    end
+    slice_sizes = [Int64(length(i)) for i in indices]
     res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.slice(
-            a.mlir_data;
-            start_indices=MLIR.IR.DenseArrayAttribute([
-                Int64(first(i) - 1) for i in indices
-            ]),
-            limit_indices=MLIR.IR.DenseArrayAttribute([Int64(last(i)) for i in indices]),
-            strides=MLIR.IR.DenseArrayAttribute([Int64(1) for i in indices]),
-        ),
-        1,
+        MLIR.Dialects.stablehlo.dynamic_slice(a.mlir_data, start_indices; slice_sizes), 1
     )
+
     x = TracedRArray{T,N}((), res, Tuple(length.(indices)))
-    ddims = findall(x -> x isa Integer, indices)
-    !isempty(ddims) && return dropdims(x; dims=Tuple(ddims))
+    ddims = findall(Base.Fix2(isa, Integer), indices)
+    isempty(ddims) || return dropdims(x; dims=Tuple(ddims))
     return x
 end
 
 # Prevent ambiguity
-function Base.getindex(a::WrappedTracedRArray, index::Int...)
+function Base.getindex(a::WrappedTracedRArray, index::Union{Int,TracedRNumber{Int}}...)
     return getindex(ancestor(a), get_ancestor_indices(a, index...)...)
 end
 
@@ -116,7 +122,9 @@ function Base.getindex(a::WrappedTracedRArray, indices...)
 end
 
 function Base.setindex!(
-    a::TracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int},N}
+    a::TracedRArray{T,N},
+    v,
+    indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int,TracedRNumber{Int}},N},
 ) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
         i isa Int ? (i:i) : (i isa Colon ? (1:size(a, idx)) : i)
@@ -138,12 +146,16 @@ function Base.setindex!(
 end
 
 function Base.setindex!(
-    a::AnyTracedRArray{T,N}, v, indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int},N}
+    a::AnyTracedRArray{T,N},
+    v,
+    indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int,TracedRNumber{Int}},N},
 ) where {T,N}
     ancestor_indices = get_ancestor_indices(a, indices...)
     setindex!(ancestor(a), v, ancestor_indices...)
     return a
 end
+
+Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(Base.getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
 
@@ -520,8 +532,10 @@ function Base.mapreduce(
         dims = [dims]
     end
 
+    op_in_T = Core.Compiler.return_type(f, Tuple{T})
+
     if isnothing(init)
-        init = Base.reduce_empty(Base.BottomRF(op), Core.Compiler.return_type(f, Tuple{T}))
+        init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
     else
         init = init::T
     end
@@ -543,7 +557,8 @@ function Base.mapreduce(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in in_tys])
 
     args = (
-        TracedRNumber{T}((), MLIR.IR.argument(fnbody, i)) for (i, ty) in enumerate(in_tys)
+        TracedRNumber{op_in_T}((), MLIR.IR.argument(fnbody, i)) for
+        (i, ty) in enumerate(in_tys)
     )
 
     res = MLIR.IR.block!(fnbody) do
@@ -699,7 +714,7 @@ end
 
 function broadcast_to_size(arg::T, rsize) where {T<:Number}
     attr = MLIR.IR.DenseElementsAttribute(Base.fill(arg, Tuple(rsize)))
-    return arg = TracedRArray{T,length(rsize)}(
+    return TracedRArray{T,length(rsize)}(
         (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), rsize
     )
 end
@@ -709,6 +724,11 @@ function broadcast_to_size(arg::TracedRNumber, rsize)
     return broadcast_to_size_internal(
         TracedRArray{eltype(arg),0}((), arg.mlir_data, ()), rsize
     )
+end
+
+function broadcast_to_size(arg::AnyTracedRArray{T,0}, rsize) where {T}
+    arg = materialize_traced_array(arg)
+    return broadcast_to_size(TracedRNumber{T}((), arg.mlir_data), rsize)
 end
 
 function broadcast_to_size(arg::AnyTracedRArray, rsize)
@@ -856,3 +876,6 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
         return x
     end
 end
+
+Base.all(f::Function, x::TracedRArray) = mapreduce(f, &, x)
+Base.any(f::Function, x::TracedRArray) = mapreduce(f, |, x)
