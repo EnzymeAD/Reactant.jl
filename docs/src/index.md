@@ -5,8 +5,8 @@ layout: home
 
 hero:
   name: Reactant Docs
-  text: TODO
-  tagline: TODO
+  text: 11
+  tagline: Optimize Julia Functions With MLIR and XLA for High-Performance Execution on CPU, GPU, TPU and More.
   actions:
     - theme: brand
       text: Tutorials

@@ -23,6 +23,10 @@ Reactant.@jit
 @code_hlo
 ```
 
+```@raw html
+<br>
+```
+
 # Internal Functionality
 
 !!! danger "Private"
