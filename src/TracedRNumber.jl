@@ -16,6 +16,8 @@ ReactantCore.is_traced(::TracedRNumber) = true
 
 new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
 
+concrete_eltype(x) = eltype(x)
+concrete_eltype(::Type{TracedRNumber{T}}) where {T} = T
 Base.eltype(::Type{T}) where {T<:TracedRNumber} = T
 
 Base.getindex(a::TracedRNumber{T}) where {T} = a
@@ -210,17 +212,17 @@ end
 for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
     @eval begin
         function Base.:&(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
-            return TracedRNumber{promote_type(eltype(x), eltype(y))}(
+            return TracedRNumber{promote_type(concrete_eltype(x), concrete_eltype(y))}(
                 (), MLIR.IR.result(MLIR.Dialects.stablehlo.and(x.mlir_data, y.mlir_data), 1)
             )
         end
         function Base.:|(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
-            return TracedRNumber{promote_type(eltype(x), eltype(y))}(
+            return TracedRNumber{promote_type(concrete_eltype(x), concrete_eltype(y))}(
                 (), MLIR.IR.result(MLIR.Dialects.stablehlo.or(x.mlir_data, y.mlir_data), 1)
             )
         end
         function Base.:!(x::TracedRNumber{<:$(T1)})
-            return TracedRNumber{eltype(x)}(
+            return TracedRNumber{concrete_eltype(x)}(
                 (), MLIR.IR.result(MLIR.Dialects.stablehlo.not(x.mlir_data), 1)
             )
         end

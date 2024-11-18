@@ -326,7 +326,7 @@ end
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
-            return promote_to(TracedRNumber{eltype(arg)}, arg)
+            return promote_to(TracedRNumber{concrete_eltype(arg)}, arg)
         end
         return f(scalar_args...)
     end
@@ -722,7 +722,7 @@ end
 function broadcast_to_size(arg::TracedRNumber, rsize)
     length(rsize) == 0 && return arg
     return broadcast_to_size_internal(
-        TracedRArray{eltype(arg),0}((), arg.mlir_data, ()), rsize
+        TracedRArray{concrete_eltype(arg),0}((), arg.mlir_data, ()), rsize
     )
 end
 
@@ -757,7 +757,7 @@ function broadcast_to_size_internal(x::TracedRArray, rsize)
     @assert length(size(MLIR.IR.type(x.mlir_data))) == length(dims)
     mlirty = MLIR.IR.type(x.mlir_data)
 
-    return TracedRArray{eltype(x),Int(length(rsize))}(
+    return TracedRArray{concrete_eltype(x),Int(length(rsize))}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.broadcast_in_dim(
