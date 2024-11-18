@@ -4,9 +4,9 @@
 layout: home
 
 hero:
-  name: Reactant Docs
-  text: 11
-  tagline: Optimize Julia Functions With MLIR and XLA for High-Performance Execution on CPU, GPU, TPU and More.
+  name: Reactant.jl Docs
+  text: Optimizing Julia Functions with MLIR
+  tagline: Optimize Julia Functions With MLIR and XLA for High-Performance Execution on CPU, GPU, TPU and more.
   actions:
     - theme: brand
       text: Tutorials
@@ -23,24 +23,24 @@ hero:
 
 features:
   - icon: 🚀
-    title: TODO
-    details: TODO
-    link: TODO
+    title: Fast & Device Agnostic
+    details: Effortlessly execute your code on CPU, GPU, and TPU with MLIR and XLA.
+    link: /introduction
 
-  - icon: 🧑‍🔬
-    title: TODO
-    details: TODO
-    link: TODO
+  - icon: ∂
+    title: Built-In MLIR AD
+    details: Leverage Enzyme-Powered Automatic Differentiation to Differentiate MLIR Functions
+    link: /introduction
 
   - icon: 🧩
-    title: TODO
-    details: TODO
-    link: TODO
+    title: Composable
+    details: Executes and optimizes generic Julia code without requiring special rewriting
+    link: /introduction
 
-  - icon: 🧪
-    title: TODO
-    details: TODO
-    link: TODO
+  - icon: ⚡
+    title: Compiler Optimizations
+    details: Fancy MLIR Optimizations seamlessly optimize your Julia code
+    link: /introduction
 ---
 ```
 

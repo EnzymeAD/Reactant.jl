@@ -16,6 +16,8 @@ export default defineConfig({
   cleanUrls: true,
   outDir: 'REPLACE_ME_DOCUMENTER_VITEPRESS', // This is required for MarkdownVitepress to work correctly...
 
+  ignoreDeadLinks: true, // tested in Documenter.jl directly
+
   markdown: {
     math: true,
     config(md) {
