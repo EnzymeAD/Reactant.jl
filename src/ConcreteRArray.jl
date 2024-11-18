@@ -14,7 +14,7 @@ end
 
 function ConcreteRNumber{T}(
     data::T2; client=XLA.default_backend[], idx=XLA.default_device_idx[], device=nothing
-) where {T<:Number, T2<:Number}
+) where {T<:Number,T2<:Number}
     data = convert(T, data)
     crarray = ConcreteRArray(fill(data); client, idx, device)
     return ConcreteRNumber{T}(crarray.data)
@@ -28,7 +28,9 @@ end
 
 Base.size(::ConcreteRNumber) = ()
 Base.real(x::ConcreteRNumber{<:Real}) = x
-Base.rtoldefault(::Type{ConcreteRNumber{T}}) where T = ConcreteRNumber(Base.rtoldefault(T))
+function Base.rtoldefault(::Type{ConcreteRNumber{T}}) where {T}
+    return ConcreteRNumber(Base.rtoldefault(T))
+end
 
 # Ensure the device and client are the same as the input
 function Base.float(x::ConcreteRNumber{T}) where {T}

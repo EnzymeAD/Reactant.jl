@@ -135,7 +135,11 @@ function make_mlir_fn(
         ircoderes = Base.code_ircode(f, map(typeof, traced_args); interp)
 
         if length(ircoderes) != 1
-            throw(AssertionError("Could not find unique ircode for $f $traced_args, found $ircoderes"))
+            throw(
+                AssertionError(
+                    "Could not find unique ircode for $f $traced_args, found $ircoderes"
+                ),
+            )
         end
         ir, ty = ircoderes[1]
         oc = Core.OpaqueClosure(ir)
