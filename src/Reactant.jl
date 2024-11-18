@@ -13,6 +13,8 @@ include("OrderedIdDict.jl")
 
 using Enzyme
 
+struct ReactantABI <: Enzyme.EnzymeCore.ABI end
+
 @static if isdefined(Core, :BFloat16)
     const ReactantPrimitive = Union{
         Bool,

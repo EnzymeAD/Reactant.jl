@@ -19,6 +19,10 @@ function mlir_type(::Type{<:MissingTracedValue})
     return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 end
 
+function batch_ty(width, mlirty)
+    return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
+end
+
 function transpose_ty(mlirty)
     return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
 end
@@ -124,19 +128,20 @@ function make_mlir_fn(
             end
         end
 
-        # NOTE an `AbstractInterpreter` cannot process methods with more recent world-ages than it
-        # solution is to use a new interpreter, but we reuse the `code_cache` to minimize comptime in Julia <= 1.10
-        @static if !HAS_INTEGRATED_CACHE
-            interp = ReactantInterpreter(; code_cache=REACTANT_CACHE)
-        else
-            interp = ReactantInterpreter()
-        end
+        interp = ReactantInterpreter()
 
-        # TODO replace with `Base.invoke_within` if julia#52964 lands
-        ir, ty = only(
-            # TODO fix it for kwargs
-            Base.code_ircode(f, map(typeof, traced_args); interp),
-        )
+        # TODO replace with `Base.invoke_within` if julia#52964 lands        
+        # TODO fix it for kwargs
+        ircoderes = Base.code_ircode(f, map(typeof, traced_args); interp)
+
+        if length(ircoderes) != 1
+            throw(
+                AssertionError(
+                    "Could not find unique ircode for $f $traced_args, found $ircoderes"
+                ),
+            )
+        end
+        ir, ty = ircoderes[1]
         oc = Core.OpaqueClosure(ir)
 
         if f === Reactant.apply
