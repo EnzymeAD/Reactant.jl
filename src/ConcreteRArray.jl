@@ -123,11 +123,7 @@ end
 
 Base.convert(::Type{T}, x::ConcreteRScalar{T}) where {T} = to_number(x)
 
-for jlop in (
-        :(Base.abs),
-    ),
-    T in (ConcreteRNumber,)
-
+for jlop in (:(Base.abs),), T in (ConcreteRNumber,)
     @eval begin
         $(jlop)(x::$(T)) = $(jlop)(to_number(x))
     end
