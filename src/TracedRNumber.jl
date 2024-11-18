@@ -16,7 +16,7 @@ ReactantCore.is_traced(::TracedRNumber) = true
 
 new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
 
-Base.eltype(::Type{TracedRNumber{T}}) where {T} = T
+Base.eltype(::Type{T}) where {T<:TracedRNumber} = T
 
 Base.getindex(a::TracedRNumber{T}) where {T} = a
 
