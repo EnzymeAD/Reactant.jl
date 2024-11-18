@@ -129,7 +129,7 @@ for jlop in (
     T in (ConcreteRNumber,)
 
     @eval begin
-        $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x))
+        $(jlop)(x::$(T)) = $(jlop)(to_number(x))
     end
 end
 
