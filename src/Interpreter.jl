@@ -27,70 +27,74 @@ function set_reactant_abi(
     arginfo::ArgInfo,
     si::StmtInfo,
     sv::AbsIntState,
-    max_methods::Int = get_max_methods(interp, f, sv),
+    max_methods::Int=get_max_methods(interp, f, sv),
 )
-
     (; fargs, argtypes) = arginfo
 
-    if ((f === Enzyme.autodiff) || (f === Enzyme.autodiff_deferred) || (f === Enzyme.gradient) || (f === Enzyme.jacobian)) && (length(argtypes) >= 2)
+    if (
+        (f === Enzyme.autodiff) ||
+        (f === Enzyme.autodiff_deferred) ||
+        (f === Enzyme.gradient) ||
+        (f === Enzyme.jacobian)
+    ) && (length(argtypes) >= 2)
         if widenconst(argtypes[2]) <: Enzyme.Mode
             newmode = Enzyme.set_abi(widenconst(argtypes[2]), ReactantABI)
             if newmode != widenconst(argtypes[2])
                 newmodev = newmode()
                 arginfo2 = ArgInfo(
-                    fargs isa Nothing ? nothing :
-                    [fargs[1], :($(newmodev)), fargs[3:end]...],
+                    if fargs isa Nothing
+                        nothing
+                    else
+                        [fargs[1], :($(newmodev)), fargs[3:end]...]
+                    end,
                     [argtypes[1], Core.Const(newmodev), argtypes[3:end]...],
                 )
-                return abstract_call_known(
-                    interp,
-                    f,
-                    arginfo2,
-                    si,
-                    sv,
-                    max_methods,
-                )
+                return abstract_call_known(interp, f, arginfo2, si, sv, max_methods)
             end
         end
     end
 
-    if length(argtypes) >= 5 && f === Core.kwcall && (widenconst(argtypes[3]) == typeof(Enzyme.gradient) || widenconst(argtypes[3]) == typeof(Enzyme.jacobian)) && widenconst(argtypes[4]) <: Enzyme.Mode
+    if length(argtypes) >= 5 &&
+        f === Core.kwcall &&
+        (
+            widenconst(argtypes[3]) == typeof(Enzyme.gradient) ||
+            widenconst(argtypes[3]) == typeof(Enzyme.jacobian)
+        ) &&
+        widenconst(argtypes[4]) <: Enzyme.Mode
         newmode = Enzyme.set_abi(widenconst(argtypes[4]), ReactantABI)
         if newmode != widenconst(argtypes[4])
             newmodev = newmode()
             arginfo2 = ArgInfo(
-                fargs isa Nothing ? nothing :
-                [fargs[1:3]..., :($(newmodev)), fargs[5:end]...],
+                if fargs isa Nothing
+                    nothing
+                else
+                    [fargs[1:3]..., :($(newmodev)), fargs[5:end]...]
+                end,
                 [argtypes[1:3]..., Core.Const(newmodev), argtypes[5:end]...],
             )
-            return abstract_call_known(
-                interp,
-                f,
-                arginfo2,
-                si,
-                sv,
-                max_methods,
-            )
+            return abstract_call_known(interp, f, arginfo2, si, sv, max_methods)
         end
     end
 
-    if length(argtypes) >= 5 && methods(f)[1].module == Enzyme && widenconst(argtypes[5]) <: Enzyme.Mode && (widenconst(argtypes[4]) == typeof(Enzyme.gradient) || widenconst(argtypes[4]) == typeof(Enzyme.jacobian))
+    if length(argtypes) >= 5 &&
+        methods(f)[1].module == Enzyme &&
+        widenconst(argtypes[5]) <: Enzyme.Mode &&
+        (
+            widenconst(argtypes[4]) == typeof(Enzyme.gradient) ||
+            widenconst(argtypes[4]) == typeof(Enzyme.jacobian)
+        )
         newmode = Enzyme.set_abi(widenconst(argtypes[5]), ReactantABI)
         if newmode != widenconst(argtypes[5])
             newmodev = newmode()
             arginfo2 = ArgInfo(
-                fargs isa Nothing ? nothing :
-                [fargs[1:4]..., :($(newmodev)), fargs[6:end]...],
+                if fargs isa Nothing
+                    nothing
+                else
+                    [fargs[1:4]..., :($(newmodev)), fargs[6:end]...]
+                end,
                 [argtypes[1:4]..., Core.Const(newmodev), argtypes[6:end]...],
             )
-            return abstract_call_known(
-                interp,
-                f,
-                arginfo2,
-                si,
-                sv,
-                max_methods,
-            )
+            return abstract_call_known(interp, f, arginfo2, si, sv, max_methods)
         end
     end
 
@@ -107,43 +111,38 @@ end
 function set_reactant_abi end
 
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE
-    struct ReactantCacheToken
-    end
+    struct ReactantCacheToken end
 
-    function ReactantInterpreter(;
-        world::UInt=Base.get_world_counter(),
-    )
+    function ReactantInterpreter(; world::UInt=Base.get_world_counter())
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             ReactantCacheToken(),
-            #=mt=#nothing,
+            nothing,            #=mt=#
             world,
-            #=forward_rules=#true,
-            #=reverse_rules=#true,
-            #=deferred_lower=#true,
-            #=broadcast_rewrite=#false,
-            set_reactant_abi
+            true,            #=forward_rules=#
+            true,            #=reverse_rules=#
+            true,            #=deferred_lower=#
+            false,            #=broadcast_rewrite=#
+            set_reactant_abi,
         )
     end
 else
     const REACTANT_CACHE = Enzyme.GPUCompiler.CodeCache()
 
     function ReactantInterpreter(;
-        world::UInt=Base.get_world_counter(),
-        code_cache=REACTANT_CACHE
+        world::UInt=Base.get_world_counter(), code_cache=REACTANT_CACHE
     )
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             REACTANT_CACHE,
-            #=mt=#nothing,
+            nothing,            #=mt=#
             world,
-            #=forward_rules=#true,
-            #=forward_rules=#true,
-            #=deferred_lower=#true,
-            #=broadcast_rewrite=#false,
-            set_reactant_abi
+            true,            #=forward_rules=#
+            true,            #=forward_rules=#
+            true,            #=deferred_lower=#
+            false,            #=broadcast_rewrite=#
+            set_reactant_abi,
         )
     end
 end
-
 
 const enzyme_out = 0
 const enzyme_dup = 1
@@ -234,9 +233,22 @@ function push_acts!(ad_inputs, x::BatchDuplicated, path, reverse)
     if !reverse
         ET = eltype(x.val)
         predims = size(x.val)
-        cval = MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate([
-            MLIR.IR.result(MLIR.Dialects.stablehlo.reshape(v.mlir_data; result_0=MLIR.IR.TensorType(Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))))) for v in x.dval]; dimension=Int64(0)))
-        tval = TracedRArray{ET, length(predims)+1}((), cval, (length(x.dval), predims...))
+        cval = MLIR.IR.result(
+            MLIR.Dialects.stablehlo.concatenate(
+                [
+                    MLIR.IR.result(
+                        MLIR.Dialects.stablehlo.reshape(
+                            v.mlir_data;
+                            result_0=MLIR.IR.TensorType(
+                                Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))
+                            ),
+                        ),
+                    ) for v in x.dval
+                ];
+                dimension=Int64(0),
+            ),
+        )
+        tval = TracedRArray{ET,length(predims) + 1}((), cval, (length(x.dval), predims...))
         push_val!(ad_inputs, tval, path)
     end
 end
@@ -246,9 +258,22 @@ function push_acts!(ad_inputs, x::BatchDuplicatedNoNeed, path, reverse)
     if !reverse
         ET = eltype(x.val)
         predims = size(x.val)
-        cval = MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate([
-            MLIR.IR.result(MLIR.Dialects.stablehlo.reshape(v.mlir_data; result_0=MLIR.IR.TensorType(Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))))) for v in x.dval]; dimension=Int64(0)))
-        tval = TracedRArray{ET, length(predims)+1}((), cval, (length(x.dval), predims...))
+        cval = MLIR.IR.result(
+            MLIR.Dialects.stablehlo.concatenate(
+                [
+                    MLIR.IR.result(
+                        MLIR.Dialects.stablehlo.reshape(
+                            v.mlir_data;
+                            result_0=MLIR.IR.TensorType(
+                                Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))
+                            ),
+                        ),
+                    ) for v in x.dval
+                ];
+                dimension=Int64(0),
+            ),
+        )
+        tval = TracedRArray{ET,length(predims) + 1}((), cval, (length(x.dval), predims...))
         push_val!(ad_inputs, tval, path)
     end
 end
@@ -335,7 +360,11 @@ function overload_autodiff(
     if width == 0
         throw(ErrorException("Cannot differentiate with a batch size of 0"))
     elseif width != 1
-        throw(ErrorException("EnzymeMLIR does not presently support width=$width, please rewrite your code to not use BatchDuplicated and/or call gradient(; chunk=1)"))
+        throw(
+            ErrorException(
+                "EnzymeMLIR does not presently support width=$width, please rewrite your code to not use BatchDuplicated and/or call gradient(; chunk=1)",
+            ),
+        )
     end
 
     primf = f.val
@@ -473,9 +502,9 @@ function overload_autodiff(
                 else
                     tval = transpose_val(MLIR.IR.result(res, residx))
                     for i in 1:width
-                        sz = size(a)                        
+                        sz = size(a)
                         starts = Int64[i]
-                        strides = Int64[1]           
+                        strides = Int64[1]
                         limits = Int64[i]
                         for v in sz
                             push!(starts, 0)
@@ -483,7 +512,13 @@ function overload_autodiff(
                             push!(strides, 1)
                         end
                         sval = MLIR.IR.result(
-                            MLIR.Dialects.stablehlo.slice(sval; start_indices=starts, limit_indices=limits, stride_indices=strides), 1
+                            MLIR.Dialects.stablehlo.slice(
+                                sval;
+                                start_indices=starts,
+                                limit_indices=limits,
+                                stride_indices=strides,
+                            ),
+                            1,
                         )
                         set!(dresult[i], path[2:end], sval)
                     end
@@ -557,7 +592,7 @@ function overload_autodiff(
             if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
                 (dresult, result)
             else
-                (result, )
+                (result,)
             end
         else
             if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
@@ -569,9 +604,10 @@ function overload_autodiff(
     end
 end
 
-
 @inline function Enzyme.autodiff_deferred(
-    rmode::Enzyme.ReverseMode{ReturnPrimal,RuntimeActivity,ReactantABI,Holomorphic,ErrIfFuncWritten},
+    rmode::Enzyme.ReverseMode{
+        ReturnPrimal,RuntimeActivity,ReactantABI,Holomorphic,ErrIfFuncWritten
+    },
     f::FA,
     rt::Type{A},
     args::Vararg{Annotation,Nargs},
@@ -584,7 +620,7 @@ end
     Nargs,
     ErrIfFuncWritten,
 }
-    overload_autodiff(rmode, f, rt, args...)
+    return overload_autodiff(rmode, f, rt, args...)
 end
 
 @inline function Enzyme.autodiff_deferred(
@@ -592,19 +628,14 @@ end
     f::FA,
     rt::Type{A},
     args::Vararg{Annotation,Nargs},
-) where {
-    FA<:Annotation,
-    A<:Annotation,
-    ReturnPrimal,
-    Nargs,
-    ErrIfFuncWritten,
-    RuntimeActivity
-}
-    overload_autodiff(rmode, f, rt, args...)
+) where {FA<:Annotation,A<:Annotation,ReturnPrimal,Nargs,ErrIfFuncWritten,RuntimeActivity}
+    return overload_autodiff(rmode, f, rt, args...)
 end
 
 @inline function Enzyme.autodiff(
-    rmode::Enzyme.ReverseMode{ReturnPrimal,RuntimeActivity,ReactantABI,Holomorphic,ErrIfFuncWritten},
+    rmode::Enzyme.ReverseMode{
+        ReturnPrimal,RuntimeActivity,ReactantABI,Holomorphic,ErrIfFuncWritten
+    },
     f::FA,
     rt::Type{A},
     args::Vararg{Annotation,Nargs},
@@ -617,7 +648,7 @@ end
     Nargs,
     ErrIfFuncWritten,
 }
-    overload_autodiff(rmode, f, rt, args...)
+    return overload_autodiff(rmode, f, rt, args...)
 end
 
 @inline function Enzyme.autodiff(
@@ -625,13 +656,6 @@ end
     f::FA,
     rt::Type{A},
     args::Vararg{Annotation,Nargs},
-) where {
-    FA<:Annotation,
-    A<:Annotation,
-    ReturnPrimal,
-    Nargs,
-    ErrIfFuncWritten,
-    RuntimeActivity
-}
-    overload_autodiff(rmode, f, rt, args...)
+) where {FA<:Annotation,A<:Annotation,ReturnPrimal,Nargs,ErrIfFuncWritten,RuntimeActivity}
+    return overload_autodiff(rmode, f, rt, args...)
 end
