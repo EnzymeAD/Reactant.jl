@@ -338,15 +338,20 @@ end
 @testset "multiply" begin
     x = ConcreteRArray([false, false, true, true])
     y = ConcreteRArray([false, true, false, true])
-    @test [false, false, false, true] == @jit Ops.maximum(x, y)
+    @test [false, false, false, true] == @jit Ops.multiply(x, y)
 
-    x = ConcreteRArray([-1, 0, 1, 10])
-    y = ConcreteRArray([10, 1, 0, -1])
-    @test [-10, 0, 0, -10] == @jit Ops.maximum(x, y)
-
-    x = ConcreteRArray([-1.0, 0.0, 1.0, 10.0])
-    y = ConcreteRArray([10.0, 1.0, 0.0, -1.0])
-    @test [-10.0, 0.0, 0.0, -10.0] == @jit Ops.maximum(x, y)
+    for (a, b) in [
+        (ConcreteRArray([5, 6, -7, -8]), ConcreteRArray([1, 2, 3, 4])),
+        (ConcreteRArray([1.1, 2.2, 3.3, 4.4]), ConcreteRArray([5.5, 6.6, -7.7, -8.8])),
+        (
+            ConcreteRArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im]),
+            ConcreteRArray([
+                9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
+            ]),
+        ),
+    ]
+        @test Array(a) .* Array(b) ≈ @jit Ops.multiply(a, b)
+    end
 end
 
 @testset "negate" begin
