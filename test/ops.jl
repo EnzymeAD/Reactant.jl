@@ -162,7 +162,7 @@ end
 
 @testset "count_leading_zeros" begin
     x = ConcreteRArray([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    @test [64, 63, 62, 61, 60, 59, 58, 57, 56, 55] ≈ @jit Ops.count_leading_zeros(x)
+    @test [64, 63, 62, 62, 61, 61, 61, 61, 60, 60] ≈ @jit Ops.count_leading_zeros(x)
 end
 
 @testset "divide" begin
