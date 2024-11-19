@@ -57,14 +57,12 @@ for (dialect, op) in [
     (:stablehlo, :exponential),
     (:stablehlo, :exponential_minus_one),
     (:stablehlo, :floor),
-    (:stablehlo, :imag),
     (:stablehlo, :log),
     (:stablehlo, :log_plus_one),
     (:stablehlo, :logistic),
     (:stablehlo, :negate),
     (:stablehlo, :not),
     (:stablehlo, :popcnt),
-    (:stablehlo, :real),
     (:stablehlo, :round_nearest_afz),
     (:stablehlo, :round_nearest_even),
     (:stablehlo, :rsqrt),
@@ -396,6 +394,46 @@ function complex(
         ),
     )
     return TracedRNumber{Complex{T}}((), res)
+end
+
+function real(
+    x::TracedRArray{Complex{T},N};
+    location=MLIR.IR.Location("stablehlo.real", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T,N}
+    res = MLIR.IR.result(
+        stablehlo.real(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
+    )
+    return TracedRArray{T,N}((), res, size(x))
+end
+
+function real(
+    x::TracedRNumber{Complex{T}};
+    location=MLIR.IR.Location("stablehlo.real", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T}
+    res = MLIR.IR.result(
+        stablehlo.real(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+    )
+    return TracedRNumber{T}((), res)
+end
+
+function imag(
+    x::TracedRArray{Complex{T},N};
+    location=MLIR.IR.Location("stablehlo.imag", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T,N}
+    res = MLIR.IR.result(
+        stablehlo.imag(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
+    )
+    return TracedRArray{T,N}((), res, size(x))
+end
+
+function imag(
+    x::TracedRNumber{Complex{T}};
+    location=MLIR.IR.Location("stablehlo.imag", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
+) where {T}
+    res = MLIR.IR.result(
+        stablehlo.imag(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+    )
+    return TracedRNumber{T}((), res)
 end
 
 # function bitcast_convert(
