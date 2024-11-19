@@ -331,7 +331,8 @@ function transpose(
         "stablehlo.transpose", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
     ),
 ) where {T,N}
-    rsize = permute!(size(x), permutation)
+    rsize = permute!(collect(size(x)), permutation)
+    permutation = permutation .- 1
     result = mlir_type(TracedRArray{T,N}, rsize)
     permutation = MLIR.IR.DenseArrayAttribute(permutation)
     res = MLIR.IR.result(stablehlo.transpose(x.mlir_data; result, permutation, location))
