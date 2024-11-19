@@ -344,12 +344,14 @@ function slice(
     location=MLIR.IR.Location("stablehlo.slice", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
 ) where {T,N}
     start_indices = start_indices .- 1
-    limit_indices = limit_indices .- 1
+    limit_indices = limit_indices
     rsize = limit_indices .- start_indices
+    @assert all(rsize .> 0) "Invalid slice dimensions"
+    strides = isnothing(strides) ? [1, size(x)[1:(end - 1)]...] : strides
     res = MLIR.IR.result(
         stablehlo.slice(
             x.mlir_data;
-            result=mlir_type(TracedRArray{T,N}, rsize),
+            result_0=mlir_type(TracedRArray{T,N}, rsize),
             start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
             limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
             strides=MLIR.IR.DenseArrayAttribute(strides),
@@ -787,7 +789,7 @@ function reverse(
         stablehlo.reverse(
             x.mlir_data;
             result=mlir_type(TracedRArray{T,N}, size(x)),
-            dimensions=MLIR.IR.DenseArrayAttribute(dimensions),
+            dimensions=MLIR.IR.DenseArrayAttribute(dimensions .- 1),
             location,
         ),
     )
