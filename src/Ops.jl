@@ -419,33 +419,39 @@ function fft(
     length,
     location=MLIR.IR.Location("stablehlo.fft", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
 ) where {T,N}
+    @assert 1 <= Base.length(length) <= 3 "stablehlo.fft only supports up to rank 3"
+
     if type ∈ ("FFT", "IFFT")
         @assert T <: Complex
         Tout = T
+        rsize = size(x)
     elseif type == "RFFT"
         @assert T <: Real
         Tout = Complex{T}
+        rsize = let rsize = collect(size(x))
+            rsize[end] = rsize[end] == 0 ? 0 : rsize[end] ÷ 2 + 1
+        end
     elseif type == "IRFFT"
         @assert T <: Complex
         Tout = real(T)
+        rsize = let rsize = collect(size(x))
+            rsize[(end - Base.length(length) + 1):end] = length
+            Tuple(rsize)
+        end
     else
         error("Invalid FFT type: $type")
     end
 
-    @assert 1 <= Base.length(length) <= 3 "stablehlo.fft only supports up to rank 3"
-
-    rsize = size(x)
-
     res = MLIR.IR.result(
         stablehlo.fft(
             x.mlir_data;
-            result_0=MLIR.IR.TensorType(rsize, mlir_type(Tout)),
+            result_0=mlir_type(TracedRArray{Tout,N}, rsize),
             fft_type=MLIR.API.stablehloFftTypeAttrGet(MLIR.IR.context(), type),
             fft_length=MLIR.IR.DenseArrayAttribute(length),
             location,
         ),
     )
-    return TracedRArray{Tout,N}((), res, rsize, mlir_type(Tout))
+    return TracedRArray{Tout,N}((), res, rsize)
 end
 
 function cholesky(

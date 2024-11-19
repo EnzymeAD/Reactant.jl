@@ -220,23 +220,26 @@ end
 end
 
 @testset "fft" begin
-    x = ConcreteRArray([1.0, 1.0, 1.0, 1.0])
-    @test ComplexF64[4.0, 0.0, 0.0] ≈ @jit Ops.fft(x, type="RFFT")
-
-    x = ConcreteRArray([0.0, 1.0, 0.0, -1.0])
-    @test ComplexF64[0.0, -2.0, 0.0] ≈ @jit Ops.fft(x, type="RFFT")
-
-    x = ConcreteRArray([1.0, -1.0, 1.0, -1.0])
-    @test ComplexF64[0.0, 0.0, 4.0] ≈ @jit Ops.fft(x, type="RFFT")
+    grfft(x) = Ops.fft(x; type="RFFT", length=[4])
+    gfft(x) = Ops.fft(x; type="FFT", length=[4])
 
     x = ConcreteRArray([1.0, 1.0, 1.0, 1.0])
-    @test ComplexF64[4.0, 0.0, 0.0, 0.0] ≈ @jit Ops.fft(x, type="FFT")
+    @test ComplexF64[4.0, 0.0, 0.0] ≈ @jit grfft(x)
 
     x = ConcreteRArray([0.0, 1.0, 0.0, -1.0])
-    @test ComplexF64[0.0, -2.0, 0.0, 2.0] ≈ @jit Ops.fft(x, type="FFT")
+    @test ComplexF64[0.0, -2.0im, 0.0] ≈ @jit grfft(x)
 
     x = ConcreteRArray([1.0, -1.0, 1.0, -1.0])
-    @test ComplexF64[0.0, 0.0, 4.0, 0.0] ≈ @jit Ops.fft(x, type="FFT")
+    @test ComplexF64[0.0, 0.0, 4.0] ≈ @jit grfft(x)
+
+    x = ConcreteRArray(ComplexF64[1.0, 1.0, 1.0, 1.0])
+    @test ComplexF64[4.0, 0.0, 0.0, 0.0] ≈ @jit gfft(x)
+
+    x = ConcreteRArray(ComplexF64[0.0, 1.0, 0.0, -1.0])
+    @test ComplexF64[0.0, -2.0im, 0.0, 2.0im] ≈ @jit gfft(x)
+
+    x = ConcreteRArray(ComplexF64[1.0, -1.0, 1.0, -1.0])
+    @test ComplexF64[0.0, 0.0, 4.0, 0.0] ≈ @jit gfft(x)
 
     # TODO test with complex numbers and inverse FFT
 end
