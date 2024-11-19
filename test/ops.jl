@@ -638,7 +638,15 @@ end
 #     @test diag(Array(x)) ≈ @jit f6(x)
 # end
 
-@testset "xor" begin end
+@testset "xor" begin
+    a = ConcreteRArray([false, false, true, true])
+    b = ConcreteRArray([false, true, false, true])
+    @test [false, true, true, false] ≈ @jit Ops.xor(a, b)
+
+    a = ConcreteRArray([1, 2, 3, 4])
+    b = ConcreteRArray([5, 6, -7, -8])
+    @test Array(a) .⊻ Array(b) == @jit Ops.xor(a, b)
+end
 
 @testset "acos" begin end
 
