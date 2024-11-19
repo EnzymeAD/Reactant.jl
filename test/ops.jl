@@ -618,7 +618,25 @@ end
     ] == @jit Ops.transpose(x, [3, 2, 1])
 end
 
-@testset "unary_einsum" begin end
+# NOTE deprecated
+# @testset "unary_einsum" begin
+#     f1(a) = Ops.unary_einsum(a; equation="i->")
+#     f4(a) = Ops.unary_einsum(a; equation="ij->")
+#     f3(a) = Ops.unary_einsum(a; equation="ij->ji")
+#     f4(a) = Ops.unary_einsum(a; equation="ij->j")
+#     f5(a) = Ops.unary_einsum(a; equation="ij->i")
+#     f6(a) = Ops.unary_einsum(a; equation="ii->i")
+
+#     x = ConcreteRArray([1, 2, 3, 4])
+#     @test sum(Array(x)) ≈ @jit f1(x)
+
+#     x = ConcreteRArray([1 2; 3 4])
+#     @test sum(Array(x)) ≈ @jit f4(x)
+#     @test Base.transpose(Array(x)) ≈ @jit f3(x)
+#     @test sum(Array(x); dims=1) ≈ @jit f4(x)
+#     @test sum(Array(x); dims=2) ≈ @jit f5(x)
+#     @test diag(Array(x)) ≈ @jit f6(x)
+# end
 
 @testset "xor" begin end
 

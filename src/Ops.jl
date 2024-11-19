@@ -649,21 +649,29 @@ function einsum(
     return TracedRArray{T,length(rsize)}((), res, rsize)
 end
 
-function unary_einsum(
-    x::Union{TracedRNumber,TracedRArray};
-    equation::String,
-    location=MLIR.IR.Location(
-        "stablehlo.unary_einsum", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
-    ),
-)
-    res = MLIR.IR.result(
-        stablehlo.unary_einsum(
-            x.mlir_data; einsum_config=MLIR.IR.Attribute(equation), location
-        ),
-    )
-    # computing the result size is not trivial
-    return TracedRArray{Float64,1}((), res, (1,))
-end
+# function unary_einsum(
+#     x::TracedRArray{T};
+#     equation::String,
+#     location=MLIR.IR.Location(
+#         "stablehlo.unary_einsum", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+#     ),
+# ) where {T}
+#     ia, ic = split(equation, "->")
+#     sizes = Dict(c => d for (c, d) in zip(ia, size(x)))
+#     rsize = Tuple(sizes[i] for i in ic)
+#     result_0 = mlir_type(TracedRArray{T,length(ic)}, rsize)
+
+#     res = MLIR.IR.result(
+#         stablehlo.unary_einsum(
+#             x.mlir_data; result_0, einsum_config=MLIR.IR.Attribute(equation), location
+#         ),
+#     )
+#     if length(rsize) == 0
+#         return TracedRNumber{T}((), res)
+#     else
+#         return TracedRArray{T,length(rsize)}((), res, rsize)
+#     end
+# end
 
 # paralell ops
 function partition_id(;
