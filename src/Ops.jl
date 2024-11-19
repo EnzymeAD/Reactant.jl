@@ -272,7 +272,7 @@ end
 
 # shape ops
 function reshape(x::TracedRArray, dims...; kwargs...)
-    return stablehlo.reshape(x, collect(dims); kwargs...)
+    return reshape(x, collect(dims); kwargs...)
 end
 
 function reshape(
@@ -282,9 +282,12 @@ function reshape(
         "stablehlo.reshape", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
     ),
 ) where {T,N}
-    restype = MLIR.IR.TensorType(dims, mlir_type(T))
+    restype = mlir_type(TracedRArray{T,length(dims)}, dims)
     res = MLIR.IR.result(stablehlo.reshape(x.mlir_data; result_0=restype, location))
-    return TracedRArray{T,N}((), res, dims)
+    result = TracedRArray{T,length(dims)}((), res, dims)
+    # NOTE this last `transpose` is required for consistency with Julia's column-major order
+    # do not remove, as it will be optimized away by the compiler
+    return transpose(result, [length(dims):-1:1...])
 end
 
 function get_dimension_size(

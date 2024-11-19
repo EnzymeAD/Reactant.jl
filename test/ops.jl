@@ -471,7 +471,7 @@ end
 
 @testset "reshape" begin
     x = ConcreteRArray([1, 2, 3, 4])
-    @test [1, 3; 2, 4] == @jit Ops.reshape(x, 2, 2)
+    @test reshape(Array(x), 2, 2) == @jit Ops.reshape(x, 2, 2)
 end
 
 @testset "reverse" begin
