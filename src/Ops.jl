@@ -342,14 +342,11 @@ end
 function pad(
     x::TracedRArray{T,N},
     padding_value::TracedRNumber{T};
-    low,
-    high,
-    interior,
+    low=fill(0, N),
+    high=fill(0, N),
+    interior=fill(0, N),
     location=MLIR.IR.Location("stablehlo.pad", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
 ) where {T,N}
-    low = low .- 1
-    high = high .- 1
-    interior = interior .- 1
     rsize = size(x) .+ low .+ high .+ max.(size(x) .- 1, 0) .* interior
     res = MLIR.IR.result(
         stablehlo.pad(
