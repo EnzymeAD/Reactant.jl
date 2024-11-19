@@ -166,8 +166,11 @@ end
 end
 
 @testset "divide" begin
+    a = ConcreteRArray([5, 6, -7, -8])
+    b = ConcreteRArray([1, 2, 3, 4])
+    @test Array(a) .÷ Array(b) ≈ @jit Ops.divide(a, b)
+
     for (a, b) in [
-        (ConcreteRArray([1, 2, 3, 4]), ConcreteRArray([5, 6, -7, -8])),
         (ConcreteRArray([1.1, 2.2, 3.3, 4.4]), ConcreteRArray([5.5, 6.6, -7.7, -8.8])),
         (
             ConcreteRArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im]),
