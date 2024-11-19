@@ -359,8 +359,8 @@ end
     @test [1, 0, -1, -10] == @jit Ops.negate(x)
 
     # on unsigned integers: (1) bitcast, (2) change sign and (3) bitcast
-    x = ConcreteRArray(UInt[-1, 0, 1, 10])
-    @test reinterpret(UInt, Base.checked_neg.(reinterpret.(Int, UInt[0, 1, 2, 3]))) ==
+    x = ConcreteRArray(UInt[0, 1, 10])
+    @test reinterpret(UInt, Base.checked_neg.(reinterpret.(Int, Array(x)))) ==
         @jit Ops.negate(x)
 
     x = ConcreteRArray([-1.0, 0.0, 1.0, 10.0])
