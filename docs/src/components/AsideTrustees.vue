@@ -10,7 +10,14 @@
             <p class="extra-info">Machine Learning</p>
         </span>
     </a>
-    <!-- XXX: Add more projects using Reactant.jl here -->
+    <a class="enjoyer" href="https://bsc-quantic.github.io/Tenet.jl/stable/" target="_blank">
+        <img width="32" height="32" src="https://raw.githubusercontent.com/bsc-quantic/Tenet.jl/refs/heads/master/docs/src/assets/logo.svg" />
+        <span>
+            <p class="extra-info">Quantum Simulation</p>
+            <p class="heading">Tenet.jl</p>
+            <p class="extra-info">Tensor Networks</p>
+        </span>
+    </a>
 </template>
 
 <style>
