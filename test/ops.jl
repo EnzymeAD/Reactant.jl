@@ -428,7 +428,7 @@ end
         (ConcreteRArray([1, 2, 3, 4]), ConcreteRArray([5, 6, -7, -8])),
         (ConcreteRArray([1.1, 2.2, 3.3, 4.4]), ConcreteRArray([5.5, 6.6, -7.7, -8.8])),
     ]
-        @test Array(a) .% Array(b) ≈ @jit Ops.divide(a, b)
+        @test Array(a) .% Array(b) ≈ @jit Ops.remainder(a, b)
     end
 end
 
