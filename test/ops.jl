@@ -98,7 +98,7 @@ end
         ],
     )
     @test cholesky(Array(x)).U ≈ @jit Ops.cholesky(x)
-    @test transpose(cholesky(Array(x)).U) ≈ @jit g(x)
+    @test adjoint(cholesky(Array(x)).U) ≈ @jit g(x)
 end
 
 @testset "clamp" begin
