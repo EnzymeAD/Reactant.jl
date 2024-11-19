@@ -380,8 +380,10 @@ end
 
 @testset "optimization_barrier" begin
     # TODO is there a better way to test this? we're only testing for identify
+    # TODO crashing for just 1 argument
     x = ConcreteRArray([1, 2, 3, 4])
-    @test x == @jit Ops.optimization_barrier(x)
+    y = ConcreteRArray([5, 6, -7, -8])
+    @test (x, y) == @jit Ops.optimization_barrier(x, y)
 end
 
 @testset "or" begin
