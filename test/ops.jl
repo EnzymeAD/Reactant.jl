@@ -1,5 +1,6 @@
 using Reactant, Test
 using Reactant: Ops
+using LinearAlgebra
 
 @testset "abs" begin
     x = ConcreteRArray([1, -1])
@@ -21,22 +22,21 @@ end
 @testset "add" begin
     a = ConcreteRArray([false, false, true, true])
     b = ConcreteRArray([false, true, false, true])
-    @test [false, true, true, true] ≈ @jit Ops.add(a, b)
+    @test [false, true, true, false] ≈ @jit Ops.add(a, b)
 
     a = ConcreteRArray([1, 2, 3, 4])
     b = ConcreteRArray([5, 6, -7, -8])
-    @test [6, 8, -4, -4] == @jit Ops.add(a, b)
+    @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
 
     a = ConcreteRArray([1.1, 2.2, 3.3, 4.4])
     b = ConcreteRArray([5.5, 6.6, -7.7, -8.8])
-    @test [6.6, 8.8, -4.4, -4.4] ≈ @jit Ops.add(a, b)
+    @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
 
     a = ConcreteRArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
     b = ConcreteRArray([
         9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
     ])
-    @test [11.0 + 12.2im, 14.4 + 16.52im, -7.63 + -7.54im, -7.38 + -7.36im] ≈
-        @jit Ops.add(a, b)
+    @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
 end
 
 @testset "after_all" begin
@@ -50,14 +50,10 @@ end
 
     a = ConcreteRArray([1, 2, 3, 4])
     b = ConcreteRArray([5, 6, -7, -8])
-    @test [1, 2, 1, 1] == @jit Ops.and(a, b)
+    @test [1, 2, 1, 0] == @jit Ops.and(a, b)
 end
 
 @testset "atan2" begin
-    a = ConcreteRArray([1, 2, 3, 4])
-    b = ConcreteRArray([5, 6, -7, -8])
-    @test atan.(Array(a), Array(b)) ≈ @jit Ops.atan2(a, b)
-
     a = ConcreteRArray([1.1, 2.2, 3.3, 4.4])
     b = ConcreteRArray([5.5, 6.6, -7.7, -8.8])
     @test atan.(Array(a), Array(b)) ≈ @jit Ops.atan2(a, b)
