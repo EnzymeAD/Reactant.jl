@@ -398,6 +398,31 @@ end
 
 @testset "outfeed" begin end
 
+@testset "pad" begin
+    x = ConcreteRArray([1, 2, 3, 4])
+    v = ConcreteRNumber(0)
+
+    flow(x, v) = Ops.pad(x, v; low=[1])
+    @test [0, 1, 2, 3, 4] == @jit flow(x, v)
+
+    fhigh(x, v) = Ops.pad(x, v; high=[1])
+    @test [1, 2, 3, 4, 0] == @jit fhigh(x, v)
+
+    finterior(x, v) = Ops.pad(x, v; interior=[1])
+    @test [1, 0, 2, 0, 3, 0, 4] == @jit finterior(x, v)
+
+    x = ConcreteRArray([1 2; 3 4])
+
+    glow(x, v) = Ops.pad(x, v; low=[1, 2])
+    @test [0 0 0 0; 0 0 1 2; 0 0 3 4] == @jit glow(x, v)
+
+    ghigh(x, v) = Ops.pad(x, v; high=[1, 2])
+    @test [1 2 0 0; 3 4 0 0; 0 0 0 0] == @jit ghigh(x, v)
+
+    ginterior(x, v) = Ops.pad(x, v; interior=[1, 2])
+    @test [1 0 0 2; 0 0 0 0; 3 0 0 4] == @jit ginterior(x, v)
+end
+
 @testset "partition_id" begin
     # TODO this crashes. seems like the same error as #196
     # @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
