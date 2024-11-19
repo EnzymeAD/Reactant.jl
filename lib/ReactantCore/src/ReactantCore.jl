@@ -31,6 +31,7 @@ if no traced value is found inside the expression, then there is no overhead.
 - `if` conditions (with `elseif` and other niceties) (`@trace if ...`)
 - `if` statements with a preceeding assignment (`@trace a = if ...`) (note the positioning
   of the macro needs to be before the assignment and not before the `if`)
+- `for` statements with a single induction variable iterating over a syntactic `StepRange` of integers.
 
 ## Special Considerations
 
@@ -81,6 +82,15 @@ end
 This will not compile since `y` is a `Float32` in one branch and a `Float64` in the other.
 You need to ensure that all branches have the same type.
 
+Another example is the following for loop which changes the type of `x` between iterations.
+
+```julia
+x = ... # ConcreteRArray{Int64, 1}
+for i in 1f0:0.5f0:10f0
+    x = x .+ i # ConcreteRArray{Float32, 1}
+end
+```
+
 ### Certain Symbols are Reserved
 
 Symbols like $(SPECIAL_SYMBOLS) are not allowed as variables in `@trace` expressions. While certain cases might work but these are not guaranteed to work. For
@@ -100,13 +110,82 @@ end
 """
 macro trace(expr)
     expr = macroexpand(__module__, expr)
-    if expr.head == :(=)
-        if expr.args[2] isa Expr && expr.args[2].head == :if
+    if Meta.isexpr(expr, :(=))
+        if Meta.isexpr(expr.args[2], :if)
             return esc(trace_if_with_returns(__module__, expr))
         end
     end
-    expr.head == :if && return esc(trace_if(__module__, expr))
+    Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
+    Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
+end
+
+function trace_for(mod, expr)
+    Meta.isexpr(expr, :for, 2) || error("expected for expr")
+    assign, body = expr.args
+
+    error_if_any_control_flow(body)
+    if !Meta.isexpr(assign, :(=)) ||
+        !(assign.args[1] isa Symbol) ||
+        !Meta.isexpr(assign.args[2], :call) ||
+        assign.args[2].args[1] !== :(:)
+        error("malformed for loop assignment")
+    end
+
+    induction, range = assign.args
+
+    counter = gensym(:i)
+    num_iters = gensym(:num_iters)
+
+    start = range.args[2]
+    step = length(range.args) == 3 ? 1 : range.args[3]
+    limit = range.args[end]
+
+    body_symbols = ExpressionExplorer.compute_symbols_state(
+        quote
+            $(Expr(:local, assign))
+            $body
+        end,
+    )
+
+    external_syms = body_symbols.assignments ∪ body_symbols.references
+    filter!(∉(SPECIAL_SYMBOLS), external_syms)
+
+    all_syms = Expr(:tuple, counter, external_syms...)
+    args_init = Expr(
+        :tuple, :(Reactant.promote_to(Reactant.TracedRNumber{Int}, 0)), external_syms...
+    )
+
+    reactant_code_block = quote
+        let args = $(args_init)
+            cond_fn =
+                $(all_syms) -> begin
+                    local num_iters = div($limit - $start, $step, RoundDown)
+                    local num_iters = Reactant.promote_to(
+                        Reactant.TracedRNumber{Int64}, num_iters
+                    )
+                    $counter < num_iters + 1
+                end
+            body_fn =
+                $(all_syms) -> begin
+                    local step_ = $step
+                    local start_ = $start
+                    local $induction = start_ + $counter * step_
+                    $body
+                    ($counter + 1, $(all_syms.args[(begin + 1):end]...))
+                end
+
+            $(ReactantCore).traced_while(cond_fn, body_fn, args)
+        end
+    end
+
+    return quote
+        if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
+            $(reactant_code_block)
+        else
+            $(expr)
+        end
+    end
 end
 
 # ... = if ... style expressions
@@ -128,7 +207,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     original_expr = expr
 
     if depth == 0
-        error_if_return(expr)
+        error_if_any_control_flow(expr)
 
         counter = 0
         expr = MacroTools.prewalk(expr) do x
@@ -281,8 +360,15 @@ function remove_shortcircuiting(expr)
 end
 
 # Generate this dummy function and later we remove it during tracing
-function traced_if(cond, true_fn::TFn, false_fn::FFn, args) where {TFn,FFn}
+function traced_if(cond, true_fn, false_fn, args)
     return cond ? true_fn(args) : false_fn(args)
+end
+
+function traced_while(cond_fn, body_fn, args)
+    while cond_fn(args...)
+        args = body_fn(args...)
+    end
+    return args
 end
 
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
@@ -294,10 +380,14 @@ function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     end
 end
 
-function error_if_return(expr)
+const CONTROL_FLOW_EXPRS = [:return, :break, :continue, :symbolicgoto]
+
+function error_if_any_control_flow(expr)
     return MacroTools.postwalk(expr) do x
-        if x isa Expr && x.head == :return
-            error("Cannot use @trace on a block that contains a return statement")
+        for head in CONTROL_FLOW_EXPRS
+            if Meta.isexpr(x, head)
+                error("Cannot use @trace on a block that contains a $head statement")
+            end
         end
         return x
     end

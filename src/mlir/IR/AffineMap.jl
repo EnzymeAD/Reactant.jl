@@ -54,7 +54,7 @@ Creates an affine map with results defined by the given list of affine expressio
 The map resulting map also has the requested number of input dimensions and symbols, regardless of them being used in the results.
 """
 AffineMap(ndims, nsymbols, exprs::Vector{AffineExpr}; context::Context=context()) =
-    AffineMap(API.mlirAffineMapGet(context, ndims, nsymbols, length(exprs), pointer(exprs)))
+    AffineMap(API.mlirAffineMapGet(context, ndims, nsymbols, length(exprs), exprs))
 
 """
     ConstantAffineMap(val; context=context())
@@ -94,9 +94,7 @@ The affine map is owned by the context.
 function PermutationAffineMap(permutation; context::Context=context())
     @assert Base.isperm(permutation) "$permutation must be a valid permutation"
     zero_perm = permutation .- 1
-    return AffineMap(
-        API.mlirAffineMapPermutationGet(context, length(zero_perm), pointer(zero_perm))
-    )
+    return AffineMap(API.mlirAffineMapPermutationGet(context, length(zero_perm), zero_perm))
 end
 
 """
@@ -192,7 +190,7 @@ Base.isperm(map::AffineMap) = API.mlirAffineMapIsPermutation(map)
 Returns the affine map consisting of the `positions` subset.
 """
 submap(map::AffineMap, pos::Vector{Int}) =
-    AffineMap(API.mlirAffineMapGetSubMap(map, length(pos), pointer(pos)))
+    AffineMap(API.mlirAffineMapGetSubMap(map, length(pos), pos))
 
 """
     majorsubmap(affineMap, nresults)
@@ -258,8 +256,8 @@ On the right hand side are allowed the following function calls:
 
 The rhs can only contains dimensions and symbols present on the left hand side or integer literals.
 
-```juliadoctest
-julia> using MLIR: IR, AffineUtils
+```julia
+julia> using Reactant.MLIR: IR
 
 julia> IR.context!(IR.Context()) do
            IR.@affinemap (d1, d2)[s0] -> (d1 + s0, d2 % 10)

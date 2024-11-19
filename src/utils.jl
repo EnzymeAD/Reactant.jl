@@ -19,6 +19,10 @@ function mlir_type(::Type{<:MissingTracedValue})
     return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 end
 
+function batch_ty(width, mlirty)
+    return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
+end
+
 function transpose_ty(mlirty)
     return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
 end
@@ -43,6 +47,7 @@ function make_mlir_fn(
     return_dialect=:func,
     no_args_in_result::Bool=false,
     construct_function_without_args::Bool=false,
+    do_transpose=true,
 )
     if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
         return (
@@ -57,6 +62,7 @@ function make_mlir_fn(
                 return_dialect,
                 no_args_in_result,
                 construct_function_without_args,
+                do_transpose,
             )[2:end]...,
         )
     end
@@ -82,8 +88,10 @@ function make_mlir_fn(
 
     in_tys = if toscalar
         [MLIR.IR.TensorType((), MLIR.IR.Type(eltype(arg))) for arg in linear_args]
-    else
+    elseif do_transpose
         [transpose_ty(mlir_type(arg)) for arg in linear_args]
+    else
+        [mlir_type(arg) for arg in linear_args]
     end
 
     sym_visibility = nothing
@@ -115,24 +123,25 @@ function make_mlir_fn(
                 arg.mlir_data = args[i].mlir_data
             else
                 raw_arg = MLIR.IR.argument(fnbody, i)
-                row_maj_arg = transpose_val(raw_arg)
+                row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
                 arg.mlir_data = row_maj_arg
             end
         end
 
-        # NOTE an `AbstractInterpreter` cannot process methods with more recent world-ages than it
-        # solution is to use a new interpreter, but we reuse the `code_cache` to minimize comptime in Julia <= 1.10
-        @static if !HAS_INTEGRATED_CACHE
-            interp = ReactantInterpreter(; code_cache=REACTANT_CACHE)
-        else
-            interp = ReactantInterpreter()
-        end
+        interp = ReactantInterpreter()
 
-        # TODO replace with `Base.invoke_within` if julia#52964 lands
-        ir, ty = only(
-            # TODO fix it for kwargs
-            Base.code_ircode(f, map(typeof, traced_args); interp),
-        )
+        # TODO replace with `Base.invoke_within` if julia#52964 lands        
+        # TODO fix it for kwargs
+        ircoderes = Base.code_ircode(f, map(typeof, traced_args); interp)
+
+        if length(ircoderes) != 1
+            throw(
+                AssertionError(
+                    "Could not find unique ircode for $f $traced_args, found $ircoderes"
+                ),
+            )
+        end
+        ir, ty = ircoderes[1]
         oc = Core.OpaqueClosure(ir)
 
         if f === Reactant.apply
@@ -180,12 +189,12 @@ function make_mlir_fn(
     ret = MLIR.IR.block!(fnbody) do
         vals = MLIR.IR.Value[]
         for res in linear_results
-            if res isa MissingTracedValue
-                col_maj = broadcast_to_size(false, ()).mlir_data
-            elseif construct_function_without_args
-                col_maj = res.mlir_data
-            else
-                col_maj = transpose_val(res.mlir_data)
+            col_maj = if res isa MissingTracedValue
+                broadcast_to_size(false, ()).mlir_data
+            elseif construct_function_without_args || !do_transpose
+                res.mlir_data
+            elseif do_transpose
+                transpose_val(res.mlir_data)
             end
             push!(vals, col_maj)
         end

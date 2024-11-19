@@ -22,7 +22,6 @@ reactant_data = Reactant.ConcreteRArray(julia_data)
 You can also create a ConcreteRArray-version of an arbitrary data type by tracing through the structure, like below. This method will automatically handle recursive data structures or shared objects.
 
 ```julia
-
 struct Pair{A,B}
    x::A
    y::B
@@ -36,7 +35,6 @@ reactant_pair = Reactant.to_rarray(pair)
 To compile programs using ConcreteRArray's, one uses the compile function, like as follows:
 
 ```julia
-
 input1 = Reactant.ConcreteRArray(ones(10))
 input2 = Reactant.ConcreteRArray(ones(10))
 
@@ -44,7 +42,7 @@ function sinsum_add(x, y)
    return sum(sin.(x) .+ y)
 end
 
-f= @compile sinsum_add(input1,input2)
+f = @compile sinsum_add(input1,input2)
 
 # one can now run the program
 f(input1, input2)
@@ -63,3 +61,15 @@ Reactant.set_default_backend("gpu")
 # ones favorite code will now all be executed on GPU, no CUDA.jl dependency even required!
 ```
 
+## Installing Reactant on GPU Servers without Internet
+
+If you want to use Reactant on GPU Servers where all packages must be installed on the login nodes and the compute nodes don't have access to internet,
+add the following to the Project.toml and precompile the package:
+
+```toml
+[extras]
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
+
+[preferences.Reactant_jll]
+gpu = "cuda"
+```

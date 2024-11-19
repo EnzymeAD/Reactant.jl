@@ -94,14 +94,18 @@ function traced_type(::Type{T}, seen, mode) where {T}
         return T
     end
 
+    if T == Type || T == DataType
+        return T
+    end
+
     # unknown number of fields
     if T isa UnionAll
         aT = Base.argument_datatype(T)
         if isnothing(aT)
-            throw("Unhandled type $T")
+            throw(TracedTypeError("Unhandled type $T"))
         end
         if isnothing(Base.datatype_fieldcount(aT))
-            throw("Unhandled type $T")
+            throw(TracedTypeError("Unhandled type $T"))
         end
     end
 
@@ -111,7 +115,7 @@ function traced_type(::Type{T}, seen, mode) where {T}
 
     # if abstract it must be by reference
     if Base.isabstracttype(T)
-        throw("Unhandled abstract type $T")
+        throw(TracedTypeError("Unhandled abstract type $T"))
     end
 
     if !(Base.isconcretetype(T) || T isa UnionAll)
@@ -148,7 +152,11 @@ function traced_type(::Type{T}, seen, mode) where {T}
         end
     end
 
-    TT2 = Core.apply_type(T.name.wrapper, subParms...)
+    if !isempty(subParms)
+        TT2 = Core.apply_type(T.name.wrapper, subParms...)
+    else
+        TT2 = T
+    end
     seen3 = (Val(T), Val(TT2), seen...)
     if fieldcount(T) == fieldcount(TT2)
         legal = true
@@ -167,7 +175,17 @@ function traced_type(::Type{T}, seen, mode) where {T}
     end
 
     name = Symbol[]
-    throw(error("Cannot convert type $T, best attempt $TT2 failed"))
+    throw(NoFieldMatchError(T, TT2))
+end
+
+function traced_type(::Type{<:ConcreteRNumber{T}}, seen, ::Val{mode}) where {T,mode}
+    if mode == ConcreteToTraced
+        return TracedRNumber{T}
+    elseif mode == TracedToConcrete
+        return ConcreteRNumber{T}
+    else
+        throw("Abstract RNumber cannot be made concrete")
+    end
 end
 
 function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode}
@@ -223,6 +241,28 @@ function traced_type(::Type{Val{T}}, seen, mode) where {T}
         return Val{T}
     end
     throw("Val type $(Val{T}) cannot be traced")
+end
+
+abstract type TracedTypeException <: Exception end
+
+struct TracedTypeError <: TracedTypeException
+    msg::String
+end
+function Base.showerror(io::IO, err::TracedTypeError)
+    print(io, "TracedTypeError: ")
+    return print(io, err.msg)
+end
+
+struct NoFieldMatchError <: TracedTypeException
+    origty
+    besteffort
+end
+function Base.showerror(io::IO, err::NoFieldMatchError)
+    print(io, "NoFieldMatchError: ")
+    return print(
+        io,
+        "Cannot convert type $(err.origty), best attempt $(err.besteffort) failed.\nThis could be because the type does not capture the fieldtypes that should be converted in its type parameters.",
+    )
 end
 
 append_path(path, i) = (path..., i)
@@ -472,6 +512,7 @@ function make_tracer(
     return prev
 end
 
+make_tracer(seen, prev::Type, @nospecialize(path), mode; kwargs...) = prev
 make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...) = prev
 
 function make_tracer(

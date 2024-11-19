@@ -88,6 +88,6 @@ end
         # TODO this should be able to run without problems, but crashes
         @test_broken isapprox(@jit(identity(x3)), x3)
 
-        @test isapprox(sum(x3), only(@jit(sum(x3))))
+        @test isapprox(@allowscalar(sum(x3)), only(@jit(sum(x3))))
     end
 end

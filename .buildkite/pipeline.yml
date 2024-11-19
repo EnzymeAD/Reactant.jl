@@ -7,6 +7,7 @@ steps:
         group:
           - core
           - neural_networks
+          - integration
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"

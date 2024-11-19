@@ -1,6 +1,7 @@
 module ReactantNNlibExt
 
 using NNlib
+using GPUArraysCore: @allowscalar
 using Reactant:
     Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR, TracedRNumber
 using ReactantCore: @trace
@@ -367,7 +368,7 @@ function NNlib.gather!(dst::TracedRArray, src::AnyTracedRArray, idxs::AbstractAr
     colons = ntuple(Returns(Colon()), dims)
     start_sizes = ntuple(i -> size(src, i), dims)
     results = map(CartesianIndices(idxs)) do k
-        res = src[colons..., Tuple(idxs[k])...]
+        res = @allowscalar src[colons..., Tuple(idxs[k])...]
         res isa TracedRNumber && (res = Reactant.broadcast_to_size(res, (1,)))
         return reshape(res, start_sizes..., :)
     end

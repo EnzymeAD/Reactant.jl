@@ -40,8 +40,17 @@ Base.convert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass.pass
 
 Enable mlir-print-ir-after-all.
 """
-function enable_ir_printing!(pm)
-    API.mlirPassManagerEnableIRPrinting(pm)
+function enable_ir_printing!(
+    pm;
+    before_all=false,
+    after_all=false,
+    module_scope=false,
+    after_only_on_change=false,
+    after_only_on_failure=false,
+)
+    API.mlirPassManagerEnableIRPrinting(
+        pm, before_all, after_all, module_scope, after_only_on_change, after_only_on_failure
+    )
     return pm
 end
 
