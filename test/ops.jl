@@ -324,15 +324,15 @@ end
 @testset "minimum" begin
     x = ConcreteRArray([false, false, true, true])
     y = ConcreteRArray([false, true, false, true])
-    @test [false, false, false, true] == @jit Ops.maximum(x, y)
+    @test [false, false, false, true] == @jit Ops.minimum(x, y)
 
     x = ConcreteRArray([-1, 0, 1, 10])
     y = ConcreteRArray([10, 1, 0, -1])
-    @test [-1, 0, 0, -1] == @jit Ops.maximum(x, y)
+    @test [-1, 0, 0, -1] == @jit Ops.minimum(x, y)
 
     x = ConcreteRArray([-1.0, 0.0, 1.0, 10.0])
     y = ConcreteRArray([10.0, 1.0, 0.0, -1.0])
-    @test [-1.0, 0.0, 0.0, -1.0] == @jit Ops.maximum(x, y)
+    @test [-1.0, 0.0, 0.0, -1.0] == @jit Ops.minimum(x, y)
 end
 
 @testset "multiply" begin
