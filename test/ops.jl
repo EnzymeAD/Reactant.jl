@@ -1,6 +1,7 @@
 using Reactant, Test
 using Reactant: Ops
 using LinearAlgebra
+using SpecialFunctions: SpecialFunctions
 
 @testset "abs" begin
     x = ConcreteRArray([1, -1])
@@ -648,31 +649,67 @@ end
     @test Array(a) .⊻ Array(b) == @jit Ops.xor(a, b)
 end
 
-@testset "acos" begin end
+@testset "acos" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test acos.(Array(x)) ≈ @jit Ops.acos(a)
+end
 
-@testset "acosh" begin end
+@testset "acosh" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test acosh.(Array(x)) ≈ @jit Ops.acosh(a)
+end
 
-@testset "asin" begin end
+@testset "asin" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test asin.(Array(x)) ≈ @jit Ops.asin(a)
+end
 
-@testset "asinh" begin end
+@testset "asinh" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test asinh.(Array(x)) ≈ @jit Ops.asinh(a)
+end
 
-@testset "atan" begin end
+@testset "atan" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test atan.(Array(x)) ≈ @jit Ops.atan(a)
+end
 
-@testset "atanh" begin end
+@testset "atanh" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test atanh.(Array(x)) ≈ @jit Ops.atanh(a)
+end
 
 @testset "bessel_i1e" begin end
 
-@testset "conj" begin end
+@testset "conj" begin
+    x = ConcreteRArray([-1.0 + 2im, 0.0 - 1im, 1.0 + 4im])
+    @test conj(Array(x)) ≈ @jit Ops.conj(a)
+end
 
-@testset "cosh" begin end
+@testset "cosh" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test cosh.(Array(x)) ≈ @jit Ops.cosh(a)
+end
 
-@testset "digamma" begin end
+@testset "digamma" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test SpecialFunctions.digamma.(Array(x)) ≈ @jit Ops.digamma(a)
+end
 
-@testset "erf_inv" begin end
+@testset "erf_inv" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test SpecialFunctions.erfinv.(Array(x)) ≈ @jit Ops.erf_inv(a)
+end
 
-@testset "erf" begin end
+@testset "erf" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test erf.(Array(x)) ≈ @jit Ops.erf(a)
+end
 
-@testset "erfc" begin end
+@testset "erfc" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test erfc.(Array(x)) ≈ @jit Ops.erfc(a)
+end
 
 @testset "is_inf" begin end
 
@@ -686,10 +723,17 @@ end
 
 @testset "polygamma" begin end
 
-@testset "sinh" begin end
+@testset "sinh" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test sinh.(Array(x)) ≈ @jit Ops.sinh(a)
+end
 
-@testset "tan" begin end
+@testset "top_k" begin
+    x = ConcreteRArray([1, 2, 3, 4])
+    @test (; values=[4, 3], indices=[3, 2]) == @jit Ops.top_k(x, 2)
+end
 
-@testset "top_k" begin end
-
-@testset "zeta" begin end
+@testset "zeta" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test SpecialFunctions.zeta.(Array(x)) ≈ @jit Ops.zeta(a)
+end
