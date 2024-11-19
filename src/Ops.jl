@@ -294,7 +294,7 @@ function get_dimension_size(
         "stablehlo.get_dimension_size", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
     ),
 ) where {T,N}
-    dimension = MLIR.IR.Attribute(dim)
+    dimension = MLIR.IR.Attribute(dim - 1)
     res = MLIR.IR.result(
         stablehlo.get_dimension_size(
             x.mlir_data; result_0=mlir_type(TracedRArray{Int32,0}, ()), dimension, location
@@ -311,7 +311,7 @@ function set_dimension_size(
         "stablehlo.set_dimension_size", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
     ),
 ) where {T,N}
-    dimension = MLIR.IR.Attribute(dim)
+    dimension = MLIR.IR.Attribute(dim - 1)
     res = MLIR.IR.result(
         stablehlo.set_dimension_size(
             x.mlir_data,
