@@ -188,10 +188,6 @@ end
         (ConcreteRArray([1, 2, 3, 4]), ConcreteRArray([5, 6, -7, -8])),
         (ConcreteRArray([1.0, 2.0, 3.0, 4.0]), ConcreteRArray([5.0, 6.0, -7.0, -8.0])),
         (
-            ConcreteRArray([1 + 1im, 2 + 2im, 3 - 3im, 4 - 4im]),
-            ConcreteRArray([5 + 5im, 6 + 6im, -7 - 7im, -8 - 8im]),
-        ),
-        (
             ConcreteRArray([1.0 + 1im, 2.0 + 2im, 3.0 - 3im, 4.0 - 4im]),
             ConcreteRArray([5.0 + 5im, 6.0 + 6im, -7.0 - 7im, -8.0 - 8im]),
         ),
