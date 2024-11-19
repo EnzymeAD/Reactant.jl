@@ -267,10 +267,10 @@ function get_dimension_size(
     dimension = MLIR.IR.Attribute(dim)
     res = MLIR.IR.result(
         stablehlo.get_dimension_size(
-            x.mlir_data; result=mlir_type(TracedRNumber{Int}, ()), dimension, location
+            x.mlir_data; result_0=mlir_type(TracedRArray{Int32,0}, ()), dimension, location
         ),
     )
-    return TracedRNumber{Int}((), res)
+    return TracedRNumber{Int32}((), res)
 end
 
 function set_dimension_size(
