@@ -591,11 +591,32 @@ end
     end
 end
 
-@testset "tan" begin end
+@testset "tan" begin
+    # TODO tan(π/2) is Inf but it returns 1.633123935319537e16
+    x = ConcreteRArray([0, π / 4, π / 2, 3π / 4, π])
+    @test [0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
 
-@testset "tanh" begin end
+    x = ConcreteRArray([
+        0.0 + 0.0im, π / 4 + 0.0im, π / 2 + 0.0im, 3π / 4 + 0.0im, π + 0.0im
+    ])
+    @test ComplexF64[0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
+end
 
-@testset "transpose" begin end
+@testset "tanh" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0])
+    @test [-0.7615941559557649, 0.0, 0.7615941559557649] ≈ @jit Ops.tanh(x)
+
+    x = ConcreteRArray(ComplexF64[-1.0, 0.0, 1.0])
+    @test ComplexF64[-0.7615941559557649, 0.0, 0.7615941559557649] ≈ @jit Ops.tanh(x)
+end
+
+@testset "transpose" begin
+    x = ConcreteRArray(collect(reshape(1:12, 2, 2, 3)))
+    @test [
+        1 3; 5 7; 9 11;;;
+        2 4; 6 8; 10 12
+    ] == @jit Ops.transpose(x, [3, 2, 1])
+end
 
 @testset "unary_einsum" begin end
 
