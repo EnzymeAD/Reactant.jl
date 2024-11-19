@@ -154,7 +154,7 @@ for (dialect, op) in [
             ),
         ) where {T,N}
             res = MLIR.IR.result(
-                $(:($dialect, $op))(
+                $(:($dialect.$op))(
                     a.mlir_data,
                     b.mlir_data;
                     result=mlir_type(TracedRArray{T,N}, size(a)),
@@ -173,7 +173,7 @@ for (dialect, op) in [
             ),
         ) where {T}
             res = MLIR.IR.result(
-                $(:($dialect, $op))(
+                $(:($dialect.$op))(
                     a.mlir_data,
                     b.mlir_data;
                     result=mlir_type(TracedRArray{T,0}, ()),
@@ -197,7 +197,7 @@ for (dialect, op) in
             ),
         ) where {T,N}
             res = MLIR.IR.result(
-                $(:($dialect, $op))(
+                $(:($dialect.$op))(
                     x.mlir_data; result=mlir_type(TracedRArray{Bool,N}, size(x)), location
                 ),
             )
@@ -212,7 +212,7 @@ for (dialect, op) in
             ),
         ) where {T}
             res = MLIR.IR.result(
-                $(:($dialect, $op))(
+                $(:($dialect.$op))(
                     x.mlir_data; result=mlir_type(TracedRArray{Bool,0}, ()), location
                 ),
             )

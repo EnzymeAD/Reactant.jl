@@ -6,7 +6,7 @@ using Reactant: Ops
     @test [1, 1] ≈ @jit Ops.abs(x)
 
     x = ConcreteRArray([1.0, -1.0])
-    @test [1.0, 1.0] ≈ @jit Ops.abs(y)
+    @test [1.0, 1.0] ≈ @jit Ops.abs(x)
 
     x = ConcreteRArray([
         3.0+4im -3.0+4im
@@ -15,7 +15,7 @@ using Reactant: Ops
     @test [
         5.0 5.0
         5.0 5.0
-    ] ≈ @jit Ops.abs(y)
+    ] ≈ @jit Ops.abs(x)
 end
 
 @testset "add" begin
