@@ -1,7 +1,8 @@
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme
-using ..Reactant: ConcreteRArray, ConcreteRNumber, TracedRArray, TracedRNumber, mlir_type
+using ..Reactant:
+    Reactant, ConcreteRArray, ConcreteRNumber, TracedRArray, TracedRNumber, mlir_type
 
 struct Token
     mlir_data::MLIR.IR.Value
@@ -25,6 +26,16 @@ function constant(x::ConcreteRArray; kwargs...)
 end
 
 function constant(
+    x::T;
+    location=MLIR.IR.Location(
+        "stablehlo.constant", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+    ),
+) where {T<:Number}
+    res = constant(fill(x); location)
+    return TracedRNumber{T}((), res.mlir_data)
+end
+
+function constant(
     x::ConcreteRNumber{T};
     location=MLIR.IR.Location(
         "stablehlo.constant", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
@@ -38,57 +49,58 @@ end
 
 # unary elementwise ops
 for (dialect, op) in [
-    (stablehlo, :abs),
-    (stablehlo, :cbrt),
-    (stablehlo, :ceil),
-    (stablehlo, :count_leading_zeros),
-    (stablehlo, :cosine),
-    (stablehlo, :exponential),
-    (stablehlo, :exponential_minus_one),
-    (stablehlo, :floor),
-    (stablehlo, :imag),
-    (stablehlo, :log),
-    (stablehlo, :log_plus_one),
-    (stablehlo, :logistic),
-    (stablehlo, :negate),
-    (stablehlo, :not),
-    (stablehlo, :popcnt),
-    (stablehlo, :real),
-    (stablehlo, :round_nearest_afz),
-    (stablehlo, :round_nearest_even),
-    (stablehlo, :rsqrt),
-    (stablehlo, :sign),
-    (stablehlo, :sine),
-    (stablehlo, :sqrt),
-    (stablehlo, :tan),
-    (stablehlo, :tanh),
-    (chlo, :acos),
-    (chlo, :acosh),
-    (chlo, :asin),
-    (chlo, :asinh),
-    (chlo, :atan),
-    (chlo, :atanh),
-    (chlo, :bessel_i1e),
-    (chlo, :conj),
-    (chlo, :cosh),
-    (chlo, :digamma),
-    (chlo, :erf_inv),
-    (chlo, :erf),
-    (chlo, :erfc),
-    (chlo, :lgamma),
-    (chlo, :sinh),
-    # (chlo, :tan),
-    (chlo, :zeta),
+    (:stablehlo, :abs),
+    (:stablehlo, :cbrt),
+    (:stablehlo, :ceil),
+    (:stablehlo, :count_leading_zeros),
+    (:stablehlo, :cosine),
+    (:stablehlo, :exponential),
+    (:stablehlo, :exponential_minus_one),
+    (:stablehlo, :floor),
+    (:stablehlo, :imag),
+    (:stablehlo, :log),
+    (:stablehlo, :log_plus_one),
+    (:stablehlo, :logistic),
+    (:stablehlo, :negate),
+    (:stablehlo, :not),
+    (:stablehlo, :popcnt),
+    (:stablehlo, :real),
+    (:stablehlo, :round_nearest_afz),
+    (:stablehlo, :round_nearest_even),
+    (:stablehlo, :rsqrt),
+    (:stablehlo, :sign),
+    (:stablehlo, :sine),
+    (:stablehlo, :sqrt),
+    (:stablehlo, :tan),
+    (:stablehlo, :tanh),
+    (:chlo, :acos),
+    (:chlo, :acosh),
+    (:chlo, :asin),
+    (:chlo, :asinh),
+    (:chlo, :atan),
+    (:chlo, :atanh),
+    (:chlo, :bessel_i1e),
+    (:chlo, :conj),
+    (:chlo, :cosh),
+    (:chlo, :digamma),
+    (:chlo, :erf_inv),
+    (:chlo, :erf),
+    (:chlo, :erfc),
+    (:chlo, :lgamma),
+    (:chlo, :sinh),
+    # (:chlo, :tan),
+    (:chlo, :zeta),
 ]
     @eval begin
         function $op(
             x::TracedRArray{T,N};
             location=MLIR.IR.Location(
-                string("$dialect.$op"), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+                $(string(Symbol(dialect, :., op))),
+                MLIR.IR.Location(@__FILE__, @__LINE__, 0),
             ),
         ) where {T,N}
             res = MLIR.IR.result(
-                $dialect.$op(
+                $(:($dialect.$op))(
                     x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location
                 ),
             )
@@ -98,11 +110,14 @@ for (dialect, op) in [
         function $op(
             x::TracedRNumber{T};
             location=MLIR.IR.Location(
-                string("$dialect.$op"), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+                $(string(Symbol(dialect, :., op))),
+                MLIR.IR.Location(@__FILE__, @__LINE__, 0),
             ),
         ) where {T}
             res = MLIR.IR.result(
-                $dialect.$op(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+                $(:($dialect.$op))(
+                    x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location
+                ),
             )
             return TracedRNumber{T}((), res)
         end
@@ -111,34 +126,35 @@ end
 
 # binary elementwise ops
 for (dialect, op) in [
-    (stablehlo, :add),
-    (stablehlo, :and),
-    (stablehlo, :atan2),
-    (stablehlo, :divide),
-    (stablehlo, :maximum),
-    (stablehlo, :minimum),
-    (stablehlo, :multiply),
-    (stablehlo, :or),
-    (stablehlo, :power),
-    (stablehlo, :remainder),
-    (stablehlo, :shift_left),
-    (stablehlo, :shift_right_arithmetic),
-    (stablehlo, :shift_right_logical),
-    (stablehlo, :subtract),
-    (stablehlo, :xor),
-    (chlo, :next_after),
-    (chlo, :polygamma),
+    (:stablehlo, :add),
+    (:stablehlo, :and),
+    (:stablehlo, :atan2),
+    (:stablehlo, :divide),
+    (:stablehlo, :maximum),
+    (:stablehlo, :minimum),
+    (:stablehlo, :multiply),
+    (:stablehlo, :or),
+    (:stablehlo, :power),
+    (:stablehlo, :remainder),
+    (:stablehlo, :shift_left),
+    (:stablehlo, :shift_right_arithmetic),
+    (:stablehlo, :shift_right_logical),
+    (:stablehlo, :subtract),
+    (:stablehlo, :xor),
+    (:chlo, :next_after),
+    (:chlo, :polygamma),
 ]
     @eval begin
         function $op(
             a::TracedRArray{T,N},
             b::TracedRArray{T,N};
             location=MLIR.IR.Location(
-                string("$dialect.$op"), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+                $(string(Symbol(dialect, :., op))),
+                MLIR.IR.Location(@__FILE__, @__LINE__, 0),
             ),
         ) where {T,N}
             res = MLIR.IR.result(
-                $dialect.$op(
+                $(:($dialect, $op))(
                     a.mlir_data,
                     b.mlir_data;
                     result=mlir_type(TracedRArray{T,N}, size(a)),
@@ -152,11 +168,12 @@ for (dialect, op) in [
             a::TracedRNumber{T},
             b::TracedRNumber{T};
             location=MLIR.IR.Location(
-                string("$dialect.$op"), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+                $(string(Symbol(dialect, :., op))),
+                MLIR.IR.Location(@__FILE__, @__LINE__, 0),
             ),
         ) where {T}
             res = MLIR.IR.result(
-                $dialect.$op(
+                $(:($dialect, $op))(
                     a.mlir_data,
                     b.mlir_data;
                     result=mlir_type(TracedRArray{T,0}, ()),
@@ -170,16 +187,17 @@ end
 
 # is* checks
 for (dialect, op) in
-    [(stablehlo, :is_finite), (chlo, :is_inf), (chlo, :is_neg_inf), (chlo, :is_pos_inf)]
+    [(:stablehlo, :is_finite), (:chlo, :is_inf), (:chlo, :is_neg_inf), (:chlo, :is_pos_inf)]
     @eval begin
         function $op(
             x::TracedRArray{T,N};
             location=MLIR.IR.Location(
-                string("$dialect.$op"), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+                $(string(Symbol(dialect, :., op))),
+                MLIR.IR.Location(@__FILE__, @__LINE__, 0),
             ),
         ) where {T,N}
             res = MLIR.IR.result(
-                $dialect.$op(
+                $(:($dialect, $op))(
                     x.mlir_data; result=mlir_type(TracedRArray{Bool,N}, size(x)), location
                 ),
             )
@@ -189,11 +207,12 @@ for (dialect, op) in
         function $op(
             x::TracedRNumber{T};
             location=MLIR.IR.Location(
-                string("$dialect.$op"), MLIR.IR.Location(@__FILE__, @__LINE__, 0)
+                $(string(Symbol(dialect, :., op))),
+                MLIR.IR.Location(@__FILE__, @__LINE__, 0),
             ),
         ) where {T}
             res = MLIR.IR.result(
-                $dialect.$op(
+                $(:($dialect, $op))(
                     x.mlir_data; result=mlir_type(TracedRArray{Bool,0}, ()), location
                 ),
             )
@@ -352,7 +371,7 @@ function complex(
         stablehlo.complex(
             real.mlir_data,
             imag.mlir_data;
-            result=mlir_type(TracedRArray{T,N}, size(real)),
+            result=mlir_type(TracedRArray{Complex{T},N}, size(real)),
             location,
         ),
     )
@@ -370,7 +389,7 @@ function complex(
         stablehlo.complex(
             real.mlir_data,
             imag.mlir_data;
-            result=mlir_type(TracedRArray{T,0}, ()),
+            result=mlir_type(TracedRArray{Complex{T},0}, ()),
             location,
         ),
     )
@@ -444,9 +463,9 @@ function cholesky(
 end
 
 function clamp(
-    min::TracedRArray{T,N},
+    min::Union{TracedRNumber{T},TracedRArray{T,N}},
     x::TracedRArray{T,N},
-    max::TracedRArray{T,N};
+    max::Union{TracedRNumber{T},TracedRArray{T,N}};
     location=MLIR.IR.Location("stablehlo.clamp", MLIR.IR.Location(@__FILE__, @__LINE__, 0)),
 ) where {T,N}
     res = MLIR.IR.result(
@@ -459,6 +478,10 @@ function clamp(
         ),
     )
     return TracedRArray{T,N}((), res, size(x))
+end
+
+function clamp(min::T, x::TracedRArray{T,N}, max::T) where {T,N}
+    return clamp(constant(min), x, constant(max))
 end
 
 # function convolution(
@@ -748,7 +771,7 @@ function iota(
 )
     N = length(shape)
     output = mlir_type(TracedRArray{T,N}, shape)
-    iota_dimension = MLIR.IR.Attribute(iota_dimension)
+    iota_dimension = MLIR.IR.Attribute(iota_dimension - 1)
     res = MLIR.IR.result(stablehlo.iota(; output, iota_dimension, location))
     return TracedRArray{T,N}((), res, shape)
 end
