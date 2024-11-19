@@ -621,16 +621,27 @@ function einsum(
         "stablehlo.einsum", MLIR.IR.Location(@__FILE__, @__LINE__, 0)
     ),
 ) where {T}
+    ins, ic = split(equation, "->")
+    ia, ib = split(ins, ",")
+
+    sizea = Dict(c => d for (c, d) in zip(ia, size(lhs)))
+    sizeb = Dict(c => d for (c, d) in zip(ib, size(rhs)))
+    sizes = mergewith(sizea, sizeb) do da, db
+        da == db ? da : error("Invalid dimensions in einsum equation")
+    end
+
+    rsize = Tuple(sizes[i] for i in ic)
+    result_0 = mlir_type(TracedRArray{T,length(ic)}, rsize)
+
     res = MLIR.IR.result(
         stablehlo.einsum(
             lhs.mlir_data,
             rhs.mlir_data;
+            result_0,
             einsum_config=MLIR.IR.Attribute(equation),
             location,
         ),
     )
-    # computing the result size is not trivial
-    rsize = size(res)
     return TracedRArray{T,length(rsize)}((), res, rsize)
 end
 

@@ -184,6 +184,11 @@ end
 end
 
 @testset "einsum" begin
+    f1(a, b) = Ops.einsum(a, b; equation="i,i->i")
+    f2(a, b) = Ops.einsum(a, b; equation="i,j->ij")
+    f3(a, b) = Ops.einsum(a, b; equation="ij,ij->ij")
+    f4(a, b) = Ops.einsum(a, b; equation="ik,kj->ij")
+
     for (a, b) in [
         (ConcreteRArray([1, 2, 3, 4]), ConcreteRArray([5, 6, -7, -8])),
         (ConcreteRArray([1.0, 2.0, 3.0, 4.0]), ConcreteRArray([5.0, 6.0, -7.0, -8.0])),
@@ -192,13 +197,13 @@ end
             ConcreteRArray([5.0 + 5im, 6.0 + 6im, -7.0 - 7im, -8.0 - 8im]),
         ),
     ]
-        @test a .* b ≈ @jit Ops.einsum("i,i->i", a, b)
-        @test kron(Array(a), Array(b)) ≈ @jit Ops.einsum("i,j->ij", a, b)
+        @test a .* b ≈ @jit f1(a, b)
+        @test reshape(kron(Array(b), Array(a)), 4, 4) ≈ @jit f2(a, b)
 
         x = reshape(a, (2, 2))
         y = reshape(b, (2, 2))
-        @test x .* y ≈ @jit Ops.einsum("ij,ij->ij", x, y)
-        @test x * y ≈ @jit Ops.einsum("ik,kj->ij", x, y)
+        @test x .* y ≈ @jit f3(x, y)
+        @test x * y ≈ @jit f4(x, y)
     end
 end
 
