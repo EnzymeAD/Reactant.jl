@@ -1,7 +1,8 @@
 module ReactantArrayInterfaceExt
 
 using ArrayInterface: ArrayInterface
-using Reactant: Reactant, RArray, ConcreteRArray, ConcreteRNumber, TracedRNumber, TracedRArray
+using Reactant:
+    Reactant, RArray, ConcreteRArray, ConcreteRNumber, TracedRNumber, TracedRArray
 
 ArrayInterface.can_setindex(::Type{<:RArray}) = false
 ArrayInterface.fast_scalar_indexing(::Type{<:RArray}) = false
