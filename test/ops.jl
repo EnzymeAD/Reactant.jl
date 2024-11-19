@@ -8,8 +8,14 @@ using Reactant: Ops
     x = ConcreteRArray([1.0, -1.0])
     @test [1.0, 1.0] ≈ @jit Ops.abs(y)
 
-    x = ConcreteRArray([3.0 + 4im, -3.0 + 4im; 3.0 - 4im, -3.0 - 4im])
-    @test [5.0, 5.0; 5.0, 5.0] ≈ @jit Ops.abs(y)
+    x = ConcreteRArray([
+        3.0+4im -3.0+4im
+        3.0-4im -3.0-4im
+    ])
+    @test [
+        5.0 5.0
+        5.0 5.0
+    ] ≈ @jit Ops.abs(y)
 end
 
 @testset "add" begin
