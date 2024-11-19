@@ -418,7 +418,7 @@ end
 
 @testset "real" begin
     x = ConcreteRArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
-    @test [1.1, 3.3, 5.5, 7.7] ≈ @jit Ops.imag(x)
+    @test [1.1, 3.3, 5.5, 7.7] ≈ @jit Ops.real(x)
 end
 
 @testset "recv" begin end
