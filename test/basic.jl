@@ -572,3 +572,13 @@ end
     y = @jit(fn(x_ra, idx_ra))
     @test y ≈ x[idx, :]
 end
+
+@testset "aos_to_soa" begin
+    using ArrayInterface
+
+    x_res = collect(reshape(1.0:4.0, 2, 1, 2))
+    x_ca = ConcreteRNumber.(x_res)
+
+    @test @allowscalar ArrayInterface.aos_to_soa(x_ca) ≈ x_res
+    @test @jit(ArrayInterface.aos_to_soa(x_ca)) ≈ x_res
+end

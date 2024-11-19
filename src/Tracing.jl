@@ -178,6 +178,16 @@ function traced_type(::Type{T}, seen, mode) where {T}
     throw(NoFieldMatchError(T, TT2))
 end
 
+function traced_type(::Type{<:ConcreteRNumber{T}}, seen, ::Val{mode}) where {T,mode}
+    if mode == ConcreteToTraced
+        return TracedRNumber{T}
+    elseif mode == TracedToConcrete
+        return ConcreteRNumber{T}
+    else
+        throw("Abstract RNumber cannot be made concrete")
+    end
+end
+
 function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode}
     if mode == ConcreteToTraced
         @inline base_typet(TV::TT) where {TT<:UnionAll} =
