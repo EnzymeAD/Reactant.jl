@@ -482,8 +482,8 @@ end
 
     x = ConcreteRArray([1 2; 3 4])
     g2(x) = Ops.reverse(x; dimensions=[2])
-    @test [3, 4; 1, 2] == @jit g1(x)
-    @test [2, 1; 4, 3] == @jit g2(x)
+    @test [3 4; 1 2] == @jit g1(x)
+    @test [2 1; 4 3] == @jit g2(x)
 end
 
 @testset "rng_bit_generator" begin
