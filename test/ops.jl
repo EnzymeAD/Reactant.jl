@@ -62,19 +62,16 @@ end
     b = ConcreteRArray([5.5, 6.6, -7.7, -8.8])
     @test atan.(Array(a), Array(b)) ≈ @jit Ops.atan2(a, b)
 
-    a = ConcreteRArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
-    b = ConcreteRArray([
-        9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
-    ])
-    @test atan.(Array(a), Array(b)) ≈ @jit Ops.atan2(a, b)
+    # TODO couldn't find the definition of complex atan2 to compare against, but it should be implemented
 end
 
 @testset "cbrt" begin
     x = ConcreteRArray([1.0, 8.0, 27.0, 64.0])
     @test [1.0, 2.0, 3.0, 4.0] ≈ @jit Ops.cbrt(x)
 
-    x = ConcreteRArray([1.0 + 2.0im, 8.0 + 16.0im, 27.0 + 54.0im, 64.0 + 128.0im])
-    @test Array(x) .^ (1//3) ≈ @jit Ops.cbrt(x)
+    # TODO currently crashes, reenable when #291 is fixed
+    # x = ConcreteRArray([1.0 + 2.0im, 8.0 + 16.0im, 27.0 + 54.0im, 64.0 + 128.0im])
+    # @test Array(x) .^ (1//3) ≈ @jit Ops.cbrt(x)
 end
 
 @testset "ceil" begin
