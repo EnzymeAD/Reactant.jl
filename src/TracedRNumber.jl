@@ -17,6 +17,7 @@ ReactantCore.is_traced(::TracedRNumber) = true
 new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
 
 concrete_eltype(x) = eltype(x)
+concrete_eltype(::TracedRNumber{T}) where {T} = T
 concrete_eltype(::Type{TracedRNumber{T}}) where {T} = T
 Base.eltype(::Type{T}) where {T<:TracedRNumber} = T
 
