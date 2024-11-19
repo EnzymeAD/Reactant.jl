@@ -537,6 +537,12 @@ end
     @test float(x) isa ConcreteRNumber{Float64}
 end
 
+@testset "concrete number with fill" begin
+    x = ConcreteRNumber(10)
+    x_ra = @jit fill(x, (10,10))
+    @test fill(x, (10,10)) == Array(x_ra)
+end
+
 @testset "clamp" begin
     x = randn(2, 3)
     x_ra = Reactant.to_rarray(x)

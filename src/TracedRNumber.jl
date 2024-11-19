@@ -304,6 +304,8 @@ struct TypeCast{T<:ReactantPrimitive} <: Function end
 
 (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = promote_to(TracedRNumber{T}, x)
 
+Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N} = Reactant.broadcast_to_size(x, dims)
+
 Base.float(x::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{float(T)}, x)
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
