@@ -15,6 +15,9 @@ import ..Reactant:
     TracedType
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
+@inline traced_getfield(
+    @nospecialize(obj::AbstractArray{<:Union{ConcreteRNumber,ConcreteRArray}}), field
+) = Base.getindex(obj, field)
 
 function create_result(tocopy::T, path, result_stores) where {T}
     if !isstructtype(typeof(tocopy))
