@@ -314,67 +314,252 @@ end
 
 @testset "logistic" begin end
 
-@testset "maximum" begin end
+@testset "maximum" begin
+    x = ConcreteRArray([false, false, true, true])
+    y = ConcreteRArray([false, true, false, true])
+    @test [false, true, true, true] == @jit Ops.maximum(x, y)
 
-@testset "minimum" begin end
+    x = ConcreteRArray([-1, 0, 1, 10])
+    y = ConcreteRArray([10, 1, 0, -1])
+    @test [10, 1, 1, 10] == @jit Ops.maximum(x, y)
 
-@testset "multiply" begin end
+    x = ConcreteRArray([-1.0, 0.0, 1.0, 10.0])
+    y = ConcreteRArray([10.0, 1.0, 0.0, -1.0])
+    @test [10.0, 1.0, 1.0, 10.0] == @jit Ops.maximum(x, y)
+end
 
-@testset "negate" begin end
+@testset "minimum" begin
+    x = ConcreteRArray([false, false, true, true])
+    y = ConcreteRArray([false, true, false, true])
+    @test [false, false, false, true] == @jit Ops.maximum(x, y)
 
-@testset "not" begin end
+    x = ConcreteRArray([-1, 0, 1, 10])
+    y = ConcreteRArray([10, 1, 0, -1])
+    @test [-1, 0, 0, -1] == @jit Ops.maximum(x, y)
 
-@testset "optimization_barrier" begin end
+    x = ConcreteRArray([-1.0, 0.0, 1.0, 10.0])
+    y = ConcreteRArray([10.0, 1.0, 0.0, -1.0])
+    @test [-1.0, 0.0, 0.0, -1.0] == @jit Ops.maximum(x, y)
+end
 
-@testset "or" begin end
+@testset "multiply" begin
+    x = ConcreteRArray([false, false, true, true])
+    y = ConcreteRArray([false, true, false, true])
+    @test [false, false, false, true] == @jit Ops.maximum(x, y)
+
+    x = ConcreteRArray([-1, 0, 1, 10])
+    y = ConcreteRArray([10, 1, 0, -1])
+    @test [-10, 0, 0, -10] == @jit Ops.maximum(x, y)
+
+    x = ConcreteRArray([-1.0, 0.0, 1.0, 10.0])
+    y = ConcreteRArray([10.0, 1.0, 0.0, -1.0])
+    @test [-10.0, 0.0, 0.0, -10.0] == @jit Ops.maximum(x, y)
+end
+
+@testset "negate" begin
+    x = ConcreteRArray([-1, 0, 1, 10])
+    @test [1, 0, -1, -10] == @jit Ops.negate(x)
+
+    # on unsigned integers: (1) bitcast, (2) change sign and (3) bitcast
+    x = ConcreteRArray(UInt[-1, 0, 1, 10])
+    @test reinterpret(UInt, Base.checked_neg.(reinterpret.(Int, UInt[0, 1, 2, 3]))) ==
+        @jit Ops.negate(x)
+
+    x = ConcreteRArray([-1.0, 0.0, 1.0, 10.0])
+    @test [1.0, 0.0, -1.0, -10.0] ≈ @jit Ops.negate(x)
+
+    x = ConcreteRArray([-1.0 + 2im, 0.0 - 3im, 1.0 + 4im, 10.0 - 5im])
+    @test [1.0 - 2im, 0.0 + 3im, -1.0 - 4im, -10.0 + 5im] ≈ @jit Ops.negate(x)
+end
+
+@testset "not" begin
+    x = ConcreteRArray([false, true])
+    @test [true, false] == @jit Ops.not(x)
+
+    x = ConcreteRArray([1, 0])
+    @test [~1, ~0] == @jit Ops.not(x)
+end
+
+@testset "optimization_barrier" begin
+    # TODO is there a better way to test this? we're only testing for identify
+    x = ConcreteRArray([1, 2, 3, 4])
+    @test x == @jit Ops.optimization_barrier(x)
+end
+
+@testset "or" begin
+    a = ConcreteRArray([false, false, true, true])
+    b = ConcreteRArray([false, true, false, true])
+    @test [false, true, true, true] ≈ @jit Ops.or(a, b)
+
+    a = ConcreteRArray([1, 2, 3, 4])
+    b = ConcreteRArray([5, 6, -7, -8])
+    @test Array(a) .| Array(b) == @jit Ops.or(a, b)
+end
 
 @testset "outfeed" begin end
 
-@testset "partition_id" begin end
+@testset "partition_id" begin
+    # TODO this crashes. seems like the same error as #196
+    # @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
+end
 
-@testset "popcnt" begin end
+@testset "popcnt" begin
+    x = ConcreteRArray([0, 1, 2, 127])
+    @test [0, 1, 1, 7] == @jit Ops.popcnt(x)
+end
 
-@testset "power" begin end
+@testset "power" begin
+    x = ConcreteRArray([-1, -1, -1, -1])
+    p = ConcreteRArray([0, 1, 2, 3])
+    @test Array(x) .^ Array(p) == @jit Ops.power(x, p)
 
-@testset "real" begin end
+    x = ConcreteRArray([0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im])
+    p = ConcreteRArray([0.0 + 0.0im, 1.0 + 0.0im, 2.0 + 0.0im, 3.0 + 0.0im])
+    @test Array(x) .^ Array(p) == @jit Ops.power(x, p)
+end
+
+@testset "real" begin
+    x = ConcreteRArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
+    @test [1.1, 3.3, 5.5, 7.7] ≈ @jit Ops.imag(x)
+end
 
 @testset "recv" begin end
 
-@testset "remainder" begin end
+@testset "remainder" begin
+    for (a, b) in [
+        (ConcreteRArray([1, 2, 3, 4]), ConcreteRArray([5, 6, -7, -8])),
+        (ConcreteRArray([1.1, 2.2, 3.3, 4.4]), ConcreteRArray([5.5, 6.6, -7.7, -8.8])),
+    ]
+        @test Array(a) .% Array(b) ≈ @jit Ops.divide(a, b)
+    end
+end
 
-@testset "replica_id" begin end
+@testset "replica_id" begin
+    # TODO this crashes. seems like the same error as #196
+    # @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
+end
 
-@testset "reshape" begin end
+@testset "reshape" begin
+    x = ConcreteRArray([1, 2, 3, 4])
+    @test [1, 3; 2, 4] == @jit Ops.reshape(x, 2, 2)
+end
 
-@testset "reverse" begin end
+@testset "reverse" begin
+    x = ConcreteRArray([1, 2, 3, 4])
+    g1(x) = Ops.reverse(x; dimensions=[1])
+    @test [4, 3, 2, 1] == @jit g1(x)
 
-@testset "rng_bit_generator" begin end
+    x = ConcreteRArray([1 2; 3 4])
+    g2(x) = Ops.reverse(x; dimensions=[2])
+    @test [3, 4; 1, 2] == @jit g1(x)
+    @test [2, 1; 4, 3] == @jit g2(x)
+end
 
-@testset "round_nearest_even" begin end
+@testset "rng_bit_generator" begin
+    # seed = ConcreteRArray([0, 0])
+    # @jit Ops.rng_bit_generator(seed, [2])
+end
 
-@testset "round_nearest_afz" begin end
+@testset "round_nearest_afz" begin
+    x = ConcreteRArray([-2.5, 0.4, 0.5, 0.6, 2.5])
+    @test [-3.0, 0.0, 1.0, 1.0, 3.0] ≈ @jit Ops.round_nearest_afz(x)
+end
 
-@testset "rsqrt" begin end
+@testset "round_nearest_even" begin
+    x = ConcreteRArray([-2.5, 0.4, 0.5, 0.6, 2.5])
+    @test [-2.0, 0.0, 0.0, 1.0, 2.0] ≈ @jit Ops.round_nearest_even(x)
+end
+
+@testset "rsqrt" begin
+    x = ConcreteRArray([1.0 4.0; 9.0 25.0])
+    @test [1.0 0.5; 0.33333343 0.2] ≈ @jit Ops.rsqrt(x)
+
+    x = ConcreteRArray([1.0+1im 4.0+2im; 9.0+3im 25.0+4im])
+    @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
+end
 
 @testset "send" begin end
 
 @testset "set_dimension_size" begin end
 
-@testset "shift_left" begin end
+@testset "shift_left" begin
+    a = ConcreteRArray([-1, 0, 1])
+    b = ConcreteRArray([1, 2, 3])
+    @test [-2, 0, 8] == @jit Ops.shift_left(a, b)
+end
 
-@testset "shift_right_arithmetic" begin end
+@testset "shift_right_arithmetic" begin
+    a = ConcreteRArray([-1, 0, 8])
+    b = ConcreteRArray([1, 2, 3])
+    @test [-1, 0, 1] == @jit Ops.shift_right_arithmetic(a, b)
+end
 
-@testset "shift_right_logical" begin end
+@testset "shift_right_logical" begin
+    a = ConcreteRArray([-1, 0, 8])
+    b = ConcreteRArray([1, 2, 3])
+    @test [9223372036854775807, 0, 1] == @jit Ops.shift_right_logical(a, b)
+end
 
-@testset "sign" begin end
+@testset "sign" begin
+    x = ConcreteRArray([-1, 0, 1])
+    @test [-1, 0, 0] == @jit Ops.sign(x)
 
-@testset "sine" begin end
+    x = ConcreteRArray([Inf, -Inf, NaN, -NaN, -1.0, -0.0, +0.0, 1.0])
+    @test [0.0, -1.0, NaN, NaN, -1.0, -0.0, 0.0, 0.0] ≈ @jit Ops.sign(x)
 
-@testset "sort" begin end
+    x = ConcreteRArray([
+        NaN + 1.0im, 1.0 + NaN, 0.0 + 0.0im, -1.0 + 2.0im, 0.0 - 3.0im, 1.0 + 4.0im
+    ])
+    @test [
+        NaN + NaN * im,
+        NaN + NaN * im,
+        0.0 + 0.0im,
+        -0.4472135954999579 + 0.8944271909999159im,
+        0.0 - 1.0im,
+        0.24253562503633297 + 0.9701425001453319im,
+    ] ≈ @jit Ops.sign(x)
+end
 
-@testset "sqrt" begin end
+@testset "sine" begin
+    x = ConcreteRArray([0, π / 2, π, 3π / 2, 2π])
+    @test [0, 1, 0, -1, 0] ≈ @jit Ops.sine(x)
 
-@testset "subtract" begin end
+    x = ConcreteRArray([0.0, π / 2, π, 3π / 2, 2π])
+    @test [0.0, 1.0, 0.0, -1.0, 0.0] ≈ @jit Ops.sine(x)
+
+    x = ConcreteRArray([0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im])
+    @test [0.0 + 0.0im, 1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im] ≈
+        @jit Ops.sine(x)
+end
+
+@testset "slice" begin
+    x = ConcreteRArray([1, 2, 3, 4])
+    @test [2, 3] == @jit Ops.slice(x, [2], [3])
+    @test [1] == @jit Ops.slice(x, [1], [1])
+end
+
+@testset "sqrt" begin
+    x = ConcreteRArray([1.0, 4.0, 9.0, 16.0])
+    @test [1.0, 2.0, 3.0, 4.0] ≈ @jit Ops.sqrt(x)
+
+    x = ConcreteRArray([1.0 + 0im, 0.0 + 1im])
+    @test [1.0 + 0im, 1 / √2 * (1 + im)] ≈ @jit Ops.sqrt(x)
+end
+
+@testset "subtract" begin
+    for (a, b) in [
+        (ConcreteRArray([1, 2, 3, 4]), ConcreteRArray([5, 6, -7, -8])),
+        (ConcreteRArray([1.1, 2.2, 3.3, 4.4]), ConcreteRArray([5.5, 6.6, -7.7, -8.8])),
+        (
+            ConcreteRArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im]),
+            ConcreteRArray([
+                9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
+            ]),
+        ),
+    ]
+        @test Array(a) .- Array(b) == @jit Ops.subtract(a, b)
+    end
+end
 
 @testset "tan" begin end
 
