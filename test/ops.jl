@@ -536,7 +536,7 @@ end
     @test [-1, 0, 1] == @jit Ops.sign(x)
 
     x = ConcreteRArray([Inf, -Inf, NaN, -NaN, -1.0, -0.0, +0.0, 1.0])
-    @test [1.0, -1.0, NaN, NaN, -1.0, -0.0, 0.0, 1.0] ≈ @jit Ops.sign(x)
+    @test [1.0, -1.0, NaN, NaN, -1.0, -0.0, 0.0, 1.0] ≈ @jit(Ops.sign(x)) nans = true
 
     x = ConcreteRArray([
         NaN + 1.0im, 1.0 + NaN, 0.0 + 0.0im, -1.0 + 2.0im, 0.0 - 3.0im, 1.0 + 4.0im
