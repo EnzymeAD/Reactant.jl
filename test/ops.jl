@@ -503,7 +503,7 @@ end
 
 @testset "rsqrt" begin
     x = ConcreteRArray([1.0 4.0; 9.0 25.0])
-    @test [1.0 0.5; 0.33333343 0.2] ≈ @jit Ops.rsqrt(x)
+    @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
 
     x = ConcreteRArray([1.0+1im 4.0+2im; 9.0+3im 25.0+4im])
     @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
