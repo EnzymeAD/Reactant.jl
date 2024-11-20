@@ -679,7 +679,10 @@ end
     @test atanh.(Array(x)) ≈ @jit Ops.atanh(x)
 end
 
-@testset "bessel_i1e" begin end
+@testset "bessel_i1e" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0, 2.0, 3.0, 4.0])
+    @test SpecialFunctions.besselix.(1, Array(x)) ≈ @jit Ops.bessel_i1e(x)
+end
 
 @testset "conj" begin
     x = ConcreteRArray([-1.0 + 2im, 0.0 - 1im, 1.0 + 4im])
