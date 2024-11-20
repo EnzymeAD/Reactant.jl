@@ -533,10 +533,10 @@ end
 
 @testset "sign" begin
     x = ConcreteRArray([-1, 0, 1])
-    @test [-1, 0, 0] == @jit Ops.sign(x)
+    @test [-1, 0, 1] == @jit Ops.sign(x)
 
     x = ConcreteRArray([Inf, -Inf, NaN, -NaN, -1.0, -0.0, +0.0, 1.0])
-    @test [0.0, -1.0, NaN, NaN, -1.0, -0.0, 0.0, 0.0] ≈ @jit Ops.sign(x)
+    @test [1.0, -1.0, NaN, NaN, -1.0, -0.0, 0.0, 0.0] ≈ @jit Ops.sign(x)
 
     x = ConcreteRArray([
         NaN + 1.0im, 1.0 + NaN, 0.0 + 0.0im, -1.0 + 2.0im, 0.0 - 3.0im, 1.0 + 4.0im
@@ -548,7 +548,7 @@ end
         -0.4472135954999579 + 0.8944271909999159im,
         0.0 - 1.0im,
         0.24253562503633297 + 0.9701425001453319im,
-    ] ≈ @jit Ops.sign(x)
+    ] ≈ @jit(Ops.sign(x)) nans = true
 end
 
 @testset "sine" begin
