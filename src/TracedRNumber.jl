@@ -304,7 +304,9 @@ struct TypeCast{T<:ReactantPrimitive} <: Function end
 
 (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = promote_to(TracedRNumber{T}, x)
 
-Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N} = Reactant.broadcast_to_size(x, dims)
+function Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N}
+    return Reactant.broadcast_to_size(x, dims)
+end
 
 Base.float(x::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{float(T)}, x)
 
