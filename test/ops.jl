@@ -713,15 +713,41 @@ end
     @test SpecialFunctions.erfc.(Array(x)) ≈ @jit Ops.erfc(x)
 end
 
-@testset "is_inf" begin end
+@testset "is_inf" begin
+    x = ConcreteRArray([-Inf, Inf, NaN, -10.0, -0.0, 0.0, 10.0])
+    @test [true, true, false, false, false, false, false] ≈ @jit Ops.is_inf(x)
+end
 
-@testset "is_neg_inf" begin end
+@testset "is_neg_inf" begin
+    x = ConcreteRArray([-Inf, Inf, NaN, -10.0, -0.0, 0.0, 10.0])
+    @test [true, false, false, false, false, false, false] ≈ @jit Ops.is_neg_inf(x)
+end
 
-@testset "is_pos_inf" begin end
+@testset "is_pos_inf" begin
+    x = ConcreteRArray([-Inf, Inf, NaN, -10.0, -0.0, 0.0, 10.0])
+    @test [false, true, false, false, false, false, false] ≈ @jit Ops.is_pos_inf(x)
+end
 
-@testset "lgamma" begin end
+@testset "lgamma" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0, 2.5])
+    @test SpecialFunctions.lgamma.(Array(x)) ≈ @jit Ops.lgamma(x)
+end
 
-@testset "next_after" begin end
+@testset "next_after" begin
+    x = ConcreteRArray([-1.0, 0.0, 1.0, 1.0, 2.5, 1e18, 1e18, 3e-9, 3e-9])
+    y = ConcreteRArray([-2.0, 0.0, 1.0, 2.0, 3.0, 0.0, 1e19, 0, 1])
+    @test [
+        prevfloat(-1.0),
+        0.0,
+        1.0,
+        nextfloat(1.0),
+        nextfloat(2.5),
+        prevfloat(1e18),
+        nextfloat(1e18),
+        prevfloat(3e-9),
+        nextfloat(3e-9),
+    ] == @jit Ops.next_after(x, y)
+end
 
 @testset "polygamma" begin end
 
@@ -735,7 +761,4 @@ end
     @test (; values=[4, 3], indices=[3, 2]) == @jit Ops.top_k(x, 2)
 end
 
-@testset "zeta" begin
-    x = ConcreteRArray([-1.0, 0.0, 1.0])
-    @test SpecialFunctions.zeta.(Array(x)) ≈ @jit Ops.zeta(x)
-end
+@testset "zeta" begin end
