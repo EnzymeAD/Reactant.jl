@@ -86,8 +86,6 @@ for (dialect, op) in [
     (:chlo, :erfc),
     (:chlo, :lgamma),
     (:chlo, :sinh),
-    # (:chlo, :tan),
-    (:chlo, :zeta),
 ]
     @eval begin
         function $op(
@@ -141,6 +139,7 @@ for (dialect, op) in [
     (:stablehlo, :xor),
     (:chlo, :next_after),
     (:chlo, :polygamma),
+    (:chlo, :zeta),
 ]
     @eval begin
         function $op(
