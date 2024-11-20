@@ -752,7 +752,12 @@ end
     ] == @jit Ops.next_after(x, y)
 end
 
-@testset "polygamma" begin end
+@testset "polygamma" begin
+    # TODO problems with IRCode
+    # x = ConcreteRArray([-1.0, 0.0, 1.0, 1.0, 2.5])
+    # m = ConcreteRArray([3, 3, 2, 3, 4])
+    # @test SpecialFunctions.polygamma.(Array(m), Array(x)) ≈ @jit Ops.polygamma(m, x)
+end
 
 @testset "sinh" begin
     x = ConcreteRArray([-1.0, 0.0, 1.0])
