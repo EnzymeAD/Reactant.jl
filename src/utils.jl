@@ -150,6 +150,7 @@ function make_mlir_fn(
             if (length(traced_args) + 1 != length(ir.argtypes)) || (
                 length(traced_args) > 0 &&
                 length(ir.argtypes) > 0 &&
+                !(last(ir.argtypes) isa Core.Const) &&
                 last(ir.argtypes) != typeof(traced_args[end])
             )
                 @assert ir.argtypes[end] <: Tuple
