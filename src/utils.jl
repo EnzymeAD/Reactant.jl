@@ -147,8 +147,11 @@ function make_mlir_fn(
         if f === Reactant.apply
             oc(traced_args[1], (traced_args[2:end]...,))
         else
-            if (length(traced_args) + 1 != length(ir.argtypes)) ||
+            if (length(traced_args) + 1 != length(ir.argtypes)) || (
+                length(traced_args) > 0 &&
+                length(ir.argtypes) > 0 &&
                 last(ir.argtypes) != typeof(traced_args[end])
+            )
                 @assert ir.argtypes[end] <: Tuple
                 oc(
                     traced_args[1:(length(ir.argtypes) - 2)]...,
