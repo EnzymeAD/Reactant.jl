@@ -122,7 +122,7 @@ jobs:
       - uses: codecov/codecov-action@v5
         if: steps.run_tests.outcome == 'success'
         with:
-          file: lcov.info
+          files: lcov.info
   docs:
     name: Documentation
     runs-on: ubuntu-latest
