@@ -81,3 +81,11 @@ end
     x_ra = Reactant.to_rarray(true; track_numbers=(Number,))
     @test @jit(iszero(x_ra)) == false
 end
+
+@testset "Vararg compilation: Issue #293" begin
+    x = rand(2, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @allowscalar(x_ra[1]) ≈ x[1]
+    @test @allowscalar(x_ra[1:1]) ≈ x[1:1]
+end
