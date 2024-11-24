@@ -29,7 +29,7 @@ function TracedRArray{T,N}(rhs::TracedRArray{T0,N}) where {T,T0,N}
             (),
             MLIR.IR.result(
                 MLIR.Dialects.stablehlo.convert(
-                    rhs.mlir_data; result=mlir_type(TracedRArray{T0,N}, size(rhs))
+                    rhs.mlir_data; result=mlir_type(TracedRArray{T,N}, size(rhs))
                 ),
                 1,
             ),
