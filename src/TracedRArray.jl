@@ -21,7 +21,31 @@ ReactantCore.is_traced(::TracedRArray) = true
 
 new_traced_value(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), nothing, size(A))
 
-TracedRArray{T,N}(x::TracedRArray{T,N}) where {T,N} = x
+function TracedRArray{T,N}(rhs::TracedRArray{T0,N}) where {T,T0,N}
+    if T == T0
+        return rhs
+    else
+        return TracedRArray{T,N}(
+            (),
+            MLIR.IR.result(
+                MLIR.Dialects.stablehlo.convert(
+                    rhs.mlir_data; result=mlir_type(TracedRArray{T0,N}, size(rhs))
+                ),
+                1,
+            ),
+            size(rhs),
+        )
+    end
+end
+
+function TracedRArray{T,N}(rhs::AbstractArray{T0,N}) where {T0,T,N}
+    attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
+    return TracedRArray{T,N}(
+        TracedRArray{T0,length(size(rhs))}(
+            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(rhs)
+        ),
+    )
+end
 
 const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
@@ -285,33 +309,7 @@ function Base.transpose(A::AnyTracedRVecOrMat)
 end
 Base.adjoint(A::AnyTracedRVecOrMat) = conj(transpose(A))
 
-function promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N}
-    if isa(rhs, TracedRArray)
-        rhs isa TracedRArray{T,N} && return rhs
-        return TracedRArray{T,N}(
-            (),
-            MLIR.IR.result(
-                MLIR.Dialects.stablehlo.convert(
-                    rhs.mlir_data; result=mlir_type(TracedRArray{T,N}, size(rhs))
-                ),
-                1,
-            ),
-            size(rhs),
-        )
-    end
-    if isa(rhs, Number)
-        throw(ArgumentError("Cannot promote number to `TracedRArray`. Use \
-                             `TracedRNumber` instead."))
-    end
-    T0 = eltype(rhs)
-    attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
-    return promote_to(
-        TracedRArray{T,N},
-        TracedRArray{T0,length(size(rhs))}(
-            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(rhs)
-        ),
-    )
-end
+promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N} = TracedRArray{T, N}(rhs)
 
 promote_to(::TracedRArray{T,N}, rhs) where {T,N} = promote_to(TracedRArray{T,N}, rhs)
 
