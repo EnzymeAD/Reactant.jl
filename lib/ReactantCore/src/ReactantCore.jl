@@ -8,6 +8,9 @@ export @trace, MissingTracedValue
 # Traits
 is_traced(x) = false
 
+# Special value to signify that a loop variable is uninitialized
+struct LoopInitializer end
+
 # New Type signifying that a value is missing
 mutable struct MissingTracedValue
     paths::Tuple
@@ -147,9 +150,23 @@ function trace_for(mod, expr)
             $body
         end,
     )
+    
+    filter!(∉(SPECIAL_SYMBOLS), body_symbols.assignments)
+    filter!(∉(SPECIAL_SYMBOLS), body_symbols.references)
 
-    external_syms = body_symbols.assignments ∪ body_symbols.references
-    filter!(∉(SPECIAL_SYMBOLS), external_syms)
+    potentially_undefined = setdiff(body_symbols.assignments, body_symbols.references)
+    defs = [gensym(arg) for arg in potentially_undefined]
+    inits = [Expr(:(=), def, LoopInitializer()) for (def, arg) in zip(defs, potentially_undefined)]
+    assigns = [Expr(:(&&), (Expr(:isdefined, arg), Expr(:(=), def, arg))) for (def, arg) in zip(defs, potentially_undefined)]
+    
+    updates = []
+    for (def, arg) in zip(defs, potentially_undefined)
+        append!(updates, (quote
+                            !($def isa $(LoopInitializer)) && ($def = $arg)
+                        end).args)
+    end
+
+    external_syms = append!(defs, body_symbols.references)
 
     all_syms = Expr(:tuple, counter, external_syms...)
     args_init = Expr(
@@ -157,7 +174,8 @@ function trace_for(mod, expr)
     )
 
     reactant_code_block = quote
-        let args = $(args_init)
+        let
+            args = $(args_init)
             cond_fn =
                 $(all_syms) -> begin
                     local num_iters = div($limit - $start, $step, RoundDown)
@@ -172,6 +190,7 @@ function trace_for(mod, expr)
                     local start_ = $start
                     local $induction = start_ + $counter * step_
                     $body
+                    $(updates...)
                     ($counter + 1, $(all_syms.args[(begin + 1):end]...))
                 end
 
@@ -180,6 +199,9 @@ function trace_for(mod, expr)
     end
 
     return quote
+        $(inits...)
+        $(assigns...)
+
         if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
             $(reactant_code_block)
         else
