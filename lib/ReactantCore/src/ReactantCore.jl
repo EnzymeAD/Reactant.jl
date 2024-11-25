@@ -147,20 +147,28 @@ function trace_for(mod, expr)
             $body
         end,
     )
-    
+
     filter!(∉(SPECIAL_SYMBOLS), body_symbols.assignments)
     filter!(∉(SPECIAL_SYMBOLS), body_symbols.references)
 
     potentially_undefined = setdiff(body_symbols.assignments, body_symbols.references)
     defs = [gensym(arg) for arg in potentially_undefined]
-    inits = [Expr(:(=), def, MissingTracedValue()) for (def, arg) in zip(defs, potentially_undefined)]
-    assigns = [Expr(:(&&), (Expr(:isdefined, arg), Expr(:(=), def, arg))) for (def, arg) in zip(defs, potentially_undefined)]
-    
+    inits = [
+        Expr(:(=), def, MissingTracedValue()) for
+        (def, arg) in zip(defs, potentially_undefined)
+    ]
+    assigns = [
+        Expr(:(&&), (Expr(:isdefined, arg), Expr(:(=), def, arg))) for
+        (def, arg) in zip(defs, potentially_undefined)
+    ]
+
     updates = []
     for (def, arg) in zip(defs, potentially_undefined)
-        append!(updates, (quote
-                            !($def isa $(MissingTracedValue)) && ($def = $arg)
-                        end).args)
+        append!(updates, (
+            quote
+                !($def isa $(MissingTracedValue)) && ($def = $arg)
+            end
+        ).args)
     end
 
     external_syms = append!(defs, body_symbols.references)
