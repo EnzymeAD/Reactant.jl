@@ -158,8 +158,15 @@ function trace_for(mod, expr)
         external_syms...,
     )
 
+    cond_val(s) = :(isdefined($(mod), $(QuoteNode(s))) ? $s : nothing)
+
+    locals = Expr[
+        [Expr(:(=), s, cond_val(s)) for s in external_syms]...,
+        :(args = $(args_init)),
+    ]
+
     reactant_code_block = quote
-        let args = $(args_init)
+        let $(locals...)
             cond_fn =
                 $(all_syms) -> begin
                     local num_iters = div($limit - $start, $step, RoundDown)
@@ -182,7 +189,7 @@ function trace_for(mod, expr)
     end
 
     return quote
-        if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
+        if any($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args[(begin + 1):end])...)))
             $(reactant_code_block)
         else
             $(expr)
