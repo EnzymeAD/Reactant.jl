@@ -887,5 +887,5 @@ Base.any(f::Function, x::TracedRArray) = mapreduce(f, |, x)
 # LinearAlgebra defines norm with some conditionals which cannot be traced directly
 function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
     isinf(p) && return maximum(abs, x)
-    return mapreduce(Base.Fix2(^, p), +, x) ^ (1 / p)
+    return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
 end
