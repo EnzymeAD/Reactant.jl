@@ -532,8 +532,14 @@ function Base.mapreduce(
 
     op_in_T = Core.Compiler.return_type(f, Tuple{T})
 
-    if isnothing(init)
-        init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
+    if init === nothing
+        if op === min
+            init = typemax(op_in_T)
+        elseif op === max
+            init = typemin(op_in_T)
+        else
+            init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
+        end
     else
         init = init::T
     end
@@ -877,3 +883,9 @@ end
 
 Base.all(f::Function, x::TracedRArray) = mapreduce(f, &, x)
 Base.any(f::Function, x::TracedRArray) = mapreduce(f, |, x)
+
+# LinearAlgebra defines norm with some conditionals which cannot be traced directly
+function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
+    isinf(p) && return maximum(abs, x)
+    return mapreduce(Base.Fix2(^, p), +, x) ^ (1 / p)
+end
