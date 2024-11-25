@@ -8,9 +8,6 @@ export @trace, MissingTracedValue
 # Traits
 is_traced(x) = false
 
-# Special value to signify that a loop variable is uninitialized
-struct LoopInitializer end
-
 # New Type signifying that a value is missing
 mutable struct MissingTracedValue
     paths::Tuple
@@ -156,13 +153,13 @@ function trace_for(mod, expr)
 
     potentially_undefined = setdiff(body_symbols.assignments, body_symbols.references)
     defs = [gensym(arg) for arg in potentially_undefined]
-    inits = [Expr(:(=), def, LoopInitializer()) for (def, arg) in zip(defs, potentially_undefined)]
+    inits = [Expr(:(=), def, MissingTracedValue()) for (def, arg) in zip(defs, potentially_undefined)]
     assigns = [Expr(:(&&), (Expr(:isdefined, arg), Expr(:(=), def, arg))) for (def, arg) in zip(defs, potentially_undefined)]
     
     updates = []
     for (def, arg) in zip(defs, potentially_undefined)
         append!(updates, (quote
-                            !($def isa $(LoopInitializer)) && ($def = $arg)
+                            !($def isa $(MissingTracedValue)) && ($def = $arg)
                         end).args)
     end
 
