@@ -59,7 +59,7 @@ function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
     for (i, v) in enumerate(tocopy)
         push!(elems, create_result(v, append_path(path, i), result_stores))
     end
-    return :($T[$(elems...)])
+    return :(reshape($T[$(elems...)], $(size(tocopy))...))
 end
 
 function create_result(tocopy::Tuple, path, result_stores)
