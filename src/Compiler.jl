@@ -225,7 +225,7 @@ const opt_passes::String = join(
                 "transpose_pad<1>",
                 "transpose_dot_reorder<1>",
                 "dot_transpose<1>",
-                "tranpose_einsum<1>",
+                "transpose_einsum<1>",
                 "einsum_transpose<1>",
                 "transpose_convolution<1>",
                 "convolution_transpose<1>",
