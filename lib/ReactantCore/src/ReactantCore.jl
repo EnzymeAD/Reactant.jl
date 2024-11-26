@@ -157,16 +157,17 @@ function trace_for(mod, expr)
         Expr(:(=), def, MissingTracedValue()) for
         (def, arg) in zip(defs, potentially_undefined)
     ]
-    assigns = [
-        Expr(:(&&), (Expr(:isdefined, arg), Expr(:(=), def, arg))) for
-        (def, arg) in zip(defs, potentially_undefined)
-    ]
-
     updates = []
+    assigns = []
     for (def, arg) in zip(defs, potentially_undefined)
         append!(updates, (
             quote
                 !($def isa $(MissingTracedValue)) && ($def = $arg)
+            end
+        ).args)
+        append!(assigns, (
+            quote
+                (@isdefined $arg) && ($def = $arg)
             end
         ).args)
     end
