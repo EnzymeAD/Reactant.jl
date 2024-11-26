@@ -13,6 +13,29 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
             @test res isa @NamedTuple{a::Reactant.ConcreteRNumber{Float64}}
             @test isapprox(res.a, sum(x.a))
         end
+
+        @testset "ConcreteRArray" begin
+            x = [1 2; 3 4; 5 6]
+            x2 = Reactant.to_rarray(x)
+
+            f = Reactant.compile((x2,)) do _
+                x2
+            end
+
+            @test f(x2) == x2
+        end
+
+        @testset "Array" begin
+            x = [1 2; 3 4; 5 6]
+            x2 = Reactant.to_rarray(x)
+
+            # TODO remove `x2` when #196 is fixed
+            f = Reactant.compile((x2,)) do _
+                x
+            end
+
+            @test f(x2) ≈ x
+        end
     end
 
     @testset "world-age" begin
