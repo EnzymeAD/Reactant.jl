@@ -493,6 +493,7 @@ function Base.fill(::Core.Type{Attribute}, value, shape)
 end
 
 to_row_major(x) = permutedims(x, ndims(x):-1:1)
+to_row_major(x::AbstractVector) = x
 
 """
     DenseElementsAttribute(array::AbstractArray)
