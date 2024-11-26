@@ -59,6 +59,7 @@ function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
     for (i, v) in enumerate(tocopy)
         push!(elems, create_result(v, append_path(path, i), result_stores))
     end
+    # TODO is there a way to not call `reshape` here? what expr is used for array literals?
     return :(reshape($T[$(elems...)], $(size(tocopy))...))
 end
 
