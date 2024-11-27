@@ -26,7 +26,7 @@ function ConcreteRNumber(
     return ConcreteRNumber{T}(crarray.data)
 end
 
-Base.collect(x::ConcreteRNumber{T}) where {T} = ConcreteRNumber{T,0}(copy(x).data, ())
+Base.collect(x::ConcreteRNumber{T}) where {T} = ConcreteRArray{T,0}(copy(x).data, ())
 
 Base.size(::ConcreteRNumber) = ()
 Base.real(x::ConcreteRNumber{<:Real}) = x
