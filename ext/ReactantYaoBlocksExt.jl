@@ -1,5 +1,8 @@
 module ReactantYaoBlocksExt
 
+using Reactant
+using YaoBlocks
+
 function YaoBlocks.mat(
     ::Type{T}, R::RotationGate{D,Reactant.TracedRNumber{S},<:XGate}
 ) where {D,T,S}
