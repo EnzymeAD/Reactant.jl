@@ -760,7 +760,7 @@ end
 @testset "polygamma" begin
     x = ConcreteRArray([-1.0, 0.0, 1.0, 1.0, 2.5])
     m = ConcreteRArray([3.0, 3.0, 2.0, 3.0, 4.0])
-    @test SpecialFunctions.polygamma.(Array(m), Array(x)) ≈ @jit Ops.polygamma(m, x)
+    @test SpecialFunctions.polygamma.(Int.(Array(m)), Array(x)) ≈ @jit Ops.polygamma(m, x)
 end
 
 @testset "sinh" begin
