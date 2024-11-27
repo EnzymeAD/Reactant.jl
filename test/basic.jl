@@ -593,3 +593,35 @@ end
     @test y_ca2 ≈ x_res
     @test y_ca2 isa ConcreteRArray
 end
+
+@testset "collect" begin
+    x = randn(2, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    @testset "ConcreteRArray" begin
+        y = collect(x_ra)
+        @test y == x
+        @test y !== x_ra
+    end
+
+    @testset "TracedRArray" begin
+        y = @jit(collect(x_ra))
+        @test y == x
+        @test y !== x_ra
+    end
+
+    x = 5
+    x_ra = ConcreteRNumber(x)
+
+    @testset "ConcreteRNumber" begin
+        y = collect(x_ra)
+        @test y isa ConcreteRArray{Int,0}
+        @test y == x
+    end
+
+    @testset "TracedRArray" begin
+        y = @jit(collect(x_ra))
+        @test y isa ConcreteRArray{Int,0}
+        @test y == x
+    end
+end
