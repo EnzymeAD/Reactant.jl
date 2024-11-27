@@ -158,7 +158,7 @@ function trace_for(mod, expr)
         external_syms...,
     )
 
-    cond_val(s) = :(isdefined($(mod), $(QuoteNode(s))) ? $s : nothing)
+    cond_val(s) = :(@isdefined($s) ? $s : nothing)
 
     locals = Expr[
         [Expr(:(=), s, cond_val(s)) for s in external_syms]...,
