@@ -55,6 +55,8 @@ end
 abstract type RArray{T<:ReactantPrimitive,N} <: AbstractArray{T,N} end
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
+Base.collect(A::RArray) = copy(A)
+
 function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
 end

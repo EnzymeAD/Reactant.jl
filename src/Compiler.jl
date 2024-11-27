@@ -59,7 +59,8 @@ function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
     for (i, v) in enumerate(tocopy)
         push!(elems, create_result(v, append_path(path, i), result_stores))
     end
-    return :($T[$(elems...)])
+    # TODO is there a way to not call `reshape` here? what expr is used for array literals?
+    return :(reshape($T[$(elems...)], $(size(tocopy))...))
 end
 
 function create_result(tocopy::Tuple, path, result_stores)
@@ -186,6 +187,7 @@ const opt_passes::String = join(
                 "scatter_to_dynamic_update_slice<1>",
                 "reduce_concat<1>",
                 "slice_concat<1>",
+                "concat_slice<1>",
                 "bin_broadcast_splat_add<1>",
                 "bin_broadcast_splat_subtract<1>",
                 "bin_broadcast_splat_div<1>",
@@ -227,6 +229,10 @@ const opt_passes::String = join(
                 "transpose_pad<1>",
                 "transpose_dot_reorder<1>",
                 "dot_transpose<1>",
+                "transpose_einsum<1>",
+                "einsum_transpose<1>",
+                "transpose_convolution<1>",
+                "convolution_transpose<1>",
                 "convert_convert_float<1>",
                 "concat_to_pad<1>",
                 "concat_appending_reshape<1>",
@@ -237,6 +243,8 @@ const opt_passes::String = join(
                 "pad_dot_general<1>(0)",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(1)",
+                "if_inline<1>",
+                "if_to_select<1>",
             ],
             ';',
         ) *

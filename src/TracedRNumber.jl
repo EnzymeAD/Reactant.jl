@@ -22,6 +22,7 @@ Base.getindex(a::TracedRNumber{T}) where {T} = a
 
 Base.zero(::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{T}, zero(T))
 Base.one(::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{T}, one(T))
+Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
 
 Base.eps(::Type{TracedRNumber{T}}) where {T} = promote_to(TracedRNumber{T}, eps(T))
 
