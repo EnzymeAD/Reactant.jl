@@ -309,7 +309,7 @@ function Base.transpose(A::AnyTracedRVecOrMat)
 end
 Base.adjoint(A::AnyTracedRVecOrMat) = conj(transpose(A))
 
-promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N} = TracedRArray{T, N}(rhs)
+promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N} = TracedRArray{T,N}(rhs)
 
 promote_to(::TracedRArray{T,N}, rhs) where {T,N} = promote_to(TracedRArray{T,N}, rhs)
 
