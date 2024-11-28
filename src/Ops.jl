@@ -1,3 +1,6 @@
+# This module reflects the HLO ops defined in the openxla/stablehlo repo (plus some extras).
+# If you want to add some check or test, the StableHLO spec should be taken as the source of truth, not the Julia or Reactant semantics.
+# Julia and Reactant semantics should be considered on the higher abstractions that use these ops.
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme
