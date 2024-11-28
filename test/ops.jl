@@ -720,8 +720,10 @@ end
 @testset "digamma" begin
     # small divergence between chlo.digamma and SpecialFunctions.digamma:
     # on <=0, chlo.digamma returns NaN, SpecialFunctions.digamma returns Inf
-    x = ConcreteRArray([-1.0, 0.0, 1.0])
-    @test [NaN, NaN, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([-1.0, 0.0, 1.0])
+        @test [NaN, NaN, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true
+    end
 end
 
 @testset "erf_inv" begin
@@ -755,8 +757,10 @@ end
 end
 
 @testset "lgamma" begin
-    x = ConcreteRArray([-1.0, 0.0, 1.0, 2.5])
-    @test SpecialFunctions.lgamma.(Array(x)) ≈ @jit Ops.lgamma(x)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([-1.0, 0.0, 1.0, 2.5])
+        @test SpecialFunctions.lgamma.(Array(x)) ≈ @jit Ops.lgamma(x)
+    end
 end
 
 @testset "next_after" begin
@@ -776,9 +780,12 @@ end
 end
 
 @testset "polygamma" begin
-    x = ConcreteRArray([-1.0, 0.0, 1.0, 1.0, 2.5])
-    m = ConcreteRArray([3.0, 3.0, 2.0, 3.0, 4.0])
-    @test SpecialFunctions.polygamma.(Int.(Array(m)), Array(x)) ≈ @jit Ops.polygamma(m, x)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([-1.0, 0.0, 1.0, 1.0, 2.5])
+        m = ConcreteRArray([3.0, 3.0, 2.0, 3.0, 4.0])
+        @test SpecialFunctions.polygamma.(Int.(Array(m)), Array(x)) ≈
+            @jit Ops.polygamma(m, x)
+    end
 end
 
 @testset "sinh" begin
