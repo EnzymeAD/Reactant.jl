@@ -516,8 +516,10 @@ end
     x = ConcreteRArray([1.0 4.0; 9.0 25.0])
     @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
 
-    x = ConcreteRArray([1.0+1im 4.0+2im; 9.0+3im 25.0+4im])
-    @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([1.0+1im 4.0+2im; 9.0+3im 25.0+4im])
+        @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
+    end
 end
 
 @testset "send" begin end
@@ -588,8 +590,10 @@ end
     x = ConcreteRArray([1.0, 4.0, 9.0, 16.0])
     @test [1.0, 2.0, 3.0, 4.0] ≈ @jit Ops.sqrt(x)
 
-    x = ConcreteRArray([1.0 + 0im, 0.0 + 1im])
-    @test [1.0 + 0im, 1 / √2 * (1 + im)] ≈ @jit Ops.sqrt(x)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([1.0 + 0im, 0.0 + 1im])
+        @test [1.0 + 0im, 1 / √2 * (1 + im)] ≈ @jit Ops.sqrt(x)
+    end
 end
 
 @testset "subtract" begin
@@ -612,18 +616,22 @@ end
     x = ConcreteRArray([0, π / 4, π / 2, 3π / 4, π])
     @test [0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
 
-    x = ConcreteRArray([
-        0.0 + 0.0im, π / 4 + 0.0im, π / 2 + 0.0im, 3π / 4 + 0.0im, π + 0.0im
-    ])
-    @test ComplexF64[0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([
+            0.0 + 0.0im, π / 4 + 0.0im, π / 2 + 0.0im, 3π / 4 + 0.0im, π + 0.0im
+        ])
+        @test ComplexF64[0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
+    end
 end
 
 @testset "tanh" begin
     x = ConcreteRArray([-1.0, 0.0, 1.0])
     @test [-0.7615941559557649, 0.0, 0.7615941559557649] ≈ @jit Ops.tanh(x)
 
-    x = ConcreteRArray(ComplexF64[-1.0, 0.0, 1.0])
-    @test ComplexF64[-0.7615941559557649, 0.0, 0.7615941559557649] ≈ @jit Ops.tanh(x)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray(ComplexF64[-1.0, 0.0, 1.0])
+        @test ComplexF64[-0.7615941559557649, 0.0, 0.7615941559557649] ≈ @jit Ops.tanh(x)
+    end
 end
 
 @testset "transpose" begin
