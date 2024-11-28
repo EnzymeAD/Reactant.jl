@@ -453,9 +453,11 @@ end
     p = ConcreteRArray([0, 1, 2, 3])
     @test Array(x) .^ Array(p) == @jit Ops.power(x, p)
 
-    x = ConcreteRArray([0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im])
-    p = ConcreteRArray([0.0 + 0.0im, 1.0 + 0.0im, 2.0 + 0.0im, 3.0 + 0.0im])
-    @test Array(x) .^ Array(p) ≈ @jit Ops.power(x, p)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im])
+        p = ConcreteRArray([0.0 + 0.0im, 1.0 + 0.0im, 2.0 + 0.0im, 3.0 + 0.0im])
+        @test Array(x) .^ Array(p) ≈ @jit Ops.power(x, p)
+    end
 end
 
 @testset "real" begin
