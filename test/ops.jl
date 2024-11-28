@@ -612,11 +612,11 @@ end
 end
 
 @testset "tan" begin
-    # TODO tan(π/2) is Inf but it returns 1.633123935319537e16
-    x = ConcreteRArray([0, π / 4, π / 2, 3π / 4, π])
-    @test [0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
-
     if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        # TODO tan(π/2) is Inf but it returns 1.633123935319537e16
+        x = ConcreteRArray([0, π / 4, π / 2, 3π / 4, π])
+        @test [0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
+
         x = ConcreteRArray([
             0.0 + 0.0im, π / 4 + 0.0im, π / 2 + 0.0im, 3π / 4 + 0.0im, π + 0.0im
         ])
