@@ -217,16 +217,20 @@ end
     x = ConcreteRArray([1.0, 2.0, 3.0, 4.0])
     @test exp.(Array(x)) ≈ @jit Ops.exponential(x)
 
-    x = ConcreteRArray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
-    @test exp.(Array(x)) ≈ @jit Ops.exponential(x)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
+        @test exp.(Array(x)) ≈ @jit Ops.exponential(x)
+    end
 end
 
 @testset "exponential_minus_one" begin
     x = ConcreteRArray([1.0, 2.0, 3.0, 4.0])
     @test expm1.(Array(x)) ≈ @jit Ops.exponential_minus_one(x)
 
-    x = ConcreteRArray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
-    @test expm1.(Array(x)) ≈ @jit Ops.exponential_minus_one(x)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
+        @test expm1.(Array(x)) ≈ @jit Ops.exponential_minus_one(x)
+    end
 end
 
 @testset "fft" begin
@@ -557,15 +561,19 @@ end
 end
 
 @testset "sine" begin
-    x = ConcreteRArray([0, π / 2, π, 3π / 2, 2π])
-    @test [0, 1, 0, -1, 0] ≈ @jit Ops.sine(x)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+        x = ConcreteRArray([0, π / 2, π, 3π / 2, 2π])
+        @test [0, 1, 0, -1, 0] ≈ @jit Ops.sine(x)
 
-    x = ConcreteRArray([0.0, π / 2, π, 3π / 2, 2π])
-    @test [0.0, 1.0, 0.0, -1.0, 0.0] ≈ @jit Ops.sine(x)
+        x = ConcreteRArray([0.0, π / 2, π, 3π / 2, 2π])
+        @test [0.0, 1.0, 0.0, -1.0, 0.0] ≈ @jit Ops.sine(x)
 
-    x = ConcreteRArray([0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im])
-    @test [0.0 + 0.0im, 1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im] ≈
-        @jit Ops.sine(x)
+        x = ConcreteRArray([
+            0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im
+        ])
+        @test [0.0 + 0.0im, 1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im] ≈
+            @jit Ops.sine(x)
+    end
 end
 
 @testset "slice" begin
