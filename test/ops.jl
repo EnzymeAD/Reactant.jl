@@ -151,7 +151,7 @@ end
 
 @testset "cosine" begin
     # it crashes in apple x86_64 and it's a deprecated platform so we don't need to care a lot...
-    if !(Sys.isapple() && Sys.ARCH === x86_64)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64)
         x = ConcreteRArray([0, π / 2, π, 3π / 2, 2π])
         @test [1, 0, -1, 0, 1] ≈ @jit Ops.cosine(x)
 
