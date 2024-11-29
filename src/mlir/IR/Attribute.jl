@@ -494,6 +494,7 @@ end
 
 to_row_major(x) = permutedims(x, ndims(x):-1:1)
 to_row_major(x::AbstractVector) = x
+to_row_major(x::AbstractArray{T,0}) where {T} = x
 
 """
     DenseElementsAttribute(array::AbstractArray)
