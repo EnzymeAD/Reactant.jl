@@ -109,7 +109,7 @@ function NNlib.conv!(
     #! format: on
 
     padding = Reactant.MLIR.IR.DenseElementsAttribute(
-        reshape(collect(padding), (num_spatial_dims, 2))'
+        reshape(collect(padding), (2, num_spatial_dims))'
     )
     result_type = Reactant.MLIR.IR.TensorType(size(y), Reactant.MLIR.IR.Type(T))
 
@@ -163,7 +163,7 @@ function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
     end
 
     padding = Reactant.MLIR.IR.DenseElementsAttribute(
-        reshape([padding..., 0, 0, 0, 0], (N, 2))'
+        reshape([padding..., 0, 0, 0, 0], (2, N))'
     )
 
     output_shape = (output_spatial_shapes..., size(x, N - 1), size(x, N))
