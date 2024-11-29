@@ -306,7 +306,7 @@ function NNlib.make_causal_mask(x::AnyTracedRArray; dims::Int=2)
     len = size(x, dims)
     # directly generating booleans were causing an incorrect constant attribute generation
     # but the optimized IR removes the type case so we are probably ok
-    mask = MLIR.IR.DenseElementsAttribute(collect(triu(fill(1, (len, len)))'))
+    mask = MLIR.IR.DenseElementsAttribute(collect(triu(fill(1, (len, len)))))
     return Reactant.promote_to(
         TracedRArray{Bool,2},
         TracedRArray{Int,2}(
