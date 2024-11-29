@@ -98,6 +98,7 @@ include("utils.jl")
 include("ConcreteRArray.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
+include("Ops.jl")
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
