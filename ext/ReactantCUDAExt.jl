@@ -5,20 +5,21 @@ using Reactant:
     Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR, TracedRNumber
 using ReactantCore: @trace
 
+using Adapt
+
+function Adapt.adapt_storage(::CUDA.KernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
+  CuDeviceArray{T,N,CUDA.AS.Global}(pointer(xs.mlir_data.value), size(xs))
+end
 
 const _kernel_instances = Dict{Any, Any}()
 
 function recufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
     cuda = CUDA.active_state()
 
-    F2 = Reactant.traced_type(F, (), Val(Reactant.TracedToConcrete))
-    tt2 = Reactant.traced_type(tt, (), Val(Reactant.TracedToConcrete))
-
-
     Base.@lock CUDA.cufunction_lock begin
         # compile the function
         cache = CUDA.compiler_cache(cuda.context)
-        source = CUDA.methodinstance(F2, tt2)
+        source = CUDA.methodinstance(F, tt)
         config = CUDA.compiler_config(cuda.device; kwargs...)::CUDA.CUDACompilerConfig
         fun = CUDA.GPUCompiler.cached_compilation(cache, source, config, CUDA.compile, CUDA.link)
 
