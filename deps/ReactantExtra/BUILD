@@ -175,6 +175,7 @@ cc_toolchain_config(
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
     target_libc = "",
+    target_system_name = "aarch64-unknown-linux-gnu",
     tool_paths = {
         "ar": "/opt/bin/aarch64-linux-gnu-libgfortran5-cxx11-gpu+none-mode+opt/ar",
         "as": "/opt/bin/aarch64-linux-gnu-libgfortran5-cxx11-gpu+none-mode+opt/as",
