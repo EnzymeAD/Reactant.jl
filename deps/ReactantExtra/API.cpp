@@ -818,7 +818,7 @@ extern "C" const char* ifrt_memorykind_string(ifrt::MemoryKind* memory_kind) {
     if (memory_kind->memory_kind().has_value())
         return cstr_from_string(memory_kind->memory_kind().value());
     else
-        return "";
+        return nullptr;
 }
 
 extern "C" ifrt::MemoryKind* ifrt_memorykind_canonicalize(ifrt::MemoryKind* memory_kind, ifrt::Device* device) {
