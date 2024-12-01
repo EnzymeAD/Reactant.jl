@@ -266,15 +266,11 @@ function mlir_stacktrace(name, file, line)
         return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
     end
 
-    return mlir_stacktrace()
-end
-
-function mlir_stacktrace()
     # retrieve current stacktrace, remove this function's frame and translate to MLIR Location
     st = stacktrace()
     deleteat!(st, 1)
-    return mapfoldl(Location) do stackframe
-        name = stackframe.func
+    return mapfoldl(MLIR.IR.Location, st) do stackframe
+        name = string(stackframe.func)
         file = stackframe.file
         line = stackframe.line
         return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
