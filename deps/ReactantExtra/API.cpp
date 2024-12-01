@@ -1078,10 +1078,11 @@ extern "C" xla::PjRtClient* ifrt_pjrt_client_pjrt_client(ifrt::PjRtClient* clien
     return client->pjrt_client();
 }
 
-extern "C" ifrt::PjRtCompatibleArray* ifrt_pjrt_client_create_pjrt_array(ifrt::PjRtClient* client, xla::PjRtBuffer* pjrt_buffer) {
-    auto buffer_ptr = std::make_shared<xla::PjRtBuffer>(*pjrt_buffer);
-    return xla::ValueOrThrow(client->CreatePjRtArray(buffer_ptr)).release();
-}
+// TODO there are problems with using `make_shared
+// extern "C" ifrt::PjRtCompatibleArray* ifrt_pjrt_client_create_pjrt_array(ifrt::PjRtClient* client, xla::PjRtBuffer* pjrt_buffer) {
+//     auto buffer_ptr = std::make_shared<xla::PjRtBuffer>(*pjrt_buffer);
+//     return xla::ValueOrThrow(client->CreatePjRtArray(buffer_ptr)).release();
+// }
 
 // TODO extern "C" ifrt::PjRtCompatibleArray* ifrt_pjrt_client_create_pjrt_array_from_buffers(ifrt::Shape* shape, ifrt::PjRtBuffer** pjrt_buffers, int num_buffers) {}
 
@@ -1194,11 +1195,12 @@ extern "C" std::tuple<size_t, xla::HloModule**> ifrt_executable_hlo_modules(ifrt
 #pragma endregion
 
 #pragma region xla::ifrt::PjRtExecutable
-extern "C" ifrt::Executable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable* pjrt_executable, ifrt::XlaCompileOptions* compile_options) {
-    auto pjrt_executable_shared = std::make_shared<xla::PjRtExecutable>(*pjrt_executable);
-    auto options = std::make_unique<ifrt::XlaCompileOptions>(*compile_options);
-    return xla::ValueOrThrow(ifrt::PjRtExecutable::Create(pjrt_executable_shared, std::move(options))).release();
-}
+// TODO there are problems with using `make_shared
+// extern "C" ifrt::Executable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable* pjrt_executable, ifrt::XlaCompileOptions* compile_options) {
+//     auto pjrt_executable_shared = std::make_shared<xla::PjRtExecutable>(*pjrt_executable);
+//     auto options = std::make_unique<ifrt::XlaCompileOptions>(*compile_options);
+//     return xla::ValueOrThrow(ifrt::PjRtExecutable::Create(pjrt_executable_shared, std::move(options))).release();
+// }
 
 extern "C" void ifrt_pjrt_executable_free(ifrt::PjRtExecutable* executable) {
     delete executable;
@@ -1309,10 +1311,11 @@ extern "C" std::tuple<size_t, ifrt::Device* const*> ifrt_loadedexecutable_addres
 
 #pragma region xla::ifrt::PjRtLoadedExecutable
 // TODO add support for LoadedHostCallback
-extern "C" ifrt::LoadedExecutable* ifrt_pjrt_loadedexecutable_ctor(ifrt::PjRtCompatibleClient* client, xla::PjRtLoadedExecutable* pjrt_loaded_executable) {
-    auto pjrt_loaded_executable_ptr = std::make_shared<xla::PjRtLoadedExecutable>(*pjrt_loaded_executable);
-    return xla::ValueOrThrow(ifrt::PjRtLoadedExecutable::Create(client, pjrt_loaded_executable_ptr, std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>())).release();
-}
+// TODO there are problems with using `make_shared
+// extern "C" ifrt::LoadedExecutable* ifrt_pjrt_loadedexecutable_ctor(ifrt::PjRtCompatibleClient* client, xla::PjRtLoadedExecutable* pjrt_loaded_executable) {
+//     auto pjrt_loaded_executable_ptr = std::make_shared<xla::PjRtLoadedExecutable>(*pjrt_loaded_executable);
+//     return xla::ValueOrThrow(ifrt::PjRtLoadedExecutable::Create(client, pjrt_loaded_executable_ptr, std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>())).release();
+// }
 
 // TODO add support for LoadedHostCallback
 extern "C" ifrt::LoadedExecutable* ifrt_pjrt_loadedexecutable_ctor_from_mlir_module(ifrt::PjRtCompatibleClient* client, mlir::ModuleOp* module, xla::CompileOptions* compile_options) {
