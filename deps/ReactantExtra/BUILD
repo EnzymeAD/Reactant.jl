@@ -199,6 +199,8 @@ cc_toolchain_config(
         "ranlib": "/opt/bin/aarch64-linux-gnu-libgfortran5-cxx11-gpu+none-mode+opt/ranlib",
         "readelf": "/opt/bin/aarch64-linux-gnu-libgfortran5-cxx11-gpu+none-mode+opt/readelf",
         "strip": "/opt/bin/aarch64-linux-gnu-libgfortran5-cxx11-gpu+none-mode+opt/strip",
+        # from host
+        "llvm-cov": "/opt/x86_64-linux-musl/bin/llvm-cov",
     },
     toolchain_identifier = "ygg_aarch64_toolchain",
     unfiltered_compile_flags = [
