@@ -133,7 +133,7 @@ cc_toolchain_config(
     ],
 )
 
-cc_toolchain(
+cc_toolchain_config(
     name = "ygg_aarch64_toolchain_config",
     abi_libc_version = "local",
     abi_version = "local",
