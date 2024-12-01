@@ -561,7 +561,8 @@ extern "C" int ifrt_tuple_arity(ifrt::Tuple* tuple) {
 extern "C" ifrt::PjRtTuple* ifrt_pjrt_tuple_ctor(ifrt::PjRtCompatibleClient* client, ifrt::Value* values, int nvalues) {
     auto values_ptr = new tsl::RCReference<ifrt::Value>[nvalues];
     for (int i=0; i<nvalues; i++) {
-        values_ptr[i] = tsl::RCReference<ifrt::Value>(values[i]);
+        values_ptr[i] = tsl::RCReference<ifrt::Value>();
+        values_ptr[i].reset(&values[i]);
     }
     auto span = absl::Span<tsl::RCReference<ifrt::Value>>(values_ptr, nvalues);
     return xla::ValueOrThrow(ifrt::PjRtTuple::Create(client, span)).release();
