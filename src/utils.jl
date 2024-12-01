@@ -260,7 +260,7 @@ function with_debug(f)
     end
 end
 
-function mlir_stacktrace(name, file, line)
+function mlir_stacktrace(name, file, line)::MLIR.IR.Location
     # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
     if DEBUG_MODE[]
         return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
