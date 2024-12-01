@@ -1343,10 +1343,10 @@ extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_module(mlir::ModuleOp* mo
     return new ifrt::HloProgram(*module);
 }
 
-extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_context_and_module(mlir::MLIRContext* context, mlir::ModuleOp* module) {
-    auto context_ptr = std::make_unique<mlir::MLIRContext>(*context);
-    return new ifrt::HloProgram(std::move(context_ptr), *module);
-}
+// extern "C" ifrt::HloProgram* ifrt_hloprogram_ctor_with_context_and_module(mlir::MLIRContext* context, mlir::ModuleOp* module) {
+//     auto context_ptr = std::make_unique<mlir::MLIRContext>(*context);
+//     return new ifrt::HloProgram(std::move(context_ptr), *module);
+// }
 #pragma endregion
 
 #pragma region xla::ifrt::Compiler
