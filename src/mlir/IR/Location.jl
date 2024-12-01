@@ -14,7 +14,7 @@ function Location(filename, line, column; context::Context=context())
 end
 
 function Location(callee::Location, caller::Location; context::Context=context())
-    return Location(API.mlirLocationCallSiteGet(context, callee, caller))
+    return Location(API.mlirLocationCallSiteGet(callee, caller))
 end
 
 function Location(name::String, location::Location; context::Context=context())
