@@ -137,7 +137,7 @@ cc_toolchain_config(
     name = "ygg_aarch64_toolchain_config",
     cpu = "aarch64",
     compiler = "clang",
-    toolchain_identifier = "ygg_aarch64_toolchain",
+    toolchain_identifier = "ygg_aarch64",
     target_system_name = "aarch64-unknown-linux-gnu",
     target_libc = "",
     abi_libc_version = "local",
