@@ -320,7 +320,11 @@ end
     @test log.(Array(x)) ≈ @jit Ops.log(x)
 end
 
-@testset "logistic" begin end
+@testset "logistic" begin
+    x = ConcreteRArray([0.0, 1.0, 2.0, 3.0])
+    l(x) = 1 / (1 + exp(-x))
+    @test l.(Array(x)) ≈ @jit Ops.logistic(x)
+end
 
 @testset "maximum" begin
     x = ConcreteRArray([false, false, true, true])
@@ -798,4 +802,8 @@ end
     @test (; values=[4, 3], indices=[3, 2]) == @jit Ops.top_k(x, 2)
 end
 
-@testset "zeta" begin end
+@testset "zeta" begin
+    s = ConcreteRArray([1.0, 2.0, 50.0])
+    z = ConcreteRArray([1e-8, 0.001, 2.0])
+    @test SpecialFunctions.zeta.(Array(s), Array(z)) ≈ @jit Ops.zeta(s, z)
+end
