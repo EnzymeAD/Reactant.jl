@@ -100,7 +100,7 @@ function set_reactant_abi(
 
     return Base.@invoke abstract_call_known(
         interp::AbstractInterpreter,
-        f,
+        f::Any,
         arginfo::ArgInfo,
         si::StmtInfo,
         sv::AbsIntState,
@@ -164,7 +164,7 @@ const enzyme_constnoneed = 5
 @inline act_from_type(::Enzyme.BatchDuplicatedNoNeed, reverse, needs_primal=true) =
     reverse ? enzyme_out : enzyme_dupnoneed
 @inline act_from_type(::Enzyme.Active, reverse, needs_primal=true) =
-    act_from_tuple(Enzyme.Active, reverse, needs_primal)
+    act_from_type(Enzyme.Active, reverse, needs_primal)
 @inline act_from_type(::Type{<:Enzyme.Const}, reverse, needs_primal) =
     if needs_primal
         enzyme_const

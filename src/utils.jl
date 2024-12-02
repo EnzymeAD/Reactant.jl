@@ -247,3 +247,32 @@ function make_mlir_fn(
         linear_results,
     )
 end
+
+const DEBUG_MODE::Ref{Bool} = Ref(false)
+
+function with_debug(f)
+    old = DEBUG_MODE[]
+    DEBUG_MODE[] = true
+    try
+        return f()
+    finally
+        DEBUG_MODE[] = old
+    end
+end
+
+function mlir_stacktrace(name, file, line)::MLIR.IR.Location
+    # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
+    if DEBUG_MODE[]
+        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+    end
+
+    # retrieve current stacktrace, remove this function's frame and translate to MLIR Location
+    st = stacktrace()
+    deleteat!(st, 1)
+    return mapfoldl(MLIR.IR.Location, st) do stackframe
+        name = string(stackframe.func)
+        file = stackframe.file
+        line = stackframe.line
+        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+    end
+end

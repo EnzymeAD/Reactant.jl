@@ -593,3 +593,50 @@ end
     @test y_ca2 ≈ x_res
     @test y_ca2 isa ConcreteRArray
 end
+
+@testset "collect" begin
+    x = randn(2, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    @testset "ConcreteRArray" begin
+        y = collect(x_ra)
+        @test y == x
+        @test y !== x_ra
+    end
+
+    @testset "TracedRArray" begin
+        y = @jit(collect(x_ra))
+        @test y == x
+        @test y !== x_ra
+    end
+
+    x = 5
+    x_ra = ConcreteRNumber(x)
+
+    @testset "ConcreteRNumber" begin
+        y = collect(x_ra)
+        @test y isa ConcreteRArray{Int,0}
+        @test y == x
+    end
+
+    @testset "TracedRArray" begin
+        y = @jit(collect(x_ra))
+        @test y isa ConcreteRArray{Int,0}
+        @test y == x
+    end
+end
+
+function f_row_major(x)
+    y = [1 2; 3 4; 5 6]
+    if x isa Reactant.TracedRArray
+        y = Reactant.promote_to(Reactant.TracedRArray{eltype(x),2}, y)
+    end
+    return x .+ y
+end
+
+@testset "array attributes: row major" begin
+    x = zeros(Int, 3, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(f_row_major(x_ra)) ≈ f_row_major(x)
+end

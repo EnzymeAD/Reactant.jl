@@ -23,11 +23,11 @@ for T in (
     end
 end
 
-function traced_type(::Type{C}, seen, mode) where {T,C<:Complex{T}}
+function traced_type(::Type{C}, seen::ST, mode::Val{Mode}) where {T,C<:Complex{T},ST,Mode}
     if !(C isa UnionAll)
         return Complex{traced_type(T, seen, mode)}
     else
-        return @invoke traced_type(C::Type{Any}, seen, mode)
+        return @invoke traced_type(C::Type{Any}, seen::ST, mode::Val{Mode})
     end
 end
 

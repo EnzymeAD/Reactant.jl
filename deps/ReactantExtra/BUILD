@@ -222,6 +222,14 @@ platform(
 )
 
 platform(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
     name = "linux_aarch64",
     constraint_values = [
         "@platforms//os:linux",
@@ -301,6 +309,7 @@ cc_library(
 "-Wl,-exported_symbol,_XLAExecute",
 "-Wl,-exported_symbol,_RegisterDialects",
 "-Wl,-exported_symbol,_InitializeRegistryAndPasses",
+"-Wl,-exported_symbol,_ifrt_*",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -350,7 +359,7 @@ cc_library(
 
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
-        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
+        "@xla//xla/python/pjrt_ifrt:pjrt_ifrt",
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/ffi:call_frame",
         "@com_google_protobuf//:protobuf",
