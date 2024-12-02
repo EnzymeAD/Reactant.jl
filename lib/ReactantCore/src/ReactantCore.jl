@@ -156,7 +156,7 @@ function trace_for(mod, expr)
         :tuple, :(Reactant.promote_to(Reactant.TracedRNumber{Int}, 0)), external_syms...
     )
 
-    cond_val(s) = :(@isdefined($s) ? $s : nothing)
+    cond_val(s) = :(@isdefined($s) ? $s : Reactant.MissingTracedValue())
 
     locals = Expr[
         [Expr(:(=), s, cond_val(s)) for s in external_syms]...,
