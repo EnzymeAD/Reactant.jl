@@ -150,7 +150,8 @@ cc_toolchain_config(
         "/opt/aarch64-linux-gnu/aarch64-linux-gnu/sys-root/usr/include",
         "/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0",
         "/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0/aarch64-linux-gnu",
-        "/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0/backward"
+        "/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0/backward",
+        "/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0/parallel"
     ],
     tool_paths = {
         "ar": "/opt/bin/aarch64-linux-gnu-libgfortran5-cxx11-gpu+none-mode+opt/ar",
