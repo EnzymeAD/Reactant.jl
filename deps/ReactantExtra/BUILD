@@ -13,9 +13,10 @@ cc_toolchain_suite(
         "k8": ":ygg_x86_toolchain",
         "darwin": ":ygg_x86_toolchain",
         "darwin_arm64": ":ygg_x86_toolchain",
-        "linux_arm64": ":ygg_aarch64_toolchain",
+        "aarch64": ":ygg_aarch64_toolchain",
     },
 )
+
 cc_toolchain_suite(
     name = "beast_toolchain_suite",
     toolchains = {
