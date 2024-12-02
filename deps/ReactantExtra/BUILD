@@ -194,7 +194,7 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++",
+        # "-stdlib=libstdc++",
     ],
     dbg_compile_flags = ["-g"],
     link_flags = [],
