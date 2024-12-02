@@ -39,6 +39,13 @@ cc_toolchain(
     toolchain_identifier = "ygg_x86_toolchain",
 )
 
+toolchain(
+    name = "ygg_aarch64_toolchain_wrapper",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+    target_compatible_with = [],
+    toolchain = ":ygg_aarch64_toolchain",
+)
+
 cc_toolchain(
     name = "ygg_aarch64_toolchain",
     all_files = ":empty",
