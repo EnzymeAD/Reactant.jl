@@ -39,14 +39,8 @@ cc_toolchain(
     toolchain_identifier = "ygg_x86_toolchain",
 )
 
-toolchain(
-    name = "ygg_aarch64_toolchain",
-    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
-    toolchain = ":ygg_aarch64_cc_toolchain",
-)
-
 cc_toolchain(
-    name = "ygg_aarch64_cc_toolchain",
+    name = "ygg_aarch64_toolchain",
     all_files = ":empty",
     compiler_files = ":empty",
     dwp_files = ":empty",
@@ -54,8 +48,8 @@ cc_toolchain(
     objcopy_files = ":empty",
     strip_files = ":empty",
     supports_param_files = 1,
-    toolchain_config = ":ygg_aarch64_cc_toolchain_config",
-    toolchain_identifier = "ygg_aarch64_cc_toolchain",
+    toolchain_config = ":ygg_aarch64_toolchain_config",
+    toolchain_identifier = "ygg_aarch64_toolchain",
 )
 
 cc_toolchain_config(
@@ -141,7 +135,7 @@ cc_toolchain_config(
 )
 
 cc_toolchain_config(
-    name = "ygg_aarch64_cc_toolchain_config",
+    name = "ygg_aarch64_toolchain_config",
     cpu = "aarch64",
     compiler = "clang",
     toolchain_identifier = "ygg_aarch64",

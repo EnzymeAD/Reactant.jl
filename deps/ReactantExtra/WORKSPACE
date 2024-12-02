@@ -229,5 +229,3 @@ load(
 )
 
 nccl_configure(name = "local_config_nccl")
-
-register_toolchains("//:ygg_aarch64_toolchain")
