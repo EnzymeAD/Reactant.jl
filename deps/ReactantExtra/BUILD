@@ -186,7 +186,8 @@ cc_toolchain_config(
         "-Wall",
         "-Wunused-but-set-parameter",
         "-Wno-free-nonheap-object",
-        "-fno-omit-frame-pointer"
+        "-fno-omit-frame-pointer",
+        "-I/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0/parallel",
     ],
     opt_compile_flags = [
         "-g0",
