@@ -815,7 +815,7 @@ function reverse(
         stablehlo.reverse(
             x.mlir_data;
             result=mlir_type(TracedRArray{T,N}, size(x)),
-            dimensions=MLIR.IR.DenseArrayAttribute(dimensions .- 1),
+            dimensions=MLIR.IR.DenseArrayAttribute(collect(dimensions .- 1)),
             location,
         ),
     )

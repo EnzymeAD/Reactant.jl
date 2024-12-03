@@ -67,15 +67,26 @@ end
 
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
+            output_size = (
+                NNlib.output_size(conv_dims)...,
+                size(weight, ndims(weight)),
+                size(x, ndims(x)),
+            )
+            dy = randn(Float32, output_size)
+            dy_reactant = Reactant.to_rarray(dy)
+
             conv_compiled = Reactant.compile(
                 NNlib.conv, (x_reactant, weight_reactant, conv_dims)
             )
 
             @test conv_compiled(x_reactant, weight_reactant, conv_dims) ≈
                 NNlib.conv(x, weight, conv_dims)
-        end
 
-        # TODO: test for gradients
+            @test Reactant.@jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
+                NNlib.∇conv_data(dy, weight, conv_dims)
+            @test Reactant.@jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
+                NNlib.∇conv_filter(x, dy, conv_dims)
+        end
     end
 
     @testset "conv 1d: flip" begin
@@ -349,5 +360,36 @@ end
         Nsrc = ndims(src)
         @test y isa ConcreteRArray{Float32,3}
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
+    end
+end
+
+@testset "∇conv(D = $ndim)" for ndim in 1:3
+    x_spatial_dim = 4
+    batch_size = 2
+    n_in_features = 3
+    n_out_features = 4
+    kernel_size = Tuple((2 for _ in 1:ndim))
+
+    x = randn(Float32, (x_spatial_dim for _ in 1:ndim)..., n_in_features, batch_size)
+    x_reactant = Reactant.to_rarray(x)
+
+    w = randn(Float32, kernel_size..., n_in_features, n_out_features)
+    w_reactant = Reactant.to_rarray(w)
+
+    @testset "conv: padding=$padding stride=$stride dilation=$dilation groups=$groups" for (
+        padding, stride, dilation, groups
+    ) in Iterators.product(
+        (0, 2), (1, 2), (1,), (1,)
+    )
+        conv_dims = NNlib.DenseConvDims(x, w; padding, stride, dilation, groups)
+
+        output_size = (NNlib.output_size(conv_dims)..., n_out_features, batch_size)
+        dy = randn(Float32, output_size)
+        dy_reactant = Reactant.to_rarray(dy)
+
+        @test Reactant.@jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
+            NNlib.∇conv_data(dy, w, conv_dims)
+        @test Reactant.@jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
+            NNlib.∇conv_filter(x, dy, conv_dims)
     end
 end
