@@ -222,7 +222,7 @@ cc_toolchain_config(
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
     ],
-    builtin_sysroot = "/opt/aarch64-linux-gnu/aarch64-linux-gnu",
+    builtin_sysroot = "/opt/aarch64-linux-gnu/aarch64-linux-gnu/sys-root/",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     host_system_name = "linux",
