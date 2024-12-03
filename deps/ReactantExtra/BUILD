@@ -227,7 +227,8 @@ cc_toolchain_config(
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     host_system_name = "linux",
-    supports_start_end_lib = True,
+    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
+    supports_start_end_lib = False,
 )
 
 cc_toolchain(
