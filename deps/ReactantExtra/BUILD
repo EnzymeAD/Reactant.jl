@@ -143,7 +143,6 @@ cc_toolchain_config(
     target_libc = "",
     abi_libc_version = "local",
     abi_version = "local",
-    builtin_sysroot = "/opt/aarch64-linux-gnu/aarch64-linux-gnu",
     cxx_builtin_include_directories = [
         "/opt/aarch64-linux-gnu/lib/gcc/aarch64-linux-gnu/10.2.0/include",
         "/opt/aarch64-linux-gnu/lib/gcc/aarch64-linux-gnu/10.2.0/include-fixed",
@@ -223,7 +222,7 @@ cc_toolchain_config(
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
     ],
-    builtin_sysroot = "/opt/aarch64-linux-gnu",
+    builtin_sysroot = "/opt/aarch64-linux-gnu/aarch64-linux-gnu",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     host_system_name = "linux",
