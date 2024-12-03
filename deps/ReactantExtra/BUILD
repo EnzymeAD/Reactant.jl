@@ -187,6 +187,14 @@ cc_toolchain_config(
         "-Wunused-but-set-parameter",
         "-Wno-free-nonheap-object",
         "-fno-omit-frame-pointer",
+        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
+        "-I/opt/aarch64-linux-gnu/lib/gcc/aarch64-linux-gnu/10.2.0/include",
+        "-I/opt/aarch64-linux-gnu/lib/gcc/aarch64-linux-gnu/10.2.0/include-fixed",
+        "-I/opt/aarch64-linux-gnu/aarch64-linux-gnu/include",
+        "-I/opt/aarch64-linux-gnu/aarch64-linux-gnu/sys-root/usr/include",
+        "-I/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0",
+        "-I/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0/aarch64-linux-gnu",
+        "-I/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0/backward",
         "-I/opt/aarch64-linux-gnu/aarch64-linux-gnu/include/c++/10.2.0/parallel",
     ],
     opt_compile_flags = [
