@@ -140,13 +140,12 @@ end
 end
 
 @testset "constant" begin
-    # TODO currently crashes due to #196
-    # for x in [[1, 2, 3], [1.1, 2.2, 3.3], [1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im]]
-    #     @test x ≈ @jit Ops.constant(x)
+    for x in [[1, 2, 3], [1.1, 2.2, 3.3], [1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im]]
+        @test x ≈ @jit Ops.constant(x)
 
-    #     xscalar = x[1]
-    #     @test xscalar ≈ @jit Ops.constant(xscalar)
-    # end
+        xscalar = x[1]
+        @test xscalar ≈ @jit Ops.constant(xscalar)
+    end
 end
 
 @testset "cosine" begin
@@ -281,22 +280,21 @@ end
 end
 
 @testset "iota" begin
-    # TODO this crashes. seems like the same error as #196
-    # g1(shape) = Ops.iota(Int, shape; iota_dimension=1)
-    # @test [
-    #     0 0 0 0 0
-    #     1 1 1 1 1
-    #     2 2 2 2 2
-    #     3 3 3 3 3
-    # ] ≈ @jit g1([4, 5])
+    g1(shape) = Ops.iota(Int, shape; iota_dimension=1)
+    @test [
+        0 0 0 0 0
+        1 1 1 1 1
+        2 2 2 2 2
+        3 3 3 3 3
+    ] ≈ @jit g1([4, 5])
 
-    # g2(shape) = Ops.iota(Int, shape; iota_dimension=2)
-    # @test [
-    #     0 1 2 3 4
-    #     0 1 2 3 4
-    #     0 1 2 3 4
-    #     0 1 2 3 4
-    # ] ≈ @jit g2([4, 5])
+    g2(shape) = Ops.iota(Int, shape; iota_dimension=2)
+    @test [
+        0 1 2 3 4
+        0 1 2 3 4
+        0 1 2 3 4
+        0 1 2 3 4
+    ] ≈ @jit g2([4, 5])
 end
 
 @testset "is_finite" begin
@@ -443,8 +441,7 @@ end
 end
 
 @testset "partition_id" begin
-    # TODO this crashes. seems like the same error as #196
-    # @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
+    @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
 end
 
 @testset "popcnt" begin
@@ -481,8 +478,7 @@ end
 end
 
 @testset "replica_id" begin
-    # TODO this crashes. seems like the same error as #196
-    # @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
+    @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
 end
 
 @testset "reshape" begin
