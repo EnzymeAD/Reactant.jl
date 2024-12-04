@@ -184,8 +184,10 @@ function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
         println(io, "<Empty buffer>")
         return nothing
     end
-    str = sprint(show, to_number(X))
-    return print(io, "$(typeof(X))($(str))")
+    print(io, "$(typeof(X))(")
+    show(io, to_number(X))
+    print(io, ")")
+    return
 end
 
 function Base.print_array(io::IO, X::ConcreteRArray)
@@ -201,8 +203,10 @@ function Base.show(io::IO, X::ConcreteRArray)
         println(io, "<Empty buffer>")
         return nothing
     end
-    str = sprint(show, convert(Array, X))
-    return print(io, "$(typeof(X))($(str))")
+    print(io, "$(typeof(X))(")
+    show(io, convert(Array, X))
+    print(io, ")")
+    return
 end
 
 function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
