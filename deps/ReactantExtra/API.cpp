@@ -361,6 +361,22 @@ extern "C" void FreeClient(PjRtClient * client) {
     delete client;
 }
 
+#include "xla/service/custom_call_target_registry.h"
+extern "C" void RegisterCustomCallTarget(const char* name, void* address,
+                                         const char* platform) {
+    CustomCallTargetRegistry::Global()->Register(std::string(name), address, std::string(platform));
+}
+
+#include "mlir/Target/LLVMIR/Import.h"
+extern "C" MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
+    auto llvmModule = std::unique_ptr<llvm::Module>(unwrap(lmod));
+    mlir::MLIRContext &context = *unwrap(cctx);
+
+    auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context, /*emitExpensiveWarnings*/false, /*dropDICompositeElements*/false).release();
+    return wrap(res);
+}
+
+
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirModule cmod) {
     auto program = std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));

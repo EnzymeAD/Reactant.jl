@@ -423,6 +423,8 @@ cc_library(
 "-Wl,-exported_symbol,_RegisterDialects",
 "-Wl,-exported_symbol,_InitializeRegistryAndPasses",
 "-Wl,-exported_symbol,_ifrt_*",
+"-Wl,-exported_symbol,RegisterCustomCallTarget",
+"-Wl,-exported_symbol,ConvertLLVMToMLIR",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -435,6 +437,7 @@ cc_library(
         "@llvm-project//mlir:ConversionPasses",
         "@llvm-project//mlir:DLTIDialect",
         "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:FromLLVMIRTranslation",
         "@llvm-project//mlir:GPUDialect",
         "@llvm-project//mlir:LinalgDialect",
         "@llvm-project//mlir:LLVMDialect",
