@@ -187,7 +187,7 @@ function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
     print(io, "$(typeof(X))(")
     show(io, to_number(X))
     print(io, ")")
-    return
+    return nothing
 end
 
 function Base.print_array(io::IO, X::ConcreteRArray)
@@ -206,7 +206,7 @@ function Base.show(io::IO, X::ConcreteRArray)
     print(io, "$(typeof(X))(")
     show(io, convert(Array, X))
     print(io, ")")
-    return
+    return nothing
 end
 
 function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
