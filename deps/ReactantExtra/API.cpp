@@ -361,6 +361,15 @@ extern "C" void FreeClient(PjRtClient * client) {
     delete client;
 }
 
+extern "C" MlirModule ConvertLLVMToMLIR(LLVMModule lmod, MlirContext ctx) {
+    auto llvmModule = std::unique_ptr<llvm::Module>(unwrap(lmod));
+    mlir::MLIRContext &context = *unwrap(cctx);
+
+    auto res = mlir::translateLLVMIRToModule(llvmModule, &context, /*emitExpensiveWarnings*/false, /*dropDICompositeElements*/false).release();
+    return wrap(res);
+}
+
+
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirModule cmod) {
     auto program = std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
