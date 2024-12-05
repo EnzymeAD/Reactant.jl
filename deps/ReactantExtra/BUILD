@@ -423,6 +423,8 @@ cc_library(
 "-Wl,-exported_symbol,_RegisterDialects",
 "-Wl,-exported_symbol,_InitializeRegistryAndPasses",
 "-Wl,-exported_symbol,_ifrt_*",
+"-Wl,-exported_symbol,RegisterCustomCallTarget",
+"-Wl,-exported_symbol,ConvertLLVMToMLIR",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
