@@ -846,4 +846,24 @@ function return_(
     return stablehlo.return_([x.mlir_data for x in results]; location)
 end
 
+# control flow ops
+function select(
+    pred::Union{TracedRArray{Bool,N},TracedRNumber{Number}},
+    on_true::TracedRArray{T,N},
+    on_false::TracedRArray{T,N},
+) where {T,N}
+    @assert size(on_true) == size(on_false) "`on_true` and `on_false` must have the same size"
+    @assert size(pred) == size(on_true) || size(pred) == () "`pred` must have the same size as `on_true`/`on_false` or be a scalar"
+
+    res = MLIR.IR.result(
+        stablehlo.select(
+            pred.mlir_data,
+            on_true.mlir_data,
+            on_false.mlir_data;
+            result=mlir_type(TracedRArray{T,N}, size(on_true)),
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(on_true))
+end
+
 end
