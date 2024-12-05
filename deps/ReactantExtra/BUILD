@@ -435,6 +435,7 @@ cc_library(
         "@llvm-project//mlir:ConversionPasses",
         "@llvm-project//mlir:DLTIDialect",
         "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:FromLLVMIRTranslation",
         "@llvm-project//mlir:GPUDialect",
         "@llvm-project//mlir:LinalgDialect",
         "@llvm-project//mlir:LLVMDialect",
