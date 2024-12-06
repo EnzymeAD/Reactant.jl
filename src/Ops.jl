@@ -709,6 +709,9 @@ function einsum(
     equation::String,
     location=mlir_stacktrace("einsum", @__FILE__, @__LINE__),
 ) where {T}
+    Base.depwarn(
+        "`stablehlo.einsum` is on deprecation process; use `dot_general` instead", :einsum
+    )
     ins, ic = split(equation, "->")
     ia, ib = split(ins, ",")
 
