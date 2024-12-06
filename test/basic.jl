@@ -640,3 +640,16 @@ end
 
     @test @jit(f_row_major(x_ra)) ≈ f_row_major(x)
 end
+
+@testset "ifelse" begin
+    @test 1.0 ==
+        @jit ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    @test @jit(
+        ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    ) isa ConcreteRNumber{Float64}
+    @test 0.0f0 ==
+        @jit ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    @test @jit(
+        ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
+    ) isa ConcreteRNumber{Float32}
+end
