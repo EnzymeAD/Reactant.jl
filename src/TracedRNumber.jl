@@ -200,12 +200,19 @@ function Base.ifelse(
     @nospecialize(x::TracedRNumber{T1}),
     @nospecialize(y::TracedRNumber{T2})
 ) where {T1,T2}
-    return TracedRNumber{promote_type(T1, T2)}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.select(pred.mlir_data, x.mlir_data, y.mlir_data), 1
-        ),
-    )
+    @warn "`ifelse` with different element-types in Reactant works by promoting the \
+            element-type to the common type. This is semantically different from the \
+            behavior of `ifelse` in Base. Use with caution" maxlog = 1
+    T = promote_type(T1, T2)
+    return ifelse(pred, promote_to(TracedRNumber{T}, x), promote_to(TracedRNumber{T}, y))
+end
+
+function Base.ifelse(
+    @nospecialize(pred::TracedRNumber{Bool}),
+    @nospecialize(x::TracedRNumber{T}),
+    @nospecialize(y::TracedRNumber{T})
+) where {T}
+    return Ops.select(pred, x, y)
 end
 
 for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
