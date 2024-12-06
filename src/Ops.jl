@@ -866,4 +866,20 @@ function select(
     return TracedRArray{T,N}((), res, size(on_true))
 end
 
+function select(
+    pred::TracedRNumber{Bool},
+    on_true::TracedRNumber{T},
+    on_false::TracedRNumber{T},
+) where {T}
+    res = MLIR.IR.result(
+        stablehlo.select(
+            pred.mlir_data,
+            on_true.mlir_data,
+            on_false.mlir_data;
+            result=mlir_type(TracedRArray{T,0}, ()),
+        ),
+    )
+    return TracedRNumber{T}((), res)
+end
+
 end
