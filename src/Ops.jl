@@ -605,6 +605,26 @@ function dot_general(
 
     ctx = MLIR.IR.context()
 
+    # from C12
+    lhs_result_dimensions = setdiff(
+        1:ndims(lhs), lhs_batching_dimensions, lhs_contracting_dimensions
+    )
+    rhs_result_dimensions = setdiff(
+        1:ndims(rhs), rhs_batching_dimensions, rhs_contracting_dimensions
+    )
+
+    ressize = stack(
+        size.(Ref(lhs), lhs_batching_dimensions),
+        size.(Ref(lhs), lhs_result_dimensions),
+        size.(Ref(rhs), rhs_result_dimensions),
+    )
+
+    # fix 1-indexing
+    lhs_batching_dimensions = lhs_batching_dimensions .- 1
+    rhs_batching_dimensions = rhs_batching_dimensions .- 1
+    lhs_contracting_dimensions = lhs_contracting_dimensions .- 1
+    rhs_contracting_dimensions = rhs_contracting_dimensions .- 1
+
     dot_dimension_numbers = GC.@preserve lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
         MLIR.IR.Attribute(
             MLIR.API.stablehloDotDimensionNumbersGet(
@@ -667,20 +687,6 @@ function dot_general(
             )
         end
     end
-
-    # from C12
-    lhs_result_dimensions = setdiff(
-        1:ndims(lhs), lhs_batching_dimensions, lhs_contracting_dimensions
-    )
-    rhs_result_dimensions = setdiff(
-        1:ndims(rhs), rhs_batching_dimensions, rhs_contracting_dimensions
-    )
-
-    ressize = stack(
-        size.(Ref(lhs), lhs_batching_dimensions),
-        size.(Ref(lhs), lhs_result_dimensions),
-        size.(Ref(rhs), rhs_result_dimensions),
-    )
 
     res = MLIR.IR.result(
         stablehlo.dot_general(
