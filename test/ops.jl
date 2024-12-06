@@ -188,6 +188,37 @@ end
     end
 end
 
+@testset "dot_general" begin
+    # dot product of first dim
+    f1(x, y) = Ops.dot_general(x, y; contracting_dimensions=[[1], [1]])
+
+    # outer product
+    fouter(x, y) = Ops.dot_general(x, y; contracting_dimensions=[Int[], Int[]])
+
+    # outer product, batch first dim
+    fouter_batch1(x, y) = Ops.dot_general(
+        x, y; contracting_dimensions=[Int[], Int[]], batching_dimensions=[[1], [1]]
+    )
+
+    for (a, b) in [
+        (ConcreteRArray([1, 2, 3, 4]), ConcreteRArray([5, 6, -7, -8])),
+        (ConcreteRArray([1.0, 2.0, 3.0, 4.0]), ConcreteRArray([5.0, 6.0, -7.0, -8.0])),
+        (
+            ConcreteRArray([1.0, 2.0im, 3.0, 4.0im]),
+            ConcreteRArray([5.0, 6.0im, -7.0im, -8.0]),
+        ),
+    ]
+        # NOTE `LinearAlgebra.dot` is not equal to `sum(a .* b)` on complex numbers due to conjugation
+        @test sum(a .* b) ≈ @jit f1(a, b)
+        @test kron(reshape(a, length(a), 1), reshape(b, 1, length(b))) ≈ @jit fouter(a, b)
+        @test a .* b ≈ @jit fouter_batch1(a, b)
+    end
+
+    a = ConcreteRArray([1 2; 3 4])
+    b = ConcreteRArray([5 6; -7 -8])
+    @test a' * b == @jit f1(a, b)
+end
+
 @testset "einsum" begin
     f1(a, b) = Ops.einsum(a, b; equation="i,i->i")
     f2(a, b) = Ops.einsum(a, b; equation="i,j->ij")

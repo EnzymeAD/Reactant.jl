@@ -546,31 +546,162 @@ end
 #     return TracedRArray{T,N}((), res, size(lhs))
 # end
 
-# function dot_general(
-#     lhs::TracedRArray{T,N},
-#     rhs::TracedRArray{T,N};
-#     dimension_numbers,
-#     lhs_contracting_dimensions,
-#     rhs_contracting_dimensions,
-#     result_permutation,
-#     location=mlir_stacktrace(
-#         "dot_general", @__FILE__, @__LINE__
-#     ),
-# ) where {T,N}
-#     res = MLIR.IR.result(
-#         stablehlo.dot_general(
-#             lhs.mlir_data,
-#             rhs.mlir_data;
-#             result=mlir_type(TracedRArray{T,N}, ...), # TODO size of result
-#             dimension_numbers,
-#             lhs_contracting_dimensions,
-#             rhs_contracting_dimensions,
-#             result_permutation,
-#             location,
-#         ),
-#     )
-#     return TracedRArray{T,N}((), res, size(lhs))
-# end
+function dot_general(
+    lhs::TracedRArray{T},
+    rhs::TracedRArray{T};
+    contracting_dimensions,
+    batching_dimensions=(Int[], Int[]),
+    precision_config=nothing,
+    precision_type=nothing,
+    accumulation_type=nothing,
+    component_count=nothing,
+    num_primitive_operations=nothing,
+    allow_imprecise_accumulation=nothing,
+    location=mlir_stacktrace("dot_general", @__FILE__, @__LINE__),
+) where {T}
+    # C1 + C2
+    @assert length(batching_dimensions) == 2 && splat(==)(length.(batching_dimensions))
+    @assert length(contracting_dimensions) == 2 &&
+        splat(==)(length.(contracting_dimensions))
+
+    # C3 + C4
+    @assert all(eltype.(contracting_dimensions) .<: Int64)
+    @assert all(eltype.(batching_dimensions) .<: Int64)
+    @assert all(isdisjoint.(contracting_dimensions, batching_dimensions))
+
+    lhs_contracting_dimensions, rhs_contracting_dimensions = contracting_dimensions
+    lhs_batching_dimensions, rhs_batching_dimensions = batching_dimensions
+
+    # C5 + C6 + C7 + C8
+    @assert all(lhs_batching_dimensions .<= ndims(lhs))
+    @assert all(rhs_batching_dimensions .<= ndims(rhs))
+    @assert all(lhs_contracting_dimensions .<= ndims(lhs))
+    @assert all(rhs_contracting_dimensions .<= ndims(rhs))
+
+    # C9 + C10
+    @assert size.(Ref(lhs), lhs_batching_dimensions) ==
+        size.(Ref(rhs), rhs_batching_dimensions)
+    @assert size.(Ref(lhs), lhs_contracting_dimensions) ==
+        size.(Ref(rhs), rhs_contracting_dimensions)
+
+    # C11
+    @assert isnothing(precision_config) || length(precision_config) == 2
+
+    @assert isnothing(precision_type) ||
+        length(precision_type) == 2 && eltype(precision_type) <: AbstractFloat
+    @assert isnothing(accumulation_type) || accumulation_type <: AbstractFloat
+
+    # C22 + C23
+    @assert isnothing(component_count) ||
+        length(component_count) == 2 &&
+            eltype(component_count) <: Int32 &&
+            all(0 .<= component_count)
+
+    # C24
+    @assert isnothing(num_primitive_operations) ||
+        num_primitive_operations isa Int32 && num_primitive_operations > 0
+    @assert isnothing(allow_imprecise_accumulation) || allow_imprecise_accumulation isa Bool
+
+    ctx = MLIR.IR.context()
+
+    # from C12
+    lhs_result_dimensions = setdiff(
+        1:ndims(lhs), lhs_batching_dimensions, lhs_contracting_dimensions
+    )
+    rhs_result_dimensions = setdiff(
+        1:ndims(rhs), rhs_batching_dimensions, rhs_contracting_dimensions
+    )
+
+    ressize = vcat(
+        size.(Ref(lhs), lhs_batching_dimensions),
+        size.(Ref(lhs), lhs_result_dimensions),
+        size.(Ref(rhs), rhs_result_dimensions),
+    )
+
+    # fix 1-indexing
+    lhs_batching_dimensions = lhs_batching_dimensions .- 1
+    rhs_batching_dimensions = rhs_batching_dimensions .- 1
+    lhs_contracting_dimensions = lhs_contracting_dimensions .- 1
+    rhs_contracting_dimensions = rhs_contracting_dimensions .- 1
+
+    dot_dimension_numbers = GC.@preserve lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
+        MLIR.IR.Attribute(
+            MLIR.API.stablehloDotDimensionNumbersGet(
+                ctx,
+                length(lhs_batching_dimensions),
+                lhs_batching_dimensions,
+                length(rhs_batching_dimensions),
+                rhs_batching_dimensions,
+                length(lhs_contracting_dimensions),
+                lhs_contracting_dimensions,
+                length(rhs_contracting_dimensions),
+                rhs_contracting_dimensions,
+            ),
+        )
+    end
+
+    if !isnothing(precision_config)
+        precision_config = MLIR.IR.Attribute([
+            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[1]),
+            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[2]),
+        ])
+    end
+
+    # all or nothing: if one is set, all must be set
+    # TODO maybe be more flexible, by setting some defaults?
+    if any(
+        !isnothing,
+        (
+            precision_type,
+            accumulation_type,
+            component_count,
+            num_primitive_operations,
+            allow_imprecise_accumulation,
+        ),
+    )
+        @assert all(
+            !isnothing,
+            (
+                precision_type...,
+                accumulation_type,
+                component_count...,
+                num_primitive_operations,
+                allow_imprecise_accumulation,
+            ),
+        )
+        lhs_precision_type, rhs_precision_type = precision_type
+        lhs_component_count, rhs_component_count = component_count
+        algorithm = GC.@preserve begin
+            MLIR.IR.Attribute(
+                MLIR.API.stablehloDotAlgorithmGet(
+                    ctx,
+                    lhs_precision_type,
+                    rhs_precision_type,
+                    accumulation_type,
+                    lhs_component_count,
+                    rhs_component_count,
+                    num_primitive_operations,
+                    allow_imprecise_accumulation,
+                ),
+            )
+        end
+    else
+        algorithm = nothing
+    end
+
+    res = MLIR.IR.result(
+        stablehlo.dot_general(
+            lhs.mlir_data,
+            rhs.mlir_data;
+            result_0=mlir_type(TracedRArray{T,length(ressize)}, ressize),
+            dot_dimension_numbers,
+            precision_config,
+            algorithm,
+            location,
+        ),
+    )
+    return TracedRArray{T,length(ressize)}((), res, ressize)
+end
 
 function einsum(
     lhs::TracedRArray{T},
@@ -578,6 +709,9 @@ function einsum(
     equation::String,
     location=mlir_stacktrace("einsum", @__FILE__, @__LINE__),
 ) where {T}
+    Base.depwarn(
+        "`stablehlo.einsum` is on deprecation process; use `dot_general` instead", :einsum
+    )
     ins, ic = split(equation, "->")
     ia, ib = split(ins, ",")
 
