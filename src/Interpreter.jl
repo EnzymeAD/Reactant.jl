@@ -118,8 +118,8 @@ function set_reactant_abi end
             ReactantCacheToken(),
             nothing,            #=mt=#
             world,
-            true,            #=forward_rules=#
-            true,            #=reverse_rules=#
+            false,            #=forward_rules=#
+            false,            #=reverse_rules=#
             true,            #=deferred_lower=#
             false,            #=broadcast_rewrite=#
             set_reactant_abi,
@@ -135,8 +135,8 @@ else
             REACTANT_CACHE,
             nothing,            #=mt=#
             world,
-            true,            #=forward_rules=#
-            true,            #=forward_rules=#
+            false,            #=forward_rules=#
+            false,            #=forward_rules=#
             true,            #=deferred_lower=#
             false,            #=broadcast_rewrite=#
             set_reactant_abi,
