@@ -449,15 +449,11 @@ function MemRefType(
     if check
         Type(
             API.mlirMemRefTypeGetChecked(
-                location, elem_type, length(shape), pointer(shape), layout, memspace
+                location, elem_type, length(shape), shape, layout, memspace
             ),
         )
     else
-        Type(
-            API.mlirMemRefTypeGet(
-                elem_type, length(shape), pointer(shape), layout, memspace
-            ),
-        )
+        Type(API.mlirMemRefTypeGet(elem_type, length(shape), shape, layout, memspace))
     end
 end
 
@@ -474,15 +470,11 @@ function MemRefType(
     if check
         Type(
             API.mlirMemRefTypeContiguousGetChecked(
-                location, elem_type, length(shape), pointer(shape), memspace
+                location, elem_type, length(shape), shape, memspace
             ),
         )
     else
-        Type(
-            API.mlirMemRefTypeContiguousGet(
-                elem_type, length(shape), pointer(shape), memspace
-            ),
-        )
+        Type(API.mlirMemRefTypeContiguousGet(elem_type, length(shape), shape, memspace))
     end
 end
 
@@ -560,7 +552,7 @@ end
 Creates a tuple type that consists of the given list of elemental types. The type is owned by the context.
 """
 Type(elements::Vector{Type}; context::Context=context()) =
-    Type(API.mlirTupleTypeGet(context, length(elements), pointer(elements)))
+    Type(API.mlirTupleTypeGet(context, length(elements), elements))
 function Type(@nospecialize(elements::NTuple{N,Type}); context::Context=context()) where {N}
     return Type(collect(elements); context)
 end
@@ -590,9 +582,7 @@ Creates a function type, mapping a list of input types to result types.
 """
 function FunctionType(inputs, results; context::Context=context())
     return Type(
-        API.mlirFunctionTypeGet(
-            context, length(inputs), pointer(inputs), length(results), pointer(results)
-        ),
+        API.mlirFunctionTypeGet(context, length(inputs), inputs, length(results), results)
     )
 end
 

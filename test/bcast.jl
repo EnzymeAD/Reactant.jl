@@ -22,8 +22,7 @@ end
 end
 
 function test()
-    ctx = MLIR.IR.Context()
-    Base.append!(Reactant.registry[]; context=ctx)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     MLIR.IR.context!(ctx) do
@@ -66,11 +65,10 @@ test()
     y_ca = Reactant.ConcreteRArray(y)
 
     @testset "Broadcasting" begin
-        # TODO make `@compile` work with broadcasting syntax
-        @test x .+ y ≈ Reactant.Compiler.compile(.+, (x_ca, y_ca))(x_ca, y_ca)
-        @test x .- y ≈ Reactant.Compiler.compile(.-, (x_ca, y_ca))(x_ca, y_ca)
-        @test x .* y ≈ Reactant.Compiler.compile(.*, (x_ca, y_ca))(x_ca, y_ca)
-        @test x ./ y ≈ Reactant.Compiler.compile(./, (x_ca, y_ca))(x_ca, y_ca)
+        @test x .+ y ≈ @jit x_ca .+ y_ca
+        @test x .- y ≈ @jit x_ca .- y_ca
+        @test x .* y ≈ @jit x_ca .* y_ca
+        @test x ./ y ≈ @jit x_ca ./ y_ca
     end
 end
 
@@ -82,10 +80,7 @@ end
 @testset "Scalar broadcasting" begin
     x = rand(2, 3)
     x_ra = Reactant.to_rarray(x)
-
-    scalar_bcast_compiled = @compile scalar_bcast(x_ra)
-
-    @test scalar_bcast_compiled(x_ra) ≈ scalar_bcast(x)
+    @test @jit(scalar_bcast(x_ra)) ≈ scalar_bcast(x)
 end
 
 function custom_ln(x)
@@ -97,9 +92,7 @@ end
 @testset "Custom layernorm" begin
     x = rand(Float32, 3, 3, 4, 2)
     x_ra = Reactant.to_rarray(x)
-
-    ln_comp = @compile custom_ln(x_ra)
-    @test ln_comp(x_ra) ≈ custom_ln(x)
+    @test @jit(custom_ln(x_ra)) ≈ custom_ln(x)
 end
 
 pow(x, n) = x .^ n
@@ -107,10 +100,7 @@ pow(x, n) = x .^ n
 @testset "Pow" begin
     x = rand(2, 3)
     x_ra = Reactant.to_rarray(x)
-
-    pow_compiled = @compile pow(x_ra, 2)
-
-    @test pow_compiled(x_ra) ≈ pow(x, 2)
+    @test @jit(pow(x_ra, 2)) ≈ pow(x, 2)
 end
 
 struct CustomBCastFunction{X}
@@ -127,8 +117,5 @@ end
 @testset "Broadcasting closures / functors" begin
     x = rand(2, 3)
     x_ra = Reactant.to_rarray(x)
-
-    custombcast_compiled = @compile custombcast(x_ra)
-
-    @test custombcast_compiled(x_ra) ≈ custombcast(x)
+    @test @jit(custombcast(x_ra)) ≈ custombcast(x)
 end

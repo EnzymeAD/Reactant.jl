@@ -9,38 +9,95 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
             x = (; a=rand(4, 3))
             x2 = Reactant.to_rarray(x)
 
-            f = @compile sum(x2)
+            res = @jit sum(x2)
+            @test res isa @NamedTuple{a::Reactant.ConcreteRNumber{Float64}}
+            @test isapprox(res.a, sum(x.a))
+        end
 
-            @test f(x2) isa @NamedTuple{a::Reactant.ConcreteRArray{Float64,0}}
-            @test isapprox(f(x2).a, sum(x.a))
+        @testset "Array" begin
+            x = [1 2; 3 4; 5 6]
+            x2 = Reactant.to_rarray(x)
+
+            # TODO remove `x2` when #196 is fixed
+            f = Reactant.compile((x2,)) do _
+                x
+            end
+
+            @test f(x2) ≈ x
         end
     end
 
     @testset "world-age" begin
-        a = Reactant.ConcreteRArray(ones(2, 10))
-        b = Reactant.ConcreteRArray(ones(10, 2))
+        a = ones(2, 10)
+        b = ones(10, 2)
+        a_ra = Reactant.ConcreteRArray(a)
+        b_ra = Reactant.ConcreteRArray(b)
 
-        function fworld(x, y)
-            g = @compile *(a, b)
-            return g(x, y)
-        end
+        fworld(x, y) = @jit(x * y)
 
-        @test fworld(a, b) ≈ ones(2, 2) * 10
+        @test fworld(a_ra, b_ra) ≈ ones(2, 2) * 10
     end
 
     @testset "type casting & optimized out returns" begin
-        a = Reactant.ConcreteRArray(rand(2, 10))
+        a = ones(2, 10)
+        a_ra = Reactant.ConcreteRArray(a)
 
         ftype1(x) = Float64.(x)
         ftype2(x) = Float32.(x)
 
-        ftype1_compiled = @compile ftype1(a)
-        ftype2_compiled = @compile ftype2(a)
+        y1 = @jit ftype1(a_ra)
+        y2 = @jit ftype2(a_ra)
 
-        @test ftype1_compiled(a) isa Reactant.ConcreteRArray{Float64,2}
-        @test ftype2_compiled(a) isa Reactant.ConcreteRArray{Float32,2}
+        @test y1 isa Reactant.ConcreteRArray{Float64,2}
+        @test y2 isa Reactant.ConcreteRArray{Float32,2}
 
-        @test ftype1_compiled(a) ≈ Float64.(a)
-        @test ftype2_compiled(a) ≈ Float32.(a)
+        @test y1 ≈ Float64.(a)
+        @test y2 ≈ Float32.(a)
     end
+
+    @testset "no variable name collisions in compile macros (#237)" begin
+        f(x) = x
+        g(x) = f(x)
+        x = rand(2, 2)
+        y = Reactant.to_rarray(x)
+        @test (@jit g(y); true)
+    end
+
+    # disabled due to long test time (core tests go from 2m to 7m just with this test)
+    # @testset "resource exhaustation bug (#190)" begin
+    #     x = rand(2, 2)
+    #     y = Reactant.to_rarray(x)
+    #     @test try
+    #         for _ in 1:10_000
+    #             f = @compile sum(y)
+    #         end
+    #         true
+    #     catch e
+    #         false
+    #     end
+    # end
+end
+
+@testset "Module export" begin
+    f(x) = sin.(cos.(x))
+    x_ra = Reactant.to_rarray(rand(3))
+
+    hlo_code = @code_hlo f(x_ra)
+    @test !startswith(string(hlo_code), "Module")
+    @test startswith(string(hlo_code), "module {")
+end
+
+@testset "Bool attributes" begin
+    x_ra = Reactant.to_rarray(false; track_numbers=(Number,))
+    @test @jit(iszero(x_ra)) == true
+    x_ra = Reactant.to_rarray(true; track_numbers=(Number,))
+    @test @jit(iszero(x_ra)) == false
+end
+
+@testset "Vararg compilation: Issue #293" begin
+    x = rand(2, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @allowscalar(x_ra[1]) ≈ x[1]
+    @test @allowscalar(x_ra[1:1]) ≈ x[1:1]
 end

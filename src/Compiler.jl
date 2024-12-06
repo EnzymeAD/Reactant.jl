@@ -5,6 +5,7 @@ import ..Reactant:
     MLIR,
     XLA,
     ConcreteRArray,
+    ConcreteRNumber,
     TracedRArray,
     TracedRNumber,
     OrderedIdDict,
@@ -14,6 +15,9 @@ import ..Reactant:
     TracedType
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
+@inline traced_getfield(
+    @nospecialize(obj::AbstractArray{<:Union{ConcreteRNumber,ConcreteRArray}}), field
+) = Base.getindex(obj, field)
 
 function create_result(tocopy::T, path, result_stores) where {T}
     if !isstructtype(typeof(tocopy))
@@ -28,6 +32,16 @@ function create_result(tocopy::T, path, result_stores) where {T}
     end
 
     return Expr(:new, T, elems...)
+end
+
+function create_result(tocopy::ConcreteRNumber{T}, path, result_stores) where {T}
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        return :(ConcreteRNumber{$T}($restore))
+    end
+    # We will set the data for this later
+    return :(ConcreteRNumber{$T}($(tocopy.data)))
 end
 
 function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
@@ -45,7 +59,8 @@ function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
     for (i, v) in enumerate(tocopy)
         push!(elems, create_result(v, append_path(path, i), result_stores))
     end
-    return :($T[$(elems...)])
+    # TODO is there a way to not call `reshape` here? what expr is used for array literals?
+    return :(reshape($T[$(elems...)], $(size(tocopy))...))
 end
 
 function create_result(tocopy::Tuple, path, result_stores)
@@ -172,6 +187,7 @@ const opt_passes::String = join(
                 "scatter_to_dynamic_update_slice<1>",
                 "reduce_concat<1>",
                 "slice_concat<1>",
+                "concat_slice<1>",
                 "bin_broadcast_splat_add<1>",
                 "bin_broadcast_splat_subtract<1>",
                 "bin_broadcast_splat_div<1>",
@@ -213,6 +229,10 @@ const opt_passes::String = join(
                 "transpose_pad<1>",
                 "transpose_dot_reorder<1>",
                 "dot_transpose<1>",
+                "transpose_einsum<1>",
+                "einsum_transpose<1>",
+                "transpose_convolution<1>",
+                "convolution_transpose<1>",
                 "convert_convert_float<1>",
                 "concat_to_pad<1>",
                 "concat_appending_reshape<1>",
@@ -223,6 +243,8 @@ const opt_passes::String = join(
                 "pad_dot_general<1>(0)",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(1)",
+                "if_inline<1>",
+                "if_to_select<1>",
             ],
             ';',
         ) *
@@ -233,17 +255,29 @@ const opt_passes::String = join(
     ',',
 )
 
-function run_pass_pipeline!(mod, pass_pipeline)
+function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     pm = MLIR.IR.PassManager()
+    MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
     MLIR.IR.run!(pm, mod)
     return mod
 end
 
+# helper for debug purposes: String -> Text
+function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
+    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    MLIR.IR.context!(ctx) do
+        mod = parse(MLIR.IR.Module, source)
+        run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
+        MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
+        Text(repr(mod))
+    end
+end
+
 function compile_mlir(f, args; kwargs...)
-    ctx = MLIR.IR.Context()
-    Base.append!(Reactant.registry[]; context=ctx)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
@@ -270,15 +304,12 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
     if optimize === :all
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
-                    opt_passes,
-                    "enzyme-batch",
-                    opt_passes,
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -288,28 +319,22 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
             ),
         )
     elseif optimize === :only_enzyme
+        run_pass_pipeline!(mod, "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "enzyme-batch",
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                ],
+                ["canonicalize", "remove-unnecessary-enzyme-ops", "enzyme-simplify-math"],
                 ',',
             ),
         )
     elseif optimize === :after_enzyme
+        run_pass_pipeline!(mod, "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
-                    "enzyme-batch",
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -319,21 +344,10 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
             ),
         )
     elseif optimize === :before_enzyme
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
-            mod,
-            join(
-                [
-                    opt_passes,
-                    "enzyme-batch",
-                    opt_passes,
-                    "enzyme",
-                    "arith-raise{stablehlo=true}",
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                ],
-                ',',
-            ),
+            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math"
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
@@ -380,45 +394,93 @@ end
 """
     @code_hlo [optimize = ...] f(args...)
 """
-macro code_hlo(options, maybe_call=nothing)
-    call = something(maybe_call, options)
-    options = isnothing(maybe_call) ? :(optimize = true) : options
-    Meta.isexpr(call, :call) || error("@code_hlo: expected call, got $call")
-    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@code_hlo: expected options in format optimize=value, got $options")
-    end
-
-    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
-
-    quote
-        options = $(esc(options))
-        f = $(esc(call.args[1]))
-        args = $(esc(Expr(:vect, call.args[2:end]...)))
-
-        mod, _... = compile_mlir(f, args; optimize=options.optimize)
-        return mod
-    end
+macro code_hlo(args...)
+    default_options = Dict{Symbol,Any}(:optimize => true)
+    compile_expr, (; compiled) = compile_call_expr(
+        __module__, compile_mlir, default_options, args...
+    )
+    return esc(:($(compile_expr);
+    $(first)($(compiled))))
 end
 
 """
     @compile f(args...)
 """
-macro compile(options, maybe_call=nothing)
-    call = something(maybe_call, options)
-    options = isnothing(maybe_call) ? :(optimize = true) : options
-    Meta.isexpr(call, :call) || error("@compile: expected call, got $call")
-    if !Meta.isexpr(options, :(=)) || options.args[1] != :optimize
-        error("@compile: expected options in format optimize=value, got $options")
+macro compile(args...)
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
+end
+
+"""
+    @jit f(args...)
+
+    Run @compile f(args..) then immediately execute it
+"""
+macro jit(args...)
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    compile_expr, (; compiled, args) = compile_call_expr(
+        __module__, compile, default_options, args...
+    )
+    #! format: off
+    return esc(
+        :(
+            $(compile_expr);
+            $(compiled)($(args)...)
+        )
+    )
+    #! format: on
+end
+
+function compile_call_expr(mod, compiler, options, args...)
+    while length(args) > 1
+        option, args = args[1], args[2:end]
+        if !Meta.isexpr(option, :(=))
+            error("Invalid option $(option)")
+        else
+            option_name = option.args[1]
+            @assert haskey(options, option_name) "Invalid option $(option_name)"
+            options[option_name] = option.args[2]
+        end
+    end
+    call = only(args)
+    f_symbol = gensym(:f)
+    args_symbol = gensym(:args)
+    compiled_symbol = gensym(:compiled)
+
+    if Meta.isexpr(call, :call)
+        bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
+        fname = if bcast
+            quote
+                if isdefined(mod, $(Meta.quot(fname_full)))
+                    $(fname_full)
+                else
+                    Base.Broadcast.BroadcastFunction($(fname))
+                end
+            end
+        else
+            :($(fname))
+        end
+        args_rhs = Expr(:tuple, call.args[2:end]...)
+    elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
+        fname = :($(Base.Broadcast.BroadcastFunction)($(call.args[1])))
+        args_rhs = only(call.args[2:end])
+    else
+        error("Invalid function call: $(call)")
     end
 
-    options = Expr(:tuple, Expr(:parameters, Expr(:kw, options.args...)))
+    return quote
+        $(f_symbol) = $(fname)
+        $(args_symbol) = $(args_rhs)
+        $(compiled_symbol) = $(compiler)(
+            $(f_symbol), $(args_symbol); $(Expr.(:kw, keys(options), values(options))...)
+        )
+    end,
+    (; compiled=compiled_symbol, args=args_symbol)
+end
 
-    quote
-        options = $(esc(options))
-        f = $(esc(call.args[1]))
-        args = $(esc(Expr(:tuple, call.args[2:end]...)))
-        compile(f, args; options.optimize)
-    end
+function correct_maybe_bcast_call(fname)
+    startswith(string(fname), '.') || return false, fname, fname
+    return true, Symbol(string(fname)[2:end]), fname
 end
 
 """
@@ -626,8 +688,7 @@ end
 
 function compile_xla(f, args; client=nothing, optimize=true)
     # register MLIR dialects
-    ctx = MLIR.IR.Context()
-    append!(Reactant.registry[]; context=ctx)
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     return MLIR.IR.context!(ctx) do
@@ -656,7 +717,7 @@ function compile_xla(f, args; client=nothing, optimize=true)
     end
 end
 
-function compile(f, args; client=nothing, optimize=true)
+function compile(f, args; client=nothing, optimize=true, sync=false)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
         f, args; client, optimize
     )
@@ -687,8 +748,18 @@ function compile(f, args; client=nothing, optimize=true)
         result_stores,
     )
 
+    sync_call = if sync
+        calls = []
+        for name in concretized_res_names
+            push!(calls, :(XLA.synced_buffer($(name))))
+        end
+        Expr(:block, calls...)
+    else
+        :()
+    end
+
     fname = gensym(Symbol(Symbol(f), :_reactant))
-    expr = :(function $fname(args...)
+    expr = :(function $(fname)(args...)
         $(
             # if `f` is a closure, then prepend the closure into `args`
             # the closure fields will be correctly extracted from it as the tracer has already passed through it
@@ -697,7 +768,8 @@ function compile(f, args; client=nothing, optimize=true)
             end
         )
         $(flatten_code...)
-        $xla_call_code
+        $(xla_call_code)
+        $(sync_call)
         $(unflatten_code...)
         return result
     end)

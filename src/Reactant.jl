@@ -1,11 +1,19 @@
 module Reactant
 
+using ReactantCore: ReactantCore, @trace, MissingTracedValue
+
+using LinearAlgebra: LinearAlgebra
 using Adapt: Adapt, WrappedArray
+using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
+
+export @allowscalar # re-exported from GPUArraysCore
 
 # auxiliary types and functions
 include("OrderedIdDict.jl")
 
 using Enzyme
+
+struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
 @static if isdefined(Core, :BFloat16)
     const ReactantPrimitive = Union{
@@ -47,6 +55,8 @@ end
 abstract type RArray{T<:ReactantPrimitive,N} <: AbstractArray{T,N} end
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
+Base.collect(A::RArray) = copy(A)
+
 function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
     return reshape(A, Base._reshape_uncolon(A, dims))
 end
@@ -82,19 +92,22 @@ end
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")
+
 include("utils.jl")
 
 include("ConcreteRArray.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
+include("Ops.jl")
 
-const TracedType = Union{TracedRArray,TracedRNumber}
+const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
+include("ControlFlow.jl")
 include("Tracing.jl")
 include("Compiler.jl")
 
-using .Compiler: @compile, @code_hlo, traced_getfield, create_result, compile
-export ConcreteRArray, @compile, @code_hlo
+using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
+export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace
 
 const registry = Ref{MLIR.IR.DialectRegistry}()
 function __init__()
@@ -109,8 +122,7 @@ function set_default_backend(backend::XLA.Client)
 end
 
 function set_default_backend(backend::String)
-    backend = XLA.backends[backend]
-    return XLA.default_backend[] = backend
+    return set_default_backend(XLA.backends[backend])
 end
 
 end # module

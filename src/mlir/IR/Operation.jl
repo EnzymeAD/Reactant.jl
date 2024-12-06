@@ -69,7 +69,7 @@ parent_op(operation::Operation) =
     Operation(API.mlirOperationGetParentOperation(operation), false)
 
 """
-    rmfromparent(op)
+    rmfromparent!(op)
 
 Removes the given operation from its parent block. The operation is not destroyed.
 The ownership of the operation is transferred to the caller.
@@ -217,6 +217,10 @@ function lose_ownership!(operation::Operation)
 end
 
 function Base.show(io::IO, operation::Operation)
+    if mlirIsNull(operation.operation)
+        return write(io, "Operation(NULL)")
+    end
+
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
 
     buffer = IOBuffer()

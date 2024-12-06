@@ -4,6 +4,8 @@ end
 
 mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
 
+mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+
 function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
     return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
@@ -11,6 +13,14 @@ end
 
 function mlir_type(::Type{<:RNumber{T}}) where {T}
     return MLIR.IR.TensorType((), MLIR.IR.Type(T))
+end
+
+function mlir_type(::Type{<:MissingTracedValue})
+    return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+end
+
+function batch_ty(width, mlirty)
+    return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
 end
 
 function transpose_ty(mlirty)
@@ -27,11 +37,33 @@ function apply(f, args...; kwargs...)
     return f(args...; kwargs...)
 end
 
-function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=false)
+function make_mlir_fn(
+    f,
+    args,
+    kwargs,
+    name="main",
+    concretein=true;
+    toscalar=false,
+    return_dialect=:func,
+    no_args_in_result::Bool=false,
+    construct_function_without_args::Bool=false,
+    do_transpose=true,
+)
     if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
         return (
             true,
-            make_mlir_fn(apply, (f, args...), kwargs, name, concretein; toscalar)[2:end]...,
+            make_mlir_fn(
+                apply,
+                (f, args...),
+                kwargs,
+                name,
+                concretein;
+                toscalar,
+                return_dialect,
+                no_args_in_result,
+                construct_function_without_args,
+                do_transpose,
+            )[2:end]...,
         )
     end
 
@@ -44,6 +76,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
             (:args, i),
             concretein ? ConcreteToTraced : TracedSetPath;
             toscalar,
+            track_numbers=construct_function_without_args ? (Number,) : (),
         )
     end
 
@@ -55,8 +88,10 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
 
     in_tys = if toscalar
         [MLIR.IR.TensorType((), MLIR.IR.Type(eltype(arg))) for arg in linear_args]
-    else
+    elseif do_transpose
         [transpose_ty(mlir_type(arg)) for arg in linear_args]
+    else
+        [mlir_type(arg) for arg in linear_args]
     end
 
     sym_visibility = nothing
@@ -73,37 +108,51 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
         )
     end
 
-    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
+    if construct_function_without_args
+        fnbody = MLIR.IR.Block()
+    else
+        fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
+    end
     push!(MLIR.IR.region(func, 1), fnbody)
 
     @assert MLIR.IR._has_block()
 
     result = MLIR.IR.block!(fnbody) do
         for (i, arg) in enumerate(linear_args)
-            raw_arg = MLIR.IR.argument(fnbody, i)
-            row_maj_arg = transpose_val(raw_arg)
-            arg.mlir_data = row_maj_arg
+            if construct_function_without_args
+                arg.mlir_data = args[i].mlir_data
+            else
+                raw_arg = MLIR.IR.argument(fnbody, i)
+                row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
+                arg.mlir_data = row_maj_arg
+            end
         end
 
-        # NOTE an `AbstractInterpreter` cannot process methods with more recent world-ages than it
-        # solution is to use a new interpreter, but we reuse the `code_cache` to minimize comptime in Julia <= 1.10
-        @static if !HAS_INTEGRATED_CACHE
-            interp = ReactantInterpreter(; code_cache=REACTANT_CACHE)
-        else
-            interp = ReactantInterpreter()
-        end
+        interp = ReactantInterpreter()
 
-        # TODO replace with `Base.invoke_within` if julia#52964 lands
-        ir, ty = only(
-            # TODO fix it for kwargs
-            Base.code_ircode(f, map(typeof, traced_args); interp),
-        )
+        # TODO replace with `Base.invoke_within` if julia#52964 lands        
+        # TODO fix it for kwargs
+        ircoderes = Base.code_ircode(f, map(typeof, traced_args); interp)
+
+        if length(ircoderes) != 1
+            throw(
+                AssertionError(
+                    "Could not find unique ircode for $f $traced_args, found $ircoderes"
+                ),
+            )
+        end
+        ir, ty = ircoderes[1]
         oc = Core.OpaqueClosure(ir)
 
         if f === Reactant.apply
             oc(traced_args[1], (traced_args[2:end]...,))
         else
-            if length(traced_args) + 1 != length(ir.argtypes)
+            if (length(traced_args) + 1 != length(ir.argtypes)) || (
+                length(traced_args) > 0 &&
+                length(ir.argtypes) > 0 &&
+                !(last(ir.argtypes) isa Core.Const) &&
+                last(ir.argtypes) != typeof(traced_args[end])
+            )
                 @assert ir.argtypes[end] <: Tuple
                 oc(
                     traced_args[1:(length(ir.argtypes) - 2)]...,
@@ -118,7 +167,11 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
     seen_results = OrderedIdDict()
 
     traced_result = make_tracer(
-        seen_results, result, (:result,), concretein ? TracedTrack : TracedSetPath
+        seen_results,
+        result,
+        (:result,),
+        concretein ? TracedTrack : TracedSetPath;
+        track_numbers=construct_function_without_args ? (Number,) : (),
     )
 
     # marks buffers to be donated
@@ -132,6 +185,7 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
 
     for (k, v) in seen_results
         v isa TracedType || continue
+        (no_args_in_result && length(v.paths) > 0 && v.paths[1][1] == :args) && continue
         push!(linear_results, v)
     end
 
@@ -140,11 +194,19 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
     ret = MLIR.IR.block!(fnbody) do
         vals = MLIR.IR.Value[]
         for res in linear_results
-            col_maj = transpose_val(res.mlir_data)
+            col_maj = if res isa MissingTracedValue
+                broadcast_to_size(false, ()).mlir_data
+            elseif construct_function_without_args || !do_transpose
+                res.mlir_data
+            elseif do_transpose
+                transpose_val(res.mlir_data)
+            end
             push!(vals, col_maj)
         end
-        @assert length(vals) == length(linear_results)
-        return MLIR.Dialects.func.return_(vals)
+        !no_args_in_result && @assert length(vals) == length(linear_results)
+
+        dialect = getfield(MLIR.Dialects, return_dialect)
+        return dialect.return_(vals)
     end
 
     name2 = name
@@ -173,7 +235,44 @@ function make_mlir_fn(f, args, kwargs, name="main", concretein=true; toscalar=fa
 
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
-    return false,
-    func2, traced_result, result, seen_args, ret, linear_args, in_tys,
-    linear_results
+    return (
+        false,
+        func2,
+        traced_result,
+        result,
+        seen_args,
+        ret,
+        linear_args,
+        in_tys,
+        linear_results,
+    )
+end
+
+const DEBUG_MODE::Ref{Bool} = Ref(false)
+
+function with_debug(f)
+    old = DEBUG_MODE[]
+    DEBUG_MODE[] = true
+    try
+        return f()
+    finally
+        DEBUG_MODE[] = old
+    end
+end
+
+function mlir_stacktrace(name, file, line)::MLIR.IR.Location
+    # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
+    if DEBUG_MODE[]
+        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+    end
+
+    # retrieve current stacktrace, remove this function's frame and translate to MLIR Location
+    st = stacktrace()
+    deleteat!(st, 1)
+    return mapfoldl(MLIR.IR.Location, st) do stackframe
+        name = string(stackframe.func)
+        file = stackframe.file
+        line = stackframe.line
+        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+    end
 end

@@ -1,5 +1,12 @@
 using Reactant
-using Reactant: traced_type, ConcreteRArray, TracedRArray, ConcreteToTraced
+using Reactant:
+    traced_type,
+    ConcreteRArray,
+    TracedRArray,
+    ConcreteToTraced,
+    ArrayToConcrete,
+    NoFieldMatchError,
+    TracedTypeError
 using Test
 
 @testset "Tracing" begin
@@ -99,5 +106,32 @@ using Test
                 )
             end
         end
+        @testset "traced_type exceptions" begin
+            @test_throws TracedTypeError Reactant.traced_type(
+                Real, Reactant.OrderedIdDict(), Val(Reactant.ArrayToConcrete)
+            )
+
+            struct Node
+                x::Vector{Float64}
+                y::Union{Nothing,Node}
+            end
+            @test_throws NoFieldMatchError traced_type(
+                Node, Reactant.OrderedIdDict(), Val(ArrayToConcrete)
+            )
+        end
+    end
+
+    @testset "specialized dispatches" begin
+        @test @inferred Union{Float64,ConcreteRArray{Float64}} Reactant.to_rarray(
+            1.0; track_numbers=(Number,)
+        ) isa ConcreteRNumber
+        @test @inferred Reactant.to_rarray(1.0) isa Float64
+        @test @inferred Reactant.to_rarray(rand(3)) isa ConcreteRArray
+
+        x_ra = Reactant.to_rarray(rand(3))
+        @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRArray
+
+        x_ra = Reactant.to_rarray(1.0; track_numbers=(Number,))
+        @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRNumber
     end
 end

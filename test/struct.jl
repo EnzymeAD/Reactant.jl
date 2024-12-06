@@ -59,8 +59,7 @@ end
             x = MockTensor(rand(4, 4), [:i, :j])
             x2 = MockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
 
-            f = @compile bcast_cos(x2)
-            y = f(x2)
+            y = @jit(bcast_cos(x2))
 
             @test y isa MockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
             @test size(y) == (4, 4)
@@ -72,8 +71,7 @@ end
             x = MutableMockTensor(rand(4, 4), [:i, :j])
             x2 = MutableMockTensor(Reactant.ConcreteRArray(parent(x)), x.inds)
 
-            f = @compile bcast_cos(x2)
-            y = f(x2)
+            y = @jit(bcast_cos(x2))
 
             @test y isa MutableMockTensor{Float64,2,Reactant.ConcreteRArray{Float64,2}}
             @test size(y) == (4, 4)
@@ -88,16 +86,8 @@ end
         x3 = Reactant.to_rarray(x2)
 
         # TODO this should be able to run without problems, but crashes
-        @test_broken begin
-            f = @compile identity(x3)
-            isapprox(f(x3), x3)
-        end
+        @test_broken isapprox(@jit(identity(x3)), x3)
 
-        f = @compile sum(x3)
-
-        y = sum(x2)
-        y3 = f(x3)
-
-        @test isapprox(y, only(y3))
+        @test isapprox(@allowscalar(sum(x3)), only(@jit(sum(x3))))
     end
 end

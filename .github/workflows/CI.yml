@@ -22,7 +22,7 @@ jobs:
       matrix:
         version:
           - '1.10'
-          - '~1.11.0-0'
+          - '1.11'
           - 'nightly'
         os:
           - ubuntu-20.04
@@ -30,6 +30,7 @@ jobs:
         test_group:
           - core
           - neural_networks
+          - integration
         arch:
           - x64
         assertions:
@@ -48,6 +49,21 @@ jobs:
             version: '1.10'
             assertions: true
             test_group: neural_networks
+          - os: ubuntu-20.04
+            arch: x86
+            libReactant: packaged
+            version: '1.10'
+            test_group: core
+          - os: ubuntu-20.04
+            arch: x86
+            libReactant: packaged
+            version: '1.10'
+            test_group: neural_networks
+          - os: ubuntu-20.04
+            arch: x86
+            libReactant: packaged
+            version: '1.10'
+            test_group: integration
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -84,18 +100,29 @@ jobs:
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
           SDKROOT=`xcrun --show-sdk-path` julia --color=yes --project=deps deps/build_local.jl
           cp LocalPreferences.toml test/
-      - uses: julia-actions/julia-runtest@v1
-        # if: steps.buildpkg.outcome == 'success'
+      - name: "Install Dependencies and Run Tests"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          # Install packages present in subdirectories
+          dev_pks = Pkg.PackageSpec[]
+          for path in ("lib/ReactantCore",)
+              push!(dev_pks, Pkg.PackageSpec(; path))
+          end
+          Pkg.develop(dev_pks)
+          Pkg.instantiate()
+          Pkg.test(; coverage="user")
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
           REACTANT_TEST_GROUP: ${{ matrix.test_group }}
       - uses: julia-actions/julia-processcoverage@v1
         if: steps.run_tests.outcome == 'success'
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v5
         if: steps.run_tests.outcome == 'success'
         with:
-          file: lcov.info
+          files: lcov.info
   docs:
     name: Documentation
     runs-on: ubuntu-latest
@@ -108,7 +135,11 @@ jobs:
       - run: |
           julia --color=yes --project=docs -e '
             using Pkg
-            Pkg.develop([PackageSpec(path=pwd()), PackageSpec("Reactant_jll")])
+            Pkg.develop([
+              PackageSpec(path=pwd()),
+              PackageSpec("Reactant_jll"),
+              PackageSpec(path="lib/ReactantCore")
+            ])
             Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager

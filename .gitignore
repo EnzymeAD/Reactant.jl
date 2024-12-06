@@ -81,7 +81,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -275,3 +274,6 @@ external
 archive/
 
 benchmark/results/*
+
+package-lock.json
+node_modules
