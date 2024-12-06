@@ -848,7 +848,7 @@ end
 
 # control flow ops
 function select(
-    pred::Union{TracedRArray{Bool,N},TracedRNumber{Number}},
+    pred::Union{TracedRArray{Bool,N},TracedRNumber{Bool}},
     on_true::TracedRArray{T,N},
     on_false::TracedRArray{T,N},
 ) where {T,N}
