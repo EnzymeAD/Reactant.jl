@@ -522,6 +522,32 @@ end
     end
 end
 
+@testset "select" begin
+    ontrue = ConcreteRArray([1, 2, 3, 4])
+    onfalse = ConcreteRArray([5, 6, -7, -8])
+
+    pred = ConcreteRArray([true, true, false, false])
+    @test [1, 2, -7, -8] == @jit Ops.select(pred, ontrue, onfalse)
+
+    pred = ConcreteRArray([false, false, true, true])
+    @test [5, 6, 3, 4] == @jit Ops.select(pred, ontrue, onfalse)
+
+    pred = ConcreteRNumber(true)
+    @test ontrue == @jit Ops.select(pred, ontrue, onfalse)
+
+    pred = ConcreteRNumber(false)
+    @test onfalse == @jit Ops.select(pred, ontrue, onfalse)
+
+    ontrue = ConcreteRNumber(1)
+    onfalse = ConcreteRNumber(2)
+
+    pred = ConcreteRNumber(true)
+    @test ontrue == @jit Ops.select(pred, ontrue, onfalse)
+
+    pred = ConcreteRNumber(false)
+    @test onfalse == @jit Ops.select(pred, ontrue, onfalse)
+end
+
 @testset "send" begin end
 
 @testset "set_dimension_size" begin end
