@@ -202,7 +202,7 @@ function Base.ifelse(
 ) where {T1,T2}
     @warn "`ifelse` with different element-types in Reactant works by promoting the \
             element-type to the common type. This is semantically different from the \
-            behavior of `ifelse` in Base. Use with caution" maxlog=1
+            behavior of `ifelse` in Base. Use with caution" maxlog = 1
     T = promote_type(T1, T2)
     return ifelse(pred, promote_to(TracedRNumber{T}, x), promote_to(TracedRNumber{T}, y))
 end
