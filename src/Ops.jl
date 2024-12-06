@@ -612,7 +612,7 @@ function dot_general(
         1:ndims(rhs), rhs_batching_dimensions, rhs_contracting_dimensions
     )
 
-    ressize = stack(
+    ressize = vcat(
         size.(Ref(lhs), lhs_batching_dimensions),
         size.(Ref(lhs), lhs_result_dimensions),
         size.(Ref(rhs), rhs_result_dimensions),
@@ -652,9 +652,9 @@ function dot_general(
     if any(
         !isnothing,
         (
-            precision_type...,
+            precision_type,
             accumulation_type,
-            component_count...,
+            component_count,
             num_primitive_operations,
             allow_imprecise_accumulation,
         ),
@@ -685,13 +685,15 @@ function dot_general(
                 ),
             )
         end
+    else
+        algorithm = nothing
     end
 
     res = MLIR.IR.result(
         stablehlo.dot_general(
             lhs.mlir_data,
             rhs.mlir_data;
-            result=mlir_type(TracedRArray{T,length(ressize)}, ressize),
+            result_0=mlir_type(TracedRArray{T,length(ressize)}, ressize),
             dot_dimension_numbers,
             precision_config,
             algorithm,
