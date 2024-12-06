@@ -208,7 +208,8 @@ end
             ConcreteRArray([5.0, 6.0im, -7.0im, -8.0]),
         ),
     ]
-        @test dot(a, b) ≈ @jit f1(a, b)
+        # NOTE `LinearAlgebra.dot` is not equal to `sum(a .* b)` on complex numbers due to conjugation
+        @test sum(a .* b) ≈ @jit f1(a, b)
         @test kron(reshape(a, length(a), 1), reshape(b, 1, length(b))) ≈ @jit fouter(a, b)
         @test a .* b ≈ @jit fouter_batch1(a, b)
     end
