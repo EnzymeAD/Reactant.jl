@@ -565,19 +565,18 @@ function dot_general(
         splat(==)(length.(contracting_dimensions))
 
     # C3 + C4
-    @assert all(eltype.(contracting_dimensions) <: Int64)
-    @assert all(eltype.(batching_dimensions) <: Int64)
+    @assert all(eltype.(contracting_dimensions) .<: Int64)
+    @assert all(eltype.(batching_dimensions) .<: Int64)
     @assert all(isdisjoint.(contracting_dimensions, batching_dimensions))
 
     lhs_contracting_dimensions, rhs_contracting_dimensions = contracting_dimensions
     lhs_batching_dimensions, rhs_batching_dimensions = batching_dimensions
 
     # C5 + C6 + C7 + C8
-    # NOTE spec says `<` but clearly can be `<=`
-    @assert lhs_batching_dimensions <= ndims(lhs)
-    @assert rhs_batching_dimensions <= ndims(rhs)
-    @assert lhs_contracting_dimensions <= ndims(lhs)
-    @assert rhs_contracting_dimensions <= ndims(rhs)
+    @assert all(lhs_batching_dimensions .<= ndims(lhs))
+    @assert all(rhs_batching_dimensions .<= ndims(rhs))
+    @assert all(lhs_contracting_dimensions .<= ndims(lhs))
+    @assert all(rhs_contracting_dimensions .<= ndims(rhs))
 
     # C9 + C10
     @assert size.(Ref(lhs), lhs_batching_dimensions) ==
