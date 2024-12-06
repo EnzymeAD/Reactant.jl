@@ -867,9 +867,7 @@ function select(
 end
 
 function select(
-    pred::TracedRNumber{Bool},
-    on_true::TracedRNumber{T},
-    on_false::TracedRNumber{T},
+    pred::TracedRNumber{Bool}, on_true::TracedRNumber{T}, on_false::TracedRNumber{T}
 ) where {T}
     res = MLIR.IR.result(
         stablehlo.select(
