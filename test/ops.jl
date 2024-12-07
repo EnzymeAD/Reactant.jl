@@ -243,7 +243,7 @@ end
         x = reshape(a, (2, 2))
         y = reshape(b, (2, 2))
         @test x .* y ≈ @jit f3(x, y)
-        @test x * y ≈ @jit f4(x, y)
+        @test Array(x) * Array(y) ≈ @jit f4(x, y)
     end
 end
 
