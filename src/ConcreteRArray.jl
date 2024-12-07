@@ -301,3 +301,8 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteR
     aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
     return ConcreteRArray(aux)
 end
+
+function Base.copyto!(dest::ConcreteRArray, src::ConcreteRArray)
+    dest.data = src.data
+    return dest
+end
