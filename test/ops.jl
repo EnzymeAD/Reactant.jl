@@ -82,14 +82,16 @@ end
 end
 
 @testset "cholesky" begin
-    g(x) = Ops.cholesky(x; lower=true)
+    g1(x) = triu(Ops.cholesky(x))
+    g2(x) = tril(Ops.cholesky(x; lower=true))
+
     x = ConcreteRArray([
         10.0 2.0 3.0
         2.0 5.0 6.0
         3.0 6.0 9.0
     ])
-    @test cholesky(Array(x)).U ≈ @jit Ops.cholesky(x)
-    @test transpose(cholesky(Array(x)).U) ≈ @jit g(x)
+    @test cholesky(Array(x)).U ≈ @jit g1(x)
+    @test transpose(cholesky(Array(x)).U) ≈ @jit g2(x)
 
     x = ConcreteRArray(
         [
@@ -98,8 +100,9 @@ end
             3.0+4.0im 3.0+2.0im 9.0+0.0im
         ],
     )
-    @test cholesky(Array(x)).U ≈ @jit Ops.cholesky(x)
-    @test adjoint(cholesky(Array(x)).U) ≈ @jit g(x)
+
+    @test cholesky(Array(x)).U ≈ @jit g1(x)
+    @test adjoint(cholesky(Array(x)).U) ≈ @jit g2(x)
 end
 
 @testset "clamp" begin

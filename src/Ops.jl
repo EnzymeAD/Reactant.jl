@@ -13,8 +13,6 @@ using ..Reactant:
     mlir_type,
     mlir_stacktrace
 
-using LinearAlgebra: triu!, tril!
-
 struct Token
     mlir_data::MLIR.IR.Value
 end
@@ -495,12 +493,7 @@ function cholesky(
             location,
         ),
     )
-    res = TracedRArray{T,N}((), res, size(x))
-
-    # See https://github.com/EnzymeAD/Reactant.jl/issues/338 for why we need to do this
-    lower ? tril!(res) : triu!(res)
-
-    return res
+    return TracedRArray{T,N}((), res, size(x))
 end
 
 function clamp(
