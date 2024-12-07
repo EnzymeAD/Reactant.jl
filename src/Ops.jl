@@ -1040,7 +1040,7 @@ function compare(
             compare_type,
             location,
         ),
-        1
+        1,
     )
     lhs isa TracedRNumber && return TracedRNumber{Bool}((), res)
     return TracedRArray{Bool,ndims(lhs)}((), res, size(lhs))
