@@ -45,7 +45,7 @@ function mul_with_view3(A, x)
     return C
 end
 
-@testset begin
+@testset "Matrix Multiplication" begin
     A = rand(4, 4)
     x = rand(4, 2)
     b = rand(4)
@@ -76,4 +76,16 @@ end
     C_ra = similar(A_ra, Float32, size(A, 1), size(x, 2))
     @jit(mul!(C_ra, A_ra, x_ra))
     @test C_ra ≈ A * x
+end
+
+@testset "triu & tril" begin
+    A = rand(4, 6)
+    A_ra = Reactant.to_rarray(A)
+
+    @test @jit(triu(A_ra)) ≈ triu(A)
+    @test @jit(tril(A_ra)) ≈ tril(A)
+    @test @jit(triu(A_ra, 2)) ≈ triu(A, 2)
+    @test @jit(tril(A_ra, 2)) ≈ tril(A, 2)
+    @test @jit(triu(A_ra, -1)) ≈ triu(A, -1)
+    @test @jit(tril(A_ra, -1)) ≈ tril(A, -1)
 end

@@ -92,13 +92,17 @@ function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) wh
     iota_2 = Ops.subtract(
         Ops.iota(Int64, [size(X)...]; iota_dimension=2), broadcast_to_size(k, size(X))
     )
-    return Ops.select(Ops.compare(iota_1, iota_2; comparison_direction="LE"), X, zero(X))
+    idxs = Ops.compare(iota_1, iota_2; comparison_direction="LE")
+    X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
+    return X
 end
 
 function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
     iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
-    iota_2 = Ops.add(
+    iota_2 = Ops.subtract(
         Ops.iota(Int64, [size(X)...]; iota_dimension=2), broadcast_to_size(k, size(X))
     )
-    return Ops.select(Ops.compare(iota_1, iota_2; comparison_direction="GE"), X, zero(X))
+    idxs = Ops.compare(iota_1, iota_2; comparison_direction="GE")
+    X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
+    return X
 end
