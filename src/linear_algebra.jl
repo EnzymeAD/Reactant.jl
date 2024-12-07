@@ -88,15 +88,19 @@ function LinearAlgebra.mul!(
 end
 
 function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
-    idxs =
-        Ops.iota(Int64, [size(X)...]; iota_dimension=1) .<
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2) .- (k - 1)
-    return ifelse.(idxs, X, promote_to(TracedRNumber{T}, zero(T)))
+    iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
+    iota_2 = Ops.subtract(
+        Ops.iota(Int64, [size(X)...]; iota_dimension=2), broadcast_to_size(k, size(X))
+    )
+    idxs = iota_1 .≤ iota_2
+    return Ops.select(idxs, X, zero(X))
 end
 
 function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
-    idxs =
-        Ops.iota(Int64, [size(X)...]; iota_dimension=1) .>
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2) .- (k + 1)
-    return ifelse.(idxs, X, promote_to(TracedRNumber{T}, zero(T)))
+    iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
+    iota_2 = Ops.add(
+        Ops.iota(Int64, [size(X)...]; iota_dimension=2), broadcast_to_size(k, size(X))
+    )
+    idxs = iota_1 .≥ iota_2
+    return Ops.select(idxs, X, zero(X))
 end
