@@ -640,3 +640,11 @@ end
 
     @test @jit(f_row_major(x_ra)) ≈ f_row_major(x)
 end
+
+@testset "PermutedDimsArray" begin
+    x = randn(2, 3)
+    x_re = Reactant.to_rarray(x)
+
+    f(u) = PermutedDimsArray(u, (2, 1))
+    @test f(x) == @jit f(x_re)
+end
