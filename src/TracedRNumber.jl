@@ -240,6 +240,8 @@ for (jlop, hloop) in (
     (:(Base.FastMath.exp_fast), :exponential),
     (:(Base.log), :log),
     (:(Base.sqrt), :sqrt),
+    (:(Base.ceil), :ceil),
+    (:(Base.floor), :floor),
 )
     @eval function $(jlop)(@nospecialize(lhs::TracedRNumber{T})) where {T}
         OutTy = $(hloop === :abs) ? real(T) : T
