@@ -298,21 +298,6 @@ function NNlib.pad_constant(
     return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
 end
 
-function NNlib.make_causal_mask(x::AnyTracedRArray; dims::Int=2)
-    len = size(x, dims)
-    # directly generating booleans were causing an incorrect constant attribute generation
-    # but the optimized IR removes the type case so we are probably ok
-    mask = MLIR.IR.DenseElementsAttribute(collect(triu(fill(1, (len, len)))))
-    return Reactant.promote_to(
-        TracedRArray{Bool,2},
-        TracedRArray{Int,2}(
-            (),
-            MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=mask), 1),
-            (len, len),
-        ),
-    )
-end
-
 # XXX: reevaluate this manual optimization once
 #      https://github.com/EnzymeAD/Enzyme-JAX/issues/164 is handled
 function NNlib.gather!(

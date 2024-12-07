@@ -1014,4 +1014,36 @@ function select(
     return TracedRNumber{T}((), res)
 end
 
+# comparison
+function compare(
+    lhs::Union{TracedRArray{T},TracedRNumber{T}},
+    rhs::Union{TracedRArray{T},TracedRNumber{T}};
+    comparison_direction::String,
+    compare_type=nothing,
+    location=mlir_stacktrace("compare", @__FILE__, @__LINE__),
+) where {T}
+    @assert comparison_direction in ("EQ", "NE", "GE", "GT", "LE", "LT")
+    @assert size(lhs) == size(rhs)
+    if lhs isa TracedRNumber
+        @assert rhs isa TracedRNumber
+    else
+        @assert rhs isa TracedRArray
+    end
+
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.compare(
+            lhs.mlir_data,
+            rhs.mlir_data;
+            comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
+                MLIR.IR.context(), comparison_direction
+            ),
+            compare_type,
+            location,
+        ),
+        1,
+    )
+    lhs isa TracedRNumber && return TracedRNumber{Bool}((), res)
+    return TracedRArray{Bool,ndims(lhs)}((), res, size(lhs))
+end
+
 end
