@@ -151,19 +151,7 @@ for (jlop, hloop, hlocomp) in (
         function $(jlop)(
             @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
         ) where {T}
-            return TracedRNumber{Bool}(
-                (),
-                MLIR.IR.result(
-                    MLIR.Dialects.stablehlo.$(hloop)(
-                        lhs.mlir_data,
-                        rhs.mlir_data;
-                        comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                            MLIR.IR.context(), $hlocomp
-                        ),
-                    ),
-                    1,
-                ),
-            )
+            return Ops.compare(lhs, rhs; comparison_direction=$(hlocomp))
         end
 
         function $(jlop)(@nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs)) where {T}
