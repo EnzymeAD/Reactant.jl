@@ -485,12 +485,10 @@ function cholesky(
     lower::Bool=false,
     location=mlir_stacktrace("cholesky", @__FILE__, @__LINE__),
 ) where {T,N}
+    lower = MLIR.IR.Attribute(lower)
     res = MLIR.IR.result(
         stablehlo.cholesky(
-            x.mlir_data;
-            result=mlir_type(TracedRArray{T,N}, size(x)),
-            lower=MLIR.IR.Attribute(lower),
-            location,
+            x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), lower, location
         ),
     )
     return TracedRArray{T,N}((), res, size(x))
