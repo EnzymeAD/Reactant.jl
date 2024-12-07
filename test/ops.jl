@@ -213,13 +213,14 @@ end
     ]
         # NOTE `LinearAlgebra.dot` is not equal to `sum(a .* b)` on complex numbers due to conjugation
         @test sum(a .* b) ≈ @jit f1(a, b)
-        @test kron(reshape(a, length(a), 1), reshape(b, 1, length(b))) ≈ @jit fouter(a, b)
+        @test kron(reshape(Array(a), length(a), 1), reshape(Array(b), 1, length(b))) ≈
+            @jit fouter(a, b)
         @test a .* b ≈ @jit fouter_batch1(a, b)
     end
 
     a = ConcreteRArray([1 2; 3 4])
     b = ConcreteRArray([5 6; -7 -8])
-    @test a' * b == @jit f1(a, b)
+    @test Array(a)' * Array(b) == @jit f1(a, b)
 end
 
 @testset "einsum" begin

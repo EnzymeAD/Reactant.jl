@@ -299,3 +299,15 @@ function Base.copyto!(dest::ConcreteRArray, src::ConcreteRArray)
     dest.data = src.data
     return dest
 end
+
+function Base.mapreduce(
+    @nospecialize(f),
+    @nospecialize(op),
+    @nospecialize(A::ConcreteRArray{T,N});
+    dims=:,
+    init=nothing,
+) where {T,N}
+    mapreduce_fn(x) = Base.mapreduce(f, op, x; dims, init)
+    fn = Reactant.compile(mapreduce_fn, (A,))
+    return fn(A)
+end
