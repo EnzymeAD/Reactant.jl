@@ -8,8 +8,6 @@ mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     shape::NTuple{N,Int}
 end
 
-const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
-
 mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
 end
