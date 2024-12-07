@@ -46,7 +46,6 @@ function set_reactant_abi(
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
     end
 
-    @show f, arginfo
     return Base.@invoke abstract_call_known(
         interp::AbstractInterpreter,
         f::Any,
