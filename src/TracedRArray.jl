@@ -252,6 +252,10 @@ function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     )
 end
 
+# force permutation of dims, because we can optimize it anyway
+# TODO should we add a method for `PermutedDimsArray` with type params?
+PermutedDimsArray(x::TracedRArray, perm) = permutedims(x, perm)
+
 Base.conj(A::TracedRArray) = A
 function Base.conj(A::TracedRArray{T,N}) where {T<:Complex,N}
     return TracedRArray{T,N}(
