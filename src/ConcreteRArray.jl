@@ -289,17 +289,8 @@ end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}})
-    ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
-    if !Base.isconcretetype(ElType)
-        throw(
-            ErrorException(
-                "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
-            ),
-        )
-    end
-
-    aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
-    return ConcreteRArray(aux)
+    fn = Reactant.compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
+    return fn(bc.args...)
 end
 
 function Base.copyto!(dest::ConcreteRArray, src::ConcreteRArray)
