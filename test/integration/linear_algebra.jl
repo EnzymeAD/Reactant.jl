@@ -88,4 +88,28 @@ end
     @test @jit(tril(A_ra, 2)) ≈ tril(A, 2)
     @test @jit(triu(A_ra, -1)) ≈ triu(A, -1)
     @test @jit(tril(A_ra, -1)) ≈ tril(A, -1)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(triu!(A_ra))
+    @test A_ra ≈ triu(A)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(tril!(A_ra))
+    @test A_ra ≈ tril(A)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(triu!(A_ra, 2))
+    @test A_ra ≈ triu(A, 2)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(tril!(A_ra, 2))
+    @test A_ra ≈ tril(A, 2)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(triu!(A_ra, -1))
+    @test A_ra ≈ triu(A, -1)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(tril!(A_ra, -1))
+    @test A_ra ≈ tril(A, -1)
 end
