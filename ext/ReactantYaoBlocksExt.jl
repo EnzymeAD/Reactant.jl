@@ -34,7 +34,7 @@ function codegen!(
 
     IR.block!(fbody) do
         θ = TracedRNumber{ParamType}((), IR.argument(fbody, 1))
-        M = Reactant.broadcast_to_size(zero(T), (2, 2))
+        M = Reactant.broadcast_to_size(zero(OutElType), (2, 2))
         c = cos(θ / 2)
         s = sin(θ / 2)
         M[1, 1] = c
