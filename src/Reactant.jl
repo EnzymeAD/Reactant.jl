@@ -57,10 +57,6 @@ abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
 Base.collect(A::RArray) = copy(A)
 
-function Base.reshape(A::RArray, dims::Tuple{Vararg{Union{Int,Colon}}})
-    return reshape(A, Base._reshape_uncolon(A, dims))
-end
-
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
 )::RT where {copy_if_inactive,RT<:RArray}
