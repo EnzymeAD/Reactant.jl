@@ -109,7 +109,7 @@ function YaoBlocks.mat(::Type{T}, R::RotationGate{D,TracedRNumber{S},<:YGate}) w
         func.call(
             [R.theta.mlir_data];
             result_0=[IR.TensorType((2, 2), IR.Type(T))],
-            callee=symname("ry", S, T),
+            callee=IR.Attribute(symname("ry", S, T)),
         ),
     )
     return TracedRArray{T,2}((), res, (2, 2))
@@ -121,7 +121,7 @@ function YaoBlocks.mat(::Type{T}, R::RotationGate{D,TracedRNumber{S},<:ZGate}) w
     op = func.call(
         [R.theta.mlir_data];
         result_0=[IR.TensorType((2, 2), IR.Type(T))],
-        callee=symname("rz", S, T),
+        callee=IR.Attribute(symname("rz", S, T)),
     )
 
     res = IR.result(op)
