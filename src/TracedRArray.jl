@@ -69,6 +69,14 @@ materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
 function materialize_traced_array(x::Base.ReshapedArray{T,N,<:TracedRArray}) where {T,N}
     return Ops.reshape(parent(x), size(x)...)
 end
+function materialize_traced_array(x::LinearAlgebra.Transpose{T,<:TracedRArray{T}}) where {T}
+    px = parent(x)
+    A = ndims(px) == 1 ? reshape(px, :, 1) : px
+    return permutedims(A, (2, 1))
+end
+function materialize_traced_array(x::LinearAlgebra.Adjoint{T,<:TracedRArray{T}}) where {T}
+    return conj(transpose(parent(x)))
+end
 
 get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
@@ -80,6 +88,26 @@ end
 function set_mlir_data!(x::Base.ReshapedArray{T,N,<:TracedRArray}, data) where {T,N}
     tdata = TracedRArray(data)
     parent(x).mlir_data = Ops.reshape(tdata, size(parent(x))...).mlir_data
+    return x
+end
+function set_mlir_data!(x::LinearAlgebra.Transpose{T,<:TracedRArray{T,N}}, data) where {T,N}
+    tdata = TracedRArray(data)
+    px = parent(x)
+    px.mlir_data = (
+        if ndims(px) == 1
+            Ops.reshape(tdata, length(tdata))
+        else
+            Ops.transpose(tdata, [2, 1])
+        end
+    ).mlir_data
+    return x
+end
+function set_mlir_data!(x::LinearAlgebra.Adjoint{T,<:TracedRArray{T,N}}, data) where {T,N}
+    tdata = TracedRArray(data)
+    px = parent(x)
+    transposed_data =
+        ndims(px) == 1 ? Ops.reshape(tdata, length(tdata)) : Ops.transpose(tdata, [2, 1])
+    px.mlir_data = (T <: Real ? transposed_data : Ops.conj(transposed_data)).mlir_data
     return x
 end
 function set_mlir_data!(x::AnyTracedRArray, data)
@@ -278,12 +306,6 @@ function Base.imag(A::TracedRArray{Complex{T},N}) where {T,N}
         size(A),
     )
 end
-
-function Base.transpose(A::AnyTracedRVecOrMat)
-    A = ndims(A) == 1 ? reshape(A, :, 1) : A
-    return permutedims(A, (2, 1))
-end
-Base.adjoint(A::AnyTracedRVecOrMat) = conj(transpose(A))
 
 promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N} = TracedRArray{T,N}(rhs)
 
@@ -770,9 +792,3 @@ end
 
 Base.all(f::Function, x::TracedRArray) = mapreduce(f, &, x)
 Base.any(f::Function, x::TracedRArray) = mapreduce(f, |, x)
-
-# LinearAlgebra defines norm with some conditionals which cannot be traced directly
-function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
-    isinf(p) && return maximum(abs, x)
-    return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
-end

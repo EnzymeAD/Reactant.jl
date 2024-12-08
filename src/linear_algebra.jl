@@ -106,3 +106,9 @@ function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) wh
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
     return X
 end
+
+# LinearAlgebra defines norm with some conditionals which cannot be traced directly
+function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
+    isinf(p) && return maximum(abs, x)
+    return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
+end
