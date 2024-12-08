@@ -6,7 +6,7 @@ function LinearAlgebra.mul!(
     β::Number=false,
 ) where {T1,T2,T3}
     # TODO: The reshape operations are not getting optimized, we should directly call dot_general
-    rC = reshape(C, :, 1)
+    rC = Ops.reshape(C, length(C), 1)
     LinearAlgebra.mul!(rC, A, reshape(B, :, 1), α, β)
     C.mlir_data = get_mlir_data(vec(rC))
     return C

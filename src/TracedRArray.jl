@@ -17,6 +17,12 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
+const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
+const AnyTracedRVector{T} = AnyTracedRArray{T,1}
+const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
+const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
+
 function TracedRArray(data::MLIR.IR.Value)
     data_type = MLIR.IR.type(data)
     return TracedRArray{eltype(MLIR.IR.julia_type(data_type)),ndims(data_type)}(
@@ -45,6 +51,10 @@ function TracedRArray{T,N}(rhs::TracedRArray{T0,N}) where {T,T0,N}
     end
 end
 
+function TracedRArray{T,N}(rhs::WrappedTracedRArray{T0,N}) where {T0,T,N}
+    return TracedRArray{T,N}(materialize_traced_array(rhs))
+end
+
 function TracedRArray{T,N}(rhs::AbstractArray{T0,N}) where {T0,T,N}
     attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
     return TracedRArray{T,N}(
@@ -53,12 +63,6 @@ function TracedRArray{T,N}(rhs::AbstractArray{T0,N}) where {T0,T,N}
         ),
     )
 end
-
-const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
-const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
-const AnyTracedRVector{T} = AnyTracedRArray{T,1}
-const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
-const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
 materialize_traced_array(x::TracedRArray) = x
 materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
