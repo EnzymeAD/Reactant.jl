@@ -7,11 +7,202 @@ using ReactantCore: @trace
 
 using Adapt
 
-#function Adapt.adapt_storage(::CUDA.KernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
-#  res = CuDeviceArray{T,N,CUDA.AS.Global}(Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, xs.mlir_data.value.ptr), size(xs))
-#  @show res, xs
-#  return res
-#end
+struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
+    ptr::Core.LLVMPtr{T,A}
+end
+
+
+Base.show(io::IO, a::AT) where AT <: CuTracedArray =
+   CUDA.Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+
+## array interface
+
+Base.elsize(::Type{<:CuTracedArray{T}}) where {T} = sizeof(T)
+Base.size(g::CuTracedArray{T,N,A,Size}) where {T,N,A,Size} = Size
+Base.sizeof(x::CuTracedArray) = Base.elsize(x) * length(x)
+Base.pointer(x::CuTracedArray{T,<:Any,A}) where {T,A} = Base.unsafe_convert(Core.LLVMPtr{T,A}, x)
+@inline function Base.pointer(x::CuTracedArray{T,<:Any,A}, i::Integer) where {T,A}
+    Base.unsafe_convert(Core.LLVMPtr{T,A}, x) + Base._memory_offset(x, i)
+end
+
+
+## conversions
+
+Base.unsafe_convert(::Type{Core.LLVMPtr{T,A}}, x::CuTracedArray{T,<:Any,A}) where {T,A} =
+  x.ptr
+
+
+## indexing intrinsics
+
+CUDA.@device_function @inline function arrayref(A::CuTracedArray{T}, index::Integer) where {T}
+    @boundscheck checkbounds(A, index)
+    if Base.isbitsunion(T)
+        arrayref_union(A, index)
+    else
+        arrayref_bits(A, index)
+    end
+end
+
+@inline function arrayref_bits(A::CuTracedArray{T}, index::Integer) where {T}
+    unsafe_load(pointer(A), index)
+end
+
+@inline @generated function arrayref_union(A::CuTracedArray{T,<:Any,AS}, index::Integer) where {T,AS}
+    typs = Base.uniontypes(T)
+
+    # generate code that conditionally loads a value based on the selector value.
+    # lacking noreturn, we return T to avoid inference thinking this can return Nothing.
+    ex = :(Base.llvmcall("unreachable", $T, Tuple{}))
+    for (sel, typ) in Iterators.reverse(enumerate(typs))
+        ex = quote
+            if selector == $(sel-1)
+                ptr = reinterpret(Core.LLVMPtr{$typ,AS}, data_ptr)
+		unsafe_load(ptr, 1)
+            else
+                $ex
+            end
+        end
+    end
+
+    quote
+        selector_ptr = typetagdata(A, index)
+        selector = unsafe_load(selector_ptr)
+
+        data_ptr = pointer(A, index)
+
+        return $ex
+    end
+end
+
+CUDA.@device_function @inline function arrayset(A::CuTracedArray{T}, x::T, index::Integer) where {T}
+    @boundscheck checkbounds(A, index)
+    if Base.isbitsunion(T)
+        arrayset_union(A, x, index)
+    else
+        arrayset_bits(A, x, index)
+    end
+    return A
+end
+
+@inline function arrayset_bits(A::CuTracedArray{T}, x::T, index::Integer) where {T}
+    unsafe_store!(pointer(A), x, index)
+end
+
+@inline @generated function arrayset_union(A::CuTracedArray{T,<:Any,AS}, x::T, index::Integer) where {T,AS}
+    typs = Base.uniontypes(T)
+    sel = findfirst(isequal(x), typs)
+
+    quote
+        selector_ptr = typetagdata(A, index)
+        unsafe_store!(selector_ptr, $(UInt8(sel-1)))
+
+        data_ptr = pointer(A, index)
+
+        unsafe_store!(reinterpret(Core.LLVMPtr{$x,AS}, data_ptr), x, 1)
+        return
+    end
+end
+
+CUDA.@device_function @inline function const_arrayref(A::CuTracedArray{T}, index::Integer) where {T}
+    @boundscheck checkbounds(A, index)
+    unsafe_cached_load(pointer(A), index)
+end
+
+
+## indexing
+
+Base.IndexStyle(::Type{<:CuTracedArray}) = Base.IndexLinear()
+
+Base.@propagate_inbounds Base.getindex(A::CuTracedArray{T}, i1::Integer) where {T} =
+    arrayref(A, i1)
+Base.@propagate_inbounds Base.setindex!(A::CuTracedArray{T}, x, i1::Integer) where {T} =
+    arrayset(A, convert(T,x)::T, i1)
+
+# preserve the specific integer type when indexing device arrays,
+# to avoid extending 32-bit hardware indices to 64-bit.
+Base.to_index(::CuTracedArray, i::Integer) = i
+
+# Base doesn't like Integer indices, so we need our own ND get and setindex! routines.
+# See also: https://github.com/JuliaLang/julia/pull/42289
+Base.@propagate_inbounds Base.getindex(A::CuTracedArray,
+                                       I::Union{Integer, CartesianIndex}...) =
+    A[Base._to_linear_index(A, to_indices(A, I)...)]
+Base.@propagate_inbounds Base.setindex!(A::CuTracedArray, x,
+                                        I::Union{Integer, CartesianIndex}...) =
+    A[Base._to_linear_index(A, to_indices(A, I)...)] = x
+
+
+## const indexing
+
+"""
+    Const(A::CuTracedArray)
+
+Mark a CuTracedArray as constant/read-only. The invariant guaranteed is that you will not
+modify an CuTracedArray for the duration of the current kernel.
+
+This API can only be used on devices with compute capability 3.5 or higher.
+
+!!! warning
+    Experimental API. Subject to change without deprecation.
+"""
+struct Const{T,N,AS} <: DenseArray{T,N}
+    a::CuTracedArray{T,N,AS}
+end
+Base.Experimental.Const(A::CuTracedArray) = Const(A)
+
+Base.IndexStyle(::Type{<:Const}) = IndexLinear()
+Base.size(C::Const) = size(C.a)
+Base.axes(C::Const) = axes(C.a)
+Base.@propagate_inbounds Base.getindex(A::Const, i1::Integer) = const_arrayref(A.a, i1)
+
+# deprecated
+Base.@propagate_inbounds ldg(A::CuTracedArray, i1::Integer) = const_arrayref(A, i1)
+
+
+## other
+
+@inline function Base.iterate(A::CuTracedArray, i=1)
+    if (i % UInt) - 1 < length(A)
+        (@inbounds A[i], i + 1)
+    else
+        nothing
+    end
+end
+
+function Base.reinterpret(::Type{T}, a::CuTracedArray{S,N,A}) where {T,S,N,A}
+  err = GPUArrays._reinterpret_exception(T, a)
+  err === nothing || throw(err)
+
+  if sizeof(T) == sizeof(S) # fast case
+    return CuTracedArray{T,N,A}(reinterpret(Core.LLVMPtr{T,A}, a.ptr), size(a), a.maxsize)
+  end
+
+  isize = size(a)
+  size1 = div(isize[1]*sizeof(S), sizeof(T))
+  osize = tuple(size1, Base.tail(isize)...)
+  return CuTracedArray{T,N,A}(reinterpret(Core.LLVMPtr{T,A}, a.ptr), osize, a.maxsize)
+end
+
+
+## reshape
+
+function Base.reshape(a::CuTracedArray{T,M,A}, dims::NTuple{N,Int}) where {T,N,M,A}
+  if prod(dims) != length(a)
+      throw(DimensionMismatch("new dimensions (argument `dims`) must be consistent with array size (`size(a)`)"))
+  end
+  if N == M && dims == size(a)
+      return a
+  end
+  _derived_array(a, T, dims)
+end
+
+
+
+function Adapt.adapt_storage(::CUDA.KernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
+  res = CuTracedArray{T,N,CUDA.AS.Global, size(xs)}(Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs)))
+  @show res, xs
+  return res
+end
 
 const _kernel_instances = Dict{Any, Any}()
 
@@ -24,6 +215,8 @@ function compile(job)
             asm, meta = CUDA.GPUCompiler.compile(:asm, job)
 	    mod = meta.ir
 	    modstr = string(mod)
+	    @show mod
+	    @show modstr
 	    # check if we'll need the device runtime
 	    undefined_fs = filter(collect(functions(meta.ir))) do f
 		isdeclaration(f) && !CUDA.LLVM.isintrinsic(f)
@@ -208,7 +401,9 @@ function (func::LLVMFunc{F,tt})(args...; blocks::CUDA.CuDim=1, threads::CUDA.CuD
     aliases = MLIR.API.MlirAttribute[]
     for (i, a) in enumerate(args)
 	@show a
-	arg = nothing
+	@assert a isa CuDeviceArray
+	ta = Base.pointer_to_objref(a.ptr)::TracedRArray
+	arg = ta.mlir_data
 	arg = Reactant.Compiler.transpose_val(arg)
 	push!(restys, MLIR.IR.Type(arg))
 	push!(aliases,
