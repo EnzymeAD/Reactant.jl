@@ -6,7 +6,7 @@ function LinearAlgebra.mul!(
     β::Number=false,
 ) where {T1,T2,T3}
     # TODO: The reshape operations are not getting optimized, we should directly call dot_general
-    rC = reshape(C, :, 1)
+    rC = Ops.reshape(C, length(C), 1)
     LinearAlgebra.mul!(rC, A, reshape(B, :, 1), α, β)
     C.mlir_data = get_mlir_data(vec(rC))
     return C
@@ -105,4 +105,10 @@ function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) wh
     idxs = Ops.compare(iota_1, iota_2; comparison_direction="GE")
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
     return X
+end
+
+# LinearAlgebra defines norm with some conditionals which cannot be traced directly
+function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
+    isinf(p) && return maximum(abs, x)
+    return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
 end

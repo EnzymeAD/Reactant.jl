@@ -100,3 +100,42 @@ end
     y_ra = @jit(bypass_permutedims(x_ra))
     @test @allowscalar(Array(y_ra)) ≈ bypass_permutedims(x)
 end
+
+function writeto_reshaped_array!(x)
+    z1 = similar(x)
+    z2 = reshape(z1, 1, 2, 3, 1)
+    @. z2 = 1.0
+    return z1
+end
+
+@testset "writeto_reshaped_array!" begin
+    x = ConcreteRArray(rand(3, 2))
+    y = @jit writeto_reshaped_array!(x)
+    @test all(isone, Array(y))
+end
+
+function write_to_transposed_array!(x)
+    z1 = similar(x)
+    z2 = transpose(z1)
+    @. z2 = 1.0
+    return z1
+end
+
+@testset "write_to_transposed_array!" begin
+    x = ConcreteRArray(rand(3, 2))
+    y = @jit write_to_transposed_array!(x)
+    @test all(isone, Array(y))
+end
+
+function write_to_adjoint_array!(x)
+    z1 = similar(x)
+    z2 = adjoint(z1)
+    @. z2 = 1.0
+    return z1
+end
+
+@testset "write_to_adjoint_array!" begin
+    x = ConcreteRArray(rand(3, 2))
+    y = @jit write_to_adjoint_array!(x)
+    @test all(isone, Array(y))
+end
