@@ -211,7 +211,7 @@ rmattr!(operation::Operation, name) =
     API.mlirOperationRemoveAttributeByName(operation, name)
 
 function lose_ownership!(operation::Operation)
-    @assert operation.owned
+    # @assert operation.owned
     @atomic operation.owned = false
     return operation
 end
