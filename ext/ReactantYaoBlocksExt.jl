@@ -156,13 +156,13 @@ end
 function YaoBlocks.mat(::Type{T}, R::RotationGate{D,TracedRNumber{S},<:ZGate}) where {D,T,S}
     hasfunc("rz", S, T) || codegen!(Val(:rz), S, T)
 
-    op = func.call(
-        [R.theta.mlir_data];
-        result_0=[IR.TensorType((2, 2), IR.Type(T))],
-        callee=IR.FlatSymbolRefAttribute(symname("rz", S, T)),
+    res = IR.result(
+        func.call(
+            [R.theta.mlir_data];
+            result_0=[IR.TensorType((2, 2), IR.Type(T))],
+            callee=IR.FlatSymbolRefAttribute(symname("rz", S, T)),
+        ),
     )
-
-    res = IR.result(op)
     return TracedRArray{T,2}((), res, (2, 2))
 end
 
