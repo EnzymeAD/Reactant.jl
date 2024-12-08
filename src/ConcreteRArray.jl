@@ -289,15 +289,44 @@ end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}})
-    ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
-    if !Base.isconcretetype(ElType)
-        throw(
-            ErrorException(
-                "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
-            ),
-        )
+    foreach(bc.args) do x
+        x isa ConcreteRArray && XLA.await(x.data)
     end
 
-    aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
-    return ConcreteRArray(aux)
+    all_on_cpu = all(bc.args) do x
+        x isa ConcreteRArray && return XLA.BufferOnCPU(x.data.buffer)
+        return true
+    end
+    if all_on_cpu
+        ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
+        if !Base.isconcretetype(ElType)
+            throw(
+                ErrorException(
+                    "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
+                ),
+            )
+        end
+        aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
+        return ConcreteRArray(aux)
+    end
+
+    fn = Reactant.compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
+    return fn(bc.args...)
+end
+
+function Base.copyto!(dest::ConcreteRArray, src::ConcreteRArray)
+    dest.data = src.data
+    return dest
+end
+
+function Base.mapreduce(
+    @nospecialize(f),
+    @nospecialize(op),
+    @nospecialize(A::ConcreteRArray{T,N});
+    dims=:,
+    init=nothing,
+) where {T,N}
+    mapreduce_fn(x) = Base.mapreduce(f, op, x; dims, init)
+    fn = Reactant.compile(mapreduce_fn, (A,))
+    return fn(A)
 end
