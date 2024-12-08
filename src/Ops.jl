@@ -254,13 +254,13 @@ function reshape(
     location=mlir_stacktrace("reshape", @__FILE__, @__LINE__),
 ) where {T,N}
     # HLO reshape semantics collapse the opposite way
-    res1 = transpose(x, [N:-1:1...])
+    res1 = transpose(x, Int64[N:-1:1...])
     restype = mlir_type(TracedRArray{T,length(dims)}, collect(Base.reverse(dims)))
     res = MLIR.IR.result(stablehlo.reshape(res1.mlir_data; result_0=restype, location))
     result = TracedRArray{T,length(dims)}((), res, collect(Base.reverse(dims)))
     # NOTE this last `transpose` is required for consistency with Julia's column-major order
     # do not remove, as it will be optimized away by the compiler
-    return transpose(result, [length(dims):-1:1...])
+    return transpose(result, Int64[length(dims):-1:1...])
 end
 
 function get_dimension_size(
