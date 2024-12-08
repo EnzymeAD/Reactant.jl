@@ -23,28 +23,31 @@ function codegen!(
     in_tys = [IR.TensorType((), IR.Type(ParamType))]
     out_tys = [IR.TensorType((2, 2), IR.Type(OutElType))]
 
-    f = func.func_(;
-        sym_name=symname("ry", ParamType, OutElType),
-        function_type=IR.FunctionType(in_tys, out_tys),
-        body=IR.Region(),
-    )
+    mod = module_top()
+    IR.block!(IR.body(mod)) do
+        f = func.func_(;
+            sym_name=symname("ry", ParamType, OutElType),
+            function_type=IR.FunctionType(in_tys, out_tys),
+            body=IR.Region(),
+        )
 
-    fbody = IR.Block(in_tys, [IR.Location()])
-    push!(IR.region(f, 1), fbody)
+        fbody = IR.Block(in_tys, [IR.Location()])
+        push!(IR.region(f, 1), fbody)
 
-    IR.block!(fbody) do
-        θ = TracedRNumber{ParamType}((), IR.argument(fbody, 1))
-        M = Reactant.broadcast_to_size(zero(OutElType), (2, 2))
-        c = cos(θ / 2)
-        s = sin(θ / 2)
-        M[1, 1] = c
-        M[2, 2] = c
-        M[1, 2] = -s
-        M[2, 1] = s
-        func.return_([M.mlir_data])
+        IR.block!(fbody) do
+            θ = TracedRNumber{ParamType}((), IR.argument(fbody, 1))
+            M = Reactant.broadcast_to_size(zero(OutElType), (2, 2))
+            c = cos(θ / 2)
+            s = sin(θ / 2)
+            M[1, 1] = c
+            M[2, 2] = c
+            M[1, 2] = -s
+            M[2, 1] = s
+            func.return_([M.mlir_data])
+        end
+
+        return f
     end
-
-    return f
 end
 
 function codegen!(
