@@ -17,6 +17,13 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
+function TracedRArray(data::MLIR.IR.Value)
+    data_type = MLIR.IR.type(data)
+    return TracedRArray{eltype(MLIR.IR.julia_type(data_type)),ndims(data_type)}(
+        (), data, size(data_type)
+    )
+end
+
 ReactantCore.is_traced(::TracedRArray) = true
 
 new_traced_value(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), nothing, size(A))
@@ -55,6 +62,9 @@ const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
 materialize_traced_array(x::TracedRArray) = x
 materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
+function materialize_traced_array(x::Base.ReshapedArray{T,N,<:TracedRArray}) where {T,N}
+    return Ops.reshape(parent(x), size(x)...)
+end
 
 get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
@@ -63,12 +73,14 @@ function set_mlir_data!(x::TracedRArray, data)
     x.mlir_data = data
     return x
 end
+function set_mlir_data!(x::Base.ReshapedArray{T,N,<:TracedRArray}, data) where {T,N}
+    tdata = TracedRArray(data)
+    parent(x).mlir_data = Ops.reshape(tdata, size(parent(x))...).mlir_data
+    return x
+end
 function set_mlir_data!(x::AnyTracedRArray, data)
-    data_type = MLIR.IR.type(data)
-    data = TracedRArray{eltype(MLIR.IR.julia_type(data_type)),ndims(data_type)}(
-        (), data, size(data_type)
-    )
-    setindex!(x, data, axes(x)...)
+    tdata = TracedRArray(data)
+    setindex!(x, tdata, axes(x)...)
     return x
 end
 
@@ -196,46 +208,6 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     return print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", size=", size(X), ")")
     # TODO this line segfaults if MLIR IR has not correctly been generated
     # return print(io, X.mlir_data, ")")
-end
-
-function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
-    if prod(dims) != prod(size(A))
-        throw(
-            DimensionMismatch(
-                "new shape $(dims) is incompatible with array size $(size(A))"
-            ),
-        )
-    end
-
-    # HLO reshape semantics collapse the opposite way
-    res1 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.transpose(
-            get_mlir_data(A);
-            permutation=MLIR.IR.DenseArrayAttribute([Int64(N - 1 - i) for i in 0:(N - 1)]),
-        ),
-        1,
-    )
-
-    res2 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.reshape(
-            res1;
-            result_0=MLIR.IR.TensorType(
-                [Int64(i) for i in reverse(dims)], eltype(MLIR.IR.type(res1))
-            ),
-        ),
-    )
-
-    res3 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.transpose(
-            res2;
-            permutation=MLIR.IR.DenseArrayAttribute([
-                Int64(NT - 1 - i) for i in 0:(NT - 1)
-            ]),
-        ),
-        1,
-    )
-
-    return TracedRArray{T,NT}((), res3, dims)
 end
 
 function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
@@ -648,7 +620,7 @@ end
 
 function broadcast_to_size(arg::AnyTracedRArray, rsize)
     arg = materialize_traced_array(arg)
-    size(arg) == rsize && return arg
+    size(arg) == Tuple(rsize) && return arg
     return broadcast_to_size_internal(arg, rsize)
 end
 
