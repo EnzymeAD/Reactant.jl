@@ -21,8 +21,8 @@ end
     x_ra = Reactant.to_rarray(x)
 
     @test @allowscalar(@jit(view_getindex_1(x_ra))) ≈ view_getindex_1(x)
-    @test @jit(view_getindex_2(x_ra)) ≈ view_getindex_2(x)
-    @test @jit(view_getindex_3(x_ra)) ≈ view_getindex_3(x)
+    @test Array(@jit(view_getindex_2(x_ra))) ≈ view_getindex_2(x)
+    @test Array(@jit(view_getindex_3(x_ra))) ≈ view_getindex_3(x)
 end
 
 function reshape_wrapper(x)

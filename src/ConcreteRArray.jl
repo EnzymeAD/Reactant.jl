@@ -8,6 +8,9 @@ mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     shape::NTuple{N,Int}
 end
 
+const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
+const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}
+
 mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
 end
@@ -76,19 +79,6 @@ end
 
 Base.size(x::ConcreteRArray) = x.shape
 
-function Base.reshape(A::ConcreteRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
-    prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
-    host = convert(Array{T,N}, A)
-    # HLO reshape semantics collapse the opposite so enforce on Julia Side
-    # until we later make the transpose/reshape/transpose
-    host = reshape(host, dims)
-    client = XLA.client(A.data)
-    device = XLA.device(A.data)
-    buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, host, device), nothing)
-    return ConcreteRArray{T,NT}(buffer, dims)
-    # ConcreteRArray{T, dims, NT}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(host), device), nothing))
-end
-
 function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,ElType,N}
     data = Array{ElType,N}(undef, size(X)...) # TODO replace for `similar`?
     XLA.await(X.data)
@@ -99,7 +89,13 @@ function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,El
     return data
     # XLA.from_row_major(data)
 end
-Base.Array(x::ConcreteRArray) = convert(Array, x)
+function Base.convert(
+    ::Type{T}, X::WrappedConcreteRArray{ElType,N}
+) where {T<:Array,ElType,N}
+    fn = compile(materialize_traced_array, (X,))
+    return convert(Array, fn(X))
+end
+Base.Array(x::AnyConcreteRArray) = convert(Array, x)
 
 function synchronize(x::Union{ConcreteRArray,ConcreteRNumber})
     XLA.synced_buffer(x.data)
@@ -264,7 +260,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     end
 
     GPUArraysCore.assertscalar("setindex!(::ConcreteRArray, ::Any, ::Vararg{Int, N})")
-    fn = Reactant.compile(mysetindex!, (a, v, args...))
+    fn = compile(mysetindex!, (a, v, args...))
     fn(a, v, args...)
     return a
 end
@@ -307,7 +303,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteR
         return ConcreteRArray(aux)
     end
 
-    fn = Reactant.compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
+    fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
     return fn(bc.args...)
 end
 
@@ -323,7 +319,7 @@ function Base.mapreduce(
     dims=:,
     init=nothing,
 ) where {T,N}
-    fn = Reactant.compile(CallMapReduce(f, op, dims, init), (A,))
+    fn = compile(CallMapReduce(f, op, dims, init), (A,))
     return fn(A)
 end
 
