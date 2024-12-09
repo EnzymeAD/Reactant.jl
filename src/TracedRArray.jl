@@ -71,13 +71,15 @@ function materialize_traced_array(
 ) where {T,N}
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
-function materialize_traced_array(x::LinearAlgebra.Transpose{T,<:TracedRArray{T}}) where {T}
+function materialize_traced_array(
+    x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}
+) where {T,N}
     px = parent(x)
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
 end
-function materialize_traced_array(x::LinearAlgebra.Adjoint{T,<:TracedRArray{T}}) where {T}
-    return conj(transpose(parent(x)))
+function materialize_traced_array(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}) where {T,N}
+    return conj(materialize_traced_array(transpose(parent(x))))
 end
 function materialize_traced_array(
     x::PermutedDimsArray{T,N,perm,iperm,<:TracedRArray{T,N}}
@@ -97,7 +99,7 @@ function set_mlir_data!(x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}, data)
     set_mlir_data!(parent(x), res_mlir_data)
     return x
 end
-function set_mlir_data!(x::LinearAlgebra.Transpose{T,<:TracedRArray{T,N}}, data) where {T,N}
+function set_mlir_data!(x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}, data) where {T,N}
     tdata = TracedRArray(data)
     px = parent(x)
     px.mlir_data = (
@@ -109,7 +111,7 @@ function set_mlir_data!(x::LinearAlgebra.Transpose{T,<:TracedRArray{T,N}}, data)
     ).mlir_data
     return x
 end
-function set_mlir_data!(x::LinearAlgebra.Adjoint{T,<:TracedRArray{T,N}}, data) where {T,N}
+function set_mlir_data!(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}, data) where {T,N}
     tdata = TracedRArray(data)
     px = parent(x)
     transposed_data =
@@ -118,7 +120,7 @@ function set_mlir_data!(x::LinearAlgebra.Adjoint{T,<:TracedRArray{T,N}}, data) w
     return x
 end
 function set_mlir_data!(
-    x::PermutedDimsArray{T,N,perm,iperm,<:TracedRArray{T,N}}, data
+    x::PermutedDimsArray{T,N,perm,iperm,TracedRArray{T,N}}, data
 ) where {T,N,perm,iperm}
     tdata = TracedRArray(data)
     parent(x).mlir_data = permutedims(tdata, iperm)
@@ -562,10 +564,10 @@ function BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
 end
 
 function Base.similar(
-    bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:ReactantPrimitive,N}
     @assert N isa Int
-    return TracedRArray{T,N}((), nothing, map(length, dims))
+    return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
 end
 
 function Base.similar(
