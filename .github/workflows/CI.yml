@@ -33,6 +33,7 @@ jobs:
           - integration
         arch:
           - x64
+          - aarch64
         assertions:
           - false
         libReactant: [packaged]
