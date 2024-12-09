@@ -244,4 +244,6 @@ function set_default_backend(backend::String)
     return set_default_backend(XLA.backends[backend])
 end
 
+include("precompile.jl")
+
 end # module
