@@ -22,12 +22,12 @@ import Core.Compiler:
     MethodResultPure
 
 
-Base.Experimental.@MethodTable REACTANT_METHOD_TABLE
+Base.Experimental.@MethodTable(REACTANT_METHOD_TABLE)
 
-macro overlay(method_expr)
-    def = splitdef(method_expr)
-    def[:name] = Expr(:overlay, :(Reactant.REACTANT_METHOD_TABLE), def[:name])
-    return esc(combinedef(def))
+function var"@reactant_override"(__source__::LineNumberNode, __module__::Module, def)
+    return Base.Experimental.var"@overlay"(
+        __source__, __module__, :(Reactant.REACTANT_METHOD_TABLE), def
+    )
 end
 
 function set_reactant_abi(

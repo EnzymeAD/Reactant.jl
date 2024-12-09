@@ -437,7 +437,7 @@ function compiler_cache(ctx::MLIR.IR.Context)
     return cache
 end
 
-Reactant.@overlay function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
+Reactant.@reactant_override function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
     @show "recufunction", f, tt
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
