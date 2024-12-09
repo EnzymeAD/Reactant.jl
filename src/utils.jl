@@ -45,14 +45,168 @@ macro LineInfoNode(method)
 end
 
 
+function rewrite_inst(inst)
+  @show inst
+  if Meta.isexpr(inst, :call)
+    rep = Expr(:call, call_with_reactant, inst.args...)
+    @show rep
+    return rep
+  end
+  if Meta.isexpr(inst, :invoke)
+    return Expr(:call, inst.args[2:end]...)
+  end
+  return inst
+end
+
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
-function call_with_reactant_generator(world::UInt, source::LineNumberNode, self, @nospecialize(args))
+function arg_partially_inline!(code::Vector{Any}, slot_replacements::Vector{Any},
+                           @nospecialize(type_signature)#=::Type{<:Tuple}=#,
+                           static_param_values::Vector{Any},
+                           slot_offset::Int, arg_offset::Int, statement_offset::Int,
+                           boundscheck::Symbol)
+    for i = 1:length(code)
+        isassigned(code, i) || continue
+        code[i] = _arg_partially_inline!(code[i], slot_replacements, type_signature,
+                                     static_param_values, slot_offset, arg_offset,
+                                     statement_offset, boundscheck)
+    end
+    return code
+end
+
+function _arg_partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
+                            @nospecialize(type_signature), static_param_values::Vector{Any},
+                            slot_offset::Int, arg_offset::Int, statement_offset::Int,
+                            boundscheck::Symbol)
+    if isa(x, Core.SSAValue)
+        return Core.SSAValue(x.id + statement_offset)
+    end
+    if isa(x, Core.GotoNode)
+        return Core.GotoNode(x.label + statement_offset)
+    end
+    if isa(x, Core.SlotNumber)
+        id = x.id
+        if 1 <= id <= length(slot_replacements)
+            return slot_replacements[id]
+        end
+        return Core.SlotNumber(id + slot_offset)
+    end
+    if isa(x, Core.Argument)
+	return Core.SlotNumber(x.n + arg_offset)
+    end
+    if isa(x, Core.NewvarNode)
+        return Core.NewvarNode(_arg_partially_inline!(x.slot, slot_replacements, type_signature,
+                                                  static_param_values, slot_offset, arg_offset,
+                                                  statement_offset, boundscheck))
+    end
+    if isa(x, Core.PhiNode)
+        arg_partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                          slot_offset, arg_offset, statement_offset, boundscheck)
+        x.edges .+= slot_offset
+        return x
+    end
+    if isa(x, Core.ReturnNode)
+        return Core.ReturnNode(
+            _arg_partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, arg_offset, statement_offset, boundscheck),
+        )
+    end
+    if isa(x, Core.GotoIfNot)
+        return Core.GotoIfNot(
+            _arg_partially_inline!(x.cond, slot_replacements, type_signature, static_param_values,
+                               slot_offset, arg_offset, statement_offset, boundscheck),
+            x.dest + statement_offset,
+        )
+    end
+    if isdefined(Core, :EnterNode) && isa(x, Core.EnterNode)
+        return Core.EnterNode(x, x.catch_dest + statement_offset)
+    end
+    if isa(x, Expr)
+        head = x.head
+        if head === :static_parameter
+            if isassigned(static_param_values, x.args[1])
+                return QuoteNode(static_param_values[x.args[1]])
+            end
+            return x
+        elseif head === :cfunction
+            @assert !isa(type_signature, UnionAll) || !isempty(spvals)
+            if !isa(x.args[2], QuoteNode) # very common no-op
+                x.args[2] = Core.Compiler._partially_inline!(x.args[2], slot_replacements, type_signature,
+                                               static_param_values, slot_offset, arg_offset,
+                                               statement_offset, boundscheck)
+            end
+            x.args[3] = Core.Compiler._instantiate_type_in_env(x.args[3], type_signature, static_param_values)
+            x.args[4] = Core.svec(Any[Core.Compiler._instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[4]]...)
+        elseif head === :foreigncall
+            @assert !isa(type_signature, UnionAll) || !isempty(static_param_values)
+            for i = 1:length(x.args)
+                if i == 2
+                    x.args[2] = Core.Compiler._instantiate_type_in_env(x.args[2], type_signature, static_param_values)
+                elseif i == 3
+                    x.args[3] = Core.svec(Any[Core.Compiler._instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[3]]...)
+                elseif i == 4
+                    @assert isa(x.args[4], Int)
+                elseif i == 5
+                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt8}})
+                else
+                    x.args[i] = _arg_partially_inline!(x.args[i], slot_replacements,
+                                                   type_signature, static_param_values,
+                                                   slot_offset, statement_offset, arg_offset,
+                                                   boundscheck)
+                end
+            end
+        elseif head === :boundscheck
+            if boundscheck === :propagate
+                return x
+            elseif boundscheck === :off
+                return false
+            else
+                return true
+            end
+        elseif head === :gotoifnot
+            x.args[1] = _arg_partially_inline!(x.args[1], slot_replacements, type_signature,
+                                           static_param_values, slot_offset, arg_offset,
+                                           statement_offset, boundscheck)
+            x.args[2] += statement_offset
+        elseif head === :isdefined
+            arg = x.args[1]
+            # inlining a QuoteNode or literal into `Expr(:isdefined, x)` is invalid, replace with true
+            if isa(arg, Core.SlotNumber)
+                id = arg.id
+                if 1 <= id <= length(slot_replacements)
+                    replacement = slot_replacements[id]
+                    if isa(replacement, Union{Core.SlotNumber, GlobalRef, Symbol})
+                        return Expr(:isdefined, replacement)
+                    else
+                        @assert !isa(replacement, Expr)
+                        return true
+                    end
+                end
+                return Expr(:isdefined, Core.SlotNumber(id + slot_offset))
+            elseif isexpr(arg, :static_parameter)
+                if isassigned(static_param_values, arg.args[1])
+                    return true
+                end
+                return x
+            else
+                @assert isa(arg, Union{GlobalRef, Symbol})
+                return x
+            end
+        elseif !Core.Compiler.is_meta_expr_head(head)
+            arg_partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
+                              slot_offset, arg_offset, statement_offset, boundscheck)
+        end
+    end
+    return x
+end
+
+function call_with_reactant_generator(world::UInt, source::LineNumberNode, self, @nospecialize(redub_arguments))
     @nospecialize
     
+    args = redub_arguments
     @show args
 
-    stub = Core.GeneratedFunctionStub(identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec())
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(:call_with_reactant, :redub_arguments), Core.svec())
 
     # look up the method match
     builtin_error = :(throw(AssertionError("Unsupported call_with_reactant of builtin $args")))
@@ -85,7 +239,40 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
                (Any, Any, Any), match.method, match.spec_types, match.sparams)
  
     result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
-    src = Core.Compiler.retrieve_code_info(mi, world)
+    @static if true
+    frame = Core.Compiler.InferenceState(result, #=cache_mode=#:local, interp)
+    @assert frame !== nothing
+    Core.Compiler.typeinf(interp, frame)
+    @assert Core.Compiler.is_inferred(frame)
+
+    #if Core.Compiler.result_is_constabi(interp, frame.result)
+    #    rt = frame.result.result::Core.Compiler.Const
+    #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
+    #else
+        opt = Core.Compiler.OptimizationState(frame, interp)
+
+	caller = frame.result
+	@static if VERSION < v"1.11-"
+	  ir = Core.Compiler.run_passes(opt.src, opt, caller)
+	else
+	  ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
+	  Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
+	end
+
+	  for (i, inst) in enumerate(ir.stmts)
+            @static if VERSION < v"1.11"
+               Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:inst]), :inst)
+            else
+               Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:stmt]), :stmt)
+            end
+         end
+    	Core.Compiler.finish(interp, opt, ir, caller)
+
+        src = Core.Compiler.ir_to_codeinf!(opt)
+    #end
+    else
+      src = Core.Compiler.retrieve_code_info(mi, world)
+    end
 
     # prepare a new code info
     code_info = copy(src)
@@ -99,7 +286,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     code_info.min_world = lookup_result.valid_worlds.min_world
     code_info.max_world = lookup_result.valid_worlds.max_world
 
-    code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME, code_info.slotnames...]
+    code_info.slotnames = Any[:call_with_reactant, :redub_arguments, code_info.slotnames...]
     code_info.slotflags = UInt8[0x00, 0x00, code_info.slotflags...]
     #code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME] #code_info.slotnames...]
     #code_info.slotflags = UInt8[0x00, 0x00] # code_info.slotflags...]
@@ -163,8 +350,13 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     @show code_info.code
 
     @show n_prepended_slots
+    @static if false
     Base.Meta.partially_inline!(code_info.code, fn_args, method.sig, Any[static_params...],
                                 n_prepended_slots, length(overdubbed_code), :propagate)
+    else
+    arg_partially_inline!(code_info.code, fn_args, method.sig, Any[static_params...],
+                          n_prepended_slots, n_prepended_slots, length(overdubbed_code), :propagate)
+    end
     @show code_info.code
 
     #callexpr = Expr(:call, Core.OpaqueClosure(ir), fn_args...)
@@ -181,6 +373,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 
     @show overdubbed_code
 
+    @static if false
     for i in eachindex(overdubbed_code)
 	prev = overdubbed_code[i]
 	if Base.Meta.isexpr(prev, :call)
@@ -193,6 +386,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 	   end
 	end
     end
+    end
 
     #=== set `code_info`/`reflection` fields accordingly ===#
 
@@ -204,9 +398,12 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     code_info.codelocs = overdubbed_codelocs
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
-    self_result = Core.Compiler.InferenceResult(self_mi, Core.Compiler.typeinf_lattice(interp))
 
     @show code_info
+    return code_info
+
+    self_result = Core.Compiler.InferenceResult(self_mi, Core.Compiler.typeinf_lattice(interp))
+
 
     @show self
     self_meths = Base._methods_by_ftype(Tuple{self, Vararg{Any}}, -1, world)
@@ -241,6 +438,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 	else
 	  ir = Core.Compiler.run_passes_ipo_safe(ir, opt, caller)
 	  Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
+
 	end
     	Core.Compiler.finish(interp, opt, ir, caller)
 
@@ -255,7 +453,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     return src
 end
 
-@eval function call_with_reactant($REDUB_ARGUMENTS_NAME...)
+@eval function call_with_reactant(redub_arguments...)
     $(Expr(:meta, :generated_only))
     $(Expr(:meta, :generated, call_with_reactant_generator))
 end
