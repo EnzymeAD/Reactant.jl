@@ -460,6 +460,7 @@ function fft(
         Tout = Complex{T}
         rsize = let rsize = collect(size(x))
             rsize[end] = rsize[end] == 0 ? 0 : rsize[end] ÷ 2 + 1
+            Tuple(rsize)
         end
     elseif type == "IRFFT"
         @assert T <: Complex
