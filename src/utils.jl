@@ -39,43 +39,183 @@ end
 
 function call_with_reactant end
 
-function rewrite_inst(inst)
-  @show inst
-  if Meta.isexpr(inst, :call)
-    rep = Expr(:call, call_with_reactant, inst.args...)
-    @show rep
-    return rep
-  end
-  return inst
+# generate a LineInfoNode for the current source code location
+macro LineInfoNode(method)
+    Core.LineInfoNode(__module__, method, __source__.file, Int32(__source__.line), Int32(0))
 end
 
-function call_with_reactant_generator(world::UInt, source::LineNumberNode, @nospecialize(F::Type), @nospecialize(N::Int), self, @nospecialize(f::Type), @nospecialize(args))
-    @nospecialize
-    @show f, args
 
-    stub = Core.GeneratedFunctionStub(identity, Core.svec(:methodinstance, :f, :args), Core.svec())
+const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
+
+function call_with_reactant_generator(world::UInt, source::LineNumberNode, self, @nospecialize(args))
+    @nospecialize
+    
+    @show args
+
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec())
 
     # look up the method match
-    method_error = :(throw(MethodError(f, args, $world)))
+    builtin_error = :(throw(AssertionError("Unsupported call_with_reactant of builtin $args")))
+    
+    if args[1] <: Core.Builtin
+        return stub(world, source, builtin_error)
+    end
+    
+    method_error = :(throw(MethodError(args[1], args[2:end], $world)))
 
     interp = ReactantInterpreter(; world)
     
-    mt = interp.method_table
+    sig = Tuple{args...}
+    lookup_result = Core.Compiler.findall(sig, Core.Compiler.method_table(interp)).matches
 
-    sig = Tuple{F, args...}
-    min_world = Ref{UInt}(typemin(UInt))
-    max_world = Ref{UInt}(typemax(UInt))
-    match = ccall(:jl_gf_invoke_lookup_worlds, Any,
-                  (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
-                  sig, mt, world, min_world, max_world)
-    match === nothing && return stub(world, source, method_error)
+    if lookup_result === nothing || lookup_result === missing
+        return stub(world, source, method_error)
+    end
 
+    matches = lookup_result.matches
+
+    if length(matches) != 1
+        return stub(world, source, method_error)
+    end
+
+    match = matches[1]::Core.MethodMatch
+    
     # look up the method and code instance
     mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
                (Any, Any, Any), match.method, match.spec_types, match.sparams)
-  
+ 
     result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
-    frame = Core.Compiler.InferenceState(result, #=cache_mode=#:global, interp)
+    src = Core.Compiler.retrieve_code_info(mi, world)
+
+    # prepare a new code info
+    code_info = copy(src)
+    method = match.method
+    static_params = match.sparams
+    signature = sig
+    is_invoke = args[1] === typeof(Core.invoke)
+
+    # propagate edge metadata
+    code_info.edges = Core.MethodInstance[mi]
+    code_info.min_world = lookup_result.valid_worlds.min_world
+    code_info.max_world = lookup_result.valid_worlds.max_world
+
+    code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME, code_info.slotnames...]
+    code_info.slotflags = UInt8[0x00, 0x00, code_info.slotflags...]
+    #code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME] #code_info.slotnames...]
+    #code_info.slotflags = UInt8[0x00, 0x00] # code_info.slotflags...]
+    n_prepended_slots = 2
+    overdub_args_slot = Core.SlotNumber(n_prepended_slots)
+
+    # For the sake of convenience, the rest of this pass will translate `code_info`'s fields
+    # into these overdubbed equivalents instead of updating `code_info` in-place. Then, at
+    # the end of the pass, we'll reset `code_info` fields accordingly.
+    overdubbed_code = Any[]
+    overdubbed_codelocs = Int32[]
+
+    # destructure the generated argument slots into the overdubbed method's argument slots.
+    n_actual_args = fieldcount(signature)
+    n_method_args = Int(method.nargs)
+    offset = 1
+    fn_args = Any[]
+    for i in 1:n_method_args
+        if is_invoke && (i == 1 || i == 2)
+            # With an invoke call, we have: 1 is invoke, 2 is f, 3 is Tuple{}, 4... is args.
+            # In the first loop iteration, we should skip invoke and process f.
+            # In the second loop iteration, we should skip the Tuple type and process args[1].
+            offset += 1
+        end
+        slot = i + n_prepended_slots
+        actual_argument = Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset)
+        push!(overdubbed_code, :($(Core.SlotNumber(slot)) = $actual_argument))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        code_info.slotflags[slot] |= 0x02 # ensure this slotflag has the "assigned" bit set
+        offset += 1
+	
+	#push!(overdubbed_code, actual_argument)
+	push!(fn_args, Core.SSAValue(length(overdubbed_code)))
+    end
+
+    # If `method` is a varargs method, we have to restructure the original method call's
+    # trailing arguments into a tuple and assign that tuple to the expected argument slot.
+    if method.isva
+        if !isempty(overdubbed_code)
+            # remove the final slot reassignment leftover from the previous destructuring
+            pop!(overdubbed_code)
+	    pop!(overdubbed_codelocs)
+	    pop!(fn_args)
+        end
+        trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
+        for i in n_method_args:n_actual_args
+            push!(overdubbed_code, Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset - 1))
+            push!(overdubbed_codelocs, code_info.codelocs[1])
+            push!(trailing_arguments.args, Core.SSAValue(length(overdubbed_code)))
+            offset += 1
+        end
+        push!(overdubbed_code, Expr(:(=), Core.SlotNumber(n_method_args + n_prepended_slots), trailing_arguments))
+        push!(overdubbed_codelocs, code_info.codelocs[1])   
+	push!(fn_args, Core.SSAValue(length(overdubbed_code)))
+    end
+
+    #=== finish initialization of `overdubbed_code`/`overdubbed_codelocs` ===#
+
+    # substitute static parameters, offset slot numbers by number of added slots, and
+    # offset statement indices by the number of additional statements
+    @show code_info.code
+
+    @show n_prepended_slots
+    Base.Meta.partially_inline!(code_info.code, fn_args, method.sig, Any[static_params...],
+                                n_prepended_slots, length(overdubbed_code), :propagate)
+    @show code_info.code
+
+    #callexpr = Expr(:call, Core.OpaqueClosure(ir), fn_args...)
+    #push!(overdubbed_code, callexpr)
+    #push!(overdubbed_codelocs, code_info.codelocs[1])
+    
+    #push!(new_ci.code, Core.Compiler.ReturnNode(Core.SSAValue(length(overdubbed_code))))
+    #push!(overdubbed_codelocs, code_info.codelocs[1])
+
+    # original_code_start_index = length(overdubbed_code) + 1
+
+    append!(overdubbed_code, code_info.code)
+    append!(overdubbed_codelocs, code_info.codelocs)
+
+    @show overdubbed_code
+
+    for i in eachindex(overdubbed_code)
+	prev = overdubbed_code[i]
+	if Base.Meta.isexpr(prev, :call)
+	   @show prev
+	   @show prev.args[1]
+	   @show prev.args[1] isa Core.IntrinsicFunction
+	   if !(prev.args[1] isa Core.IntrinsicFunction)
+		   overdubbed_code[i] = Expr(:call, GlobalRef(Reactant, :call_with_reactant), prev.args...)
+		   @show "post", overdubbed_code[i]
+	   end
+	end
+    end
+
+    #=== set `code_info`/`reflection` fields accordingly ===#
+
+    if code_info.method_for_inference_limit_heuristics === nothing
+        code_info.method_for_inference_limit_heuristics = method
+    end
+
+    code_info.code = overdubbed_code
+    code_info.codelocs = overdubbed_codelocs
+    code_info.ssavaluetypes = length(overdubbed_code)
+    code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
+    self_result = Core.Compiler.InferenceResult(self_mi, Core.Compiler.typeinf_lattice(interp))
+
+    @show code_info
+
+    @show self
+    self_meths = Base._methods_by_ftype(Tuple{self, Vararg{Any}}, -1, world)
+    @show self_meths
+    self_method = (self_meths[1]::Core.MethodMatch).method
+    self_mi = Core.Compiler.specialize_method(self_method, Tuple{typeof(Reactant.call_with_reactant), sig.parameters...}, Core.svec())
+    @show self_mi
+    self_result = Core.Compiler.InferenceResult(self_mi, Core.Compiler.typeinf_lattice(interp))
+    frame = Core.Compiler.InferenceState(self_result, code_info, #=cache_mode=#:global, interp)
     @assert frame !== nothing
     Core.Compiler.typeinf(interp, frame)
     @assert Core.Compiler.is_inferred(frame)
@@ -85,36 +225,37 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, @nosp
     #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
     #else
         opt = Core.Compiler.OptimizationState(frame, interp)
+
+    ir = opt.src
+    @show ir
+    for (i, stmt) in enumerate(ir.stmts)
+      @show stmt
+
+    end
+
+    @show ir
+
 	caller = frame.result
 	@static if VERSION < v"1.11-"
-	  ir = Core.Compiler.run_passes(opt.src, opt, caller)
+	  ir = Core.Compiler.run_passes(ir, opt, caller)
 	else
-	  ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
+	  ir = Core.Compiler.run_passes_ipo_safe(ir, opt, caller)
 	  Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
 	end
-	@show ir
-	  for (i, inst) in enumerate(ir.stmts)
-	     @static if VERSION < v"1.11"
-	        Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:inst]), :inst)
-	     else
-	        Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:stmt]), :stmt)
-	     end
-	  end
-	@show ir
     	Core.Compiler.finish(interp, opt, ir, caller)
+
         src = Core.Compiler.ir_to_codeinf!(opt)
     #end
 
-    new_ci = copy(src)
-    new_ci.slotnames = Symbol[Symbol("#self#"), :f, :args]
-    new_ci.edges = Core.MethodInstance[mi]
-    new_ci.min_world = min_world[]
-    new_ci.max_world = max_world[]
+    src = copy(src)
+    src.ssavaluetypes = length(src.code)
 
-    return new_ci
+    @show src
+
+    return src
 end
 
-@eval function call_with_reactant(f::F, args::Vararg{Any, N}) where {F, N}
+@eval function call_with_reactant($REDUB_ARGUMENTS_NAME...)
     $(Expr(:meta, :generated_only))
     $(Expr(:meta, :generated, call_with_reactant_generator))
 end
@@ -214,12 +355,10 @@ function make_mlir_fn(
 
         # TODO replace with `Base.invoke_within` if julia#52964 lands        
         # TODO fix it for kwargs	
-	oc = call_with_reactant # Core.OpaqueClosure(ir)
-
         if f === Reactant.apply
-            oc(f, traced_args[1], (traced_args[2:end]...,))
+            call_with_reactant(f, traced_args[1], (traced_args[2:end]...,))
         else
-            oc(f, traced_args...)
+            call_with_reactant(f, traced_args...)
         end
     end
 
