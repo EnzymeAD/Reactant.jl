@@ -216,9 +216,9 @@ function NNlib.meanpool!(
     return y
 end
 
-NNlib.batched_transpose(x::AnyTracedRArray{T,3}) where {T} = permutedims(x, (2, 1, 3))
+NNlib.batched_transpose(x::AnyTracedRArray{T,3}) where {T} = PermutedDimsArray(x, (2, 1, 3))
 function NNlib.batched_adjoint(x::AnyTracedRArray{T,3}) where {T}
-    y = permutedims(x, (2, 1, 3))
+    y = NNlib.batched_transpose(x)
     conj!(y)
     return y
 end
@@ -234,14 +234,21 @@ function NNlib.batched_mul!(
             ),
         )
     end
+
+    if size(x, 3) != size(y, 3)
+        B = max(size(x, 3), size(y, 3))
+        if size(x, 3) == 1
+            x = Reactant.broadcast_to_size(x, (size(x, 1), size(x, 2), B))
+        elseif size(y, 3) == 1
+            y = Reactant.broadcast_to_size(y, (size(y, 1), size(y, 2), B))
+        end
+    end
+
     x = permutedims(x, (3, 1, 2))
     y = permutedims(y, (3, 1, 2))
 
-    B = max(size(x, 1), size(y, 1))
-    out_shape = (B, size(x, 2), size(y, 3))
-    resty = MLIR.IR.TensorType(out_shape, eltype(MLIR.IR.type(get_mlir_data(res))))
-
     if size(x, 1) != size(y, 1)
+        B = max(size(x, 1), size(y, 1))
         if size(x, 1) == 1
             x = Reactant.broadcast_to_size(x, (B, size(x, 2), size(x, 3)))
         elseif size(y, 1) == 1
@@ -249,28 +256,14 @@ function NNlib.batched_mul!(
         end
     end
 
-    dot_dimension_numbers = MLIR.API.stablehloDotDimensionNumbersGet(
-        MLIR.IR.context(), 1, [0], 1, [0], 1, [2], 1, [1]
-    )
-
-    prec = MLIR.IR.Attribute(
-        MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.context(), "DEFAULT")
-    )
-    tmp = TracedRArray{T1,3}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.dot_general(
-                get_mlir_data(x),
-                get_mlir_data(y);
-                result_0=resty,
-                dot_dimension_numbers=dot_dimension_numbers,
-                precision_config=prec,
-            ),
-            1,
-        ),
-        size(resty),
+    tmp = Ops.dot_general(
+        T1.(materialize_traced_array(x)),
+        T1.(materialize_traced_array(y));
+        contracting_dimensions=([3], [2]),
+        batching_dimensions=([1], [1]),
     )
     set_mlir_data!(res, get_mlir_data(permutedims(tmp, (2, 3, 1))))
+
     return res
 end
 

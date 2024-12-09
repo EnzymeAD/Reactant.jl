@@ -66,8 +66,10 @@ end
 
 materialize_traced_array(x::TracedRArray) = x
 materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
-function materialize_traced_array(x::Base.ReshapedArray{T,N,<:TracedRArray}) where {T,N}
-    return Ops.reshape(parent(x), size(x)...)
+function materialize_traced_array(
+    x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}
+) where {T,N}
+    return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 function materialize_traced_array(x::LinearAlgebra.Transpose{T,<:TracedRArray{T}}) where {T}
     px = parent(x)
@@ -77,6 +79,11 @@ end
 function materialize_traced_array(x::LinearAlgebra.Adjoint{T,<:TracedRArray{T}}) where {T}
     return conj(transpose(parent(x)))
 end
+function materialize_traced_array(
+    x::PermutedDimsArray{T,N,perm,iperm,<:TracedRArray{T,N}}
+) where {T,N,perm,iperm}
+    return permutedims(parent(x), perm)
+end
 
 get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
@@ -85,9 +92,9 @@ function set_mlir_data!(x::TracedRArray, data)
     x.mlir_data = data
     return x
 end
-function set_mlir_data!(x::Base.ReshapedArray{T,N,<:TracedRArray}, data) where {T,N}
-    tdata = TracedRArray(data)
-    parent(x).mlir_data = Ops.reshape(tdata, size(parent(x))...).mlir_data
+function set_mlir_data!(x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}, data) where {T,N}
+    res_mlir_data = Ops.reshape(TracedRArray(data), size(parent(x))...).mlir_data
+    set_mlir_data!(parent(x), res_mlir_data)
     return x
 end
 function set_mlir_data!(x::LinearAlgebra.Transpose{T,<:TracedRArray{T,N}}, data) where {T,N}
@@ -108,6 +115,13 @@ function set_mlir_data!(x::LinearAlgebra.Adjoint{T,<:TracedRArray{T,N}}, data) w
     transposed_data =
         ndims(px) == 1 ? Ops.reshape(tdata, length(tdata)) : Ops.transpose(tdata, [2, 1])
     px.mlir_data = (T <: Real ? transposed_data : Ops.conj(transposed_data)).mlir_data
+    return x
+end
+function set_mlir_data!(
+    x::PermutedDimsArray{T,N,perm,iperm,<:TracedRArray{T,N}}, data
+) where {T,N,perm,iperm}
+    tdata = TracedRArray(data)
+    parent(x).mlir_data = permutedims(tdata, iperm)
     return x
 end
 function set_mlir_data!(x::AnyTracedRArray, data)

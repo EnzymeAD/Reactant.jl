@@ -40,50 +40,21 @@ function LinearAlgebra.mul!(
     if size(A, 2) != size(B, 1)
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
     end
-    resty = MLIR.IR.TensorType(size(C), MLIR.IR.Type(T1))
-    dot_dimension_numbers = MLIR.API.stablehloDotDimensionNumbersGet(
-        MLIR.IR.context(), 0, [], 0, [], 1, [1], 1, [0]
+
+    tmp = Ops.dot_general(
+        T1.(materialize_traced_array(A)),
+        T1.(materialize_traced_array(B));
+        contracting_dimensions=([2], [1]),
     )
-    prec = MLIR.IR.Attribute(
-        MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.context(), "DEFAULT")
-    )
-    precar = MLIR.IR.Attribute([prec, prec])
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dot_general(
-            get_mlir_data(A),
-            get_mlir_data(B);
-            result_0=resty,
-            dot_dimension_numbers=dot_dimension_numbers,
-            precision_config=precar,
-        ),
-        1,
-    )
-    if iszero(β)
-        if isone(α)
-            C.mlir_data = res
-        else
-            C.mlir_data = MLIR.IR.result(
-                MLIR.Dialects.stablehlo.multiply(
-                    res, broadcast_to_size(T1(α), size(C)).mlir_data
-                ),
-                1,
-            )
-        end
+
+    res = if iszero(β)
+        isone(α) ? tmp : Ops.multiply(tmp, broadcast_to_size(T1(α), size(C)))
     else
-        α_res = MLIR.IR.result(
-            MLIR.Dialects.stablehlo.multiply(
-                res, broadcast_to_size(T1(α), size(C)).mlir_data
-            ),
-            1,
-        )
-        β_C = MLIR.IR.result(
-            MLIR.Dialects.stablehlo.multiply(
-                C.mlir_data, broadcast_to_size(T1(β), size(C)).mlir_data
-            ),
-            1,
-        )
-        C.mlir_data = MLIR.IR.result(MLIR.Dialects.stablehlo.add(α_res, β_C), 1)
+        α_res = Ops.multiply(tmp, broadcast_to_size(T1(α), size(C)))
+        β_C = Ops.multiply(C, broadcast_to_size(T1(β), size(C)))
+        Ops.add(α_res, β_C)
     end
+    set_mlir_data!(C, get_mlir_data(res))
     return C
 end
 
