@@ -99,6 +99,10 @@ include("ConcreteRArray.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 
+include("Ops.jl")
+
+include("linear_algebra.jl")
+
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")

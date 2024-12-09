@@ -625,3 +625,31 @@ end
         @test y == x
     end
 end
+
+function f_row_major(x)
+    y = [1 2; 3 4; 5 6]
+    if x isa Reactant.TracedRArray
+        y = Reactant.promote_to(Reactant.TracedRArray{eltype(x),2}, y)
+    end
+    return x .+ y
+end
+
+@testset "array attributes: row major" begin
+    x = zeros(Int, 3, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(f_row_major(x_ra)) ≈ f_row_major(x)
+end
+
+@testset "ifelse" begin
+    @test 1.0 ==
+        @jit ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    @test @jit(
+        ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    ) isa ConcreteRNumber{Float64}
+    @test 0.0f0 ==
+        @jit ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    @test @jit(
+        ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
+    ) isa ConcreteRNumber{Float32}
+end

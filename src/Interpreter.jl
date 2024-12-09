@@ -100,7 +100,7 @@ function set_reactant_abi(
 
     return Base.@invoke abstract_call_known(
         interp::AbstractInterpreter,
-        f,
+        f::Any,
         arginfo::ArgInfo,
         si::StmtInfo,
         sv::AbsIntState,
@@ -120,7 +120,6 @@ function set_reactant_abi end
             world,
             true,            #=forward_rules=#
             true,            #=reverse_rules=#
-            true,            #=deferred_lower=#
             false,            #=broadcast_rewrite=#
             set_reactant_abi,
         )
@@ -137,7 +136,6 @@ else
             world,
             true,            #=forward_rules=#
             true,            #=forward_rules=#
-            true,            #=deferred_lower=#
             false,            #=broadcast_rewrite=#
             set_reactant_abi,
         )

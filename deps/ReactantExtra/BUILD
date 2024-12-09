@@ -1,5 +1,6 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
+# load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
 licenses(["notice"])
 
 package(
@@ -13,9 +14,10 @@ cc_toolchain_suite(
         "k8": ":ygg_x86_toolchain",
         "darwin": ":ygg_x86_toolchain",
         "darwin_arm64": ":ygg_x86_toolchain",
-        "linux_arm64": ":ygg_x86_toolchain",
+        "aarch64": ":ygg_aarch64_toolchain",
     },
 )
+
 cc_toolchain_suite(
     name = "beast_toolchain_suite",
     toolchains = {
@@ -120,6 +122,117 @@ cc_toolchain_config(
     ],
 )
 
+# TODO change it to more generic yggdrasil toolchain once we have it
+cc_toolchain(
+    name = "ygg_aarch64_toolchain",
+    all_files = ":empty",
+    compiler_files = ":empty",
+    dwp_files = ":empty",
+    linker_files = ":empty",
+    objcopy_files = ":empty",
+    strip_files = ":empty",
+    supports_param_files = 1,
+    toolchain_config = ":ygg_aarch64_toolchain_config",
+    toolchain_identifier = "ygg_toolchain",
+)
+
+# TODO distinguish between clang and gcc toolchains?
+cc_toolchain_config(
+    name = "ygg_aarch64_toolchain_config",
+    cpu = "aarch64",
+    compiler = "compiler",
+    toolchain_identifier = "ygg_aarch64",
+    target_system_name = "aarch64-unknown-linux-gnu",
+    target_libc = "",
+    abi_libc_version = "local",
+    abi_version = "local",
+    cxx_builtin_include_directories = [
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include-fixed",
+        "/opt/BB_TARGET/BB_TARGET/include",
+        "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/BB_TARGET",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/backward",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/parallel"
+    ],
+    tool_paths = {
+        "ar": "/opt/bin/BB_FULL_TARGET/ar",
+        "as": "/opt/bin/BB_FULL_TARGET/as",
+        "c++": "/opt/bin/BB_FULL_TARGET/c++",
+        "c++filt": "/opt/bin/BB_FULL_TARGET/c++filt",
+        "cc": "/opt/bin/BB_FULL_TARGET/cc",
+        "clang": "/opt/bin/BB_FULL_TARGET/clang",
+        "clang++": "/opt/bin/BB_FULL_TARGET/clang++",
+        "cpp": "/opt/bin/BB_FULL_TARGET/cpp",
+        "f77": "/opt/bin/BB_FULL_TARGET/f77",
+        "g++": "/opt/bin/BB_FULL_TARGET/g++",
+        "gcc": "/opt/bin/BB_FULL_TARGET/gcc",
+        "gfortran": "/opt/bin/BB_FULL_TARGET/gfortran",
+        "ld": "/opt/bin/BB_FULL_TARGET/ld",
+        "ld.lld": "/opt/bin/BB_FULL_TARGET/ld.lld",
+        "libtool": "/opt/bin/BB_FULL_TARGET/libtool",
+        "lld": "/opt/bin/BB_FULL_TARGET/lld",
+        "nm": "/opt/bin/BB_FULL_TARGET/nm",
+        "objcopy": "/opt/bin/BB_FULL_TARGET/objcopy",
+        "patchelf": "/opt/bin/BB_FULL_TARGET/patchelf",
+        "ranlib": "/opt/bin/BB_FULL_TARGET/ranlib",
+        "readelf": "/opt/bin/BB_FULL_TARGET/readelf",
+        "strip": "/opt/bin/BB_FULL_TARGET/strip",
+        # from host
+        "llvm-cov": "/opt/x86_64-linux-musl/bin/llvm-cov",
+        "llvm-profdata": "/opt/x86_64-linux-musl/bin/llvm-profdata",
+        "objdump": "/usr/bin/objdump",
+    },
+    compile_flags = [
+        "-fstack-protector",
+        "-Wall",
+        "-Wunused-but-set-parameter",
+        "-Wno-free-nonheap-object",
+        "-fno-omit-frame-pointer",
+        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include",
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include-fixed",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include",
+        "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/BB_TARGET",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/backward",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/parallel",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+        # "-stdlib=libstdc++",
+    ],
+    dbg_compile_flags = ["-g"],
+    link_flags = [],
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    unfiltered_compile_flags = [
+        "-no-canonical-prefixes",
+        "-Wno-builtin-macro-redefined",
+        "-D__DATE__=\"redacted\"",
+        "-D__TIMESTAMP__=\"redacted\"",
+        "-D__TIME__=\"redacted\"",
+        "-Wno-unused-command-line-argument",
+        "-Wno-gnu-offsetof-extensions",
+    ],
+    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    host_system_name = "linux",
+    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
+    supports_start_end_lib = False,
+)
+
 cc_toolchain(
     name = "beast_x86_toolchain",
     all_files = ":empty",
@@ -222,6 +335,14 @@ platform(
 )
 
 platform(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
     name = "linux_aarch64",
     constraint_values = [
         "@platforms//os:linux",
@@ -301,6 +422,9 @@ cc_library(
 "-Wl,-exported_symbol,_XLAExecute",
 "-Wl,-exported_symbol,_RegisterDialects",
 "-Wl,-exported_symbol,_InitializeRegistryAndPasses",
+"-Wl,-exported_symbol,_ifrt_*",
+"-Wl,-exported_symbol,_RegisterCustomCallTarget",
+"-Wl,-exported_symbol,_ConvertLLVMToMLIR",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -313,6 +437,7 @@ cc_library(
         "@llvm-project//mlir:ConversionPasses",
         "@llvm-project//mlir:DLTIDialect",
         "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:FromLLVMIRTranslation",
         "@llvm-project//mlir:GPUDialect",
         "@llvm-project//mlir:LinalgDialect",
         "@llvm-project//mlir:LLVMDialect",
@@ -350,7 +475,7 @@ cc_library(
 
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
-        "@xla//xla/python/pjrt_ifrt:xla_ifrt",
+        "@xla//xla/python/pjrt_ifrt:pjrt_ifrt",
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/ffi:call_frame",
         "@com_google_protobuf//:protobuf",
