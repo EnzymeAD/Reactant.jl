@@ -206,6 +206,13 @@ end
 
 const _kernel_instances = Dict{Any, Any}()
 
+struct LLVMFunc{F,tt}
+   f::Union{F, Nothing}
+   mod::String
+   image
+   entry::String
+end
+
 
 # compile to executable machine code
 function compile(job)
@@ -218,8 +225,8 @@ function compile(job)
 	    @show mod
 	    @show modstr
 	    # check if we'll need the device runtime
-	    undefined_fs = filter(collect(functions(meta.ir))) do f
-		isdeclaration(f) && !CUDA.LLVM.isintrinsic(f)
+	    undefined_fs = filter(collect(CUDA.LLVM.functions(meta.ir))) do f
+		CUDA.LLVM.isdeclaration(f) && !CUDA.LLVM.isintrinsic(f)
 	    end
 	    intrinsic_fns = ["vprintf", "malloc", "free", "__assertfail",
 			     "__nvvm_reflect" #= TODO: should have been optimized away =#]
@@ -246,7 +253,7 @@ function compile(job)
 
 	    # validate use of parameter memory
 	    argtypes = filter([CUDA.KernelState, job.source.specTypes.parameters...]) do dt
-		!isghosttype(dt) && !Core.Compiler.isconstType(dt)
+		!CUDA.isghosttype(dt) && !Core.Compiler.isconstType(dt)
 	    end
 	    param_usage = sum(sizeof, argtypes)
 	    param_limit = 4096
@@ -268,7 +275,7 @@ function compile(job)
 		    end
 
 		    for (i, typ) in enumerate(source_types)
-			if isghosttype(typ) || Core.Compiler.isconstType(typ)
+			if CUDA.isghosttype(typ) || Core.Compiler.isconstType(typ)
 			    continue
 			end
 			name = source_argnames[i]
@@ -306,7 +313,7 @@ function compile(job)
 		"--output-file", ptxas_output,
 		ptx_input
 	    ])
-	    proc, log = CUDA.run_and_collect(`$(ptxas()) $ptxas_opts`)
+	    proc, log = CUDA.run_and_collect(`$(CUDA.ptxas()) $ptxas_opts`)
 	    log = strip(log)
 	    if !success(proc)
 		reason = proc.termsignal > 0 ? "ptxas received signal $(proc.termsignal)" :
@@ -342,7 +349,7 @@ function compile(job)
 		    "--output-file", nvlink_output,
 		    ptxas_output
 		])
-		proc, log = run_and_collect(`$(nvlink()) $nvlink_opts`)
+		proc, log = run_and_collect(`$(CUDA.nvlink()) $nvlink_opts`)
 		log = strip(log)
 		if !success(proc)
 		    reason = proc.termsignal > 0 ? "nvlink received signal $(proc.termsignal)" :
@@ -369,24 +376,13 @@ function compile(job)
 	    modstr, image, meta.entry
     end
     
-    println(string(modstr))
-    @show job
-    @show job.source
-    @show job.config
-    LLVMFunc{F,job.source.specTypes}(f, modstr, image, LLVM.name(entry))
+    LLVMFunc{job.source.specTypes[1],job.source.specTypes}(nothing, modstr, image, LLVM.name(entry))
 end
 
 # link into an executable kernel
 function link(job, compiled)
     # load as an executable kernel object
     return compiled
-end
-
-struct LLVMFunc{F,tt}
-   f::F
-   mod::String
-   image
-   entry::String
 end
 
 function (func::LLVMFunc{F,tt})(args...; blocks::CUDA.CuDim=1, threads::CUDA.CuDim=1,

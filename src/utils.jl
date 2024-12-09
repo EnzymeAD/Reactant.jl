@@ -45,12 +45,26 @@ macro LineInfoNode(method)
 end
 
 
-function rewrite_inst(inst)
-  @show inst
+
+function maybe_argextype(
+    @nospecialize(x),
+    src,
+)
+    return try
+        Core.Compiler.argextype(x, src)
+    catch err
+        !(err isa Core.Compiler.InvalidIRError) && rethrow()
+        nothing
+    end
+end
+
+function rewrite_inst(inst, ir)
   if Meta.isexpr(inst, :call)
-    rep = Expr(:call, call_with_reactant, inst.args...)
-    @show rep
-    return rep
+    ft = Core.Compiler.widenconst(maybe_argextype(inst.args[1], ir))
+    if !(ft <: Core.IntrinsicFunction) && !(ft <: Core.Builtin)
+      rep = Expr(:call, call_with_reactant, inst.args...)
+      return rep
+    end
   end
   if Meta.isexpr(inst, :invoke)
     return Expr(:call, inst.args[2:end]...)
@@ -204,12 +218,11 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     @nospecialize
     
     args = redub_arguments
-    @show args
 
     stub = Core.GeneratedFunctionStub(identity, Core.svec(:call_with_reactant, :redub_arguments), Core.svec())
 
     # look up the method match
-    builtin_error = :(throw(AssertionError("Unsupported call_with_reactant of builtin $args")))
+    builtin_error = :(throw(AssertionError("Unsupported call_with_reactant of builtin $redub_arguments")))
     
     if args[1] <: Core.Builtin
         return stub(world, source, builtin_error)
@@ -218,7 +231,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     method_error = :(throw(MethodError(args[1], args[2:end], $world)))
 
     interp = ReactantInterpreter(; world)
-    
+
     sig = Tuple{args...}
     lookup_result = Core.Compiler.findall(sig, Core.Compiler.method_table(interp)).matches
 
@@ -239,7 +252,6 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
                (Any, Any, Any), match.method, match.spec_types, match.sparams)
  
     result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
-    @static if true
     frame = Core.Compiler.InferenceState(result, #=cache_mode=#:local, interp)
     @assert frame !== nothing
     Core.Compiler.typeinf(interp, frame)
@@ -260,19 +272,16 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 	end
 
 	  for (i, inst) in enumerate(ir.stmts)
+
             @static if VERSION < v"1.11"
-               Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:inst]), :inst)
+               Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:inst], ir), :inst)
             else
-               Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:stmt]), :stmt)
+               Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:stmt], ir), :stmt)
             end
+            Core.Compiler.setindex!(ir.stmts[i], Any, :type)
          end
     	Core.Compiler.finish(interp, opt, ir, caller)
-
         src = Core.Compiler.ir_to_codeinf!(opt)
-    #end
-    else
-      src = Core.Compiler.retrieve_code_info(mi, world)
-    end
 
     # prepare a new code info
     code_info = copy(src)
@@ -347,17 +356,9 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 
     # substitute static parameters, offset slot numbers by number of added slots, and
     # offset statement indices by the number of additional statements
-    @show code_info.code
 
-    @show n_prepended_slots
-    @static if false
-    Base.Meta.partially_inline!(code_info.code, fn_args, method.sig, Any[static_params...],
-                                n_prepended_slots, length(overdubbed_code), :propagate)
-    else
     arg_partially_inline!(code_info.code, fn_args, method.sig, Any[static_params...],
                           n_prepended_slots, n_prepended_slots, length(overdubbed_code), :propagate)
-    end
-    @show code_info.code
 
     #callexpr = Expr(:call, Core.OpaqueClosure(ir), fn_args...)
     #push!(overdubbed_code, callexpr)
@@ -371,23 +372,6 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     append!(overdubbed_code, code_info.code)
     append!(overdubbed_codelocs, code_info.codelocs)
 
-    @show overdubbed_code
-
-    @static if false
-    for i in eachindex(overdubbed_code)
-	prev = overdubbed_code[i]
-	if Base.Meta.isexpr(prev, :call)
-	   @show prev
-	   @show prev.args[1]
-	   @show prev.args[1] isa Core.IntrinsicFunction
-	   if !(prev.args[1] isa Core.IntrinsicFunction)
-		   overdubbed_code[i] = Expr(:call, GlobalRef(Reactant, :call_with_reactant), prev.args...)
-		   @show "post", overdubbed_code[i]
-	   end
-	end
-    end
-    end
-
     #=== set `code_info`/`reflection` fields accordingly ===#
 
     if code_info.method_for_inference_limit_heuristics === nothing
@@ -399,58 +383,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
-    @show code_info
     return code_info
-
-    self_result = Core.Compiler.InferenceResult(self_mi, Core.Compiler.typeinf_lattice(interp))
-
-
-    @show self
-    self_meths = Base._methods_by_ftype(Tuple{self, Vararg{Any}}, -1, world)
-    @show self_meths
-    self_method = (self_meths[1]::Core.MethodMatch).method
-    self_mi = Core.Compiler.specialize_method(self_method, Tuple{typeof(Reactant.call_with_reactant), sig.parameters...}, Core.svec())
-    @show self_mi
-    self_result = Core.Compiler.InferenceResult(self_mi, Core.Compiler.typeinf_lattice(interp))
-    frame = Core.Compiler.InferenceState(self_result, code_info, #=cache_mode=#:global, interp)
-    @assert frame !== nothing
-    Core.Compiler.typeinf(interp, frame)
-    @assert Core.Compiler.is_inferred(frame)
-
-    #if Core.Compiler.result_is_constabi(interp, frame.result)
-    #    rt = frame.result.result::Core.Compiler.Const
-    #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
-    #else
-        opt = Core.Compiler.OptimizationState(frame, interp)
-
-    ir = opt.src
-    @show ir
-    for (i, stmt) in enumerate(ir.stmts)
-      @show stmt
-
-    end
-
-    @show ir
-
-	caller = frame.result
-	@static if VERSION < v"1.11-"
-	  ir = Core.Compiler.run_passes(ir, opt, caller)
-	else
-	  ir = Core.Compiler.run_passes_ipo_safe(ir, opt, caller)
-	  Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
-
-	end
-    	Core.Compiler.finish(interp, opt, ir, caller)
-
-        src = Core.Compiler.ir_to_codeinf!(opt)
-    #end
-
-    src = copy(src)
-    src.ssavaluetypes = length(src.code)
-
-    @show src
-
-    return src
 end
 
 @eval function call_with_reactant(redub_arguments...)
