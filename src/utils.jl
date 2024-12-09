@@ -37,6 +37,88 @@ function apply(f, args...; kwargs...)
     return f(args...; kwargs...)
 end
 
+function call_with_reactant end
+
+function rewrite_inst(inst)
+  @show inst
+  if Meta.isexpr(inst, :call)
+    rep = Expr(:call, call_with_reactant, inst.args...)
+    @show rep
+    return rep
+  end
+  return inst
+end
+
+function call_with_reactant_generator(world::UInt, source::LineNumberNode, @nospecialize(F::Type), @nospecialize(N::Int), self, @nospecialize(f::Type), @nospecialize(args))
+    @nospecialize
+    @show f, args
+
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(:methodinstance, :f, :args), Core.svec())
+
+    # look up the method match
+    method_error = :(throw(MethodError(f, args, $world)))
+
+    interp = ReactantInterpreter(; world)
+    
+    mt = interp.method_table
+
+    sig = Tuple{F, args...}
+    min_world = Ref{UInt}(typemin(UInt))
+    max_world = Ref{UInt}(typemax(UInt))
+    match = ccall(:jl_gf_invoke_lookup_worlds, Any,
+                  (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
+                  sig, mt, world, min_world, max_world)
+    match === nothing && return stub(world, source, method_error)
+
+    # look up the method and code instance
+    mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
+               (Any, Any, Any), match.method, match.spec_types, match.sparams)
+  
+    result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
+    frame = Core.Compiler.InferenceState(result, #=cache_mode=#:global, interp)
+    @assert frame !== nothing
+    Core.Compiler.typeinf(interp, frame)
+    @assert Core.Compiler.is_inferred(frame)
+
+    #if Core.Compiler.result_is_constabi(interp, frame.result)
+    #    rt = frame.result.result::Core.Compiler.Const
+    #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
+    #else
+        opt = Core.Compiler.OptimizationState(frame, interp)
+	caller = frame.result
+	@static if VERSION < v"1.11-"
+	  ir = Core.Compiler.run_passes(opt.src, opt, caller)
+	else
+	  ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
+	  Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
+	end
+	@show ir
+	  for (i, inst) in enumerate(ir.stmts)
+	     @static if VERSION < v"1.11"
+	        Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:inst]), :inst)
+	     else
+	        Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:stmt]), :stmt)
+	     end
+	  end
+	@show ir
+    	Core.Compiler.finish(interp, opt, ir, caller)
+        src = Core.Compiler.ir_to_codeinf!(opt)
+    #end
+
+    new_ci = copy(src)
+    new_ci.slotnames = Symbol[Symbol("#self#"), :f, :args]
+    new_ci.edges = Core.MethodInstance[mi]
+    new_ci.min_world = min_world[]
+    new_ci.max_world = max_world[]
+
+    return new_ci
+end
+
+@eval function call_with_reactant(f::F, args::Vararg{Any, N}) where {F, N}
+    $(Expr(:meta, :generated_only))
+    $(Expr(:meta, :generated, call_with_reactant_generator))
+end
+
 function make_mlir_fn(
     f,
     args,
@@ -131,36 +213,13 @@ function make_mlir_fn(
         interp = ReactantInterpreter()
 
         # TODO replace with `Base.invoke_within` if julia#52964 lands        
-        # TODO fix it for kwargs
-        ircoderes = Base.code_ircode(f, map(typeof, traced_args); interp)
-
-        if length(ircoderes) != 1
-            throw(
-                AssertionError(
-                    "Could not find unique ircode for $f $traced_args, found $ircoderes"
-                ),
-            )
-        end
-        ir, ty = ircoderes[1]
-        oc = Core.OpaqueClosure(ir)
+        # TODO fix it for kwargs	
+	oc = call_with_reactant # Core.OpaqueClosure(ir)
 
         if f === Reactant.apply
-            oc(traced_args[1], (traced_args[2:end]...,))
+            oc(f, traced_args[1], (traced_args[2:end]...,))
         else
-            if (length(traced_args) + 1 != length(ir.argtypes)) || (
-                length(traced_args) > 0 &&
-                length(ir.argtypes) > 0 &&
-                !(last(ir.argtypes) isa Core.Const) &&
-                last(ir.argtypes) != typeof(traced_args[end])
-            )
-                @assert ir.argtypes[end] <: Tuple
-                oc(
-                    traced_args[1:(length(ir.argtypes) - 2)]...,
-                    (traced_args[(length(ir.argtypes) - 1):end]...,),
-                )
-            else
-                oc(traced_args...)
-            end
+            oc(f, traced_args...)
         end
     end
 

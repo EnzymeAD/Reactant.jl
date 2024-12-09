@@ -21,6 +21,15 @@ import Core.Compiler:
     mapany,
     MethodResultPure
 
+
+Base.Experimental.@MethodTable REACTANT_METHOD_TABLE
+
+macro overlay(method_expr)
+    def = splitdef(method_expr)
+    def[:name] = Expr(:overlay, :(Reactant.REACTANT_METHOD_TABLE), def[:name])
+    return esc(combinedef(def))
+end
+
 function set_reactant_abi(
     interp,
     @nospecialize(f),
@@ -54,50 +63,6 @@ function set_reactant_abi(
         end
     end
 
-    if length(argtypes) >= 5 &&
-        f === Core.kwcall &&
-        (
-            widenconst(argtypes[3]) == typeof(Enzyme.gradient) ||
-            widenconst(argtypes[3]) == typeof(Enzyme.jacobian)
-        ) &&
-        widenconst(argtypes[4]) <: Enzyme.Mode
-        newmode = Enzyme.set_abi(widenconst(argtypes[4]), ReactantABI)
-        if newmode != widenconst(argtypes[4])
-            newmodev = newmode()
-            arginfo2 = ArgInfo(
-                if fargs isa Nothing
-                    nothing
-                else
-                    [fargs[1:3]..., :($(newmodev)), fargs[5:end]...]
-                end,
-                [argtypes[1:3]..., Core.Const(newmodev), argtypes[5:end]...],
-            )
-            return abstract_call_known(interp, f, arginfo2, si, sv, max_methods)
-        end
-    end
-
-    if length(argtypes) >= 5 &&
-        methods(f)[1].module == Enzyme &&
-        widenconst(argtypes[5]) <: Enzyme.Mode &&
-        (
-            widenconst(argtypes[4]) == typeof(Enzyme.gradient) ||
-            widenconst(argtypes[4]) == typeof(Enzyme.jacobian)
-        )
-        newmode = Enzyme.set_abi(widenconst(argtypes[5]), ReactantABI)
-        if newmode != widenconst(argtypes[5])
-            newmodev = newmode()
-            arginfo2 = ArgInfo(
-                if fargs isa Nothing
-                    nothing
-                else
-                    [fargs[1:4]..., :($(newmodev)), fargs[6:end]...]
-                end,
-                [argtypes[1:4]..., Core.Const(newmodev), argtypes[6:end]...],
-            )
-            return abstract_call_known(interp, f, arginfo2, si, sv, max_methods)
-        end
-    end
-
     return Base.@invoke abstract_call_known(
         interp::AbstractInterpreter,
         f::Any,
@@ -116,7 +81,7 @@ function set_reactant_abi end
     function ReactantInterpreter(; world::UInt=Base.get_world_counter())
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             ReactantCacheToken(),
-            nothing,            #=mt=#
+            REACTANT_METHOD_TABLE,
             world,
             true,            #=forward_rules=#
             true,            #=reverse_rules=#
@@ -132,7 +97,7 @@ else
     )
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             REACTANT_CACHE,
-            nothing,            #=mt=#
+            REACTANT_METHOD_TABLE,
             world,
             true,            #=forward_rules=#
             true,            #=forward_rules=#
