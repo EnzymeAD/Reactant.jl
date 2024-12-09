@@ -327,7 +327,7 @@ function Base.mapreduce(
     return fn(A)
 end
 
-struct CallMapReduce{Fn, Op, Dims, Init}
+struct CallMapReduce{Fn,Op,Dims,Init}
     f::Fn
     op::Op
     dims::Dims
