@@ -142,11 +142,9 @@ function get_region_removing_missing_values(compiled_fn, insertions)
     return_op = MLIR.IR.terminator(block)
     for (i, rt) in insertions
         if rt isa TracedRNumber
-            attr = MLIR.IR.DenseElementsAttribute(Array{eltype(rt)}(undef, ()))
-            op = MLIR.Dialects.stablehlo.constant(; value=attr)
+            op = Ops.constant(Array{eltype(rt)}(undef, ()))
         elseif rt isa TracedRArray
-            attr = MLIR.IR.DenseElementsAttribute(Array{eltype(rt)}(undef, size(rt)))
-            op = MLIR.Dialects.stablehlo.constant(; value=attr)
+            op = Ops.constant(Array{eltype(rt)}(undef, size(rt)))
         else
             error("Unknown type $(typeof(rt))")
         end
