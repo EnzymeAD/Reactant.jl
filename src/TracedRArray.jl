@@ -247,6 +247,9 @@ function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     return Ops.transpose(materialize_traced_array(A), Int64[perm...])
 end
 
+Base.conj(A::AnyTracedRArray) = A
+Base.conj(A::AnyTracedRArray{<:Complex}) = Ops.conj(materialize_traced_array(A))
+
 Base.conj!(A::AnyTracedRArray) = A
 function Base.conj!(A::AnyTracedRArray{<:Complex})
     set_mlir_data!(A, Ops.conj(materialize_traced_array(A)).mlir_data)
