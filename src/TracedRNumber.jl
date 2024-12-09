@@ -13,7 +13,7 @@ mutable struct TracedRNumber{T} <: RNumber{T}
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
-set_mlir_data!(x::TracedRNumber, data) = (x.mlir_data = data)
+set_mlir_data!(x::TracedRNumber, data) = (x.mlir_data = data; return x)
 
 ReactantCore.is_traced(::TracedRNumber) = true
 
