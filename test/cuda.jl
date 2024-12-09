@@ -11,7 +11,9 @@ end
 
 # basic squaring on GPU
 function square!(x)
-    @cuda blocks = 1 threads = length(x) square_kernel!(x)
+    # @cuda blocks = 1 threads = length(x) square_kernel!(x)
+    cr = @cuda launch=false square_kernel!(x)
+    @show cr
     return nothing
 end
 

@@ -437,7 +437,8 @@ function compiler_cache(ctx::MLIR.IR.Context)
     return cache
 end
 
-function recufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
+Reactant.@overlay function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
+    @show "recufunction", f, tt
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
 	cache = compiler_cache(MLIR.IR.context())
@@ -448,45 +449,6 @@ function recufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
         CUDA.GPUCompiler.cached_compilation(cache, source, config, compile, link)
     end
     res
-end
-
-const CC = Core.Compiler
-
-import Core.Compiler:
-    AbstractInterpreter,
-    abstract_call,
-    abstract_call_known,
-    ArgInfo,
-    StmtInfo,
-    AbsIntState,
-    get_max_methods,
-    CallMeta,
-    Effects,
-    NoCallInfo,
-    widenconst,
-    mapany,
-    MethodResultPure
-
-
-function Reactant.set_reactant_abi(
-    interp,
-    f::typeof(CUDA.cufunction),
-    arginfo::ArgInfo,
-    si::StmtInfo,
-    sv::AbsIntState,
-    max_methods::Int=get_max_methods(interp, f, sv),
-)
-    (; fargs, argtypes) = arginfo
-	
-	arginfo2 = ArgInfo(
-	    if fargs isa Nothing
-		nothing
-	    else
-		[:($(recufunction)), fargs[2:end]...]
-	    end,
-	    [Core.Const(recufunction), argtypes[2:end]...],
-	)
-	return abstract_call_known(interp, recufunction, arginfo2, si, sv, max_methods)
 end
 
 end # module ReactantCUDAExt
