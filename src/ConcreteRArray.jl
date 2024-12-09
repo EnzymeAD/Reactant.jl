@@ -215,7 +215,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     end
 
     XLA.await(a.data)
-    if XLA.BufferOnCPU(a.data.buffer)
+    if buffer_on_cpu(a)
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -246,7 +246,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     end
 
     XLA.await(a.data)
-    if XLA.BufferOnCPU(a.data.buffer)
+    if buffer_on_cpu(a)
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -289,14 +289,11 @@ end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}})
-    foreach(bc.args) do x
+    for x in bc.args
         x isa ConcreteRArray && XLA.await(x.data)
     end
 
-    all_on_cpu = all(bc.args) do x
-        x isa ConcreteRArray && return XLA.BufferOnCPU(x.data.buffer)
-        return true
-    end
+    all_on_cpu = all(buffer_on_cpu, bc.args)
     if all_on_cpu
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
         if !Base.isconcretetype(ElType)
@@ -326,7 +323,18 @@ function Base.mapreduce(
     dims=:,
     init=nothing,
 ) where {T,N}
-    mapreduce_fn(x) = Base.mapreduce(f, op, x; dims, init)
-    fn = Reactant.compile(mapreduce_fn, (A,))
+    fn = Reactant.compile(CallMapReduce(f, op, dims, init), (A,))
     return fn(A)
 end
+
+struct CallMapReduce{Fn, Op, Dims, Init}
+    f::Fn
+    op::Op
+    dims::Dims
+    init::Init
+end
+
+(f::CallMapReduce)(A) = Base.mapreduce(f.f, f.op, A; f.dims, f.init)
+
+buffer_on_cpu(::Any) = true
+buffer_on_cpu(x::ConcreteRArray) = XLA.BufferOnCPU(x.data.buffer)

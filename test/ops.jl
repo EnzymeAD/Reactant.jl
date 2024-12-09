@@ -82,6 +82,8 @@ end
 end
 
 @testset "cholesky" begin
+    # cholesky in stablehlo for the other triangle is implementation defined.
+    # See https://github.com/EnzymeAD/Reactant.jl/issues/338 for more details.
     g1(x) = triu(Ops.cholesky(x))
     g2(x) = tril(Ops.cholesky(x; lower=true))
 
