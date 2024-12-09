@@ -20,7 +20,9 @@ end
 const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
-const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
+const AnyTracedRMatrix{T} = Union{
+    AnyTracedRArray{T,2},LinearAlgebra.Diagonal{T,TracedRArray{T,1}}
+}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
 function TracedRArray(data::MLIR.IR.Value)
@@ -86,6 +88,9 @@ function materialize_traced_array(
 ) where {T,N,perm,iperm}
     return permutedims(parent(x), perm)
 end
+function materialize_traced_array(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}) where {T}
+    return LinearAlgebra.diagm(parent(x))
+end
 
 get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
@@ -122,13 +127,15 @@ end
 function set_mlir_data!(
     x::PermutedDimsArray{T,N,perm,iperm,TracedRArray{T,N}}, data
 ) where {T,N,perm,iperm}
-    tdata = TracedRArray(data)
-    parent(x).mlir_data = permutedims(tdata, iperm)
+    parent(x).mlir_data = permutedims(TracedRArray(data), iperm).mlir_data
+    return x
+end
+function set_mlir_data!(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}, data) where {T}
+    parent(x).mlir_data = LinearAlgebra.diag(TracedRArray(data)).mlir_data
     return x
 end
 function set_mlir_data!(x::AnyTracedRArray, data)
-    tdata = TracedRArray(data)
-    setindex!(x, tdata, axes(x)...)
+    setindex!(x, TracedRArray(data), axes(x)...)
     return x
 end
 

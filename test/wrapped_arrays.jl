@@ -1,4 +1,4 @@
-using Reactant, Test, Statistics, NNlib
+using Reactant, Test, Statistics, NNlib, LinearAlgebra
 
 function view_getindex_1(x)
     x = view(x, 2:3, 1:2, :)
@@ -138,4 +138,46 @@ end
     x = ConcreteRArray(rand(3, 2))
     y = @jit write_to_adjoint_array!(x)
     @test all(isone, Array(y))
+end
+
+add_perm_dims(x) = x .+ PermutedDimsArray(x, (2, 1))
+
+@testset "add_perm_dims" begin
+    x = rand(4, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(add_perm_dims(x_ra)) ≈ add_perm_dims(x)
+end
+
+function write_to_permuted_dims_array!(x)
+    z1 = similar(x)
+    z2 = PermutedDimsArray(z1, (2, 1))
+    @. z2 = 1.0
+    return z1
+end
+
+@testset "write_to_permuted_dims_array!" begin
+    x = rand(4, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(write_to_permuted_dims_array!(x_ra)) ≈ write_to_permuted_dims_array!(x)
+end
+
+function write_to_diagonal_array!(x)
+    z = Diagonal(x)
+    @. z = 1.0
+    return z
+end
+
+@testset "write_to_diagonal_array!" begin
+    x = rand(4, 4)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = copy(x_ra)
+
+    y = @jit(write_to_diagonal_array!(x_ra))
+    y_res = @allowscalar Array(y)
+    @test x_ra ≈ y_ra
+    @test all(isone, diag(y_res))
+    y_res[diagind(y_res)] .= 0
+    @test all(iszero, y_res)
 end
