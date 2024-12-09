@@ -66,43 +66,15 @@ function TracedRNumber{T}(x::Number) where {T}
 end
 
 function promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
-    if isa(rhs, TracedRNumber)
+    if rhs isa TracedRNumber
         rhs isa TracedRNumber{T} && return rhs
-        return TracedRNumber{T}(
-            (),
-            MLIR.IR.result(
-                MLIR.Dialects.stablehlo.convert(
-                    rhs.mlir_data; result=mlir_type(TracedRNumber{T})
-                ),
-                1,
-            ),
-        )
+        return Ops.convert(TracedRNumber{T}, rhs)
     end
-    if isa(rhs, TracedRArray{<:Any,0})
-        return TracedRNumber{T}(
-            (),
-            MLIR.IR.result(
-                MLIR.Dialects.stablehlo.convert(
-                    rhs.mlir_data; result=mlir_type(TracedRNumber{T})
-                ),
-                1,
-            ),
-        )
+    if rhs isa TracedRArray{<:Any,0}
+        return promote_to(TracedRNumber{T}, TracedRNumber{eltype(rhs)}((), rhs.mlir_data))
     end
-    if isa(rhs, Number)
-        attr = MLIR.IR.DenseElementsAttribute(fill(T(rhs)))
-        return TracedRNumber{T}(
-            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
-        )
-    end
-    T0 = eltype(rhs)
-    attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
-    return promote_to(
-        TracedRNumber{T},
-        TracedRNumber{T0}(
-            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
-        ),
-    )
+    rhs isa Number && return promote_to(TracedRNumber{T}, Ops.constant(fill(T(rhs))))
+    return promote_to(TracedRNumber{T}, Ops.constant(collect(rhs)))
 end
 
 promote_to(::TracedRNumber{T}, rhs) where {T} = promote_to(TracedRNumber{T}, rhs)
@@ -119,27 +91,14 @@ for (jlop, hloop) in (
     @eval function $(jlop)(
         @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
     ) where {T}
-        return TracedRNumber{T}(
-            (),
-            MLIR.IR.result(
-                MLIR.Dialects.stablehlo.$(hloop)(lhs.mlir_data, rhs.mlir_data), 1
-            ),
-        )
+        return Ops.$(hloop)(lhs, rhs)
     end
 end
 
 function Base.div(
     @nospecialize(lhs::TracedRNumber{T}), rhs, ::typeof(RoundDown)
 ) where {T<:Integer}
-    return TracedRNumber{T}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.divide(
-                lhs.mlir_data, promote_to(TracedRNumber{T}, rhs).mlir_data
-            ),
-            1,
-        ),
-    )
+    return Ops.divide(lhs, promote_to(TracedRNumber{T}, rhs))
 end
 
 for (jlop, hloop, hlocomp) in (
@@ -207,22 +166,19 @@ function Base.ifelse(
 end
 
 for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
+    T = promote_type(T1, T2)
     @eval begin
         function Base.:&(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
-            return TracedRNumber{promote_type(eltype(x), eltype(y))}(
-                (), MLIR.IR.result(MLIR.Dialects.stablehlo.and(x.mlir_data, y.mlir_data), 1)
+            return Ops.and(
+                promote_to(TracedRNumber{$(T)}, x), promote_to(TracedRNumber{$(T)}, y)
             )
         end
         function Base.:|(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
-            return TracedRNumber{promote_type(eltype(x), eltype(y))}(
-                (), MLIR.IR.result(MLIR.Dialects.stablehlo.or(x.mlir_data, y.mlir_data), 1)
+            return Ops.or(
+                promote_to(TracedRNumber{$(T)}, x), promote_to(TracedRNumber{$(T)}, y)
             )
         end
-        function Base.:!(x::TracedRNumber{<:$(T1)})
-            return TracedRNumber{eltype(x)}(
-                (), MLIR.IR.result(MLIR.Dialects.stablehlo.not(x.mlir_data), 1)
-            )
-        end
+        Base.:!(x::TracedRNumber{<:$(T1)}) = Ops.not(x)
     end
 end
 
@@ -241,64 +197,27 @@ for (jlop, hloop) in (
     (:(Base.FastMath.tanh_fast), :tanh),
     (:(Base.exp), :exponential),
     (:(Base.FastMath.exp_fast), :exponential),
+    (:(Base.expm1), :exponential_minus_one),
     (:(Base.log), :log),
+    (:(Base.log1p), :log_plus_one),
     (:(Base.sqrt), :sqrt),
     (:(Base.ceil), :ceil),
     (:(Base.floor), :floor),
 )
-    @eval function $(jlop)(@nospecialize(lhs::TracedRNumber{T})) where {T}
-        OutTy = $(hloop === :abs) ? real(T) : T
-        return TracedRNumber{OutTy}(
-            (), MLIR.IR.result(MLIR.Dialects.stablehlo.$hloop(lhs.mlir_data), 1)
-        )
-    end
+    @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
 end
 
 Base.conj(x::TracedRNumber) = x
-function Base.conj(x::TracedRNumber{T}) where {T<:Complex}
-    return TracedRNumber{T}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.chlo.conj(x.mlir_data; result=mlir_type(TracedRNumber{T})), 1
-        ),
-    )
-end
+Base.conj(x::TracedRNumber{<:Complex}) = Ops.conj(x)
 
 Base.real(x::TracedRNumber) = x
-function Base.real(x::TracedRNumber{Complex{T}}) where {T}
-    return TracedRNumber{T}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.real(x.mlir_data; result=mlir_type(TracedRNumber{T})), 1
-        ),
-    )
-end
+Base.real(x::TracedRNumber{<:Complex}) = Ops.real(x)
 
 Base.imag(x::TracedRNumber) = zero(x)
-function Base.imag(x::TracedRNumber{Complex{T}}) where {T}
-    return TracedRNumber{T}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.imag(x.mlir_data; result=mlir_type(TracedRNumber{T})), 1
-        ),
-    )
-end
-
-Base.abs2(x::TracedRNumber) = abs(x)^2
-
-Base.log1p(x::TracedRNumber{T}) where {T} = log(x + one(T))
+Base.imag(x::TracedRNumber{<:Complex}) = Ops.imag(x)
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
-    @eval function Base.clamp(x::TracedRNumber{T}, min::$(minT), max::$(maxT)) where {T}
-        min = promote_to(TracedRNumber{T}, min)
-        max = promote_to(TracedRNumber{T}, max)
-        return TracedRNumber{T}(
-            (),
-            MLIR.IR.result(
-                MLIR.Dialects.stablehlo.clamp(min.mlir_data, x.mlir_data, max.mlir_data), 1
-            ),
-        )
-    end
+    @eval Base.clamp(x::TracedRNumber, min::$(minT), max::$(maxT)) = Ops.clamp(min, x, max)
 end
 
 struct TypeCast{T<:ReactantPrimitive} <: Function end
