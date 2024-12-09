@@ -77,6 +77,13 @@ function ConcreteRArray(
     )
 end
 
+ConcreteRArray(x::AnyConcreteRArray) = ConcreteRArray{eltype(x),ndims(x)}(x)
+ConcreteRArray{T}(x::AnyConcreteRArray) where {T} = ConcreteRArray{T,ndims(x)}(x)
+ConcreteRArray{T,N}(x::ConcreteRArray{T,N}) where {T,N} = x
+function ConcreteRArray{T,N}(x::AnyConcreteRArray) where {T,N}
+    return ConcreteRArray(convert(Array{T,N}, x))
+end
+
 Base.size(x::ConcreteRArray) = x.shape
 
 function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,ElType,N}
@@ -161,19 +168,21 @@ for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
     end
 end
 
-function Base.isapprox(x::ConcreteRArray, y::AbstractArray; kwargs...)
+function Base.isapprox(x::AnyConcreteRArray, y::AbstractArray; kwargs...)
     return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
 end
-function Base.isapprox(x::AbstractArray, y::ConcreteRArray; kwargs...)
+function Base.isapprox(x::AbstractArray, y::AnyConcreteRArray; kwargs...)
     return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
 end
-function Base.isapprox(x::ConcreteRArray, y::ConcreteRArray; kwargs...)
+function Base.isapprox(x::AnyConcreteRArray, y::AnyConcreteRArray; kwargs...)
     return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
 end
 
-Base.:(==)(x::ConcreteRArray, y::AbstractArray) = convert(Array, x) == convert(Array, y)
-Base.:(==)(x::AbstractArray, y::ConcreteRArray) = convert(Array, x) == convert(Array, y)
-Base.:(==)(x::ConcreteRArray, y::ConcreteRArray) = convert(Array, x) == convert(Array, y)
+Base.:(==)(x::AnyConcreteRArray, y::AbstractArray) = convert(Array, x) == convert(Array, y)
+Base.:(==)(x::AbstractArray, y::AnyConcreteRArray) = convert(Array, x) == convert(Array, y)
+function Base.:(==)(x::AnyConcreteRArray, y::AnyConcreteRArray)
+    return convert(Array, x) == convert(Array, y)
+end
 
 function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
     if X.data == XLA.AsyncEmptyBuffer
