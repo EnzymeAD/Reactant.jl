@@ -1094,16 +1094,24 @@ function hlo_call(
     )
     if isnothing(fn)
         new_mod = parse(MLIR.IR.Module, code)
+        new_mod_op = MLIR.IR.Operation(new_mod)
         body = MLIR.IR.body(new_mod)
 
-        for op in MLIR.IR.OperationIterator(body)
-            MLIR.IR.rmfromparent!(op)
-
+        operations = collect(MLIR.IR.OperationIterator(body))
+        for op in operations
             if MLIR.IR.name(op) == "func.func"
                 fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
                 if fn_name == func_name
                     fn = op
                 end
+
+                new_name = _hlo_call_name(fn_name, module_suffix)
+                res = MLIR.IR.LogicalResult(
+                    MLIR.API.mlirSymbolTableReplaceAllSymbolUses(
+                        fn_name, new_name, new_mod_op
+                    ),
+                )
+                @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
 
                 # Set function private
                 MLIR.IR.attr!(
@@ -1113,13 +1121,10 @@ function hlo_call(
                 )
 
                 # Change function name
-                MLIR.IR.attr!(
-                    op,
-                    symbol_attr_name,
-                    MLIR.IR.Attribute(_hlo_call_name(fn_name, module_suffix)),
-                )
+                MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
             end
 
+            MLIR.IR.rmfromparent!(op)
             push!(top_level_block, op)
         end
     end
@@ -1131,13 +1136,13 @@ function hlo_call(
     ftype_attr = MLIR.IR.attr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
-    @assert all(Base.Fix2(isa, Reactant.AnyTracedRArray), args) "all inputs to hlo_call should be reactant arrays"
-    @assert MLIR.IR.ninputs(ftype) == length(args) "invalid number of arguments for function $func_name"
+    @assert all(Base.Fix2(isa, Reactant.AnyTracedRArray), args) "hlo_call: all inputs to hlo_call should be reactant arrays"
+    @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name"
 
     for (i, arg) in enumerate(args)
         expected_type = MLIR.IR.input(ftype, i)
         arg_type = MLIR.IR.type(arg.mlir_data)
-        @assert expected_type == arg_type "argument #$i has the wrong type (expected $expected_type, got $arg_type)"
+        @assert expected_type == arg_type "hlo_call: argument #$i has the wrong type (expected $expected_type, got $arg_type)"
     end
 
     operands = [a.mlir_data for a in args]

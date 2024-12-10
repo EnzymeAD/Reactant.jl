@@ -920,3 +920,24 @@ end
     add_pos = findfirst("stablehlo.add", hlo_ir[last(add_pos):end])
     @test isnothing(add_pos)
 end
+
+@testset "hlo_call: multiple functions" begin
+    @test Reactant.@jit(
+        Ops.hlo_call(
+            """
+            module {
+              func.func @add(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+              func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = func.call @add(%arg0, %arg1) : (tensor<3xf32>, tensor<3xf32>) -> tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+            }
+            """,
+            Reactant.to_rarray(Float32[1, 2, 3]),
+            Reactant.to_rarray(Float32[1, 2, 3]),
+        )
+    )[1] ≈ Float32[2, 4, 6]
+end
