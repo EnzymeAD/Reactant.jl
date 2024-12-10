@@ -1090,7 +1090,7 @@ function hlo_call(code, args...; location=mlir_stacktrace("hlo_call", @__FILE__,
     MLIR.IR.attr!(fn, "sym_name", MLIR.IR.Attribute(name))
 
     @assert all(Base.Fix2(isa, Reactant.AnyTracedRArray), args) "all inputs to hlo_call should be reactant arrays"
-    @assert MLIR.IR.ninputs(ftype) == length(args) "invalid number of argument for function $orig_name"
+    @assert MLIR.IR.ninputs(ftype) == length(args) "invalid number of arguments for function $orig_name"
 
     operands = [a.mlir_data for a in args]
     call = MLIR.Dialects.func.call(
