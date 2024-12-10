@@ -410,6 +410,7 @@ function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, th
 	arg = transpose_val(arg)
 	@show arg
 	push!(restys, MLIR.IR.type(arg))
+	push!(mlir_args, arg)
 	push!(aliases,
 	      MLIR.IR.Attribute(MLIR.API.stablehloOutputOperandAliasGet(
 		MLIR.IR.context(),
