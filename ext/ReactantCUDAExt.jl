@@ -382,6 +382,13 @@ function link(job, compiled)
     return compiled
 end
 
+function transpose_val(val)
+    attr = MLIR.IR.DenseArrayAttribute(
+        Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...]
+    )
+    return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
+end
+
 function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, threads::CuDim=1,
                 cooperative::Bool=false, shmem::Integer=0, call_kwargs...) where{F, tt}
     @show args
@@ -392,7 +399,7 @@ function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, th
 
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
-    aliases = MLIR.API.MlirAttribute[]
+    aliases = MLIR.IR.Attribute[]
     rarrays = TracedRArray[]
     for (i, a) in enumerate(args)
 	@show a
@@ -400,24 +407,25 @@ function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, th
 	ta = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
 	push!(rarrays, ta)
 	arg = ta.mlir_data
-	arg = Reactant.Compiler.transpose_val(arg)
-	push!(restys, MLIR.IR.Type(arg))
+	arg = transpose_val(arg)
+	@show arg
+	push!(restys, MLIR.IR.type(arg))
 	push!(aliases,
-	      MLIR.IR.Dialects.stablehlo.stablehloOutputOperandAliasGet(
+	      MLIR.IR.Attribute(MLIR.API.stablehloOutputOperandAliasGet(
 		MLIR.IR.context(),
-	        len(args) == 1 ? 0 : 1,
-		len(args) == 1 ? C_NULL : Ref{Int64}(i-1),
+	        length(args) == 1 ? 0 : 1,
+		length(args) == 1 ? C_NULL : Ref{Int64}(i-1),
 		i-1,
 		0,
 		C_NULL
-	)
+		))
 	      )
     end
 
-    output_operand_aliases=MLIR.ArrayAttr.get(MLIR.IR.context(), aliases)
-    call = MLIR.IR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases)
+    output_operand_aliases=MLIR.IR.Attribute(aliases)
+    call = MLIR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases)
     for (i, res) in enumerate(rarrays)
-       ta.mlir_data = Reactant.Compiler.transpose_val(MLIR.IR.result(call, i-1))
+       res.mlir_data = transpose_val(MLIR.IR.result(call, i))
     end
     #CUDA.cuLaunchKernel(f,
     #	       blockdim.x, blockdim.y, blockdim.z,
