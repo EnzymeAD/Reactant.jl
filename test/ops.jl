@@ -130,7 +130,7 @@ end
     ]
         x = ConcreteRArray([1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8, 9.9, 10.0])
         @test [3.0, 3.0, 3.3, 4.4, 5.5, 6.6, 7.0, 7.0, 7.0, 7.0] ==
-            @jit Ops.clamp(_min, x, _max)
+              @jit Ops.clamp(_min, x, _max)
     end
 end
 
@@ -166,7 +166,7 @@ end
             0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im
         ])
         @test [1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im, 1.0 + 0.0im] ≈
-            @jit Ops.cosine(x)
+              @jit Ops.cosine(x)
     end
 end
 
@@ -216,7 +216,7 @@ end
         # NOTE `LinearAlgebra.dot` is not equal to `sum(a .* b)` on complex numbers due to conjugation
         @test sum(a .* b) ≈ @jit f1(a, b)
         @test kron(reshape(Array(a), length(a), 1), reshape(Array(b), 1, length(b))) ≈
-            @jit fouter(a, b)
+              @jit fouter(a, b)
         @test a .* b ≈ @jit fouter_batch1(a, b)
     end
 
@@ -415,7 +415,7 @@ end
     # on unsigned integers: (1) bitcast, (2) change sign and (3) bitcast
     x = ConcreteRArray(UInt[0, 1, 10])
     @test reinterpret(UInt, Base.checked_neg.(reinterpret.(Int, Array(x)))) ==
-        @jit Ops.negate(x)
+          @jit Ops.negate(x)
 
     x = ConcreteRArray([-1.0, 0.0, 1.0, 10.0])
     @test [1.0, 0.0, -1.0, -10.0] ≈ @jit Ops.negate(x)
@@ -639,7 +639,7 @@ end
             0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im
         ])
         @test [0.0 + 0.0im, 1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im] ≈
-            @jit Ops.sine(x)
+              @jit Ops.sine(x)
     end
 end
 
@@ -847,7 +847,7 @@ end
         x = ConcreteRArray([-1.0, 0.0, 1.0, 1.0, 2.5])
         m = ConcreteRArray([3.0, 3.0, 2.0, 3.0, 4.0])
         @test SpecialFunctions.polygamma.(Int.(Array(m)), Array(x)) ≈
-            @jit Ops.polygamma(m, x)
+              @jit Ops.polygamma(m, x)
     end
 end
 
@@ -940,4 +940,36 @@ end
             Reactant.to_rarray(Float32[1, 2, 3]),
         )
     )[1] ≈ Float32[2, 4, 6]
+end
+
+function f_multiple_hlo_calls(x, y)
+    x, = Ops.hlo_call(
+        """
+        module {
+          func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+            %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+            return %0 : tensor<3xf32>
+          }
+        }
+        """, x, y,
+    )
+    return Ops.hlo_call(
+        """
+        module {
+          func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+            %0 = stablehlo.multiply %arg0, %arg1 : tensor<3xf32>
+            return %0 : tensor<3xf32>
+          }
+        }
+        """, x, y
+    )
+end
+
+@testset "hlo_call: multiple hlo_calls" begin
+    x = Float32[1.0, 2.0, 50.0]
+    y = Float32[-4.0, 0.001, 2.0]
+    x_reactant = Reactant.to_rarray(x)
+    y_reactant = Reactant.to_rarray(y)
+
+    @test Reactant.@jit(f_multiple_hlo_calls(x_reactant, y_reactant))[1] ≈ (x .+ y) .* y
 end
