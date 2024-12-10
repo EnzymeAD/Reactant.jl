@@ -25,9 +25,17 @@ Base.convert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st.st
 Looks up a symbol with the given name in the given symbol table and returns the operation that corresponds to the symbol.
 If the symbol cannot be found, returns a null operation.
 """
-lookup(st::SymbolTable, name::AbstractString) =
-    Operation(API.mlirSymbolTableLookup(st, name))
-Base.getindex(st::SymbolTable, name::AbstractString) = lookup(st, name)
+function lookup(st::SymbolTable, name::AbstractString)
+    raw_op = API.mlirSymbolTableLookup(st, name)
+    if raw_op.ptr == C_NULL
+        nothing
+    else
+        Operation(raw_op, false)
+    end
+end
+function Base.getindex(st::SymbolTable, name::AbstractString)
+    @something(lookup(st, name), throw(KeyError(name)))
+end
 
 """
     push!(symboltable, operation)
