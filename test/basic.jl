@@ -101,6 +101,13 @@ f_var(args...) = sum(args)
     @test @jit(f_var(x, y, z)) ≈ [6.6, 6.6, 6.6]
 end
 
+@testset "Complex expression" begin
+    x = Reactant.to_rarray(ones(3))
+    f(x) = x .+ 1
+    @test @jit(x + x - x + x * float(Base.pi) * 0) ≈ x
+    @test @jit(f(f(f(f(x))))) ≈ @allowscalar x .+ 4
+end
+
 function sumcos(x)
     return sum(cos.(x))
 end
