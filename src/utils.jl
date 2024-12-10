@@ -237,7 +237,10 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     interp = ReactantInterpreter(; world)
 
     sig = Tuple{args...}
-    lookup_result = Core.Compiler.findall(sig, Core.Compiler.method_table(interp)).matches
+    lookup_result = Core.Compiler.findall(sig, Core.Compiler.method_table(interp))
+    @static if VERSION < v"1.11-"
+        lookup_result = lookup_result.matches
+    end
 
     if lookup_result === nothing || lookup_result === missing
         return stub(world, source, method_error)
@@ -259,6 +262,10 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     frame = Core.Compiler.InferenceState(result, #=cache_mode=#:local, interp)
     @assert frame !== nothing
     Core.Compiler.typeinf(interp, frame)
+    @static if VERSION >= v"1.11"
+        # `typeinf` doesn't update the cfg. We need to do it manually.
+        frame.cfg = Core.Compiler.compute_basic_blocks(frame.src.code)
+    end
     @assert Core.Compiler.is_inferred(frame)
 
     method = match.method
@@ -279,7 +286,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 	  ir = Core.Compiler.run_passes(opt.src, opt, caller)
 	else
 	  ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
-	  Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
+	  Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
 	end
 
 	@show ir
