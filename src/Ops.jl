@@ -1046,11 +1046,16 @@ function compare(
     return TracedRArray{Bool,ndims(lhs)}((), res, size(lhs))
 end
 
-"""
-    Ops.hlo_call(mlir_code::String, args::Vararg{AnyTracedRArray}...) -> NTuple{N, AnyTracedRArray}
+# Generate a unique name given a module hash and a function name.
+function _hlo_call_name(orig_name, module_suffix)
+    return orig_name * "_hlo_call_" * module_suffix
+end
 
-Given a MLIR module given as a string and containing a single function,
-calls the given function with the provided arguments and return a tuple for each result of the call.
+"""
+    Ops.hlo_call(mlir_code::String, args::Vararg{AnyTracedRArray}...; func_name::String="main") -> NTuple{N, AnyTracedRArray}
+
+Given a MLIR module given as a string, calls the function identified by the `func_name` keyword parameter (default "main")
+with the provided arguments and return a tuple for each result of the call.
 
 ```julia-repl
 julia> Reactant.@jit(
@@ -1070,33 +1075,74 @@ julia> Reactant.@jit(
 (ConcreteRArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
 ```
 """
-function hlo_call(code, args...; location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__))
-    new_mod = parse(MLIR.IR.Module, code)
-    body = MLIR.IR.body(new_mod)
-    fn = MLIR.IR.first_op(body)
-    MLIR.IR.rmfromparent!(fn)
+function hlo_call(
+    code,
+    args...;
+    func_name="main",
+    location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__),
+)
+    module_suffix = string(hash(code); base=16)
+    name_to_call = _hlo_call_name(func_name, module_suffix)
 
     current_module = MLIR.IR.mmodule()
     top_level_block = MLIR.IR.body(current_module)
 
-    orig_name = String(MLIR.IR.attr(fn, "sym_name"))
-    name = orig_name * "_" * string(gensym())
+    symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
 
-    push!(top_level_block, fn)
+    fn = MLIR.IR.lookup(
+        MLIR.IR.SymbolTable(MLIR.IR.Operation(current_module)), name_to_call
+    )
+    if isnothing(fn)
+        new_mod = parse(MLIR.IR.Module, code)
+        body = MLIR.IR.body(new_mod)
+
+        for op in MLIR.IR.OperationIterator(body)
+            MLIR.IR.rmfromparent!(op)
+
+            # Set function private
+            MLIR.IR.attr!(
+                op,
+                MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
+                MLIR.IR.Attribute("private"),
+            )
+
+            fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
+            if fn_name == func_name
+                fn = op
+            end
+
+            # Change function name
+            MLIR.IR.attr!(
+                op,
+                symbol_attr_name,
+                MLIR.IR.Attribute(_hlo_call_name(fn_name, module_suffix)),
+            )
+
+            push!(top_level_block, op)
+        end
+    end
+
+    if isnothing(fn)
+        error("hlo_call: could not find function $func_name in the provided module")
+    end
 
     ftype_attr = MLIR.IR.attr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
-    MLIR.IR.attr!(fn, "sym_name", MLIR.IR.Attribute(name))
-
     @assert all(Base.Fix2(isa, Reactant.AnyTracedRArray), args) "all inputs to hlo_call should be reactant arrays"
-    @assert MLIR.IR.ninputs(ftype) == length(args) "invalid number of arguments for function $orig_name"
+    @assert MLIR.IR.ninputs(ftype) == length(args) "invalid number of arguments for function $func_name"
+
+    for (i, arg) in enumerate(args)
+        expected_type = MLIR.IR.input(ftype, i)
+        arg_type = MLIR.IR.type(arg.mlir_data)
+        @assert expected_type == arg_type "argument #$i has the wrong type (expected $expected_type, got $arg_type)"
+    end
 
     operands = [a.mlir_data for a in args]
     call = MLIR.Dialects.func.call(
         operands;
         result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
-        callee=MLIR.IR.FlatSymbolRefAttribute(name),
+        callee=MLIR.IR.FlatSymbolRefAttribute(name_to_call),
         location,
     )
 

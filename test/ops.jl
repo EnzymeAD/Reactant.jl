@@ -888,3 +888,35 @@ end
         )
     )[1] ≈ x .+ y
 end
+
+function f_repeat(x, y)
+    for _ in 1:3
+        x, = Ops.hlo_call(
+            """
+            module {
+              func.func @my_add(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+            }
+            """,
+            x,
+            y;
+            func_name="my_add",
+        )
+    end
+    return x
+end
+
+@testset "hlo_call: repeat" begin
+    x = Reactant.to_rarray(randn(Float32, 3))
+    y = Reactant.to_rarray(randn(Float32, 3))
+    mod = Reactant.@code_hlo optimize = false f_repeat(x, y)
+    hlo_ir = repr(mod)
+
+    add_pos = findfirst("stablehlo.add", hlo_ir)
+    @test !isnothing(add_pos)
+
+    add_pos = findfirst("stablehlo.add", hlo_ir[last(add_pos):end])
+    @test isnothing(add_pos)
+end
