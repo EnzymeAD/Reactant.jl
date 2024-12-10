@@ -242,8 +242,8 @@ end
         @test a .* b ≈ @jit f1(a, b)
         @test reshape(kron(Array(b), Array(a)), 4, 4) ≈ @jit f2(a, b)
 
-        x = reshape(a, (2, 2))
-        y = reshape(b, (2, 2))
+        x = ConcreteRArray(reshape(a, (2, 2)))
+        y = ConcreteRArray(reshape(b, (2, 2)))
         @test x .* y ≈ @jit f3(x, y)
         @test Array(x) * Array(y) ≈ @jit f4(x, y)
     end
