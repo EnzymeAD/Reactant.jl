@@ -866,3 +866,25 @@ end
     z = ConcreteRArray([1e-8, 0.001, 2.0])
     @test SpecialFunctions.zeta.(Array(s), Array(z)) ≈ @jit Ops.zeta(s, z)
 end
+
+@testset "hlo_call" begin
+    x = Float32[1.0, 2.0, 50.0]
+    y = Float32[-4.0, 0.001, 2.0]
+    x_reactant = Reactant.to_rarray(x)
+    y_reactant = Reactant.to_rarray(y)
+
+    @test Reactant.@jit(
+        Ops.hlo_call(
+            """
+module {
+  func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+    %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+    return %0 : tensor<3xf32>
+  }
+}
+""",
+            x_reactant,
+            y_reactant,
+        )
+    )[1] ≈ x .+ y
+end
