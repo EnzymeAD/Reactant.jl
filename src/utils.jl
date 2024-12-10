@@ -27,8 +27,10 @@ function transpose_ty(mlirty)
     return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
 end
 function transpose_val(val)
-    val = TracedRArray(val)
-    return Ops.transpose(val, collect(ndims(val):-1:1)).mlir_data
+    attr = MLIR.IR.DenseArrayAttribute(
+        Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...]
+    )
+    return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
 function apply(f, args...; kwargs...)
