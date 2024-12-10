@@ -284,6 +284,10 @@ function make_tracer(
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
 
+    if TT === Module || TT === String
+        return prev
+    end
+
     if ismutabletype(TT)
         y = ccall(:jl_new_struct_uninit, Any, (Any,), TT)
         seen[prev] = y

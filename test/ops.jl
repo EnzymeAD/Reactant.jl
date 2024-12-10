@@ -866,3 +866,114 @@ end
     z = ConcreteRArray([1e-8, 0.001, 2.0])
     @test SpecialFunctions.zeta.(Array(s), Array(z)) ≈ @jit Ops.zeta(s, z)
 end
+
+@testset "hlo_call" begin
+    x = Float32[1.0, 2.0, 50.0]
+    y = Float32[-4.0, 0.001, 2.0]
+    x_reactant = Reactant.to_rarray(x)
+    y_reactant = Reactant.to_rarray(y)
+
+    @test Reactant.@jit(
+        Ops.hlo_call(
+            """
+            module {
+              func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+            }
+            """,
+            x_reactant,
+            y_reactant,
+        )
+    )[1] ≈ x .+ y
+end
+
+function f_repeat(x, y)
+    for _ in 1:3
+        x, = Ops.hlo_call(
+            """
+            module {
+              func.func @my_add(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+            }
+            """,
+            x,
+            y;
+            func_name="my_add",
+        )
+    end
+    return x
+end
+
+@testset "hlo_call: repeat" begin
+    x = Reactant.to_rarray(randn(Float32, 3))
+    y = Reactant.to_rarray(randn(Float32, 3))
+    mod = Reactant.@code_hlo optimize = false f_repeat(x, y)
+    hlo_ir = repr(mod)
+
+    add_pos = findfirst("stablehlo.add", hlo_ir)
+    @test !isnothing(add_pos)
+
+    add_pos = findfirst("stablehlo.add", hlo_ir[last(add_pos):end])
+    @test isnothing(add_pos)
+end
+
+@testset "hlo_call: multiple functions" begin
+    @test Reactant.@jit(
+        Ops.hlo_call(
+            """
+            module {
+              func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = func.call @add(%arg0, %arg1) : (tensor<3xf32>, tensor<3xf32>) -> tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+              func.func @add(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+            }
+            """,
+            Reactant.to_rarray(Float32[1, 2, 3]),
+            Reactant.to_rarray(Float32[1, 2, 3]),
+        )
+    )[1] ≈ Float32[2, 4, 6]
+end
+
+function f_multiple_hlo_calls(x, y)
+    x, = Ops.hlo_call(
+        """
+        module {
+          func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+            %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+            return %0 : tensor<3xf32>
+          }
+        }
+        """,
+        x,
+        y,
+    )
+    return Ops.hlo_call(
+        """
+        module {
+          func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+            %0 = stablehlo.multiply %arg0, %arg1 : tensor<3xf32>
+            return %0 : tensor<3xf32>
+          }
+        }
+        """,
+        x,
+        y,
+    )
+end
+
+@testset "hlo_call: multiple hlo_calls" begin
+    x = Float32[1.0, 2.0, 50.0]
+    y = Float32[-4.0, 0.001, 2.0]
+    x_reactant = Reactant.to_rarray(x)
+    y_reactant = Reactant.to_rarray(y)
+
+    @test Reactant.@jit(f_multiple_hlo_calls(x_reactant, y_reactant))[1] ≈ (x .+ y) .* y
+end
