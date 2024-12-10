@@ -1123,7 +1123,9 @@ function hlo_call(
                 # Change function name
                 MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
             end
+        end
 
+        for op in operations
             MLIR.IR.rmfromparent!(op)
             push!(top_level_block, op)
         end
