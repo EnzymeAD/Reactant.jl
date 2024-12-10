@@ -221,7 +221,15 @@ function compile(job)
     modstr, image, entry = CUDA.GPUCompiler.JuliaContext() do ctx
             asm, meta = CUDA.GPUCompiler.compile(:asm, job)
 	    mod = meta.ir
+	    
 	    modstr = string(mod)
+
+	    # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
+	    # it is probably safer to reparse a string using the right llvm module api, so we will do that.
+
+	    mmod = MLIR.IR.Module(@ccall MLIR.API.mlir_c.ConvertLLVMToMLIR(mod::CUDA.LLVM.API.LLVMModuleRef, MLIR.IR.context()::MLIR.API.MlirContext)::MLIR.API.MlirModule)
+	    @show mmod
+
 	    # check if we'll need the device runtime
 	    undefined_fs = filter(collect(CUDA.LLVM.functions(meta.ir))) do f
 		CUDA.LLVM.isdeclaration(f) && !CUDA.LLVM.isintrinsic(f)
@@ -424,7 +432,8 @@ function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, th
     end
 
     output_operand_aliases=MLIR.IR.Attribute(aliases)
-    call = MLIR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases)
+    call = MLIR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases, backend_config=MLIR.IR.Attribute("configstr"))
+    # call = MLIR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases, backend_config=MLIR.IR.Attribute(func.mod))
     for (i, res) in enumerate(rarrays)
        res.mlir_data = transpose_val(MLIR.IR.result(call, i))
     end
@@ -457,6 +466,10 @@ Reactant.@reactant_override function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwarg
         CUDA.GPUCompiler.cached_compilation(cache, source, config, compile, link)
     end
     res
+end
+
+function __init__()
+   
 end
 
 end # module ReactantCUDAExt
