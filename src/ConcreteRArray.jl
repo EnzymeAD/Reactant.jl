@@ -215,7 +215,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     end
 
     XLA.await(a.data)
-    if XLA.BufferOnCPU(a.data.buffer)
+    if buffer_on_cpu(a)
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -246,7 +246,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     end
 
     XLA.await(a.data)
-    if XLA.BufferOnCPU(a.data.buffer)
+    if buffer_on_cpu(a)
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -289,15 +289,52 @@ end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}})
-    ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
-    if !Base.isconcretetype(ElType)
-        throw(
-            ErrorException(
-                "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
-            ),
-        )
+    for x in bc.args
+        x isa ConcreteRArray && XLA.await(x.data)
     end
 
-    aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
-    return ConcreteRArray(aux)
+    all_on_cpu = all(buffer_on_cpu, bc.args)
+    if all_on_cpu
+        ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
+        if !Base.isconcretetype(ElType)
+            throw(
+                ErrorException(
+                    "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
+                ),
+            )
+        end
+        aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
+        return ConcreteRArray(aux)
+    end
+
+    fn = Reactant.compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
+    return fn(bc.args...)
 end
+
+function Base.copyto!(dest::ConcreteRArray, src::ConcreteRArray)
+    dest.data = src.data
+    return dest
+end
+
+function Base.mapreduce(
+    @nospecialize(f),
+    @nospecialize(op),
+    @nospecialize(A::ConcreteRArray{T,N});
+    dims=:,
+    init=nothing,
+) where {T,N}
+    fn = Reactant.compile(CallMapReduce(f, op, dims, init), (A,))
+    return fn(A)
+end
+
+struct CallMapReduce{Fn,Op,Dims,Init}
+    f::Fn
+    op::Op
+    dims::Dims
+    init::Init
+end
+
+(f::CallMapReduce)(A) = Base.mapreduce(f.f, f.op, A; f.dims, f.init)
+
+buffer_on_cpu(::Any) = true
+buffer_on_cpu(x::ConcreteRArray) = XLA.BufferOnCPU(x.data.buffer)

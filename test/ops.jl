@@ -82,14 +82,18 @@ end
 end
 
 @testset "cholesky" begin
-    g(x) = Ops.cholesky(x; lower=true)
+    # cholesky in stablehlo for the other triangle is implementation defined.
+    # See https://github.com/EnzymeAD/Reactant.jl/issues/338 for more details.
+    g1(x) = triu(Ops.cholesky(x))
+    g2(x) = tril(Ops.cholesky(x; lower=true))
+
     x = ConcreteRArray([
         10.0 2.0 3.0
         2.0 5.0 6.0
         3.0 6.0 9.0
     ])
-    @test cholesky(Array(x)).U ≈ @jit Ops.cholesky(x)
-    @test transpose(cholesky(Array(x)).U) ≈ @jit g(x)
+    @test cholesky(Array(x)).U ≈ @jit g1(x)
+    @test transpose(cholesky(Array(x)).U) ≈ @jit g2(x)
 
     x = ConcreteRArray(
         [
@@ -98,8 +102,9 @@ end
             3.0+4.0im 3.0+2.0im 9.0+0.0im
         ],
     )
-    @test cholesky(Array(x)).U ≈ @jit Ops.cholesky(x)
-    @test adjoint(cholesky(Array(x)).U) ≈ @jit g(x)
+
+    @test cholesky(Array(x)).U ≈ @jit g1(x)
+    @test adjoint(cholesky(Array(x)).U) ≈ @jit g2(x)
 end
 
 @testset "clamp" begin
@@ -210,13 +215,14 @@ end
     ]
         # NOTE `LinearAlgebra.dot` is not equal to `sum(a .* b)` on complex numbers due to conjugation
         @test sum(a .* b) ≈ @jit f1(a, b)
-        @test kron(reshape(a, length(a), 1), reshape(b, 1, length(b))) ≈ @jit fouter(a, b)
+        @test kron(reshape(Array(a), length(a), 1), reshape(Array(b), 1, length(b))) ≈
+            @jit fouter(a, b)
         @test a .* b ≈ @jit fouter_batch1(a, b)
     end
 
     a = ConcreteRArray([1 2; 3 4])
     b = ConcreteRArray([5 6; -7 -8])
-    @test a' * b == @jit f1(a, b)
+    @test Array(a)' * Array(b) == @jit f1(a, b)
 end
 
 @testset "einsum" begin
@@ -239,7 +245,7 @@ end
         x = reshape(a, (2, 2))
         y = reshape(b, (2, 2))
         @test x .* y ≈ @jit f3(x, y)
-        @test x * y ≈ @jit f4(x, y)
+        @test Array(x) * Array(y) ≈ @jit f4(x, y)
     end
 end
 
