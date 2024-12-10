@@ -1097,28 +1097,28 @@ function hlo_call(
         body = MLIR.IR.body(new_mod)
 
         for op in MLIR.IR.OperationIterator(body)
-            @assert MLIR.IR.name(op) == "func.func" "hlo_call: the given module should only contain `func.func` operations"
-
             MLIR.IR.rmfromparent!(op)
 
-            # Set function private
-            MLIR.IR.attr!(
-                op,
-                MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
-                MLIR.IR.Attribute("private"),
-            )
+            if MLIR.IR.name(op) == "func.func"
+                fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
+                if fn_name == func_name
+                    fn = op
+                end
 
-            fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
-            if fn_name == func_name
-                fn = op
+                # Set function private
+                MLIR.IR.attr!(
+                    op,
+                    MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
+                    MLIR.IR.Attribute("private"),
+                )
+
+                # Change function name
+                MLIR.IR.attr!(
+                    op,
+                    symbol_attr_name,
+                    MLIR.IR.Attribute(_hlo_call_name(fn_name, module_suffix)),
+                )
             end
-
-            # Change function name
-            MLIR.IR.attr!(
-                op,
-                symbol_attr_name,
-                MLIR.IR.Attribute(_hlo_call_name(fn_name, module_suffix)),
-            )
 
             push!(top_level_block, op)
         end
