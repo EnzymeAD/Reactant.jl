@@ -1097,6 +1097,8 @@ function hlo_call(
         body = MLIR.IR.body(new_mod)
 
         for op in MLIR.IR.OperationIterator(body)
+            @assert MLIR.IR.name(op) == "func.func" "hlo_call: the given module should only contain `func.func` operations"
+
             MLIR.IR.rmfromparent!(op)
 
             # Set function private
