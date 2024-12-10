@@ -222,8 +222,6 @@ function compile(job)
             asm, meta = CUDA.GPUCompiler.compile(:asm, job)
 	    mod = meta.ir
 	    modstr = string(mod)
-	    @show mod
-	    @show modstr
 	    # check if we'll need the device runtime
 	    undefined_fs = filter(collect(CUDA.LLVM.functions(meta.ir))) do f
 		CUDA.LLVM.isdeclaration(f) && !CUDA.LLVM.isintrinsic(f)
@@ -375,8 +373,7 @@ function compile(job)
 	    
 	    modstr, image, meta.entry
     end
-    
-    LLVMFunc{job.source.specTypes[1],job.source.specTypes}(nothing, modstr, image, LLVM.name(entry))
+    LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, modstr, image, CUDA.LLVM.name(entry))
 end
 
 # link into an executable kernel
@@ -385,20 +382,23 @@ function link(job, compiled)
     return compiled
 end
 
-function (func::LLVMFunc{F,tt})(args...; blocks::CUDA.CuDim=1, threads::CUDA.CuDim=1,
-					 shmem::Integer=0) where{F, tt}
+function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, threads::CuDim=1,
+                cooperative::Bool=false, shmem::Integer=0, call_kwargs...) where{F, tt}
+    @show args
+    @show call_kwargs
+
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
-
-    @show args
 
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
     aliases = MLIR.API.MlirAttribute[]
+    rarrays = TracedRArray[]
     for (i, a) in enumerate(args)
 	@show a
-	@assert a isa CuDeviceArray
-	ta = Base.pointer_to_objref(a.ptr)::TracedRArray
+	@assert a isa CuTracedArray
+	ta = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
+	push!(rarrays, ta)
 	arg = ta.mlir_data
 	arg = Reactant.Compiler.transpose_val(arg)
 	push!(restys, MLIR.IR.Type(arg))
@@ -415,7 +415,10 @@ function (func::LLVMFunc{F,tt})(args...; blocks::CUDA.CuDim=1, threads::CUDA.CuD
     end
 
     output_operand_aliases=MLIR.ArrayAttr.get(MLIR.IR.context(), aliases)
-    MLIR.IR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases)
+    call = MLIR.IR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases)
+    for (i, res) in enumerate(rarrays)
+       ta.mlir_data = Reactant.Compiler.transpose_val(MLIR.IR.result(call, i-1))
+    end
     #CUDA.cuLaunchKernel(f,
     #	       blockdim.x, blockdim.y, blockdim.z,
     #	       threaddim.x, threaddim.y, threaddim.z,

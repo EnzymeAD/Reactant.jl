@@ -63,13 +63,13 @@ function rewrite_inst(inst, ir)
     ft = Core.Compiler.widenconst(maybe_argextype(inst.args[1], ir))
     if !(ft <: Core.IntrinsicFunction) && !(ft <: Core.Builtin)
       rep = Expr(:call, call_with_reactant, inst.args...)
-      return rep
+      return true, rep
     end
   end
   if Meta.isexpr(inst, :invoke)
-    return Expr(:call, inst.args[2:end]...)
+    return false, Expr(:call, inst.args[2:end]...)
   end
-  return inst
+  return false, inst
 end
 
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
@@ -120,10 +120,14 @@ function _arg_partially_inline!(@nospecialize(x), slot_replacements::Vector{Any}
         return x
     end
     if isa(x, Core.ReturnNode)
-        return Core.ReturnNode(
+	if !isdefined(x, :val)
+	   return Core.ReturnNode(:nothing)
+	else
+	   return Core.ReturnNode(
             _arg_partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
                                slot_offset, arg_offset, statement_offset, boundscheck),
-        )
+           )
+	end
     end
     if isa(x, Core.GotoIfNot)
         return Core.GotoIfNot(
@@ -257,11 +261,18 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     Core.Compiler.typeinf(interp, frame)
     @assert Core.Compiler.is_inferred(frame)
 
+    method = match.method
+    @show mi
+    @show method
+
     #if Core.Compiler.result_is_constabi(interp, frame.result)
     #    rt = frame.result.result::Core.Compiler.Const
     #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
     #else
         opt = Core.Compiler.OptimizationState(frame, interp)
+
+	@show Core.Compiler.retrieve_code_info(mi, world)
+	@show opt.src
 
 	caller = frame.result
 	@static if VERSION < v"1.11-"
@@ -271,21 +282,35 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 	  Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
 	end
 
-	  for (i, inst) in enumerate(ir.stmts)
+	@show ir
+	any_changed = false
+	for (i, inst) in enumerate(ir.stmts)
 
+	   
             @static if VERSION < v"1.11"
-               Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:inst], ir), :inst)
+	       changed, next = rewrite_inst(inst[:inst], ir)
+               Core.Compiler.setindex!(ir.stmts[i], next, :inst)
             else
-               Core.Compiler.setindex!(ir.stmts[i], rewrite_inst(inst[:stmt], ir), :stmt)
+	       changed, next = rewrite_inst(inst[:stmt], ir)
+               Core.Compiler.setindex!(ir.stmts[i], next, :stmt)
             end
-            Core.Compiler.setindex!(ir.stmts[i], Any, :type)
+	    if changed
+		any_changed = true
+		Core.Compiler.setindex!(ir.stmts[i], Any, :type)
+	    end
          end
     	Core.Compiler.finish(interp, opt, ir, caller)
+	@show "post", ir
         src = Core.Compiler.ir_to_codeinf!(opt)
+	
+	@show any_changed, src
+	if !any_changed
+	   src = Core.Compiler.retrieve_code_info(mi, world)
+	   @show "post non change", src
+	end
 
     # prepare a new code info
     code_info = copy(src)
-    method = match.method
     static_params = match.sparams
     signature = sig
     is_invoke = args[1] === typeof(Core.invoke)
@@ -352,6 +377,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 	push!(fn_args, Core.SSAValue(length(overdubbed_code)))
     end
 
+    @show code_info.code
     #=== finish initialization of `overdubbed_code`/`overdubbed_codelocs` ===#
 
     # substitute static parameters, offset slot numbers by number of added slots, and
@@ -382,6 +408,8 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     code_info.codelocs = overdubbed_codelocs
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
+
+    @show code_info
 
     return code_info
 end
