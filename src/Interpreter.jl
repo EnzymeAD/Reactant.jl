@@ -29,51 +29,6 @@ function var"@reactant_override"(__source__::LineNumberNode, __module__::Module,
     )
 end
 
-function set_reactant_abi(
-    interp,
-    @nospecialize(f),
-    arginfo::ArgInfo,
-    si::StmtInfo,
-    sv::AbsIntState,
-    max_methods::Int=get_max_methods(interp, f, sv),
-)
-    (; fargs, argtypes) = arginfo
-
-    if (
-        (f === Enzyme.autodiff) ||
-        (f === Enzyme.autodiff_deferred) ||
-        (f === Enzyme.gradient) ||
-        (f === Enzyme.jacobian)
-    ) && (length(argtypes) >= 2)
-        if widenconst(argtypes[2]) <: Enzyme.Mode
-            newmode = Enzyme.set_abi(widenconst(argtypes[2]), ReactantABI)
-            if newmode != widenconst(argtypes[2])
-                newmodev = newmode()
-                arginfo2 = ArgInfo(
-                    if fargs isa Nothing
-                        nothing
-                    else
-                        [fargs[1], :($(newmodev)), fargs[3:end]...]
-                    end,
-                    [argtypes[1], Core.Const(newmodev), argtypes[3:end]...],
-                )
-                return abstract_call_known(interp, f, arginfo2, si, sv, max_methods)
-            end
-        end
-    end
-
-    return Base.@invoke abstract_call_known(
-        interp::AbstractInterpreter,
-        f::Any,
-        arginfo::ArgInfo,
-        si::StmtInfo,
-        sv::AbsIntState,
-        max_methods::Int,
-    )
-end
-
-function set_reactant_abi end
-
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE
     struct ReactantCacheToken end
 
@@ -85,7 +40,7 @@ function set_reactant_abi end
             true,            #=forward_rules=#
             true,            #=reverse_rules=#
             false,            #=broadcast_rewrite=#
-            set_reactant_abi,
+            nothing,
         )
     end
 else
@@ -101,7 +56,7 @@ else
             true,            #=forward_rules=#
             true,            #=forward_rules=#
             false,            #=broadcast_rewrite=#
-            set_reactant_abi,
+            nothing,
         )
     end
 end
@@ -566,58 +521,28 @@ function overload_autodiff(
     end
 end
 
-@inline function Enzyme.autodiff_deferred(
-    rmode::Enzyme.ReverseMode{
-        ReturnPrimal,RuntimeActivity,ReactantABI,Holomorphic,ErrIfFuncWritten
-    },
+@reactant_override @inline function Enzyme.autodiff_deferred(
+    rmode::Enzyme.Mode,
     f::FA,
     rt::Type{A},
     args::Vararg{Annotation,Nargs},
 ) where {
     FA<:Annotation,
     A<:Annotation,
-    ReturnPrimal,
-    RuntimeActivity,
-    Holomorphic,
     Nargs,
-    ErrIfFuncWritten,
 }
     return overload_autodiff(rmode, f, rt, args...)
 end
 
-@inline function Enzyme.autodiff_deferred(
-    rmode::ForwardMode{ReturnPrimal,ReactantABI,ErrIfFuncWritten,RuntimeActivity},
-    f::FA,
-    rt::Type{A},
-    args::Vararg{Annotation,Nargs},
-) where {FA<:Annotation,A<:Annotation,ReturnPrimal,Nargs,ErrIfFuncWritten,RuntimeActivity}
-    return overload_autodiff(rmode, f, rt, args...)
-end
-
-@inline function Enzyme.autodiff(
-    rmode::Enzyme.ReverseMode{
-        ReturnPrimal,RuntimeActivity,ReactantABI,Holomorphic,ErrIfFuncWritten
-    },
+@reactant_override @inline function Enzyme.autodiff(
+    rmode::Enzyme.Mode,
     f::FA,
     rt::Type{A},
     args::Vararg{Annotation,Nargs},
 ) where {
     FA<:Annotation,
     A<:Annotation,
-    ReturnPrimal,
-    RuntimeActivity,
-    Holomorphic,
     Nargs,
-    ErrIfFuncWritten,
 }
-    return overload_autodiff(rmode, f, rt, args...)
-end
-
-@inline function Enzyme.autodiff(
-    rmode::ForwardMode{ReturnPrimal,ReactantABI,ErrIfFuncWritten,RuntimeActivity},
-    f::FA,
-    rt::Type{A},
-    args::Vararg{Annotation,Nargs},
-) where {FA<:Annotation,A<:Annotation,ReturnPrimal,Nargs,ErrIfFuncWritten,RuntimeActivity}
     return overload_autodiff(rmode, f, rt, args...)
 end
