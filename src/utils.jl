@@ -657,11 +657,7 @@ function make_mlir_fn(
         end
 
         # TODO fix it for kwargs	
-        if f === Reactant.apply
-            call_with_reactant(f, traced_args[1], (traced_args[2:end]...,))
-        else
-            call_with_reactant(f, traced_args...)
-        end
+        call_with_reactant(f, traced_args...)
     end
 
     seen_results = OrderedIdDict()
