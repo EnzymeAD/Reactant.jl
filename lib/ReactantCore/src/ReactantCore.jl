@@ -115,6 +115,7 @@ macro trace(expr)
             return esc(trace_if_with_returns(__module__, expr))
         end
     end
+    Meta.isexpr(expr, :call) && return esc(trace_call(__module__, expr))
     Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
     Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
@@ -350,6 +351,18 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     end
 end
 
+function trace_call(mod, expr)
+    f = expr.args[1]
+    args = expr.args[2:end]
+    return quote
+        if any($(is_traced), ($(args...), ))
+            $(traced_call)($f, $(args...))
+        else
+            $(expr)
+        end
+    end
+end
+
 function remove_shortcircuiting(expr)
     return MacroTools.prewalk(expr) do x
         if MacroTools.@capture(x, a_ && b_)
@@ -372,6 +385,8 @@ function traced_while(cond_fn, body_fn, args)
     end
     return args
 end
+
+traced_call(f, args...; kwargs...) = f(args...; kwargs...)
 
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     return MacroTools.postwalk(expr) do x
