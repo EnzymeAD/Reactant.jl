@@ -41,8 +41,6 @@ end
 
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
-include("cuda.jl")
-@static if false
 @testset "Reactant.jl Tests" begin
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
         @safetestset "Layout" include("layout.jl")
@@ -62,19 +60,17 @@ include("cuda.jl")
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
         @safetestset "Linear Algebra" include("integration/linear_algebra.jl")
-        @safetestset "CUDA" include("cuda.jl")
         @safetestset "AbstractFFTs" include("integration/fft.jl")
     end
 
-    # if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
-    #     @testset "Neural Networks" begin
-    #         @safetestset "NNlib Primitives" include("nn/nnlib.jl")
-    #         @safetestset "Flux.jl Integration" include("nn/flux.jl")
-    #         if Sys.islinux()
-    #             @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
-    #             @safetestset "Lux Integration" include("nn/lux.jl")
-    #         end
-    #     end
-    # end
-end
+    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
+        @testset "Neural Networks" begin
+            @safetestset "NNlib Primitives" include("nn/nnlib.jl")
+            @safetestset "Flux.jl Integration" include("nn/flux.jl")
+            if Sys.islinux()
+                @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
+                @safetestset "Lux Integration" include("nn/lux.jl")
+            end
+        end
+    end
 end

@@ -60,6 +60,8 @@ end
 
 function rewrite_inst(inst, ir)
   if Meta.isexpr(inst, :call)
+    # Even if type unstable we do not want (or need) to replace intrinsic
+    # calls or builtins with our version.
     ft = Core.Compiler.widenconst(maybe_argextype(inst.args[1], ir))
     if !(ft <: Core.IntrinsicFunction) && !(ft <: Core.Builtin)
       rep = Expr(:call, call_with_reactant, inst.args...)
@@ -74,6 +76,8 @@ end
 
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
+# From Julia's Base.Meta with fix from https://github.com/JuliaLang/julia/pull/56787
+# and additionally adds support for an argument rewriting into a slot
 function arg_partially_inline!(code::Vector{Any}, slot_replacements::Vector{Any},
                            @nospecialize(type_signature)#=::Type{<:Tuple}=#,
                            static_param_values::Vector{Any},
@@ -218,12 +222,35 @@ function _arg_partially_inline!(@nospecialize(x), slot_replacements::Vector{Any}
     return x
 end
 
+
+"""
+    Reactant.REDUB_ARGUMENTS_NAME
+
+The variable name bound to `call_with_reactant`'s tuple of arguments in its
+`@generated` method definition.
+
+This binding can be used to manually reference/destructure `call_with_reactants` arguments
+
+This is required because user arguments could have a name which clashes with whatever name we choose for
+our argument. Thus we gensym to create it.
+
+This originates from https://github.com/JuliaLabs/Cassette.jl/blob/c29b237c1ec0deda3a1037ec519eebe216952bfe/src/overdub.jl#L154
+"""
+const OVERDUB_ARGUMENTS_NAME = gensym("overdub_arguments")
+
+# Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
+# In particular this entails two pieces:
+#   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
+#   2) Post type inference (using of course the reactant interpreter), all type unstable call functions are
+#      replaced with calls to `call_with_reactant`. This allows us to circumvent long standing issues in Julia
+#      using a custom interpreter in type unstable code.
+# `redub_arguments` is `(typeof(original_function), map(typeof, original_args_tuple)...)`
 function call_with_reactant_generator(world::UInt, source::LineNumberNode, self, @nospecialize(redub_arguments))
     @nospecialize
     
     args = redub_arguments
 
-    stub = Core.GeneratedFunctionStub(identity, Core.svec(:call_with_reactant, :redub_arguments), Core.svec())
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(:call_with_reactant, OVERDUB_ARGUMENTS_NAME), Core.svec())
 
     # look up the method match
     builtin_error = :(throw(AssertionError("Unsupported call_with_reactant of builtin $redub_arguments")))
@@ -248,6 +275,7 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 
     matches = lookup_result.matches
 
+    # No method could be found (including in our method table), bail with an error
     if length(matches) != 1
         return stub(world, source, method_error)
     end
@@ -269,17 +297,14 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     @assert Core.Compiler.is_inferred(frame)
 
     method = match.method
-    @show mi
-    @show method
 
+    # The original julia code (on 1.11+) has the potential constprop, for now
+    # we assume this outermost function does not constprop, for ease.
     #if Core.Compiler.result_is_constabi(interp, frame.result)
     #    rt = frame.result.result::Core.Compiler.Const
     #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
     #else
         opt = Core.Compiler.OptimizationState(frame, interp)
-
-	@show Core.Compiler.retrieve_code_info(mi, world)
-	@show opt.src
 
 	caller = frame.result
 	@static if VERSION < v"1.11-"
@@ -289,11 +314,13 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 	  Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
 	end
 
-	@show ir
+        # Rewrite type unstable calls to recurse into call_with_reactant to ensure
+        # they continue to use our interpreter. Reset the derived return type
+        # to Any if our interpreter would change the return type of any result.
+        # Also rewrite invoke (type stable call) to be :call, since otherwise apparently
+        # screws up type inference after this (TODO this should be fixed).
 	any_changed = false
-	for (i, inst) in enumerate(ir.stmts)
-
-	   
+	for (i, inst) in enumerate(ir.stmts)   
             @static if VERSION < v"1.11"
 	       changed, next = rewrite_inst(inst[:inst], ir)
                Core.Compiler.setindex!(ir.stmts[i], next, :inst)
@@ -307,10 +334,12 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 	    end
          end
     	Core.Compiler.finish(interp, opt, ir, caller)
-	@show "post", ir
         src = Core.Compiler.ir_to_codeinf!(opt)
 	
-	@show any_changed, src
+	# Julia hits various internal errors trying to re-perform type inference
+        # on type infered code (that we undo inference of), if there is no type unstable
+        # code to be rewritten, just use the default methodinstance (still using our methodtable),
+        # to improve compatibility as these bugs are fixed upstream.
 	if !any_changed
 	   src = Core.Compiler.retrieve_code_info(mi, world)
 	   @show "post non change", src
@@ -322,15 +351,16 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     signature = sig
     is_invoke = args[1] === typeof(Core.invoke)
 
-    # propagate edge metadata
+    # propagate edge metadata, this method is invalidated if the original function we are calling
+    # is invalidated
     code_info.edges = Core.MethodInstance[mi]
     code_info.min_world = lookup_result.valid_worlds.min_world
     code_info.max_world = lookup_result.valid_worlds.max_world
 
-    code_info.slotnames = Any[:call_with_reactant, :redub_arguments, code_info.slotnames...]
+    # Rewrite the arguments to this function, to prepend the two new arguments, the function :call_with_reactant,
+    # and the REDUB_ARGUMENTS_NAME tuple of input arguments
+    code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME, code_info.slotnames...]
     code_info.slotflags = UInt8[0x00, 0x00, code_info.slotflags...]
-    #code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME] #code_info.slotnames...]
-    #code_info.slotflags = UInt8[0x00, 0x00] # code_info.slotflags...]
     n_prepended_slots = 2
     overdub_args_slot = Core.SlotNumber(n_prepended_slots)
 
@@ -339,6 +369,9 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     # the end of the pass, we'll reset `code_info` fields accordingly.
     overdubbed_code = Any[]
     overdubbed_codelocs = Int32[]
+    
+    # Rewire the arguments from our tuple input of fn and args, to the corresponding calling convention
+    # required by the base method.
 
     # destructure the generated argument slots into the overdubbed method's argument slots.
     n_actual_args = fieldcount(signature)
@@ -384,23 +417,11 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
 	push!(fn_args, Core.SSAValue(length(overdubbed_code)))
     end
 
-    @show code_info.code
-    #=== finish initialization of `overdubbed_code`/`overdubbed_codelocs` ===#
-
     # substitute static parameters, offset slot numbers by number of added slots, and
     # offset statement indices by the number of additional statements
 
     arg_partially_inline!(code_info.code, fn_args, method.sig, Any[static_params...],
                           n_prepended_slots, n_prepended_slots, length(overdubbed_code), :propagate)
-
-    #callexpr = Expr(:call, Core.OpaqueClosure(ir), fn_args...)
-    #push!(overdubbed_code, callexpr)
-    #push!(overdubbed_codelocs, code_info.codelocs[1])
-    
-    #push!(new_ci.code, Core.Compiler.ReturnNode(Core.SSAValue(length(overdubbed_code))))
-    #push!(overdubbed_codelocs, code_info.codelocs[1])
-
-    # original_code_start_index = length(overdubbed_code) + 1
 
     append!(overdubbed_code, code_info.code)
     append!(overdubbed_codelocs, code_info.codelocs)
@@ -416,12 +437,10 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
-    @show code_info
-
     return code_info
 end
 
-@eval function call_with_reactant(redub_arguments...)
+@eval function call_with_reactant($OVERDUB_ARGUMENTS_NAME...)
     $(Expr(:meta, :generated_only))
     $(Expr(:meta, :generated, call_with_reactant_generator))
 end
@@ -517,9 +536,6 @@ function make_mlir_fn(
             end
         end
 
-        interp = ReactantInterpreter()
-
-        # TODO replace with `Base.invoke_within` if julia#52964 lands        
         # TODO fix it for kwargs	
         if f === Reactant.apply
             call_with_reactant(f, traced_args[1], (traced_args[2:end]...,))
