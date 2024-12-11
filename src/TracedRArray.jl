@@ -800,3 +800,27 @@ function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
     isinf(p) && return maximum(abs, x)
     return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
 end
+
+# outer repeat
+function Base.repeat(x::AnyTracedRArray{T,N}, counts::Vararg{Int,M}) where {T,N,M}
+    P = max(N, M) # potentially padded
+
+    # (d1, d2, ..., dP) -> (d1, 1, d2, 1, ..., dP, 1)
+    interleaved_size = ones(Int, 2P)
+    interleaved_size[1:2:2N] .= size(x)
+
+    x_interleaved = reshape(x, interleaved_size...)
+
+    # (d1, 1, d2, 1, ..., dP, 1) -> (d1, r1, d2, r2, ..., dP, rP)
+    broadcast_target_size = interleaved_size
+    broadcast_target_size[2:2:2M] .= counts
+
+    x_broadcasted = broadcast_to_size(x_interleaved, broadcast_target_size)
+
+    # (d1, r1, d2, r2, ..., dP, rP) -> (d1*r1, d2*r2, ..., dP*rP)
+    final_size = vec(prod(reshape(broadcast_target_size, 2, :), dims=1))
+
+    x_final = reshape(x_broadcasted, final_size...)
+
+    return x_final
+end
