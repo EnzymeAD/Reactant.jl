@@ -434,10 +434,6 @@ macro jit(args...)
     #! format: on
 end
 
-is_a_module(s::Symbol)::Bool = begin
-    isdefined(@__MODULE__, s) && getproperty(@__MODULE__, s) isa Module
-end
-
 #create expression for more complex expression than a call
 function wrapped_expression(expr::Expr)
     css = ExpressionExplorer.compute_symbols_state(expr)
@@ -474,7 +470,7 @@ end
 function is_tracking_call(input)
     Meta.isexpr(input, :call) || return false
     function_name = (ExpressionExplorer.explore_funcdef!(input, ExpressionExplorer.ScopeState()))[1].parts[end]
-    function_name in [:to_rarray, :ConcreteRNumber]
+    function_name in [:to_rarray, :ConcreteRNumber, :ConcreteRArray]
 end
 
 #check if an expression need to be wrap in a closure

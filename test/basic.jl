@@ -105,7 +105,7 @@ end
     x = Reactant.to_rarray(ones(3))
     f(x) = x .+ 1
     @test @jit(x + x - x + x * float(Base.pi) * 0) ≈ x
-    @test @jit(f(f(f(f(x))))) ≈ @allowscalar x .+ 4
+    @test @jit(f(f(f(f(x)))) .+ Reactant.to_rarray(ones(3))) ≈ @allowscalar x .+ 5
 end
 
 function sumcos(x)
