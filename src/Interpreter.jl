@@ -21,7 +21,6 @@ import Core.Compiler:
     mapany,
     MethodResultPure
 
-
 Base.Experimental.@MethodTable(REACTANT_METHOD_TABLE)
 
 function var"@reactant_override"(__source__::LineNumberNode, __module__::Module, def)

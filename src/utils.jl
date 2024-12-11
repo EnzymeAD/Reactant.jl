@@ -41,15 +41,12 @@ function call_with_reactant end
 
 # generate a LineInfoNode for the current source code location
 macro LineInfoNode(method)
-    Core.LineInfoNode(__module__, method, __source__.file, Int32(__source__.line), Int32(0))
+    return Core.LineInfoNode(
+        __module__, method, __source__.file, Int32(__source__.line), Int32(0)
+    )
 end
 
-
-
-function maybe_argextype(
-    @nospecialize(x),
-    src,
-)
+function maybe_argextype(@nospecialize(x), src)
     return try
         Core.Compiler.argextype(x, src)
     catch err
@@ -59,43 +56,61 @@ function maybe_argextype(
 end
 
 function rewrite_inst(inst, ir)
-  if Meta.isexpr(inst, :call)
-    # Even if type unstable we do not want (or need) to replace intrinsic
-    # calls or builtins with our version.
-    ft = Core.Compiler.widenconst(maybe_argextype(inst.args[1], ir))
-    if !(ft <: Core.IntrinsicFunction) && !(ft <: Core.Builtin)
-      rep = Expr(:call, call_with_reactant, inst.args...)
-      return true, rep
+    if Meta.isexpr(inst, :call)
+        # Even if type unstable we do not want (or need) to replace intrinsic
+        # calls or builtins with our version.
+        ft = Core.Compiler.widenconst(maybe_argextype(inst.args[1], ir))
+        if !(ft <: Core.IntrinsicFunction) && !(ft <: Core.Builtin)
+            rep = Expr(:call, call_with_reactant, inst.args...)
+            return true, rep
+        end
     end
-  end
-  if Meta.isexpr(inst, :invoke)
-    return false, Expr(:call, inst.args[2:end]...)
-  end
-  return false, inst
+    if Meta.isexpr(inst, :invoke)
+        return false, Expr(:call, inst.args[2:end]...)
+    end
+    return false, inst
 end
 
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
 # From Julia's Base.Meta with fix from https://github.com/JuliaLang/julia/pull/56787
 # and additionally adds support for an argument rewriting into a slot
-function arg_partially_inline!(code::Vector{Any}, slot_replacements::Vector{Any},
-                           @nospecialize(type_signature)#=::Type{<:Tuple}=#,
-                           static_param_values::Vector{Any},
-                           slot_offset::Int, arg_offset::Int, statement_offset::Int,
-                           boundscheck::Symbol)
-    for i = 1:length(code)
+function arg_partially_inline!(
+    code::Vector{Any},
+    slot_replacements::Vector{Any},
+    @nospecialize(type_signature), #=::Type{<:Tuple}=#
+    static_param_values::Vector{Any},
+    slot_offset::Int,
+    arg_offset::Int,
+    statement_offset::Int,
+    boundscheck::Symbol,
+)
+    for i in 1:length(code)
         isassigned(code, i) || continue
-        code[i] = _arg_partially_inline!(code[i], slot_replacements, type_signature,
-                                     static_param_values, slot_offset, arg_offset,
-                                     statement_offset, boundscheck)
+        code[i] = _arg_partially_inline!(
+            code[i],
+            slot_replacements,
+            type_signature,
+            static_param_values,
+            slot_offset,
+            arg_offset,
+            statement_offset,
+            boundscheck,
+        )
     end
     return code
 end
 
-function _arg_partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
-                            @nospecialize(type_signature), static_param_values::Vector{Any},
-                            slot_offset::Int, arg_offset::Int, statement_offset::Int,
-                            boundscheck::Symbol)
+function _arg_partially_inline!(
+    @nospecialize(x),
+    slot_replacements::Vector{Any},
+    @nospecialize(type_signature),
+    static_param_values::Vector{Any},
+    slot_offset::Int,
+    arg_offset::Int,
+    statement_offset::Int,
+    boundscheck::Symbol,
+)
     if isa(x, Core.SSAValue)
         return Core.SSAValue(x.id + statement_offset)
     end
@@ -110,33 +125,66 @@ function _arg_partially_inline!(@nospecialize(x), slot_replacements::Vector{Any}
         return Core.SlotNumber(id + slot_offset)
     end
     if isa(x, Core.Argument)
-	return Core.SlotNumber(x.n + arg_offset)
+        return Core.SlotNumber(x.n + arg_offset)
     end
     if isa(x, Core.NewvarNode)
-        return Core.NewvarNode(_arg_partially_inline!(x.slot, slot_replacements, type_signature,
-                                                  static_param_values, slot_offset, arg_offset,
-                                                  statement_offset, boundscheck))
+        return Core.NewvarNode(
+            _arg_partially_inline!(
+                x.slot,
+                slot_replacements,
+                type_signature,
+                static_param_values,
+                slot_offset,
+                arg_offset,
+                statement_offset,
+                boundscheck,
+            ),
+        )
     end
     if isa(x, Core.PhiNode)
-        arg_partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
-                          slot_offset, arg_offset, statement_offset, boundscheck)
+        arg_partially_inline!(
+            x.values,
+            slot_replacements,
+            type_signature,
+            static_param_values,
+            slot_offset,
+            arg_offset,
+            statement_offset,
+            boundscheck,
+        )
         x.edges .+= slot_offset
         return x
     end
     if isa(x, Core.ReturnNode)
-	if !isdefined(x, :val)
-	   return Core.ReturnNode(:nothing)
-	else
-	   return Core.ReturnNode(
-            _arg_partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
-                               slot_offset, arg_offset, statement_offset, boundscheck),
-           )
-	end
+        if !isdefined(x, :val)
+            return Core.ReturnNode(:nothing)
+        else
+            return Core.ReturnNode(
+                _arg_partially_inline!(
+                    x.val,
+                    slot_replacements,
+                    type_signature,
+                    static_param_values,
+                    slot_offset,
+                    arg_offset,
+                    statement_offset,
+                    boundscheck,
+                ),
+            )
+        end
     end
     if isa(x, Core.GotoIfNot)
         return Core.GotoIfNot(
-            _arg_partially_inline!(x.cond, slot_replacements, type_signature, static_param_values,
-                               slot_offset, arg_offset, statement_offset, boundscheck),
+            _arg_partially_inline!(
+                x.cond,
+                slot_replacements,
+                type_signature,
+                static_param_values,
+                slot_offset,
+                arg_offset,
+                statement_offset,
+                boundscheck,
+            ),
             x.dest + statement_offset,
         )
     end
@@ -153,28 +201,59 @@ function _arg_partially_inline!(@nospecialize(x), slot_replacements::Vector{Any}
         elseif head === :cfunction
             @assert !isa(type_signature, UnionAll) || !isempty(spvals)
             if !isa(x.args[2], QuoteNode) # very common no-op
-                x.args[2] = Core.Compiler._partially_inline!(x.args[2], slot_replacements, type_signature,
-                                               static_param_values, slot_offset, arg_offset,
-                                               statement_offset, boundscheck)
+                x.args[2] = Core.Compiler._partially_inline!(
+                    x.args[2],
+                    slot_replacements,
+                    type_signature,
+                    static_param_values,
+                    slot_offset,
+                    arg_offset,
+                    statement_offset,
+                    boundscheck,
+                )
             end
-            x.args[3] = Core.Compiler._instantiate_type_in_env(x.args[3], type_signature, static_param_values)
-            x.args[4] = Core.svec(Any[Core.Compiler._instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[4]]...)
+            x.args[3] = Core.Compiler._instantiate_type_in_env(
+                x.args[3], type_signature, static_param_values
+            )
+            x.args[4] = Core.svec(
+                Any[
+                    Core.Compiler._instantiate_type_in_env(
+                        argt, type_signature, static_param_values
+                    ) for argt in x.args[4]
+                ]...,
+            )
         elseif head === :foreigncall
             @assert !isa(type_signature, UnionAll) || !isempty(static_param_values)
-            for i = 1:length(x.args)
+            for i in 1:length(x.args)
                 if i == 2
-                    x.args[2] = Core.Compiler._instantiate_type_in_env(x.args[2], type_signature, static_param_values)
+                    x.args[2] = Core.Compiler._instantiate_type_in_env(
+                        x.args[2], type_signature, static_param_values
+                    )
                 elseif i == 3
-                    x.args[3] = Core.svec(Any[Core.Compiler._instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[3]]...)
+                    x.args[3] = Core.svec(
+                        Any[
+                            Core.Compiler._instantiate_type_in_env(
+                                argt, type_signature, static_param_values
+                            ) for argt in x.args[3]
+                        ]...,
+                    )
                 elseif i == 4
                     @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt8}})
+                    @assert isa(
+                        (x.args[5]::QuoteNode).value, Union{Symbol,Tuple{Symbol,UInt8}}
+                    )
                 else
-                    x.args[i] = _arg_partially_inline!(x.args[i], slot_replacements,
-                                                   type_signature, static_param_values,
-                                                   slot_offset, statement_offset, arg_offset,
-                                                   boundscheck)
+                    x.args[i] = _arg_partially_inline!(
+                        x.args[i],
+                        slot_replacements,
+                        type_signature,
+                        static_param_values,
+                        slot_offset,
+                        statement_offset,
+                        arg_offset,
+                        boundscheck,
+                    )
                 end
             end
         elseif head === :boundscheck
@@ -186,9 +265,16 @@ function _arg_partially_inline!(@nospecialize(x), slot_replacements::Vector{Any}
                 return true
             end
         elseif head === :gotoifnot
-            x.args[1] = _arg_partially_inline!(x.args[1], slot_replacements, type_signature,
-                                           static_param_values, slot_offset, arg_offset,
-                                           statement_offset, boundscheck)
+            x.args[1] = _arg_partially_inline!(
+                x.args[1],
+                slot_replacements,
+                type_signature,
+                static_param_values,
+                slot_offset,
+                arg_offset,
+                statement_offset,
+                boundscheck,
+            )
             x.args[2] += statement_offset
         elseif head === :isdefined
             arg = x.args[1]
@@ -197,7 +283,7 @@ function _arg_partially_inline!(@nospecialize(x), slot_replacements::Vector{Any}
                 id = arg.id
                 if 1 <= id <= length(slot_replacements)
                     replacement = slot_replacements[id]
-                    if isa(replacement, Union{Core.SlotNumber, GlobalRef, Symbol})
+                    if isa(replacement, Union{Core.SlotNumber,GlobalRef,Symbol})
                         return Expr(:isdefined, replacement)
                     else
                         @assert !isa(replacement, Expr)
@@ -211,17 +297,24 @@ function _arg_partially_inline!(@nospecialize(x), slot_replacements::Vector{Any}
                 end
                 return x
             else
-                @assert isa(arg, Union{GlobalRef, Symbol})
+                @assert isa(arg, Union{GlobalRef,Symbol})
                 return x
             end
         elseif !Core.Compiler.is_meta_expr_head(head)
-            arg_partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
-                              slot_offset, arg_offset, statement_offset, boundscheck)
+            arg_partially_inline!(
+                x.args,
+                slot_replacements,
+                type_signature,
+                static_param_values,
+                slot_offset,
+                arg_offset,
+                statement_offset,
+                boundscheck,
+            )
         end
     end
     return x
 end
-
 
 """
     Reactant.REDUB_ARGUMENTS_NAME
@@ -245,20 +338,24 @@ const OVERDUB_ARGUMENTS_NAME = gensym("overdub_arguments")
 #      replaced with calls to `call_with_reactant`. This allows us to circumvent long standing issues in Julia
 #      using a custom interpreter in type unstable code.
 # `redub_arguments` is `(typeof(original_function), map(typeof, original_args_tuple)...)`
-function call_with_reactant_generator(world::UInt, source::LineNumberNode, self, @nospecialize(redub_arguments))
+function call_with_reactant_generator(
+    world::UInt, source::LineNumberNode, self, @nospecialize(redub_arguments)
+)
     @nospecialize
-    
     args = redub_arguments
 
-    stub = Core.GeneratedFunctionStub(identity, Core.svec(:call_with_reactant, OVERDUB_ARGUMENTS_NAME), Core.svec())
+    stub = Core.GeneratedFunctionStub(
+        identity, Core.svec(:call_with_reactant, OVERDUB_ARGUMENTS_NAME), Core.svec()
+    )
 
     # look up the method match
-    builtin_error = :(throw(AssertionError("Unsupported call_with_reactant of builtin $redub_arguments")))
-    
+    builtin_error = :(throw(
+        AssertionError("Unsupported call_with_reactant of builtin $redub_arguments")
+    ))
+
     if args[1] <: Core.Builtin
         return stub(world, source, builtin_error)
     end
-    
     method_error = :(throw(MethodError(args[1], args[2:end], $world)))
 
     interp = ReactantInterpreter(; world)
@@ -281,7 +378,6 @@ function call_with_reactant_generator(world::UInt, source::LineNumberNode, self,
     end
 
     match = matches[1]::Core.MethodMatch
-    
     # look up the method and code instance
     mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
                (Any, Any, Any), match.method, match.spec_types, match.sparams)
