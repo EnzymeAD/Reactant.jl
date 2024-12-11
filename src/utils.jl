@@ -329,7 +329,7 @@ our argument. Thus we gensym to create it.
 
 This originates from https://github.com/JuliaLabs/Cassette.jl/blob/c29b237c1ec0deda3a1037ec519eebe216952bfe/src/overdub.jl#L154
 """
-const OVERDUB_ARGUMENTS_NAME = gensym("overdub_arguments")
+const REDUB_ARGUMENTS_NAME = gensym("overdub_arguments")
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
@@ -345,7 +345,7 @@ function call_with_reactant_generator(
     args = redub_arguments
 
     stub = Core.GeneratedFunctionStub(
-        identity, Core.svec(:call_with_reactant, OVERDUB_ARGUMENTS_NAME), Core.svec()
+        identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
     )
 
     # look up the method match
@@ -562,7 +562,7 @@ function call_with_reactant_generator(
     return code_info
 end
 
-@eval function call_with_reactant($OVERDUB_ARGUMENTS_NAME...)
+@eval function call_with_reactant($REDUB_ARGUMENTS_NAME...)
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
