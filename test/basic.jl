@@ -147,7 +147,8 @@ end
 
 @testset "ConcreteRArray" begin
     c = Reactant.ConcreteRArray(ones(50, 70))
-    similar(c)
+    sim_c = similar(c)
+    @test typeof(sim_c) == typeof(c) && size(sim_c) == size(sim_c)
 end
 
 @testset "Reactant.@code_hlo" begin

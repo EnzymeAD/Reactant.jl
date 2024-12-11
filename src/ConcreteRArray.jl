@@ -8,6 +8,9 @@ mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     shape::NTuple{N,Int}
 end
 
+const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
+const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}
+
 mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
 end
@@ -74,20 +77,14 @@ function ConcreteRArray(
     )
 end
 
-Base.size(x::ConcreteRArray) = x.shape
-
-function Base.reshape(A::ConcreteRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
-    prod(dims) == prod(size(A)) || Base._throw_dmrsa(dims, prod(size(A)))
-    host = convert(Array{T,N}, A)
-    # HLO reshape semantics collapse the opposite so enforce on Julia Side
-    # until we later make the transpose/reshape/transpose
-    host = reshape(host, dims)
-    client = XLA.client(A.data)
-    device = XLA.device(A.data)
-    buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, host, device), nothing)
-    return ConcreteRArray{T,NT}(buffer, dims)
-    # ConcreteRArray{T, dims, NT}(XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, XLA.to_row_major(host), device), nothing))
+ConcreteRArray(x::AnyConcreteRArray) = ConcreteRArray{eltype(x),ndims(x)}(x)
+ConcreteRArray{T}(x::AnyConcreteRArray) where {T} = ConcreteRArray{T,ndims(x)}(x)
+ConcreteRArray{T,N}(x::ConcreteRArray{T,N}) where {T,N} = x
+function ConcreteRArray{T,N}(x::AnyConcreteRArray) where {T,N}
+    return ConcreteRArray(convert(Array{T,N}, x))
 end
+
+Base.size(x::ConcreteRArray) = x.shape
 
 function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,ElType,N}
     data = Array{ElType,N}(undef, size(X)...) # TODO replace for `similar`?
@@ -99,7 +96,13 @@ function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,El
     return data
     # XLA.from_row_major(data)
 end
-Base.Array(x::ConcreteRArray) = convert(Array, x)
+function Base.convert(
+    ::Type{T}, X::WrappedConcreteRArray{ElType,N}
+) where {T<:Array,ElType,N}
+    fn = compile(materialize_traced_array, (X,))
+    return convert(Array, fn(X))
+end
+Base.Array(x::AnyConcreteRArray) = convert(Array, x)
 
 function synchronize(x::Union{ConcreteRArray,ConcreteRNumber})
     XLA.synced_buffer(x.data)
@@ -165,19 +168,21 @@ for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
     end
 end
 
-function Base.isapprox(x::ConcreteRArray, y::AbstractArray; kwargs...)
+function Base.isapprox(x::AnyConcreteRArray, y::AbstractArray; kwargs...)
     return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
 end
-function Base.isapprox(x::AbstractArray, y::ConcreteRArray; kwargs...)
+function Base.isapprox(x::AbstractArray, y::AnyConcreteRArray; kwargs...)
     return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
 end
-function Base.isapprox(x::ConcreteRArray, y::ConcreteRArray; kwargs...)
+function Base.isapprox(x::AnyConcreteRArray, y::AnyConcreteRArray; kwargs...)
     return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
 end
 
-Base.:(==)(x::ConcreteRArray, y::AbstractArray) = convert(Array, x) == convert(Array, y)
-Base.:(==)(x::AbstractArray, y::ConcreteRArray) = convert(Array, x) == convert(Array, y)
-Base.:(==)(x::ConcreteRArray, y::ConcreteRArray) = convert(Array, x) == convert(Array, y)
+Base.:(==)(x::AnyConcreteRArray, y::AbstractArray) = convert(Array, x) == convert(Array, y)
+Base.:(==)(x::AbstractArray, y::AnyConcreteRArray) = convert(Array, x) == convert(Array, y)
+function Base.:(==)(x::AnyConcreteRArray, y::AnyConcreteRArray)
+    return convert(Array, x) == convert(Array, y)
+end
 
 function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
     if X.data == XLA.AsyncEmptyBuffer
@@ -215,7 +220,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     end
 
     XLA.await(a.data)
-    if XLA.BufferOnCPU(a.data.buffer)
+    if buffer_on_cpu(a)
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -246,7 +251,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     end
 
     XLA.await(a.data)
-    if XLA.BufferOnCPU(a.data.buffer)
+    if buffer_on_cpu(a)
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -264,7 +269,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     end
 
     GPUArraysCore.assertscalar("setindex!(::ConcreteRArray, ::Any, ::Vararg{Int, N})")
-    fn = Reactant.compile(mysetindex!, (a, v, args...))
+    fn = compile(mysetindex!, (a, v, args...))
     fn(a, v, args...)
     return a
 end
@@ -289,15 +294,52 @@ end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}})
-    ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
-    if !Base.isconcretetype(ElType)
-        throw(
-            ErrorException(
-                "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
-            ),
-        )
+    for x in bc.args
+        x isa ConcreteRArray && XLA.await(x.data)
     end
 
-    aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
-    return ConcreteRArray(aux)
+    all_on_cpu = all(buffer_on_cpu, bc.args)
+    if all_on_cpu
+        ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
+        if !Base.isconcretetype(ElType)
+            throw(
+                ErrorException(
+                    "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
+                ),
+            )
+        end
+        aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
+        return ConcreteRArray(aux)
+    end
+
+    fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
+    return fn(bc.args...)
 end
+
+function Base.copyto!(dest::ConcreteRArray, src::ConcreteRArray)
+    dest.data = src.data
+    return dest
+end
+
+function Base.mapreduce(
+    @nospecialize(f),
+    @nospecialize(op),
+    @nospecialize(A::ConcreteRArray{T,N});
+    dims=:,
+    init=nothing,
+) where {T,N}
+    fn = compile(CallMapReduce(f, op, dims, init), (A,))
+    return fn(A)
+end
+
+struct CallMapReduce{Fn,Op,Dims,Init}
+    f::Fn
+    op::Op
+    dims::Dims
+    init::Init
+end
+
+(f::CallMapReduce)(A) = Base.mapreduce(f.f, f.op, A; f.dims, f.init)
+
+buffer_on_cpu(::Any) = true
+buffer_on_cpu(x::ConcreteRArray) = XLA.BufferOnCPU(x.data.buffer)

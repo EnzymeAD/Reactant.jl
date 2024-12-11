@@ -28,7 +28,7 @@ function constant(
 end
 
 function constant(x::ConcreteRArray; kwargs...)
-    return stablehlo.constant(convert(Array, x); kwargs...)
+    return stablehlo.constant(Base.convert(Array, x); kwargs...)
 end
 
 function constant(
@@ -42,7 +42,9 @@ function constant(
     x::ConcreteRNumber{T}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T}
     output = mlir_type(TracedRArray{T,0}, ())
-    value = MLIR.IR.DenseElementsAttribute(fill(MLIR.IR.Attribute(convert(T, x)), output))
+    value = MLIR.IR.DenseElementsAttribute(
+        fill(MLIR.IR.Attribute(Base.convert(T, x)), output)
+    )
     res = MLIR.IR.result(stablehlo.constant(; output, value, location))
     return TracedRNumber{T,N}((), res)
 end
@@ -253,12 +255,14 @@ function reshape(
     dims::Vector{Int};
     location=mlir_stacktrace("reshape", @__FILE__, @__LINE__),
 ) where {T,N}
-    restype = mlir_type(TracedRArray{T,length(dims)}, dims)
-    res = MLIR.IR.result(stablehlo.reshape(x.mlir_data; result_0=restype, location))
-    result = TracedRArray{T,length(dims)}((), res, dims)
+    # HLO reshape semantics collapse the opposite way
+    res1 = transpose(x, Int64[N:-1:1...])
+    restype = mlir_type(TracedRArray{T,length(dims)}, collect(Base.reverse(dims)))
+    res = MLIR.IR.result(stablehlo.reshape(res1.mlir_data; result_0=restype, location))
+    result = TracedRArray{T,length(dims)}((), res, collect(Base.reverse(dims)))
     # NOTE this last `transpose` is required for consistency with Julia's column-major order
     # do not remove, as it will be optimized away by the compiler
-    return transpose(result, [length(dims):-1:1...])
+    return transpose(result, Int64[length(dims):-1:1...])
 end
 
 function get_dimension_size(
@@ -456,10 +460,11 @@ function fft(
         Tout = Complex{T}
         rsize = let rsize = collect(size(x))
             rsize[end] = rsize[end] == 0 ? 0 : rsize[end] ÷ 2 + 1
+            Tuple(rsize)
         end
     elseif type == "IRFFT"
         @assert T <: Complex
-        Tout = real(T)
+        Tout = Base.real(T)
         rsize = let rsize = collect(size(x))
             rsize[(end - Base.length(length) + 1):end] = length
             Tuple(rsize)
@@ -512,7 +517,25 @@ function clamp(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function clamp(min::T, x::TracedRArray{T,N}, max::T) where {T,N}
+function clamp(
+    min::TracedRNumber{T},
+    x::TracedRNumber{T},
+    max::TracedRNumber{T};
+    location=mlir_stacktrace("clamp", @__FILE__, @__LINE__),
+) where {T}
+    res = MLIR.IR.result(
+        stablehlo.clamp(
+            min.mlir_data,
+            x.mlir_data,
+            max.mlir_data;
+            result=mlir_type(TracedRArray{T,0}, ()),
+            location,
+        ),
+    )
+    return TracedRNumber{T}((), res)
+end
+
+function clamp(min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T) where {T,N}
     return clamp(constant(min), x, constant(max))
 end
 
@@ -1031,7 +1054,7 @@ function compare(
     end
 
     res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.compare(
+        stablehlo.compare(
             lhs.mlir_data,
             rhs.mlir_data;
             comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
@@ -1046,4 +1069,158 @@ function compare(
     return TracedRArray{Bool,ndims(lhs)}((), res, size(lhs))
 end
 
+# eltype conversion
+function convert(
+    ::Type{TracedRArray{T,N}},
+    x::TracedRArray;
+    location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert N == ndims(x)
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            stablehlo.convert(
+                x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location
+            ),
+        ),
+        size(x),
+    )
 end
+
+function convert(
+    ::Type{TracedRNumber{T}},
+    x::TracedRNumber;
+    location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
+) where {T}
+    return TracedRNumber{T}(
+        (),
+        MLIR.IR.result(
+            stablehlo.convert(x.mlir_data; result=mlir_type(TracedRNumber{T}), location)
+        ),
+    )
+end
+
+# Generate a unique name given a module hash and a function name.
+function _hlo_call_name(orig_name, module_suffix)
+    return orig_name * "_hlo_call_" * module_suffix
+end
+
+"""
+    Ops.hlo_call(mlir_code::String, args::Vararg{AnyTracedRArray}...; func_name::String="main") -> NTuple{N, AnyTracedRArray}
+
+Given a MLIR module given as a string, calls the function identified by the `func_name` keyword parameter (default "main")
+with the provided arguments and return a tuple for each result of the call.
+
+```julia-repl
+julia> Reactant.@jit(
+          Ops.hlo_call(
+              \"\"\"
+              module {
+                func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                  %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                  return %0 : tensor<3xf32>
+                }
+              }
+              \"\"\",
+              Reactant.to_rarray(Float32[1, 2, 3]),
+              Reactant.to_rarray(Float32[1, 2, 3]),
+          )
+       )
+(ConcreteRArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
+```
+"""
+function hlo_call(
+    code,
+    args...;
+    func_name="main",
+    location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__),
+)
+    module_suffix = string(hash(code); base=16)
+    name_to_call = _hlo_call_name(func_name, module_suffix)
+
+    current_module = MLIR.IR.mmodule()
+    top_level_block = MLIR.IR.body(current_module)
+
+    symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
+
+    fn = MLIR.IR.lookup(
+        MLIR.IR.SymbolTable(MLIR.IR.Operation(current_module)), name_to_call
+    )
+    if isnothing(fn)
+        new_mod = parse(MLIR.IR.Module, code)
+        new_mod_op = MLIR.IR.Operation(new_mod)
+        body = MLIR.IR.body(new_mod)
+
+        operations = collect(MLIR.IR.OperationIterator(body))
+        for op in operations
+            if MLIR.IR.name(op) == "func.func"
+                fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
+                if fn_name == func_name
+                    fn = op
+                end
+
+                new_name = _hlo_call_name(fn_name, module_suffix)
+                res = MLIR.IR.LogicalResult(
+                    MLIR.API.mlirSymbolTableReplaceAllSymbolUses(
+                        fn_name, new_name, new_mod_op
+                    ),
+                )
+                @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
+
+                # Set function private
+                MLIR.IR.attr!(
+                    op,
+                    MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
+                    MLIR.IR.Attribute("private"),
+                )
+
+                # Change function name
+                MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
+            end
+        end
+
+        for op in operations
+            MLIR.IR.rmfromparent!(op)
+            push!(top_level_block, op)
+        end
+    end
+
+    if isnothing(fn)
+        error("hlo_call: could not find function $func_name in the provided module")
+    end
+
+    ftype_attr = MLIR.IR.attr(fn, "function_type")
+    ftype = MLIR.IR.Type(ftype_attr)
+
+    @assert all(Base.Fix2(isa, Reactant.AnyTracedRArray), args) "hlo_call: all inputs to hlo_call should be reactant arrays"
+    @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name"
+
+    for (i, arg) in enumerate(args)
+        expected_type = MLIR.IR.input(ftype, i)
+        arg_type = MLIR.IR.type(arg.mlir_data)
+        @assert expected_type == arg_type "hlo_call: argument #$i has the wrong type (expected $expected_type, got $arg_type)"
+    end
+
+    operands = [a.mlir_data for a in args]
+    call = MLIR.Dialects.func.call(
+        operands;
+        result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
+        callee=MLIR.IR.FlatSymbolRefAttribute(name_to_call),
+        location,
+    )
+
+    return ntuple(MLIR.IR.nresults(call)) do i
+        out = MLIR.IR.result(call, i)
+        ty = MLIR.IR.type(out)
+        sz = MLIR.IR.size(ty)
+        T = MLIR.IR.julia_type(eltype(ty))
+        N = length(sz)
+        if N == 0
+            Reactant.TracedRNumber{T}((), out)
+        else
+            Reactant.TracedRArray{T,N}((), out, sz)
+        end
+    end
+end
+
+end # module Ops
