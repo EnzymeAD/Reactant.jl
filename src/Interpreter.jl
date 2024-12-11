@@ -46,6 +46,18 @@ function set_reactant_abi(
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
     end
 
+    # ensures we are not generating a constant array in the trace
+    # https://github.com/EnzymeAD/Reactant.jl/issues/356
+    if (f === Random.default_rng || f === default_rng) && length(argtypes) == 1
+        arginfo2 = ArgInfo(
+            fargs isa Nothing ? nothing : Any[:($(default_rng_inside_interpreter))],
+            Any[Core.Const(default_rng_inside_interpreter)],
+        )
+        return abstract_call_known(
+            interp, default_rng_inside_interpreter, arginfo2, si, sv, max_methods
+        )
+    end
+
     return Base.@invoke abstract_call_known(
         interp::AbstractInterpreter,
         f::Any,

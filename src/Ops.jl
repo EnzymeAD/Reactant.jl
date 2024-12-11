@@ -4,7 +4,14 @@
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme
-using ..Reactant: Reactant, TracedRArray, TracedRNumber, RArray, RNumber, MissingTracedValue
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    RArray,
+    RNumber,
+    MissingTracedValue,
+    ReactantPrimitive
 
 function mlir_type(x::RArray{T,N}) where {T,N}
     return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
@@ -1022,7 +1029,7 @@ end
     shape;
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
-) where {T<:Integer}
+) where {T<:ReactantPrimitive}
     @assert algorithm in ("DEFAULT", "PHILOX", "THREE_FRY")
     if algorithm == "PHILOX"
         @assert length(seed) ∈ (2, 3)
