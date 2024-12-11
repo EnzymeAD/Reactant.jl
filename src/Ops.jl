@@ -1017,17 +1017,28 @@ end
 
 # random ops
 @noinline function rng_bit_generator(
+    ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
-)
-    output = MLIR.IR.TensorType(TracedRArray{UInt64,1}, shape)
+) where {T<:Integer}
+    @assert algorithm in ("DEFAULT", "PHILOX", "THREE_FRY")
+    if algorithm == "PHILOX"
+        @assert length(seed) ∈ (2, 3)
+    elseif algorithm == "THREE_FRY"
+        @assert length(seed) == 2
+    end
+
+    output = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    output_state = MLIR.IR.TensorType(size(seed), MLIR.IR.Type(UInt64))
     rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
-    op = stablehlo.rng_bit_generator(seed.mlir_data; output, rng_algorithm, location)
+    op = stablehlo.rng_bit_generator(
+        seed.mlir_data; output, output_state, rng_algorithm, location
+    )
     return (;
-        output_state=TracedRArray{UInt64,1}((), MLIR.IR.result(op, 1), MLIR.IR.size(seed)),
-        output=TracedRArray{T,length(shape)}((), MLIR.IR.result(op, 2), shape),
+        output_state=TracedRArray{UInt64,1}((), MLIR.IR.result(op, 1), size(seed)),
+        output=TracedRArray{T,length(shape)}((), MLIR.IR.result(op, 2), Tuple(shape)),
     )
 end
 
