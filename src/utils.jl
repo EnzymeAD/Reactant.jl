@@ -67,6 +67,7 @@ function rewrite_inst(inst, ir)
     end
     if Meta.isexpr(inst, :invoke)
         @show inst
+        flush(stdout)
     #    return false, Expr(:call, inst.args[2:end]...)
     end
     return false, inst
@@ -378,6 +379,7 @@ function StatefulOpaqueClosure(ir::Core.Compiler.IRCode, @nospecialize env...;
     return Base.Experimental.generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; kwargs...)
 end
 
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -593,12 +595,24 @@ function call_with_reactant_generator(
     #)
 
     @show ir
+    ccall(:jl_, Any, (Any,), "ir=")
+    ccall(:jl_, Any, (Any,), ir)
+    flush(stdout)
+
+    rt = Base.Experimental.compute_ir_rettype(ir)
+    lno = LineNumberNode(1, :none)
+    oc = Base.Experimental.generate_opaque_closure(sig::Type, rt::Type, rt::Type, src::Core.Compiler.CodeInfo, Int(method.nargs), method.isva::Bool)
+
+    @show oc
+    ccall(:jl_, Any, (Any,), "oc=")
+    ccall(:jl_, Any, (Any,), oc)
+    flush(stdout)
 
     push!(
         overdubbed_code,
         Expr(
             :(call),
-            StatefulOpaqueClosure(ir; isva=method.isva),
+            oc,
             fn_args...
         ),
     )
@@ -626,6 +640,10 @@ function call_with_reactant_generator(
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
     @show code_info
+    ccall(:jl_, Any, (Any,), "code_info=")
+    ccall(:jl_, Any, (Any,), code_info)
+    flush(stdout)
+
     return code_info
 end
 
