@@ -242,8 +242,8 @@ end
         @test a .* b ≈ @jit f1(a, b)
         @test reshape(kron(Array(b), Array(a)), 4, 4) ≈ @jit f2(a, b)
 
-        x = reshape(a, (2, 2))
-        y = reshape(b, (2, 2))
+        x = ConcreteRArray(reshape(a, (2, 2)))
+        y = ConcreteRArray(reshape(b, (2, 2)))
         @test x .* y ≈ @jit f3(x, y)
         @test Array(x) * Array(y) ≈ @jit f4(x, y)
     end
@@ -521,6 +521,9 @@ end
 @testset "reshape" begin
     x = ConcreteRArray([1, 2, 3, 4])
     @test reshape(Array(x), 2, 2) == @jit Ops.reshape(x, 2, 2)
+
+    x = ConcreteRArray(collect(reshape(1:12, 2, 2, 3)))
+    @test reshape(Array(x), 3, 1, 4) == @jit Ops.reshape(x, 3, 1, 4)
 end
 
 @testset "reverse" begin
