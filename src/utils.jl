@@ -329,7 +329,7 @@ our argument. Thus we gensym to create it.
 
 This originates from https://github.com/JuliaLabs/Cassette.jl/blob/c29b237c1ec0deda3a1037ec519eebe216952bfe/src/overdub.jl#L154
 """
-const REDUB_ARGUMENTS_NAME = gensym("overdub_arguments")
+const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
