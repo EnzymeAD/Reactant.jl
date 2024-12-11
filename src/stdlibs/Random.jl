@@ -21,11 +21,6 @@ end
 
 # XXX: Currently we get an illegal instruction if we don't call Random.default_rng()
 
-# TODO: scalar rand functions should return a TracedRNumber
-
-# TODO: Implement `randexp`
-# TODO: Implement `randexp!`
-
 function Random.rand!(rng::TracedRNG, A::AnyTracedRArray{T,N}) where {T,N}
     length(A) == 0 && return A
     res = Ops.rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
@@ -47,25 +42,39 @@ function Random.randn!(rng::TracedRNG, A::AnyTracedRArray{T,N}) where {T,N}
     return A
 end
 
-function Random.rand(rng::TracedRNG, ::Type{T}, dims::Dims) where {T}
-    return Random.rand!(rng, TracedRArray{T,length(dims)}((), nothing, dims))
-end
-function Random.randn(rng::TracedRNG, ::Type{T}, dims::Dims) where {T}
-    return Random.randn!(rng, TracedRArray{T,length(dims)}((), nothing, dims))
+for randfun in (:rand, :randn)
+    randfun! = Symbol(randfun, :!)
+    @eval begin
+        function Random.$(randfun)(rng::TracedRNG, ::Type{T}, dims::Dims) where {T}
+            return Random.$(randfun!)(rng, TracedRArray{T,length(dims)}((), nothing, dims))
+        end
+
+        function Random.$(randfun)(rng::TracedRNG, dim1::Integer, dims::Integer...)
+            return Random.$(randfun)(rng, Dims((dim1, dims...)))
+        end
+
+        function Random.$(randfun)(
+            rng::TracedRNG, ::Type{T}, dim1::Integer, dims::Integer...
+        ) where {T}
+            return Random.$(randfun)(rng, T, Dims((dim1, dims...)))
+        end
+
+        Random.$(randfun!)(A::AnyTracedRArray) = Random.$(randfun!)(default_rng(), A)
+
+        # scalars
+        function Random.$(randfun)(rng::TracedRNG, ::Type{T} = Float64) where {T}
+            A = promote_to(TracedRArray{T,0}, fill(T(0)))
+            Random.$(randfun!)(rng, A)
+            return A[]
+        end
+    end
 end
 
-function Random.rand(rng::TracedRNG, dim1::Integer, dims::Integer...)
-    return Random.rand(rng, Dims((dim1, dims...)))
-end
-function Random.randn(rng::TracedRNG, dim1::Integer, dims::Integer...)
-    return Random.randn(rng, Dims((dim1, dims...)))
-end
-
-function Random.rand(rng::TracedRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T}
-    return Random.rand(rng, T, Dims((dim1, dims...)))
-end
-function Random.randn(rng::TracedRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T}
-    return Random.randn(rng, T, Dims((dim1, dims...)))
+# resolve ambiguities
+function Random.randn(rng::TracedRNG, T::Random.BitFloatType)
+    A = promote_to(TracedRArray{T,0}, fill(T(0)))
+    Random.randn!(rng, A)
+    return A[]
 end
 
 # # CPU arrays
@@ -79,16 +88,6 @@ end
 #     randn!(rng, B)
 #     copyto!(A, B)
 # end
-
-# # scalars
-# Random.rand(rng::RNG, T::Type=Float32) = Random.rand(rng, T, 1)[]
-# Random.randn(rng::RNG, T::Type=Float32) = Random.randn(rng, T, 1)[]
-
-# # resolve ambiguities
-# Random.randn(rng::RNG, T::Random.BitFloatType) = Random.randn(rng, T, 1)[]
-
-Random.rand!(A::AnyTracedRArray) = Random.rand!(default_rng(), A)
-Random.randn!(A::AnyTracedRArray) = Random.randn!(default_rng(), A)
 
 # TODO: At some later point we might want to implement the sampler API as well since it
 #       makes all RNG implementation work by default. From the post-optimize IR we need to
