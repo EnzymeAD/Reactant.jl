@@ -542,12 +542,8 @@ end
     genInt64(seed) = Ops.rng_bit_generator(Int64, seed, [2, 4])
     genUInt64(seed) = Ops.rng_bit_generator(UInt64, seed, [2, 4])
 
-    @testset for (alg, sz) in [
-        ("DEFAULT", 2),
-        ("PHILOX", 2),
-        ("PHILOX", 3),
-        ("THREE_FRY", 2),
-    ]
+    @testset for (alg, sz) in
+                 [("DEFAULT", 2), ("PHILOX", 2), ("PHILOX", 3), ("THREE_FRY", 2)]
         seed = ConcreteRArray(zeros(UInt64, sz))
 
         res = @jit genInt32(seed)
