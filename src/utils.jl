@@ -66,12 +66,11 @@ function rewrite_inst(inst, ir)
         end
     end
     if Meta.isexpr(inst, :invoke)
-        return false, Expr(:call, inst.args[2:end]...)
+        @show inst
+    #    return false, Expr(:call, inst.args[2:end]...)
     end
     return false, inst
 end
-
-const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
 # From Julia's Base.Meta with fix from https://github.com/JuliaLang/julia/pull/56787
 # and additionally adds support for an argument rewriting into a slot
@@ -331,6 +330,54 @@ This originates from https://github.com/JuliaLabs/Cassette.jl/blob/c29b237c1ec0d
 """
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
+function compute_stateful_oc_signature(ir::Core.Compiler.IRCode, nargs::Int, isva::Bool)
+    argtypes = Vector{Any}(undef, nargs)
+    for i = 1:nargs
+        argtypes[i] = Core.Compiler.widenconst(ir.argtypes[i])
+    end
+    if isva
+        lastarg = pop!(argtypes)
+        if lastarg <: Tuple
+            append!(argtypes, lastarg.parameters)
+        else
+            push!(argtypes, Vararg{Any})
+        end
+    end 
+    return Tuple{argtypes...}
+end 
+
+function StatefulOpaqueClosure(ir::Core.Compiler.IRCode, @nospecialize env...;
+                            isva::Bool = false,
+                            slotnames::Union{Nothing,Vector{Symbol}}=nothing,
+                            kwargs...)
+    # if the user didn't specify a definition MethodInstance or filename Symbol to use for the debuginfo, set a filename now
+    @static if VERSION < v"1.12-"
+    else
+        ir.debuginfo.def === nothing && (ir.debuginfo.def = :var"generated IR for OpaqueClosure")
+    end
+    nargtypes = length(ir.argtypes)
+    nargs = nargtypes
+    sig = compute_stateful_oc_signature(ir, nargs, isva)
+    rt = Base.Experimental.compute_ir_rettype(ir)
+    src = ccall(:jl_new_code_info_uninit, Ref{Core.Compiler.CodeInfo}, ())
+    if slotnames === nothing
+        src.slotnames = fill(:none, nargtypes)
+    else
+        length(slotnames) == nargtypes || error("mismatched `argtypes` and `slotnames`")
+        src.slotnames = slotnames
+    end                          
+    src.slotflags = fill(zero(UInt8), nargtypes)
+    src.slottypes = copy(ir.argtypes)
+    @static if VERSION < v"1.12-"
+    else
+    src.isva = isva
+    src.nargs = UInt(nargtypes)
+    end
+    src = Core.Compiler.ir_to_codeinf!(src, ir)
+    src.rettype = rt
+    return Base.Experimental.generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; kwargs...)
+end
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -534,19 +581,38 @@ function call_with_reactant_generator(
     # substitute static parameters, offset slot numbers by number of added slots, and
     # offset statement indices by the number of additional statements
 
-    arg_partially_inline!(
-        code_info.code,
-        fn_args,
-        method.sig,
-        Any[static_params...],
-        n_prepended_slots,
-        n_prepended_slots,
-        length(overdubbed_code),
-        :propagate,
+    # arg_partially_inline!(
+    #     code_info.code,
+    #     fn_args,
+    #     method.sig,
+    #    Any[static_params...],
+    #    n_prepended_slots,
+    #    n_prepended_slots,
+    #    length(overdubbed_code),
+    #    :propagate,
+    #)
+
+    @show ir
+
+    push!(
+        overdubbed_code,
+        Expr(
+            :(call),
+            StatefulOpaqueClosure(ir; isva=method.isva),
+            fn_args...
+        ),
     )
 
-    append!(overdubbed_code, code_info.code)
-    append!(overdubbed_codelocs, code_info.codelocs)
+    push!(overdubbed_codelocs, code_info.codelocs[1])
+
+    push!(
+        overdubbed_code,
+        Core.ReturnNode(Core.SSAValue(length(overdubbed_code)))
+    )
+    push!(overdubbed_codelocs, code_info.codelocs[1])
+
+    # append!(overdubbed_code, code_info.code)
+    # append!(overdubbed_codelocs, code_info.codelocs)
 
     #=== set `code_info`/`reflection` fields accordingly ===#
 
@@ -559,6 +625,7 @@ function call_with_reactant_generator(
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
+    @show code_info
     return code_info
 end
 
