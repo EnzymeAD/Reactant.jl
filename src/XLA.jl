@@ -8,9 +8,10 @@ mutable struct Client
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
         client = new(client)
-        finalizer(client) do client
-            @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
-        end
+        #TODO: Client are also constructed from MLIR.API.mlir_c.BufferToClient so the pointer cannot be free when Client is cleaned
+        #finalizer(client) do client
+        #    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
+        #end
         return client
     end
 end
