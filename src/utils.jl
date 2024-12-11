@@ -212,12 +212,12 @@ function _arg_partially_inline!(
                     boundscheck,
                 )
             end
-            x.args[3] = Core.Compiler._instantiate_type_in_env(
+            x.args[3] = Base.Meta._instantiate_type_in_env(
                 x.args[3], type_signature, static_param_values
             )
             x.args[4] = Core.svec(
                 Any[
-                    Core.Compiler._instantiate_type_in_env(
+                    Base.Meta._instantiate_type_in_env(
                         argt, type_signature, static_param_values
                     ) for argt in x.args[4]
                 ]...,
@@ -226,13 +226,13 @@ function _arg_partially_inline!(
             @assert !isa(type_signature, UnionAll) || !isempty(static_param_values)
             for i in 1:length(x.args)
                 if i == 2
-                    x.args[2] = Core.Compiler._instantiate_type_in_env(
+                    x.args[2] = Base.Meta._instantiate_type_in_env(
                         x.args[2], type_signature, static_param_values
                     )
                 elseif i == 3
                     x.args[3] = Core.svec(
                         Any[
-                            Core.Compiler._instantiate_type_in_env(
+                            Base.Meta._instantiate_type_in_env(
                                 argt, type_signature, static_param_values
                             ) for argt in x.args[3]
                         ]...,
@@ -438,7 +438,6 @@ function call_with_reactant_generator(
         # to improve compatibility as these bugs are fixed upstream.
 	if !any_changed
 	   src = Core.Compiler.retrieve_code_info(mi, world)
-	   @show "post non change", src
 	end
 
     # prepare a new code info
