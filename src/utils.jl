@@ -442,9 +442,11 @@ function call_with_reactant_generator(
     # on type infered code (that we undo inference of), if there is no type unstable
     # code to be rewritten, just use the default methodinstance (still using our methodtable),
     # to improve compatibility as these bugs are fixed upstream.
-    if !any_changed
-        src = Core.Compiler.retrieve_code_info(mi, world)
-    end
+    # Just kidding we can't do this, since otherwise the inferred code won't guarantee to run
+    # within our interpreter, so we must use our generated IR here.
+    # if !any_changed
+    #     src = Core.Compiler.retrieve_code_info(mi, world)
+    # end
 
     # prepare a new code info
     code_info = copy(src)
