@@ -440,13 +440,28 @@ end
 
 #create expression for more complex expression than a call
 function wrapped_expression(expr::Expr)
-    args = ExpressionExplorer.compute_symbols_state(expr).references
-    args = filter(!is_a_module, args)
-    args = tuple(collect(args)...)
+    css = ExpressionExplorer.compute_symbols_state(expr)
+    tracked_definitions = []
+    tracked_names = []
+    alter_expr = (e::Expr) -> begin
+        for (i, arg) in enumerate(e.args)
+            arg isa Expr && alter_expr(arg)
+            is_tracking_call(arg) || continue
+            name = gensym(:tracked)
+            push!(tracked_definitions, arg)
+            push!(tracked_names, name)
+            e.args[i] = name
+        end
+    end
+    alter_expr(expr)
+
+    free_args = collect(css.references)
+    function_args = tuple([free_args; tracked_definitions]...)
+    args = tuple([free_args; tracked_names]...)
     fname = gensym(:F)
 
     return (
-        Expr(:tuple, args...),
+        Expr(:tuple, function_args...),
         quote
             ($fname)($(args...)) = $expr
         end,
@@ -456,11 +471,18 @@ function wrapped_expression(expr::Expr)
     )
 end
 
+function is_tracking_call(input)
+    Meta.isexpr(input, :call) || return false
+    function_name = (ExpressionExplorer.explore_funcdef!(input, ExpressionExplorer.ScopeState()))[1].parts[end]
+    function_name in [:to_rarray, :ConcreteRNumber]
+end
+
 #check if an expression need to be wrap in a closure
 function need_wrap(expr::Expr)::Bool
     for arg in expr.args
         arg isa Expr || continue
         Meta.isexpr(arg, :.) && continue
+        is_tracking_call(arg) && continue
         return true
     end
     return false
