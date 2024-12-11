@@ -7,7 +7,18 @@ mutable struct TracedRNG <: Random.AbstractRNG
     const algorithm::String
 end
 
-# TODO: Base.seed!
+function Random.seed!(rng::TracedRNG, seed::Number)
+    seed = reinterpret(UInt64, Random.hash_seed(seed))
+    # TODO: Using `seed!` inside tracing should generate a TracedRArray
+    return Random.seed!(rng, ConcreteRArray(seed[1:length(rng.seed)]))
+end
+
+function Random.seed!(
+    rng::TracedRNG, seed::Union{ConcreteRArray{UInt64,1},TracedRArray{UInt64,1}}
+)
+    rng.seed = seed
+    return rng
+end
 
 make_seed() = rand(Random.RandomDevice(), UInt64, 2)
 
@@ -20,6 +31,8 @@ function default_rng_inside_interpreter()
 end
 
 # XXX: Currently we get an illegal instruction if we don't call Random.default_rng()
+
+# XXX: rng_bit_generator doesn't support floating point types
 
 function Random.rand!(rng::TracedRNG, A::AnyTracedRArray{T,N}) where {T,N}
     length(A) == 0 && return A
@@ -62,10 +75,20 @@ for randfun in (:rand, :randn)
         Random.$(randfun!)(A::AnyTracedRArray) = Random.$(randfun!)(default_rng(), A)
 
         # scalars
-        function Random.$(randfun)(rng::TracedRNG, ::Type{T} = Float64) where {T}
+        function Random.$(randfun)(rng::TracedRNG, ::Type{T}=Float64) where {T}
             A = promote_to(TracedRArray{T,0}, fill(T(0)))
             Random.$(randfun!)(rng, A)
             return A[]
+        end
+
+        # Non-Traced RNGs if used will lead to disastrous performance. We attempt to fix
+        # that but with a warning
+        function Random.$(randfun!)(rng::Random.AbstractRNG, A::AnyTracedRArray)
+            @warn "`rng` is not a `TracedRNG`. We will use this to seed the `TracedRNG` \
+                   instead of generating samples from this RNG type." maxlog = 1
+            seed = promote_to(TracedRArray{UInt64,1}, rand(rng, UInt64, 2))
+            trng = TracedRNG(seed, "DEFAULT")
+            return Random.$(randfun!)(trng, A)
         end
     end
 end
@@ -76,18 +99,6 @@ function Random.randn(rng::TracedRNG, T::Random.BitFloatType)
     Random.randn!(rng, A)
     return A[]
 end
-
-# # CPU arrays
-# function Random.rand!(rng::RNG, A::AbstractArray{T}) where {T}
-#     B = CuArray{T}(undef, size(A))
-#     rand!(rng, B)
-#     copyto!(A, B)
-# end
-# function Random.randn!(rng::RNG, A::AbstractArray{T}) where {T}
-#     B = CuArray{T}(undef, size(A))
-#     randn!(rng, B)
-#     copyto!(A, B)
-# end
 
 # TODO: At some later point we might want to implement the sampler API as well since it
 #       makes all RNG implementation work by default. From the post-optimize IR we need to
