@@ -32,8 +32,6 @@ end
 
 # XXX: Currently we get an illegal instruction if we don't call Random.default_rng()
 
-# XXX: rng_bit_generator doesn't support floating point types
-
 function Random.rand!(rng::TracedRNG, A::AnyTracedRArray{T,N}) where {T,N}
     length(A) == 0 && return A
     res = Ops.rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
@@ -60,6 +58,10 @@ for randfun in (:rand, :randn)
     @eval begin
         function Random.$(randfun)(rng::TracedRNG, ::Type{T}, dims::Dims) where {T}
             return Random.$(randfun!)(rng, TracedRArray{T,length(dims)}((), nothing, dims))
+        end
+
+        function Random.$(randfun)(rng::TracedRNG, dims::Dims)
+            return Random.$(randfun)(rng, Float64, dims)
         end
 
         function Random.$(randfun)(rng::TracedRNG, dim1::Integer, dims::Integer...)
