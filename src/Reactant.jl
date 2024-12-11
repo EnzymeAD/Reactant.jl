@@ -3,6 +3,8 @@ module Reactant
 using ReactantCore: ReactantCore, @trace, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
+using Random: Random
+
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
 
@@ -122,7 +124,9 @@ include("TracedRArray.jl")
 
 include("ConcreteRArray.jl")
 
-include("linear_algebra.jl")
+# StdLib Overloads
+include("stdlibs/LinearAlgebra.jl")
+include("stdlibs/Random.jl")
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
