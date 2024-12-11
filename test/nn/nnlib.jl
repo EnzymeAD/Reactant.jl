@@ -393,3 +393,10 @@ end
             NNlib.∇conv_filter(x, dy, conv_dims)
     end
 end
+
+@testset "Upsampling" begin
+    x = randn(Float32, 4, 4, 3, 2)
+    x_ra = Reactant.ConcreteRArray(x)
+
+    @test @jit(NNlib.upsample_nearest(x_ra, (2, 2))) ≈ NNlib.upsample_nearest(x, (2, 2))
+end

@@ -58,6 +58,7 @@ export default defineConfig({
         text: "API",
         items: [
           { text: "Core Reactant API", link: "/api/api" },
+          { text: "Ops", link: "/api/ops" },
           {
             text: "MLIR Dialects",
             items: [
@@ -108,6 +109,7 @@ export default defineConfig({
             text: "Reactant API",
             link: "/api/api",
           },
+          { text: "Ops", link: "/api/ops" },
           {
             text: "MLIR Dialects",
             collapsed: false,

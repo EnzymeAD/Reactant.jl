@@ -28,7 +28,7 @@ function constant(
 end
 
 function constant(x::ConcreteRArray; kwargs...)
-    return stablehlo.constant(convert(Array, x); kwargs...)
+    return stablehlo.constant(Base.convert(Array, x); kwargs...)
 end
 
 function constant(
@@ -42,7 +42,9 @@ function constant(
     x::ConcreteRNumber{T}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T}
     output = mlir_type(TracedRArray{T,0}, ())
-    value = MLIR.IR.DenseElementsAttribute(fill(MLIR.IR.Attribute(convert(T, x)), output))
+    value = MLIR.IR.DenseElementsAttribute(
+        fill(MLIR.IR.Attribute(Base.convert(T, x)), output)
+    )
     res = MLIR.IR.result(stablehlo.constant(; output, value, location))
     return TracedRNumber{T,N}((), res)
 end
@@ -253,12 +255,14 @@ function reshape(
     dims::Vector{Int};
     location=mlir_stacktrace("reshape", @__FILE__, @__LINE__),
 ) where {T,N}
-    restype = mlir_type(TracedRArray{T,length(dims)}, dims)
-    res = MLIR.IR.result(stablehlo.reshape(x.mlir_data; result_0=restype, location))
-    result = TracedRArray{T,length(dims)}((), res, dims)
+    # HLO reshape semantics collapse the opposite way
+    res1 = transpose(x, Int64[N:-1:1...])
+    restype = mlir_type(TracedRArray{T,length(dims)}, collect(Base.reverse(dims)))
+    res = MLIR.IR.result(stablehlo.reshape(res1.mlir_data; result_0=restype, location))
+    result = TracedRArray{T,length(dims)}((), res, collect(Base.reverse(dims)))
     # NOTE this last `transpose` is required for consistency with Julia's column-major order
     # do not remove, as it will be optimized away by the compiler
-    return transpose(result, [length(dims):-1:1...])
+    return transpose(result, Int64[length(dims):-1:1...])
 end
 
 function get_dimension_size(
@@ -456,10 +460,11 @@ function fft(
         Tout = Complex{T}
         rsize = let rsize = collect(size(x))
             rsize[end] = rsize[end] == 0 ? 0 : rsize[end] ÷ 2 + 1
+            Tuple(rsize)
         end
     elseif type == "IRFFT"
         @assert T <: Complex
-        Tout = real(T)
+        Tout = Base.real(T)
         rsize = let rsize = collect(size(x))
             rsize[(end - Base.length(length) + 1):end] = length
             Tuple(rsize)
@@ -512,7 +517,25 @@ function clamp(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function clamp(min::T, x::TracedRArray{T,N}, max::T) where {T,N}
+function clamp(
+    min::TracedRNumber{T},
+    x::TracedRNumber{T},
+    max::TracedRNumber{T};
+    location=mlir_stacktrace("clamp", @__FILE__, @__LINE__),
+) where {T}
+    res = MLIR.IR.result(
+        stablehlo.clamp(
+            min.mlir_data,
+            x.mlir_data,
+            max.mlir_data;
+            result=mlir_type(TracedRArray{T,0}, ()),
+            location,
+        ),
+    )
+    return TracedRNumber{T}((), res)
+end
+
+function clamp(min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T) where {T,N}
     return clamp(constant(min), x, constant(max))
 end
 
@@ -1031,7 +1054,7 @@ function compare(
     end
 
     res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.compare(
+        stablehlo.compare(
             lhs.mlir_data,
             rhs.mlir_data;
             comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
@@ -1044,6 +1067,37 @@ function compare(
     )
     lhs isa TracedRNumber && return TracedRNumber{Bool}((), res)
     return TracedRArray{Bool,ndims(lhs)}((), res, size(lhs))
+end
+
+# eltype conversion
+function convert(
+    ::Type{TracedRArray{T,N}},
+    x::TracedRArray;
+    location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert N == ndims(x)
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            stablehlo.convert(
+                x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location
+            ),
+        ),
+        size(x),
+    )
+end
+
+function convert(
+    ::Type{TracedRNumber{T}},
+    x::TracedRNumber;
+    location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
+) where {T}
+    return TracedRNumber{T}(
+        (),
+        MLIR.IR.result(
+            stablehlo.convert(x.mlir_data; result=mlir_type(TracedRNumber{T}), location)
+        ),
+    )
 end
 
 # Generate a unique name given a module hash and a function name.

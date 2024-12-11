@@ -17,44 +17,63 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
+const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
+const AnyTracedRVector{T} = AnyTracedRArray{T,1}
+const AnyTracedRMatrix{T} = Union{
+    AnyTracedRArray{T,2},LinearAlgebra.Diagonal{T,TracedRArray{T,1}}
+}
+const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
+
+function TracedRArray(data::MLIR.IR.Value)
+    data_type = MLIR.IR.type(data)
+    return TracedRArray{eltype(MLIR.IR.julia_type(data_type)),ndims(data_type)}(
+        (), data, size(data_type)
+    )
+end
+
 ReactantCore.is_traced(::TracedRArray) = true
 
 new_traced_value(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), nothing, size(A))
 
-function TracedRArray{T,N}(rhs::TracedRArray{T0,N}) where {T,T0,N}
-    if T == T0
-        return rhs
-    else
-        return TracedRArray{T,N}(
-            (),
-            MLIR.IR.result(
-                MLIR.Dialects.stablehlo.convert(
-                    rhs.mlir_data; result=mlir_type(TracedRArray{T,N}, size(rhs))
-                ),
-                1,
-            ),
-            size(rhs),
-        )
+function Base.convert(::Type{TracedRArray{T,N}}, x::AbstractArray) where {T,N}
+    @assert ndims(x) == N
+    if x isa TracedRArray
+        eltype(x) == T && return x
+        return Ops.convert(TracedRArray{T,N}, x)
     end
+    x isa WrappedTracedRArray &&
+        return convert(TracedRArray{T,N}, materialize_traced_array(x))
+    return convert(TracedRArray{T,N}, Ops.constant(collect(x)))
 end
 
-function TracedRArray{T,N}(rhs::AbstractArray{T0,N}) where {T0,T,N}
-    attr = MLIR.IR.DenseElementsAttribute(collect(rhs))
-    return TracedRArray{T,N}(
-        TracedRArray{T0,length(size(rhs))}(
-            (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(rhs)
-        ),
-    )
-end
-
-const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
-const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
-const AnyTracedRVector{T} = AnyTracedRArray{T,1}
-const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
-const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
+TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 
 materialize_traced_array(x::TracedRArray) = x
 materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
+function materialize_traced_array(
+    x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}
+) where {T,N}
+    return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
+end
+function materialize_traced_array(
+    x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}
+) where {T,N}
+    px = parent(x)
+    A = ndims(px) == 1 ? reshape(px, :, 1) : px
+    return permutedims(A, (2, 1))
+end
+function materialize_traced_array(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}) where {T,N}
+    return conj(materialize_traced_array(transpose(parent(x))))
+end
+function materialize_traced_array(
+    x::PermutedDimsArray{T,N,perm,iperm,<:TracedRArray{T,N}}
+) where {T,N,perm,iperm}
+    return permutedims(parent(x), perm)
+end
+function materialize_traced_array(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}) where {T}
+    return LinearAlgebra.diagm(parent(x))
+end
 
 get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
@@ -63,12 +82,43 @@ function set_mlir_data!(x::TracedRArray, data)
     x.mlir_data = data
     return x
 end
+function set_mlir_data!(x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}, data) where {T,N}
+    res_mlir_data = Ops.reshape(TracedRArray(data), size(parent(x))...).mlir_data
+    set_mlir_data!(parent(x), res_mlir_data)
+    return x
+end
+function set_mlir_data!(x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}, data) where {T,N}
+    tdata = TracedRArray(data)
+    px = parent(x)
+    px.mlir_data = (
+        if ndims(px) == 1
+            Ops.reshape(tdata, length(tdata))
+        else
+            Ops.transpose(tdata, [2, 1])
+        end
+    ).mlir_data
+    return x
+end
+function set_mlir_data!(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}, data) where {T,N}
+    tdata = TracedRArray(data)
+    px = parent(x)
+    transposed_data =
+        ndims(px) == 1 ? Ops.reshape(tdata, length(tdata)) : Ops.transpose(tdata, [2, 1])
+    px.mlir_data = (T <: Real ? transposed_data : Ops.conj(transposed_data)).mlir_data
+    return x
+end
+function set_mlir_data!(
+    x::PermutedDimsArray{T,N,perm,iperm,TracedRArray{T,N}}, data
+) where {T,N,perm,iperm}
+    parent(x).mlir_data = permutedims(TracedRArray(data), iperm).mlir_data
+    return x
+end
+function set_mlir_data!(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}, data) where {T}
+    parent(x).mlir_data = LinearAlgebra.diag(TracedRArray(data)).mlir_data
+    return x
+end
 function set_mlir_data!(x::AnyTracedRArray, data)
-    data_type = MLIR.IR.type(data)
-    data = TracedRArray{eltype(MLIR.IR.julia_type(data_type)),ndims(data_type)}(
-        (), data, size(data_type)
-    )
-    setindex!(x, data, axes(x)...)
+    setindex!(x, TracedRArray(data), axes(x)...)
     return x
 end
 
@@ -97,7 +147,6 @@ function Base.getindex(
         ),
         1,
     )
-
     return TracedRNumber{T}((), res2)
 end
 
@@ -187,9 +236,7 @@ Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data,
 
 # TODO is there a way to create an unitialized `tensor`? does it show an advantage? maybe `fill`?
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    attr = MLIR.IR.DenseElementsAttribute(zeros(T, dims))
-    res = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
-    return TracedRArray{T,N}((), res, dims)
+    return Ops.constant(zeros(T, dims))
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
@@ -198,116 +245,24 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     # return print(io, X.mlir_data, ")")
 end
 
-function Base.reshape(A::AnyTracedRArray{T,N}, dims::NTuple{NT,Int}) where {T,N,NT}
-    if prod(dims) != prod(size(A))
-        throw(
-            DimensionMismatch(
-                "new shape $(dims) is incompatible with array size $(size(A))"
-            ),
-        )
-    end
-
-    # HLO reshape semantics collapse the opposite way
-    res1 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.transpose(
-            get_mlir_data(A);
-            permutation=MLIR.IR.DenseArrayAttribute([Int64(N - 1 - i) for i in 0:(N - 1)]),
-        ),
-        1,
-    )
-
-    res2 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.reshape(
-            res1;
-            result_0=MLIR.IR.TensorType(
-                [Int64(i) for i in reverse(dims)], eltype(MLIR.IR.type(res1))
-            ),
-        ),
-    )
-
-    res3 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.transpose(
-            res2;
-            permutation=MLIR.IR.DenseArrayAttribute([
-                Int64(NT - 1 - i) for i in 0:(NT - 1)
-            ]),
-        ),
-        1,
-    )
-
-    return TracedRArray{T,NT}((), res3, dims)
-end
-
 function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
-    return TracedRArray{T,N}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.transpose(
-                get_mlir_data(A);
-                permutation=MLIR.IR.DenseArrayAttribute([Int64(i - 1) for i in perm]),
-            ),
-            1,
-        ),
-        Tuple(size(A, i) for i in perm),
-    )
+    return Ops.transpose(materialize_traced_array(A), Int64[perm...])
 end
 
-Base.conj(A::TracedRArray) = A
-function Base.conj(A::TracedRArray{T,N}) where {T<:Complex,N}
-    return TracedRArray{T,N}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.chlo.conj(
-                A.mlir_data; result=mlir_type(TracedRArray{T,N}, size(A))
-            ),
-            1,
-        ),
-        size(A),
-    )
-end
+Base.conj(A::AnyTracedRArray) = A
+Base.conj(A::AnyTracedRArray{<:Complex}) = Ops.conj(materialize_traced_array(A))
 
-Base.conj!(A::TracedRArray) = A
-function Base.conj!(A::TracedRArray{T,N}) where {T<:Complex,N}
-    A.mlir_data = MLIR.IR.result(
-        MLIR.Dialects.chlo.conj(A.mlir_data; result=mlir_type(TracedRArray{T,N}, size(A))),
-        1,
-    )
+Base.conj!(A::AnyTracedRArray) = A
+function Base.conj!(A::AnyTracedRArray{<:Complex})
+    set_mlir_data!(A, Ops.conj(materialize_traced_array(A)).mlir_data)
     return A
 end
 
-Base.real(A::TracedRArray) = A
-function Base.real(A::TracedRArray{Complex{T},N}) where {T,N}
-    return TracedRArray{T,N}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.real(
-                A.mlir_data; result=mlir_type(TracedRArray{T,N}, size(A))
-            ),
-            1,
-        ),
-        size(A),
-    )
-end
+Base.real(A::AnyTracedRArray) = A
+Base.real(A::AnyTracedRArray{<:Complex}) = Ops.real(materialize_traced_array(A))
 
-Base.imag(A::TracedRArray) = zero(A)
-function Base.imag(A::TracedRArray{Complex{T},N}) where {T,N}
-    return TracedRArray{T,N}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.imag(
-                A.mlir_data; result=mlir_type(TracedRArray{T,N}, size(A))
-            ),
-            1,
-        ),
-        size(A),
-    )
-end
-
-function Base.transpose(A::AnyTracedRVecOrMat)
-    A = ndims(A) == 1 ? reshape(A, :, 1) : A
-    return permutedims(A, (2, 1))
-end
-Base.adjoint(A::AnyTracedRVecOrMat) = conj(transpose(A))
+Base.imag(A::AnyTracedRArray) = zero(A)
+Base.imag(A::AnyTracedRArray{<:Complex}) = Ops.imag(materialize_traced_array(A))
 
 promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N} = TracedRArray{T,N}(rhs)
 
@@ -500,13 +455,7 @@ function Base.mapreduce(
     redT = eltype(MLIR.IR.julia_type(MLIR.IR.type(red)))
 
     if dims != (:)
-        red = MLIR.IR.result(
-            MLIR.Dialects.stablehlo.reshape(
-                red; result_0=MLIR.IR.TensorType(toonedims, eltype(MLIR.IR.type(red)))
-            ),
-            1,
-        )
-        red = TracedRArray{redT,length(toonedims)}((), red, (toonedims...,))
+        red = Ops.reshape(TracedRArray(red), toonedims...)
     else
         if length(outdims) == 0
             red = TracedRNumber{redT}((), red)
@@ -550,10 +499,10 @@ function BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
 end
 
 function Base.similar(
-    bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:ReactantPrimitive,N}
     @assert N isa Int
-    return TracedRArray{T,N}((), nothing, map(length, dims))
+    return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
 end
 
 function Base.similar(
@@ -612,27 +561,14 @@ function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T,N}) where {T,
     return dest
 end
 
-function broadcast_to_size(arg::AbstractArray, rsize)
-    attr = MLIR.IR.DenseElementsAttribute(arg)
-    len = ndims(arg)
-    @assert typeof(len) == Int
-    arg = TracedRArray{eltype(arg),len}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), size(arg)
-    )
-    return broadcast_to_size(arg, rsize)
-end
+broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
 
 function broadcast_to_size(arg::Base.RefValue, rsize)
     # XXX: don't we want to expand here to rsize?
     return arg
 end
 
-function broadcast_to_size(arg::T, rsize) where {T<:Number}
-    attr = MLIR.IR.DenseElementsAttribute(Base.fill(arg, Tuple(rsize)))
-    return TracedRArray{T,length(rsize)}(
-        (), MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1), rsize
-    )
-end
+broadcast_to_size(arg::Number, rsize) = Ops.constant(Base.fill(arg, Tuple(rsize)))
 
 function broadcast_to_size(arg::TracedRNumber, rsize)
     length(rsize) == 0 && return arg
@@ -648,7 +584,7 @@ end
 
 function broadcast_to_size(arg::AnyTracedRArray, rsize)
     arg = materialize_traced_array(arg)
-    size(arg) == rsize && return arg
+    size(arg) == Tuple(rsize) && return arg
     return broadcast_to_size_internal(arg, rsize)
 end
 
@@ -785,20 +721,11 @@ function maybe_expand_dims(x::AbstractArray{T,N}, dims) where {T,N}
 end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
-    @eval function Base.clamp!(x::TracedRArray{T}, min::$(minT), max::$(maxT)) where {T}
-        y = clamp.(x, min, max)
-        x.mlir_data = y.mlir_data
+    @eval function Base.clamp!(x::AnyTracedRArray, min::$(minT), max::$(maxT))
+        y = Ops.clamp(min, materialize_traced_array(x), max)
+        set_mlir_data!(x, y.mlir_data)
         return x
     end
-end
-
-Base.all(f::Function, x::TracedRArray) = mapreduce(f, &, x)
-Base.any(f::Function, x::TracedRArray) = mapreduce(f, |, x)
-
-# LinearAlgebra defines norm with some conditionals which cannot be traced directly
-function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
-    isinf(p) && return maximum(abs, x)
-    return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
 end
 
 # outer repeat

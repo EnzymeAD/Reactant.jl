@@ -113,3 +113,32 @@ end
     @jit(tril!(A_ra, -1))
     @test A_ra ≈ tril(A, -1)
 end
+
+@testset "diag / diagm" begin
+    x = rand(2, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @testset for k in (-size(x, 1) + 1):(size(x, 1) - 1)
+        @test @jit(diag(x_ra, k)) ≈ diag(x, k)
+    end
+
+    x = rand(4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(diagm(x_ra)) ≈ diagm(x)
+    @test @jit(diagm(5, 4, x_ra)) ≈ diagm(5, 4, x)
+    @test @jit(diagm(4, 5, x_ra)) ≈ diagm(4, 5, x)
+    @test @jit(diagm(6, 6, x_ra)) ≈ diagm(6, 6, x)
+    @test_throws DimensionMismatch @jit(diagm(3, 3, x_ra))
+end
+
+# TODO: Currently Diagonal(x) * x goes down the generic matmul path but it should clearly be
+#       optimized
+mul_diagonal(x) = Diagonal(x) * x
+
+@testset "mul_diagonal" begin
+    x = rand(4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(mul_diagonal(x_ra)) ≈ mul_diagonal(x)
+end
