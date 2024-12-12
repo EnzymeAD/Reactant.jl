@@ -565,3 +565,18 @@ end
 
     @test @jit(for_ref_outer(x_ra)) ≈ for_ref_outer(x)
 end
+
+function for_inner_scope(x)
+    @trace for i in 1:10
+        s = sum(x)
+        x = x / s
+    end
+    return x
+end
+
+@testset "for: inner scope" begin
+    x = randn(Float64, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(for_inner_scope(x_ra)) ≈ for_inner_scope(x)
+end
