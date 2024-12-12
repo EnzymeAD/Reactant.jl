@@ -105,7 +105,7 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     ) where {T,N}
         shape = Tuple(shape)
         if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == shape
+            @assert size(MLIR.IR.type(mlir_data)) == shape "Expected: $(shape), got: $(size(MLIR.IR.type(mlir_data)))"
         end
         return new{T,N}(paths, mlir_data, shape)
     end

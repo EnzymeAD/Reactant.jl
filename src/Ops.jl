@@ -1473,4 +1473,47 @@ function scatter_setindex(
     )
 end
 
+"""
+    gather_getindex(src, gather_indices)
+
+Uses [`MLIR.Dialects.stablehlo.gather`](@ref) to get the values of `src` at the indices
+specified by `gather_indices`. If the indices are contiguous it is recommended to directly
+use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
+"""
+function gather_getindex(
+    src::TracedRArray{T,N}, gather_indices::TracedRArray{Int64,2}
+) where {T,N}
+    @assert size(gather_indices, 2) == N
+
+    #! format: off
+    dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(1), Int64[1],
+        Int64(N - 1), collect(Int64, 0:(N - 2)),
+        Int64(0), Int64[],
+        Int64(0), Int64[],
+        Int64(N), collect(Int64, 0:(N - 1)),
+        1
+    )
+    #! format: on
+
+    return reshape(
+        TracedRArray{T,2}(
+            (),
+            MLIR.IR.result(
+                MLIR.Dialects.stablehlo.gather(
+                    src.mlir_data,
+                    gather_indices.mlir_data;
+                    dimension_numbers,
+                    slice_sizes=fill(Int64(1), N),
+                    indices_are_sorted=false,
+                ),
+                1,
+            ),
+            (size(gather_indices, 1), 1),
+        ),
+        size(gather_indices, 1),
+    )
+end
+
 end # module Ops
