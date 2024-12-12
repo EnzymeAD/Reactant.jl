@@ -1,2 +1,0 @@
-#!/bin/bash
-/home/wmoses/llvms/llvm16/install/bin/clang -I/usr/include/x86_64-linux-gnu/c++/11 -L/home/wmoses/llvms/llvm16/build/lib/x86_64-unknown-linux-gnu -stdlib=libc++ -v "$@"
