@@ -29,6 +29,47 @@ function var"@reactant_override"(__source__::LineNumberNode, __module__::Module,
     )
 end
 
+function set_reactant_abi(
+    interp,
+    @nospecialize(f),
+    arginfo::ArgInfo,
+    si::StmtInfo,
+    sv::AbsIntState,
+    max_methods::Int=get_max_methods(interp, f, sv),
+)
+    (; fargs, argtypes) = arginfo
+
+    @show "pre", f
+
+    # Improve inference by considering call_with_reactant as having the same results as
+    # the original call
+    if f === Reactant.call_with_reactant
+        arginfo2 = ArgInfo(
+            fargs isa Nothing ? nothing :
+            fargs[2:end],
+            argtypes[2:end],
+        )
+        return abstract_call(
+            interp,
+            arginfo2::ArgInfo,
+            si,
+            sv,
+            max_methods,
+        )
+    end
+
+    @show "post", f
+
+    return Base.@invoke abstract_call_known(
+        interp::AbstractInterpreter,
+        f::Any,
+        arginfo::ArgInfo,
+        si::StmtInfo,
+        sv::AbsIntState,
+        max_methods::Int,
+    )
+end
+
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE
     struct ReactantCacheToken end
 
@@ -40,7 +81,7 @@ end
             true,            #=forward_rules=#
             true,            #=reverse_rules=#
             false,            #=broadcast_rewrite=#
-            nothing,
+            set_reactant_abi,
         )
     end
 else
@@ -56,7 +97,7 @@ else
             true,            #=forward_rules=#
             true,            #=forward_rules=#
             false,            #=broadcast_rewrite=#
-            nothing,
+            set_reactant_abi,
         )
     end
 end

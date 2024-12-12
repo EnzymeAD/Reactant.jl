@@ -779,6 +779,11 @@ function compile(f, args; client=nothing, optimize=true, sync=false)
     return register_thunk(fname, body)
 end
 
+# Compiling within a compile should return simply the original function
+Reactant.@reactant_override function Reactant.Compiler.compile(f, args; client=nothing, optimize=true, sync=false)
+    return f
+end
+
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_body_cache = Dict{Symbol,Expr}()
 

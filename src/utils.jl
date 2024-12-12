@@ -102,6 +102,9 @@ function call_with_reactant_generator(
     args = redub_arguments
 
     @show args
+    ccall(:jl_, Any, (Any,), "world="*string(world))
+    ccall(:jl_, Any, (Any,), "args=")
+    ccall(:jl_, Any, (Any,), args)
     flush(stdout)
 
     stub = Core.GeneratedFunctionStub(
@@ -114,6 +117,7 @@ function call_with_reactant_generator(
     ))
 
     if args[1] <: Core.Builtin
+        ccall(:jl_, Any, (Any,), "builtin-ret")
         return stub(world, source, builtin_error)
     end
     method_error = :(throw(MethodError(args[1], args[2:end], $world)))
@@ -127,6 +131,7 @@ function call_with_reactant_generator(
     end
 
     if lookup_result === nothing || lookup_result === missing
+        ccall(:jl_, Any, (Any,), "no rlookup_result"*string(lookup_result))
         return stub(world, source, method_error)
     end
 
@@ -134,6 +139,8 @@ function call_with_reactant_generator(
 
     # No method could be found (including in our method table), bail with an error
     if length(matches) != 1
+        ccall(:jl_, Any, (Any,), "no matches  "*string(lookup_result))
+        ccall(:jl_, Any, (Any,), "no matches2 "*string(matches))
         return stub(world, source, method_error)
     end
 
@@ -148,14 +155,19 @@ function call_with_reactant_generator(
         match.sparams,
     )
 
+    ccall(:jl_, Any, (Any,), "mi=")
+    ccall(:jl_, Any, (Any,), mi)
+
     result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
     frame = Core.Compiler.InferenceState(result, :local, interp) #=cache_mode=#
+    ccall(:jl_, Any, (Any,), "frame="*string(frame))
     @assert frame !== nothing
     Core.Compiler.typeinf(interp, frame)
     @static if VERSION >= v"1.11"
         # `typeinf` doesn't update the cfg. We need to do it manually.
         frame.cfg = Core.Compiler.compute_basic_blocks(frame.src.code)
     end
+    ccall(:jl_, Any, (Any,), "frameinf="*string(Core.Compiler.is_inferred(frame)))
     @assert Core.Compiler.is_inferred(frame)
 
     method = match.method
@@ -175,6 +187,10 @@ function call_with_reactant_generator(
         ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
+
+
+    ccall(:jl_, Any, (Any,), "first ir=")
+    ccall(:jl_, Any, (Any,), ir)
 
     # Rewrite type unstable calls to recurse into call_with_reactant to ensure
     # they continue to use our interpreter. Reset the derived return type
@@ -196,7 +212,15 @@ function call_with_reactant_generator(
         end
     end
     Core.Compiler.finish(interp, opt, ir, caller)
+
+    ccall(:jl_, Any, (Any,), "post ir=")
+    ccall(:jl_, Any, (Any,), ir)
+
     src = Core.Compiler.ir_to_codeinf!(opt)
+
+
+    ccall(:jl_, Any, (Any,), "post src=")
+    ccall(:jl_, Any, (Any,), src)
 
     # Julia hits various internal errors trying to re-perform type inference
     # on type infered code (that we undo inference of), if there is no type unstable
