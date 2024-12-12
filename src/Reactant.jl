@@ -146,6 +146,8 @@ function Enzyme.make_zero(
     return res
 end
 
+include("IFRT.jl")
+
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
 export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace
 
