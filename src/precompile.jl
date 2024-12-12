@@ -1,9 +1,6 @@
 using PrecompileTools: @setup_workload, @compile_workload
 
 @setup_workload begin
-    #HACK: check_bounds is 1 with Pkg.test (and is heavely broken see #353).
-    #Enable precompilation for normal usage
-    Base.JLOptions().check_bounds == 0 || return nothing
     @compile_workload begin
         Reactant.__init__()
         cpu = XLA.CPUClient()

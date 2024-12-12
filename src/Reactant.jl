@@ -124,6 +124,10 @@ function set_default_backend(backend::String)
     return set_default_backend(XLA.backends[backend])
 end
 
-include("precompile.jl")
+#HACK: check_bounds is 1 with Pkg.test (and is heavely broken see #353).
+#Enable precompilation for normal usage
+@static if Base.JLOptions().check_bounds == 0
+    include("precompile.jl")
+end
 
 end # module
