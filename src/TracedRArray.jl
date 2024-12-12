@@ -728,6 +728,9 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
     end
 end
 
+Base.all(f::Function, x::AnyTracedRArray) = mapreduce(f, &, x)
+Base.any(f::Function, x::AnyTracedRArray) = mapreduce(f, |, x)
+
 # outer repeat
 function Base.repeat(x::AnyTracedRArray{T,N}, counts::Vararg{Int,M}) where {T,N,M}
     P = max(N, M) # potentially padded
