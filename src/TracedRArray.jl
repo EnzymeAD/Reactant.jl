@@ -3,17 +3,19 @@ module TracedRArrayOverrides
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
-import ..TracedRArray
-import ..TracedRNumber
-import ..ReactantPrimitive
-import ..WrappedTracedRArray
-import ..AnyTracedRArray
-using ..TracedUtils
-import ..Ops
-import ..MLIR
-import ..ancestor
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    ReactantPrimitive,
+    WrappedTracedRArray,
+    AnyTracedRArray,
+    Ops,
+    MLIR,
+    ancestor
+using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
+
 using ReactantCore: ReactantCore
-import ..TracedUtils: materialize_traced_array
 using GPUArraysCore: GPUArraysCore
 
 ReactantCore.is_traced(::TracedRArray) = true
@@ -57,7 +59,6 @@ function Base.getindex(a::TracedRArray{T,0}) where {T}
     return TracedRNumber{T}((), a.mlir_data)
 end
 
-# XXX: We want to support https://github.com/EnzymeAD/Reactant.jl/issues/242 eventually
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
         i isa Colon && return 1:size(a, idx)
@@ -65,13 +66,27 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         return i
     end
 
+    non_contiguous_getindex = false
     for idxs in indices
         idxs isa Number && continue
         contiguous = all(isone, diff(idxs))
         # XXX: We want to throw error even for dynamic indexing
-        if typeof(contiguous) <: Bool
-            contiguous || error("non-contiguous indexing is not supported")
+        if typeof(contiguous) <: Bool && !contiguous
+            non_contiguous_getindex = true
+            break
         end
+    end
+
+    if non_contiguous_getindex
+        indices_tuples = collect(Iterators.product(indices...))
+        indices = Matrix{Int}(undef, (length(indices_tuples), 2))
+        for (i, idx) in enumerate(indices_tuples)
+            indices[i, 1] = idx[1] - 1
+            indices[i, 2] = idx[2] - 1
+        end
+        indices = promote_to(TracedRArray{Int,2}, indices)
+        res = Ops.gather_getindex(a, indices)
+        return Ops.reshape(res, size(indices_tuples)...)
     end
 
     start_indices = map(indices) do i
