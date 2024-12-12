@@ -274,58 +274,12 @@ function LinearAlgebra._diagm(
         MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=0), 1),
         (size(scatter_indices, 1),),
     )
-    return simple_scatter_op((m, n), scatter_indices, values)
+    return Ops.scatter_setindex(
+        Ops.constant(fill(zero(T), (m, n))), scatter_indices, values
+    )
 end
 
 # Common Utilities
-## This is quite handy to have but is not generalized enough to be put into Ops? Or maybe
-## we can document it and place it there under a different name. It takes a list of values
-## and a list of indices and constructs a matrix with the values at the indices.
-function simple_scatter_op(
-    shape, scatter_indices::TracedRArray{Int64,2}, updates::TracedRArray{T,1}
-) where {T}
-    @assert length(updates) == size(scatter_indices, 1)
-    @assert size(scatter_indices, 2) == 2
-
-    update_computation = MLIR.IR.Region()
-    block = MLIR.IR.Block(
-        [mlir_type(TracedRNumber{T}), mlir_type(TracedRNumber{T})],
-        [MLIR.IR.Location(), MLIR.IR.Location()],
-    )
-    return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
-    MLIR.IR.rmfromparent!(return_op)
-    push!(block, return_op)
-    pushfirst!(update_computation, block)
-
-    init_array = Ops.constant(fill(zero(T), shape)).mlir_data
-
-    #! format: off
-    scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
-        MLIR.IR.context(),
-        0, Int64[],
-        2, Int64[0, 1],
-        0, Int64[],
-        0, Int64[],
-        2, Int64[0, 1],
-        1
-    )
-    #! format: on
-
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.scatter(
-            [init_array],
-            scatter_indices.mlir_data,
-            [updates.mlir_data];
-            result_0=[mlir_type(TracedRArray{T,2}, shape)],
-            update_computation,
-            scatter_dimension_numbers,
-        ),
-        1,
-    )
-
-    return TracedRArray{T,2}((), res, shape)
-end
-
 ## The cartesian version doesn't exist in julia 1.10
 function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
     idx1, idx2 = 1 + max(0, -k), 1 + max(0, k)
