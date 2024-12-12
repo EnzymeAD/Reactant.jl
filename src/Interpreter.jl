@@ -39,8 +39,6 @@ function set_reactant_abi(
 )
     (; fargs, argtypes) = arginfo
 
-    @show "pre", f
-
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
     if f === Reactant.call_with_reactant
@@ -57,8 +55,6 @@ function set_reactant_abi(
             max_methods,
         )
     end
-
-    @show "post", f
 
     return Base.@invoke abstract_call_known(
         interp::AbstractInterpreter,

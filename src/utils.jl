@@ -68,7 +68,7 @@ function rewrite_inst(inst, ir)
     if Meta.isexpr(inst, :invoke)
     #    return false, Expr(:call, inst.args[2:end]...)
     end
-    return false, inst
+    return falsse, inst
 end
 
 """
@@ -85,19 +85,6 @@ our argument. Thus we gensym to create it.
 This originates from https://github.com/JuliaLabs/Cassette.jl/blob/c29b237c1ec0deda3a1037ec519eebe216952bfe/src/overdub.jl#L154
 """
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
-
-function make_oc(@nospecialize(sig::Type), @nospecialize(rt::Type), @nospecialize(rt2::Type), method::Core.Method)
-    Base.llvmcall(("""
-            declare {} addrspace(10)* @jl_new_opaque_closure_jlcall({} addrspace(10)*, {} addrspace(10)**, i32);
-
-            declare {} addrspace(10)* @julia.call(...)
-
-            define {} addrspace(10)* @f({} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3) {
-               %res = call {} addrspace(10)* (...) @julia.call({} addrspace(10)* ({} addrspace(10)*, {} addrspace(10)**, i32)* @jl_new_opaque_closure_jlcall, {} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3)
-               ret {} addrspace(10)* %res  
-            }
-    """, "f"), Any, Tuple{Any, Any, Any, Any}, sig, rt, rt2, method)
-end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
@@ -141,7 +128,6 @@ function call_with_reactant_generator(
     end
 
     if lookup_result === nothing || lookup_result === missing
-        ccall(:jl_, Any, (Any,), "no rlookup_result"*string(lookup_result))
         return stub(world, source, method_error)
     end
 
@@ -149,8 +135,6 @@ function call_with_reactant_generator(
 
     # No method could be found (including in our method table), bail with an error
     if length(matches) != 1
-        ccall(:jl_, Any, (Any,), "no matches  "*string(lookup_result))
-        ccall(:jl_, Any, (Any,), "no matches2 "*string(matches))
         return stub(world, source, method_error)
     end
 
@@ -165,19 +149,14 @@ function call_with_reactant_generator(
         match.sparams,
     )
 
-    ccall(:jl_, Any, (Any,), "mi=")
-    ccall(:jl_, Any, (Any,), mi)
-
     result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
     frame = Core.Compiler.InferenceState(result, :local, interp) #=cache_mode=#
-    ccall(:jl_, Any, (Any,), "frame="*string(frame))
     @assert frame !== nothing
     Core.Compiler.typeinf(interp, frame)
     @static if VERSION >= v"1.11"
         # `typeinf` doesn't update the cfg. We need to do it manually.
         frame.cfg = Core.Compiler.compute_basic_blocks(frame.src.code)
     end
-    ccall(:jl_, Any, (Any,), "frameinf="*string(Core.Compiler.is_inferred(frame)))
     @assert Core.Compiler.is_inferred(frame)
 
     method = match.method
@@ -197,10 +176,6 @@ function call_with_reactant_generator(
         ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
-
-
-    ccall(:jl_, Any, (Any,), "first ir=")
-    ccall(:jl_, Any, (Any,), ir)
 
     # Rewrite type unstable calls to recurse into call_with_reactant to ensure
     # they continue to use our interpreter. Reset the derived return type
@@ -223,14 +198,7 @@ function call_with_reactant_generator(
     end
     Core.Compiler.finish(interp, opt, ir, caller)
 
-    ccall(:jl_, Any, (Any,), "post ir=")
-    ccall(:jl_, Any, (Any,), ir)
-
     src = Core.Compiler.ir_to_codeinf!(opt)
-
-
-    ccall(:jl_, Any, (Any,), "post src=")
-    ccall(:jl_, Any, (Any,), src)
 
     # Julia hits various internal errors trying to re-perform type inference
     # on type infered code (that we undo inference of), if there is no type unstable
@@ -325,66 +293,36 @@ function call_with_reactant_generator(
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
     end
 
-    # substitute static parameters, offset slot numbers by number of added slots, and
-    # offset statement indices by the number of additional statements
-
-    # arg_partially_inline!(
-    #     code_info.code,
-    #     fn_args,
-    #     method.sig,
-    #    Any[static_params...],
-    #    n_prepended_slots,
-    #    n_prepended_slots,
-    #    length(overdubbed_code),
-    #    :propagate,
-    #)
-
-    ccall(:jl_, Any, (Any,), "ir=")
-    ccall(:jl_, Any, (Any,), ir)
-    flush(stdout)
-
     rt = Base.Experimental.compute_ir_rettype(ir)
-
-    meth = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), Main)
-    meth.sig = sig
-    meth.isva = method.isva
-    meth.is_for_opaque_closure = true
-    meth.name = :opaque_closure
-    meth.nargs = method.nargs
-    meth.file = Symbol("")
-    meth.line = 0 # source
-    ccall(:jl_method_set_source, Cvoid, (Ref{Core.Method}, Ref{Core.Compiler.CodeInfo}), meth, src)
-
-    nmi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any), meth, sig, Core.svec())
-
-    inst2 = Core.Compiler.CodeInstance(
-        nmi::Core.MethodInstance, rt, #=@nospecialize(inferred_const)=#C_NULL,
-        #=@nospecialize(inferred)=#src, #=const_flags=#Int32(0), lookup_result.valid_worlds.min_world, lookup_result.valid_worlds.max_world,
-        #=ipo_effects::UInt32=#UInt32(0), #=effects::UInt32=#UInt32(0), #=@nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#)=#nothing,
-        #=src.relocatability=#UInt8(0))
-
-    ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), nmi, inst2)
-
-    # oc = make_oc(sig, rt, method.isva, meth)
-
-    # oc = Core.OpaqueClosure(sig, rt, rt, method, C_NULL, 0, true) #
-
-    ocargs = Any[Tuple{typeof(Reactant.apply), sig.parameters...}, rt, rt, meth]
-    @show meth.nargs
-    @show length(ocargs[1].parameters)
-    flush(stdout)
-    oc = ccall(:jl_new_opaque_closure_jlcall, Any, (Ptr{Cvoid}, Ptr{Any}, Int32), C_NULL, ocargs, Int32(4))
-
-    ccall(:jl_, Any, (Any,), "oc=")
-    ccall(:jl_, Any, (Any,), oc)
-    flush(stdout)
+    
+    
+    oc = if Base.issingletontype(args[1])
+        ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+        Tuple{sig.parameters[2:end]...}, rt, rt, @__MODULE__, src, 0, nothing, method.nargs-1, method.isva, args[1].instance, true)
+    else
+        push!(overdubbed_code,
+        quote
+            args[1]
+        end
+        )
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        farg = Core.SSAValue(length(overdubbed_code))
+        push!(overdubbed_code,
+        quote
+            ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+            $(Tuple{sig.parameters[2:end]...}), $rt, $rt, $(@__MODULE__), $src, 0, nothing, $(method.nargs-1), $(method.isva), $farg, true)
+        end
+        )
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        Core.SSAValue(length(overdubbed_code))
+    end
 
     push!(
         overdubbed_code,
         Expr(
             :(call),
             oc,
-            fn_args...
+            fn_args[2:end]...
         ),
     )
 
@@ -396,9 +334,6 @@ function call_with_reactant_generator(
     )
     push!(overdubbed_codelocs, code_info.codelocs[1])
 
-    # append!(overdubbed_code, code_info.code)
-    # append!(overdubbed_codelocs, code_info.codelocs)
-
     #=== set `code_info`/`reflection` fields accordingly ===#
 
     if code_info.method_for_inference_limit_heuristics === nothing
@@ -409,10 +344,6 @@ function call_with_reactant_generator(
     code_info.codelocs = overdubbed_codelocs
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
-
-    ccall(:jl_, Any, (Any,), "code_info=")
-    ccall(:jl_, Any, (Any,), code_info)
-    flush(stdout)
 
     return code_info
 end
