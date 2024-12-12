@@ -86,8 +86,17 @@ This originates from https://github.com/JuliaLabs/Cassette.jl/blob/c29b237c1ec0d
 """
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
-@generated function make_oc(sig, rt, isva, method)
-    Expr(:new_opaque_closure, sig, rt, rt, isva, method)
+function make_oc(@nospecialize(sig::Type), @nospecialize(rt::Type), @nospecialize(rt2::Type), method::Core.Method)
+    Base.llvmcall(("""
+            declare {} addrspace(10)* @jl_new_opaque_closure_jlcall({} addrspace(10)*, {} addrspace(10)**, i32);
+
+            declare {} addrspace(10)* @julia.call(...)
+
+            define {} addrspace(10)* @f({} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3) {
+               %res = call {} addrspace(10)* (...) @julia.call({} addrspace(10)* ({} addrspace(10)*, {} addrspace(10)**, i32)* @jl_new_opaque_closure_jlcall, {} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3)
+               ret {} addrspace(10)* %res  
+            }
+    """, "f"), Any, Tuple{Any, Any, Any, Any}, sig, rt, rt2, method)
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -360,29 +369,7 @@ function call_with_reactant_generator(
 
     # oc = Core.OpaqueClosure(sig, rt, rt, method, C_NULL, 0, true) #
 
-    oc = @static if sizeof(Cint) == sizeof(Int64)
-        Base.llvmcall(("""
-        declare {} addrspace(10)* @jl_new_opaque_closure_jlcall({} addrspace(10)*, {} addrspace(10)**, i64);
-
-        declare {} addrspace(10)* @julia.call(...)
-
-        define {} addrspace(10)* @f({} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3) {
-           %res = call {} addrspace(10)* (...) @julia.call({} addrspace(10)* ({} addrspace(10)*, {} addrspace(10)**, i64)* @jl_new_opaque_closure_jlcall, {} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3)
-           ret {} addrspace(10)* %res  
-        }
-            """, "f"), Any, Tuple{Any, Any, Any, Any}, sig, rt, rt, meth)
-    else
-        Base.llvmcall(("""
-        declare {} addrspace(10)* @jl_new_opaque_closure_jlcall({} addrspace(10)*, {} addrspace(10)**, i32);
-
-        declare {} addrspace(10)* @julia.call(...)
-
-        define {} addrspace(10)* @f({} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3) {
-           %res = call {} addrspace(10)* (...) @julia.call({} addrspace(10)* ({} addrspace(10)*, {} addrspace(10)**, i32)* @jl_new_opaque_closure_jlcall, {} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3)
-           ret {} addrspace(10)* %res  
-        }
-            """, "f"), Any, Tuple{Any, Any, Any, Any}, sig, rt, rt, meth)
-    end
+    oc = make_oc(sig, rt, rt, meth)
 
     ccall(:jl_, Any, (Any,), "oc=")
     ccall(:jl_, Any, (Any,), oc)
