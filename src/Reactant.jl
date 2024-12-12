@@ -244,6 +244,9 @@ function set_default_backend(backend::String)
     return set_default_backend(XLA.backends[backend])
 end
 
-include("precompile.jl")
+@static if !haskey(ENV, "REACTANT_TEST_GROUP")
+    @info "enable precompilation" gethostname() Base.active_project()
+    include("precompile.jl")
+end
 
 end # module

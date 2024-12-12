@@ -3,7 +3,8 @@ using PrecompileTools: @setup_workload, @compile_workload
 @setup_workload begin
     @compile_workload begin
         Reactant.__init__()
-        interp = Reactant.ReactantInterpreter()
-        Base.code_ircode(sum, (Reactant.TracedRArray{Float64,2},); interp)
+        cpu = XLA.CPUClient()
+        x = Reactant.ConcreteRArray(randn(Float64, 2, 2); client=cpu)
+        @code_hlo optimize = false sum(x)
     end
 end
