@@ -132,7 +132,22 @@ end
 
 function ReactantCore.traced_call(f, args...)
     # TODO: caching!
-    # TODO: handle multiple returns, what about tuples of tuples?
+    cache_key = make_tracer(
+        OrderedIdDict(),
+        (f, args...),
+        (),
+        CallCache;
+        toscalar=false,
+        track_numbers=(), # TODO: track_numbers?
+    )
+
+    if haskey(Reactant.Compiler.callcache[], cache_key)
+        @info "Cache hit"
+    else
+        Reactant.Compiler.callcache[][cache_key] = nothing
+        @warn Reactant.Compiler.callcache[]
+    end
+
     f_name = String(gensym(Symbol(f)))
     temp = Reactant.make_mlir_fn(
         f,
