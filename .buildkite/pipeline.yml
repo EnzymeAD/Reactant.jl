@@ -40,11 +40,10 @@ steps:
           - JuliaCI/julia#v1:
               version: "1"
         command: |
-          julia --project=benchmark -e 'println("--- :julia: Instantiating project")
-              using Pkg
-              Pkg.develop([PackageSpec(path=pwd()), PackageSpec(path="lib/ReactantCore")])'
-
-          julia --project=benchmark -e 'println("--- :julia: Run Benchmarks")
+          julia --project=benchmark -e '
+              println("--- :julia: Instantiating project");
+              using Pkg; Pkg.update();
+              println("--- :julia: Run Benchmarks");
               include("benchmark/runbenchmarks.jl")'
         artifact_paths:
           - "benchmark/results/*"
@@ -65,17 +64,16 @@ steps:
           - JuliaCI/julia#v1:
               version: "1"
         command: |
-          julia --project=benchmark -e 'println("--- :julia: Instantiating project")
-              using Pkg
-              Pkg.develop([PackageSpec(path=pwd()), PackageSpec(path="lib/ReactantCore")])'
-
-          julia --project=benchmark -e 'println("--- :julia: Run Benchmarks")
+          julia --project=benchmark -e '
+              println("--- :julia: Instantiating project");
+              using Pkg; Pkg.update();
+              println("--- :julia: Run Benchmarks");
               include("benchmark/runbenchmarks.jl")'
         artifact_paths:
           - "benchmark/results/*"
         agents:
-          queue: "benchmark"
-          gpu: "rtx4070"
+          queue: "juliagpu"
+          gpu: "a100"
           cuda: "*"
         env:
           BENCHMARK_GROUP: CUDA
