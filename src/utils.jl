@@ -68,7 +68,7 @@ function rewrite_inst(inst, ir)
     if Meta.isexpr(inst, :invoke)
     #    return false, Expr(:call, inst.args[2:end]...)
     end
-    return falsse, inst
+    return false, inst
 end
 
 """
@@ -99,10 +99,8 @@ function call_with_reactant_generator(
     @nospecialize
     args = redub_arguments
 
-    ccall(:jl_, Any, (Any,), "world="*string(world))
     ccall(:jl_, Any, (Any,), "args=")
     ccall(:jl_, Any, (Any,), args)
-    flush(stdout)
 
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
