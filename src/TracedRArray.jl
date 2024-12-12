@@ -385,10 +385,12 @@ end
 function Base.mapreduce(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(A::TracedRArray{T,N});
+    @nospecialize(A::AnyTracedRArray{T,N});
     dims=:,
     init=nothing,
 ) where {T,N}
+    A = materialize_traced_array(A)
+
     if dims isa Int
         dims = [dims]
     end
