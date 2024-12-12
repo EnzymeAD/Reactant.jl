@@ -195,16 +195,18 @@ function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
     return nothing
 end
 
-function Base.print_array(io::IO, X::ConcreteRArray)
-    if X.data == XLA.AsyncEmptyBuffer
+function Base.print_array(io::IO, X::AnyConcreteRArray)
+    data = ancestor(X).data
+    if data == XLA.AsyncEmptyBuffer
         println(io, "<Empty buffer>")
         return nothing
     end
     return Base.print_array(io, convert(Array, X))
 end
 
-function Base.show(io::IO, X::ConcreteRArray)
-    if X.data == XLA.AsyncEmptyBuffer
+function Base.show(io::IO, X::AnyConcreteRArray)
+    data = ancestor(X).data
+    if data == XLA.AsyncEmptyBuffer
         println(io, "<Empty buffer>")
         return nothing
     end
