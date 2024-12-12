@@ -1,3 +1,129 @@
+# Various Wrapper Arrays defined in LinearAlgebra
+function materialize_traced_array(
+    x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}
+) where {T,N}
+    px = parent(x)
+    A = ndims(px) == 1 ? reshape(px, :, 1) : px
+    return permutedims(A, (2, 1))
+end
+
+function materialize_traced_array(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}) where {T,N}
+    return conj(materialize_traced_array(transpose(parent(x))))
+end
+
+function materialize_traced_array(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}) where {T}
+    return LinearAlgebra.diagm(parent(x))
+end
+
+function materialize_traced_array(
+    x::LinearAlgebra.Tridiagonal{T,TracedRArray{T,1}}
+) where {T}
+    scatter_indices = vcat(
+        diagonal_indices_zero_indexed(size(x, 1), size(x, 2), -1),
+        diagonal_indices_zero_indexed(size(x, 1), size(x, 2), 0),
+        diagonal_indices_zero_indexed(size(x, 1), size(x, 2), 1),
+    )
+    scatter_indices = Ops.constant(scatter_indices)
+
+    updates = TracedRArray{T,1}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.concatenate(
+                [x.dl.mlir_data, x.d.mlir_data, x.du.mlir_data]; dimension=0
+            ),
+            1,
+        ),
+        (size(scatter_indices, 1),),
+    )
+
+    return simple_scatter_op(size(x), scatter_indices, updates)
+end
+
+for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
+    uAT = Symbol(:Unit, AT)
+    @eval begin
+        function materialize_traced_array(
+            x::LinearAlgebra.$(AT){T,TracedRArray{T,2}}
+        ) where {T}
+            m, n = size(x)
+            row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
+            col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
+            indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(comp))
+            return Ops.select(indicator, parent(x), zero(parent(x)))
+        end
+
+        function materialize_traced_array(
+            x::LinearAlgebra.$(uAT){T,TracedRArray{T,2}}
+        ) where {T}
+            m, n = size(x)
+            row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
+            col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
+            nondiag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="NE")
+            x = materialize_traced_array(LinearAlgebra.$(AT)(parent(x)))
+            return Ops.select(nondiag_indicator, x, one.(x))
+        end
+    end
+end
+
+function materialize_traced_array(x::LinearAlgebra.Symmetric{T,TracedRArray{T,2}}) where {T}
+    m, n = size(x)
+    row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
+    col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
+    if x.uplo == 'L'
+        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="GT")
+        x_lt = Ops.select(indicator, parent(x), zero(parent(x)))
+        x_ltd = materialize_traced_array(LinearAlgebra.LowerTriangular(parent(x)))
+        return Ops.add(x_lt, Ops.transpose(x_ltd, [2, 1]))
+    else
+        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="LT")
+        x_ut = Ops.select(indicator, parent(x), zero(parent(x)))
+        x_utd = materialize_traced_array(LinearAlgebra.UpperTriangular(parent(x)))
+        return Ops.add(Ops.transpose(x_utd, [2, 1]), x_ut)
+    end
+end
+
+function set_mlir_data!(x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}, data) where {T,N}
+    tdata = TracedRArray(data)
+    px = parent(x)
+    px.mlir_data = (
+        if ndims(px) == 1
+            Ops.reshape(tdata, length(tdata))
+        else
+            Ops.transpose(tdata, [2, 1])
+        end
+    ).mlir_data
+    return x
+end
+
+function set_mlir_data!(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}, data) where {T,N}
+    tdata = TracedRArray(data)
+    px = parent(x)
+    transposed_data =
+        ndims(px) == 1 ? Ops.reshape(tdata, length(tdata)) : Ops.transpose(tdata, [2, 1])
+    px.mlir_data = (T <: Real ? transposed_data : Ops.conj(transposed_data)).mlir_data
+    return x
+end
+
+function set_mlir_data!(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}, data) where {T}
+    parent(x).mlir_data = LinearAlgebra.diag(TracedRArray(data)).mlir_data
+    return x
+end
+
+# TODO: UnitLowerTriangular
+# TODO: LowerTriangular
+# TODO: UnitUpperTriangular
+# TODO: UpperTriangular
+# TODO: Symmetric
+
+function set_mlir_data!(x::LinearAlgebra.Tridiagonal{T,TracedRArray{T,1}}, data) where {T}
+    tdata = TracedRArray(data)
+    set_mlir_data!(x.dl, LinearAlgebra.diag(tdata, -1).mlir_data)
+    set_mlir_data!(x.d, LinearAlgebra.diag(tdata, 0).mlir_data)
+    set_mlir_data!(x.du, LinearAlgebra.diag(tdata, 1).mlir_data)
+    return x
+end
+
+# Core functions
 function LinearAlgebra.mul!(
     @nospecialize(C::TracedRArray{T,1}),
     @nospecialize(A::AnyTracedRMatrix),
@@ -131,14 +257,76 @@ end
 function LinearAlgebra.diagm(m::Integer, n::Integer, v::AnyTracedRArray{T,1}) where {T}
     m, n = LinearAlgebra.diagm_size((m, n), 0 => v) # size check
 
-    v = materialize_traced_array(v)
-    D = length(v)
-    row_idxs = Ops.iota(Int, [D, D]; iota_dimension=1)
-    col_idxs = Ops.iota(Int, [D, D]; iota_dimension=2)
-    diag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="EQ")
+    indices = Ops.constant(diagonal_indices_zero_indexed(m, n, 0)[1:length(v), :])
+    return simple_scatter_op((m, n), indices, materialize_traced_array(v))
+end
 
-    mat = (v .+ zero(v)') .* diag_indicator
-    return Ops.pad(
-        mat, promote_to(TracedRNumber{T}, 0); high=[m - length(v), n - length(v)]
+# Common Utilities
+simple_update_overwrite(x, y) = y
+
+## This is quite handy to have but is not generalized enough to be put into Ops? Or maybe
+## we can document it and place it there under a different name. It takes a list of values
+## and a list of indices and constructs a matrix with the values at the indices.
+function simple_scatter_op(
+    shape, scatter_indices::TracedRArray{Int64,2}, updates::TracedRArray{T,1}
+) where {T}
+    @assert length(updates) == size(scatter_indices, 1)
+    @assert size(scatter_indices, 2) == 2
+
+    # TODO: Directly use `Ops.hlo_call` for this part
+    (_, update_function) = make_mlir_fn(
+        simple_update_overwrite,
+        (promote_to(TracedRNumber{T}, 0), promote_to(TracedRNumber{T}, 0)),
+        (),
+        string(gensym("update_computation")),
+        false;
+        return_dialect=:stablehlo,
+        no_args_in_result=true,
     )
+    update_computation = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(
+        update_computation, MLIR.API.mlirOperationGetRegion(update_function, 0)
+    )
+    MLIR.IR.rmfromparent!(update_function)
+
+    init_array = Ops.constant(fill(zero(T), shape)).mlir_data
+
+    #! format: off
+    scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
+        MLIR.IR.context(),
+        0, Int64[],
+        2, Int64[0, 1],
+        0, Int64[],
+        0, Int64[],
+        2, Int64[0, 1],
+        1
+    )
+    #! format: on
+
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.scatter(
+            [init_array],
+            scatter_indices.mlir_data,
+            [updates.mlir_data];
+            result_0=[mlir_type(TracedRArray{T,2}, shape)],
+            update_computation,
+            scatter_dimension_numbers,
+        ),
+        1,
+    )
+
+    return TracedRArray{T,2}((), res, shape)
+end
+
+# The cartesian version doesn't exist in julia 1.10
+function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
+    Cstart = CartesianIndex(1 + max(0, -k), 1 + max(0, k))
+    Cstep = CartesianIndex(1, 1)
+    res = StepRangeLen(Cstart, Cstep, max(0, k <= 0 ? min(m + k, n) : min(m, n - k)))
+    indices = Matrix{Int}(undef, (length(res), 2))
+    for (i, idx) in enumerate(res)
+        indices[i, 1] = idx[1] - 1
+        indices[i, 2] = idx[2] - 1
+    end
+    return indices
 end

@@ -57,22 +57,9 @@ function materialize_traced_array(
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 function materialize_traced_array(
-    x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}
-) where {T,N}
-    px = parent(x)
-    A = ndims(px) == 1 ? reshape(px, :, 1) : px
-    return permutedims(A, (2, 1))
-end
-function materialize_traced_array(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}) where {T,N}
-    return conj(materialize_traced_array(transpose(parent(x))))
-end
-function materialize_traced_array(
     x::PermutedDimsArray{T,N,perm,iperm,<:TracedRArray{T,N}}
 ) where {T,N,perm,iperm}
     return permutedims(parent(x), perm)
-end
-function materialize_traced_array(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}) where {T}
-    return LinearAlgebra.diagm(parent(x))
 end
 
 get_mlir_data(x::TracedRArray) = x.mlir_data
@@ -87,34 +74,10 @@ function set_mlir_data!(x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}, data)
     set_mlir_data!(parent(x), res_mlir_data)
     return x
 end
-function set_mlir_data!(x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}, data) where {T,N}
-    tdata = TracedRArray(data)
-    px = parent(x)
-    px.mlir_data = (
-        if ndims(px) == 1
-            Ops.reshape(tdata, length(tdata))
-        else
-            Ops.transpose(tdata, [2, 1])
-        end
-    ).mlir_data
-    return x
-end
-function set_mlir_data!(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}, data) where {T,N}
-    tdata = TracedRArray(data)
-    px = parent(x)
-    transposed_data =
-        ndims(px) == 1 ? Ops.reshape(tdata, length(tdata)) : Ops.transpose(tdata, [2, 1])
-    px.mlir_data = (T <: Real ? transposed_data : Ops.conj(transposed_data)).mlir_data
-    return x
-end
 function set_mlir_data!(
     x::PermutedDimsArray{T,N,perm,iperm,TracedRArray{T,N}}, data
 ) where {T,N,perm,iperm}
     parent(x).mlir_data = permutedims(TracedRArray(data), iperm).mlir_data
-    return x
-end
-function set_mlir_data!(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}, data) where {T}
-    parent(x).mlir_data = LinearAlgebra.diag(TracedRArray(data)).mlir_data
     return x
 end
 function set_mlir_data!(x::AnyTracedRArray, data)
@@ -736,18 +699,18 @@ function Base.repeat(x::AnyTracedRArray{T,N}, counts::Vararg{Int,M}) where {T,N,
 
     # (d1, d2, ..., dP) -> (d1, 1, d2, 1, ..., dP, 1)
     interleaved_size = ones(Int, 2P)
-    interleaved_size[1:2:2N] .= size(x)
+    interleaved_size[1:2:(2N)] .= size(x)
 
     x_interleaved = reshape(x, interleaved_size...)
 
     # (d1, 1, d2, 1, ..., dP, 1) -> (d1, r1, d2, r2, ..., dP, rP)
     broadcast_target_size = interleaved_size
-    broadcast_target_size[2:2:2M] .= counts
+    broadcast_target_size[2:2:(2M)] .= counts
 
     x_broadcasted = broadcast_to_size(x_interleaved, broadcast_target_size)
 
     # (d1, r1, d2, r2, ..., dP, rP) -> (d1*r1, d2*r2, ..., dP*rP)
-    final_size = vec(prod(reshape(broadcast_target_size, 2, :), dims=1))
+    final_size = vec(prod(reshape(broadcast_target_size, 2, :); dims=1))
 
     x_final = reshape(x_broadcasted, final_size...)
 
