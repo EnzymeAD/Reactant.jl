@@ -66,8 +66,6 @@ function rewrite_inst(inst, ir)
         end
     end
     if Meta.isexpr(inst, :invoke)
-        @show inst
-        flush(stdout)
     #    return false, Expr(:call, inst.args[2:end]...)
     end
     return false, inst
@@ -88,6 +86,10 @@ This originates from https://github.com/JuliaLabs/Cassette.jl/blob/c29b237c1ec0d
 """
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
+@generated function make_oc(sig, rt, isva, method)
+    Expr(:new_opaque_closure, sig, rt, rt, isva, method)
+end
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -101,7 +103,6 @@ function call_with_reactant_generator(
     @nospecialize
     args = redub_arguments
 
-    @show args
     ccall(:jl_, Any, (Any,), "world="*string(world))
     ccall(:jl_, Any, (Any,), "args=")
     ccall(:jl_, Any, (Any,), args)
@@ -329,16 +330,60 @@ function call_with_reactant_generator(
     #    :propagate,
     #)
 
-    @show ir
     ccall(:jl_, Any, (Any,), "ir=")
     ccall(:jl_, Any, (Any,), ir)
     flush(stdout)
 
     rt = Base.Experimental.compute_ir_rettype(ir)
-    lno = LineNumberNode(1, :none)
-    oc = Base.Experimental.generate_opaque_closure(sig::Type, rt::Type, rt::Type, src::Core.Compiler.CodeInfo, Int(method.nargs), method.isva::Bool)
 
-    @show oc
+    meth = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), Main)
+    meth.sig = sig
+    meth.isva = method.isva
+    meth.is_for_opaque_closure = true
+    meth.name = :opaque_closure
+    meth.nargs = method.nargs
+    meth.file = Symbol("")
+    meth.line = 0 # source
+    ccall(:jl_method_set_source, Cvoid, (Ref{Core.Method}, Ref{Core.Compiler.CodeInfo}), meth, src)
+
+    nmi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any), meth, sig, Core.svec())
+
+    inst2 = Core.Compiler.CodeInstance(
+        nmi::Core.MethodInstance, rt, #=@nospecialize(inferred_const)=#C_NULL,
+        #=@nospecialize(inferred)=#src, #=const_flags=#Int32(0), lookup_result.valid_worlds.min_world, lookup_result.valid_worlds.max_world,
+        #=ipo_effects::UInt32=#UInt32(0), #=effects::UInt32=#UInt32(0), #=@nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#)=#nothing,
+        #=src.relocatability=#UInt8(0))
+
+    ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), nmi, inst2)
+
+    # oc = make_oc(sig, rt, method.isva, meth)
+
+    # oc = Core.OpaqueClosure(sig, rt, rt, method, C_NULL, 0, true) #
+
+    oc = @static if sizeof(Cint) == sizeof(Int64)
+        Base.llvmcall(("""
+        declare {} addrspace(10)* @jl_new_opaque_closure_jlcall({} addrspace(10)*, {} addrspace(10)**, i64);
+
+        declare {} addrspace(10)* @julia.call(...)
+
+        define {} addrspace(10)* @f({} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3) {
+           %res = call {} addrspace(10)* (...) @julia.call({} addrspace(10)* ({} addrspace(10)*, {} addrspace(10)**, i64)* @jl_new_opaque_closure_jlcall, {} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3)
+           ret {} addrspace(10)* %res  
+        }
+            """, "f"), Any, Tuple{Any, Any, Any, Any}, sig, rt, rt, meth)
+    else
+        Base.llvmcall(("""
+        declare {} addrspace(10)* @jl_new_opaque_closure_jlcall({} addrspace(10)*, {} addrspace(10)**, i32);
+
+        declare {} addrspace(10)* @julia.call(...)
+
+        define {} addrspace(10)* @f({} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3) {
+           %res = call {} addrspace(10)* (...) @julia.call({} addrspace(10)* ({} addrspace(10)*, {} addrspace(10)**, i32)* @jl_new_opaque_closure_jlcall, {} addrspace(10)* %a0, {} addrspace(10)* %a1, {} addrspace(10)* %a2, {} addrspace(10)* %a3)
+           ret {} addrspace(10)* %res  
+        }
+            """, "f"), Any, Tuple{Any, Any, Any, Any}, sig, rt, rt, meth)
+    end
+
     ccall(:jl_, Any, (Any,), "oc=")
     ccall(:jl_, Any, (Any,), oc)
     flush(stdout)
@@ -374,7 +419,6 @@ function call_with_reactant_generator(
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
-    @show code_info
     ccall(:jl_, Any, (Any,), "code_info=")
     ccall(:jl_, Any, (Any,), code_info)
     flush(stdout)
