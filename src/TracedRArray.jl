@@ -122,9 +122,6 @@ function set_mlir_data!(x::AnyTracedRArray, data)
     return x
 end
 
-ancestor(x::TracedRArray) = x
-ancestor(x::WrappedTracedRArray) = ancestor(parent(x))
-
 get_ancestor_indices(::TracedRArray, indices...) = indices
 function get_ancestor_indices(x::WrappedTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
