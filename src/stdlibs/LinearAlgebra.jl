@@ -35,65 +35,25 @@ function materialize_traced_array(
 end
 
 function TracedUtils.materialize_traced_array(x::Tridiagonal{T,TracedRArray{T,1}}) where {T}
-    (_, update_function) = make_mlir_fn(
-        simple_update_overwrite,
-        (promote_to(TracedRNumber{T}, 0), promote_to(TracedRNumber{T}, 0)),
+    scatter_indices = vcat(
+        diagonal_indices_zero_indexed(size(x, 1), size(x, 2), -1),
+        diagonal_indices_zero_indexed(size(x, 1), size(x, 2), 0),
+        diagonal_indices_zero_indexed(size(x, 1), size(x, 2), 1),
+    )
+    scatter_indices = Ops.constant(scatter_indices)
+
+    updates = TracedRArray{T,1}(
         (),
-        string(gensym("update_computation")),
-        false;
-        return_dialect=:stablehlo,
-        no_args_in_result=true,
-    )
-    update_computation = MLIR.IR.Region()
-    MLIR.API.mlirRegionTakeBody(
-        update_computation, MLIR.API.mlirOperationGetRegion(update_function, 0)
-    )
-    MLIR.IR.rmfromparent!(update_function)
-
-    init_array = Ops.constant(fill(zero(T), size(x))).mlir_data
-
-    scatter_indices = Vector{Int64}[]
-    for i in (-1, 0, 1)
-        idxs = diagind(x, i, IndexCartesian())
-        for idx in idxs
-            push!(scatter_indices, Int64[idx[1] - 1, idx[2] - 1])
-        end
-    end
-    scatter_indices =
-        Ops.transpose(Ops.constant(reduce(hcat, scatter_indices)), [2, 1]).mlir_data
-
-    updates = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.concatenate(
-            [x.dl.mlir_data, x.d.mlir_data, x.du.mlir_data]; dimension=0
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.concatenate(
+                [x.dl.mlir_data, x.d.mlir_data, x.du.mlir_data]; dimension=0
+            ),
+            1,
         ),
-        1,
+        (size(scatter_indices, 1),),
     )
 
-    #! format: off
-    scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
-        MLIR.IR.context(),
-        0, Int64[],
-        2, Int64[0, 1],
-        0, Int64[],
-        0, Int64[],
-        2, Int64[0, 1],
-        1
-    )
-    #! format: on
-
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.scatter(
-            [init_array],
-            scatter_indices,
-            [updates];
-            result_0=[mlir_type(TracedRArray{T,2}, size(x))],
-            update_computation,
-            scatter_dimension_numbers,
-        ),
-        1,
-    )
-
-    return TracedRArray{T,2}((), res, size(x))
+    return simple_scatter_op(size(x), scatter_indices, updates)
 end
 
 for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
@@ -320,23 +280,77 @@ function LinearAlgebra.diagm(v::AnyTracedRArray{T,1}) where {T}
     return diagm(length(v), length(v), v)
 end
 function LinearAlgebra.diagm(m::Integer, n::Integer, v::AnyTracedRArray{T,1}) where {T}
-    # TODO: Use scatter for this
     m, n = LinearAlgebra.diagm_size((m, n), 0 => v) # size check
 
-    v = materialize_traced_array(v)
-    D = length(v)
-    row_idxs = Ops.iota(Int, [D, D]; iota_dimension=1)
-    col_idxs = Ops.iota(Int, [D, D]; iota_dimension=2)
-    diag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="EQ")
-
-    mat = (v .+ zero(v)') .* diag_indicator
-    return Ops.pad(
-        mat,
-        TracedUtils.promote_to(TracedRNumber{T}, 0);
-        high=[m - length(v), n - length(v)],
-    )
+    indices = Ops.constant(diagonal_indices_zero_indexed(m, n, 0)[1:length(v), :])
+    return simple_scatter_op((m, n), indices, materialize_traced_array(v))
 end
 
 simple_update_overwrite(x, y) = y
+
+## This is quite handy to have but is not generalized enough to be put into Ops? Or maybe
+## we can document it and place it there under a different name. It takes a list of values
+## and a list of indices and constructs a matrix with the values at the indices.
+function simple_scatter_op(
+    shape, scatter_indices::TracedRArray{Int64,2}, updates::TracedRArray{T,1}
+) where {T}
+    @assert length(updates) == size(scatter_indices, 1)
+    @assert size(scatter_indices, 2) == 2
+
+    # TODO: Directly use `Ops.hlo_call` for this part
+    (_, update_function) = make_mlir_fn(
+        simple_update_overwrite,
+        (promote_to(TracedRNumber{T}, 0), promote_to(TracedRNumber{T}, 0)),
+        false;
+        return_dialect=:stablehlo,
+        no_args_in_result=true,
+    )
+    update_computation = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(
+        update_computation, MLIR.API.mlirOperationGetRegion(update_function, 0)
+    )
+    MLIR.IR.rmfromparent!(update_function)
+
+    init_array = Ops.constant(fill(zero(T), shape)).mlir_data
+
+    #! format: off
+    scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
+        MLIR.IR.context(),
+        0, Int64[],
+        2, Int64[0, 1],
+        0, Int64[],
+        0, Int64[],
+        2, Int64[0, 1],
+        1
+    )
+    #! format: on
+
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.scatter(
+            [init_array],
+            scatter_indices.mlir_data,
+            [updates.mlir_data];
+            result_0=[mlir_type(TracedRArray{T,2}, shape)],
+            update_computation,
+            scatter_dimension_numbers,
+        ),
+        1,
+    )
+
+    return TracedRArray{T,2}((), res, shape)
+end
+
+# The cartesian version doesn't exist in julia 1.10
+function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
+    Cstart = CartesianIndex(1 + max(0, -k), 1 + max(0, k))
+    Cstep = CartesianIndex(1, 1)
+    res = StepRangeLen(Cstart, Cstep, max(0, k <= 0 ? min(m + k, n) : min(m, n - k)))
+    indices = Matrix{Int}(undef, (length(res), 2))
+    for (i, idx) in enumerate(res)
+        indices[i, 1] = idx[1] - 1
+        indices[i, 2] = idx[2] - 1
+    end
+    return indices
+end
 
 end
