@@ -353,8 +353,7 @@ cc_library(
     srcs = glob(
         [
             "*.cpp",
-        ],
-
+        ]
     ) + [
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         "@xla//xla:xla.pb.cc",
@@ -372,15 +371,13 @@ cc_library(
     hdrs = glob([
         "*.h",
     ]),
-    include_prefix = [
-        "/Users/mofeing/.julia/artifacts/6a1f8b0d254a485be750499b732b476ddbee44c5/include/"
-    ],
     copts = [
         "-Werror=unused-variable",
         "-Werror=unused-but-set-variable",
         "-Werror=return-type",
         "-Werror=unused-result",
-        "-Wno-error=stringop-truncation"
+        "-Wno-error=stringop-truncation",
+        # "-I$(location @libcxxwrap_julia//:include)"
     ],
     alwayslink = True,
     linkstatic = True,
@@ -432,6 +429,7 @@ cc_library(
         ]
     }),
     deps = [
+        # "@libcxxwrap_julia",
         "@enzyme//:EnzymeMLIR",
         "@llvm-project//mlir:AffineDialect",
         "@llvm-project//mlir:AllPassesAndDialects",
