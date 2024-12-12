@@ -130,6 +130,53 @@ function ReactantCore.traced_while(
     end
 end
 
+function ReactantCore.traced_call(f, args...)
+    # TODO: caching!
+    cache_key = make_tracer(
+        OrderedIdDict(),
+        (f, args...),
+        (),
+        CallCache;
+        toscalar=false,
+        track_numbers=(), # TODO: track_numbers?
+    )
+
+    if haskey(Reactant.Compiler.callcache[], cache_key)
+        @info "Cache hit"
+    else
+        Reactant.Compiler.callcache[][cache_key] = nothing
+        @warn Reactant.Compiler.callcache[]
+    end
+
+    f_name = String(gensym(Symbol(f)))
+    temp = Reactant.make_mlir_fn(
+        f,
+        args,
+        (),
+        f_name,
+        false;
+        no_args_in_result=true,
+    )
+
+    traced_result, ret, linear_result = temp[[3, 6, 9]]
+    call_op = MLIR.Dialects.func.call(
+        [a.mlir_data for a in args];
+        result_0=[MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)],
+        callee=MLIR.IR.FlatSymbolRefAttribute(f_name),
+    )
+
+    @assert length(linear_result) == MLIR.IR.noperands(ret) "Expected $(MLIR.IR.noperands(ret)) results, got $(length(linear_result))."
+
+    for i in 1:length(linear_result)
+        # mutating the TracedRArrays in linear_result, changes
+        # them in traced_result as well:
+        linear_result[i].mlir_data = MLIR.IR.result(call_op, i)
+        linear_result[i].paths=()
+    end
+
+    return traced_result
+end
+
 function take_region(compiled_fn)
     region = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0))
