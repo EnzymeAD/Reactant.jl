@@ -326,19 +326,15 @@ function simple_scatter_op(
     @assert length(updates) == size(scatter_indices, 1)
     @assert size(scatter_indices, 2) == 2
 
-    # TODO: Directly use `Ops.hlo_call` for this part
-    (_, update_function) = make_mlir_fn(
-        simple_update_overwrite,
-        (promote_to(TracedRNumber{T}, 0), promote_to(TracedRNumber{T}, 0)),
-        false;
-        return_dialect=:stablehlo,
-        no_args_in_result=true,
-    )
     update_computation = MLIR.IR.Region()
-    MLIR.API.mlirRegionTakeBody(
-        update_computation, MLIR.API.mlirOperationGetRegion(update_function, 0)
+    block = MLIR.IR.Block(
+        [mlir_type(TracedRNumber{T}), mlir_type(TracedRNumber{T})],
+        [MLIR.IR.Location(), MLIR.IR.Location()],
     )
-    MLIR.IR.rmfromparent!(update_function)
+    return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
+    MLIR.IR.rmfromparent!(return_op)
+    push!(block, return_op)
+    pushfirst!(update_computation, block)
 
     init_array = Ops.constant(fill(zero(T), shape)).mlir_data
 
