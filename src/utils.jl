@@ -369,7 +369,11 @@ function call_with_reactant_generator(
 
     # oc = Core.OpaqueClosure(sig, rt, rt, method, C_NULL, 0, true) #
 
-    oc = make_oc(sig, rt, rt, meth)
+    ocargs = Any[Tuple{typeof(Reactant.apply), sig.parameters...}, rt, rt, meth]
+    @show meth.nargs
+    @show length(ocargs[1].parameters)
+    flush(stdout)
+    oc = ccall(:jl_new_opaque_closure_jlcall, Any, (Ptr{Cvoid}, Ptr{Any}, Int32), C_NULL, ocargs, Int32(4))
 
     ccall(:jl_, Any, (Any,), "oc=")
     ccall(:jl_, Any, (Any,), oc)
