@@ -134,24 +134,32 @@ function ReactantCore.traced_call(f, args...)
     # TODO: caching!
     # TODO: handle multiple returns, what about tuples of tuples?
     f_name = String(gensym(Symbol(f)))
-    result, ret = Reactant.make_mlir_fn(
+    temp = Reactant.make_mlir_fn(
         f,
         args,
         (),
         f_name,
         false;
         no_args_in_result=true,
-    )[[4, 6]]
-    call_result = MLIR.IR.result(MLIR.Dialects.func.call(
+    )
+
+    traced_result, ret, linear_result = temp[[3, 6, 9]]
+    call_op = MLIR.Dialects.func.call(
         [a.mlir_data for a in args];
         result_0=[MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)],
         callee=MLIR.IR.FlatSymbolRefAttribute(f_name),
-    ))
-    if result isa Tuple
-        error("Multiple return values are not supported yet.")
-    else
-        return typeof(result)((), call_result, result.shape)
+    )
+
+    @assert length(linear_result) == MLIR.IR.noperands(ret) "Expected $(MLIR.IR.noperands(ret)) results, got $(length(linear_result))."
+
+    for i in 1:length(linear_result)
+        # mutating the TracedRArrays in linear_result, changes
+        # them in traced_result as well:
+        linear_result[i].mlir_data = MLIR.IR.result(call_op, i)
+        linear_result[i].paths=()
     end
+
+    return traced_result
 end
 
 function take_region(compiled_fn)
