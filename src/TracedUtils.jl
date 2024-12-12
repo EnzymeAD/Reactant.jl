@@ -3,7 +3,6 @@
 # within compilation. However, it means these functions are a _lot_ faster to compile.
 module TracedUtils
 
-using LinearAlgebra: LinearAlgebra
 using Adapt: Adapt, WrappedReshapedArray
 using ..Reactant:
     Reactant,
@@ -19,33 +18,19 @@ using ..Reactant:
     Ops
 
 materialize_traced_array(x::TracedRArray) = x
+
 materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
+
 function materialize_traced_array(
     x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}
 ) where {T,N,M}
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
-function materialize_traced_array(
-    x::LinearAlgebra.Transpose{TracedRNumber{T},TracedRArray{T,N}}
-) where {T,N}
-    px = parent(x)
-    A = ndims(px) == 1 ? reshape(px, :, 1) : px
-    return permutedims(A, (2, 1))
-end
-function materialize_traced_array(
-    x::LinearAlgebra.Adjoint{TracedRNumber{T},TracedRArray{T,N}}
-) where {T,N}
-    return conj(materialize_traced_array(transpose(parent(x))))
-end
+
 function materialize_traced_array(
     x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}
 ) where {T,N,perm,iperm}
     return permutedims(parent(x), perm)
-end
-function materialize_traced_array(
-    x::LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}}
-) where {T}
-    return LinearAlgebra.diagm(parent(x))
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
@@ -58,6 +43,7 @@ function set_mlir_data!(x::TracedRArray, data)
     x.mlir_data = data
     return x
 end
+
 function set_mlir_data!(
     x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, data
 ) where {T,N,M}
@@ -65,42 +51,14 @@ function set_mlir_data!(
     set_mlir_data!(parent(x), res_mlir_data)
     return x
 end
-function set_mlir_data!(
-    x::LinearAlgebra.Transpose{TracedRNumber{T},TracedRArray{T,N}}, data
-) where {T,N}
-    tdata = TracedRArray(data)
-    px = parent(x)
-    px.mlir_data = (
-        if ndims(px) == 1
-            Ops.reshape(tdata, length(tdata))
-        else
-            Ops.transpose(tdata, [2, 1])
-        end
-    ).mlir_data
-    return x
-end
-function set_mlir_data!(
-    x::LinearAlgebra.Adjoint{TracedRNumber{T},TracedRArray{T,N}}, data
-) where {T,N}
-    tdata = TracedRArray(data)
-    px = parent(x)
-    transposed_data =
-        ndims(px) == 1 ? Ops.reshape(tdata, length(tdata)) : Ops.transpose(tdata, [2, 1])
-    px.mlir_data = (T <: Real ? transposed_data : Ops.conj(transposed_data)).mlir_data
-    return x
-end
+
 function set_mlir_data!(
     x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}, data
 ) where {T,N,perm,iperm}
     parent(x).mlir_data = permutedims(TracedRArray(data), iperm).mlir_data
     return x
 end
-function set_mlir_data!(
-    x::LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}}, data
-) where {T}
-    parent(x).mlir_data = LinearAlgebra.diag(TracedRArray(data)).mlir_data
-    return x
-end
+
 function set_mlir_data!(x::AnyTracedRArray, data)
     setindex!(x, TracedRArray(data), axes(x)...)
     return x
