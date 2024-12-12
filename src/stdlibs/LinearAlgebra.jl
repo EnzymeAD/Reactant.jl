@@ -317,4 +317,69 @@ function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
     return indices
 end
 
+## This is quite handy to have but is not generalized enough to be put into Ops? Or maybe
+## we can document it and place it there under a different name. It takes a list of values
+## and a list of indices and constructs a matrix with the values at the indices.
+function simple_scatter_op(
+    shape, scatter_indices::TracedRArray{Int64,2}, updates::TracedRArray{T,1}
+) where {T}
+    @assert length(updates) == size(scatter_indices, 1)
+    @assert size(scatter_indices, 2) == 2
+
+    # TODO: Directly use `Ops.hlo_call` for this part
+    (_, update_function) = make_mlir_fn(
+        simple_update_overwrite,
+        (promote_to(TracedRNumber{T}, 0), promote_to(TracedRNumber{T}, 0)),
+        false;
+        return_dialect=:stablehlo,
+        no_args_in_result=true,
+    )
+    update_computation = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(
+        update_computation, MLIR.API.mlirOperationGetRegion(update_function, 0)
+    )
+    MLIR.IR.rmfromparent!(update_function)
+
+    init_array = Ops.constant(fill(zero(T), shape)).mlir_data
+
+    #! format: off
+    scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
+        MLIR.IR.context(),
+        0, Int64[],
+        2, Int64[0, 1],
+        0, Int64[],
+        0, Int64[],
+        2, Int64[0, 1],
+        1
+    )
+    #! format: on
+
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.scatter(
+            [init_array],
+            scatter_indices.mlir_data,
+            [updates.mlir_data];
+            result_0=[mlir_type(TracedRArray{T,2}, shape)],
+            update_computation,
+            scatter_dimension_numbers,
+        ),
+        1,
+    )
+
+    return TracedRArray{T,2}((), res, shape)
+end
+
+# The cartesian version doesn't exist in julia 1.10
+function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
+    Cstart = CartesianIndex(1 + max(0, -k), 1 + max(0, k))
+    Cstep = CartesianIndex(1, 1)
+    res = StepRangeLen(Cstart, Cstep, max(0, k <= 0 ? min(m + k, n) : min(m, n - k)))
+    indices = Matrix{Int}(undef, (length(res), 2))
+    for (i, idx) in enumerate(res)
+        indices[i, 1] = idx[1] - 1
+        indices[i, 2] = idx[2] - 1
+    end
+    return indices
+end
+
 end
