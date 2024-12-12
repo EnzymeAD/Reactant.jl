@@ -321,13 +321,17 @@ end
 const cuLaunch = Ref{UInt}(0)
 const cuFunc = Ref{UInt}(0)
 const cuModule = Ref{UInt}(0)
+using Base.ScopedValues
+const callcache = ScopedValue{Dict}()
 
 function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
-        MLIR.IR.block!(MLIR.IR.body(mod)) do
-            return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+        MLIR.IR.block!(MLIR.IR.body(mod)) do            
+            with(callcache=>Dict()) do
+                return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+            end
         end
     end
 
