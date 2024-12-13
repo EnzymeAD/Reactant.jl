@@ -10,7 +10,7 @@ def ygg_cc_toolchain(supports_start_end_lib = False):
     bb_full_target = os.environ["bb_full_target"]
     cpu = os.environ["bb_cpu"]
     toolchain_identifier = "ygg_toolchain"
-    target_system_name = os.environ["bb_target_system_name"]
+    target_system_name = ""
 
     cc_toolchain(
         name = "ygg_target_toolchain",
