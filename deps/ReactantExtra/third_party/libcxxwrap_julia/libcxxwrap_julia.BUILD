@@ -5,7 +5,11 @@ package(default_visibility = ["//visibility:public"])
 
 cc_import(
     name = "libcxxwrap_julia",
-    hdrs = glob(["include/jlcxx/*.hpp"]),
+    hdrs = glob(["include/**/*.hpp"]),
+    includes = ["include"],
     shared_library = "lib/libcxxwrap_julia.dylib",
     visibility = ["//visibility:public"],
+    deps = [
+        "@julia",
+    ],
 )
