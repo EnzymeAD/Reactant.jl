@@ -18,7 +18,7 @@ import ..Reactant:
     append_path,
     ancestor,
     TracedType
-using Base.ScopedValues
+using ScopedValues
 import ReactantCore: enable_tracing
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)

@@ -3,7 +3,7 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools
 
-using Base.ScopedValues
+using ScopedValues
 const enable_tracing = ScopedValue{Bool}(false)
 
 export @trace, MissingTracedValue
