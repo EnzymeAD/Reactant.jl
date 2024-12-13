@@ -1,6 +1,6 @@
 """Loads the libcxxwrap_julia library."""
 
-def libcxxwrap_julia_deps():
+def repo():
     # TODO change this to download the real artifacts or build them from source
     native.new_local_repository(
         name = "libcxxwrap_julia",

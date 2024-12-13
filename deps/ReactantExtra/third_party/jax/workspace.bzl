@@ -12,7 +12,3 @@ def repo():
         patch_args = ["-p1"],
         patches = ["@enzyme_ad//:patches/jax.patch"],
     )
-
-    load("@jax//third_party/xla:workspace.bzl", jax_xla_workspace = "repo")
-
-    jax_xla_workspace()
