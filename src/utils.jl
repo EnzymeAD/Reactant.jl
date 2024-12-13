@@ -357,7 +357,10 @@ function call_with_reactant_generator(
 
     offset = 1
     fn_args = Any[]
-    for i in 1:length(redub_arguments)
+    n_method_args = method.nargs
+    n_actual_args = length(redub_arguments)
+
+    for i in 1:n_actual_args
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
         )
@@ -367,24 +370,61 @@ function call_with_reactant_generator(
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
     end
 
+
+    # If `method` is a varargs method, we have to restructure the original method call's
+    # trailing arguments into a tuple and assign that tuple to the expected argument slot.
+    if false && method.isva
+        if !isempty(overdubbed_code)
+            # remove the final slot reassignment leftover from the previous destructuring
+            pop!(overdubbed_code)
+            pop!(overdubbed_codelocs)
+            pop!(fn_args)
+        end
+        trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
+        for i in n_method_args:n_actual_args
+            push!(
+                overdubbed_code,
+                Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset - 1),
+            )
+            push!(overdubbed_codelocs, code_info.codelocs[1])
+            push!(trailing_arguments.args, Core.SSAValue(length(overdubbed_code)))
+            offset += 1
+        end
+        push!(
+            overdubbed_code, trailing_arguments
+        )
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        push!(fn_args, Core.SSAValue(length(overdubbed_code)))
+    end
+
     rt = Base.Experimental.compute_ir_rettype(ir)
     
+    ocva = method.isva
+
+    @show method
+    @show method.isva, method.sig, mi.specTypes
+    @show method.nargs
+    ocnargs = method.nargs - 1
+    octup = Tuple{mi.specTypes.parameters[2:end]...}
+    @show octup
+    @show mi
+
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
     # inner code during compilation without special handling (i.e. call_in_world_total).
     # Opaque closures also require takign the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
     oc = if Base.issingletontype(args[1])
-        Core._call_in_world_total(world, make_oc, Tuple{sig.parameters[2:end]...}, rt, src, method.nargs - 1, method.isva, args[1].instance)::Core.OpaqueClosure
+        Core._call_in_world_total(world, make_oc, octup, rt, src, ocnargs, ocva, args[1].instance)::Core.OpaqueClosure
     else
         farg = fn_args[1]
         push!(overdubbed_code,
             Expr(:call,
                 make_oc,
-                Tuple{sig.parameters[2:end]...},
+                octup,
                 rt,
                 src,
-                method.nargs-1,
-                method.isva,
+                ocnargs,
+                ocva,
                 farg
                 )
                 )
