@@ -259,30 +259,7 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     #   <unknown>:0: note: see current operation: %0 = "tensor.empty"() : () -> tensor<0xf64>
     length(indices) ≤ 0 && return TracedUtils.promote_to(TracedRArray{T,1}, T[])
 
-    idxs = get_mlir_data(TracedUtils.promote_to(TracedRArray{Int,2}, indices))
-
-    #! format: off
-    dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
-        MLIR.IR.context(),
-        Int64(0), Int64[],
-        Int64(2), Int64[0, 1],
-        Int64(0), Int64[],
-        Int64(0), Int64[],
-        Int64(2), Int64[0, 1],
-        Int64(1)
-    )
-    #! format: on
-
-    slice_sizes = get_mlir_data(
-        Reactant.TracedUtils.promote_to(TracedRArray{Int,1}, [1, 1])
-    )
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dynamic_gather(
-            get_mlir_data(y), idxs, slice_sizes; dimension_numbers
-        ),
-        1,
-    )
-    return TracedRArray{T,1}((), res, (diag_length,))
+    return Ops.gather_getindex(x, promote_to(TracedRArray{Int,2}, indices))
 end
 
 function LinearAlgebra._diagm(
