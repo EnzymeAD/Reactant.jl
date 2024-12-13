@@ -455,6 +455,9 @@ function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == CallCache
+        if !haskey(seen, prev)
+            seen[prev] = prev
+        end
         return MLIR.IR.type(prev.mlir_data)
     end
     if mode == TracedTrack
