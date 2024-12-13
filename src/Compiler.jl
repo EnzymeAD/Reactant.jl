@@ -18,6 +18,8 @@ import ..Reactant:
     append_path,
     ancestor,
     TracedType
+using Base.ScopedValues
+import ReactantCore: enable_tracing
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
@@ -328,8 +330,8 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
-        MLIR.IR.block!(MLIR.IR.body(mod)) do            
-            with(callcache=>Dict()) do
+        MLIR.IR.block!(MLIR.IR.body(mod)) do
+            with(enable_tracing=>true, callcache=>Dict()) do
                 return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
             end
         end
