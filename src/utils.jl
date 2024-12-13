@@ -155,8 +155,6 @@ function call_with_reactant_generator(
     @nospecialize
     args = redub_arguments
 
-    ccall(:jl_, Any, (Any,), string(world)*" args="*string(args))
-
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
     )
@@ -275,9 +273,6 @@ function call_with_reactant_generator(
 
     method = match.method
 
-    ccall(:jl_, Any, (Any,), ("method=")*string(method))
-    ccall(:jl_, Any, (Any,), ("va=")*string(method.isva))
-
     # The original julia code (on 1.11+) has the potential constprop, for now
     # we assume this outermost function does not constprop, for ease.
     #if Core.Compiler.result_is_constabi(interp, frame.result)
@@ -293,8 +288,6 @@ function call_with_reactant_generator(
         ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
-
-    ccall(:jl_, Any, (Any,), ("ir=")*string(ir))
 
     # Rewrite type unstable calls to recurse into call_with_reactant to ensure
     # they continue to use our interpreter. Reset the derived return type
@@ -318,8 +311,6 @@ function call_with_reactant_generator(
     Core.Compiler.finish(interp, opt, ir, caller)
 
     src = Core.Compiler.ir_to_codeinf!(opt)
-
-    ccall(:jl_, Any, (Any,), ("src=")*string(src))
 
     # prepare a new code info
     code_info = copy(src)
@@ -405,14 +396,6 @@ function call_with_reactant_generator(
     # octup = Tuple{method.sig.parameters[2:end]...}
     octup = Tuple{tys[2:end]...}
     ocva = false
-    if false && method.isva && tys[end] == Tuple{}
-        octup = Tuple{tys[2:end-1]...}
-        ocnargs -= 1
-    end
-
-    @show args[1]
-    @show method.isva
-    @show octup, rt, ocnargs, ocva
 
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
     # inner code during compilation without special handling (i.e. call_in_world_total).
@@ -436,8 +419,6 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
         Core.SSAValue(length(overdubbed_code))
     end
-
-    @show Base.issingletontype(args[1]), oc
 
     push!(
         overdubbed_code,
@@ -467,7 +448,6 @@ function call_with_reactant_generator(
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
-    ccall(:jl_, Any, (Any,), "code_info="*string(code_info))
     return code_info
 end
 
@@ -567,9 +547,12 @@ function make_mlir_fn(
             end
         end
 
-        # TODO fix it for kwargs	
-        @show f, traced_args
-        call_with_reactant(f, traced_args...)
+        # TODO fix it for kwargs
+        if concretein
+            call_with_reactant(f, traced_args...)
+        else
+            f(traced_args...)
+        end
     end
 
     seen_results = OrderedIdDict()

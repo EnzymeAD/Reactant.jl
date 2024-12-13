@@ -807,7 +807,6 @@ end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
     @eval function Base.clamp!(x::TracedRArray{T}, min::$(minT), max::$(maxT)) where {T}
-        @show x, min, max
         y = clamp.(x, min, max)
         x.mlir_data = y.mlir_data
         return x

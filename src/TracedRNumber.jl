@@ -290,17 +290,14 @@ Base.log1p(x::TracedRNumber{T}) where {T} = log(x + one(T))
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
     @eval function Base.clamp(x::TracedRNumber{T}, min::$(minT), max::$(maxT)) where {T}
-        ccall(:jl_, Any, (Any,), min)
-        return x
-        #min = promote_to(TracedRNumber{T}, min)
-        #max = promote_to(TracedRNumber{T}, max)
-        #@show min, max
-        #return TracedRNumber{T}(
-        #    (),
-        #    MLIR.IR.result(
-        #        MLIR.Dialects.stablehlo.clamp(min.mlir_data::MLIR.IR.Value, x.mlir_data::MLIR.IR.Value, max.mlir_data::MLIR.IR.Value), 1
-        #    ),
-        #)
+        min = promote_to(TracedRNumber{T}, min)
+        max = promote_to(TracedRNumber{T}, max)
+        return TracedRNumber{T}(
+            (),
+            MLIR.IR.result(
+                MLIR.Dialects.stablehlo.clamp(min.mlir_data::MLIR.IR.Value, x.mlir_data::MLIR.IR.Value, max.mlir_data::MLIR.IR.Value), 1
+            ),
+        )
     end
 end
 
