@@ -360,7 +360,13 @@ function call_with_reactant_generator(
     n_method_args = method.nargs
     n_actual_args = length(redub_arguments)
 
-    for i in 1:n_actual_args
+    tys = []
+    
+    iter_args = n_actual_args
+    if method.isva
+        iter_args = min(n_actual_args, n_method_args-1)
+    end
+    for i in 1:iter_args
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
         )
@@ -368,46 +374,60 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
         offset += 1
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
+        push!(tys, redub_arguments[i])
     end
 
 
     # If `method` is a varargs method, we have to restructure the original method call's
     # trailing arguments into a tuple and assign that tuple to the expected argument slot.
-    if false && method.isva
-        if !isempty(overdubbed_code)
-            # remove the final slot reassignment leftover from the previous destructuring
-            pop!(overdubbed_code)
-            pop!(overdubbed_codelocs)
-            pop!(fn_args)
-        end
+    if method.isva
+        @show "post pop", tys
         trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
         for i in n_method_args:n_actual_args
             push!(
                 overdubbed_code,
-                Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset - 1),
+                Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset),
             )
             push!(overdubbed_codelocs, code_info.codelocs[1])
             push!(trailing_arguments.args, Core.SSAValue(length(overdubbed_code)))
             offset += 1
         end
+
         push!(
             overdubbed_code, trailing_arguments
         )
         push!(overdubbed_codelocs, code_info.codelocs[1])
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
+        push!(tys, Tuple{redub_arguments[n_method_args:n_actual_args]...})
+
+        @show "post redo", tys
+        @show Tuple{redub_arguments[n_method_args:n_actual_args]...}
     end
 
+    @show n_method_args, n_actual_args
     rt = Base.Experimental.compute_ir_rettype(ir)
     
-    ocva = method.isva
+    # ocva = method.isva
+
+    ocva = false # method.isva
 
     @show method
     @show method.isva, method.sig, mi.specTypes
     @show method.nargs
     ocnargs = method.nargs - 1
-    octup = Tuple{mi.specTypes.parameters[2:end]...}
+    # octup = Tuple{mi.specTypes.parameters[2:end]...}
+    # octup = Tuple{method.sig.parameters[2:end]...}
+    octup = Tuple{tys[2:end]...}
+    ocva = false
     @show octup
     @show mi
+
+    if false && method.isva && tys[end] == Tuple{}
+        octup = Tuple{tys[2:end-1]...}
+        ocnargs -= 1
+    end
+
+    @show "final", ocva, ocnargs, octup
 
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
     # inner code during compilation without special handling (i.e. call_in_world_total).
