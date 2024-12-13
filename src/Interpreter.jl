@@ -189,17 +189,7 @@ function push_acts!(ad_inputs, x::BatchDuplicated, path, reverse)
         predims = size(x.val)
         cval = MLIR.IR.result(
             MLIR.Dialects.stablehlo.concatenate(
-                [
-                    MLIR.IR.result(
-                        MLIR.Dialects.stablehlo.reshape(
-                            v.mlir_data;
-                            result_0=MLIR.IR.TensorType(
-                                Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))
-                            ),
-                        ),
-                    ) for v in x.dval
-                ];
-                dimension=Int64(0),
+                [Ops.reshape(v, Int64[1, predims...]) for v in x.dval]; dimension=Int64(0)
             ),
         )
         tval = TracedRArray{ET,length(predims) + 1}((), cval, (length(x.dval), predims...))
@@ -214,17 +204,7 @@ function push_acts!(ad_inputs, x::BatchDuplicatedNoNeed, path, reverse)
         predims = size(x.val)
         cval = MLIR.IR.result(
             MLIR.Dialects.stablehlo.concatenate(
-                [
-                    MLIR.IR.result(
-                        MLIR.Dialects.stablehlo.reshape(
-                            v.mlir_data;
-                            result_0=MLIR.IR.TensorType(
-                                Int64[1, predims...], eltype(MLIR.IR.type(v.mlir_data))
-                            ),
-                        ),
-                    ) for v in x.dval
-                ];
-                dimension=Int64(0),
+                [Ops.reshape(v, Int64[1, predims...]) for v in x.dval]; dimension=Int64(0)
             ),
         )
         tval = TracedRArray{ET,length(predims) + 1}((), cval, (length(x.dval), predims...))
@@ -458,22 +438,12 @@ function overload_autodiff(
                     for i in 1:width
                         sz = size(a)
                         starts = Int64[i]
-                        strides = Int64[1]
                         limits = Int64[i]
                         for v in sz
                             push!(starts, 0)
                             push!(limits, v)
-                            push!(strides, 1)
                         end
-                        sval = MLIR.IR.result(
-                            MLIR.Dialects.stablehlo.slice(
-                                sval;
-                                start_indices=starts,
-                                limit_indices=limits,
-                                stride_indices=strides,
-                            ),
-                            1,
-                        )
+                        sval = Ops.slice(sval, starts, limits)
                         set!(dresult[i], path[2:end], sval)
                     end
                 end
