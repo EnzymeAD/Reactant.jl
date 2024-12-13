@@ -93,11 +93,9 @@ end
 
 
 @inline function lookup_world(@nospecialize(sig::Type), world::UInt, mt::Union{Nothing,Core.MethodTable}, min_world::Ref{UInt}, max_world::Ref{UInt})
-    ccall(:jl_, Any, (Any,), "pre mt "*string(world)*" mnw="*string(min_world)*" mxw"*string(max_world))
     res = ccall(:jl_gf_invoke_lookup_worlds, Any,
                   (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
                   sig, mt, world, min_world, max_world)
-    ccall(:jl_, Any, (Any,), "post mt "*string(world)*" mnw="*string(min_world)* " mxw"*string(max_world))
     return res
 end
 
@@ -178,8 +176,6 @@ function call_with_reactant_generator(
 
     lookup_result = lookup_world(sig, world, Core.Compiler.method_table(interp), min_world, max_world)
     
-    ccall(:jl_, Any, (Any,), string(lookup_result)*" sig="*string(sig)*" mw="*string(min_world)*" "*string(max_world)*" "*string(Base.get_world_counter()))
-
     overdubbed_code = Any[]
     overdubbed_codelocs = Int32[]
 
