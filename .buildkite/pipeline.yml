@@ -35,7 +35,7 @@ steps:
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 60
 
-      - label: "${ARCH?} - Julia v{{matrix.version}} -- {{matrix.group}}"
+      - label: ":julia: :linux: aarch64 - Julia v{{matrix.version}} -- {{matrix.group}}"
         matrix:
           setup:
             version:
