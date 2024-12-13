@@ -1,6 +1,6 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
-load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
+load("//:toolchain/yggdrasil.bzl", "ygg_cc_toolchain")
 licenses(["notice"])
 
 package(
