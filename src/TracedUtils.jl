@@ -46,7 +46,7 @@ function set_mlir_data!(x::TracedRArray, data)
 end
 
 function set_mlir_data!(x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}, data) where {T,N}
-    res_mlir_data = Ops.reshape(TracedRArray(data), size(parent(x))...).mlir_data
+    res_mlir_data = Ops.reshape(TracedRArray{T}(data), size(parent(x))...).mlir_data
     set_mlir_data!(parent(x), res_mlir_data)
     return x
 end
@@ -54,12 +54,12 @@ end
 function set_mlir_data!(
     x::PermutedDimsArray{T,N,perm,iperm,TracedRArray{T,N}}, data
 ) where {T,N,perm,iperm}
-    parent(x).mlir_data = permutedims(TracedRArray(data), iperm).mlir_data
+    parent(x).mlir_data = permutedims(TracedRArray{T}(data), iperm).mlir_data
     return x
 end
 
 function set_mlir_data!(x::AnyTracedRArray, data)
-    setindex!(x, TracedRArray(data), axes(x)...)
+    setindex!(x, TracedRArray{T}(data), axes(x)...)
     return x
 end
 
