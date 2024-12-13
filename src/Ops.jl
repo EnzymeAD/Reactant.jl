@@ -914,67 +914,28 @@ end
 #     return TracedRArray{T,N}((), res, size(x))
 # end
 
-function sort(
-    x::TracedRArray{T,N};
-    comparator::Function,
-    dimension=1,
-    is_stable=false,
-    location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
-) where {T,N}
-    #C4:
-    @assert 0 < dimension <= ndims(x) "$x invalid dimension"
-
-    #C5:
-    method = Base.methods(
-        comparator, (Reactant.TracedRArray{T,N}, Reactant.TracedRArray{T,N})
-    )
-    @assert size(method, 1) != 0 error("$comparator is not a valid comparator")
-    @assert size(method, 1) == 1 error("$comparator ambiguous candidates")
-    #TODO: move to @trace
-    (a, b) = (ConcreteRNumber(T(0)), ConcreteRNumber(T(0)))
-    func = Reactant.make_mlir_fn(comparator, (a, b), (), "main"; no_args_in_result=true)[2]
-
-    fn_name = String(
-        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
-    )
-    @assert fn_name == "main" "$comparator: no function generated"
-    @assert MLIR.IR.nregions(func) == 1
-    ftype_attr = MLIR.IR.attr(func, "function_type")
-    ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
-        "$comparator return type is not tensor<i1>"
-    )
-
-    #TODO: move takebody to utils?
-    comparator = MLIR.IR.Region()
-    MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
-    MLIR.IR.rmfromparent!(func)
-    global leaked = comparator
-    for block in MLIR.IR.BlockIterator(comparator)
-        return_op = MLIR.IR.terminator(block)
-        MLIR.IR.name(return_op) == "func.return" || continue
-        operands = [MLIR.IR.operand(return_op, i) for i in 1:MLIR.IR.noperands(return_op)]
-        MLIR.IR.block!(block) do
-            MLIR.Dialects.stablehlo.return_(operands; location=MLIR.IR.location(return_op))
-            MLIR.IR.rmfromparent!(return_op)
-        end
-    end
-
-    dimension = MLIR.IR.Attribute(dimension - 1)
-    is_stable = MLIR.IR.Attribute(is_stable)
-
-    res = MLIR.IR.result(
-        stablehlo.sort(
-            [x.mlir_data];
-            result_0=[mlir_type(TracedRArray{T,N}, size(x))],
-            dimension,
-            is_stable,
-            comparator,
-            location,
-        ),
-    )
-    return TracedRArray{T,N}((), res, size(x))
-end
+# sorting ops
+# TODO need to trace over `comparator`
+# function sort(
+#     x::TracedRArray{T,N};
+#     comparator,
+#     dimension=-1,
+#     is_stable=false,
+#     location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
+# ) where {T,N}
+#     dimension = MLIR.IR.Attribute(dimension)
+#     is_stable = MLIR.IR.Attribute(is_stable)
+#     res = MLIR.IR.result(
+#         stablehlo.sort(
+#             x.mlir_data;
+#             result=mlir_type(TracedRArray{T,N}, size(x)),
+#             dimension,
+#             is_stable,
+#             location,
+#         ),
+#     )
+#     return TracedRArray{T,N}((), res, size(x))
+# end
 
 function top_k(
     x::TracedRArray{T,N}, k; location=mlir_stacktrace("top_k", @__FILE__, @__LINE__)
