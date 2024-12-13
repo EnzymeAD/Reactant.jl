@@ -131,37 +131,22 @@ function ReactantCore.traced_while(
 end
 
 function ReactantCore.traced_call(f, args...)
-    # TODO: caching!
-    cache_key = make_tracer(
-        Reactant.OrderedIdDict(),
-        (f, args...),
+    seen_cache = Reactant.OrderedIdDict()
+    cache_key = (f, make_tracer(
+        seen_cache,
+        args,
         (),
         CallCache;
         toscalar=false,
         track_numbers=(), # TODO: track_numbers?
-    )
+    ))
+    linear_args = Reactant.MLIR.IR.Value[]
+    for (k, v) in seen_cache
+        v isa TracedType || continue
+        push!(linear_args, v.mlir_data)
+    end
 
     if haskey(Reactant.Compiler.callcache[], cache_key)
-        # Determine `linear_args`, the vector containing `MLIR.IR.Value`s
-        # to be passed to the function:
-        N = length(args)
-        seen_args = Reactant.OrderedIdDict()
-        traced_args = ntuple(N) do i
-            return make_tracer(
-                seen_args,
-                args[i],
-                (),
-                TracedTrack;
-                toscalar=false,
-                track_numbers=(),
-            )
-        end
-        linear_args = Reactant.MLIR.IR.Value[]
-        for (k, v) in seen_args
-            v isa TracedType || continue
-            push!(linear_args, v.mlir_data)
-        end
-
         # cache lookup:
         (; f_name, mlir_result_types, traced_result) = Reactant.Compiler.callcache[][cache_key]
     else
@@ -173,11 +158,10 @@ function ReactantCore.traced_call(f, args...)
             f_name,
             false;
             no_args_in_result=true,
+            do_transpose=false,
         )
-        traced_result, ret, linear_args = temp[[3, 6, 7]]
-        linear_args = MLIR.IR.Value[v.mlir_data for v in linear_args]
+        traced_result, ret = temp[[3, 6]]
         mlir_result_types = [MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)]
-
         Reactant.Compiler.callcache[][cache_key] = (; f_name, mlir_result_types, traced_result)
     end
 
@@ -191,7 +175,7 @@ function ReactantCore.traced_call(f, args...)
     traced_result = make_tracer(
         seen_results,
         traced_result,
-        (),
+        nothing, # we have to insert something here, but we remove it immediately below.
         TracedSetPath;
         toscalar=false,
         track_numbers=(),
@@ -201,6 +185,8 @@ function ReactantCore.traced_call(f, args...)
         v isa TracedType || continue
         # this mutates `traced_result`, which is what we want:
         v.mlir_data = MLIR.IR.result(call_op, i)
+        # make tracer inserted `nothing` into the path, here we remove it:
+        v.paths = v.paths[1:end-1]
         i += 1
     end
 
