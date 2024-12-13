@@ -86,6 +86,64 @@ This originates from https://github.com/JuliaLabs/Cassette.jl/blob/c29b237c1ec0d
 """
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
+function throw_method_error(argtys)
+    throw(MethodError(argtys[1], argtys[2:end]))
+end
+
+
+
+@inline function lookup_world(@nospecialize(sig::Type), world::UInt, mt::Union{Nothing,Core.MethodTable}, min_world::Ref{UInt}, max_world::Ref{UInt})
+    ccall(:jl_, Any, (Any,), "pre mt "*string(world)*" mnw="*string(min_world)*" mxw"*string(max_world))
+    res = ccall(:jl_gf_invoke_lookup_worlds, Any,
+                  (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
+                  sig, mt, world, min_world, max_world)
+    ccall(:jl_, Any, (Any,), "post mt "*string(world)*" mnw="*string(min_world)* " mxw"*string(max_world))
+    return res
+end
+
+@inline function lookup_world(@nospecialize(sig::Type), world::UInt, mt::Core.Compiler.InternalMethodTable, min_world::Ref{UInt}, max_world::Ref{UInt})
+    @show "pre imt", world, min_world, max_world
+    res = lookup_world(sig, mt.world, nothing, min_world, max_world)
+    @show "imt", res, world, min_world, max_world
+    return res
+end
+
+@inline function lookup_world(@nospecialize(sig::Type), world::UInt, mt::Core.Compiler.OverlayMethodTable, min_world::Ref{UInt}, max_world::Ref{UInt})
+    res = lookup_world(sig, mt.world, mt.mt, min_world, max_world)
+    if res !== nothing
+        return res
+    else
+        return lookup_world(sig, mt.world, nothing, min_world, max_world)
+    end
+end
+
+
+# HACK: in all versions of Julia, `jl_new_opaque_closure_from_code_info` doesn't take a world argument
+#       but instead always generates code for the current world. note that this doesn't
+#       actually change the world age, but just spoofs the counter `jl_create_native` reads.
+# XXX: Base.get_world_counter is supposed to be monotonically increasing and is runtime global.
+macro in_world(world, ex)
+    quote
+        actual_world = Base.get_world_counter()
+        world_counter = cglobal(:jl_world_counter, Csize_t)
+        unsafe_store!(world_counter, $(esc(world)))
+        try
+            $(esc(ex))
+        finally
+            unsafe_store!(world_counter, actual_world)
+        end
+    end
+end
+
+#define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
+
+
+function make_oc(sig, rt, src, nargs, isva, f)::Core.OpaqueClosure
+    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+        sig, rt, rt, @__MODULE__, src, 0, nothing, nargs, isva, f, true)::Core.OpaqueClosure
+end
+
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -99,8 +157,7 @@ function call_with_reactant_generator(
     @nospecialize
     args = redub_arguments
 
-    ccall(:jl_, Any, (Any,), "args=")
-    ccall(:jl_, Any, (Any,), args)
+    ccall(:jl_, Any, (Any,), string(world)*" args="*string(args))
 
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
@@ -112,31 +169,96 @@ function call_with_reactant_generator(
     ))
 
     if args[1] <: Core.Builtin
-        ccall(:jl_, Any, (Any,), "builtin-ret")
         return stub(world, source, builtin_error)
     end
-    method_error = :(throw(MethodError(args[1], args[2:end], $world)))
+    method_error = :(throw(MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)))
 
     interp = ReactantInterpreter(; world)
 
     sig = Tuple{args...}
-    lookup_result = Core.Compiler.findall(sig, Core.Compiler.method_table(interp))
-    @static if VERSION < v"1.11-"
-        lookup_result = lookup_result.matches
-    end
 
-    if lookup_result === nothing || lookup_result === missing
-        return stub(world, source, method_error)
-    end
+    min_world = Ref{UInt}(typemin(UInt))
+    max_world = Ref{UInt}(typemax(UInt))
 
-    matches = lookup_result.matches
+    lookup_result = lookup_world(sig, world, Core.Compiler.method_table(interp), min_world, max_world)
+    
+    ccall(:jl_, Any, (Any,), string(lookup_result)*" sig="*string(sig)*" mw="*string(min_world)*" "*string(max_world)*" "*string(Base.get_world_counter()))
+
+    overdubbed_code = Any[]
+    overdubbed_codelocs = Int32[]
 
     # No method could be found (including in our method table), bail with an error
-    if length(matches) != 1
+    if lookup_result == nothing
         return stub(world, source, method_error)
+        tmp_min_world = Ref{UInt}(typemin(UInt))
+        tmp_max_world = Ref{UInt}(typemax(UInt))
+        match = ccall(:jl_gf_invoke_lookup_worlds, Any,
+                      (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
+                      Tuple{typeof(throw_method_error), sig}, #=mt=# nothing, world, tmp_min_world, tmp_max_world)
+        @assert match !== nothing
+
+        # look up the method and code instance
+        mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
+                   (Any, Any, Any), match.method, match.spec_types, match.sparams)
+     
+        ci = Core.Compiler.retrieve_code_info(mi, world)::Core.Compiler.CodeInfo
+
+        src = copy(ci)
+        src.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME]
+
+        src.edges = Any[ccall(:jl_method_table_for, Any, (Any,), sig)::Core.MethodTable, sig]
+        src.min_world = min_world[]
+        src.max_world = max_world[]
+
+        push!(overdubbed_code, :($(Base.getindex)($(Core.Argument(2)), 1)))
+        push!(overdubbed_codelocs, 0)
+
+        expr_fn = Core.SSAValue(length(overdubbed_code))
+
+
+        push!(overdubbed_code, :($(Base.lastindex)($(Core.Argument(2)))))
+        push!(overdubbed_codelocs, 0)
+
+        expr_lastindex = Core.SSAValue(length(overdubbed_code))
+
+
+        push!(overdubbed_code, :(2:$expr_lastindex))
+        push!(overdubbed_codelocs, 0)
+
+        expr_slice = Core.SSAValue(length(overdubbed_code))
+
+        push!(overdubbed_code, :($(Base.getindex)($(Core.Argument(2)), $expr_slice)))
+        push!(overdubbed_codelocs, 0)
+
+        expr_args = Core.SSAValue(length(overdubbed_code))
+
+        push!(overdubbed_code, :($(Base.MethodError)($expr_fn, $expr_args, $world)))
+        push!(overdubbed_codelocs, 0)
+
+        expr_method = Core.SSAValue(length(overdubbed_code))
+
+        push!(overdubbed_code, :($(Base.throw)($expr_method)))
+        push!(overdubbed_codelocs, 0)
+
+        push!(
+            overdubbed_code,
+            Core.ReturnNode(Core.SSAValue(length(overdubbed_code)))
+        )
+        push!(overdubbed_codelocs, 0)
+
+        src.code = overdubbed_code
+        src.codelocs = overdubbed_codelocs
+        src.ssavaluetypes = length(overdubbed_code)
+        src.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
+
+        @show src
+        @show src.edges
+        @show typeof(src)
+
+        return src
     end
 
-    match = matches[1]::Core.MethodMatch
+    match = lookup_result::Core.MethodMatch
     # look up the method and code instance
     mi = ccall(
         :jl_specializations_get_linfo,
@@ -159,6 +281,9 @@ function call_with_reactant_generator(
 
     method = match.method
 
+    ccall(:jl_, Any, (Any,), ("method=")*string(method))
+    ccall(:jl_, Any, (Any,), ("va=")*string(method.isva))
+
     # The original julia code (on 1.11+) has the potential constprop, for now
     # we assume this outermost function does not constprop, for ease.
     #if Core.Compiler.result_is_constabi(interp, frame.result)
@@ -174,6 +299,8 @@ function call_with_reactant_generator(
         ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
+
+    ccall(:jl_, Any, (Any,), ("ir=")*string(ir))
 
     # Rewrite type unstable calls to recurse into call_with_reactant to ensure
     # they continue to use our interpreter. Reset the derived return type
@@ -198,33 +325,22 @@ function call_with_reactant_generator(
 
     src = Core.Compiler.ir_to_codeinf!(opt)
 
-    # Julia hits various internal errors trying to re-perform type inference
-    # on type infered code (that we undo inference of), if there is no type unstable
-    # code to be rewritten, just use the default methodinstance (still using our methodtable),
-    # to improve compatibility as these bugs are fixed upstream.
-    # Just kidding we can't do this, since otherwise the inferred code won't guarantee to run
-    # within our interpreter, so we must use our generated IR here.
-    # if !any_changed
-    #     src = Core.Compiler.retrieve_code_info(mi, world)
-    # end
+    ccall(:jl_, Any, (Any,), ("src=")*string(src))
 
     # prepare a new code info
     code_info = copy(src)
     static_params = match.sparams
     signature = sig
-    is_invoke = args[1] === typeof(Core.invoke)
 
     # propagate edge metadata, this method is invalidated if the original function we are calling
     # is invalidated
     code_info.edges = Core.MethodInstance[mi]
-    code_info.min_world = lookup_result.valid_worlds.min_world
-    code_info.max_world = lookup_result.valid_worlds.max_world
+    code_info.min_world = min_world[]
+    code_info.max_world = max_world[]
 
     # Rewrite the arguments to this function, to prepend the two new arguments, the function :call_with_reactant,
     # and the REDUB_ARGUMENTS_NAME tuple of input arguments
-    code_info.slotnames = Any[
-        :call_with_reactant, REDUB_ARGUMENTS_NAME, code_info.slotnames...
-    ]
+    code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME, code_info.slotnames...]
     code_info.slotflags = UInt8[0x00, 0x00, code_info.slotflags...]
     n_prepended_slots = 2
     overdub_args_slot = Core.SlotNumber(n_prepended_slots)
@@ -240,15 +356,10 @@ function call_with_reactant_generator(
     # destructure the generated argument slots into the overdubbed method's argument slots.
     n_actual_args = fieldcount(signature)
     n_method_args = Int(method.nargs)
+
     offset = 1
     fn_args = Any[]
-    for i in 1:n_method_args
-        if is_invoke && (i == 1 || i == 2)
-            # With an invoke call, we have: 1 is invoke, 2 is f, 3 is Tuple{}, 4... is args.
-            # In the first loop iteration, we should skip invoke and process f.
-            # In the second loop iteration, we should skip the Tuple type and process args[1].
-            offset += 1
-        end
+    for i in 1:length(redub_arguments)
         slot = i + n_prepended_slots
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
@@ -258,59 +369,30 @@ function call_with_reactant_generator(
         code_info.slotflags[slot] |= 0x02 # ensure this slotflag has the "assigned" bit set
         offset += 1
 
-        #push!(overdubbed_code, actual_argument)
-        push!(fn_args, Core.SSAValue(length(overdubbed_code)))
-    end
-
-    # If `method` is a varargs method, we have to restructure the original method call's
-    # trailing arguments into a tuple and assign that tuple to the expected argument slot.
-    if method.isva
-        if !isempty(overdubbed_code)
-            # remove the final slot reassignment leftover from the previous destructuring
-            pop!(overdubbed_code)
-            pop!(overdubbed_codelocs)
-            pop!(fn_args)
-        end
-        trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
-        for i in n_method_args:n_actual_args
-            push!(
-                overdubbed_code,
-                Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset - 1),
-            )
-            push!(overdubbed_codelocs, code_info.codelocs[1])
-            push!(trailing_arguments.args, Core.SSAValue(length(overdubbed_code)))
-            offset += 1
-        end
-        push!(
-            overdubbed_code,
-            Expr(
-                :(=), Core.SlotNumber(n_method_args + n_prepended_slots), trailing_arguments
-            ),
-        )
-        push!(overdubbed_codelocs, code_info.codelocs[1])
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
     end
 
     rt = Base.Experimental.compute_ir_rettype(ir)
     
-    
+    # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
+    # inner code during compilation without special handling (i.e. call_in_world_total).
+    # Opaque closures also require takign the function argument. We can work around the latter
+    # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
     oc = if Base.issingletontype(args[1])
-        ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-        Tuple{sig.parameters[2:end]...}, rt, rt, @__MODULE__, src, 0, nothing, method.nargs-1, method.isva, args[1].instance, true)
+        Core._call_in_world_total(world, make_oc, Tuple{sig.parameters[2:end]...}, rt, src, method.nargs - 1, method.isva, args[1].instance)::Core.OpaqueClosure
     else
+        farg = fn_args[1]
         push!(overdubbed_code,
-        quote
-            args[1]
-        end
-        )
-        push!(overdubbed_codelocs, code_info.codelocs[1])
-        farg = Core.SSAValue(length(overdubbed_code))
-        push!(overdubbed_code,
-        quote
-            ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-            $(Tuple{sig.parameters[2:end]...}), $rt, $rt, $(@__MODULE__), $src, 0, nothing, $(method.nargs-1), $(method.isva), $farg, true)
-        end
-        )
+            Expr(:call,
+                make_oc,
+                Tuple{sig.parameters[2:end]...},
+                rt,
+                src,
+                method.nargs-1,
+                method.isva,
+                farg
+                )
+                )
         push!(overdubbed_codelocs, code_info.codelocs[1])
         Core.SSAValue(length(overdubbed_code))
     end
@@ -343,6 +425,7 @@ function call_with_reactant_generator(
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
+    ccall(:jl_, Any, (Any,), "code_info="*string(code_info))
     return code_info
 end
 
