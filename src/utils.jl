@@ -102,9 +102,7 @@ end
 end
 
 @inline function lookup_world(@nospecialize(sig::Type), world::UInt, mt::Core.Compiler.InternalMethodTable, min_world::Ref{UInt}, max_world::Ref{UInt})
-    @show "pre imt", world, min_world, max_world
     res = lookup_world(sig, mt.world, nothing, min_world, max_world)
-    @show "imt", res, world, min_world, max_world
     return res
 end
 
@@ -251,10 +249,6 @@ function call_with_reactant_generator(
         src.ssavaluetypes = length(overdubbed_code)
         src.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
-        @show src
-        @show src.edges
-        @show typeof(src)
-
         return src
     end
 
@@ -381,7 +375,6 @@ function call_with_reactant_generator(
     # If `method` is a varargs method, we have to restructure the original method call's
     # trailing arguments into a tuple and assign that tuple to the expected argument slot.
     if method.isva
-        @show "post pop", tys
         trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
         for i in n_method_args:n_actual_args
             push!(
@@ -399,35 +392,23 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
         push!(tys, Tuple{redub_arguments[n_method_args:n_actual_args]...})
-
-        @show "post redo", tys
-        @show Tuple{redub_arguments[n_method_args:n_actual_args]...}
     end
 
-    @show n_method_args, n_actual_args
     rt = Base.Experimental.compute_ir_rettype(ir)
     
     # ocva = method.isva
 
     ocva = false # method.isva
 
-    @show method
-    @show method.isva, method.sig, mi.specTypes
-    @show method.nargs
     ocnargs = method.nargs - 1
     # octup = Tuple{mi.specTypes.parameters[2:end]...}
     # octup = Tuple{method.sig.parameters[2:end]...}
     octup = Tuple{tys[2:end]...}
     ocva = false
-    @show octup
-    @show mi
-
     if false && method.isva && tys[end] == Tuple{}
         octup = Tuple{tys[2:end-1]...}
         ocnargs -= 1
     end
-
-    @show "final", ocva, ocnargs, octup
 
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
     # inner code during compilation without special handling (i.e. call_in_world_total).
