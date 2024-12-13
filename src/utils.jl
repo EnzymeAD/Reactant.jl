@@ -410,6 +410,10 @@ function call_with_reactant_generator(
         ocnargs -= 1
     end
 
+    @show args[1]
+    @show method.isva
+    @show octup, rt, ocnargs, ocva
+
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
     # inner code during compilation without special handling (i.e. call_in_world_total).
     # Opaque closures also require takign the function argument. We can work around the latter
