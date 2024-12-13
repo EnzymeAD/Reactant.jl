@@ -646,6 +646,18 @@ end
     end
 end
 
+@testset "sort" begin
+    basic_sort(x, dimension) = Reactant.Ops.sort(x; comparator=(a, b) -> a < b, dimension)
+    for i in 1:3
+        t_size = tuple(fill(10, (i,))...)
+        x = Reactant.to_rarray(randn(t_size))
+
+        for j in 1:i
+            @test (i == 1 ? sort(x) : sort(x; dims=j)) == @jit basic_sort(x, j)
+        end
+    end
+end
+
 @testset "slice" begin
     x = ConcreteRArray([1, 2, 3, 4])
     @test [2, 3] == @jit Ops.slice(x, [2], [3])
