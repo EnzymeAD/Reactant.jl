@@ -155,8 +155,6 @@ function call_with_reactant_generator(
     @nospecialize
     args = redub_arguments
 
-    ccall(:jl_, Any, (Any,), string(world)*" args="*string(args))
-
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
     )
@@ -179,8 +177,6 @@ function call_with_reactant_generator(
     max_world = Ref{UInt}(typemax(UInt))
 
     lookup_result = lookup_world(sig, world, Core.Compiler.method_table(interp), min_world, max_world)
-    
-    ccall(:jl_, Any, (Any,), string(lookup_result)*" sig="*string(sig)*" mw="*string(min_world)*" "*string(max_world)*" "*string(Base.get_world_counter()))
 
     overdubbed_code = Any[]
     overdubbed_codelocs = Int32[]
@@ -275,9 +271,6 @@ function call_with_reactant_generator(
 
     method = match.method
 
-    ccall(:jl_, Any, (Any,), ("method=")*string(method))
-    ccall(:jl_, Any, (Any,), ("va=")*string(method.isva))
-
     # The original julia code (on 1.11+) has the potential constprop, for now
     # we assume this outermost function does not constprop, for ease.
     #if Core.Compiler.result_is_constabi(interp, frame.result)
@@ -293,8 +286,6 @@ function call_with_reactant_generator(
         ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
-
-    ccall(:jl_, Any, (Any,), ("ir=")*string(ir))
 
     # Rewrite type unstable calls to recurse into call_with_reactant to ensure
     # they continue to use our interpreter. Reset the derived return type
@@ -318,8 +309,6 @@ function call_with_reactant_generator(
     Core.Compiler.finish(interp, opt, ir, caller)
 
     src = Core.Compiler.ir_to_codeinf!(opt)
-
-    ccall(:jl_, Any, (Any,), ("src=")*string(src))
 
     # prepare a new code info
     code_info = copy(src)
@@ -461,7 +450,6 @@ function call_with_reactant_generator(
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
-    ccall(:jl_, Any, (Any,), "code_info="*string(code_info))
     return code_info
 end
 
