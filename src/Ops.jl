@@ -916,7 +916,7 @@ end
 
 function sort(
     x::TracedRArray{T,N};
-    comparator::Function,
+    comparator,
     dimension=1,
     is_stable=false,
     location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
@@ -924,12 +924,6 @@ function sort(
     #C4:
     @assert 0 < dimension <= ndims(x) "$x invalid dimension"
 
-    #C5:
-    method = Base.methods(
-        comparator, (Reactant.TracedRArray{T,N}, Reactant.TracedRArray{T,N})
-    )
-    @assert size(method, 1) != 0 error("$comparator is not a valid comparator")
-    @assert size(method, 1) == 1 error("$comparator ambiguous candidates")
     #TODO: move to @trace
     (a, b) = (ConcreteRNumber(T(0)), ConcreteRNumber(T(0)))
     func = Reactant.make_mlir_fn(comparator, (a, b), (), "main"; no_args_in_result=true)[2]
@@ -937,6 +931,7 @@ function sort(
     fn_name = String(
         MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
     )
+    #C5:
     @assert fn_name == "main" "$comparator: no function generated"
     @assert MLIR.IR.nregions(func) == 1
     ftype_attr = MLIR.IR.attr(func, "function_type")
@@ -949,7 +944,6 @@ function sort(
     comparator = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
     MLIR.IR.rmfromparent!(func)
-    global leaked = comparator
     for block in MLIR.IR.BlockIterator(comparator)
         return_op = MLIR.IR.terminator(block)
         MLIR.IR.name(return_op) == "func.return" || continue
