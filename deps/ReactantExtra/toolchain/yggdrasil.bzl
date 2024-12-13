@@ -5,7 +5,13 @@ load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_tool
 # cpu = "aarch64"
 # toolchain_identifier = "ygg_aarch64"
 # target_system_name = "aarch64-unknown-linux-gnu"
-def ygg_cc_toolchain(cpu, toolchain_identifier, target_system_name, bb_target, bb_full_target, supports_start_end_lib = False):
+def ygg_cc_toolchain(supports_start_end_lib = False):
+    bb_target = os.environ["bb_target"]
+    bb_full_target = os.environ["bb_full_target"]
+    cpu = os.environ["bb_cpu"]
+    toolchain_identifier = "ygg_toolchain"
+    target_system_name = os.environ["bb_target_system_name"]
+
     cc_toolchain(
         name = "ygg_target_toolchain",
         all_files = ":empty",
@@ -23,7 +29,7 @@ def ygg_cc_toolchain(cpu, toolchain_identifier, target_system_name, bb_target, b
     cc_toolchain_config(
         name = "ygg_target_toolchain_config",
         cpu = cpu,
-        compiler = "compiler",
+        compiler = "clang",
         toolchain_identifier = toolchain_identifier,
         target_system_name = target_system_name,
         target_libc = "",
@@ -49,8 +55,9 @@ def ygg_cc_toolchain(cpu, toolchain_identifier, target_system_name, bb_target, b
             "clang++": f"/opt/bin/{bb_full_target}/clang++",
             "cpp": f"/opt/bin/{bb_full_target}/cpp",
             "f77": f"/opt/bin/{bb_full_target}/f77",
-            "g++": f"/opt/bin/{bb_full_target}/g++",
-            "gcc": f"/opt/bin/{bb_full_target}/gcc",
+            # WARN we force to use clang instead of gcc
+            "g++": f"/opt/bin/{bb_full_target}/clang++",
+            "gcc": f"/opt/bin/{bb_full_target}/clang",
             "gfortran": f"/opt/bin/{bb_full_target}/gfortran",
             "ld": f"/opt/bin/{bb_full_target}/ld",
             "ld.lld": f"/opt/bin/{bb_full_target}/ld.lld",
@@ -113,5 +120,5 @@ def ygg_cc_toolchain(cpu, toolchain_identifier, target_system_name, bb_target, b
         coverage_link_flags = ["--coverage"],
         host_system_name = "linux",
         # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
-        supports_start_end_lib = supports_start_end_lib,
+        # supports_start_end_lib = supports_start_end_lib,
     )
