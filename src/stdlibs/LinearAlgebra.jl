@@ -84,7 +84,7 @@ end
 function TracedUtils.set_mlir_data!(
     x::Transpose{TracedRNumber{T},TracedRArray{T,N}}, data
 ) where {T,N}
-    tdata = TracedRArray(data)
+    tdata = TracedRArray{T}(data)
     px = parent(x)
     px.mlir_data = (
         if ndims(px) == 1
@@ -99,7 +99,7 @@ end
 function TracedUtils.set_mlir_data!(
     x::Adjoint{TracedRNumber{T},TracedRArray{T,N}}, data
 ) where {T,N}
-    tdata = TracedRArray(data)
+    tdata = TracedRArray{T}(data)
     px = parent(x)
     transposed_data =
         ndims(px) == 1 ? Ops.reshape(tdata, length(tdata)) : Ops.transpose(tdata, [2, 1])
@@ -108,18 +108,45 @@ function TracedUtils.set_mlir_data!(
 end
 
 function TracedUtils.set_mlir_data!(x::Diagonal{TracedRNumber{T},TracedRArray{T,1}}, data) where {T}
-    parent(x).mlir_data = diag(TracedRArray(data)).mlir_data
+    parent(x).mlir_data = diag(TracedRArray{T}(data)).mlir_data
     return x
 end
 
-# TODO: UnitLowerTriangular
-# TODO: LowerTriangular
-# TODO: UnitUpperTriangular
-# TODO: UpperTriangular
-# TODO: Symmetric
+for (AT, dcomp, ocomp) in (
+    (:LowerTriangular, "GE", "LT"),
+    (:UnitLowerTriangular, "GT", "LE"),
+    (:UpperTriangular, "LE", "GT"),
+    (:UnitUpperTriangular, "LT", "GE"),
+)
+    @eval function set_mlir_data!(
+        x::LinearAlgebra.$(AT){T,TracedRArray{T,2}}, data
+    ) where {T}
+        tdata = TracedRArray{T}(data)
+        z = zero(tdata)
+        m, n = size(x)
+        row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
+        col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
+        data_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(dcomp))
+        original_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(ocomp))
+        res = Ops.add(
+            Ops.select(data_indicator, tdata, z), Ops.select(original_indicator, x.data, z)
+        )
+        set_mlir_data!(x.data, res.mlir_data)
+        return x
+    end
+end
+
+function set_mlir_data!(x::LinearAlgebra.Symmetric{T,TracedRArray{T,2}}, data) where {T}
+    if x.uplo == 'L'
+        set_mlir_data!(LinearAlgebra.LowerTriangular(parent(x)), data)
+    else
+        set_mlir_data!(LinearAlgebra.UpperTriangular(parent(x)), data)
+    end
+    return x
+end
 
 function set_mlir_data!(x::Tridiagonal{T,TracedRArray{T,1}}, data) where {T}
-    tdata = TracedRArray(data)
+    tdata = TracedRArray{T}(data)
     set_mlir_data!(x.dl, diag(tdata, -1).mlir_data)
     set_mlir_data!(x.d, diag(tdata, 0).mlir_data)
     set_mlir_data!(x.du, diag(tdata, 1).mlir_data)

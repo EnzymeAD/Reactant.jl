@@ -123,11 +123,17 @@ const AnyTracedRMatrix{T} = Union{
 }
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
-function TracedRArray(data::MLIR.IR.Value)
+function TracedRArray{T}(data::MLIR.IR.Value) where {T}
     data_type = MLIR.IR.type(data)
-    return TracedRArray{eltype(MLIR.IR.julia_type(data_type)),ndims(data_type)}(
-        (), data, size(data_type)
-    )
+    if T == eltype(MLIR.IR.julia_type(data_type))
+        return TracedRArray{T,ndims(data_type)}((), data, size(data_type))
+    end
+    tdata = TracedRArray(data)
+    return Ops.convert(TracedRArray{T,ndims(data_type)}, tdata)
+end
+
+function TracedRArray(data::MLIR.IR.Value)
+    return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
 end
 
 struct XLAArray{T,N} <: RArray{T,N} end
