@@ -340,8 +340,8 @@ function call_with_reactant_generator(
 
     # Rewrite the arguments to this function, to prepend the two new arguments, the function :call_with_reactant,
     # and the REDUB_ARGUMENTS_NAME tuple of input arguments
-    code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME, code_info.slotnames...]
-    code_info.slotflags = UInt8[0x00, 0x00, code_info.slotflags...]
+    code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME]
+    code_info.slotflags = UInt8[0x00, 0x00]
     n_prepended_slots = 2
     overdub_args_slot = Core.SlotNumber(n_prepended_slots)
 
@@ -354,21 +354,16 @@ function call_with_reactant_generator(
     # required by the base method.
 
     # destructure the generated argument slots into the overdubbed method's argument slots.
-    n_actual_args = fieldcount(signature)
-    n_method_args = Int(method.nargs)
 
     offset = 1
     fn_args = Any[]
     for i in 1:length(redub_arguments)
-        slot = i + n_prepended_slots
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
         )
-        push!(overdubbed_code, :($(Core.SlotNumber(slot)) = $actual_argument))
+        push!(overdubbed_code, actual_argument)
         push!(overdubbed_codelocs, code_info.codelocs[1])
-        code_info.slotflags[slot] |= 0x02 # ensure this slotflag has the "assigned" bit set
         offset += 1
-
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
     end
 
