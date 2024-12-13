@@ -3,12 +3,9 @@ licenses(["notice"])
 
 package(default_visibility = ["//visibility:public"])
 
-filegroup(
-    name = "include",
-    srcs = glob(["include/**/*.h"]),
-)
-
-filegroup(
-    name = "libs",
-    srcs = glob(["lib/libcxxwrap_julia*.dylib"]),
+cc_import(
+    name = "libcxxwrap_julia",
+    hdrs = glob(["include/jlcxx/*.hpp"]),
+    shared_library = "lib/libcxxwrap_julia.dylib",
+    visibility = ["//visibility:public"],
 )
