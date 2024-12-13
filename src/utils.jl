@@ -401,7 +401,7 @@ function call_with_reactant_generator(
     # inner code during compilation without special handling (i.e. call_in_world_total).
     # Opaque closures also require takign the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
-    oc = if Base.issingletontype(args[1])
+    oc = if false && Base.issingletontype(args[1])
         Core._call_in_world_total(world, make_oc, octup, rt, src, ocnargs, ocva, args[1].instance)::Core.OpaqueClosure
     else
         farg = fn_args[1]
