@@ -2,6 +2,9 @@ workspace(name = "Reactant")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+load("//third_party/julia:workspace.bzl", julia_workspace = "repo")
+julia_workspace()
+
 load("//third_party/libcxxwrap_julia:workspace.bzl", libcxxwrap_julia_workspace = "repo")
 libcxxwrap_julia_workspace()
 

@@ -377,7 +377,9 @@ cc_library(
         "-Werror=return-type",
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation",
-        # "-I$(location @libcxxwrap_julia//:include)"
+        # "-I$(location @libcxxwrap_julia//:include)",
+        "-Iexternal/libcxxwrap_julia/include/",
+        "-Iexternal/julia/include/julia/",
     ],
     alwayslink = True,
     linkstatic = True,
