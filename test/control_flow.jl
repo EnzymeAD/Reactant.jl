@@ -589,7 +589,7 @@ end
     # With different operand sizes, different functions need to be generated:
     c = rand(4, 5)
     c_ra = Reactant.to_rarray(c)
-    
+
     @test @jit(call1(a_ra, c_ra)) ≈ call1(a, c)
     ir = @code_hlo optimize=false call1(a_ra, c_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
@@ -606,5 +606,28 @@ end
     a_rn = Reactant.ConcreteRNumber(a)
 
     @test @jit(call2(a_rn)) == call2(a)
+end
+
+function _call3(x::Int, y)
+    if x > 10
+        return y .+ y
+    else
+        return y .* y
+    end
+end
+
+function call3(y)
+    z = @trace _call3(1, y)
+    @trace _call3(1, z) # doesn't generate new function because y.shape == z.shape
+    @trace _call3(11, y) # new function because x changed.
+end
+
+@testset "call: caching for Julia operands" begin
+    y = rand(3)
+    y_ra = Reactant.to_rarray(y)
+
+    ir = @code_hlo optimize=false call3(y_ra)
+    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
 end
 
