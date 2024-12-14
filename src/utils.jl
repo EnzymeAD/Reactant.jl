@@ -147,6 +147,10 @@ function make_oc(sig, rt, src, nargs, isva, f)::Core.OpaqueClosure
         sig, rt, rt, @__MODULE__, src, 0, nothing, nargs, isva, f, true)::Core.OpaqueClosure
 end
 
+function safe_print(name, x)
+    ccall(:jl_, Cvoid, (Any,), name*" "*string(x))
+end
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -159,6 +163,7 @@ function call_with_reactant_generator(
 )
     @nospecialize
     args = redub_arguments
+    safe_print("args", args)
 
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
@@ -283,6 +288,8 @@ function call_with_reactant_generator(
     #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
     #else
     opt = Core.Compiler.OptimizationState(frame, interp)
+    
+    safe_print("opt.src", opt.src)
 
     caller = frame.result
     @static if VERSION < v"1.11-"
@@ -291,6 +298,8 @@ function call_with_reactant_generator(
         ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
+    
+    safe_print("ir1", ir)
     
     # Rewrite type unstable calls to recurse into call_with_reactant to ensure
     # they continue to use our interpreter. Reset the derived return type
@@ -314,6 +323,8 @@ function call_with_reactant_generator(
     Core.Compiler.finish(interp, opt, ir, caller)
 
     src = Core.Compiler.ir_to_codeinf!(opt)
+    
+    safe_print("src", src)
     
     # prepare a new code info
     code_info = copy(src)
@@ -452,6 +463,8 @@ function call_with_reactant_generator(
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
     
+    safe_print("code_info", code_info)
+
     return code_info
 end
 
