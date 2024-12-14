@@ -153,7 +153,7 @@ function trace_for(mod, expr)
 
     all_syms = Expr(:tuple, counter, external_syms...)
     args_init = Expr(
-        :tuple, :(Reactant.promote_to(Reactant.TracedRNumber{Int}, 0)), external_syms...
+        :tuple, :(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0)), external_syms...
     )
 
     reactant_code_block = quote
@@ -161,7 +161,7 @@ function trace_for(mod, expr)
             cond_fn =
                 $(all_syms) -> begin
                     local num_iters = div($limit - $start, $step, RoundDown)
-                    local num_iters = Reactant.promote_to(
+                    local num_iters = Reactant.TracedUtils.promote_to(
                         Reactant.TracedRNumber{Int64}, num_iters
                     )
                     $counter < num_iters + 1

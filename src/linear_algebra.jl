@@ -7,6 +7,7 @@ import ..AnyTracedRArray
 import ..AnyTracedRMatrix
 import ..AnyTracedRVector
 
+import ..TracedUtils
 using ..TracedUtils:
     get_mlir_data,
     materialize_traced_array,
@@ -116,9 +117,9 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     # terminate called after throwing an instance of 'xla::XlaRuntimeError'
     #   what():  UNKNOWN: <unknown>:0: error: 'tensor.empty' op unsupported op for export to XLA
     #   <unknown>:0: note: see current operation: %0 = "tensor.empty"() : () -> tensor<0xf64>
-    length(indices) ≤ 0 && return promote_to(TracedRArray{T,1}, T[])
+    length(indices) ≤ 0 && return TracedUtils.promote_to(TracedRArray{T,1}, T[])
 
-    idxs = get_mlir_data(Reactant.promote_to(TracedRArray{Int,2}, indices))
+    idxs = get_mlir_data(TracedUtils.promote_to(TracedRArray{Int,2}, indices))
 
     #! format: off
     dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
