@@ -87,6 +87,11 @@ function should_rewrite_ft(@nospecialize(ft))
         return false
     end
 
+    # Avoid the 1.10 stackoverflow
+    if ft <: typeof(Base.typed_hvcat)
+        return false
+    end
+
     # Default assume all functions need to be reactant-ified
     return true
 end
