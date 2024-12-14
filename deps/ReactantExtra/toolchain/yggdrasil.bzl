@@ -126,7 +126,9 @@ def _ygg_cc_toolchain_impl(ctx):
 
 ygg_cc_toolchain = rule(
     implementation = _ygg_cc_toolchain_impl,
-    attrs = {},
+    attrs = {
+        "name": attr.string(default = "ygg_cc_toolchain"),
+    },
     executable = False,
     test = False,
 )
