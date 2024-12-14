@@ -565,3 +565,46 @@ end
 
     @test @jit(for_ref_outer(x_ra)) ≈ for_ref_outer(x)
 end
+
+_call1(a, b) = a
+function call1(a, b)
+    x = @trace _call1(a, b)
+    y = @trace _call1(a, b)
+    return @trace _call1(x, y)
+end
+
+@testset "call: basic" begin
+    a = rand(2, 3)
+    b = rand(2, 3)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit(call1(a_ra, b_ra)) ≈ call1(a, b)
+
+    # check whether the func for _call1 was only generated once:
+    ir = @code_hlo optimize=false call1(a_ra, b_ra)
+    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    @test length(ops) == 2 # call1, _call1
+
+    # With different operand sizes, different functions need to be generated:
+    c = rand(4, 5)
+    c_ra = Reactant.to_rarray(c)
+    
+    @test @jit(call1(a_ra, c_ra)) ≈ call1(a, c)
+    ir = @code_hlo optimize=false call1(a_ra, c_ra)
+    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    @test length(ops) == 3
+end
+
+_call2(a) = a+a
+function call2(a)
+    return @trace _call2(a)
+end
+
+@testset "call: rnumber" begin
+    a = 10
+    a_rn = Reactant.ConcreteRNumber(a)
+
+    @test @jit(call2(a_rn)) == call2(a)
+end
+
