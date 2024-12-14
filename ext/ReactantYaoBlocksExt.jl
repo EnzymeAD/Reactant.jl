@@ -1,7 +1,7 @@
 module ReactantYaoBlocksExt
 
 using Reactant
-using Reactant.TraceUtils: broadcast_to_size
+using Reactant.TracedUtils: broadcast_to_size
 using YaoBlocks
 
 function YaoBlocks.mat(

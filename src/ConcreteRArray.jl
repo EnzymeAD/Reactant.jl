@@ -99,7 +99,7 @@ end
 function Base.convert(
     ::Type{T}, X::WrappedConcreteRArray{ElType,N}
 ) where {T<:Array,ElType,N}
-    fn = compile(materialize_traced_array, (X,))
+    fn = compile(TracedUtils.materialize_traced_array, (X,))
     return convert(Array, fn(X))
 end
 Base.Array(x::AnyConcreteRArray) = convert(Array, x)

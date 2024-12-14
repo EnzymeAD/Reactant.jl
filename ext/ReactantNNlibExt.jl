@@ -10,7 +10,7 @@ using Reactant:
     MLIR,
     TracedRNumber
 
-using Reactant.TraceUtils:
+using Reactant.TracedUtils:
     materialize_traced_array,
     get_mlir_data,
     set_mlir_data!
