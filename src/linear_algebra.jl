@@ -2,6 +2,7 @@ module TracedLinearAlgebra
 
 using ..Reactant
 import ..TracedRArray
+import ..TracedRNumber
 import ..AnyTracedRArray
 import ..AnyTracedRMatrix
 import ..AnyTracedRVector
