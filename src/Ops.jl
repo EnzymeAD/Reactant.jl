@@ -45,7 +45,7 @@ function with_debug(f)
     end
 end
 
-function mlir_stacktrace(name, file, line)::MLIR.IR.Location
+@noinline function mlir_stacktrace(name, file, line)::MLIR.IR.Location
     # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
     if DEBUG_MODE[]
         return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
@@ -67,7 +67,7 @@ struct Token
 end
 
 # constant ops
-function constant(
+@noinline function constant(
     x::DenseArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
     value = MLIR.IR.DenseElementsAttribute(x)
@@ -76,7 +76,7 @@ function constant(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function constant(
+@noinline function constant(
     x::T; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T<:Number}
     res = constant(fill(x); location)
@@ -124,7 +124,7 @@ for (dialect, op) in [
     (:chlo, :sinh),
 ]
     @eval begin
-        function $op(
+        @noinline function $op(
             x::TracedRArray{T,N};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T,N}
@@ -136,7 +136,7 @@ for (dialect, op) in [
             return TracedRArray{T,N}((), res, size(x))
         end
 
-        function $op(
+        @noinline function $op(
             x::TracedRNumber{T};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T}
@@ -172,7 +172,7 @@ for (dialect, op) in [
     (:chlo, :zeta),
 ]
     @eval begin
-        function $op(
+        @noinline function $op(
             a::TracedRArray{T,N},
             b::TracedRArray{T,N};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
@@ -188,7 +188,7 @@ for (dialect, op) in [
             return TracedRArray{T,N}((), res, size(a))
         end
 
-        function $op(
+        @noinline function $op(
             a::TracedRNumber{T},
             b::TracedRNumber{T};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
@@ -214,7 +214,7 @@ for (dialect, op) in [
     (:chlo, :is_pos_inf),
 ]
     @eval begin
-        function $op(
+        @noinline function $op(
             x::TracedRArray{T,N};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T,N}
@@ -226,7 +226,7 @@ for (dialect, op) in [
             return TracedRArray{Bool,N}((), res, size(x))
         end
 
-        function $op(
+        @noinline function $op(
             x::TracedRNumber{T};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T}
@@ -240,7 +240,7 @@ for (dialect, op) in [
     end
 end
 
-function is_finite(
+@noinline function is_finite(
     x::TracedRArray{T,N}; location=mlir_stacktrace("is_finite", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
@@ -251,7 +251,7 @@ function is_finite(
     return TracedRArray{Bool,N}((), res, size(x))
 end
 
-function is_finite(
+@noinline function is_finite(
     x::TracedRNumber{T}; location=mlir_stacktrace("is_finite", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
@@ -261,7 +261,7 @@ function is_finite(
 end
 
 # fixes to default automated implementations
-function abs(
+@noinline function abs(
     x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("abs", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
@@ -270,7 +270,7 @@ function abs(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function abs(
+@noinline function abs(
     x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("abs", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
@@ -284,7 +284,7 @@ function reshape(x::TracedRArray, dims...; kwargs...)
     return reshape(x, collect(dims); kwargs...)
 end
 
-function reshape(
+@noinline function reshape(
     x::TracedRArray{T,N},
     dims::Vector{Int};
     location=mlir_stacktrace("reshape", @__FILE__, @__LINE__),
@@ -299,7 +299,7 @@ function reshape(
     return transpose(result, Int64[length(dims):-1:1...])
 end
 
-function get_dimension_size(
+@noinline function get_dimension_size(
     x::TracedRArray{T,N},
     dim;
     location=mlir_stacktrace("get_dimension_size", @__FILE__, @__LINE__),
@@ -313,7 +313,7 @@ function get_dimension_size(
     return TracedRNumber{Int32}((), res)
 end
 
-function set_dimension_size(
+@noinline function set_dimension_size(
     x::TracedRArray{T,N},
     size::TracedRNumber{Int},
     dim::Int;
@@ -332,7 +332,7 @@ function set_dimension_size(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function transpose(
+@noinline function transpose(
     x::TracedRArray{T,N},
     permutation;
     location=mlir_stacktrace("transpose", @__FILE__, @__LINE__),
@@ -346,7 +346,7 @@ function transpose(
 end
 
 # indexing ops
-function pad(
+@noinline function pad(
     x::TracedRArray{T,N},
     padding_value::TracedRNumber{T};
     low=fill(0, N),
@@ -368,7 +368,7 @@ function pad(
     return TracedRArray{T,N}((), res, rsize)
 end
 
-function slice(
+@noinline function slice(
     x::TracedRArray{T,N},
     start_indices,
     limit_indices;
@@ -394,7 +394,7 @@ function slice(
 end
 
 # numerics
-function complex(
+@noinline function complex(
     real::TracedRArray{T,N},
     imag::TracedRArray{T,N};
     location=mlir_stacktrace("complex", @__FILE__, @__LINE__),
@@ -410,7 +410,7 @@ function complex(
     return TracedRArray{Complex{T},N}((), res, size(real))
 end
 
-function complex(
+@noinline function complex(
     real::TracedRNumber{T},
     imag::TracedRNumber{T};
     location=mlir_stacktrace("complex", @__FILE__, @__LINE__),
@@ -426,7 +426,7 @@ function complex(
     return TracedRNumber{Complex{T}}((), res)
 end
 
-function real(
+@noinline function real(
     x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
@@ -435,7 +435,7 @@ function real(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function real(
+@noinline function real(
     x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
@@ -444,7 +444,7 @@ function real(
     return TracedRNumber{T}((), res)
 end
 
-function imag(
+@noinline function imag(
     x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
@@ -453,7 +453,7 @@ function imag(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function imag(
+@noinline function imag(
     x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
@@ -477,7 +477,7 @@ end
 #     return TracedRArray{T,N}((), res, size(x))
 # end
 
-function fft(
+@noinline function fft(
     x::TracedRArray{T,N};
     type::String,
     length,
@@ -519,7 +519,7 @@ function fft(
     return TracedRArray{Tout,N}((), res, rsize)
 end
 
-function cholesky(
+@noinline function cholesky(
     x::TracedRArray{T,N};
     lower::Bool=false,
     location=mlir_stacktrace("cholesky", @__FILE__, @__LINE__),
@@ -533,7 +533,7 @@ function cholesky(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function clamp(
+@noinline function clamp(
     min::Union{TracedRNumber{T},TracedRArray{T,N}},
     x::TracedRArray{T,N},
     max::Union{TracedRNumber{T},TracedRArray{T,N}};
@@ -551,7 +551,7 @@ function clamp(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function clamp(
+@noinline function clamp(
     min::TracedRNumber{T},
     x::TracedRNumber{T},
     max::TracedRNumber{T};
@@ -569,7 +569,7 @@ function clamp(
     return TracedRNumber{T}((), res)
 end
 
-function clamp(min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T) where {T,N}
+@noinline function clamp(min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T) where {T,N}
     return clamp(constant(min), x, constant(max))
 end
 
@@ -603,7 +603,7 @@ end
 #     return TracedRArray{T,N}((), res, size(lhs))
 # end
 
-function dot_general(
+@noinline function dot_general(
     lhs::TracedRArray{T},
     rhs::TracedRArray{T};
     contracting_dimensions,
@@ -760,7 +760,7 @@ function dot_general(
     return TracedRArray{T,length(ressize)}((), res, ressize)
 end
 
-function einsum(
+@noinline function einsum(
     lhs::TracedRArray{T},
     rhs::TracedRArray{T};
     equation::String,
@@ -818,23 +818,23 @@ end
 # end
 
 # paralell ops
-function partition_id(; location=mlir_stacktrace("partition_id", @__FILE__, @__LINE__))
+@noinline function partition_id(; location=mlir_stacktrace("partition_id", @__FILE__, @__LINE__))
     res = MLIR.IR.result(stablehlo.partition_id(; location))
     return TracedRNumber{UInt32}((), res)
 end
 
-function replica_id(; location=mlir_stacktrace("replica_id", @__FILE__, @__LINE__))
+@noinline function replica_id(; location=mlir_stacktrace("replica_id", @__FILE__, @__LINE__))
     res = MLIR.IR.result(stablehlo.replica_id(; location))
     return TracedRNumber{UInt32}((), res)
 end
 
-function after_all(tokens...; location=mlir_stacktrace("after_all", @__FILE__, @__LINE__))
+@noinline function after_all(tokens...; location=mlir_stacktrace("after_all", @__FILE__, @__LINE__))
     tokens = [token.mlir_data for token in tokens]
     res = MLIR.IR.result(stablehlo.after_all(tokens; location))
     return Token(res)
 end
 
-function optimization_barrier(
+@noinline function optimization_barrier(
     operands::Union{TracedRNumber,TracedRArray}...;
     location=mlir_stacktrace("optimization_barrier", @__FILE__, @__LINE__),
 )
@@ -855,7 +855,7 @@ function optimization_barrier(
     )
 end
 
-function outfeed(
+@noinline function outfeed(
     operands::Union{TracedRNumber,TracedRArray}...;
     token,
     config="",
@@ -869,7 +869,7 @@ function outfeed(
     return Token(res)
 end
 
-function send(
+@noinline function send(
     operands::Union{TracedRNumber,TracedRArray}...;
     token,
     channel_id::Int,
@@ -892,7 +892,7 @@ function send(
     return Token(res)
 end
 
-function recv(
+@noinline function recv(
     results::Tuple{Type,Vector{Int}}...;
     token,
     channel_id::Int,
@@ -971,7 +971,7 @@ end
 #     return TracedRArray{T,N}((), res, size(x))
 # end
 
-function top_k(
+@noinline function top_k(
     x::TracedRArray{T,N}, k; location=mlir_stacktrace("top_k", @__FILE__, @__LINE__)
 ) where {T,N}
     rsize = [size(x)[1:(end - 1)]..., k]
@@ -984,7 +984,7 @@ function top_k(
     )
 end
 
-function iota(
+@noinline function iota(
     T::Type,
     shape::Vector{Int};
     iota_dimension,
@@ -997,7 +997,7 @@ function iota(
     return TracedRArray{T,N}((), res, shape)
 end
 
-function reverse(
+@noinline function reverse(
     x::TracedRArray{T,N};
     dimensions,
     location=mlir_stacktrace("reverse", @__FILE__, @__LINE__),
@@ -1014,7 +1014,7 @@ function reverse(
 end
 
 # random ops
-function rng_bit_generator(
+@noinline function rng_bit_generator(
     seed::TracedRArray{UInt64,1},
     shape;
     algorithm::String="DEFAULT",
@@ -1030,7 +1030,7 @@ function rng_bit_generator(
 end
 
 # functional ops
-function return_(
+@noinline function return_(
     results::Union{TracedRArray,TracedRNumber}...;
     location=mlir_stacktrace("return_", @__FILE__, @__LINE__),
 )
@@ -1038,7 +1038,7 @@ function return_(
 end
 
 # control flow ops
-function select(
+@noinline function select(
     pred::Union{TracedRArray{Bool,N},TracedRNumber{Bool}},
     on_true::TracedRArray{T,N},
     on_false::TracedRArray{T,N},
@@ -1057,7 +1057,7 @@ function select(
     return TracedRArray{T,N}((), res, size(on_true))
 end
 
-function select(
+@noinline function select(
     pred::TracedRNumber{Bool}, on_true::TracedRNumber{T}, on_false::TracedRNumber{T}
 ) where {T}
     res = MLIR.IR.result(
@@ -1072,20 +1072,15 @@ function select(
 end
 
 # comparison
-function compare(
-    lhs::Union{TracedRArray{T},TracedRNumber{T}},
-    rhs::Union{TracedRArray{T},TracedRNumber{T}};
+@noinline function compare(
+    lhs::AT,
+    rhs::AT;
     comparison_direction::String,
     compare_type=nothing,
     location=mlir_stacktrace("compare", @__FILE__, @__LINE__),
-) where {T}
+   ) where {AT <: Union{TracedRArray,TracedRNumber}}
     @assert comparison_direction in ("EQ", "NE", "GE", "GT", "LE", "LT")
     @assert size(lhs) == size(rhs)
-    if lhs isa TracedRNumber
-        @assert rhs isa TracedRNumber
-    else
-        @assert rhs isa TracedRArray
-    end
 
     res = MLIR.IR.result(
         stablehlo.compare(
@@ -1104,7 +1099,7 @@ function compare(
 end
 
 # eltype conversion
-function convert(
+@noinline function convert(
     ::Type{TracedRArray{T,N}},
     x::TracedRArray;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
@@ -1121,7 +1116,7 @@ function convert(
     )
 end
 
-function convert(
+@noinline function convert(
     ::Type{TracedRNumber{T}},
     x::TracedRNumber;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
@@ -1163,7 +1158,7 @@ julia> Reactant.@jit(
 (ConcreteRArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
 ```
 """
-function hlo_call(
+@noinline function hlo_call(
     code,
     args...;
     func_name="main",

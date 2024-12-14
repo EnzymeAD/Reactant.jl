@@ -11,6 +11,7 @@ import ..AnyTracedRArray
 using ..TracedUtils
 import ..Ops
 import ..MLIR
+import ..ancestor
 import ReactantCore
 import ..TracedUtils: materialize_traced_array
 
@@ -313,7 +314,7 @@ function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
     return dest[CartesianIndex()]  # 0D broadcast needs to unwrap results
 end
 
-# Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
+Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
