@@ -1,7 +1,7 @@
 function ReactantCore.traced_if(
     cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args
 ) where {TFn,FFn}
-    (_, true_branch_compiled, true_branch_results, _, _, _, _, _, true_linear_results) = Reactant.make_mlir_fn(
+    (_, true_branch_compiled, true_branch_results, _, _, _, _, _, true_linear_results) = Reactant.TracedUtils.make_mlir_fn(
         true_fn,
         args,
         (),
@@ -12,7 +12,7 @@ function ReactantCore.traced_if(
         construct_function_without_args=true,
     )
 
-    (_, false_branch_compiled, false_branch_results, _, _, _, _, _, false_linear_results) = Reactant.make_mlir_fn(
+    (_, false_branch_compiled, false_branch_results, _, _, _, _, _, false_linear_results) = Reactant.TracedUtils.make_mlir_fn(
         false_fn,
         args,
         (),
@@ -36,16 +36,16 @@ function ReactantCore.traced_if(
                        returned `$(typeof(tr))`, false branch returned `$(typeof(fr))`.")
             elseif tr isa MissingTracedValue
                 push!(result_types, MLIR.IR.type(fr.mlir_data))
-                push!(linear_results, new_traced_value(false_linear_results[i]))
+                push!(linear_results, TracedUtils.new_traced_value(false_linear_results[i]))
                 push!(true_block_insertions, (i => linear_results[end]))
             else
                 push!(result_types, MLIR.IR.type(tr.mlir_data))
-                push!(linear_results, new_traced_value(true_linear_results[i]))
+                push!(linear_results, TracedUtils.new_traced_value(true_linear_results[i]))
                 push!(false_block_insertions, (i => linear_results[end]))
             end
         else
             push!(result_types, MLIR.IR.type(tr.mlir_data))
-            push!(linear_results, new_traced_value(tr))
+            push!(linear_results, TracedUtils.new_traced_value(tr))
         end
     end
 
@@ -82,13 +82,13 @@ function ReactantCore.traced_while(
     # We promote all incoming args (is there a better way to do this?)
     traced_args = [
         if v isa Number && !(v isa TracedType)
-            Reactant.promote_to(TracedRNumber{typeof(v)}, v)
+            Reactant.TracedUtils.promote_to(TracedRNumber{typeof(v)}, v)
         else
             v
         end for v in args
     ]
 
-    (_, cond_fn_compiled, cond_fn_results, _, _, _, _, in_tys, cond_fn_linear_results) = Reactant.make_mlir_fn(
+    (_, cond_fn_compiled, cond_fn_results, _, _, _, _, in_tys, cond_fn_linear_results) = Reactant.TracedUtils.make_mlir_fn(
         cond_fn,
         traced_args,
         (),
@@ -99,7 +99,7 @@ function ReactantCore.traced_while(
         do_transpose=false,
     )
 
-    (_, body_fn_compiled, body_fn_results, _, _, _, _, _, body_fn_linear_results) = Reactant.make_mlir_fn(
+    (_, body_fn_compiled, body_fn_results, _, _, _, _, _, body_fn_linear_results) = Reactant.TracedUtils.make_mlir_fn(
         body_fn,
         traced_args,
         (),

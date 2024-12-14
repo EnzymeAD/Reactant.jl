@@ -376,6 +376,16 @@ extern "C" MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
     return wrap(res);
 }
 
+#include "llvm/IRReader/IRReader.h"
+extern "C" MlirModule ConvertLLVMStrToMLIR(const char* lmod, MlirContext cctx) {
+    LLVMContext Context;
+    SMDiagnostic Err;
+    auto llvmModule = llvm::parseIR(llvm::MemoryBufferRef(lmod, "conversion"), Err, Context);
+    mlir::MLIRContext &context = *unwrap(cctx);
+    auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context, /*emitExpensiveWarnings*/false, /*dropDICompositeElements*/false).release();
+    return wrap(res);
+}
+
 
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirModule cmod) {
