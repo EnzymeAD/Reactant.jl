@@ -241,9 +241,9 @@ function NNlib.batched_mul!(
     if size(x, 3) != size(y, 3)
         B = max(size(x, 3), size(y, 3))
         if size(x, 3) == 1
-            x = Reactant.broadcast_to_size(x, (size(x, 1), size(x, 2), B))
+            x = Reactant.TracedUtils.broadcast_to_size(x, (size(x, 1), size(x, 2), B))
         elseif size(y, 3) == 1
-            y = Reactant.broadcast_to_size(y, (size(y, 1), size(y, 2), B))
+            y = Reactant.TracedUtils.broadcast_to_size(y, (size(y, 1), size(y, 2), B))
         end
     end
 
@@ -253,9 +253,9 @@ function NNlib.batched_mul!(
     if size(x, 1) != size(y, 1)
         B = max(size(x, 1), size(y, 1))
         if size(x, 1) == 1
-            x = Reactant.broadcast_to_size(x, (B, size(x, 2), size(x, 3)))
+            x = Reactant.TracedUtils.broadcast_to_size(x, (B, size(x, 2), size(x, 3)))
         elseif size(y, 1) == 1
-            y = Reactant.broadcast_to_size(y, (B, size(y, 2), size(y, 3)))
+            y = Reactant.TracedUtils.broadcast_to_size(y, (B, size(y, 2), size(y, 3)))
         end
     end
 
@@ -273,7 +273,7 @@ end
 function NNlib.pad_constant(
     x::AnyTracedRArray{T,N}, pad::NTuple{N,Tuple{Int,Int}}, value
 ) where {T,N}
-    value = Reactant.promote_to(TracedRNumber{T}, value)
+    value = Reactant.TracedUtils.promote_to(TracedRNumber{T}, value)
     low = [i[1] for i in pad]
     high = [i[2] for i in pad]
     interior = [0 for i in pad]
@@ -332,7 +332,7 @@ function NNlib.gather!(dst::TracedRArray, src::AnyTracedRArray, idxs::AbstractAr
     start_sizes = ntuple(i -> size(src, i), dims)
     results = map(CartesianIndices(idxs)) do k
         res = @allowscalar src[colons..., Tuple(idxs[k])...]
-        res isa TracedRNumber && (res = Reactant.broadcast_to_size(res, (1,)))
+        res isa TracedRNumber && (res = Reactant.TracedUtils.broadcast_to_size(res, (1,)))
         return reshape(res, start_sizes..., :)
     end
     res = reshape(cat(results...; dims=(dims + 1)), size(dst))

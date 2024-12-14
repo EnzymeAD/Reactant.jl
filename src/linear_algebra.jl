@@ -14,6 +14,7 @@ using ..TracedUtils:
     set_mlir_data!
 
 import ..Ops
+import ..MLIR
 using LinearAlgebra
 
 function LinearAlgebra.mul!(
@@ -157,7 +158,7 @@ function LinearAlgebra.diagm(m::Integer, n::Integer, v::AnyTracedRArray{T,1}) wh
 
     mat = (v .+ zero(v)') .* diag_indicator
     return Ops.pad(
-        mat, promote_to(TracedRNumber{T}, 0); high=[m - length(v), n - length(v)]
+        mat, TracedUtils.promote_to(TracedRNumber{T}, 0); high=[m - length(v), n - length(v)]
     )
 end
 

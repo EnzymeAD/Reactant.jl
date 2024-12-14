@@ -82,7 +82,7 @@ function ReactantCore.traced_while(
     # We promote all incoming args (is there a better way to do this?)
     traced_args = [
         if v isa Number && !(v isa TracedType)
-            Reactant.promote_to(TracedRNumber{typeof(v)}, v)
+            Reactant.TracedUtils.promote_to(TracedRNumber{typeof(v)}, v)
         else
             v
         end for v in args
