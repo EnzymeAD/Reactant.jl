@@ -7,11 +7,14 @@ using Reactant:
     Ops,
     TracedRArray,
     AnyTracedRArray,
-    materialize_traced_array,
     MLIR,
-    TracedRNumber,
+    TracedRNumber
+
+using Reactant.TraceUtils:
+    materialize_traced_array,
     get_mlir_data,
     set_mlir_data!
+
 using ReactantCore: @trace
 using LinearAlgebra: LinearAlgebra, triu
 

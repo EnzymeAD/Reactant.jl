@@ -458,7 +458,7 @@ end
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
     @eval function Base.clamp!(x::AnyTracedRArray, min::$(minT), max::$(maxT))
         y = Ops.clamp(min, materialize_traced_array(x), max)
-        set_mlir_data!(x, y.mlir_data)
+        TracedUtils.set_mlir_data!(x, y.mlir_data)
         return x
     end
 end

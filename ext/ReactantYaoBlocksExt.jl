@@ -1,12 +1,13 @@
 module ReactantYaoBlocksExt
 
 using Reactant
+using Reactant.TraceUtils: broadcast_to_size
 using YaoBlocks
 
 function YaoBlocks.mat(
     ::Type{T}, R::RotationGate{D,Reactant.TracedRNumber{S},<:XGate}
 ) where {D,T,S}
-    M = Reactant.broadcast_to_size(zero(T), (2, 2))
+    M = broadcast_to_size(zero(T), (2, 2))
     c = cos(R.theta / 2)
     s = -im * sin(R.theta / 2)
     M[1, 1] = c
@@ -19,7 +20,7 @@ end
 function YaoBlocks.mat(
     ::Type{T}, R::RotationGate{D,Reactant.TracedRNumber{S},<:YGate}
 ) where {D,T,S}
-    M = Reactant.broadcast_to_size(zero(T), (2, 2))
+    M = broadcast_to_size(zero(T), (2, 2))
     c = cos(R.theta / 2)
     s = sin(R.theta / 2)
     M[1, 1] = c
@@ -32,7 +33,7 @@ end
 function YaoBlocks.mat(
     ::Type{T}, R::RotationGate{D,Reactant.TracedRNumber{S},<:ZGate}
 ) where {D,T,S}
-    M = Reactant.broadcast_to_size(zero(T), (2, 2))
+    M = broadcast_to_size(zero(T), (2, 2))
     x = exp(im * R.theta / 2)
     M[1, 1] = conj(x)
     M[2, 2] = x

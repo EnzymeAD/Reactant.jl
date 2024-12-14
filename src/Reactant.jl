@@ -57,34 +57,6 @@ abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
 Base.collect(A::RArray) = copy(A)
 
-function Enzyme.make_zero(
-    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
-)::RT where {copy_if_inactive,RT<:RArray}
-    if haskey(seen, prev)
-        return seen[prev]
-    end
-    if Enzyme.Compiler.guaranteed_const_nongen(RT, nothing)
-        return copy_if_inactive ? Base.deepcopy_internal(prev, seen) : prev
-    end
-    if RT <: ConcreteRArray
-        res = RT(zeros(eltype(RT), size(prev)))
-        seen[prev] = res
-        return res
-    end
-
-    if RT <: TracedRArray
-        res = broadcast_to_size(eltype(RT)(0), size(prev))
-        seen[prev] = res
-        return res
-    end
-
-    attr = fill(MLIR.IR.Attribute(eltype(RT)(0)), mlir_type(prev))
-    cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
-    res = RT((), cst)
-    seen[prev] = res
-    return res
-end
-
 function ancestor(x::AbstractArray)
     p_x = parent(x)
     p_x === x && return x
@@ -158,6 +130,20 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 include("ControlFlow.jl")
 include("Tracing.jl")
 include("Compiler.jl")
+
+function Enzyme.make_zero(
+    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
+)::RT where {copy_if_inactive,RT<:RArray}
+    if haskey(seen, prev)
+        return seen[prev]
+    end
+    if Enzyme.Compiler.guaranteed_const_nongen(eltype(RT), nothing)
+        return copy_if_inactive ? Base.deepcopy_internal(prev, seen) : prev
+    end
+    res = zero(prev)
+    seen[prev] = res
+    return res
+end
 
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
 export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace

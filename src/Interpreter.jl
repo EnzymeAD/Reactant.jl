@@ -303,7 +303,7 @@ function overload_autodiff(
             act = act_from_type(A, reverse, needs_primal(CMode))
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
-                attr = fill(MLIR.IR.Attribute(eltype(a)(1)), mlir_type(a))
+                attr = fill(MLIR.IR.Attribute(eltype(a)(1)), Ops.mlir_type(a))
                 cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
                 push!(ad_inputs, cst)
             end
@@ -325,7 +325,7 @@ function overload_autodiff(
                 if act != enzyme_out && act != enzyme_outnoneed
                     continue
                 end
-                TraceUtils.push_val!(ad_inputs, args[idx].dval, path[3:end])
+                TracedUtils.push_val!(ad_inputs, args[idx].dval, path[3:end])
             end
         end
     end

@@ -123,7 +123,7 @@ function make_mlir_fn(
         return (
             true,
             make_mlir_fn(
-                apply,
+                Reactant.apply,
                 (f, args...),
                 kwargs,
                 name,
