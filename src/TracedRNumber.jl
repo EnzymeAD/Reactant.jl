@@ -217,7 +217,7 @@ struct TypeCast{T<:ReactantPrimitive} <: Function end
 (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = TracedUtils.promote_to(TracedRNumber{T}, x)
 
 function Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N}
-    return Reactant.broadcast_to_size(x, dims)
+    return TracedUtils.broadcast_to_size(x, dims)
 end
 
 Base.float(x::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{float(T)}, x)
@@ -249,7 +249,7 @@ end
 function Base.typed_hvncat(
     ::Type{T}, dims::Tuple{Vararg{Int}}, row_first::Bool, xs::TracedRNumber...
 ) where {T}
-    xs = map(Base.Fix2(broadcast_to_size, (1, 1)), xs)
+    xs = map(Base.Fix2(TracedUtils.broadcast_to_size, (1, 1)), xs)
     return Base.typed_hvncat(T, dims, row_first, xs...)
 end
 

@@ -88,11 +88,11 @@ end
 
 # Prevent ambiguity
 function Base.getindex(a::WrappedTracedRArray, index::Union{Int,TracedRNumber{Int}}...)
-    return getindex(ancestor(a), get_ancestor_indices(a, index...)...)
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...)
 end
 
 function Base.getindex(a::WrappedTracedRArray, indices...)
-    return getindex(ancestor(a), get_ancestor_indices(a, indices...)...)
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
 end
 
 function Base.setindex!(
@@ -124,7 +124,7 @@ function Base.setindex!(
     v,
     indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int,TracedRNumber{Int}},N},
 ) where {T,N}
-    ancestor_indices = get_ancestor_indices(a, indices...)
+    ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
     setindex!(ancestor(a), v, ancestor_indices...)
     return a
 end
