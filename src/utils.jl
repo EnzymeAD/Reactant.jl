@@ -1,50 +1,9 @@
-function mlir_type(x::RArray{T,N}) where {T,N}
-    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
-end
-
-mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
-
-mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
-
-function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
-    @assert length(shape) == N
-    return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
-end
-
-function mlir_type(::Type{<:RNumber{T}}) where {T}
-    return MLIR.IR.TensorType((), MLIR.IR.Type(T))
-end
-
-function mlir_type(::Type{<:MissingTracedValue})
-    return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
-end
-
-function batch_ty(width, mlirty)
-    return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
-end
-
-function transpose_ty(mlirty)
-    return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
-end
-function transpose_val(val)
-    attr = MLIR.IR.DenseArrayAttribute(
-        Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...]
-    )
-    return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
-end
 
 function apply(f, args...; kwargs...)
     return f(args...; kwargs...)
 end
 
 function call_with_reactant end
-
-# generate a LineInfoNode for the current source code location
-macro LineInfoNode(method)
-    return Core.LineInfoNode(
-        __module__, method, __source__.file, Int32(__source__.line), Int32(0)
-    )
-end
 
 function maybe_argextype(@nospecialize(x), src)
     return try
@@ -53,22 +12,6 @@ function maybe_argextype(@nospecialize(x), src)
         !(err isa Core.Compiler.InvalidIRError) && rethrow()
         nothing
     end
-end
-
-function rewrite_inst(inst, ir)
-    if Meta.isexpr(inst, :call)
-        # Even if type unstable we do not want (or need) to replace intrinsic
-        # calls or builtins with our version.
-        ft = Core.Compiler.widenconst(maybe_argextype(inst.args[1], ir))
-        if !(ft <: Core.IntrinsicFunction) && !(ft <: Core.Builtin)
-            rep = Expr(:call, call_with_reactant, inst.args...)
-            return true, rep
-        end
-    end
-    if Meta.isexpr(inst, :invoke)
-    #    return false, Expr(:call, inst.args[2:end]...)
-    end
-    return false, inst
 end
 
 """
@@ -113,32 +56,96 @@ end
     end
 end
 
-
-# HACK: in all versions of Julia, `jl_new_opaque_closure_from_code_info` doesn't take a world argument
-#       but instead always generates code for the current world. note that this doesn't
-#       actually change the world age, but just spoofs the counter `jl_create_native` reads.
-# XXX: Base.get_world_counter is supposed to be monotonically increasing and is runtime global.
-macro in_world(world, ex)
-    quote
-        actual_world = Base.get_world_counter()
-        world_counter = cglobal(:jl_world_counter, Csize_t)
-        unsafe_store!(world_counter, $(esc(world)))
-        try
-            $(esc(ex))
-        finally
-            unsafe_store!(world_counter, actual_world)
-        end
+function has_ancestor(query::Module, target::Module)
+    query == target && return true
+    while true
+        next = parentmodule(query)
+        next == target && return true
+        next == query && return false
+        query = next
     end
 end
 
-#define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
+function should_rewrite_ft(@nospecialize(ft))
+    # Don't rewrite builtin or intrinsics
+    if ft <: Core.IntrinsicFunction || ft <: Core.Builtin
+        return false
+    end
+    if ft <: Core.Function
+        mod = ft.name.module
+        # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
+        if has_ancestor(mod, Reactant.Ops) || has_ancestor(mod, Reactant.TracedUtils) || has_ancestor(mod, Reactant.MLIR)
+            return false
+        end
+    end
+    # Don't rewrite Val
+    if ft === Type{Base.Val}
+        return false
+    end
+    # Don't rewrite exception constructors
+    if ft <: Type{<:Core.Exception}
+        return false
+    end
 
+    # Default assume all functions need to be reactant-ified
+    return true
+end
+
+# Avoid recursively interpreting into methods we define explicitly
+# as overloads, which we assume should handle the entirety of the
+# translation (and if not they can use call_in_reactant).
+function is_reactant_method(mi::Core.MethodInstance)
+    meth = mi.def
+    if !isdefined(meth, :external_mt)
+        return false
+    end
+    mt = meth.external_mt
+    return mt === REACTANT_METHOD_TABLE
+end
+
+function rewrite_inst(inst, ir, interp)
+    if Meta.isexpr(inst, :call)
+        # Even if type unstable we do not want (or need) to replace intrinsic
+        # calls or builtins with our version.
+        ft = Core.Compiler.widenconst(maybe_argextype(inst.args[1], ir))
+        if should_rewrite_ft(ft)
+            rep = Expr(:call, call_with_reactant, inst.args...)
+            return true, rep
+        end
+    end
+    if Meta.isexpr(inst, :invoke)
+        omi = inst.args[1]::Core.MethodInstance
+        sig = omi.specTypes
+        ft = sig.parameters[1]
+
+        if should_rewrite_ft(ft) && !is_reactant_method(omi)
+
+            min_world = Ref{UInt}(typemin(UInt))
+            max_world = Ref{UInt}(typemax(UInt))
+
+            lookup_result = lookup_world(Tuple{typeof(call_with_reactant), sig.parameters...}, interp.world, Core.Compiler.method_table(interp), min_world, max_world)
+    
+            match = lookup_result::Core.MethodMatch
+            # look up the method and code instance
+            mi = ccall(
+                :jl_specializations_get_linfo,
+                Ref{Core.MethodInstance},
+                (Any, Any, Any),
+                match.method,
+                match.spec_types,
+                match.sparams,
+            )
+            rep = Expr(:invoke, mi, call_with_reactant, inst.args[2:end]...)
+            return true, rep
+        end
+    end
+    return false, inst
+end
 
 function make_oc(sig, rt, src, nargs, isva, f)::Core.OpaqueClosure
     ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
         sig, rt, rt, @__MODULE__, src, 0, nothing, nargs, isva, f, true)::Core.OpaqueClosure
 end
-
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
@@ -284,7 +291,7 @@ function call_with_reactant_generator(
         ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
-
+    
     # Rewrite type unstable calls to recurse into call_with_reactant to ensure
     # they continue to use our interpreter. Reset the derived return type
     # to Any if our interpreter would change the return type of any result.
@@ -293,10 +300,10 @@ function call_with_reactant_generator(
     any_changed = false
     for (i, inst) in enumerate(ir.stmts)
         @static if VERSION < v"1.11"
-            changed, next = rewrite_inst(inst[:inst], ir)
+            changed, next = rewrite_inst(inst[:inst], ir, interp)
             Core.Compiler.setindex!(ir.stmts[i], next, :inst)
         else
-            changed, next = rewrite_inst(inst[:stmt], ir)
+            changed, next = rewrite_inst(inst[:stmt], ir, interp)
             Core.Compiler.setindex!(ir.stmts[i], next, :stmt)
         end
         if changed
@@ -307,7 +314,7 @@ function call_with_reactant_generator(
     Core.Compiler.finish(interp, opt, ir, caller)
 
     src = Core.Compiler.ir_to_codeinf!(opt)
-
+    
     # prepare a new code info
     code_info = copy(src)
     static_params = match.sparams
@@ -347,6 +354,7 @@ function call_with_reactant_generator(
     if method.isva
         iter_args = min(n_actual_args, n_method_args-1)
     end
+        
     for i in 1:iter_args
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
@@ -443,223 +451,11 @@ function call_with_reactant_generator(
     code_info.codelocs = overdubbed_codelocs
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
-
+    
     return code_info
 end
 
 @eval function call_with_reactant($REDUB_ARGUMENTS_NAME...)
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
-end
-
-function make_mlir_fn(
-    f,
-    args,
-    kwargs,
-    name="main",
-    concretein=true;
-    toscalar=false,
-    return_dialect=:func,
-    no_args_in_result::Bool=false,
-    construct_function_without_args::Bool=false,
-    do_transpose=true,
-)
-    if sizeof(typeof(f)) != 0 || f isa BroadcastFunction
-        return (
-            true,
-            make_mlir_fn(
-                apply,
-                (f, args...),
-                kwargs,
-                name,
-                concretein;
-                toscalar,
-                return_dialect,
-                no_args_in_result,
-                construct_function_without_args,
-                do_transpose,
-            )[2:end]...,
-        )
-    end
-
-    N = length(args)
-    seen_args = OrderedIdDict()
-    traced_args = ntuple(N) do i
-        return make_tracer(
-            seen_args,
-            args[i],
-            (:args, i),
-            concretein ? ConcreteToTraced : TracedSetPath;
-            toscalar,
-            track_numbers=construct_function_without_args ? (Number,) : (),
-        )
-    end
-
-    linear_args = TracedType[]
-    for (k, v) in seen_args
-        v isa TracedType || continue
-        push!(linear_args, v)
-    end
-
-    in_tys = if toscalar
-        [MLIR.IR.TensorType((), MLIR.IR.Type(eltype(arg))) for arg in linear_args]
-    elseif do_transpose
-        [transpose_ty(mlir_type(arg)) for arg in linear_args]
-    else
-        [mlir_type(arg) for arg in linear_args]
-    end
-
-    sym_visibility = nothing
-    if !concretein
-        sym_visibility = MLIR.IR.Attribute("private")
-    end
-
-    mod = MLIR.IR.mmodule()
-    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
-            sym_name=name * "_tmp",
-            function_type=MLIR.IR.FunctionType(in_tys, []),
-            body=MLIR.IR.Region(),
-        )
-    end
-
-    if construct_function_without_args
-        fnbody = MLIR.IR.Block()
-    else
-        fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
-    end
-    push!(MLIR.IR.region(func, 1), fnbody)
-
-    @assert MLIR.IR._has_block()
-
-    result = MLIR.IR.block!(fnbody) do
-        for (i, arg) in enumerate(linear_args)
-            if construct_function_without_args
-                arg.mlir_data = args[i].mlir_data
-            else
-                raw_arg = MLIR.IR.argument(fnbody, i)
-                row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
-                arg.mlir_data = row_maj_arg
-            end
-        end
-
-        # TODO fix it for kwargs
-        if concretein
-            call_with_reactant(f, traced_args...)
-        else
-            f(traced_args...)
-        end
-    end
-
-    seen_results = OrderedIdDict()
-
-    traced_result = make_tracer(
-        seen_results,
-        result,
-        (:result,),
-        concretein ? TracedTrack : TracedSetPath;
-        track_numbers=construct_function_without_args ? (Number,) : (),
-    )
-
-    # marks buffers to be donated
-    for i in 1:N
-        make_tracer(
-            seen_results, traced_args[i], concretein ? (:resargs, i) : (), TracedTrack
-        )
-    end
-
-    linear_results = TracedType[]
-
-    for (k, v) in seen_results
-        v isa TracedType || continue
-        (no_args_in_result && length(v.paths) > 0 && v.paths[1][1] == :args) && continue
-        push!(linear_results, v)
-    end
-
-    out_tys = [transpose_ty(mlir_type(arg)) for arg in linear_results]
-
-    ret = MLIR.IR.block!(fnbody) do
-        vals = MLIR.IR.Value[]
-        for res in linear_results
-            col_maj = if res isa MissingTracedValue
-                broadcast_to_size(false, ()).mlir_data
-            elseif construct_function_without_args || !do_transpose
-                res.mlir_data
-            elseif do_transpose
-                transpose_val(res.mlir_data)
-            end
-            push!(vals, col_maj)
-        end
-        !no_args_in_result && @assert length(vals) == length(linear_results)
-
-        dialect = getfield(MLIR.Dialects, return_dialect)
-        return dialect.return_(vals)
-    end
-
-    name2 = name
-
-    tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
-    for i in 0:10000
-        name2 = if i == 0
-            name
-        else
-            name * string(i)
-        end
-        if MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, name2))
-            break
-        end
-    end
-
-    func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
-            sym_name=name2,
-            function_type=MLIR.IR.FunctionType(in_tys, out_tys),
-            body=MLIR.IR.Region(),
-            sym_visibility,
-        )
-    end
-    MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
-
-    MLIR.API.mlirOperationDestroy(func.operation)
-    func.operation = MLIR.API.MlirOperation(C_NULL)
-    return (
-        false,
-        func2,
-        traced_result,
-        result,
-        seen_args,
-        ret,
-        linear_args,
-        in_tys,
-        linear_results,
-    )
-end
-
-const DEBUG_MODE::Ref{Bool} = Ref(false)
-
-function with_debug(f)
-    old = DEBUG_MODE[]
-    DEBUG_MODE[] = true
-    try
-        return f()
-    finally
-        DEBUG_MODE[] = old
-    end
-end
-
-function mlir_stacktrace(name, file, line)::MLIR.IR.Location
-    # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
-    if DEBUG_MODE[]
-        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
-    end
-
-    # retrieve current stacktrace, remove this function's frame and translate to MLIR Location
-    st = stacktrace()
-    deleteat!(st, 1)
-    return mapfoldl(MLIR.IR.Location, st) do stackframe
-        name = string(stackframe.func)
-        file = stackframe.file
-        line = stackframe.line
-        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
-    end
 end

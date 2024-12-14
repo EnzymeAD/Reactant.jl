@@ -1,36 +1,27 @@
-mutable struct TracedRNumber{T} <: RNumber{T}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
+module TracedRNumberOverrides
 
-    function TracedRNumber{T}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
-    ) where {T}
-        if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == ()
-        end
-        return new{T}(paths, mlir_data)
-    end
-end
-
-get_mlir_data(x::TracedRNumber) = x.mlir_data
-set_mlir_data!(x::TracedRNumber, data) = (x.mlir_data = data; return x)
+import ..TracedRNumber
+import ..TracedRArray
+import ..ReactantPrimitive
+using ..TracedUtils
+import ..Ops
+import ..MLIR
+using ReactantCore
 
 ReactantCore.is_traced(::TracedRNumber) = true
-
-new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
 
 Base.eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 Base.getindex(a::TracedRNumber{T}) where {T} = a
 
-Base.zero(::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{T}, zero(T))
-Base.one(::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{T}, one(T))
+Base.zero(::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{T}, zero(T))
+Base.one(::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{T}, one(T))
 Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
 
-Base.eps(::Type{TracedRNumber{T}}) where {T} = promote_to(TracedRNumber{T}, eps(T))
+Base.eps(::Type{TracedRNumber{T}}) where {T} = TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 
 function Base.convert(::Type{<:TracedRNumber{T}}, x::Number) where {T}
-    return promote_to(TracedRNumber{T}, T(x))
+    return TracedUtils.promote_to(TracedRNumber{T}, T(x))
 end
 
 function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
@@ -57,27 +48,28 @@ function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
 end
 
 function Base.convert(::Type{TracedRNumber{T}}, x::Number) where {T}
-    return promote_to(TracedRNumber{T}, x)
+    return TracedUtils.promote_to(TracedRNumber{T}, x)
 end
 
 TracedRNumber{T}(x::TracedRNumber{T}) where {T} = x
+
 function TracedRNumber{T}(x::Number) where {T}
-    return promote_to(TracedRNumber{T}, x)
+    return TracedUtils.promote_to(TracedRNumber{T}, x)
 end
 
-function promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
+function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
     if rhs isa TracedRNumber
         rhs isa TracedRNumber{T} && return rhs
         return Ops.convert(TracedRNumber{T}, rhs)
     end
     if rhs isa TracedRArray{<:Any,0}
-        return promote_to(TracedRNumber{T}, TracedRNumber{eltype(rhs)}((), rhs.mlir_data))
+        return TracedUtils.promote_to(TracedRNumber{T}, TracedRNumber{eltype(rhs)}((), rhs.mlir_data))
     end
-    rhs isa Number && return promote_to(TracedRNumber{T}, Ops.constant(fill(T(rhs))))
-    return promote_to(TracedRNumber{T}, Ops.constant(collect(rhs)))
+    rhs isa Number && return TracedUtils.promote_to(TracedRNumber{T}, Ops.constant(fill(T(rhs))))
+    return TracedUtils.promote_to(TracedRNumber{T}, Ops.constant(collect(rhs)))
 end
 
-promote_to(::TracedRNumber{T}, rhs) where {T} = promote_to(TracedRNumber{T}, rhs)
+TracedUtils.promote_to(::TracedRNumber{T}, rhs) where {T} = TracedUtils.promote_to(TracedRNumber{T}, rhs)
 
 for (jlop, hloop) in (
     (:(Base.min), :minimum),
@@ -98,7 +90,7 @@ end
 function Base.div(
     @nospecialize(lhs::TracedRNumber{T}), rhs, ::typeof(RoundDown)
 ) where {T<:Integer}
-    return Ops.divide(lhs, promote_to(TracedRNumber{T}, rhs))
+    return Ops.divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
 
 for (jlop, hloop, hlocomp) in (
@@ -117,29 +109,29 @@ for (jlop, hloop, hlocomp) in (
         end
 
         function $(jlop)(@nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs)) where {T}
-            return $(jlop)(lhs, promote_to(lhs, rhs))
+            return $(jlop)(lhs, TracedUtils.promote_to(lhs, rhs))
         end
         function $(jlop)(
             @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
         ) where {T}
-            return $(jlop)(lhs, promote_to(lhs, rhs))
+            return $(jlop)(lhs, TracedUtils.promote_to(lhs, rhs))
         end
 
         function $(jlop)(@nospecialize(lhs), @nospecialize(rhs::TracedRNumber{T})) where {T}
-            return $(jlop)(promote_to(rhs, lhs), rhs)
+            return $(jlop)(TracedUtils.promote_to(rhs, lhs), rhs)
         end
         function $(jlop)(
             @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
         ) where {T}
-            return $(jlop)(promote_to(rhs, lhs), rhs)
+            return $(jlop)(TracedUtils.promote_to(rhs, lhs), rhs)
         end
 
         function $(jlop)(
             @nospecialize(lhs::TracedRNumber{T1}), @nospecialize(rhs::TracedRNumber{T2})
         ) where {T1,T2}
             commonTy = TracedRNumber{Base.promote_type(T1, T2)}
-            lhs = promote_to(commonTy, lhs)
-            rhs = promote_to(commonTy, rhs)
+            lhs = TracedUtils.promote_to(commonTy, lhs)
+            rhs = TracedUtils.promote_to(commonTy, rhs)
             return $(jlop)(lhs, rhs)
         end
     end
@@ -154,7 +146,7 @@ function Base.ifelse(
             element-type to the common type. This is semantically different from the \
             behavior of `ifelse` in Base. Use with caution" maxlog = 1
     T = promote_type(T1, T2)
-    return ifelse(pred, promote_to(TracedRNumber{T}, x), promote_to(TracedRNumber{T}, y))
+    return ifelse(pred, TracedUtils.promote_to(TracedRNumber{T}, x), TracedUtils.promote_to(TracedRNumber{T}, y))
 end
 
 function Base.ifelse(
@@ -170,12 +162,12 @@ for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
     @eval begin
         function Base.:&(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
             return Ops.and(
-                promote_to(TracedRNumber{$(T)}, x), promote_to(TracedRNumber{$(T)}, y)
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x), TracedUtils.promote_to(TracedRNumber{$(T)}, y)
             )
         end
         function Base.:|(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
             return Ops.or(
-                promote_to(TracedRNumber{$(T)}, x), promote_to(TracedRNumber{$(T)}, y)
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x), TracedUtils.promote_to(TracedRNumber{$(T)}, y)
             )
         end
         Base.:!(x::TracedRNumber{<:$(T1)}) = Ops.not(x)
@@ -222,13 +214,13 @@ end
 
 struct TypeCast{T<:ReactantPrimitive} <: Function end
 
-(::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = promote_to(TracedRNumber{T}, x)
+(::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = TracedUtils.promote_to(TracedRNumber{T}, x)
 
 function Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N}
     return Reactant.broadcast_to_size(x, dims)
 end
 
-Base.float(x::TracedRNumber{T}) where {T} = promote_to(TracedRNumber{float(T)}, x)
+Base.float(x::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{float(T)}, x)
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
@@ -259,4 +251,6 @@ function Base.typed_hvncat(
 ) where {T}
     xs = map(Base.Fix2(broadcast_to_size, (1, 1)), xs)
     return Base.typed_hvncat(T, dims, row_first, xs...)
+end
+
 end

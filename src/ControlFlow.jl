@@ -36,16 +36,16 @@ function ReactantCore.traced_if(
                        returned `$(typeof(tr))`, false branch returned `$(typeof(fr))`.")
             elseif tr isa MissingTracedValue
                 push!(result_types, MLIR.IR.type(fr.mlir_data))
-                push!(linear_results, new_traced_value(false_linear_results[i]))
+                push!(linear_results, TracedUtils.new_traced_value(false_linear_results[i]))
                 push!(true_block_insertions, (i => linear_results[end]))
             else
                 push!(result_types, MLIR.IR.type(tr.mlir_data))
-                push!(linear_results, new_traced_value(true_linear_results[i]))
+                push!(linear_results, TracedUtils.new_traced_value(true_linear_results[i]))
                 push!(false_block_insertions, (i => linear_results[end]))
             end
         else
             push!(result_types, MLIR.IR.type(tr.mlir_data))
-            push!(linear_results, new_traced_value(tr))
+            push!(linear_results, TracedUtils.new_traced_value(tr))
         end
     end
 

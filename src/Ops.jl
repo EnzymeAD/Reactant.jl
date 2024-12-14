@@ -6,12 +6,61 @@ using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme
 using ..Reactant:
     Reactant,
-    ConcreteRArray,
-    ConcreteRNumber,
     TracedRArray,
     TracedRNumber,
-    mlir_type,
-    mlir_stacktrace
+    RArray,
+    RNumber,
+    MissingTracedValue
+
+function mlir_type(x::RArray{T,N}) where {T,N}
+    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
+end
+
+mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
+
+mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+
+function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
+    @assert length(shape) == N
+    return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+end
+
+function mlir_type(::Type{<:RNumber{T}}) where {T}
+    return MLIR.IR.TensorType((), MLIR.IR.Type(T))
+end
+
+function mlir_type(::Type{<:MissingTracedValue})
+    return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+end
+
+const DEBUG_MODE::Ref{Bool} = Ref(false)
+
+function with_debug(f)
+    old = DEBUG_MODE[]
+    DEBUG_MODE[] = true
+    try
+        return f()
+    finally
+        DEBUG_MODE[] = old
+    end
+end
+
+function mlir_stacktrace(name, file, line)::MLIR.IR.Location
+    # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
+    if DEBUG_MODE[]
+        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+    end
+
+    # retrieve current stacktrace, remove this function's frame and translate to MLIR Location
+    st = stacktrace()
+    deleteat!(st, 1)
+    return mapfoldl(MLIR.IR.Location, st) do stackframe
+        name = string(stackframe.func)
+        file = stackframe.file
+        line = stackframe.line
+        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+    end
+end
 
 struct Token
     mlir_data::MLIR.IR.Value
@@ -27,26 +76,11 @@ function constant(
     return TracedRArray{T,N}((), res, size(x))
 end
 
-function constant(x::ConcreteRArray; kwargs...)
-    return stablehlo.constant(Base.convert(Array, x); kwargs...)
-end
-
 function constant(
     x::T; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T<:Number}
     res = constant(fill(x); location)
     return TracedRNumber{T}((), res.mlir_data)
-end
-
-function constant(
-    x::ConcreteRNumber{T}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
-) where {T}
-    output = mlir_type(TracedRArray{T,0}, ())
-    value = MLIR.IR.DenseElementsAttribute(
-        fill(MLIR.IR.Attribute(Base.convert(T, x)), output)
-    )
-    res = MLIR.IR.result(stablehlo.constant(; output, value, location))
-    return TracedRNumber{T,N}((), res)
 end
 
 # unary elementwise ops

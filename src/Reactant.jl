@@ -97,11 +97,59 @@ include("Interpreter.jl")
 
 include("utils.jl")
 
-include("ConcreteRArray.jl")
+mutable struct TracedRArray{T,N} <: RArray{T,N}
+    paths::Tuple
+    mlir_data::Union{Nothing,MLIR.IR.Value}
+    shape::NTuple{N,Int}
+
+    function TracedRArray{T,N}(
+        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
+    ) where {T,N}
+        shape = Tuple(shape)
+        if !isnothing(mlir_data)
+            @assert size(MLIR.IR.type(mlir_data)) == shape
+        end
+        return new{T,N}(paths, mlir_data, shape)
+    end
+end
+
+const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
+const AnyTracedRVector{T} = AnyTracedRArray{T,1}
+const AnyTracedRMatrix{T} = Union{
+    AnyTracedRArray{T,2},LinearAlgebra.Diagonal{T,TracedRArray{T,1}}
+}
+const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
+
+function TracedRArray(data::MLIR.IR.Value)
+    data_type = MLIR.IR.type(data)
+    return TracedRArray{eltype(MLIR.IR.julia_type(data_type)),ndims(data_type)}(
+        (), data, size(data_type)
+    )
+end
+
+mutable struct TracedRNumber{T} <: RNumber{T}
+    paths::Tuple
+    mlir_data::Union{Nothing,MLIR.IR.Value}
+
+    function TracedRNumber{T}(
+        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+    ) where {T}
+        if !isnothing(mlir_data)
+            @assert size(MLIR.IR.type(mlir_data)) == ()
+        end
+        return new{T}(paths, mlir_data)
+    end
+end
+
+include("Ops.jl")
+include("TracedUtils.jl")
+
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 
-include("Ops.jl")
+include("ConcreteRArray.jl")
+
 
 include("linear_algebra.jl")
 
