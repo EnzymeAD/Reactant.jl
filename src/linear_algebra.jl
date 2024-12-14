@@ -5,7 +5,13 @@ import ..TracedRArray
 import ..AnyTracedRArray
 import ..AnyTracedRMatrix
 import ..AnyTracedRVector
-using ..TracedUtils
+
+using ..TracedUtils:
+    get_mlir_data,
+    materialize_traced_array,
+    set_mlir_data!
+
+import ..Ops
 using LinearAlgebra
 
 function LinearAlgebra.mul!(
