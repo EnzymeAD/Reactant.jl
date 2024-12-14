@@ -119,11 +119,25 @@ function rewrite_inst(inst, ir, interp)
         ft = sig.parameters[1]
 
         if should_rewrite_ft(ft) && !is_reactant_method(omi)
+            method = omi.def::Core.Method
 
             min_world = Ref{UInt}(typemin(UInt))
             max_world = Ref{UInt}(typemax(UInt))
+            
 
-            lookup_result = lookup_world(Tuple{typeof(call_with_reactant), sig.parameters...}, interp.world, Core.Compiler.method_table(interp), min_world, max_world)
+            if !method.isva || !Base.isvarargtype(sig.parameters[end])
+                sig2 = Tuple{typeof(call_with_reactant), sig.parameters...}
+            else
+                vartup = inst.args[end]
+                ns = Type[]
+                eT = sig.parameters[end].T
+                for i in 1:(length(inst.args) - 1 - (length(sig.parameters) - 1))
+                    push!(ns, eT)
+                end
+                sig2 = Tuple{typeof(call_with_reactant), sig.parameters[1:end-1]..., ns...}
+            end
+
+            lookup_result = lookup_world(sig2, interp.world, Core.Compiler.method_table(interp), min_world, max_world)
     
             match = lookup_result::Core.MethodMatch
             # look up the method and code instance
@@ -135,6 +149,7 @@ function rewrite_inst(inst, ir, interp)
                 match.spec_types,
                 match.sparams,
             )
+            n_method_args = method.nargs
             rep = Expr(:invoke, mi, call_with_reactant, inst.args[2:end]...)
             return true, rep
         end
@@ -163,7 +178,7 @@ function call_with_reactant_generator(
 )
     @nospecialize
     args = redub_arguments
-    safe_print("args", args)
+    # safe_print("args", args)
 
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
@@ -289,7 +304,7 @@ function call_with_reactant_generator(
     #else
     opt = Core.Compiler.OptimizationState(frame, interp)
     
-    safe_print("opt.src", opt.src)
+    # safe_print("opt.src", opt.src)
 
     caller = frame.result
     @static if VERSION < v"1.11-"
@@ -298,8 +313,9 @@ function call_with_reactant_generator(
         ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
+
     
-    safe_print("ir1", ir)
+    # safe_print("ir1", ir)
     
     # Rewrite type unstable calls to recurse into call_with_reactant to ensure
     # they continue to use our interpreter. Reset the derived return type
@@ -320,11 +336,12 @@ function call_with_reactant_generator(
             Core.Compiler.setindex!(ir.stmts[i], Any, :type)
         end
     end
+    
     Core.Compiler.finish(interp, opt, ir, caller)
 
     src = Core.Compiler.ir_to_codeinf!(opt)
     
-    safe_print("src", src)
+    # safe_print("src", src)
     
     # prepare a new code info
     code_info = copy(src)
@@ -463,7 +480,7 @@ function call_with_reactant_generator(
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
     
-    safe_print("code_info", code_info)
+    # safe_print("code_info", code_info)
 
     return code_info
 end

@@ -481,7 +481,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
     return broadcast_to_size_internal(x, rsize)
 end
 
-function broadcast_to_size_internal(x::TracedRArray, rsize)
+@noinline function broadcast_to_size_internal(x::TracedRArray, rsize)
     dims = collect(Int64, 0:(length(size(x)) - 1))
 
     if length(size(MLIR.IR.type(x.mlir_data))) != length(dims)
