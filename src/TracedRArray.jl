@@ -211,36 +211,50 @@ function Base.mapreduce(
 
     inp = [broadcast(f, A).mlir_data]
 
-    rdims = if dims == (:)
-        Int64[i for i in 0:(N - 1)]
+    rdims = Int64[]
+
+    if dims == (:)
+        for i in 0:(N-1)
+            push!(rdims, i)
+        end
     else
-        Int64[i - 1 for i in dims]
+        for i in dims
+            push!(rdims, i-1)
+        end
     end
 
     in_tys = [
-        MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(arg))) for arg in (inp[1], init[1])
+        MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(inp[1]))),
+        MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(init[1]))),
     ]
 
-    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in in_tys])
+    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location(), MLIR.IR.Location()])
 
     args = (
-        TracedRNumber{op_in_T}((), MLIR.IR.argument(fnbody, i)) for
-        (i, ty) in enumerate(in_tys)
+        TracedRNumber{op_in_T}((), MLIR.IR.argument(fnbody, 1)),
+        TracedRNumber{op_in_T}((), MLIR.IR.argument(fnbody, 2)),
     )
 
-    res = MLIR.IR.block!(fnbody) do
-        tmp = TracedUtils.broadcast_to_size(op(args...), ()).mlir_data
-        MLIR.Dialects.stablehlo.return_(MLIR.IR.Value[tmp])
-        return tmp
+    resty = MLIR.IR.block!(fnbody) do
+        tmp = TracedUtils.broadcast_to_size(op(args...), ())
+        Ops.return_(tmp)
+        return eltype(MLIR.IR.type(tmp.mlir_data))
     end
 
-    toonedims = [(in(i - 1, rdims) ? 1 : size(A, i)) for i in 1:N]
-    outdims = [size(A, i) for i in 1:N if (i - 1) ∉ rdims]
+    toonedims = Int[]
+    outdims = Int[]
+    for i in 1:N
+        tmp = if in(i-1, rdims)
+            1
+        else
+            sz = size(A, i)
+            push!(outdims, sz)
+            sz
+        end
+        push!(toonedims, tmp)
+    end
 
-    TT = [
-        MLIR.IR.TensorType(outdims, eltype(MLIR.IR.type(inp0))) for
-        (inp0, res0) in zip(inp, (res,))
-    ]
+    TT = MLIR.IR.Type[MLIR.IR.TensorType(outdims, resty)]
 
     body = MLIR.IR.Region()
     push!(body, fnbody)

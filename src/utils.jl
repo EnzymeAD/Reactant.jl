@@ -95,6 +95,21 @@ function should_rewrite_ft(@nospecialize(ft))
         return false
     end
 
+    # Don't rewrite traced constructors
+    if ft <: Type{<:TracedRArray} || ft <: Type{<:TracedRNumber} || ft === Type{MLIR.IR.Location} || ft === Type{MLIR.IR.Block}
+        return false
+    end
+
+    # Perf optimizations
+    if ft <: typeof(Core.Compiler.return_type)
+        return false
+    end
+    
+    # Perf optimizations
+    if ft <: typeof(Base.typemax) || ft <: typeof(Base.typemin) || ft <: typeof(Base.getproperty) || ft <: typeof(Base.vect) || ft <: typeof(Base.eltype)
+        return false
+    end
+
     # Default assume all functions need to be reactant-ified
     return true
 end
@@ -116,6 +131,9 @@ function rewrite_inst(inst, ir, interp)
         # Even if type unstable we do not want (or need) to replace intrinsic
         # calls or builtins with our version.
         ft = Core.Compiler.widenconst(maybe_argextype(inst.args[1], ir))
+        if ft == typeof(Core.kwcall)
+            ft = Core.Compiler.widenconst(maybe_argextype(inst.args[3], ir))
+        end
         if should_rewrite_ft(ft)
             rep = Expr(:call, call_with_reactant, inst.args...)
             return true, rep
@@ -125,7 +143,9 @@ function rewrite_inst(inst, ir, interp)
         omi = inst.args[1]::Core.MethodInstance
         sig = omi.specTypes
         ft = sig.parameters[1]
-
+        if ft == typeof(Core.kwcall)
+            ft = sig.parameters[3]
+        end
         if should_rewrite_ft(ft) && !is_reactant_method(omi)
             method = omi.def::Core.Method
 
