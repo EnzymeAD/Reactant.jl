@@ -7,13 +7,12 @@ mutable struct Client
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        client = new(client)
-        #TODO: Client are also constructed from MLIR.API.mlir_c.BufferToClient so the pointer cannot be free when Client is cleaned
-        #finalizer(client) do client
-        #    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
-        #end
-        return client
+        return new(client)
     end
+end
+
+@inline function free_client(client::Client)
+    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
 end
 
 function to_row_major(x::Array{T,N}) where {T,N}
@@ -42,8 +41,11 @@ end
 
 SetLogLevel(x) = @ccall MLIR.API.mlir_c.SetLogLevel(x::Cint)::Cvoid
 
+global cpuclientcount = Ref(0)
 # TODO synchronization when async is not working because `future` in `ConcreteRArray` is always `nothing`
 function CPUClient(asynchronous=false, node_id=0, num_nodes=1)
+    @assert cpuclientcount[] == 0
+    cpuclientcount[] += 1
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
     client = ccall(f, Ptr{Cvoid}, (UInt, Cint, Cint), asynchronous, node_id, num_nodes)
     #client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}

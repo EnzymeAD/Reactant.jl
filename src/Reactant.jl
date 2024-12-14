@@ -114,12 +114,21 @@ include("Compiler.jl")
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
 export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace
 
-const registry = Ref{MLIR.IR.DialectRegistry}()
-function __init__()
+const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
+
+function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
     @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
         registry[]::MLIR.API.MlirDialectRegistry
     )::Cvoid
+end
+
+function deinitialize_dialect()
+    return registry[] = nothing
+end
+
+function __init__()
+    return initialize_dialect()
 end
 
 function set_default_backend(backend::XLA.Client)
@@ -130,6 +139,6 @@ function set_default_backend(backend::String)
     return set_default_backend(XLA.backends[backend])
 end
 
-include("precompile.jl")
+include("Precompile.jl")
 
 end # module
