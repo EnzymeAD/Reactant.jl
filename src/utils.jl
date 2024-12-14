@@ -165,14 +165,28 @@ function rewrite_inst(inst, ir, interp)
     return false, inst
 end
 
-function make_oc(sig, rt, src, nargs, isva, f)::Core.OpaqueClosure
-    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+const oc_captures = Dict{Tuple{Type, Type, Core.CodeInfo, Int, Bool, Any}, Core.OpaqueClosure}()
+
+# Caching is both good to reducing compile times and necessary to work around julia bugs
+# in OpaqueClosure's: https://github.com/JuliaLang/julia/issues/56833
+function make_oc(sig::Type, rt::Type, src::Core.CodeInfo, nargs::Int, isva::Bool, f::Any)::Core.OpaqueClosure
+    key = (sig, rt, src, nargs, isva, f)
+    if haskey(oc_captures, key)
+        return oc_captures[key]
+    else
+        ores = ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
         sig, rt, rt, @__MODULE__, src, 0, nothing, nargs, isva, f, true)::Core.OpaqueClosure
+        oc_captures[key] = ores
+        return ores
+    end
 end
 
 function safe_print(name, x)
     ccall(:jl_, Cvoid, (Any,), name*" "*string(x))
 end
+
+const DEBUG_INTERP = Ref(false) 
+
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
@@ -186,7 +200,9 @@ function call_with_reactant_generator(
 )
     @nospecialize
     args = redub_arguments
-    # safe_print("args", args)
+    if DEBUG_INTERP[]
+        safe_print("args", args)
+    end
 
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
@@ -293,12 +309,12 @@ function call_with_reactant_generator(
     )
 
     result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
-    frame = Core.Compiler.InferenceState(result, :local, interp) #=cache_mode=#
+    frame = Core.Compiler.InferenceState(result, VERSION < v"1.11-" ? :local : :global, interp) #=cache_mode=#
     @assert frame !== nothing
     Core.Compiler.typeinf(interp, frame)
     @static if VERSION >= v"1.11"
         # `typeinf` doesn't update the cfg. We need to do it manually.
-        frame.cfg = Core.Compiler.compute_basic_blocks(frame.src.code)
+        # frame.cfg = Core.Compiler.compute_basic_blocks(frame.src.code)
     end
     @assert Core.Compiler.is_inferred(frame)
 
@@ -310,21 +326,28 @@ function call_with_reactant_generator(
     #    rt = frame.result.result::Core.Compiler.Const
     #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
     #else
+    #
     opt = Core.Compiler.OptimizationState(frame, interp)
-    
-    # safe_print("opt.src", opt.src)
+
+    if DEBUG_INTERP[]
+        safe_print("opt.src", opt.src)
+    end
 
     caller = frame.result
     @static if VERSION < v"1.11-"
         ir = Core.Compiler.run_passes(opt.src, opt, caller)
     else
         ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
-        Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
+        @static if VERSION < v"1.12-"
+        else
+            Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
+        end
+    end
+    
+    if DEBUG_INTERP[]
+        safe_print("ir1", ir)
     end
 
-    
-    # safe_print("ir1", ir)
-    
     # Rewrite type unstable calls to recurse into call_with_reactant to ensure
     # they continue to use our interpreter. Reset the derived return type
     # to Any if our interpreter would change the return type of any result.
@@ -349,8 +372,10 @@ function call_with_reactant_generator(
 
     src = Core.Compiler.ir_to_codeinf!(opt)
     
-    # safe_print("src", src)
-    
+    if DEBUG_INTERP[]
+        safe_print("src", src)
+    end
+
     # prepare a new code info
     code_info = copy(src)
     static_params = match.sparams
@@ -400,6 +425,11 @@ function call_with_reactant_generator(
         offset += 1
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
         push!(tys, redub_arguments[i])
+        
+        if DEBUG_INTERP[]
+            push!(overdubbed_code, Expr(:call, safe_print, "fn arg["*string(length(fn_args))*"]", fn_args[end]))
+            push!(overdubbed_codelocs, code_info.codelocs[1])
+        end
     end
 
 
@@ -423,6 +453,11 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
         push!(tys, Tuple{redub_arguments[n_method_args:n_actual_args]...})
+        
+        if DEBUG_INTERP[]
+            push!(overdubbed_code, Expr(:call, safe_print, "fn arg["*string(length(fn_args))*"]", fn_args[end]))
+            push!(overdubbed_codelocs, code_info.codelocs[1])
+        end
     end
 
     rt = Base.Experimental.compute_ir_rettype(ir)
@@ -442,7 +477,8 @@ function call_with_reactant_generator(
     # Opaque closures also require takign the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
     oc = if false && Base.issingletontype(args[1])
-        Core._call_in_world_total(world, make_oc, octup, rt, src, ocnargs, ocva, args[1].instance)::Core.OpaqueClosure
+        res = Core._call_in_world_total(world, make_oc, octup, rt, src, ocnargs, ocva, args[1].instance)::Core.OpaqueClosure
+
     else
         farg = fn_args[1]
         push!(overdubbed_code,
@@ -488,7 +524,9 @@ function call_with_reactant_generator(
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
     
-    # safe_print("code_info", code_info)
+    if DEBUG_INTERP[]
+        safe_print("code_info", code_info)
+    end
 
     return code_info
 end
