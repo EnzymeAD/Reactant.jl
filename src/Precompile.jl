@@ -4,11 +4,13 @@ using PrecompileTools: @setup_workload, @compile_workload
     @static if haskey(ENV, "REACTANT_TEST_GROUP")
         return
     end
-    @info "enable precompilation" gethostname() Base.active_project()
     @compile_workload begin
-        Reactant.__init__()
+        initialize_dialect()
         cpu = XLA.CPUClient()
         x = Reactant.ConcreteRArray(randn(Float64, 2, 2); client=cpu)
         @code_hlo optimize = false sum(x)
+        XLA.free_client(cpu)
+        deinitialize_dialect()
     end
+    XLA.cpuclientcount[] = 0
 end
