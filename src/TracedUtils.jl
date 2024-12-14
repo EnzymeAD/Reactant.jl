@@ -291,6 +291,11 @@ function make_mlir_fn(
 end
 
 elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
+
+struct TypeCast{T<:ReactantPrimitive} <: Function end
+
+(::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = TracedUtils.promote_to(TracedRNumber{T}, x)
+
 function elem_apply(
     ::Type{T}, x::TracedRArray{T2}
 ) where {T<:ReactantPrimitive,T2<:ReactantPrimitive}

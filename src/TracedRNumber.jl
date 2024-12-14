@@ -212,10 +212,6 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
     @eval Base.clamp(x::TracedRNumber, min::$(minT), max::$(maxT)) = Ops.clamp(min, x, max)
 end
 
-struct TypeCast{T<:ReactantPrimitive} <: Function end
-
-(::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = TracedUtils.promote_to(TracedRNumber{T}, x)
-
 function Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N}
     return TracedUtils.broadcast_to_size(x, dims)
 end

@@ -157,7 +157,7 @@ Base.conj(A::AnyTracedRArray{<:Complex}) = Ops.conj(materialize_traced_array(A))
 Base.conj!(A::AnyTracedRArray) = A
 
 function Base.conj!(A::AnyTracedRArray{<:Complex})
-    set_mlir_data!(A, Ops.conj(materialize_traced_array(A)).mlir_data)
+    TracedUtils.set_mlir_data!(A, Ops.conj(materialize_traced_array(A)).mlir_data)
     return A
 end
 
