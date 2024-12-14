@@ -14,6 +14,7 @@ import ..MLIR
 import ..ancestor
 import ReactantCore
 import ..TracedUtils: materialize_traced_array
+import GPUArraysCore
 
 ReactantCore.is_traced(::TracedRArray) = true
 
