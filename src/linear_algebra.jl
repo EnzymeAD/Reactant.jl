@@ -134,7 +134,7 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     )
     #! format: on
 
-    slice_sizes = get_mlir_data(Reactant.promote_to(TracedRArray{Int,1}, [1, 1]))
+    slice_sizes = get_mlir_data(Reactant.TracedUtils.promote_to(TracedRArray{Int,1}, [1, 1]))
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_gather(
             get_mlir_data(y), idxs, slice_sizes; dimension_numbers
