@@ -329,7 +329,7 @@ function call_with_reactant_generator(
     )
 
     result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
-    frame = Core.Compiler.InferenceState(result, VERSION < v"1.11-" ? :local : :global, interp) #=cache_mode=#
+    frame = Core.Compiler.InferenceState(result, VERSION < v"1.11-" ? :no : :global, interp) #=cache_mode=#
     @assert frame !== nothing
     Core.Compiler.typeinf(interp, frame)
     @static if VERSION >= v"1.11"
