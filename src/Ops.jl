@@ -4,13 +4,7 @@
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme
-using ..Reactant:
-    Reactant,
-    TracedRArray,
-    TracedRNumber,
-    RArray,
-    RNumber,
-    MissingTracedValue
+using ..Reactant: Reactant, TracedRArray, TracedRNumber, RArray, RNumber, MissingTracedValue
 
 function mlir_type(x::RArray{T,N}) where {T,N}
     return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
@@ -569,7 +563,9 @@ end
     return TracedRNumber{T}((), res)
 end
 
-@noinline function clamp(min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T) where {T,N}
+@noinline function clamp(
+    min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T
+) where {T,N}
     return clamp(constant(min), x, constant(max))
 end
 
@@ -818,17 +814,23 @@ end
 # end
 
 # paralell ops
-@noinline function partition_id(; location=mlir_stacktrace("partition_id", @__FILE__, @__LINE__))
+@noinline function partition_id(;
+    location=mlir_stacktrace("partition_id", @__FILE__, @__LINE__)
+)
     res = MLIR.IR.result(stablehlo.partition_id(; location))
     return TracedRNumber{UInt32}((), res)
 end
 
-@noinline function replica_id(; location=mlir_stacktrace("replica_id", @__FILE__, @__LINE__))
+@noinline function replica_id(;
+    location=mlir_stacktrace("replica_id", @__FILE__, @__LINE__)
+)
     res = MLIR.IR.result(stablehlo.replica_id(; location))
     return TracedRNumber{UInt32}((), res)
 end
 
-@noinline function after_all(tokens...; location=mlir_stacktrace("after_all", @__FILE__, @__LINE__))
+@noinline function after_all(
+    tokens...; location=mlir_stacktrace("after_all", @__FILE__, @__LINE__)
+)
     tokens = [token.mlir_data for token in tokens]
     res = MLIR.IR.result(stablehlo.after_all(tokens; location))
     return Token(res)
@@ -1078,7 +1080,7 @@ end
     comparison_direction::String,
     compare_type=nothing,
     location=mlir_stacktrace("compare", @__FILE__, @__LINE__),
-   ) where {AT <: Union{TracedRArray,TracedRNumber}}
+) where {AT<:Union{TracedRArray,TracedRNumber}}
     @assert comparison_direction in ("EQ", "NE", "GE", "GT", "LE", "LT")
     @assert size(lhs) == size(rhs)
 

@@ -8,10 +8,7 @@ import ..AnyTracedRMatrix
 import ..AnyTracedRVector
 
 import ..TracedUtils
-using ..TracedUtils:
-    get_mlir_data,
-    materialize_traced_array,
-    set_mlir_data!
+using ..TracedUtils: get_mlir_data, materialize_traced_array, set_mlir_data!
 
 import ..Ops
 import ..MLIR
@@ -80,7 +77,8 @@ end
 function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
     iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = Ops.subtract(
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2), TracedUtils.broadcast_to_size(k, size(X))
+        Ops.iota(Int64, [size(X)...]; iota_dimension=2),
+        TracedUtils.broadcast_to_size(k, size(X)),
     )
     idxs = Ops.compare(iota_1, iota_2; comparison_direction="LE")
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
@@ -90,7 +88,8 @@ end
 function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
     iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = Ops.subtract(
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2), TracedUtils.broadcast_to_size(k, size(X))
+        Ops.iota(Int64, [size(X)...]; iota_dimension=2),
+        TracedUtils.broadcast_to_size(k, size(X)),
     )
     idxs = Ops.compare(iota_1, iota_2; comparison_direction="GE")
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
@@ -134,7 +133,9 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     )
     #! format: on
 
-    slice_sizes = get_mlir_data(Reactant.TracedUtils.promote_to(TracedRArray{Int,1}, [1, 1]))
+    slice_sizes = get_mlir_data(
+        Reactant.TracedUtils.promote_to(TracedRArray{Int,1}, [1, 1])
+    )
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_gather(
             get_mlir_data(y), idxs, slice_sizes; dimension_numbers
@@ -158,7 +159,9 @@ function LinearAlgebra.diagm(m::Integer, n::Integer, v::AnyTracedRArray{T,1}) wh
 
     mat = (v .+ zero(v)') .* diag_indicator
     return Ops.pad(
-        mat, TracedUtils.promote_to(TracedRNumber{T}, 0); high=[m - length(v), n - length(v)]
+        mat,
+        TracedUtils.promote_to(TracedRNumber{T}, 0);
+        high=[m - length(v), n - length(v)],
     )
 end
 

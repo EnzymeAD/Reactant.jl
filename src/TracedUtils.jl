@@ -3,9 +3,17 @@
 # within compilation. However, it means these functions are a _lot_ faster to compile.
 module TracedUtils
 
-import LinearAlgebra
-import Adapt
-using ..Reactant: RArray, RNumber, TracedRArray, TracedRNumber, WrappedTracedRArray, AnyTracedRArray, MissingTracedValue, OrderedIdDict
+using LinearAlgebra: LinearAlgebra
+using Adapt: Adapt
+using ..Reactant:
+    RArray,
+    RNumber,
+    TracedRArray,
+    TracedRNumber,
+    WrappedTracedRArray,
+    AnyTracedRArray,
+    MissingTracedValue,
+    OrderedIdDict
 import ..Reactant
 import ..Reactant.MLIR
 import ..ReactantPrimitive
@@ -91,7 +99,6 @@ get_ancestor_indices(::TracedRArray, indices...) = indices
 function get_ancestor_indices(x::WrappedTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
-
 
 function batch_ty(width, mlirty)
     return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
@@ -200,7 +207,7 @@ function make_mlir_fn(
 
         # TODO fix it for kwargs
         #if concretein
-            Reactant.call_with_reactant(f, traced_args...)
+        Reactant.call_with_reactant(f, traced_args...)
         #else
         #    f(traced_args...)
         #end
@@ -219,7 +226,10 @@ function make_mlir_fn(
     # marks buffers to be donated
     for i in 1:N
         Reactant.make_tracer(
-            seen_results, traced_args[i], concretein ? (:resargs, i) : (), Reactant.TracedTrack
+            seen_results,
+            traced_args[i],
+            concretein ? (:resargs, i) : (),
+            Reactant.TracedTrack,
         )
     end
 
@@ -294,7 +304,9 @@ elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
 
 struct TypeCast{T<:ReactantPrimitive} <: Function end
 
-(::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2} = TracedUtils.promote_to(TracedRNumber{T}, x)
+function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
+    return TracedUtils.promote_to(TracedRNumber{T}, x)
+end
 
 function elem_apply(
     ::Type{T}, x::TracedRArray{T2}
@@ -442,7 +454,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     end
 
     seen_results = OrderedIdDict()
-    traced2_result = Reactant.make_tracer(seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape)
+    traced2_result = Reactant.make_tracer(
+        seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
+    )
 
     func2.operation = MLIR.API.MlirOperation(C_NULL)
 

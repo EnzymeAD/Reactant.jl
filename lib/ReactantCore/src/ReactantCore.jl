@@ -153,7 +153,9 @@ function trace_for(mod, expr)
 
     all_syms = Expr(:tuple, counter, external_syms...)
     args_init = Expr(
-        :tuple, :(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0)), external_syms...
+        :tuple,
+        :(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0)),
+        external_syms...,
     )
 
     reactant_code_block = quote

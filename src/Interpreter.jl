@@ -42,18 +42,8 @@ function set_reactant_abi(
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
     if f === Reactant.call_with_reactant
-        arginfo2 = ArgInfo(
-            fargs isa Nothing ? nothing :
-            fargs[2:end],
-            argtypes[2:end],
-        )
-        return abstract_call(
-            interp,
-            arginfo2::ArgInfo,
-            si,
-            sv,
-            max_methods,
-        )
+        arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
+        return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
     end
 
     return Base.@invoke abstract_call_known(
@@ -280,7 +270,12 @@ function overload_autodiff(
                 if width == 1
                     push!(outtys, TracedUtils.transpose_ty(MLIR.IR.type(a.mlir_data)))
                 else
-                    push!(outtys, TracedUtils.batch_ty(width, TracedUtils.transpose_ty(MLIR.IR.type(a.mlir_data))))
+                    push!(
+                        outtys,
+                        TracedUtils.batch_ty(
+                            width, TracedUtils.transpose_ty(MLIR.IR.type(a.mlir_data))
+                        ),
+                    )
                 end
             end
         else
@@ -393,13 +388,21 @@ function overload_autodiff(
         else
             idx, path = TracedUtils.get_argidx(a)
             if idx == 1 && fnwrap
-                TracedUtils.set!(f.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
+                TracedUtils.set!(
+                    f.val,
+                    path[3:end],
+                    TracedUtils.transpose_val(MLIR.IR.result(res, residx)),
+                )
                 residx += 1
             else
                 if fnwrap
                     idx -= 1
                 end
-                TracedUtils.set!(args[idx].val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
+                TracedUtils.set!(
+                    args[idx].val,
+                    path[3:end],
+                    TracedUtils.transpose_val(MLIR.IR.result(res, residx)),
+                )
                 residx += 1
             end
         end
@@ -417,7 +420,12 @@ function overload_autodiff(
                 residx += 1
                 continue
             end
-            set_act!(f, path[3:end], reverse, TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
+            set_act!(
+                f,
+                path[3:end],
+                reverse,
+                TracedUtils.transpose_val(MLIR.IR.result(res, residx)),
+            )
         else
             if fnwrap
                 idx -= 1
@@ -437,7 +445,10 @@ function overload_autodiff(
                 continue
             end
             set_act!(
-                args[idx], path[3:end], reverse, TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+                args[idx],
+                path[3:end],
+                reverse,
+                TracedUtils.transpose_val(MLIR.IR.result(res, residx)),
             )
         end
         residx += 1
@@ -470,27 +481,13 @@ function overload_autodiff(
 end
 
 @reactant_override @noinline function Enzyme.autodiff_deferred(
-    rmode::Enzyme.Mode,
-    f::FA,
-    rt::Type{A},
-    args::Vararg{Annotation,Nargs},
-) where {
-    FA<:Annotation,
-    A<:Annotation,
-    Nargs,
-}
+    rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
+) where {FA<:Annotation,A<:Annotation,Nargs}
     return overload_autodiff(rmode, f, rt, args...)
 end
 
 @reactant_override @noinline function Enzyme.autodiff(
-    rmode::Enzyme.Mode,
-    f::FA,
-    rt::Type{A},
-    args::Vararg{Annotation,Nargs},
-) where {
-    FA<:Annotation,
-    A<:Annotation,
-    Nargs,
-}
+    rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
+) where {FA<:Annotation,A<:Annotation,Nargs}
     return overload_autodiff(rmode, f, rt, args...)
 end

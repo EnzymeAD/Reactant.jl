@@ -2,18 +2,9 @@ module ReactantNNlibExt
 
 using NNlib
 using GPUArraysCore: @allowscalar
-using Reactant:
-    Reactant,
-    Ops,
-    TracedRArray,
-    AnyTracedRArray,
-    MLIR,
-    TracedRNumber
+using Reactant: Reactant, Ops, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
 
-using Reactant.TracedUtils:
-    materialize_traced_array,
-    get_mlir_data,
-    set_mlir_data!
+using Reactant.TracedUtils: materialize_traced_array, get_mlir_data, set_mlir_data!
 
 using ReactantCore: @trace
 using LinearAlgebra: LinearAlgebra, triu
@@ -332,7 +323,8 @@ function NNlib.gather!(dst::TracedRArray, src::AnyTracedRArray, idxs::AbstractAr
     start_sizes = ntuple(i -> size(src, i), dims)
     results = map(CartesianIndices(idxs)) do k
         res = @allowscalar src[colons..., Tuple(idxs[k])...]
-        res isa TracedRNumber && (res = Reactant.TracedUtils.broadcast_to_size(res, (1,)))
+        res isa TracedRNumber &&
+            (res = Reactant.TracedUtils.broadcast_to_size(res, (1,)))
         return reshape(res, start_sizes..., :)
     end
     res = reshape(cat(results...; dims=(dims + 1)), size(dst))

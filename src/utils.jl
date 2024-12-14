@@ -33,21 +33,44 @@ function throw_method_error(argtys)
     throw(MethodError(argtys[1], argtys[2:end]))
 end
 
-
-
-@inline function lookup_world(@nospecialize(sig::Type), world::UInt, mt::Union{Nothing,Core.MethodTable}, min_world::Ref{UInt}, max_world::Ref{UInt})
-    res = ccall(:jl_gf_invoke_lookup_worlds, Any,
-                  (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
-                  sig, mt, world, min_world, max_world)
+@inline function lookup_world(
+    @nospecialize(sig::Type),
+    world::UInt,
+    mt::Union{Nothing,Core.MethodTable},
+    min_world::Ref{UInt},
+    max_world::Ref{UInt},
+)
+    res = ccall(
+        :jl_gf_invoke_lookup_worlds,
+        Any,
+        (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
+        sig,
+        mt,
+        world,
+        min_world,
+        max_world,
+    )
     return res
 end
 
-@inline function lookup_world(@nospecialize(sig::Type), world::UInt, mt::Core.Compiler.InternalMethodTable, min_world::Ref{UInt}, max_world::Ref{UInt})
+@inline function lookup_world(
+    @nospecialize(sig::Type),
+    world::UInt,
+    mt::Core.Compiler.InternalMethodTable,
+    min_world::Ref{UInt},
+    max_world::Ref{UInt},
+)
     res = lookup_world(sig, mt.world, nothing, min_world, max_world)
     return res
 end
 
-@inline function lookup_world(@nospecialize(sig::Type), world::UInt, mt::Core.Compiler.OverlayMethodTable, min_world::Ref{UInt}, max_world::Ref{UInt})
+@inline function lookup_world(
+    @nospecialize(sig::Type),
+    world::UInt,
+    mt::Core.Compiler.OverlayMethodTable,
+    min_world::Ref{UInt},
+    max_world::Ref{UInt},
+)
     res = lookup_world(sig, mt.world, mt.mt, min_world, max_world)
     if res !== nothing
         return res
@@ -74,7 +97,9 @@ function should_rewrite_ft(@nospecialize(ft))
     if ft <: Core.Function
         mod = ft.name.module
         # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
-        if has_ancestor(mod, Reactant.Ops) || has_ancestor(mod, Reactant.TracedUtils) || has_ancestor(mod, Reactant.MLIR)
+        if has_ancestor(mod, Reactant.Ops) ||
+            has_ancestor(mod, Reactant.TracedUtils) ||
+            has_ancestor(mod, Reactant.MLIR)
             return false
         end
     end
@@ -96,7 +121,10 @@ function should_rewrite_ft(@nospecialize(ft))
     end
 
     # Don't rewrite traced constructors
-    if ft <: Type{<:TracedRArray} || ft <: Type{<:TracedRNumber} || ft === Type{MLIR.IR.Location} || ft === Type{MLIR.IR.Block}
+    if ft <: Type{<:TracedRArray} ||
+        ft <: Type{<:TracedRNumber} ||
+        ft === Type{MLIR.IR.Location} ||
+        ft === Type{MLIR.IR.Block}
         return false
     end
 
@@ -104,9 +132,13 @@ function should_rewrite_ft(@nospecialize(ft))
     if ft <: typeof(Core.Compiler.return_type)
         return false
     end
-    
+
     # Perf optimizations
-    if ft <: typeof(Base.typemax) || ft <: typeof(Base.typemin) || ft <: typeof(Base.getproperty) || ft <: typeof(Base.vect) || ft <: typeof(Base.eltype)
+    if ft <: typeof(Base.typemax) ||
+        ft <: typeof(Base.typemin) ||
+        ft <: typeof(Base.getproperty) ||
+        ft <: typeof(Base.vect) ||
+        ft <: typeof(Base.eltype)
         return false
     end
 
@@ -151,10 +183,9 @@ function rewrite_inst(inst, ir, interp)
 
             min_world = Ref{UInt}(typemin(UInt))
             max_world = Ref{UInt}(typemax(UInt))
-            
 
             if !method.isva || !Base.isvarargtype(sig.parameters[end])
-                sig2 = Tuple{typeof(call_with_reactant), sig.parameters...}
+                sig2 = Tuple{typeof(call_with_reactant),sig.parameters...}
             else
                 vartup = inst.args[end]
                 ns = Type[]
@@ -162,11 +193,15 @@ function rewrite_inst(inst, ir, interp)
                 for i in 1:(length(inst.args) - 1 - (length(sig.parameters) - 1))
                     push!(ns, eT)
                 end
-                sig2 = Tuple{typeof(call_with_reactant), sig.parameters[1:end-1]..., ns...}
+                sig2 = Tuple{
+                    typeof(call_with_reactant),sig.parameters[1:(end - 1)]...,ns...
+                }
             end
 
-            lookup_result = lookup_world(sig2, interp.world, Core.Compiler.method_table(interp), min_world, max_world)
-    
+            lookup_result = lookup_world(
+                sig2, interp.world, Core.Compiler.method_table(interp), min_world, max_world
+            )
+
             match = lookup_result::Core.MethodMatch
             # look up the method and code instance
             mi = ccall(
@@ -185,28 +220,43 @@ function rewrite_inst(inst, ir, interp)
     return false, inst
 end
 
-const oc_captures = Dict{Tuple{Type, Type, Core.CodeInfo, Int, Bool, Any}, Core.OpaqueClosure}()
+const oc_captures = Dict{Tuple{Type,Type,Core.CodeInfo,Int,Bool,Any},Core.OpaqueClosure}()
 
 # Caching is both good to reducing compile times and necessary to work around julia bugs
 # in OpaqueClosure's: https://github.com/JuliaLang/julia/issues/56833
-function make_oc(sig::Type, rt::Type, src::Core.CodeInfo, nargs::Int, isva::Bool, f::Any)::Core.OpaqueClosure
+function make_oc(
+    sig::Type, rt::Type, src::Core.CodeInfo, nargs::Int, isva::Bool, f::Any
+)::Core.OpaqueClosure
     key = (sig, rt, src, nargs, isva, f)
     if haskey(oc_captures, key)
         return oc_captures[key]
     else
-        ores = ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-        sig, rt, rt, @__MODULE__, src, 0, nothing, nargs, isva, f, true)::Core.OpaqueClosure
+        ores = ccall(
+            :jl_new_opaque_closure_from_code_info,
+            Any,
+            (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+            sig,
+            rt,
+            rt,
+            @__MODULE__,
+            src,
+            0,
+            nothing,
+            nargs,
+            isva,
+            f,
+            true,
+        )::Core.OpaqueClosure
         oc_captures[key] = ores
         return ores
     end
 end
 
 function safe_print(name, x)
-    ccall(:jl_, Cvoid, (Any,), name*" "*string(x))
+    return ccall(:jl_, Cvoid, (Any,), name * " " * string(x))
 end
 
-const DEBUG_INTERP = Ref(false) 
-
+const DEBUG_INTERP = Ref(false)
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
@@ -236,7 +286,9 @@ function call_with_reactant_generator(
     if args[1] <: Core.Builtin
         return stub(world, source, builtin_error)
     end
-    method_error = :(throw(MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)))
+    method_error = :(throw(
+        MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
+    ))
 
     interp = ReactantInterpreter(; world)
 
@@ -245,8 +297,10 @@ function call_with_reactant_generator(
     min_world = Ref{UInt}(typemin(UInt))
     max_world = Ref{UInt}(typemax(UInt))
 
-    lookup_result = lookup_world(sig, world, Core.Compiler.method_table(interp), min_world, max_world)
-    
+    lookup_result = lookup_world(
+        sig, world, Core.Compiler.method_table(interp), min_world, max_world
+    )
+
     overdubbed_code = Any[]
     overdubbed_codelocs = Int32[]
 
@@ -255,21 +309,36 @@ function call_with_reactant_generator(
         return stub(world, source, method_error)
         tmp_min_world = Ref{UInt}(typemin(UInt))
         tmp_max_world = Ref{UInt}(typemax(UInt))
-        match = ccall(:jl_gf_invoke_lookup_worlds, Any,
-                      (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
-                      Tuple{typeof(throw_method_error), sig}, #=mt=# nothing, world, tmp_min_world, tmp_max_world)
+        match = ccall(
+            :jl_gf_invoke_lookup_worlds,
+            Any,
+            (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
+            Tuple{typeof(throw_method_error),sig},
+            nothing,
+            world,
+            tmp_min_world,
+            tmp_max_world,
+        ) #=mt=#
         @assert match !== nothing
 
         # look up the method and code instance
-        mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
-                   (Any, Any, Any), match.method, match.spec_types, match.sparams)
-     
+        mi = ccall(
+            :jl_specializations_get_linfo,
+            Ref{Core.MethodInstance},
+            (Any, Any, Any),
+            match.method,
+            match.spec_types,
+            match.sparams,
+        )
+
         ci = Core.Compiler.retrieve_code_info(mi, world)::Core.Compiler.CodeInfo
 
         src = copy(ci)
         src.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME]
 
-        src.edges = Any[ccall(:jl_method_table_for, Any, (Any,), sig)::Core.MethodTable, sig]
+        src.edges = Any[
+            ccall(:jl_method_table_for, Any, (Any,), sig)::Core.MethodTable, sig
+        ]
         src.min_world = min_world[]
         src.max_world = max_world[]
 
@@ -278,14 +347,12 @@ function call_with_reactant_generator(
 
         expr_fn = Core.SSAValue(length(overdubbed_code))
 
-
         push!(overdubbed_code, :($(Base.lastindex)($(Core.Argument(2)))))
         push!(overdubbed_codelocs, 0)
 
         expr_lastindex = Core.SSAValue(length(overdubbed_code))
 
-
-        push!(overdubbed_code, :(2:$expr_lastindex))
+        push!(overdubbed_code, :(2:($expr_lastindex)))
         push!(overdubbed_codelocs, 0)
 
         expr_slice = Core.SSAValue(length(overdubbed_code))
@@ -303,10 +370,7 @@ function call_with_reactant_generator(
         push!(overdubbed_code, :($(Base.throw)($expr_method)))
         push!(overdubbed_codelocs, 0)
 
-        push!(
-            overdubbed_code,
-            Core.ReturnNode(Core.SSAValue(length(overdubbed_code)))
-        )
+        push!(overdubbed_code, Core.ReturnNode(Core.SSAValue(length(overdubbed_code))))
         push!(overdubbed_codelocs, 0)
 
         src.code = overdubbed_code
@@ -363,7 +427,7 @@ function call_with_reactant_generator(
             Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
         end
     end
-    
+
     if DEBUG_INTERP[]
         safe_print("ir1", ir)
     end
@@ -387,11 +451,11 @@ function call_with_reactant_generator(
             Core.Compiler.setindex!(ir.stmts[i], Any, :type)
         end
     end
-    
+
     Core.Compiler.finish(interp, opt, ir, caller)
 
     src = Core.Compiler.ir_to_codeinf!(opt)
-    
+
     if DEBUG_INTERP[]
         safe_print("src", src)
     end
@@ -430,12 +494,12 @@ function call_with_reactant_generator(
     n_actual_args = length(redub_arguments)
 
     tys = []
-    
+
     iter_args = n_actual_args
     if method.isva
-        iter_args = min(n_actual_args, n_method_args-1)
+        iter_args = min(n_actual_args, n_method_args - 1)
     end
-        
+
     for i in 1:iter_args
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
@@ -445,13 +509,20 @@ function call_with_reactant_generator(
         offset += 1
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
         push!(tys, redub_arguments[i])
-        
+
         if DEBUG_INTERP[]
-            push!(overdubbed_code, Expr(:call, safe_print, "fn arg["*string(length(fn_args))*"]", fn_args[end]))
+            push!(
+                overdubbed_code,
+                Expr(
+                    :call,
+                    safe_print,
+                    "fn arg[" * string(length(fn_args)) * "]",
+                    fn_args[end],
+                ),
+            )
             push!(overdubbed_codelocs, code_info.codelocs[1])
         end
     end
-
 
     # If `method` is a varargs method, we have to restructure the original method call's
     # trailing arguments into a tuple and assign that tuple to the expected argument slot.
@@ -467,21 +538,27 @@ function call_with_reactant_generator(
             offset += 1
         end
 
-        push!(
-            overdubbed_code, trailing_arguments
-        )
+        push!(overdubbed_code, trailing_arguments)
         push!(overdubbed_codelocs, code_info.codelocs[1])
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
         push!(tys, Tuple{redub_arguments[n_method_args:n_actual_args]...})
-        
+
         if DEBUG_INTERP[]
-            push!(overdubbed_code, Expr(:call, safe_print, "fn arg["*string(length(fn_args))*"]", fn_args[end]))
+            push!(
+                overdubbed_code,
+                Expr(
+                    :call,
+                    safe_print,
+                    "fn arg[" * string(length(fn_args)) * "]",
+                    fn_args[end],
+                ),
+            )
             push!(overdubbed_codelocs, code_info.codelocs[1])
         end
     end
 
     rt = Base.Experimental.compute_ir_rettype(ir)
-    
+
     # ocva = method.isva
 
     ocva = false # method.isva
@@ -497,40 +574,22 @@ function call_with_reactant_generator(
     # Opaque closures also require takign the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
     oc = if false && Base.issingletontype(args[1])
-        res = Core._call_in_world_total(world, make_oc, octup, rt, src, ocnargs, ocva, args[1].instance)::Core.OpaqueClosure
+        res = Core._call_in_world_total(
+            world, make_oc, octup, rt, src, ocnargs, ocva, args[1].instance
+        )::Core.OpaqueClosure
 
     else
         farg = fn_args[1]
-        push!(overdubbed_code,
-            Expr(:call,
-                make_oc,
-                octup,
-                rt,
-                src,
-                ocnargs,
-                ocva,
-                farg
-                )
-                )
+        push!(overdubbed_code, Expr(:call, make_oc, octup, rt, src, ocnargs, ocva, farg))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         Core.SSAValue(length(overdubbed_code))
     end
 
-    push!(
-        overdubbed_code,
-        Expr(
-            :(call),
-            oc,
-            fn_args[2:end]...
-        ),
-    )
+    push!(overdubbed_code, Expr(:(call), oc, fn_args[2:end]...))
 
     push!(overdubbed_codelocs, code_info.codelocs[1])
 
-    push!(
-        overdubbed_code,
-        Core.ReturnNode(Core.SSAValue(length(overdubbed_code)))
-    )
+    push!(overdubbed_code, Core.ReturnNode(Core.SSAValue(length(overdubbed_code))))
     push!(overdubbed_codelocs, code_info.codelocs[1])
 
     #=== set `code_info`/`reflection` fields accordingly ===#
@@ -543,7 +602,7 @@ function call_with_reactant_generator(
     code_info.codelocs = overdubbed_codelocs
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
-    
+
     if DEBUG_INTERP[]
         safe_print("code_info", code_info)
     end

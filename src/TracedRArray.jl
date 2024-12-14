@@ -12,9 +12,9 @@ using ..TracedUtils
 import ..Ops
 import ..MLIR
 import ..ancestor
-import ReactantCore
+using ReactantCore: ReactantCore
 import ..TracedUtils: materialize_traced_array
-import GPUArraysCore
+using GPUArraysCore: GPUArraysCore
 
 ReactantCore.is_traced(::TracedRArray) = true
 
@@ -31,13 +31,14 @@ end
 
 TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 
-
 function Base.getindex(
     a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
     GPUArraysCore.assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
 
-    start_indices = [TracedUtils.promote_to(TracedRNumber{Int}, i - 1).mlir_data for i in index]
+    start_indices = [
+        TracedUtils.promote_to(TracedRNumber{Int}, i - 1).mlir_data for i in index
+    ]
     slice_sizes = [Int64(1) for _ in index]
 
     res1 = MLIR.IR.result(
@@ -107,8 +108,9 @@ function Base.setindex!(
     v = TracedUtils.broadcast_to_size(v, length.(indices))
     v = TracedUtils.promote_to(TracedRArray{T,N}, v)
     indices = [
-        (TracedUtils.promote_to(TracedRNumber{Int}, i isa Colon ? 1 : first(i)) - 1).mlir_data for
-        i in indices
+        (
+            TracedUtils.promote_to(TracedRNumber{Int}, i isa Colon ? 1 : first(i)) - 1
+        ).mlir_data for i in indices
     ]
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_update_slice(
@@ -168,7 +170,9 @@ Base.imag(A::AnyTracedRArray) = zero(A)
 Base.imag(A::AnyTracedRArray{<:Complex}) = Ops.imag(materialize_traced_array(A))
 
 TracedUtils.promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N} = TracedRArray{T,N}(rhs)
-TracedUtils.promote_to(::TracedRArray{T,N}, rhs) where {T,N} = TracedUtils.promote_to(TracedRArray{T,N}, rhs)
+function TracedUtils.promote_to(::TracedRArray{T,N}, rhs) where {T,N}
+    return TracedUtils.promote_to(TracedRArray{T,N}, rhs)
+end
 
 for (jlop, hloop, hlocomp, merge) in
     ((:(Base.:(==)), :compare, "EQ", :all), (:(Base.:(!=)), :compare, "NE", :any))
@@ -214,12 +218,12 @@ function Base.mapreduce(
     rdims = Int64[]
 
     if dims == (:)
-        for i in 0:(N-1)
+        for i in 0:(N - 1)
             push!(rdims, i)
         end
     else
         for i in dims
-            push!(rdims, i-1)
+            push!(rdims, i - 1)
         end
     end
 
@@ -244,7 +248,7 @@ function Base.mapreduce(
     toonedims = Int[]
     outdims = Int[]
     for i in 1:N
-        tmp = if in(i-1, rdims)
+        tmp = if in(i - 1, rdims)
             1
         else
             sz = size(A, i)
@@ -283,7 +287,9 @@ function Base.mapreducedim!(
     @nospecialize(R::TracedRArray),
     A::Base.AbstractArrayOrBroadcasted,
 )
-    tmp = TracedUtils.broadcast_to_size(Base.mapreduce(f, op, A; dims=1), (1, size(R)[2:end]...))
+    tmp = TracedUtils.broadcast_to_size(
+        Base.mapreduce(f, op, A; dims=1), (1, size(R)[2:end]...)
+    )
     R.mlir_data = broadcast(op, R, tmp).mlir_data
     return R
 end
@@ -295,7 +301,9 @@ function Base.fill!(A::TracedRArray{T,N}, x) where {T,N}
 end
 
 function Base.fill!(A::TracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
-    bcast = TracedUtils.broadcast_to_size(TracedUtils.promote_to(TracedRNumber{T}, x), size(A))
+    bcast = TracedUtils.broadcast_to_size(
+        TracedUtils.promote_to(TracedRNumber{T}, x), size(A)
+    )
     A.mlir_data = bcast.mlir_data
     return A
 end

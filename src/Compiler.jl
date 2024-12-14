@@ -780,7 +780,9 @@ function compile(f, args; client=nothing, optimize=true, sync=false)
 end
 
 # Compiling within a compile should return simply the original function
-Reactant.@reactant_override function Reactant.Compiler.compile(f, args; client=nothing, optimize=true, sync=false)
+Reactant.@reactant_override function Reactant.Compiler.compile(
+    f, args; client=nothing, optimize=true, sync=false
+)
     return f
 end
 
