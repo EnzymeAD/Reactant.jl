@@ -85,6 +85,12 @@ function Enzyme.make_zero(
     return res
 end
 
+function ancestor(x::AbstractArray)
+    p_x = parent(x)
+    p_x === x && return x
+    return ancestor(p_x)
+end
+
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")

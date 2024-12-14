@@ -33,6 +33,7 @@ jobs:
           - integration
         arch:
           - x64
+          - aarch64
         assertions:
           - false
         libReactant: [packaged]
@@ -64,6 +65,10 @@ jobs:
             libReactant: packaged
             version: '1.10'
             test_group: integration
+        exclude:
+          # these are run on Buildkite
+          - os: ubuntu-20.04
+            arch: aarch64
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

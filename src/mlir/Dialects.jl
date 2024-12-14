@@ -17,6 +17,7 @@ function operandsegmentsizes(segments)
 end
 
 for file in readdir(joinpath(@__DIR__, "Dialects"))
+    endswith(file, ".jl") || continue
     include(joinpath(@__DIR__, "Dialects", file))
 end
 
