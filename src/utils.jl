@@ -423,6 +423,7 @@ function call_with_reactant_generator(
     end
 
     rt = Base.Experimental.compute_ir_rettype(ir)
+    @assert code_info.rettype == rt
     
     # ocva = method.isva
 
