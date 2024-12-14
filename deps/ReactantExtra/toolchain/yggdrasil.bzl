@@ -5,12 +5,13 @@ load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_tool
 # cpu = "aarch64"
 # toolchain_identifier = "ygg_aarch64"
 # target_system_name = "aarch64-unknown-linux-gnu"
-def ygg_cc_toolchain(supports_start_end_lib = False):
-    bb_target = os.environ["bb_target"]
-    bb_full_target = os.environ["bb_full_target"]
-    cpu = os.environ["bb_cpu"]
+def _ygg_cc_toolchain_impl(ctx):
+    bb_target = ctx.configuration.default_shell_env["bb_target"]
+    bb_full_target = ctx.configuration.default_shell_env["bb_full_target"]
+    cpu = ctx.configuration.default_shell_env["bb_cpu"]
     toolchain_identifier = "ygg_toolchain"
     target_system_name = ""
+    supports_start_end_lib = False
 
     cc_toolchain(
         name = "ygg_target_toolchain",
@@ -122,3 +123,10 @@ def ygg_cc_toolchain(supports_start_end_lib = False):
         # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
         # supports_start_end_lib = supports_start_end_lib,
     )
+
+ygg_cc_toolchain = rule(
+    implementation = _ygg_cc_toolchain_impl,
+    attrs = {},
+    executable = False,
+    test = False,
+)
