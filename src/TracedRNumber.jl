@@ -239,7 +239,7 @@ end
 function Base.typed_hvcat(
     ::Type{T}, rows::Tuple{Vararg{Int}}, xs::TracedRNumber...
 ) where {T}
-    xs = map(Base.Fix2(broadcast_to_size, (1, 1)), xs)
+    xs = map(Base.Fix2(TracedUtils.broadcast_to_size, (1, 1)), xs)
     return Base.typed_hvcat(T, rows, xs...)
 end
 
