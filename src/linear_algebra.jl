@@ -64,10 +64,10 @@ function LinearAlgebra.mul!(
     )
 
     res = if iszero(β)
-        isone(α) ? tmp : Ops.multiply(tmp, broadcast_to_size(T(α), size(C)))
+        isone(α) ? tmp : Ops.multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C)))
     else
-        α_res = Ops.multiply(tmp, broadcast_to_size(T(α), size(C)))
-        β_C = Ops.multiply(C, broadcast_to_size(T(β), size(C)))
+        α_res = Ops.multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C)))
+        β_C = Ops.multiply(C, TracedUtils.broadcast_to_size(T(β), size(C)))
         Ops.add(α_res, β_C)
     end
     set_mlir_data!(C, get_mlir_data(res))
@@ -77,7 +77,7 @@ end
 function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
     iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = Ops.subtract(
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2), broadcast_to_size(k, size(X))
+        Ops.iota(Int64, [size(X)...]; iota_dimension=2), TracedUtils.broadcast_to_size(k, size(X))
     )
     idxs = Ops.compare(iota_1, iota_2; comparison_direction="LE")
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
@@ -87,7 +87,7 @@ end
 function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
     iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = Ops.subtract(
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2), broadcast_to_size(k, size(X))
+        Ops.iota(Int64, [size(X)...]; iota_dimension=2), TracedUtils.broadcast_to_size(k, size(X))
     )
     idxs = Ops.compare(iota_1, iota_2; comparison_direction="GE")
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
