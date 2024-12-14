@@ -506,6 +506,12 @@ function make_tracer(
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
+    if mode == CallCache
+        if !haskey(seen, prev)
+            seen[prev] = prev
+        end
+        return MLIR.IR.type(prev.mlir_data)
+    end
     if mode == TracedTrack
         prev.paths = (prev.paths..., path)
         if !haskey(seen, prev)
