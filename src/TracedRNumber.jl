@@ -225,12 +225,12 @@ Base.float(x::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
 function Base.typed_vcat(::Type{T}, x::TracedRNumber...) where {T}
-    return Base.typed_vcat(T, map(Base.Fix2(broadcast_to_size, (1,)), x)...)
+    return Base.typed_vcat(T, map(Base.Fix2(TracedUtils.broadcast_to_size, (1,)), x)...)
 end
 
 Base.hcat(x::TracedRNumber...) = Base.typed_hcat(Base.promote_eltypeof(x...), x...)
 function Base.typed_hcat(::Type{T}, x::TracedRNumber...) where {T}
-    return Base.typed_hcat(T, map(Base.Fix2(broadcast_to_size, (1, 1)), x)...)
+    return Base.typed_hcat(T, map(Base.Fix2(TracedUtils.broadcast_to_size, (1, 1)), x)...)
 end
 
 function Base.hvcat(rows::Tuple{Vararg{Int}}, xs::TracedRNumber...)
