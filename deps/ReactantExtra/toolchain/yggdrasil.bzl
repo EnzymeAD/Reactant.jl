@@ -37,14 +37,14 @@ def _ygg_cc_toolchain_impl(ctx):
         abi_libc_version = "local",
         abi_version = "local",
         cxx_builtin_include_directories = [
-            f"/opt/{bb_target}/lib/gcc/{bb_target}/10.2.0/include",
-            f"/opt/{bb_target}/lib/gcc/{bb_target}/10.2.0/include-fixed",
-            f"/opt/{bb_target}/{bb_target}/include",
-            f"/opt/{bb_target}/{bb_target}/sys-root/usr/include",
-            f"/opt/{bb_target}/{bb_target}/include/c++/10.2.0",
-            f"/opt/{bb_target}/{bb_target}/include/c++/10.2.0/{bb_target}",
-            f"/opt/{bb_target}/{bb_target}/include/c++/10.2.0/backward",
-            f"/opt/{bb_target}/{bb_target}/include/c++/10.2.0/parallel"
+            "/opt/{bb_target}/lib/gcc/{bb_target}/10.2.0/include".format(bb_target = bb_target),
+            "/opt/{bb_target}/lib/gcc/{bb_target}/10.2.0/include-fixed".format(bb_target = bb_target),
+            "/opt/{bb_target}/{bb_target}/include".format(bb_target = bb_target),
+            "/opt/{bb_target}/{bb_target}/sys-root/usr/include".format(bb_target = bb_target),
+            "/opt/{bb_target}/{bb_target}/include/c++/10.2.0".format(bb_target = bb_target),
+            "/opt/{bb_target}/{bb_target}/include/c++/10.2.0/{bb_target}".format(bb_target = bb_target),
+            "/opt/{bb_target}/{bb_target}/include/c++/10.2.0/backward".format(bb_target = bb_target),
+            "/opt/{bb_target}/{bb_target}/include/c++/10.2.0/parallel".format(bb_target = bb_target),
         ],
         tool_paths = {
             "ar": f"/opt/bin/{bb_full_target}/ar",
