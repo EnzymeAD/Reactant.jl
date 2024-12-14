@@ -1,3 +1,13 @@
+module TracedLinearAlgebra
+
+using ..Reactant
+import ..TracedRArray
+import ..AnyTracedRArray
+import ..AnyTracedRMatrix
+import ..AnyTracedRVector
+using ..TracedUtils
+using LinearAlgebra
+
 function LinearAlgebra.mul!(
     @nospecialize(C::TracedRArray{T,1}),
     @nospecialize(A::AnyTracedRMatrix),
@@ -141,4 +151,6 @@ function LinearAlgebra.diagm(m::Integer, n::Integer, v::AnyTracedRArray{T,1}) wh
     return Ops.pad(
         mat, promote_to(TracedRNumber{T}, 0); high=[m - length(v), n - length(v)]
     )
+end
+
 end
