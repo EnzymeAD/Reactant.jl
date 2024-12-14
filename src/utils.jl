@@ -91,6 +91,9 @@ function should_rewrite_ft(@nospecialize(ft))
     if ft <: typeof(Base.typed_hvcat)
         return false
     end
+    if ft <: typeof(Base.hvcat)
+        return false
+    end
 
     # Default assume all functions need to be reactant-ified
     return true
@@ -423,7 +426,6 @@ function call_with_reactant_generator(
     end
 
     rt = Base.Experimental.compute_ir_rettype(ir)
-    @assert code_info.rettype == rt
     
     # ocva = method.isva
 
