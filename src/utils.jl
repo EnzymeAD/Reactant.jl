@@ -584,7 +584,6 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
         Core.SSAValue(length(overdubbed_code))
     end
-    end
 
     push!(overdubbed_code, Expr(:(call), oc, fn_args[2:end]...))
 
@@ -611,7 +610,7 @@ function call_with_reactant_generator(
     return code_info
 end
 
-@eval function call_with_reactant(redub_arguments...)
+@eval function call_with_reactant($REDUB_ARGUMENTS_NAME...)
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
