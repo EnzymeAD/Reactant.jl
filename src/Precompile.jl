@@ -1,9 +1,6 @@
 using PrecompileTools: @setup_workload, @compile_workload
 
 @setup_workload begin
-    @static if haskey(ENV, "REACTANT_TEST_GROUP")
-        return
-    end
     @compile_workload begin
         initialize_dialect()
         cpu = XLA.CPUClient()
