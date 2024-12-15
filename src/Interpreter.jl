@@ -479,15 +479,3 @@ function overload_autodiff(
         end
     end
 end
-
-@reactant_override @noinline function Enzyme.autodiff_deferred(
-    rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
-) where {FA<:Annotation,A<:Annotation,Nargs}
-    return overload_autodiff(rmode, f, rt, args...)
-end
-
-@reactant_override @noinline function Enzyme.autodiff(
-    rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
-) where {FA<:Annotation,A<:Annotation,Nargs}
-    return overload_autodiff(rmode, f, rt, args...)
-end

@@ -13,7 +13,8 @@ using ..Reactant:
     WrappedTracedRArray,
     AnyTracedRArray,
     MissingTracedValue,
-    OrderedIdDict
+    OrderedIdDict,
+    Compiler
 import ..Reactant
 import ..Reactant.MLIR
 import ..ReactantPrimitive
