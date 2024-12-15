@@ -41,7 +41,7 @@ end
 
 SetLogLevel(x) = @ccall MLIR.API.mlir_c.SetLogLevel(x::Cint)::Cvoid
 
-global cpuclientcount = Ref(0)
+const cpuclientcount = Ref(0)
 # TODO synchronization when async is not working because `future` in `ConcreteRArray` is always `nothing`
 function CPUClient(asynchronous=false, node_id=0, num_nodes=1)
     @assert cpuclientcount[] == 0
