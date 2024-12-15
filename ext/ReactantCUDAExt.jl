@@ -2,7 +2,7 @@ module ReactantCUDAExt
 
 using CUDA
 using Reactant:
-    Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR, TracedRNumber
+    Reactant, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
 
 using Adapt
@@ -465,7 +465,7 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, threads::CuDim=1,
+Reactant.@reactant_override @noinline function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, threads::CuDim=1,
                 cooperative::Bool=false, shmem::Integer=0, call_kwargs...) where{F, tt}
     @show args
     @show call_kwargs
@@ -522,7 +522,7 @@ function compiler_cache(ctx::MLIR.IR.Context)
     return cache
 end
 
-Reactant.@reactant_override function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
+Reactant.@reactant_override @noinline function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
     @show "recufunction", f, tt
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
@@ -543,6 +543,7 @@ Reactant.@reactant_override function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwarg
         config = CUDA.CompilerConfig(CUDA.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo), CUDA.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx); kernel, name, always_inline)
         CUDA.GPUCompiler.cached_compilation(cache, source, config, compile, link)
     end
+    @show res
     res
 end
 
