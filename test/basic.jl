@@ -640,7 +640,7 @@ end
 function f_row_major(x)
     y = [1 2; 3 4; 5 6]
     if x isa Reactant.TracedRArray
-        y = Reactant.promote_to(Reactant.TracedRArray{eltype(x),2}, y)
+        y = Reactant.TracedUtils.promote_to(Reactant.TracedRArray{eltype(x),2}, y)
     end
     return x .+ y
 end

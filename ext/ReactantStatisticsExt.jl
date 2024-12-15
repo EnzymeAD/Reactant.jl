@@ -1,6 +1,7 @@
 module ReactantStatisticsExt
 
-using Reactant: AnyTracedRArray, materialize_traced_array
+using Reactant: AnyTracedRArray
+using Reactant.TracedUtils: materialize_traced_array
 using Statistics: Statistics
 
 function Statistics.mean(A::AnyTracedRArray{T,N}; dims=:) where {T,N}
