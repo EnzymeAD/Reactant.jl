@@ -99,7 +99,7 @@ end
 function Base.convert(
     ::Type{T}, X::WrappedConcreteRArray{ElType,N}
 ) where {T<:Array,ElType,N}
-    fn = compile(materialize_traced_array, (X,))
+    fn = compile(TracedUtils.materialize_traced_array, (X,))
     return convert(Array, fn(X))
 end
 Base.Array(x::AnyConcreteRArray) = convert(Array, x)
@@ -345,3 +345,11 @@ end
 
 buffer_on_cpu(::Any) = true
 buffer_on_cpu(x::ConcreteRArray) = XLA.BufferOnCPU(x.data.buffer)
+
+function Ops.constant(x::ConcreteRArray; kwargs...)
+    return Ops.constant(Base.convert(Array, x); kwargs...)
+end
+
+function Ops.constant(x::ConcreteRNumber{T}; kwargs...) where {T}
+    return Ops.constant(Base.convert(T, x); kwargs...)
+end

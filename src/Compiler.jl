@@ -294,7 +294,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
         MLIR.IR.block!(MLIR.IR.body(mod)) do
-            return Reactant.make_mlir_fn(f, args, (), "main", true)
+            return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
         end
     end
 
@@ -832,6 +832,13 @@ function compile(f, args; client=nothing, optimize=true, sync=false)
 
     body = expr.args[2]
     return register_thunk(fname, body)
+end
+
+# Compiling within a compile should return simply the original function
+Reactant.@reactant_override function Reactant.Compiler.compile(
+    f, args; client=nothing, optimize=true, sync=false
+)
+    return f
 end
 
 # inspired by RuntimeGeneratedFunction.jl
