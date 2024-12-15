@@ -23,7 +23,7 @@ import Core.Compiler:
 
 Base.Experimental.@MethodTable(REACTANT_METHOD_TABLE)
 
-function var"@reactant_override"(__source__::LineNumberNode, __module__::Module, def)
+function var"@reactant_overlay"(__source__::LineNumberNode, __module__::Module, def)
     return Base.Experimental.var"@overlay"(
         __source__, __module__, :(Reactant.REACTANT_METHOD_TABLE), def
     )

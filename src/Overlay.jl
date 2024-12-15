@@ -4,20 +4,20 @@
 #       we should move all the reactant_overrides to relevant files.
 
 # Compiling within a compile should return simply the original function
-@reactant_override function Compiler.compile(
+@reactant_overlay function Compiler.compile(
     f, args; client=nothing, optimize=true, sync=false
 )
     return f
 end
 
 # Enzyme overrides
-@reactant_override @noinline function Enzyme.autodiff_deferred(
+@reactant_overlay @noinline function Enzyme.autodiff_deferred(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
     return overload_autodiff(rmode, f, rt, args...)
 end
 
-@reactant_override @noinline function Enzyme.autodiff(
+@reactant_overlay @noinline function Enzyme.autodiff(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
     return overload_autodiff(rmode, f, rt, args...)
