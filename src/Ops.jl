@@ -1042,7 +1042,7 @@ end
     )
 end
 
-function rng_bit_generator(
+@noinline function rng_bit_generator(
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
