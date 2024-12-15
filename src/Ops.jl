@@ -926,33 +926,22 @@ function sort(
 
     #TODO: move to @trace
     (a, b) = (ConcreteRNumber(T(0)), ConcreteRNumber(T(0)))
-    func = Reactant.make_mlir_fn(comparator, (a, b), (), "main"; no_args_in_result=true)[2]
-
+    func = Reactant.make_mlir_fn(comparator, (a, b), (), "main"; no_args_in_result=true, return_dialect=:stablehlo)[2]
+    @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
         MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
     )
     #C5:
     @assert fn_name == "main" "$comparator: no function generated"
-    @assert MLIR.IR.nregions(func) == 1
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
     @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
         "$comparator return type is not tensor<i1>"
     )
 
-    #TODO: move takebody to utils?
     comparator = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
     MLIR.IR.rmfromparent!(func)
-    for block in MLIR.IR.BlockIterator(comparator)
-        return_op = MLIR.IR.terminator(block)
-        MLIR.IR.name(return_op) == "func.return" || continue
-        operands = [MLIR.IR.operand(return_op, i) for i in 1:MLIR.IR.noperands(return_op)]
-        MLIR.IR.block!(block) do
-            MLIR.Dialects.stablehlo.return_(operands; location=MLIR.IR.location(return_op))
-            MLIR.IR.rmfromparent!(return_op)
-        end
-    end
 
     dimension = MLIR.IR.Attribute(dimension - 1)
     is_stable = MLIR.IR.Attribute(is_stable)
