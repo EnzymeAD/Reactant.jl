@@ -9,8 +9,14 @@ end
 
 function Random.seed!(rng::TracedRNG, seed::Number)
     seed = reinterpret(UInt64, Random.hash_seed(seed))
-    # TODO: Using `seed!` inside tracing should generate a TracedRArray
     return Random.seed!(rng, ConcreteRArray(seed[1:length(rng.seed)]))
+end
+
+@reactant_override @noinline function Random.seed!(rng::TracedRNG, seed::Number)
+    seed = reinterpret(UInt64, Random.hash_seed(seed))
+    return Random.seed!(
+        rng, TracedUtils.promote_to(TracedRArray{UInt64,1}, seed[1:length(rng.seed)])
+    )
 end
 
 function Random.seed!(
