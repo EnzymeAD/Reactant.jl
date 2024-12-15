@@ -14,11 +14,17 @@ using ..Reactant:
     AnyTracedRArray,
     MissingTracedValue,
     OrderedIdDict,
-    Compiler
+    ConcreteRArray,
+    ConcreteRNumber
 import ..Reactant
 import ..Reactant.MLIR
 import ..ReactantPrimitive
 import ..Ops
+
+@inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
+@inline traced_getfield(
+    @nospecialize(obj::AbstractArray{<:Union{ConcreteRNumber,ConcreteRArray}}), field
+) = Base.getindex(obj, field)
 
 materialize_traced_array(x::TracedRArray) = x
 materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
@@ -324,7 +330,7 @@ end
 
 function push_val!(ad_inputs, x, path)
     for p in path
-        x = Compiler.traced_getfield(x, p)
+        x = traced_getfield(x, p)
     end
     x = x.mlir_data
     return push!(ad_inputs, x)
@@ -344,7 +350,7 @@ end
 
 function set!(x, path, tostore; emptypath=false)
     for p in path
-        x = Compiler.traced_getfield(x, p)
+        x = traced_getfield(x, p)
     end
 
     x.mlir_data = tostore
