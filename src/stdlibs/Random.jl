@@ -27,16 +27,17 @@ TracedRNG(seed::ConcreteRArray{UInt64,1}) = TracedRNG(seed, "DEFAULT")
 
 default_rng() = TracedRNG()
 function default_rng_inside_interpreter()
-    return TracedRNG(promote_to(TracedRArray{UInt64,1}, make_seed()), "DEFAULT")
+    return TracedRNG(TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed()), "DEFAULT")
 end
 
-# XXX: Currently we get an illegal instruction if we don't call Random.default_rng()
+@reactant_override @noinline Random.default_rng() = default_rng_inside_interpreter()
+@reactant_override @noinline default_rng() = default_rng_inside_interpreter()
 
 function Random.rand!(rng::TracedRNG, A::AnyTracedRArray{T,N}) where {T,N}
     length(A) == 0 && return A
     res = Ops.rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
     rng.seed = res.output_state
-    set_mlir_data!(A, res.output.mlir_data)
+    TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
 end
 
@@ -49,7 +50,7 @@ function Random.randn!(rng::TracedRNG, A::AnyTracedRArray{T,N}) where {T,N}
     )
     probit = Ops.erf_inv(scaled_uniform)
     rand_normal = Ops.multiply(probit, Ops.constant(fill(sqrt(T(2)), size(A))))
-    set_mlir_data!(A, rand_normal.mlir_data)
+    TracedUtils.set_mlir_data!(A, rand_normal.mlir_data)
     return A
 end
 
