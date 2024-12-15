@@ -124,6 +124,11 @@ include("TracedRArray.jl")
 
 include("ConcreteRArray.jl")
 
+mutable struct TracedRNG <: Random.AbstractRNG
+    seed::Union{ConcreteRArray{UInt64,1},TracedRArray{UInt64,1}}
+    const algorithm::String
+end
+
 # StdLib Overloads
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")

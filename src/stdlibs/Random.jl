@@ -1,11 +1,21 @@
+module TracedRandom
+
 # Implementation based on the following:
 # 1. https://github.com/JuliaGPU/CUDA.jl/blob/master/src/random.jl
 # 2. https://github.com/JuliaRandom/Random123.jl/blob/master/src/common.jl#L125
 
-mutable struct TracedRNG <: Random.AbstractRNG
-    seed::Union{ConcreteRArray{UInt64,1},TracedRArray{UInt64,1}}
-    const algorithm::String
-end
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    TracedRNG,
+    AnyTracedRArray,
+    Reactant,
+    TracedUtils,
+    @reactant_override,
+    Ops,
+    ConcreteRArray
+using Random: Random
 
 function Random.seed!(rng::TracedRNG, seed::Number)
     seed = reinterpret(UInt64, Random.hash_seed(seed))
@@ -128,3 +138,5 @@ end
 #       confirm that the dynamic_update_slice calls are optimized away into a single
 #       `stablehlo.rng_bit_generator` call -- confirm that this should be the case based on
 #       how the seeding should work?
+
+end
