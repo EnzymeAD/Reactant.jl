@@ -5,7 +5,7 @@ using CUDA
 function square_kernel!(x)
     i = threadIdx().x
     x[i] *= x[i]
-    sync_threads()
+    # sync_threads()
     return nothing
 end
 
