@@ -12,21 +12,18 @@ using ..Reactant:
     AnyTracedRArray,
     Reactant,
     TracedUtils,
-    @reactant_override,
     Ops,
     ConcreteRArray
 using Random: Random
 
 function Random.seed!(rng::TracedRNG, seed::Number)
     seed = reinterpret(UInt64, Random.hash_seed(seed))
-    return Random.seed!(rng, ConcreteRArray(seed[1:length(rng.seed)]))
-end
-
-@reactant_override @noinline function Random.seed!(rng::TracedRNG, seed::Number)
-    seed = reinterpret(UInt64, Random.hash_seed(seed))
-    return Random.seed!(
-        rng, TracedUtils.promote_to(TracedRArray{UInt64,1}, seed[1:length(rng.seed)])
-    )
+    seed = if Reactant.within_reactant_interpreter()
+        TracedUtils.promote_to(TracedRArray{UInt64,1}, seed[1:length(rng.seed)])
+    else
+        ConcreteRArray(seed[1:length(rng.seed)])
+    end
+    return Random.seed!(rng, seed)
 end
 
 function Random.seed!(
@@ -41,13 +38,10 @@ make_seed() = rand(Random.RandomDevice(), UInt64, 2)
 TracedRNG() = TracedRNG(ConcreteRArray(make_seed()))
 TracedRNG(seed::ConcreteRArray{UInt64,1}) = TracedRNG(seed, "DEFAULT")
 
-default_rng() = TracedRNG()
-function default_rng_inside_interpreter()
+function default_rng()
+    Reactant.within_reactant_interpreter() || return TracedRNG()
     return TracedRNG(TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed()), "DEFAULT")
 end
-
-@reactant_override @noinline Random.default_rng() = default_rng_inside_interpreter()
-@reactant_override @noinline default_rng() = default_rng_inside_interpreter()
 
 function Random.rand!(rng::TracedRNG, A::AnyTracedRArray{T,N}) where {T,N}
     length(A) == 0 && return A
