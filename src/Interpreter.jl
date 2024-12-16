@@ -202,7 +202,7 @@ function set_act!(inp, path, reverse, tostore; emptypath=false)
     end
 
     for p in path
-        x = TracedUtils.traced_getfield(x, p)
+        x = traced_getfield(x, p)
     end
 
     #if inp isa Enzyme.Active || !reverse

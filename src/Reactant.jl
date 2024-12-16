@@ -114,25 +114,6 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
-struct XLAArray{T,N} <: RArray{T,N}
-    # size::NTuple{N,Int}
-end
-
-mutable struct ConcreteRArray{T,N} <: RArray{T,N}
-    data::XLA.AsyncBuffer
-    #   data::XLAArray{T, N}
-    shape::NTuple{N,Int}
-end
-
-const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
-const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}
-
-mutable struct ConcreteRNumber{T} <: RNumber{T}
-    data::XLA.AsyncBuffer
-end
-
-const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
-
 include("Ops.jl")
 include("TracedUtils.jl")
 
@@ -142,6 +123,8 @@ include("TracedRArray.jl")
 include("ConcreteRArray.jl")
 
 include("linear_algebra.jl")
+
+const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
 include("Tracing.jl")
@@ -163,7 +146,7 @@ function Enzyme.make_zero(
     return res
 end
 
-using .Compiler: @compile, @code_hlo, @jit, create_result, compile
+using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
 export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace
 
 const registry = Ref{MLIR.IR.DialectRegistry}()
