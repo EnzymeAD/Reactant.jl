@@ -1,11 +1,11 @@
 module ReactantSpecialFunctionsExt
 using SpecialFunctions
 using Reactant: Ops, Reactant, ReactantFloat, TracedRNumber
-using Reactant.TracedUtils: promote_to
+using Reactant.TracedRNumberOverrides: float
 
-for fn in [:gamma, :loggamma, :digamma, :erf, :erfc]
+for fn in [:gamma, :loggamma, :digamma, :trigamma, :erf, :erfc]
     @eval(function SpecialFunctions.$fn(x::TracedRNumber{<:Number})
-        return $fn(promote_to(TracedRNumber{Float64}, x))
+        return $fn(float(x))
     end)
 end
 
@@ -41,7 +41,7 @@ end
 
 # SpecialFunctions.invdigamma
 
-function SpecialFunctions.trigamma(x::TracedRNumber{T}) where {T}
+function SpecialFunctions.trigamma(x::TracedRNumber{T}) where {T<: ReactantFloat}
     return Ops.polygamma(Ops.constant(T(1)), x)
 end
 
@@ -52,7 +52,7 @@ function SpecialFunctions.polygamma(
 end
 
 function SpecialFunctions.polygamma(n::TracedRNumber{T}, x::TracedRNumber{T}) where {T}
-    x = promote_to(TracedRNumber{Float64}, x)
+    x = promote_to(TracedRNumber{T}, x)
     return polygamma(n, x)
 end
 
@@ -101,7 +101,7 @@ function SpecialFunctions.logerf(x::TracedRNumber{T}, y::TracedRNumber{T}) where
 end
 
 function SpecialFunctions.erfcx(x::TracedRNumber{T}) where {T}
-    return exp(x^2) * erfc(x)
+    return exp(float(x^2)) * erfc(x)
 end
 
 function SpecialFunctions.logerfc(x::TracedRNumber{T}) where {T}

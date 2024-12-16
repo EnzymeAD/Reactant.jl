@@ -1,26 +1,29 @@
 using SpecialFunctions, Reactant
-@testset "Generic" begin
-    values = [0.5, 0.6]
-    for (op, n_args) in [
-        (:gamma, 1),
-        (:loggamma, 1),
-        (:loggamma1p, 1),
-        (:digamma, 1),
-        (:trigamma, 1),
-        (:beta, 2),
-        (:logbeta, 2),
-        (:erf, 1),
-        (:erf, 2),
-        (:erfc, 1),
-        (:logerf, 2),
-        (:erfcx, 1),
-        (:logerfc, 1),
-        (:logerfcx, 1),
-    ]
-        x = values[1:n_args]
+@testset "$op" for (op, n_args) in [
+    (:gamma, 1),
+    (:loggamma, 1),
+    (:digamma, 1),
+    (:trigamma, 1),
+    (:beta, 2),
+    (:logbeta, 2),
+    (:erf, 1),
+    (:erf, 2),
+    (:erfc, 1),
+    (:logerf, 2),
+    (:erfcx, 1),
+    (:logerfc, 1),
+    (:logerfcx, 1),
+]
+    for data in ([0.5, 0.6], [2, 4])
+        x = data[1:n_args]
         @eval @test @jit(SpecialFunctions.$op(ConcreteRNumber.($x)...)) ≈
             SpecialFunctions.$op($x...)
     end
+end
+
+@testset "loggamma1p" begin
+    @test SpecialFunctions.loggamma1p(0.5) ≈
+        @jit SpecialFunctions.loggamma1p(ConcreteRNumber(0.5))
 end
 
 @testset "loggammadiv" begin
