@@ -1,16 +1,16 @@
 module ReactantSpecialFunctionsExt
 using SpecialFunctions
-using Reactant: Ops, Reactant, ReactantFloat, TracedRNumber
+using Reactant: Ops, Reactant, TracedRNumber
 using Reactant.TracedRNumberOverrides: float
 
-for fn in [:gamma, :loggamma, :digamma, :trigamma, :erf, :erfc]
-    @eval(function SpecialFunctions.$fn(x::TracedRNumber{<:Number})
-        return $fn(float(x))
+for fn in [:digamma, :erf, :erfc]
+    @eval(function SpecialFunctions.$fn(x::TracedRNumber)
+        return Ops.$fn(float(x))
     end)
 end
 
-function SpecialFunctions.gamma(x::TracedRNumber{T}) where {T<:ReactantFloat}
-    return exp(Ops.lgamma(x))
+function SpecialFunctions.gamma(x::TracedRNumber)
+    return exp(Ops.lgamma(float(x)))
 end
 
 #TODO: add factorial function
@@ -21,11 +21,11 @@ end
 end
 =#
 
-function SpecialFunctions.loggamma(x::TracedRNumber{T}) where {T<:ReactantFloat}
-    return Ops.lgamma(x)
+function SpecialFunctions.loggamma(x::TracedRNumber) 
+    return Ops.lgamma(float(x))
 end
 
-function SpecialFunctions.loggamma1p(x::TracedRNumber{T}) where {T}
+function SpecialFunctions.loggamma1p(x::TracedRNumber) 
     return loggamma(1 + x)
 end
 
@@ -35,20 +35,14 @@ function SpecialFunctions.logfactorial(
     return loggamma(1 + x)
 end
 
-function SpecialFunctions.digamma(x::TracedRNumber{T}) where {T<:ReactantFloat}
-    return Ops.digamma(x)
-end
-
 # SpecialFunctions.invdigamma
 
-function SpecialFunctions.trigamma(x::TracedRNumber{T}) where {T<: ReactantFloat}
-    return Ops.polygamma(Ops.constant(T(1)), x)
+function SpecialFunctions.trigamma(x::TracedRNumber{T}) where {T}
+    return Ops.polygamma(Ops.constant(T(1)), float(x))
 end
 
-function SpecialFunctions.polygamma(
-    n::TracedRNumber{T}, x::TracedRNumber{T}
-) where {T<:ReactantFloat}
-    return Ops.polygamma(n, x)
+function SpecialFunctions.polygamma(n::TracedRNumber{T}, x::TracedRNumber)
+    return Ops.polygamma(float(n), float(x))
 end
 
 function SpecialFunctions.polygamma(n::TracedRNumber{T}, x::TracedRNumber{T}) where {T}
@@ -82,16 +76,8 @@ end
 
 #utilities...
 
-function SpecialFunctions.erf(x::TracedRNumber{T}) where {T<:ReactantFloat}
-    return Ops.erf(x)
-end
-
 function SpecialFunctions.erf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T}
     return erf(y) - erf(x)
-end
-
-function SpecialFunctions.erfc(x::TracedRNumber{T}) where {T<:ReactantFloat}
-    return Ops.erfc(x)
 end
 
 #SpecialFunctions.erfcinv
@@ -100,15 +86,15 @@ function SpecialFunctions.logerf(x::TracedRNumber{T}, y::TracedRNumber{T}) where
     return log(erf(x, y))
 end
 
-function SpecialFunctions.erfcx(x::TracedRNumber{T}) where {T}
+function SpecialFunctions.erfcx(x::TracedRNumber) 
     return exp(float(x^2)) * erfc(x)
 end
 
-function SpecialFunctions.logerfc(x::TracedRNumber{T}) where {T}
+function SpecialFunctions.logerfc(x::TracedRNumber) 
     return log(erfc(x))
 end
 
-function SpecialFunctions.logerfcx(x::TracedRNumber{T}) where {T}
+function SpecialFunctions.logerfcx(x::TracedRNumber) 
     return log(erfcx(x))
 end
 
