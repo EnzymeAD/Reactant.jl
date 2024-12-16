@@ -32,7 +32,7 @@ path = "lib/ReactantCore"
 ReactantAbstractFFTsExt = "AbstractFFTs"
 ReactantArrayInterfaceExt = "ArrayInterface"
 ReactantNNlibExt = "NNlib"
-ReactantSpecialFunctions = "SpecialFunctions"
+ReactantSpecialFunctionsExt = "SpecialFunctions"
 ReactantStatisticsExt = "Statistics"
 ReactantYaoBlocksExt = "YaoBlocks"
 
