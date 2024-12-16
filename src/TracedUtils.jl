@@ -214,9 +214,9 @@ function make_mlir_fn(
     end
 
     out_tys = if do_transpose
-        [transpose_ty(mlir_type(arg)) for arg in linear_results]
+        [transpose_ty(Ops.mlir_type(arg)) for arg in linear_results]
     else
-        [mlir_type(arg) for arg in linear_results]
+        [Ops.mlir_type(arg) for arg in linear_results]
     end
 
     ret = MLIR.IR.block!(fnbody) do
