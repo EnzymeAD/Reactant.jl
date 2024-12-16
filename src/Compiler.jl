@@ -315,7 +315,8 @@ function compile_mlir(f, args; kwargs...)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        evalinfo = compile_mlir!(mod, f, args; kwargs...)
+        callcache = Dict()
+        evalinfo = compile_mlir!(mod, f, args, callcache; kwargs...)
         return mod, evalinfo...
     end
 end
@@ -326,13 +327,15 @@ const cuModule = Ref{UInt}(0)
 using Base.ScopedValues
 const callcache = ScopedValue{Dict}()
 
-function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
+function compile_mlir!(mod, f, args, callcache; optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
         MLIR.IR.block!(MLIR.IR.body(mod)) do
-            with(enable_tracing=>true, callcache=>Dict()) do
-                return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+            callcache!(callcache) do
+                with(enable_tracing=>true) do
+                    return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+                end
             end
         end
     end
@@ -920,5 +923,42 @@ function register_thunk(tag, body)
     __thunk_body_cache[tag] = body
     return Thunk{tag}()
 end
+
+function activate_callcache!(callcache)
+    stack = get!(task_local_storage(), :callcache) do
+        return []
+    end
+    push!(stack, callcache)
+    return nothing
+end
+
+function deactivate_callcache!(callcache)
+    callcache === last(task_local_storage(:callcache)) ||
+        error("Deactivating wrong callcache")
+    return pop!(task_local_storage(:callcache))
+end
+
+function _has_callcache()
+    return haskey(task_local_storage(), :callcache) &&
+           !Base.isempty(task_local_storage(:callcache))
+end
+
+function callcache(; throw_error::Bool=true)
+    if !_has_callcache()
+        throw_error && error("No callcache is active")
+        return nothing
+    end
+    return last(task_local_storage(:callcache))
+end
+
+function callcache!(f, callcache)
+    activate_callcache!(callcache)
+    try
+        return f()
+    finally
+        deactivate_callcache!(callcache)
+    end
+end
+
 
 end

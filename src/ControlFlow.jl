@@ -130,7 +130,7 @@ function ReactantCore.traced_while(
     end
 end
 
-function ReactantCore.traced_call(f, args...)
+function ReactantCore.traced_call(f::Function, args...)
     seen_cache = Reactant.OrderedIdDict()
     make_tracer(
         seen_cache,
@@ -149,12 +149,13 @@ function ReactantCore.traced_call(f, args...)
     end
 
     cache_key = Cached((f, args...))
-    if haskey(Reactant.Compiler.callcache[], cache_key)
+    callcache = Reactant.Compiler.callcache()
+    if haskey(callcache, cache_key)
         # cache lookup:
-        (; f_name, mlir_result_types, traced_result) = Reactant.Compiler.callcache[][cache_key]
+        (; f_name, mlir_result_types, traced_result) = callcache[cache_key]
     else
         f_name = String(gensym(Symbol(f)))
-        temp = Reactant.make_mlir_fn(
+        temp = Reactant.TracedUtils.make_mlir_fn(
             f,
             args,
             (),
@@ -165,7 +166,7 @@ function ReactantCore.traced_call(f, args...)
         )
         traced_result, ret = temp[[3, 6]]
         mlir_result_types = [MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)]
-        Reactant.Compiler.callcache[][cache_key] = (; f_name, mlir_result_types, traced_result)
+        callcache[cache_key] = (; f_name, mlir_result_types, traced_result)
     end
 
     call_op = MLIR.Dialects.func.call(
