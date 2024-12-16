@@ -1,5 +1,5 @@
 using Reactant: Reactant, Ops
-using Reactant.TracedUtils
+using Reactant.TracedUtils: promote_to
 
 function SpecialFunctions.gamma(x::TracedRNumber{T}) where {T}
     x = promote_to(TracedRNumber{Float64}, x)
@@ -37,7 +37,7 @@ end
 # SpecialFunctions.invdigamma
 
 function SpecialFunctions.trigamma(x::TracedRNumber{T}) where {T}
-    return Ops.polygamma(Ops.constant(2.0), x)
+    return Ops.polygamma(Ops.constant(1.0), x)
 end
 
 function SpecialFunctions.polygamma(n::TracedRNumber{T}, x::TracedRNumber{T}) where {T}
@@ -77,16 +77,12 @@ function SpecialFunctions.erf(x::TracedRNumber{T}) where {T}
 end
 
 function SpecialFunctions.erf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T}
-    return y - x
+    return erf(y) - erf(x)
 end
 
 function SpecialFunctions.erfc(x::TracedRNumber{T}) where {T}
     x = promote_to(TracedRNumber{Float64}, x)
     return Ops.erfc(x)
-end
-
-function SpecialFunctions.logerf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T}
-    return log(erf(x, y))
 end
 
 #SpecialFunctions.erfcinv
@@ -121,5 +117,5 @@ end
 #Elliptic Integrals
 
 function SpecialFunctions.zeta(z::TracedRNumber{T}, s::TracedRNumber{T}) where {T}
-    return Ops.zeta(z,s)
+    return Ops.zeta(z, s)
 end
