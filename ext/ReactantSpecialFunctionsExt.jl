@@ -4,7 +4,7 @@ using Reactant: Ops, Reactant, TracedRNumber
 using Reactant.TracedRNumberOverrides: float
 
 for fn in [:digamma, :erf, :erfc]
-    @eval(function SpecialFunctions.$fn(x::TracedRNumber)
+    @eval(function SpecialFunctions.$fn(x::TracedRNumber{<:Real})
         return Ops.$fn(float(x))
     end)
 end
@@ -16,12 +16,12 @@ end
 #TODO: add factorial function
 #=function SpecialFunctions.gamma(
     n::TracedRNumber{T}
-) where {T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64}}
+) where {T<:Integer}
      factorial(n)
 end
 =#
 
-function SpecialFunctions.loggamma(x::TracedRNumber) 
+function SpecialFunctions.loggamma(x::TracedRNumber{<:Real}) 
     return Ops.lgamma(float(x))
 end
 
@@ -41,12 +41,11 @@ function SpecialFunctions.trigamma(x::TracedRNumber{T}) where {T}
     return Ops.polygamma(Ops.constant(T(1)), float(x))
 end
 
-function SpecialFunctions.polygamma(n::TracedRNumber, x::TracedRNumber)
+function SpecialFunctions.polygamma(n::TracedRNumber{<:Real}, x::TracedRNumber{<:Real})
     return Ops.polygamma(float(n), float(x))
 end
 
 function SpecialFunctions.polygamma(n::TracedRNumber{T}, x::TracedRNumber{T}) where {T}
-    x = promote_to(TracedRNumber{T}, x)
     return polygamma(n, x)
 end
 
@@ -54,17 +53,17 @@ end
 
 # SpecialFunctions.gamma_inc_inv
 
-function SpecialFunctions.loggammadiv(a::TracedRNumber{T}, b::TracedRNumber{T}) where {T}
+function SpecialFunctions.loggammadiv(a::TracedRNumber{T}, b::TracedRNumber{T}) where {T<:Real}
     return log(gamma(b) / gamma(a + b))
 end
 
 #SpecialFunctions.gamma ...
 
-function SpecialFunctions.beta(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T}
+function SpecialFunctions.beta(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:Real}
     return gamma(x) * gamma(y) / gamma(x + y)
 end
 
-function SpecialFunctions.logbeta(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T}
+function SpecialFunctions.logbeta(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:Real}
     return log(abs(beta(x, y)))
 end
 
@@ -76,25 +75,25 @@ end
 
 #utilities...
 
-function SpecialFunctions.erf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T}
+function SpecialFunctions.erf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:Real}
     return erf(y) - erf(x)
 end
 
 #SpecialFunctions.erfcinv
 
-function SpecialFunctions.logerf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T}
+function SpecialFunctions.logerf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:Real}
     return log(erf(x, y))
 end
 
-function SpecialFunctions.erfcx(x::TracedRNumber) 
+function SpecialFunctions.erfcx(x::TracedRNumber{<:Real}) 
     return exp(float(x^2)) * erfc(x)
 end
 
-function SpecialFunctions.logerfc(x::TracedRNumber) 
+function SpecialFunctions.logerfc(x::TracedRNumber{<:Real}) 
     return log(erfc(x))
 end
 
-function SpecialFunctions.logerfcx(x::TracedRNumber) 
+function SpecialFunctions.logerfcx(x::TracedRNumber{<:Real}) 
     return log(erfcx(x))
 end
 
@@ -111,7 +110,7 @@ end
 
 #Elliptic Integrals
 
-function SpecialFunctions.zeta(z::TracedRNumber{T}, s::TracedRNumber{T}) where {T}
+function SpecialFunctions.zeta(z::TracedRNumber{T}, s::TracedRNumber{T}) where {T<:Real}
     return Ops.zeta(z, s)
 end
 
