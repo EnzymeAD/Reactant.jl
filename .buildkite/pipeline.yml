@@ -1,7 +1,7 @@
 steps:
   - group: ":test_tube: Tests"
     steps:
-      - label: "CUDA Julia v{{matrix.version}} -- {{matrix.group}}"
+      - label: ":julia: :linux: CUDA Julia v{{matrix.version}} -- {{matrix.group}}"
         matrix:
           setup:
             version:
@@ -33,7 +33,7 @@ steps:
         env:
           REACTANT_TEST_GROUP: "{{matrix.group}}"
         if: build.message !~ /\[skip tests\]/
-        timeout_in_minutes: 60
+        timeout_in_minutes: 120
 
       - label: ":julia: :linux: aarch64 - Julia v{{matrix.version}} -- {{matrix.group}}"
         matrix:
@@ -70,7 +70,7 @@ steps:
         env:
           REACTANT_TEST_GROUP: "{{matrix.group}}"
         if: build.message !~ /\[skip tests\]/
-        timeout_in_minutes: 60
+        timeout_in_minutes: 120
 
   - group: ":racehorse: Benchmarks"
     steps:
