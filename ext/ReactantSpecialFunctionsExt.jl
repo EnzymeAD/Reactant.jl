@@ -1,8 +1,15 @@
-using Reactant: Reactant, Ops
+module ReactantSpecialFunctionsExt
+using SpecialFunctions
+using Reactant: Ops, Reactant, ReactantFloat, TracedRNumber
 using Reactant.TracedUtils: promote_to
 
-function SpecialFunctions.gamma(x::TracedRNumber{T}) where {T}
-    x = promote_to(TracedRNumber{Float64}, x)
+for fn in [:gamma, :loggamma, :digamma, :erf, :erfc]
+    @eval(function SpecialFunctions.$fn(x::TracedRNumber{<:Number})
+        return $fn(promote_to(TracedRNumber{Float64}, x))
+    end)
+end
+
+function SpecialFunctions.gamma(x::TracedRNumber{T}) where {T<:ReactantFloat}
     return exp(Ops.lgamma(x))
 end
 
@@ -14,8 +21,7 @@ end
 end
 =#
 
-function SpecialFunctions.loggamma(x::TracedRNumber{T}) where {T}
-    x = promote_to(TracedRNumber{Float64}, x)
+function SpecialFunctions.loggamma(x::TracedRNumber{T}) where {T<:ReactantFloat}
     return Ops.lgamma(x)
 end
 
@@ -24,25 +30,30 @@ function SpecialFunctions.loggamma1p(x::TracedRNumber{T}) where {T}
 end
 
 function SpecialFunctions.logfactorial(
-    x::TracedRNumber{<:T}
+    x::TracedRNumber{T}
 ) where {T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64}}
     return loggamma(1 + x)
 end
 
-function SpecialFunctions.digamma(x::TracedRNumber{T}) where {T}
-    x = promote_to(TracedRNumber{Float64}, x)
+function SpecialFunctions.digamma(x::TracedRNumber{T}) where {T<:ReactantFloat}
     return Ops.digamma(x)
 end
 
 # SpecialFunctions.invdigamma
 
 function SpecialFunctions.trigamma(x::TracedRNumber{T}) where {T}
-    return Ops.polygamma(Ops.constant(1.0), x)
+    return Ops.polygamma(Ops.constant(T(1)), x)
+end
+
+function SpecialFunctions.polygamma(
+    n::TracedRNumber{T}, x::TracedRNumber{T}
+) where {T<:ReactantFloat}
+    return Ops.polygamma(n, x)
 end
 
 function SpecialFunctions.polygamma(n::TracedRNumber{T}, x::TracedRNumber{T}) where {T}
     x = promote_to(TracedRNumber{Float64}, x)
-    return Ops.polygamma(n, x)
+    return polygamma(n, x)
 end
 
 # SpecialFunctions.gamma_inc
@@ -71,8 +82,7 @@ end
 
 #utilities...
 
-function SpecialFunctions.erf(x::TracedRNumber{T}) where {T}
-    x = promote_to(TracedRNumber{Float64}, x)
+function SpecialFunctions.erf(x::TracedRNumber{T}) where {T<:ReactantFloat}
     return Ops.erf(x)
 end
 
@@ -80,8 +90,7 @@ function SpecialFunctions.erf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T
     return erf(y) - erf(x)
 end
 
-function SpecialFunctions.erfc(x::TracedRNumber{T}) where {T}
-    x = promote_to(TracedRNumber{Float64}, x)
+function SpecialFunctions.erfc(x::TracedRNumber{T}) where {T<:ReactantFloat}
     return Ops.erfc(x)
 end
 
@@ -119,3 +128,5 @@ end
 function SpecialFunctions.zeta(z::TracedRNumber{T}, s::TracedRNumber{T}) where {T}
     return Ops.zeta(z, s)
 end
+
+end # module ReactantSpecialFunctionsExt
