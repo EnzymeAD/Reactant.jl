@@ -30,8 +30,8 @@ function SpecialFunctions.loggamma1p(x::TracedRNumber)
 end
 
 function SpecialFunctions.logfactorial(
-    x::TracedRNumber{T}
-) where {T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64}}
+    x::TracedRNumber{<:Integer}
+)
     return loggamma(1 + x)
 end
 
@@ -41,7 +41,7 @@ function SpecialFunctions.trigamma(x::TracedRNumber{T}) where {T}
     return Ops.polygamma(Ops.constant(T(1)), float(x))
 end
 
-function SpecialFunctions.polygamma(n::TracedRNumber{T}, x::TracedRNumber)
+function SpecialFunctions.polygamma(n::TracedRNumber, x::TracedRNumber)
     return Ops.polygamma(float(n), float(x))
 end
 
