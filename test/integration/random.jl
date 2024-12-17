@@ -2,6 +2,48 @@ using Reactant, Test, Random, Random123, StableRNGs, Statistics
 using StatsBase, Statistics, HypothesisTests, Distributions
 
 # First Testing overlay works correctly
+@testset "Random.jl Overlay" begin
+    hlo = @code_hlo rand(Float32, 2, 3)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    hlo = @code_hlo rand(MersenneTwister(), Float32, 2, 3)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    hlo = @code_hlo rand(2, 3)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    hlo = @code_hlo rand(MersenneTwister(), 2, 3)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    hlo = @code_hlo rand(MersenneTwister(), Float64, (2, 3))
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    hlo = @code_hlo rand(MersenneTwister(), Float64)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    hlo = @code_hlo rand(MersenneTwister())
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    fn(x) = begin
+        rng = MersenneTwister()
+        Random.rand!(rng, x)
+        return x
+    end
+    hlo = @code_hlo fn(Reactant.to_rarray(rand(Float64, 2, 3)))
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    # XXX: This crashes with Unreachable reached at 0x7a64877b6b16
+    # fn2() = begin
+    #     rng = MersenneTwister()
+    #     x = zeros(Float64, 2, 3)
+    #     Random.rand!(rng, x)
+    #     return x
+    # end
+    # hlo = @code_hlo fn2()
+    # @test !contains(repr(hlo), "stablehlo.rng_bit_generator")
+end
+
+@testset "Random123" begin end
 
 # Next we test that the random number generators actually generate data from the correct
 # distributions

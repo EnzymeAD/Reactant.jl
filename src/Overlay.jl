@@ -47,7 +47,7 @@ for randfun in (:rand, :randn, :randexp)
     @eval begin
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dims::Dims
-        ) where {T}
+        ) where {T <: ReactantPrimitive}
             return TracedRandom.$(overload_randfun)(rng, T, dims)
         end
 
@@ -59,14 +59,14 @@ for randfun in (:rand, :randn, :randexp)
 
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...
-        ) where {T}
+        ) where {T <: ReactantPrimitive}
             return TracedRandom.$(overload_randfun)(rng, T, dim1, dims...)
         end
 
         # scalars
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}=Float64
-        ) where {T}
+        ) where {T <: ReactantPrimitive}
             return TracedRandom.$(overload_randfun)(rng, T)
         end
 

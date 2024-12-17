@@ -2,7 +2,7 @@ module TracedRandom
 
 # Implementation based on the following:
 # 1. https://github.com/JuliaGPU/CUDA.jl/blob/master/src/random.jl
-# 2. https://github.com/JuliaRandom/Random123.jl/blob/master/src/common.jl#L125
+# 2. https://github.com/JuliaRandom/Random123.jl/blob/master/src/common.jl
 
 using ..Reactant:
     Reactant,
@@ -15,6 +15,14 @@ using ..Reactant:
     Ops,
     ConcreteRArray
 using Random: Random, AbstractRNG
+
+function make_seed(rng::AbstractRNG = Random.RandomDevice())
+    seed_uint64 = Array{UInt64}(undef, 2)
+    sampler = Random.Sampler(rng, UInt64, Val(1))
+    seed_uint64[1] = rand(rng, sampler)
+    seed_uint64[2] = rand(rng, sampler)
+    return seed_uint64
+end
 
 function Random.seed!(rng::TracedRNG, seed::Number)
     if seed isa TracedRNumber
@@ -45,8 +53,6 @@ function Random.seed!(
     rng.seed = seed
     return rng
 end
-
-make_seed() = rand(Random.RandomDevice(), UInt64, 2)
 
 TracedRNG() = TracedRNG(ConcreteRArray(make_seed()))
 TracedRNG(seed::ConcreteRArray{UInt64,1}) = TracedRNG(seed, "DEFAULT")
@@ -127,15 +133,11 @@ for randfun in (:rand, :randn, :randexp, :rand!, :randn!, :randexp!)
     internal_overload_randfun = Symbol(:internal_overload_, randfun)
     @eval begin
         function $(overload_randfun)(rng::AbstractRNG, args...)
-            seed_uint64 = Array{UInt64}(undef, 2)
-            sampler = Random.Sampler(rng, UInt64, Val(1))
-            seed_uint64[1] = rand(rng, sampler)
-            seed_uint64[2] = rand(rng, sampler)
             # XXX: Ideally the following should just work but currently it gives an illegal
             #      instruction error. Maybe an issue with Julia's AbsInt?
-            # Random.rand!(rng, seed_uint64)
+            # seed_uint64 = rand(rng, UInt64, 2)
             rng = TracedRNG(
-                TracedUtils.promote_to(TracedRArray{UInt64,1}, seed_uint64),
+                TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed(rng)),
                 rng_algorithm(rng),
             )
             return $(internal_overload_randfun)(rng, args...)
