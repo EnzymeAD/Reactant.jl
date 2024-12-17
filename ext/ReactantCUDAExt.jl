@@ -370,7 +370,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(args...; co
 
     location = MLIR.IR.Location()
     call = MLIR.IR.create_operation(
-        "enzymexla.kern_call",
+        "enzymexla.kernel_call",
         location;
         operands,
         owned_regions,
