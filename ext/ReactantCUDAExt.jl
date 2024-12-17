@@ -354,24 +354,23 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(args...; co
     # Force public for now while we don't have real users
     # MLIR.IR.rmattr!(func.entry, "sym_visibility")
 
-    op_ty_results = IR.Type[result_0...,]
     operands = MLIR.IR.Value[]
-    for idx in (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z)
-        push!(operands, TracedUtils.promote_to(TracedRNumber{Int}, idx).mlir_data)
+    for idx in (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
+        push!(operands, Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, idx).mlir_data)
     end
-    for arg in mlir_ir_args
+    for arg in mlir_args
 	push!(operands, arg)
     end
     owned_regions = MLIR.IR.Region[]
     successors = MLIR.IR.Block[]
     attributes = MLIR.IR.NamedAttribute[
-	MLIR.IR.namedattribute("fn", fname),
-	MLIR.IR.namedattribute("output_operand_aliases", output_operand_aliases)
+	MLIR.IR.NamedAttribute("fn", fname),
+	MLIR.IR.NamedAttribute("output_operand_aliases", output_operand_aliases)
     ]
 
     location = MLIR.IR.Location()
     call = MLIR.IR.create_operation(
-        "stablehlo.custom_call",
+        "enzymexla.kern_call",
         location;
         operands,
         owned_regions,
@@ -404,7 +403,7 @@ function compiler_cache(ctx::MLIR.IR.Context)
     return cache
 end
 
-Reactant.@reactant_override @noinline function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
+Reactant.@reactant_overlay @noinline function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
 	cache = compiler_cache(MLIR.IR.context())
