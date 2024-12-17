@@ -317,10 +317,8 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-Reactant.@reactant_override @noinline function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, threads::CuDim=1,
+Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(args...; convert=Val(false), blocks::CuDim=1, threads::CuDim=1,
                 cooperative::Bool=false, shmem::Integer=0, call_kwargs...) where{F, tt}
-    @show call_kwargs
-
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
 
@@ -352,20 +350,37 @@ Reactant.@reactant_override @noinline function (func::LLVMFunc{F,tt})(args...; c
 
     fname = Reactant.TracedUtils.get_attribute_by_name(func.entry, "sym_name")
     # Force public for now while we don't have real users
-    MLIR.IR.rmattr!(func.entry, "sym_visibility")
+    # MLIR.IR.rmattr!(func.entry, "sym_visibility")
 
-    call = MLIR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases, backend_config=MLIR.IR.Attribute(fname))
-    # call = MLIR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases, backend_config=MLIR.IR.Attribute(func.mod))
+    operands = MLIR.IR.Value[]
+    for idx in (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
+        push!(operands, Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, idx).mlir_data)
+    end
+    for arg in mlir_args
+	push!(operands, arg)
+    end
+    owned_regions = MLIR.IR.Region[]
+    successors = MLIR.IR.Block[]
+    attributes = MLIR.IR.NamedAttribute[
+	MLIR.IR.NamedAttribute("fn", MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))),
+	MLIR.IR.NamedAttribute("output_operand_aliases", MLIR.IR.Attribute(output_operand_aliases))
+    ]
+
+    location = MLIR.IR.Location()
+    call = MLIR.IR.create_operation(
+        "enzymexla.kernel_call",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=restys,
+        result_inference=false,
+    )
+
     for (i, res) in enumerate(rarrays)
        res.mlir_data = transpose_val(MLIR.IR.result(call, i))
     end
-
-    @show blockdim
-    @show threaddim
-    #CUDA.cuLaunchKernel(f,
-    #	       blockdim.x, blockdim.y, blockdim.z,
-    #	       threaddim.x, threaddim.y, threaddim.z,
-    #	       shmem, stream, kernelParams, C_NULL)  
 end
 
 # cache of compilation caches, per context
@@ -379,7 +394,7 @@ function compiler_cache(ctx::MLIR.IR.Context)
     return cache
 end
 
-Reactant.@reactant_override @noinline function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
+Reactant.@reactant_overlay @noinline function CUDA.cufunction(f::F, tt::TT=Tuple{}; kwargs...) where {F,TT}
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
 	cache = compiler_cache(MLIR.IR.context())

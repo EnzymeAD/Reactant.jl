@@ -358,6 +358,7 @@ cc_library(
         ],
 
     ) + [
+	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
@@ -426,6 +427,7 @@ cc_library(
 "-Wl,-exported_symbol,_ifrt_*",
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
+"-Wl,-exported_symbol,_EnzymeGPUCustomCall",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -468,6 +470,9 @@ cc_library(
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
+
+        "@xla//xla/service:metrics_proto_cc",
+        "@xla//xla/service:metrics_proto_cc_impl",
 
         "@xla//xla/service/cpu:cpu_compiler",
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
