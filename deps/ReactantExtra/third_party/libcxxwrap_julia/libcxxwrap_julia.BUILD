@@ -7,7 +7,7 @@ cc_import(
     name = "libcxxwrap_julia",
     hdrs = glob(["include/**/*.hpp"]),
     includes = ["include"],
-    shared_library = "lib/libcxxwrap_julia.dylib",
+    shared_library = "lib/libcxxwrap_julia.0.dylib",
     visibility = ["//visibility:public"],
     deps = [
         "@julia",
