@@ -284,13 +284,12 @@ function compile_mlir(f, args; kwargs...)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        callcache = Dict{Cached, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any}}()
         evalinfo = compile_mlir!(mod, f, args, callcache; kwargs...)
         return mod, evalinfo...
     end
 end
 
-function compile_mlir!(mod, f, args, callcache; optimize::Union{Bool,Symbol}=true)
+function compile_mlir!(mod, f, args, callcache=Dict{Cached, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any}}(); optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
