@@ -367,18 +367,18 @@ function call_with_reactant_generator(
     # screws up type inference after this (TODO this should be fixed).
     any_changed = false
     if should_rewrite_ft(args[1]) && !is_reactant_method(mi)
-	for (i, inst) in enumerate(ir.stmts)
-		@static if VERSION < v"1.11"
-		    changed, next = rewrite_inst(inst[:inst], ir, interp)
-		    Core.Compiler.setindex!(ir.stmts[i], next, :inst)
-		else
-		    changed, next = rewrite_inst(inst[:stmt], ir, interp)
-		    Core.Compiler.setindex!(ir.stmts[i], next, :stmt)
-		end
-		if changed
-		    any_changed = true
-		    Core.Compiler.setindex!(ir.stmts[i], Any, :type)
-		end
+        for (i, inst) in enumerate(ir.stmts)
+            @static if VERSION < v"1.11"
+                changed, next = rewrite_inst(inst[:inst], ir, interp)
+                Core.Compiler.setindex!(ir.stmts[i], next, :inst)
+            else
+                changed, next = rewrite_inst(inst[:stmt], ir, interp)
+                Core.Compiler.setindex!(ir.stmts[i], next, :stmt)
+            end
+            if changed
+                any_changed = true
+                Core.Compiler.setindex!(ir.stmts[i], Any, :type)
+            end
         end
     end
 
