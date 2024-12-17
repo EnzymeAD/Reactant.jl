@@ -130,6 +130,8 @@ include("ControlFlow.jl")
 include("Tracing.jl")
 include("Compiler.jl")
 
+include("Overlay.jl")
+
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
 )::RT where {copy_if_inactive,RT<:RArray}
