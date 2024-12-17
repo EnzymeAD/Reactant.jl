@@ -466,6 +466,14 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   DialectRegistry registry;
   prepareRegistry(registry);
   context.appendDialectRegistry(registry);
+  context.loadDialect<mlir::arith::ArithDialect>();
+  context.loadDialect<mlir::enzyme::EnzymeDialect>();
+  context.loadDialect<mlir::enzymexla::EnzymeXLADialect>();
+  context.loadDialect<mlir::tensor::TensorDialect>();
+  context.loadDialect<mlir::func::FuncDialect>();
+  context.loadDialect<mlir::mhlo::MhloDialect>();
+  context.loadDialect<mlir::stablehlo::StablehloDialect>();
+  context.loadDialect<mlir::chlo::ChloDialect>();
 }
 
 #include "mlir/Target/LLVMIR/Dialect/NVVM/LLVMIRToNVVMTranslation.h"
