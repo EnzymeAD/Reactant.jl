@@ -358,6 +358,7 @@ cc_library(
         ],
 
     ) + [
+	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",

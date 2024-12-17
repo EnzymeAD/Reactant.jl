@@ -19,6 +19,7 @@ end
     oA = collect(1:1:64)
     A = Reactant.to_rarray(oA)
     @show @code_hlo optimize = false square!(A)
+    @show @code_hlo optimize=:before_kernel square!(A)
     @show @code_hlo square!(A)
     func = @compile square!(A)
     @test all(Array(A) .≈ (oA .* oA))
