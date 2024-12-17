@@ -17,7 +17,8 @@ import ..Reactant:
     TracedToConcrete,
     append_path,
     ancestor,
-    TracedType
+    TracedType,
+    Cached
 using ScopedValues
 import ReactantCore: enable_tracing
 
@@ -315,7 +316,7 @@ function compile_mlir(f, args; kwargs...)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        callcache = Dict()
+        callcache = Dict{Cached, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any}}()
         evalinfo = compile_mlir!(mod, f, args, callcache; kwargs...)
         return mod, evalinfo...
     end

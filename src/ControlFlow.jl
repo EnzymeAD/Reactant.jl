@@ -229,6 +229,9 @@ end
 
 struct Cached
     obj
+    # `deepcopy` is needed for when a Cached object is used as a key in a Dict.
+    # If the original object is mutated, the key should stay the same:
+    Cached(obj) = new(deepcopy(obj))
 end
 Base.:(==)(a::Cached, b::Cached) = recursive_equal(a.obj, b.obj)
 Base.hash(a::Cached, h::UInt) = recursive_hash(a.obj, h)
