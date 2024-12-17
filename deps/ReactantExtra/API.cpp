@@ -459,15 +459,13 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBu
     }
 }
 
+void prepareRegistry(mlir::DialectRegistry &registry);
+
 extern "C" void RegisterDialects(MlirContext cctx) {
   mlir::MLIRContext &context = *unwrap(cctx);
-  context.loadDialect<mlir::arith::ArithDialect>();
-  context.loadDialect<mlir::enzyme::EnzymeDialect>();
-  context.loadDialect<mlir::tensor::TensorDialect>();
-  context.loadDialect<mlir::func::FuncDialect>();
-  context.loadDialect<mlir::mhlo::MhloDialect>();
-  context.loadDialect<mlir::stablehlo::StablehloDialect>();
-  context.loadDialect<mlir::chlo::ChloDialect>();
+  DialectRegistry registry;
+  prepareRegistry(registry);
+  context.appendDialectRegistry(registry);
 }
 
 #include "mlir/Target/LLVMIR/Dialect/NVVM/LLVMIRToNVVMTranslation.h"
