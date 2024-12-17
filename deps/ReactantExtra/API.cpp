@@ -473,34 +473,10 @@ extern "C" void RegisterDialects(MlirContext cctx) {
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::DialectRegistry &registry = *unwrap(creg);
-
-  // Register MLIR stuff
-  registry.insert<mlir::affine::AffineDialect>();
-  registry.insert<mlir::LLVM::LLVMDialect>();
-  registry.insert<mlir::memref::MemRefDialect>();
-  registry.insert<mlir::async::AsyncDialect>();
-  registry.insert<mlir::tensor::TensorDialect>();
-  registry.insert<mlir::func::FuncDialect>();
-  registry.insert<mlir::arith::ArithDialect>();
-  registry.insert<mlir::cf::ControlFlowDialect>();
-  registry.insert<mlir::scf::SCFDialect>();
-  registry.insert<mlir::gpu::GPUDialect>();
-  registry.insert<mlir::NVVM::NVVMDialect>();
-  registry.insert<mlir::omp::OpenMPDialect>();
-  registry.insert<mlir::math::MathDialect>();
-  registry.insert<mlir::linalg::LinalgDialect>();
-  registry.insert<DLTIDialect>();
-  registry.insert<mlir::mhlo::MhloDialect>();
-  registry.insert<mlir::stablehlo::StablehloDialect>();
-  registry.insert<mlir::chlo::ChloDialect>();
-
-  registry.insert<mlir::enzyme::EnzymeDialect>();
+  prepareRegistry(registry);
 
   mlir::registerenzymePasses();
   regsiterenzymeXLAPasses();
-  mlir::enzyme::registerXLAAutoDiffInterfaces(registry);
-
-  mlir::func::registerInlinerExtension(registry);
 
   // Register the standard passes we want.
   mlir::registerCSEPass();
@@ -517,7 +493,6 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::registerLLVMDialectImport(registry);
   mlir::registerNVVMDialectImport(registry);
 
-  mlir::LLVM::registerInlinerInterface(registry);
 
 /*
   registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
@@ -535,15 +510,10 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   });
   */
 
-  // Register the autodiff interface implementations for upstream dialects.
-  enzyme::registerCoreDialectAutodiffInterfaces(registry);
-
   // Transform dialect and extensions.
   mlir::transform::registerInterpreterPass();
-  mlir::linalg::registerTransformDialectExtension(registry);
   mlir::enzyme::registerGenerateApplyPatternsPass();
   mlir::enzyme::registerRemoveTransformPass();
-  mlir::enzyme::registerEnzymeJaxTransformExtension(registry);
 }
 
 
