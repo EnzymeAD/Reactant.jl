@@ -1048,7 +1048,7 @@ end
     shape;
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
-) where {T<:Union{Float16,Float32,Float64}}
+) where {T<:AbstractFloat}
     nbits = sizeof(T) * 8
     uT = nbits == 16 ? UInt16 : (nbits == 32 ? UInt32 : UInt64)
     (; output_state, output) = rng_bit_generator(uT, seed, shape; algorithm, location)
