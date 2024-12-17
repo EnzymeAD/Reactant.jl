@@ -391,7 +391,13 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     # MLIR.IR.rmattr!(func.entry, "sym_visibility")
 
     op_ty_results = IR.Type[result_0...,]
-    operands = Value[inputs...,]
+    operands = MLIR.IR.Value[]
+    for idx in (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z)
+        push!(operands, TracedUtils.promote_to(TracedRNumber{Int}, idx).mlir_data)
+    end
+    for arg in mlir_ir_args
+	push!(operands, arg)
+    end
     owned_regions = MLIR.IR.Region[]
     successors = MLIR.IR.Block[]
     attributes = MLIR.IR.NamedAttribute[

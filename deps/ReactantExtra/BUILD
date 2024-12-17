@@ -470,6 +470,9 @@ cc_library(
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
 
+        "@xla//xla/service:metrics_proto_cc",
+        "@xla//xla/service:metrics_proto_cc_impl",
+
         "@xla//xla/service/cpu:cpu_compiler",
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
         "@xla//xla/stream_executor/tpu:tpu_executor",
