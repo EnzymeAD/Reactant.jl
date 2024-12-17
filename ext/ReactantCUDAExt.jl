@@ -388,8 +388,19 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     fname = Reactant.TracedUtils.get_attribute_by_name(func.entry, "sym_name")
     # Force public for now while we don't have real users
-    MLIR.IR.rmattr!(func.entry, "sym_visibility")
+    # MLIR.IR.rmattr!(func.entry, "sym_visibility")
 
+    op_ty_results = IR.Type[result_0...,]
+    operands = Value[inputs...,]
+    owned_regions = MLIR.IR.Region[]
+    successors = MLIR.IR.Block[]
+    attributes = MLIR.IR.NamedAttribute[
+	MLIR.IR.namedattribute("fn", fname),
+	MLIR.IR.namedattribute("output_operand_aliases", output_operand_aliases)
+    ]
+
+    location = MLIR.IR.Location()
+    
     call = MLIR.Dialects.stablehlo.custom_call(
         mlir_args;
         result_0=restys,
@@ -397,7 +408,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         output_operand_aliases,
         backend_config=MLIR.IR.Attribute(fname),
     )
-    # call = MLIR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases, backend_config=MLIR.IR.Attribute(func.mod))
     for (i, res) in enumerate(rarrays)
         res.mlir_data = transpose_val(MLIR.IR.result(call, i))
     end

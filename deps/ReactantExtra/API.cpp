@@ -50,7 +50,6 @@
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
-#include "xla/service/cpu/simple_orc_jit.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/MC/TargetRegistry.h"
