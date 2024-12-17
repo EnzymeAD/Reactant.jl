@@ -350,11 +350,7 @@ platform(
 
 cc_library(
     name = "ReactantExtraLib",
-    srcs = glob(
-        [
-            "*.cpp",
-        ]
-    ) + [
+    srcs = glob(["src/*.cpp"]) + [
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
