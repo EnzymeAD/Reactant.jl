@@ -16,13 +16,7 @@ using ..Reactant:
     ConcreteRArray
 using Random: Random, AbstractRNG
 
-function make_seed(rng::AbstractRNG = Random.RandomDevice())
-    seed_uint64 = Array{UInt64}(undef, 2)
-    sampler = Random.Sampler(rng, UInt64, Val(1))
-    seed_uint64[1] = rand(rng, sampler)
-    seed_uint64[2] = rand(rng, sampler)
-    return seed_uint64
-end
+make_seed(rng::AbstractRNG=Random.RandomDevice()) = rand(rng, UInt64, 2)
 
 function Random.seed!(rng::TracedRNG, seed::Number)
     if seed isa TracedRNumber
@@ -133,9 +127,6 @@ for randfun in (:rand, :randn, :randexp, :rand!, :randn!, :randexp!)
     internal_overload_randfun = Symbol(:internal_overload_, randfun)
     @eval begin
         function $(overload_randfun)(rng::AbstractRNG, args...)
-            # XXX: Ideally the following should just work but currently it gives an illegal
-            #      instruction error. Maybe an issue with Julia's AbsInt?
-            # seed_uint64 = rand(rng, UInt64, 2)
             rng = TracedRNG(
                 TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed(rng)),
                 rng_algorithm(rng),

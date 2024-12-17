@@ -32,18 +32,33 @@ using StatsBase, Statistics, HypothesisTests, Distributions
     hlo = @code_hlo fn(Reactant.to_rarray(rand(Float64, 2, 3)))
     @test contains(repr(hlo), "stablehlo.rng_bit_generator")
 
-    # XXX: This crashes with Unreachable reached at 0x7a64877b6b16
-    # fn2() = begin
-    #     rng = MersenneTwister()
-    #     x = zeros(Float64, 2, 3)
-    #     Random.rand!(rng, x)
-    #     return x
-    # end
-    # hlo = @code_hlo fn2()
-    # @test !contains(repr(hlo), "stablehlo.rng_bit_generator")
+    fn2() = begin
+        rng = MersenneTwister()
+        x = zeros(Float64, 2, 3)
+        Random.rand!(rng, x)
+        return x
+    end
+    hlo = @code_hlo fn2()
+    @test !contains(repr(hlo), "stablehlo.rng_bit_generator")
 end
 
-@testset "Random123" begin end
+@testset "Random123" begin
+    hlo = @code_hlo rand(Random123.Threefry4x(), Float32, 2, 3)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test contains(repr(hlo), "THREE_FRY")
+
+    hlo = @code_hlo rand(Random123.Threefry2x(), Float64, 2, 3)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test contains(repr(hlo), "THREE_FRY")
+
+    hlo = @code_hlo rand(Random123.Philox4x(), Float64, 2, 3)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test contains(repr(hlo), "PHILOX")
+
+    hlo = @code_hlo rand(Random123.Philox2x(), Float64, 2, 3)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test contains(repr(hlo), "PHILOX")
+end
 
 # Next we test that the random number generators actually generate data from the correct
 # distributions
