@@ -429,6 +429,7 @@ cc_library(
             "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
             "-Wl,-exported_symbol,_EnzymeGPUCustomCall",
             "-Wl,-exported_symbol,_ReactantThrowError",
+            "-Wl,-exported_symbol,_reactant_*",
             "-L/Users/mofeing/.julia/artifacts/6a1f8b0d254a485be750499b732b476ddbee44c5/lib/",
             "-llibcxxwrap_julia.0.14.0.dylib",
         ],
