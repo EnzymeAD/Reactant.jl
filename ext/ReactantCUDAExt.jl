@@ -405,13 +405,15 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     ]
 
     location = MLIR.IR.Location()
-    
-    call = MLIR.Dialects.stablehlo.custom_call(
-        mlir_args;
-        result_0=restys,
-        call_target_name="reactant_gpu_call",
-        output_operand_aliases,
-        backend_config=MLIR.IR.Attribute(fname),
+    call = MLIR.IR.create_operation(
+        "enzymexla.kernel_call",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=restys,
+        result_inference=false,
     )
     for (i, res) in enumerate(rarrays)
         res.mlir_data = transpose_val(MLIR.IR.result(call, i))
