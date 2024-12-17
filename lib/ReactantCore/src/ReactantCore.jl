@@ -3,10 +3,7 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools
 
-using ScopedValues
-const enable_tracing = ScopedValue{Bool}(false)
-
-export @trace, MissingTracedValue
+export @trace, within_tracing, MissingTracedValue
 
 # Traits
 is_traced(x) = false
@@ -21,6 +18,13 @@ MissingTracedValue() = MissingTracedValue(())
 const SPECIAL_SYMBOLS = [
     :(:), :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
 ]
+
+"""
+    within_tracing()
+
+Returns true if within tracing, otherwise false.
+"""
+@inline within_tracing() = false # behavior is overwritten in Interpreter.jl
 
 # Code generation
 """
@@ -186,7 +190,7 @@ function trace_for(mod, expr)
     end
 
     return quote
-        if $(enable_tracing)[] && $(any)($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
+        if $(within_tracing)() && $(any)($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -200,7 +204,7 @@ function trace_if_with_returns(mod, expr)
         mod, expr.args[2]; store_last_line=expr.args[1], depth=1
     )
     return quote
-        if $(enable_tracing)[] && $(any)($(is_traced), ($(all_check_vars...),))
+        if $(within_tracing)() && $(any)($(is_traced), ($(all_check_vars...),))
             $(new_expr)
         else
             $(expr)
@@ -346,7 +350,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     )
 
     return quote
-        if $(enable_tracing)[] && $(any)($(is_traced), ($(all_check_vars...),))
+        if $(within_tracing)() && $(any)($(is_traced), ($(all_check_vars...),))
             $(reactant_code_block)
         else
             $(original_expr)
@@ -358,7 +362,7 @@ function trace_call(mod, expr)
     f = expr.args[1]
     args = expr.args[2:end]
     return quote
-        if $(enable_tracing)[]
+        if $(within_tracing)()
             $(traced_call)($f, $(args...))
         else
             $(expr)

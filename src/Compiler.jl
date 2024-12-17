@@ -20,7 +20,6 @@ import ..Reactant:
     TracedType,
     Cached
 using ScopedValues
-import ReactantCore: enable_tracing
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
@@ -334,9 +333,7 @@ function compile_mlir!(mod, f, args, callcache; optimize::Union{Bool,Symbol}=tru
     linear_results = MLIR.IR.mmodule!(mod) do
         MLIR.IR.block!(MLIR.IR.body(mod)) do
             callcache!(callcache) do
-                with(enable_tracing=>true) do
-                    return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
-                end
+                return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
             end
         end
     end
