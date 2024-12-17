@@ -90,6 +90,8 @@
 #include "xla/python/pjrt_ifrt/pjrt_executable.h"
 #include "xla/python/pjrt_ifrt/pjrt_compiler.h"
 
+#include "jlcxx/jlcxx.hpp"
+
 using namespace mlir;
 using namespace llvm;
 using namespace xla;
@@ -1481,5 +1483,56 @@ extern "C" void ifrt_pjrt_compiler_free(ifrt::PjRtCompiler* compiler) {
     delete compiler;
 }
 #pragma endregion
+
+JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod) {
+    // mod.add_type<ifrt::Value>("Value")
+    //     .method("client", &ifrt::Value::client)
+    //     .method("get_ready_future", &ifrt::Value::GetReadyFuture)
+    //     .method("delete!", &ifrt::Value::Delete)
+    //     .method("isdeleted", &ifrt::Value::IsDeleted)
+    //     .method("debug_string", &ifrt::Value::DebugString);
+
+    mod.add_bits<ifrt::DType::Kind>("DTypeKind", jlcxx::julia_type("CppEnum"));
+    mod.set_const("DTypeKindInvalid", ifrt::DType::Kind::kInvalid);
+    mod.set_const("DTypeKindPred", ifrt::DType::Kind::kPred);
+    mod.set_const("DTypeKindS2", ifrt::DType::Kind::kS2);
+    mod.set_const("DTypeKindS4", ifrt::DType::Kind::kS4);
+    mod.set_const("DTypeKindS8", ifrt::DType::Kind::kS8);
+    mod.set_const("DTypeKindS16", ifrt::DType::Kind::kS16);
+    mod.set_const("DTypeKindS32", ifrt::DType::Kind::kS32);
+    mod.set_const("DTypeKindS64", ifrt::DType::Kind::kS64);
+    mod.set_const("DTypeKindU2", ifrt::DType::Kind::kU2);
+    mod.set_const("DTypeKindU4", ifrt::DType::Kind::kU4);
+    mod.set_const("DTypeKindU8", ifrt::DType::Kind::kU8);
+    mod.set_const("DTypeKindU16", ifrt::DType::Kind::kU16);
+    mod.set_const("DTypeKindU32", ifrt::DType::Kind::kU32);
+    mod.set_const("DTypeKindU64", ifrt::DType::Kind::kU64);
+    mod.set_const("DTypeKindF16", ifrt::DType::Kind::kF16);
+    mod.set_const("DTypeKindF32", ifrt::DType::Kind::kF32);
+    mod.set_const("DTypeKindF64", ifrt::DType::Kind::kF64);
+    mod.set_const("DTypeKindBF16", ifrt::DType::Kind::kBF16);
+    mod.set_const("DTypeKindC64", ifrt::DType::Kind::kC64);
+    mod.set_const("DTypeKindC128", ifrt::DType::Kind::kC128);
+    mod.set_const("DTypeKindToken", ifrt::DType::Kind::kToken);
+    mod.set_const("DTypeKindOpaque", ifrt::DType::Kind::kOpaque);
+    mod.set_const("DTypeKindF8E3M4", ifrt::DType::Kind::kF8E3M4);
+    mod.set_const("DTypeKindF8E4M3", ifrt::DType::Kind::kF8E4M3);
+    mod.set_const("DTypeKindF8E4M3FN", ifrt::DType::Kind::kF8E4M3FN);
+    mod.set_const("DTypeKindF8E4M3B11FNUZ", ifrt::DType::Kind::kF8E4M3B11FNUZ);
+    mod.set_const("DTypeKindF8E4M3FNUZ", ifrt::DType::Kind::kF8E4M3FNUZ);
+    mod.set_const("DTypeKindF8E5M2", ifrt::DType::Kind::kF8E5M2);
+    mod.set_const("DTypeKindF8E5M2FNUZ", ifrt::DType::Kind::kF8E5M2FNUZ);
+    mod.set_const("DTypeKindString", ifrt::DType::Kind::kString);
+
+    mod.add_type<ifrt::DType>("DType")
+        .constructor<ifrt::DType::Kind>(&ifrt::DType::DType)
+        .method("kind", &ifrt::DType::kind)
+        .method("byte_size", &ifrt::DType::byte_size)
+        .method("bit_size", &ifrt::DType::bit_size);
+    mod.set_override_module(jl_base_module);
+    mod.method("==", [](ifrt::DType* a, ifrt::DType* b) { return *a == *b; });
+    mod.method("!=", [](ifrt::DType* a, ifrt::DType* b) { return *a != *b; });
+    mod.unset_override_module();
+}
 
 #pragma endregion
