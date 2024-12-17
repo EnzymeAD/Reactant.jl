@@ -353,9 +353,7 @@ platform(
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
-        [
-            "*.cpp",
-        ],
+        ["src/*.cpp"],
     ) + [
         "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
