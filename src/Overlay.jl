@@ -36,3 +36,55 @@ end
 @reactant_overlay @noinline function Random.default_rng()
     return call_with_reactant(TracedRandom.default_rng)
 end
+
+## Only problematic edge case here is the direct `<randfun!>(rng, A::AbstractArray)` call
+## We can't directly overlay that call without breaking the semantics of inplace update
+for randfun in (:rand, :randn, :randexp)
+    randfun! = Symbol(randfun, :!)
+    overload_randfun = Symbol(:overload_, randfun)
+    overload_randfun! = Symbol(:overload_, randfun!)
+
+    @eval begin
+        @reactant_overlay @noinline function Random.$(randfun)(
+            rng::AbstractRNG, ::Type{T}, dims::Dims
+        ) where {T}
+            return TracedRandom.$(overload_randfun)(rng, T, dims)
+        end
+
+        @reactant_overlay @noinline function Random.$(randfun)(
+            rng::AbstractRNG, dim1::Integer, dims::Integer...
+        )
+            return TracedRandom.$(overload_randfun)(rng, dim1, dims...)
+        end
+
+        @reactant_overlay @noinline function Random.$(randfun)(
+            rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...
+        ) where {T}
+            return TracedRandom.$(overload_randfun)(rng, T, dim1, dims...)
+        end
+
+        # scalars
+        @reactant_overlay @noinline function Random.$(randfun)(
+            rng::AbstractRNG, ::Type{T}=Float64
+        ) where {T}
+            return TracedRandom.$(overload_randfun)(rng, T)
+        end
+
+        # inplace
+        @reactant_overlay @noinline function Random.$(randfun!)(
+            rng::AbstractRNG, A::AnyTracedRArray
+        )
+            return TracedRandom.$(overload_randfun!)(rng, A)
+        end
+
+        # warn about direct writing to arrays
+        @reactant_overlay @noinline function Random.$(randfun!)(
+            rng::AbstractRNG, A::AbstractArray
+        )
+            @warn "Directly writing to an array using Random.jl functions inside \
+                   ReactantInterpreter will generate a constant array in the IR. Use with \
+                   caution." maxlog = 1
+            return Random.$(randfun!)(rng, A)
+        end
+    end
+end
