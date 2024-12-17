@@ -377,7 +377,7 @@ Reactant.@reactant_override @noinline function (func::LLVMFunc{F,tt})(args...; c
         owned_regions,
         successors,
         attributes,
-        results=restys
+        results=restys,
         result_inference=false,
     )
 
