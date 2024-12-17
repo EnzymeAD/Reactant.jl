@@ -351,8 +351,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     shmem::Integer=0,
     call_kwargs...,
 ) where {F,tt}
-    @show call_kwargs
-
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
 
@@ -400,8 +398,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     owned_regions = MLIR.IR.Region[]
     successors = MLIR.IR.Block[]
     attributes = MLIR.IR.NamedAttribute[
-	MLIR.IR.NamedAttribute("fn", fname),
-	MLIR.IR.NamedAttribute("output_operand_aliases", output_operand_aliases)
+	MLIR.IR.NamedAttribute("fn", MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))),
+	MLIR.IR.NamedAttribute("output_operand_aliases", MLIR.IR.Attribute(output_operand_aliases))
     ]
 
     location = MLIR.IR.Location()
@@ -418,13 +416,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     for (i, res) in enumerate(rarrays)
         res.mlir_data = transpose_val(MLIR.IR.result(call, i))
     end
-
-    @show blockdim
-    @show threaddim
-    #CUDA.cuLaunchKernel(f,
-    #	       blockdim.x, blockdim.y, blockdim.z,
-    #	       threaddim.x, threaddim.y, threaddim.z,
-    #	       shmem, stream, kernelParams, C_NULL)  
 end
 
 # cache of compilation caches, per context
