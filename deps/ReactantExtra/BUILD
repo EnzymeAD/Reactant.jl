@@ -423,6 +423,7 @@ cc_library(
             "-Wl,-exported_symbol,_RegisterCustomCallTarget",
             "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
             "-Wl,-exported_symbol,_reactant_*",
+            "-Wl,-exported_symbol,_register_julia_module",
         ],
     }),
     deps = [
