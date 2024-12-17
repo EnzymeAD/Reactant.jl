@@ -11,6 +11,7 @@
 #include "Enzyme/MLIR/Passes/Passes.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
+#include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/TransformOps/TransformOps.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -36,6 +37,7 @@
 #include "mlir/Transforms/Passes.h"
 #include "llvm/Support/TargetSelect.h"
 
+#include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 
@@ -500,7 +502,7 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
 
   mlir::registerLLVMDialectImport(registry);
   mlir::registerNVVMDialectImport(registry);
-
+  mlir::LLVM::registerInlinerInterface(registry);
 
 /*
   registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
