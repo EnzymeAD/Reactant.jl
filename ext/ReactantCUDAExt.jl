@@ -355,7 +355,13 @@ Reactant.@reactant_override @noinline function (func::LLVMFunc{F,tt})(args...; c
     # MLIR.IR.rmattr!(func.entry, "sym_visibility")
 
     op_ty_results = IR.Type[result_0...,]
-    operands = Value[inputs...,]
+    operands = MLIR.IR.Value[]
+    for idx in (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z)
+        push!(operands, TracedUtils.promote_to(TracedRNumber{Int}, idx).mlir_data)
+    end
+    for arg in mlir_ir_args
+	push!(operands, arg)
+    end
     owned_regions = MLIR.IR.Region[]
     successors = MLIR.IR.Block[]
     attributes = MLIR.IR.NamedAttribute[
@@ -367,7 +373,7 @@ Reactant.@reactant_override @noinline function (func::LLVMFunc{F,tt})(args...; c
     call = MLIR.IR.create_operation(
         "stablehlo.custom_call",
         location;
-        mlir_args,
+        operands,
         owned_regions,
         successors,
         attributes,
