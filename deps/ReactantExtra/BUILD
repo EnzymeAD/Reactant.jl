@@ -3,6 +3,8 @@ load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_tool
 # load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
 licenses(["notice"])
 
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
+
 package(
     default_applicable_licenses = [],
     default_visibility = ["//:__subpackages__"],
@@ -360,7 +362,7 @@ cc_library(
     ) + [
 	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
-        "@xla//xla:xla.pb.cc",
+        # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
         "@xla//xla/stream_executor:device_description.pb.cc",
         "@xla//xla/service:hlo.pb.cc",
@@ -509,12 +511,13 @@ cc_library(
         "@xla//xla/service/gpu/model:hlo_op_profiles",
         "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
         "@xla//xla/service/gpu:nvptx_compiler",
-        "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/service/gpu:gpu_transfer_manager",
         "@xla//xla/stream_executor:kernel", 
     ],
     "//conditions:default": [],
-    }),
+    }) + if_rocm([
+        "@xla//xla/service/gpu:amdgpu_compiler",
+    ]),
 )
 
 # cc_shared_library(
