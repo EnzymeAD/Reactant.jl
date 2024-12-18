@@ -43,7 +43,6 @@ pages = [
         ],
         "MLIR API" => "api/mlirc.md",
         "XLA" => "api/xla.md",
-        "Internal API" => "api/internal.md",
     ],
 ]
 

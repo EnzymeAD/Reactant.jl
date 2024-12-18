@@ -8,7 +8,7 @@ end
 function gradient_loss_function(model, x, y, ps, st)
     dps = Enzyme.make_zero(ps)
     _, res = Enzyme.autodiff(
-        set_runtime_activity(ReverseWithPrimal),
+        ReverseWithPrimal,
         loss_function,
         Active,
         Const(model),

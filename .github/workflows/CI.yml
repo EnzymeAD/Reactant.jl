@@ -51,12 +51,6 @@ jobs:
             assertions: true
             test_group: neural_networks
           - os: ubuntu-20.04
-            arch: x64
-            libReactant: packaged
-            version: '1.10'
-            assertions: true
-            test_group: integration
-          - os: ubuntu-20.04
             arch: x86
             libReactant: packaged
             version: '1.10'

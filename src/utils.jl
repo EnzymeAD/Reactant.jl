@@ -99,8 +99,7 @@ function should_rewrite_ft(@nospecialize(ft))
         # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
         if has_ancestor(mod, Reactant.Ops) ||
             has_ancestor(mod, Reactant.TracedUtils) ||
-            has_ancestor(mod, Reactant.MLIR) ||
-            has_ancestor(mod, Reactant.TracedRandom)
+            has_ancestor(mod, Reactant.MLIR)
             return false
         end
     end
@@ -306,7 +305,7 @@ function call_with_reactant_generator(
     overdubbed_codelocs = Int32[]
 
     # No method could be found (including in our method table), bail with an error
-    if lookup_result === nothing
+    if lookup_result == nothing
         return stub(world, source, method_error)
     end
 
@@ -502,7 +501,7 @@ function call_with_reactant_generator(
 
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
     # inner code during compilation without special handling (i.e. call_in_world_total).
-    # Opaque closures also require taking the function argument. We can work around the latter
+    # Opaque closures also require takign the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
     oc = if false && Base.issingletontype(args[1])
         res = Core._call_in_world_total(

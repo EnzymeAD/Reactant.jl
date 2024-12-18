@@ -78,8 +78,7 @@ export default defineConfig({
               { text: "MLIR API", link: "/api/mlirc" },
               { text: "XLA", link: "/api/xla" },
             ],
-          },
-          { text: "Internal API", link: "/api/internal" },
+          }
         ],
       },
       {
@@ -133,7 +132,6 @@ export default defineConfig({
               { text: "XLA", link: "/api/xla" },
             ],
           },
-          { text: "Internal API", link: "/api/internal" },
         ],
       },
     },
