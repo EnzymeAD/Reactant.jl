@@ -472,6 +472,9 @@ cc_library(
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
+        
+        "@xla//xla:xla_proto_cc",
+        "@xla//xla:xla_proto_cc_impl",
 
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
