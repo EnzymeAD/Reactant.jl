@@ -1,3 +1,19 @@
+module TracedLinearAlgebra
+
+using ..Reactant
+import ..TracedRArray
+import ..TracedRNumber
+import ..AnyTracedRArray
+import ..AnyTracedRMatrix
+import ..AnyTracedRVector
+
+import ..TracedUtils
+using ..TracedUtils: get_mlir_data, materialize_traced_array, set_mlir_data!
+
+import ..Ops
+import ..MLIR
+using LinearAlgebra
+
 function LinearAlgebra.mul!(
     @nospecialize(C::TracedRArray{T,1}),
     @nospecialize(A::AnyTracedRMatrix),
@@ -48,10 +64,10 @@ function LinearAlgebra.mul!(
     )
 
     res = if iszero(β)
-        isone(α) ? tmp : Ops.multiply(tmp, broadcast_to_size(T(α), size(C)))
+        isone(α) ? tmp : Ops.multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C)))
     else
-        α_res = Ops.multiply(tmp, broadcast_to_size(T(α), size(C)))
-        β_C = Ops.multiply(C, broadcast_to_size(T(β), size(C)))
+        α_res = Ops.multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C)))
+        β_C = Ops.multiply(C, TracedUtils.broadcast_to_size(T(β), size(C)))
         Ops.add(α_res, β_C)
     end
     set_mlir_data!(C, get_mlir_data(res))
@@ -61,7 +77,8 @@ end
 function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
     iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = Ops.subtract(
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2), broadcast_to_size(k, size(X))
+        Ops.iota(Int64, [size(X)...]; iota_dimension=2),
+        TracedUtils.broadcast_to_size(k, size(X)),
     )
     idxs = Ops.compare(iota_1, iota_2; comparison_direction="LE")
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
@@ -71,7 +88,8 @@ end
 function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
     iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = Ops.subtract(
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2), broadcast_to_size(k, size(X))
+        Ops.iota(Int64, [size(X)...]; iota_dimension=2),
+        TracedUtils.broadcast_to_size(k, size(X)),
     )
     idxs = Ops.compare(iota_1, iota_2; comparison_direction="GE")
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
@@ -99,9 +117,9 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     # terminate called after throwing an instance of 'xla::XlaRuntimeError'
     #   what():  UNKNOWN: <unknown>:0: error: 'tensor.empty' op unsupported op for export to XLA
     #   <unknown>:0: note: see current operation: %0 = "tensor.empty"() : () -> tensor<0xf64>
-    length(indices) ≤ 0 && return promote_to(TracedRArray{T,1}, T[])
+    length(indices) ≤ 0 && return TracedUtils.promote_to(TracedRArray{T,1}, T[])
 
-    idxs = get_mlir_data(Reactant.promote_to(TracedRArray{Int,2}, indices))
+    idxs = get_mlir_data(TracedUtils.promote_to(TracedRArray{Int,2}, indices))
 
     #! format: off
     dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
@@ -115,7 +133,9 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     )
     #! format: on
 
-    slice_sizes = get_mlir_data(Reactant.promote_to(TracedRArray{Int,1}, [1, 1]))
+    slice_sizes = get_mlir_data(
+        Reactant.TracedUtils.promote_to(TracedRArray{Int,1}, [1, 1])
+    )
     res = MLIR.IR.result(
         MLIR.Dialects.stablehlo.dynamic_gather(
             get_mlir_data(y), idxs, slice_sizes; dimension_numbers
@@ -139,6 +159,10 @@ function LinearAlgebra.diagm(m::Integer, n::Integer, v::AnyTracedRArray{T,1}) wh
 
     mat = (v .+ zero(v)') .* diag_indicator
     return Ops.pad(
-        mat, promote_to(TracedRNumber{T}, 0); high=[m - length(v), n - length(v)]
+        mat,
+        TracedUtils.promote_to(TracedRNumber{T}, 0);
+        high=[m - length(v), n - length(v)],
     )
+end
+
 end

@@ -292,7 +292,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do
         MLIR.IR.block!(MLIR.IR.body(mod)) do
-            return Reactant.make_mlir_fn(f, args, (), "main", true)
+            return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
         end
     end
 
@@ -624,7 +624,7 @@ function codegen_unflatten!(
                 if path[2:end] == argpath[2:end]
                     continue
                 end
-                res = :(args[path[2]])
+                res = :(args[$(path[2])])
                 path = path[3:end]
             end
             for p in path

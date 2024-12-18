@@ -366,8 +366,8 @@ end
 
 @testset "repeat" begin
     @testset for (size, counts) in Iterators.product(
-        [(2,), (2,3), (2,3,4), (2,3,4,5)],
-        [(), (1,), (2,), (2,1), (1,2), (2,2), (2,2,2), (1,1,1,1,1)]
+        [(2,), (2, 3), (2, 3, 4), (2, 3, 4, 5)],
+        [(), (1,), (2,), (2, 1), (1, 2), (2, 2), (2, 2, 2), (1, 1, 1, 1, 1)],
     )
         x = rand(size...)
         @test (@jit repeat(Reactant.to_rarray(x), counts...)) == repeat(x, counts...)
@@ -640,7 +640,7 @@ end
 function f_row_major(x)
     y = [1 2; 3 4; 5 6]
     if x isa Reactant.TracedRArray
-        y = Reactant.promote_to(Reactant.TracedRArray{eltype(x),2}, y)
+        y = Reactant.TracedUtils.promote_to(Reactant.TracedRArray{eltype(x),2}, y)
     end
     return x .+ y
 end
