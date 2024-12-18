@@ -624,7 +624,7 @@ function codegen_unflatten!(
                 if path[2:end] == argpath[2:end]
                     continue
                 end
-                res = :(args[path[2]])
+                res = :(args[$(path[2])])
                 path = path[3:end]
             end
             for p in path
