@@ -51,9 +51,13 @@ for randfun in (:rand, :randn, :randexp)
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T, dims)
             end
-            @warn "Reactant doesn't support sampling of $(T) with the current \
-                   interpreter. Falling back to native interpreter." maxlog = 1
-            return Random.$(randfun)(rng, T, dims)
+            return error(
+                "Reactant doesn't support sampling of $(T) with the current interpreter."
+            )
+            # XXX: The following will lead to illegal instruction
+            # @warn "Reactant doesn't support sampling of $(T) with the current \
+            #        interpreter. Falling back to native interpreter." maxlog = 1
+            # return Random.$(randfun)(rng, T, dims)
         end
 
         @reactant_overlay @noinline function Random.$(randfun)(
@@ -68,9 +72,13 @@ for randfun in (:rand, :randn, :randexp)
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T, dim1, dims...)
             end
-            @warn "Reactant doesn't support sampling of $(T) with the current \
-                   interpreter. Falling back to native interpreter." maxlog = 1
-            return Random.$(randfun)(rng, T, dim1, dims...)
+            return error(
+                "Reactant doesn't support sampling of $(T) with the current interpreter."
+            )
+            # XXX: The following will lead to illegal instruction
+            # @warn "Reactant doesn't support sampling of $(T) with the current \
+            #        interpreter. Falling back to native interpreter." maxlog = 1
+            # return Random.$(randfun)(rng, T, dim1, dims...)
         end
 
         # scalars
@@ -80,9 +88,13 @@ for randfun in (:rand, :randn, :randexp)
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T)
             end
-            @warn "Reactant doesn't support sampling of $(T) with the current \
-                   interpreter. Falling back to native interpreter." maxlog = 1
-            return Random.$(randfun)(rng, T)
+            return error(
+                "Reactant doesn't support sampling of $(T) with the current interpreter."
+            )
+            # XXX: The following will lead to illegal instruction
+            # @warn "Reactant doesn't support sampling of $(T) with the current \
+            #        interpreter. Falling back to native interpreter." maxlog = 1
+            # return Random.$(randfun)(rng, T)
         end
 
         # inplace
