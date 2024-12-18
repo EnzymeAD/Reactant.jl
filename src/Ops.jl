@@ -950,7 +950,7 @@ end
 #     return TracedRArray{T,N}((), res, size(x))
 # end
 
-function sort(
+@noinline function sort(
     x::TracedRArray{T,N};
     comparator,
     dimension=1,
@@ -960,9 +960,8 @@ function sort(
     #C4:
     @assert 0 < dimension <= ndims(x) "$x invalid dimension"
 
-    #TODO: move to @trace
-    (a, b) = (ConcreteRNumber(T(0)), ConcreteRNumber(T(0)))
-    func = Reactant.make_mlir_fn(comparator, (a, b), (), "main"; no_args_in_result=true, return_dialect=:stablehlo)[2]
+    (a, b) = (Reactant.ConcreteRNumber(T(0)), Reactant.ConcreteRNumber(T(0)))
+    func = Reactant.TracedUtils.make_mlir_fn(comparator, (a, b), (), "main"; no_args_in_result=true, return_dialect=:stablehlo)[2]
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
         MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
