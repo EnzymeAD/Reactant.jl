@@ -92,7 +92,7 @@ end
     y = Reactant.ConcreteRNumber(x)
 
     f = Reactant.compile((y,)) do z
-        z + Reactant.promote_to(Reactant.TracedRNumber{ComplexF64}, 1.0 - 3.0im)
+        z + Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{ComplexF64}, 1.0 - 3.0im)
     end
 
     @test isapprox(f(y), 2.0 - 1.0im)

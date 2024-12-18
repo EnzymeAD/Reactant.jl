@@ -538,8 +538,50 @@ end
 end
 
 @testset "rng_bit_generator" begin
-    # seed = ConcreteRArray([0, 0])
-    # @jit Ops.rng_bit_generator(seed, [2])
+    genInt32(seed) = Ops.rng_bit_generator(Int32, seed, [2, 4])
+    genInt64(seed) = Ops.rng_bit_generator(Int64, seed, [2, 4])
+    genUInt64(seed) = Ops.rng_bit_generator(UInt64, seed, [2, 4])
+    genFloat32(seed) = Ops.rng_bit_generator(Float32, seed, [2, 4])
+    genFloat64(seed) = Ops.rng_bit_generator(Float64, seed, [2, 4])
+
+    @testset for (alg, sz) in
+                 [("DEFAULT", 2), ("PHILOX", 2), ("PHILOX", 3), ("THREE_FRY", 2)]
+        seed = ConcreteRArray(zeros(UInt64, sz))
+
+        res = @jit genInt32(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{Int32,2}
+        @test size(res.output) == (2, 4)
+
+        seed = res.output_state
+        res = @jit genInt64(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{Int64,2}
+        @test size(res.output) == (2, 4)
+
+        seed = res.output_state
+        res = @jit genUInt64(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{UInt64,2}
+        @test size(res.output) == (2, 4)
+
+        seed = res.output_state
+        res = @jit genFloat32(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{Float32,2}
+        @test size(res.output) == (2, 4)
+
+        seed = res.output_state
+        res = @jit genFloat64(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{Float64,2}
+        @test size(res.output) == (2, 4)
+    end
 end
 
 @testset "round_nearest_afz" begin

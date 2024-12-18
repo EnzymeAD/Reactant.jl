@@ -376,6 +376,16 @@ extern "C" MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
     return wrap(res);
 }
 
+#include "llvm/IRReader/IRReader.h"
+extern "C" MlirModule ConvertLLVMStrToMLIR(const char* lmod, MlirContext cctx) {
+    LLVMContext Context;
+    SMDiagnostic Err;
+    auto llvmModule = llvm::parseIR(llvm::MemoryBufferRef(lmod, "conversion"), Err, Context);
+    mlir::MLIRContext &context = *unwrap(cctx);
+    auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context, /*emitExpensiveWarnings*/false, /*dropDICompositeElements*/false).release();
+    return wrap(res);
+}
+
 
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable* ClientCompile(PjRtClient * client, MlirModule cmod) {
@@ -460,6 +470,10 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::stablehlo::StablehloDialect>();
   context.loadDialect<mlir::chlo::ChloDialect>();
 }
+
+#include "mlir/Target/LLVMIR/Dialect/NVVM/LLVMIRToNVVMTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMIRToLLVMTranslation.h"
+#include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::DialectRegistry &registry = *unwrap(creg);
 
@@ -503,6 +517,11 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::affine::registerAffinePasses();
   mlir::registerReconcileUnrealizedCasts();
 
+  mlir::registerLLVMDialectImport(registry);
+  mlir::registerNVVMDialectImport(registry);
+
+  mlir::LLVM::registerInlinerInterface(registry);
+
 /*
   registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
     LLVM::LLVMFunctionType::attachInterface<MemRefInsider>(*ctx);
@@ -528,6 +547,81 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::enzyme::registerGenerateApplyPatternsPass();
   mlir::enzyme::registerRemoveTransformPass();
   mlir::enzyme::registerEnzymeJaxTransformExtension(registry);
+}
+
+
+/// Returns an unused symbol in `module` for `oldSymbolName` by trying numeric
+/// suffix in `lastUsedID`.
+static mlir::StringAttr renameSymbol(llvm::StringRef oldSymName,
+                                     unsigned &lastUsedID,
+                                     mlir::ModuleOp source,
+                                     mlir::ModuleOp target) {
+  using namespace llvm;
+  using namespace mlir;
+  SmallString<64> newSymName(oldSymName);
+  newSymName.push_back('_');
+  while (true) {
+    auto possible = newSymName + Twine(++lastUsedID);
+    if (!SymbolTable::lookupSymbolIn(source, possible.str()) && !SymbolTable::lookupSymbolIn(target, possible.str())) {
+      return StringAttr::get(target.getContext(), possible);
+    }
+  }
+}
+
+
+/// Checks if a symbol with the same name as `op` already exists in `source`.
+/// If so, renames `op` and updates all its references in `target`.
+static mlir::LogicalResult
+updateSymbolAndAllUses(mlir::SymbolOpInterface op, mlir::ModuleOp source, mlir::ModuleOp target,
+                       unsigned &lastUsedID) {
+  using namespace llvm;
+  using namespace mlir;
+
+  auto opName = op.getName().str();
+
+  if (!SymbolTable::lookupSymbolIn(target, opName)) {
+    return success();
+  }
+
+  StringAttr newSymName =
+      renameSymbol(opName, lastUsedID, source, target);
+
+  if (failed(SymbolTable::replaceAllSymbolUses(op, newSymName, source)))
+    return op.emitError("unable to update all symbol uses for ")
+           << opName << " to " << newSymName;
+
+  SymbolTable::setSymbolName(op, newSymName);
+  return success();
+}
+
+extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC, const char* entryfn) {
+    auto prevMod = cast<ModuleOp>(*unwrap(prevModC));
+    auto newMod = cast<ModuleOp>(*unwrap(newModC));
+
+    Operation* entryFn = nullptr;
+
+      unsigned lastUsedID = 0;
+
+      for (auto &op : *newMod.getBody()) {
+        auto symbolOp = dyn_cast<SymbolOpInterface>(op);
+        if (!symbolOp)
+          continue;
+
+        StringRef oldSymName = symbolOp.getName();
+        
+        if (oldSymName == entryfn) {
+          entryFn = &op;
+        }
+
+        if (failed(updateSymbolAndAllUses(symbolOp, newMod, prevMod,
+                                          lastUsedID))) {
+          assert(0 && "failed to update all uses");
+        }
+        SymbolTable::setSymbolVisibility(&op, SymbolTable::Visibility::Private);
+      }
+      prevMod.getBody()->getOperations().splice(prevMod.getBody()->getOperations().end(),
+                                   newMod.getBody()->getOperations());
+  return wrap(entryFn);
 }
 
 #pragma region xla::ifrt
