@@ -91,5 +91,15 @@ for randfun in (:rand, :randn, :randexp)
         )
             return TracedRandom.$(overload_randfun!)(rng, A)
         end
+
+        # XXX: Uncomment once AbsInt issues with recursive calls are resolved
+        # @reactant_overlay @noinline function Random.$(randfun!)(
+        #     rng::AbstractRNG, A::AbstractArray
+        # )
+        #     @warn "Directly writing to an array using Random.jl functions inside \
+        #            ReactantInterpreter will generate a constant array in the IR. Use with \
+        #            caution." maxlog = 1
+        #     return Random.$(randfun!)(rng, A)
+        # end
     end
 end

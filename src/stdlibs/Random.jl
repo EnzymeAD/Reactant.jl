@@ -17,7 +17,12 @@ using ..Reactant:
 using Random: Random, AbstractRNG
 
 @noinline function make_seed(rng::AbstractRNG=Random.RandomDevice())
-    return Base.@invoke rand(rng::AbstractRNG, UInt64, 2)
+    # XXX: We should really be able to call this here. But with our AbsInt it leads to a
+    #      segfault. So we'll just call it in the rand! method.
+    # return rand(rng, UInt64, 2)
+    seed = Array{UInt64}(undef, 2)
+    Random.rand!(rng, seed)
+    return seed
 end
 
 function Random.seed!(rng::TracedRNG, seed::Number)
