@@ -3,6 +3,7 @@ module ReactantCUDAExt
 using CUDA
 using Reactant: Reactant, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
+using Libdl
 
 using Adapt
 
@@ -460,9 +461,9 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 function __init__()
-   ptr1 = Reactant.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuLaunchKernel")
-   ptr2 = Reactant.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleLoadData")
-   ptr3 = Reactant.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleGetFunction")
+   ptr1 = Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuLaunchKernel")
+   ptr2 = Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleLoadData")
+   ptr3 = Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleGetFunction")
    Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
    Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
    Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
