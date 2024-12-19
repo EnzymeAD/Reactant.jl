@@ -32,7 +32,7 @@ path = "lib/ReactantCore"
 [extensions]
 ReactantAbstractFFTsExt = "AbstractFFTs"
 ReactantArrayInterfaceExt = "ArrayInterface"
-ReactantCUDAExt = "CUDA"
+ReactantCUDAExt = ["CUDA", "Libdl"]
 ReactantNNlibExt = "NNlib"
 ReactantStatisticsExt = "Statistics"
 ReactantYaoBlocksExt = "YaoBlocks"
