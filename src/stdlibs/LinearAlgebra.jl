@@ -34,7 +34,7 @@ function materialize_traced_array(
     return LinearAlgebra.diagm(parent(x))
 end
 
-function materialize_traced_array(x::Tridiagonal{T,TracedRArray{T,1}}) where {T}
+function TracedUtils.materialize_traced_array(x::Tridiagonal{T,TracedRArray{T,1}}) where {T}
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
 end
 
@@ -118,7 +118,7 @@ for (AT, dcomp, ocomp) in (
     (:UpperTriangular, "LE", "GT"),
     (:UnitUpperTriangular, "LT", "GE"),
 )
-    @eval function set_mlir_data!(
+    @eval function TracedUtils.set_mlir_data!(
         x::LinearAlgebra.$(AT){T,TracedRArray{T,2}}, data
     ) where {T}
         tdata = TracedRArray{T}(data)
@@ -136,7 +136,9 @@ for (AT, dcomp, ocomp) in (
     end
 end
 
-function set_mlir_data!(x::LinearAlgebra.Symmetric{T,TracedRArray{T,2}}, data) where {T}
+function TracedUtils.set_mlir_data!(
+    x::LinearAlgebra.Symmetric{T,TracedRArray{T,2}}, data
+) where {T}
     if x.uplo == 'L'
         set_mlir_data!(LinearAlgebra.LowerTriangular(parent(x)), data)
     else
@@ -145,7 +147,7 @@ function set_mlir_data!(x::LinearAlgebra.Symmetric{T,TracedRArray{T,2}}, data) w
     return x
 end
 
-function set_mlir_data!(x::Tridiagonal{T,TracedRArray{T,1}}, data) where {T}
+function TracedUtils.set_mlir_data!(x::Tridiagonal{T,TracedRArray{T,1}}, data) where {T}
     tdata = TracedRArray{T}(data)
     set_mlir_data!(x.dl, diag(tdata, -1).mlir_data)
     set_mlir_data!(x.d, diag(tdata, 0).mlir_data)
@@ -259,7 +261,7 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     #   <unknown>:0: note: see current operation: %0 = "tensor.empty"() : () -> tensor<0xf64>
     length(indices) ≤ 0 && return TracedUtils.promote_to(TracedRArray{T,1}, T[])
 
-    return Ops.gather_getindex(x, promote_to(TracedRArray{Int,2}, indices))
+    return Ops.gather_getindex(x, TracedUtils.promote_to(TracedRArray{Int,2}, indices))
 end
 
 function LinearAlgebra._diagm(

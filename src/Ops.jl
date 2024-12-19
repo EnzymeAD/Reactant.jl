@@ -1447,12 +1447,12 @@ instead.
     #! format: off
     scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
         MLIR.IR.context(),
-        0, Int64[],
-        N, collect(Int64, 0:(N - 1)),
-        0, Int64[],
-        0, Int64[],
-        N, collect(Int64, 0:(N - 1)),
-        1
+        Int64(0), Int64[],
+        Int64(N), collect(Int64, 0:(N - 1)),
+        Int64(0), Int64[],
+        Int64(0), Int64[],
+        Int64(N), collect(Int64, 0:(N - 1)),
+        Int64(1)
     )
     #! format: on
 

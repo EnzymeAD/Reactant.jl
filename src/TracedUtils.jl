@@ -59,7 +59,7 @@ function set_mlir_data!(
     return x
 end
 
-function set_mlir_data!(x::AnyTracedRArray, data)
+function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     setindex!(x, TracedRArray{T}(data), axes(x)...)
     return x
 end
