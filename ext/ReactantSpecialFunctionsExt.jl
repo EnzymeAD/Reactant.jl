@@ -1,59 +1,49 @@
 module ReactantSpecialFunctionsExt
 using SpecialFunctions
-using Reactant: Ops, Reactant, TracedRNumber
+using Reactant: Ops, Reactant, TracedRNumber, ReactantFloat
 using Reactant.TracedRNumberOverrides: float
 
-for fn in [:digamma, :erf, :erfc]
-    @eval(function SpecialFunctions.$fn(x::TracedRNumber{<:Real})
-        return Ops.$fn(float(x))
+for fn in [:digamma, :erf, :erfc, (:loggamma, :lgamma)]
+    (fns, fno) = fn isa Tuple ? fn : (fn, fn)
+    @eval(function SpecialFunctions.$fns(x::TracedRNumber{<:Real})
+        return Ops.$fno(float(x))
     end)
 end
 
-function SpecialFunctions.gamma(x::TracedRNumber)
+function SpecialFunctions.gamma(x::TracedRNumber{<:Real})
     return exp(Ops.lgamma(float(x)))
 end
 
-#TODO: add factorial function
-#=function SpecialFunctions.gamma(
-    n::TracedRNumber{T}
-) where {T<:Integer}
-     factorial(n)
-end
-=#
-
-function SpecialFunctions.loggamma(x::TracedRNumber{<:Real}) 
-    return Ops.lgamma(float(x))
+function SpecialFunctions.gamma(n::TracedRNumber{<:Integer})
+    return round(gamma(float(n)))
 end
 
-function SpecialFunctions.loggamma1p(x::TracedRNumber) 
+function SpecialFunctions.loggamma1p(x::TracedRNumber{<:Real})
+    @assert abs(x) < 1
     return loggamma(1 + x)
 end
 
-function SpecialFunctions.logfactorial(
-    x::TracedRNumber{<:Integer}
-)
+function SpecialFunctions.logfactorial(x::TracedRNumber{<:Integer})
     return loggamma(1 + x)
 end
 
 # SpecialFunctions.invdigamma
 
-function SpecialFunctions.trigamma(x::TracedRNumber{T}) where {T}
-    return Ops.polygamma(Ops.constant(T(1)), float(x))
+function SpecialFunctions.trigamma(x::TracedRNumber{<:Real})
+    return Ops.polygamma(Ops.constant(Float64(1)), float(x))#TODO: change Ops definition
 end
 
 function SpecialFunctions.polygamma(n::TracedRNumber{<:Real}, x::TracedRNumber{<:Real})
     return Ops.polygamma(float(n), float(x))
 end
 
-function SpecialFunctions.polygamma(n::TracedRNumber{T}, x::TracedRNumber{T}) where {T}
-    return polygamma(n, x)
-end
-
 # SpecialFunctions.gamma_inc
 
 # SpecialFunctions.gamma_inc_inv
 
-function SpecialFunctions.loggammadiv(a::TracedRNumber{T}, b::TracedRNumber{T}) where {T<:Real}
+function SpecialFunctions.loggammadiv(
+    a::TracedRNumber{T}, b::TracedRNumber{T}
+) where {T<:Real}
     return log(gamma(b) / gamma(a + b))
 end
 
@@ -85,15 +75,15 @@ function SpecialFunctions.logerf(x::TracedRNumber{T}, y::TracedRNumber{T}) where
     return log(erf(x, y))
 end
 
-function SpecialFunctions.erfcx(x::TracedRNumber{<:Real}) 
+function SpecialFunctions.erfcx(x::TracedRNumber{<:Real})
     return exp(float(x^2)) * erfc(x)
 end
 
-function SpecialFunctions.logerfc(x::TracedRNumber{<:Real}) 
+function SpecialFunctions.logerfc(x::TracedRNumber{<:Real})
     return log(erfc(x))
 end
 
-function SpecialFunctions.logerfcx(x::TracedRNumber{<:Real}) 
+function SpecialFunctions.logerfcx(x::TracedRNumber{<:Real})
     return log(erfcx(x))
 end
 
