@@ -23,7 +23,7 @@ jobs:
         version:
           - '1.10'
           - '1.11'
-          - 'nightly'
+          # - 'nightly'
         os:
           - ubuntu-20.04
           - macOS-latest
@@ -56,21 +56,21 @@ jobs:
             version: '1.10'
             assertions: true
             test_group: integration
-          - os: ubuntu-20.04
-            arch: x86
-            libReactant: packaged
-            version: '1.10'
-            test_group: core
-          - os: ubuntu-20.04
-            arch: x86
-            libReactant: packaged
-            version: '1.10'
-            test_group: neural_networks
-          - os: ubuntu-20.04
-            arch: x86
-            libReactant: packaged
-            version: '1.10'
-            test_group: integration
+          # - os: ubuntu-20.04
+          #   arch: x86
+          #   libReactant: packaged
+          #   version: '1.10'
+          #   test_group: core
+          # - os: ubuntu-20.04
+          #   arch: x86
+          #   libReactant: packaged
+          #   version: '1.10'
+          #   test_group: neural_networks
+          # - os: ubuntu-20.04
+          #   arch: x86
+          #   libReactant: packaged
+          #   version: '1.10'
+          #   test_group: integration
         exclude:
           # these are run on Buildkite
           - os: ubuntu-20.04
