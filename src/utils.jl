@@ -271,6 +271,7 @@ function call_with_reactant_generator(
 )
     @nospecialize
     args = redub_arguments
+    Core.println("in call_with_reactant_generator: ", redub_arguments)
     if DEBUG_INTERP[]
         safe_print("args", args)
     end
@@ -321,53 +322,62 @@ function call_with_reactant_generator(
         match.sparams,
     )
 
-    result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
-    frame = Core.Compiler.InferenceState(result, VERSION < v"1.11-" ? :local : :no, interp) #=cache_mode=#
-    @assert frame !== nothing
-    Core.Compiler.typeinf(interp, frame)
-    @static if VERSION >= v"1.11"
-        # `typeinf` doesn't update the cfg. We need to do it manually.
-        # frame.cfg = Core.Compiler.compute_basic_blocks(frame.src.code)
-    end
-    @assert Core.Compiler.is_inferred(frame)
-
-    method = match.method
-
-    # The original julia code (on 1.11+) has the potential constprop, for now
-    # we assume this outermost function does not constprop, for ease.
-    #if Core.Compiler.result_is_constabi(interp, frame.result)
-    #    rt = frame.result.result::Core.Compiler.Const
-    #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
-    #else
-    #
-    opt = Core.Compiler.OptimizationState(frame, interp)
-
-    if DEBUG_INTERP[]
-        safe_print("opt.src", opt.src)
-    end
-
-    caller = frame.result
-    @static if VERSION < v"1.11-"
-        ir = Core.Compiler.run_passes(opt.src, opt, caller)
-    else
-        ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
-        @static if VERSION < v"1.12-"
+    cached = CC.get(CC.code_cache(interp), mi, nothing)
+    if !isnothing(cached)
+        Core.println("Found cached code instance for $mi")
+        method = mi.def
+        if cached isa CC.CodeInstance
+            src = Base._uncompressed_ir(cached, cached.inferred)
+            rt = cached.rettype
+        # elseif cached isa Core.CodeInfo
+        #     Core.println("How to get the return type?")
+        #     src =  cached
         else
-            Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
+            throw(ArgumentError("Invalid cached code instance for $mi: $(typeof(cached))"))
         end
-    end
+    else
+        result = Core.Compiler.InferenceResult(mi, Core.Compiler.typeinf_lattice(interp))
+        frame = Core.Compiler.InferenceState(result, VERSION < v"1.11-" ? :local : :no, interp) #=cache_mode=#
+        @assert frame !== nothing
+        Core.Compiler.typeinf(interp, frame)
+        @assert Core.Compiler.is_inferred(frame)
+    
+        method = match.method
+    
+        # The original julia code (on 1.11+) has the potential constprop, for now
+        # we assume this outermost function does not constprop, for ease.
+        #if Core.Compiler.result_is_constabi(interp, frame.result)
+        #    rt = frame.result.result::Core.Compiler.Const
+        #    src = Core.Compiler.codeinfo_for_const(interp, frame.linfo, rt.val)
+        #else
+        #
+        opt = Core.Compiler.OptimizationState(frame, interp)
+    
+        if DEBUG_INTERP[]
+            safe_print("opt.src", opt.src)
+        end
+    
+        caller = frame.result
+        @static if VERSION < v"1.11-"
+            ir = Core.Compiler.run_passes(opt.src, opt, caller)
+        else
+            ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
+            @static if VERSION < v"1.12-"
+            else
+                Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
+            end
+        end
+    
+        if DEBUG_INTERP[]
+            safe_print("ir1", ir)
+        end
 
-    if DEBUG_INTERP[]
-        safe_print("ir1", ir)
-    end
-
-    # Rewrite type unstable calls to recurse into call_with_reactant to ensure
-    # they continue to use our interpreter. Reset the derived return type
-    # to Any if our interpreter would change the return type of any result.
-    # Also rewrite invoke (type stable call) to be :call, since otherwise apparently
-    # screws up type inference after this (TODO this should be fixed).
-    any_changed = false
-    if should_rewrite_ft(args[1]) && !is_reactant_method(mi)
+        # Rewrite type unstable calls to recurse into call_with_reactant to ensure
+        # they continue to use our interpreter. Reset the derived return type
+        # to Any if our interpreter would change the return type of any result.
+        # Also rewrite invoke (type stable call) to be :call, since otherwise apparently
+        # screws up type inference after this (TODO this should be fixed).
+        any_changed = false
         for (i, inst) in enumerate(ir.stmts)
             @static if VERSION < v"1.11"
                 changed, next = rewrite_inst(inst[:inst], ir, interp)
@@ -381,11 +391,15 @@ function call_with_reactant_generator(
                 Core.Compiler.setindex!(ir.stmts[i], Any, :type)
             end
         end
+
+        Core.Compiler.finish(interp, opt, ir, caller)
+
+        rt = Base.Experimental.compute_ir_rettype(ir)
+        src = Core.Compiler.ir_to_codeinf!(opt)
+
+        result.src = src
+        CC.cache_result!(interp, result)
     end
-
-    Core.Compiler.finish(interp, opt, ir, caller)
-
-    src = Core.Compiler.ir_to_codeinf!(opt)
 
     if DEBUG_INTERP[]
         safe_print("src", src)
@@ -486,9 +500,7 @@ function call_with_reactant_generator(
             )
             push!(overdubbed_codelocs, code_info.codelocs[1])
         end
-    end
-
-    rt = Base.Experimental.compute_ir_rettype(ir)
+    end    
 
     # ocva = method.isva
 
