@@ -116,6 +116,7 @@ const opt_passes::String = join(
                 "get_tuple_element_op_canon<16>",
                 "real_op_canon<16>",
                 "imag_op_canon<16>",
+                "conj_complex_negate<16>",
                 "get_dimension_size_op_canon<16>",
                 "gather_op_canon<16>",
                 "reshape_op_canon<16>",
@@ -155,6 +156,7 @@ const opt_passes::String = join(
                 "cos_simplify<16>",
                 "sin_simplify<16>",
                 "noop_slice<16>",
+                "noop_reverse<16>",
                 "const_prop_through_barrier<16>",
                 "slice_slice<16>",
                 "shift_right_logical_simplify<16>",
@@ -246,6 +248,7 @@ const opt_passes::String = join(
                 "if_inline<1>",
                 "if_to_select<1>",
                 "dynamic_update_slice_const_prop",
+                "dynamic_gather_op_is_not_dynamic<16>",
             ],
             ';',
         ) *
@@ -307,6 +310,21 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     if optimize === :all
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :no_enzyme
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
