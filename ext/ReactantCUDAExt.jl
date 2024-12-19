@@ -417,7 +417,9 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(f::F, tt::TT=Tuple
 end
 
 function __init__()
-   
+   Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, Base.cglobal((:cuLaunchKernel, CUDA.libcuda))
+   Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, Base.cglobal((:cuModuleLoadData, CUDA.libcuda))
+   Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, Base.cglobsl((:cuModuleGetFunction, CUDA.libcuda))
 end
 
 end # module ReactantCUDAExt
