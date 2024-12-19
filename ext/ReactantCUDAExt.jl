@@ -461,9 +461,18 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 function __init__()
-   ptr1 = Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuLaunchKernel")
-   ptr2 = Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleLoadData")
-   ptr3 = Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleGetFunction")
+   ptr1 = Reactant.XLA.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuLaunchKernel"; throw_error=false)
+   if ptr1 === nothing
+	ptr1 = C_NULL
+   end
+   ptr2 = Reactant.XLA.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleLoadData"; throw_error=false)
+   if ptr2 === nothing
+	ptr2 = C_NULL
+   end
+   ptr3 = Reactant.XLA.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleGetFunction"; throw_error=false)
+   if ptr3 === nothing
+	ptr3 = C_NULL
+   end
    Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
    Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
    Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
