@@ -346,7 +346,11 @@ function call_with_reactant_generator(
     )
     method = mi.def
 
-    ir, rt = CC.typeinf_ircode(interp, mi, nothing)
+    @static if VERSION < v"1.11"
+        ir, rt = CC.typeinf_ircode(interp, method, mi.specTypes, mi.sparam_vals, nothing)
+    else
+        ir, rt = CC.typeinf_ircode(interp, mi, nothing)
+    end
 
     ir, any_changed = rewrite_insts!(ir, interp)
     src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
