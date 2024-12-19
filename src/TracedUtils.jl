@@ -323,7 +323,7 @@ end
 
 function push_val!(ad_inputs, x, path)
     for p in path
-        x = traced_getfield(x, p)
+        x = Reactant.Compiler.traced_getfield(x, p)
     end
     x = x.mlir_data
     return push!(ad_inputs, x)
@@ -343,7 +343,7 @@ end
 
 function set!(x, path, tostore; emptypath=false)
     for p in path
-        x = traced_getfield(x, p)
+        x = Reactant.Compiler.traced_getfield(x, p)
     end
 
     x.mlir_data = tostore

@@ -3,6 +3,8 @@ module Reactant
 using ReactantCore: ReactantCore, @trace, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
+using Random: Random, AbstractRNG
+
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
 
@@ -106,13 +108,22 @@ include("TracedRArray.jl")
 
 include("ConcreteRArray.jl")
 
-include("linear_algebra.jl")
+mutable struct TracedRNG <: Random.AbstractRNG
+    seed::Union{ConcreteRArray{UInt64,1},TracedRArray{UInt64,1}}
+    const algorithm::String
+end
+
+# StdLib Overloads
+include("stdlibs/LinearAlgebra.jl")
+include("stdlibs/Random.jl")
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
 include("Tracing.jl")
 include("Compiler.jl")
+
+include("Overlay.jl")
 
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)

@@ -624,7 +624,7 @@ function codegen_unflatten!(
                 if path[2:end] == argpath[2:end]
                     continue
                 end
-                res = :(args[path[2]])
+                res = :(args[$(path[2])])
                 path = path[3:end]
             end
             for p in path
@@ -777,13 +777,6 @@ function compile(f, args; client=nothing, optimize=true, sync=false)
 
     body = expr.args[2]
     return register_thunk(fname, body)
-end
-
-# Compiling within a compile should return simply the original function
-Reactant.@reactant_override function Reactant.Compiler.compile(
-    f, args; client=nothing, optimize=true, sync=false
-)
-    return f
 end
 
 # inspired by RuntimeGeneratedFunction.jl
