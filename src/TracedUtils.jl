@@ -108,11 +108,9 @@ function transpose_ty(mlirty)
     return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
 end
 function transpose_val(val)
-    val_size = size(MLIR.IR.type(val)) 
+    val_size = size(MLIR.IR.type(val))
     val_size == () && return val
-    attr = MLIR.IR.DenseArrayAttribute(
-        Int64[reverse(0:(length(val_size) - 1))...]
-    )
+    attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
