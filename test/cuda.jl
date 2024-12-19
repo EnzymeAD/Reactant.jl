@@ -23,5 +23,7 @@ end
     @show @code_hlo square!(A)
     func! = @compile square!(A)
     func!(A)
+    @show A
+    @show oA
     @test all(Array(A) .≈ (oA .* oA))
 end
