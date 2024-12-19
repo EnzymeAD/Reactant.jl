@@ -21,7 +21,7 @@ end
     @show @code_hlo optimize = false square!(A)
     @show @code_hlo optimize=:before_kernel square!(A)
     @show @code_hlo square!(A)
-    func = @compile square!(A)
+    func! = @compile square!(A)
     func!(A)
     @test all(Array(A) .≈ (oA .* oA))
 end
