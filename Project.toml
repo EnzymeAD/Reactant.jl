@@ -34,7 +34,7 @@ ReactantCore = {path = "lib/ReactantCore"}
 [extensions]
 ReactantAbstractFFTsExt = "AbstractFFTs"
 ReactantArrayInterfaceExt = "ArrayInterface"
-ReactantCUDAExt = "CUDA"
+ReactantCUDAExt = ["CUDA", "Libdl"]
 ReactantNNlibExt = "NNlib"
 ReactantRandom123Ext = "Random123"
 ReactantStatisticsExt = "Statistics"
