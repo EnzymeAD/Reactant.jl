@@ -19,7 +19,6 @@ function SpecialFunctions.gamma(n::TracedRNumber{<:Integer})
 end
 
 function SpecialFunctions.loggamma1p(x::TracedRNumber{<:Real})
-    @assert abs(x) < 1
     return loggamma(1 + x)
 end
 
