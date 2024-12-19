@@ -460,9 +460,12 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 function __init__()
-   Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, Base.cglobal((:cuLaunchKernel, "libcuda.so.1")))
-   Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, Base.cglobal((:cuModuleLoadData, "libcuda.so.1")))
-   Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, Base.cglobsl((:cuModuleGetFunction, "libcuda.so.1")))
+   ptr1 = Reactant.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuLaunchKernel")
+   ptr2 = Reactant.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleLoadData")
+   ptr3 = Reactant.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda_handle, "cuModuleGetFunction")
+   Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
+   Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
+   Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
 end
 
 end # module ReactantCUDAExt
