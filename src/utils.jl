@@ -49,7 +49,6 @@ end
         world,
         min_world,
         max_world,
-main
     )
     return res
 end
