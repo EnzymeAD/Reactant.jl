@@ -461,15 +461,16 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 function __init__()
-   ptr1 = Reactant.XLA.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda, "cuLaunchKernel"; throw_error=false)
+   handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda)
+   ptr1 = Reactant.XLA.Libdl.dlsym(handle, "cuLaunchKernel"; throw_error=false)
    if ptr1 === nothing
 	ptr1 = C_NULL
    end
-   ptr2 = Reactant.XLA.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda, "cuModuleLoadData"; throw_error=false)
+   ptr2 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleLoadData"; throw_error=false)
    if ptr2 === nothing
 	ptr2 = C_NULL
    end
-   ptr3 = Reactant.XLA.Libdl.dlsym(CUDA.CUDA_Driver_jll.libcuda, "cuModuleGetFunction"; throw_error=false)
+   ptr3 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleGetFunction"; throw_error=false)
    if ptr3 === nothing
 	ptr3 = C_NULL
    end
