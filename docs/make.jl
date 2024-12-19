@@ -30,6 +30,7 @@ pages = [
     "Tutorials" => ["Overview" => "tutorials/index.md"],
     "API Reference" => [
         "Reactant API" => "api/api.md",
+        "Ops" => "api/ops.md",
         "Dialects" => [
             "ArithOps" => "api/arith.md",
             "Affine" => "api/affine.md",
@@ -42,6 +43,7 @@ pages = [
         ],
         "MLIR API" => "api/mlirc.md",
         "XLA" => "api/xla.md",
+        "Internal API" => "api/internal.md",
     ],
 ]
 

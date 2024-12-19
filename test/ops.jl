@@ -82,14 +82,18 @@ end
 end
 
 @testset "cholesky" begin
-    g(x) = Ops.cholesky(x; lower=true)
+    # cholesky in stablehlo for the other triangle is implementation defined.
+    # See https://github.com/EnzymeAD/Reactant.jl/issues/338 for more details.
+    g1(x) = triu(Ops.cholesky(x))
+    g2(x) = tril(Ops.cholesky(x; lower=true))
+
     x = ConcreteRArray([
         10.0 2.0 3.0
         2.0 5.0 6.0
         3.0 6.0 9.0
     ])
-    @test cholesky(Array(x)).U ≈ @jit Ops.cholesky(x)
-    @test transpose(cholesky(Array(x)).U) ≈ @jit g(x)
+    @test cholesky(Array(x)).U ≈ @jit g1(x)
+    @test transpose(cholesky(Array(x)).U) ≈ @jit g2(x)
 
     x = ConcreteRArray(
         [
@@ -98,8 +102,9 @@ end
             3.0+4.0im 3.0+2.0im 9.0+0.0im
         ],
     )
-    @test cholesky(Array(x)).U ≈ @jit Ops.cholesky(x)
-    @test adjoint(cholesky(Array(x)).U) ≈ @jit g(x)
+
+    @test cholesky(Array(x)).U ≈ @jit g1(x)
+    @test adjoint(cholesky(Array(x)).U) ≈ @jit g2(x)
 end
 
 @testset "clamp" begin
@@ -140,13 +145,12 @@ end
 end
 
 @testset "constant" begin
-    # TODO currently crashes due to #196
-    # for x in [[1, 2, 3], [1.1, 2.2, 3.3], [1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im]]
-    #     @test x ≈ @jit Ops.constant(x)
+    for x in [[1, 2, 3], [1.1, 2.2, 3.3], [1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im]]
+        @test x ≈ @jit Ops.constant(x)
 
-    #     xscalar = x[1]
-    #     @test xscalar ≈ @jit Ops.constant(xscalar)
-    # end
+        xscalar = x[1]
+        @test xscalar ≈ @jit Ops.constant(xscalar)
+    end
 end
 
 @testset "cosine" begin
@@ -189,6 +193,38 @@ end
     end
 end
 
+@testset "dot_general" begin
+    # dot product of first dim
+    f1(x, y) = Ops.dot_general(x, y; contracting_dimensions=[[1], [1]])
+
+    # outer product
+    fouter(x, y) = Ops.dot_general(x, y; contracting_dimensions=[Int[], Int[]])
+
+    # outer product, batch first dim
+    fouter_batch1(x, y) = Ops.dot_general(
+        x, y; contracting_dimensions=[Int[], Int[]], batching_dimensions=[[1], [1]]
+    )
+
+    for (a, b) in [
+        (ConcreteRArray([1, 2, 3, 4]), ConcreteRArray([5, 6, -7, -8])),
+        (ConcreteRArray([1.0, 2.0, 3.0, 4.0]), ConcreteRArray([5.0, 6.0, -7.0, -8.0])),
+        (
+            ConcreteRArray([1.0, 2.0im, 3.0, 4.0im]),
+            ConcreteRArray([5.0, 6.0im, -7.0im, -8.0]),
+        ),
+    ]
+        # NOTE `LinearAlgebra.dot` is not equal to `sum(a .* b)` on complex numbers due to conjugation
+        @test sum(a .* b) ≈ @jit f1(a, b)
+        @test kron(reshape(Array(a), length(a), 1), reshape(Array(b), 1, length(b))) ≈
+            @jit fouter(a, b)
+        @test a .* b ≈ @jit fouter_batch1(a, b)
+    end
+
+    a = ConcreteRArray([1 2; 3 4])
+    b = ConcreteRArray([5 6; -7 -8])
+    @test Array(a)' * Array(b) == @jit f1(a, b)
+end
+
 @testset "einsum" begin
     f1(a, b) = Ops.einsum(a, b; equation="i,i->i")
     f2(a, b) = Ops.einsum(a, b; equation="i,j->ij")
@@ -206,10 +242,10 @@ end
         @test a .* b ≈ @jit f1(a, b)
         @test reshape(kron(Array(b), Array(a)), 4, 4) ≈ @jit f2(a, b)
 
-        x = reshape(a, (2, 2))
-        y = reshape(b, (2, 2))
+        x = ConcreteRArray(reshape(a, (2, 2)))
+        y = ConcreteRArray(reshape(b, (2, 2)))
         @test x .* y ≈ @jit f3(x, y)
-        @test x * y ≈ @jit f4(x, y)
+        @test Array(x) * Array(y) ≈ @jit f4(x, y)
     end
 end
 
@@ -281,22 +317,21 @@ end
 end
 
 @testset "iota" begin
-    # TODO this crashes. seems like the same error as #196
-    # g1(shape) = Ops.iota(Int, shape; iota_dimension=1)
-    # @test [
-    #     0 0 0 0 0
-    #     1 1 1 1 1
-    #     2 2 2 2 2
-    #     3 3 3 3 3
-    # ] ≈ @jit g1([4, 5])
+    g1(shape) = Ops.iota(Int, shape; iota_dimension=1)
+    @test [
+        0 0 0 0 0
+        1 1 1 1 1
+        2 2 2 2 2
+        3 3 3 3 3
+    ] ≈ @jit g1([4, 5])
 
-    # g2(shape) = Ops.iota(Int, shape; iota_dimension=2)
-    # @test [
-    #     0 1 2 3 4
-    #     0 1 2 3 4
-    #     0 1 2 3 4
-    #     0 1 2 3 4
-    # ] ≈ @jit g2([4, 5])
+    g2(shape) = Ops.iota(Int, shape; iota_dimension=2)
+    @test [
+        0 1 2 3 4
+        0 1 2 3 4
+        0 1 2 3 4
+        0 1 2 3 4
+    ] ≈ @jit g2([4, 5])
 end
 
 @testset "is_finite" begin
@@ -320,7 +355,11 @@ end
     @test log.(Array(x)) ≈ @jit Ops.log(x)
 end
 
-@testset "logistic" begin end
+@testset "logistic" begin
+    x = ConcreteRArray([0.0, 1.0, 2.0, 3.0])
+    l(x) = 1 / (1 + exp(-x))
+    @test l.(Array(x)) ≈ @jit Ops.logistic(x)
+end
 
 @testset "maximum" begin
     x = ConcreteRArray([false, false, true, true])
@@ -439,8 +478,7 @@ end
 end
 
 @testset "partition_id" begin
-    # TODO this crashes. seems like the same error as #196
-    # @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
+    @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
 end
 
 @testset "popcnt" begin
@@ -477,13 +515,15 @@ end
 end
 
 @testset "replica_id" begin
-    # TODO this crashes. seems like the same error as #196
-    # @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
+    @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
 end
 
 @testset "reshape" begin
     x = ConcreteRArray([1, 2, 3, 4])
     @test reshape(Array(x), 2, 2) == @jit Ops.reshape(x, 2, 2)
+
+    x = ConcreteRArray(collect(reshape(1:12, 2, 2, 3)))
+    @test reshape(Array(x), 3, 1, 4) == @jit Ops.reshape(x, 3, 1, 4)
 end
 
 @testset "reverse" begin
@@ -498,8 +538,50 @@ end
 end
 
 @testset "rng_bit_generator" begin
-    # seed = ConcreteRArray([0, 0])
-    # @jit Ops.rng_bit_generator(seed, [2])
+    genInt32(seed) = Ops.rng_bit_generator(Int32, seed, [2, 4])
+    genInt64(seed) = Ops.rng_bit_generator(Int64, seed, [2, 4])
+    genUInt64(seed) = Ops.rng_bit_generator(UInt64, seed, [2, 4])
+    genFloat32(seed) = Ops.rng_bit_generator(Float32, seed, [2, 4])
+    genFloat64(seed) = Ops.rng_bit_generator(Float64, seed, [2, 4])
+
+    @testset for (alg, sz) in
+                 [("DEFAULT", 2), ("PHILOX", 2), ("PHILOX", 3), ("THREE_FRY", 2)]
+        seed = ConcreteRArray(zeros(UInt64, sz))
+
+        res = @jit genInt32(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{Int32,2}
+        @test size(res.output) == (2, 4)
+
+        seed = res.output_state
+        res = @jit genInt64(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{Int64,2}
+        @test size(res.output) == (2, 4)
+
+        seed = res.output_state
+        res = @jit genUInt64(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{UInt64,2}
+        @test size(res.output) == (2, 4)
+
+        seed = res.output_state
+        res = @jit genFloat32(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{Float32,2}
+        @test size(res.output) == (2, 4)
+
+        seed = res.output_state
+        res = @jit genFloat64(seed)
+        @test res.output_state !== seed
+        @test size(res.output_state) == (sz,)
+        @test res.output isa ConcreteRArray{Float64,2}
+        @test size(res.output) == (2, 4)
+    end
 end
 
 @testset "round_nearest_afz" begin
@@ -520,6 +602,32 @@ end
         x = ConcreteRArray([1.0+1im 4.0+2im; 9.0+3im 25.0+4im])
         @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
     end
+end
+
+@testset "select" begin
+    ontrue = ConcreteRArray([1, 2, 3, 4])
+    onfalse = ConcreteRArray([5, 6, -7, -8])
+
+    pred = ConcreteRArray([true, true, false, false])
+    @test [1, 2, -7, -8] == @jit Ops.select(pred, ontrue, onfalse)
+
+    pred = ConcreteRArray([false, false, true, true])
+    @test [5, 6, 3, 4] == @jit Ops.select(pred, ontrue, onfalse)
+
+    pred = ConcreteRNumber(true)
+    @test ontrue == @jit Ops.select(pred, ontrue, onfalse)
+
+    pred = ConcreteRNumber(false)
+    @test onfalse == @jit Ops.select(pred, ontrue, onfalse)
+
+    ontrue = ConcreteRNumber(1)
+    onfalse = ConcreteRNumber(2)
+
+    pred = ConcreteRNumber(true)
+    @test ontrue == @jit Ops.select(pred, ontrue, onfalse)
+
+    pred = ConcreteRNumber(false)
+    @test onfalse == @jit Ops.select(pred, ontrue, onfalse)
 end
 
 @testset "send" begin end
@@ -798,4 +906,119 @@ end
     @test (; values=[4, 3], indices=[3, 2]) == @jit Ops.top_k(x, 2)
 end
 
-@testset "zeta" begin end
+@testset "zeta" begin
+    s = ConcreteRArray([1.0, 2.0, 50.0])
+    z = ConcreteRArray([1e-8, 0.001, 2.0])
+    @test SpecialFunctions.zeta.(Array(s), Array(z)) ≈ @jit Ops.zeta(s, z)
+end
+
+@testset "hlo_call" begin
+    x = Float32[1.0, 2.0, 50.0]
+    y = Float32[-4.0, 0.001, 2.0]
+    x_reactant = Reactant.to_rarray(x)
+    y_reactant = Reactant.to_rarray(y)
+
+    @test Reactant.@jit(
+        Ops.hlo_call(
+            """
+            module {
+              func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+            }
+            """,
+            x_reactant,
+            y_reactant,
+        )
+    )[1] ≈ x .+ y
+end
+
+function f_repeat(x, y)
+    for _ in 1:3
+        x, = Ops.hlo_call(
+            """
+            module {
+              func.func @my_add(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+            }
+            """,
+            x,
+            y;
+            func_name="my_add",
+        )
+    end
+    return x
+end
+
+@testset "hlo_call: repeat" begin
+    x = Reactant.to_rarray(randn(Float32, 3))
+    y = Reactant.to_rarray(randn(Float32, 3))
+    mod = Reactant.@code_hlo optimize = false f_repeat(x, y)
+    hlo_ir = repr(mod)
+
+    add_pos = findfirst("stablehlo.add", hlo_ir)
+    @test !isnothing(add_pos)
+
+    add_pos = findfirst("stablehlo.add", hlo_ir[last(add_pos):end])
+    @test isnothing(add_pos)
+end
+
+@testset "hlo_call: multiple functions" begin
+    @test Reactant.@jit(
+        Ops.hlo_call(
+            """
+            module {
+              func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = func.call @add(%arg0, %arg1) : (tensor<3xf32>, tensor<3xf32>) -> tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+              func.func @add(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                return %0 : tensor<3xf32>
+              }
+            }
+            """,
+            Reactant.to_rarray(Float32[1, 2, 3]),
+            Reactant.to_rarray(Float32[1, 2, 3]),
+        )
+    )[1] ≈ Float32[2, 4, 6]
+end
+
+function f_multiple_hlo_calls(x, y)
+    x, = Ops.hlo_call(
+        """
+        module {
+          func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+            %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+            return %0 : tensor<3xf32>
+          }
+        }
+        """,
+        x,
+        y,
+    )
+    return Ops.hlo_call(
+        """
+        module {
+          func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+            %0 = stablehlo.multiply %arg0, %arg1 : tensor<3xf32>
+            return %0 : tensor<3xf32>
+          }
+        }
+        """,
+        x,
+        y,
+    )
+end
+
+@testset "hlo_call: multiple hlo_calls" begin
+    x = Float32[1.0, 2.0, 50.0]
+    y = Float32[-4.0, 0.001, 2.0]
+    x_reactant = Reactant.to_rarray(x)
+    y_reactant = Reactant.to_rarray(y)
+
+    @test Reactant.@jit(f_multiple_hlo_calls(x_reactant, y_reactant))[1] ≈ (x .+ y) .* y
+end

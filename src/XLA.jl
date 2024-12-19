@@ -285,14 +285,19 @@ end
 function execute_ir(N, n_outs, fn)
     ptr = sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
     cint = sizeof(Cint) == sizeof(Int64) ? "i64" : "i32"
-    res = """define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, [$N x $ptr] %inps, [$N x i8] %donated) alwaysinline {
+    args = N > 0 ? ", [$N x $ptr] %inps, [$N x i8] %donated" : ""
+    stores = N > 0 ? """
+store [$N x $ptr] %inps, [$N x $ptr]* %inpa
+store [$N x i8] %donated, [$N x i8]* %dona
+    """ : ""
+
+    res = """define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec $args) alwaysinline {
 entry:
     %inpa = alloca [$N x $ptr]
+    %dona = alloca [$N x i8]
     %outa = alloca [$n_outs x $ptr]
     %futpa = alloca [$n_outs x $ptr]
-    store [$N x $ptr] %inps, [$N x $ptr]* %inpa
-    %dona = alloca [$N x i8]
-    store [$N x i8] %donated, [$N x i8]* %dona
+    $stores
     %futa = alloca i8
     call void inttoptr ($ptr $fn to void ($ptr, $cint, [$N x $ptr]*, [$N x i8]*, $cint, [$n_outs x $ptr]*, i8*, [$n_outs x $ptr]*)*)($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, [$N x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
     %out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
@@ -323,6 +328,9 @@ end
             :(AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing)),
         )
     end
+
+    args_type = N > 0 ? (Ptr{Cvoid}, NTuple{N,Ptr{Cvoid}}, NTuple{N,UInt8}) : (Ptr{Cvoid},)
+    args = N > 0 ? (:inputs, :donated_args) : ()
     return quote
         Base.@_inline_meta
         exec = exec.exec
@@ -330,10 +338,9 @@ end
             outputs, future_res, future = Base.llvmcall(
                 ($ir, "f"),
                 Tuple{NTuple{n_outs,Ptr{Cvoid}},NTuple{n_outs,Ptr{Cvoid}},Bool},
-                Tuple{Ptr{Cvoid},NTuple{N,Ptr{Cvoid}},NTuple{N,UInt8}},
+                Tuple{$args_type...},
                 exec,
-                inputs,
-                donated_args,
+                $(args...),
             )
         end
         return ($(results...),)

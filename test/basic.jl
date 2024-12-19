@@ -140,7 +140,8 @@ end
 
 @testset "ConcreteRArray" begin
     c = Reactant.ConcreteRArray(ones(50, 70))
-    similar(c)
+    sim_c = similar(c)
+    @test typeof(sim_c) == typeof(c) && size(sim_c) == size(sim_c)
 end
 
 @testset "Reactant.@code_hlo" begin
@@ -360,6 +361,16 @@ end
         y = @jit test_typed_hvncat(x_concrete)
         @test y == test_typed_hvncat(x)
         @test eltype(y) === Int
+    end
+end
+
+@testset "repeat" begin
+    @testset for (size, counts) in Iterators.product(
+        [(2,), (2, 3), (2, 3, 4), (2, 3, 4, 5)],
+        [(), (1,), (2,), (2, 1), (1, 2), (2, 2), (2, 2, 2), (1, 1, 1, 1, 1)],
+    )
+        x = rand(size...)
+        @test (@jit repeat(Reactant.to_rarray(x), counts...)) == repeat(x, counts...)
     end
 end
 
@@ -629,7 +640,7 @@ end
 function f_row_major(x)
     y = [1 2; 3 4; 5 6]
     if x isa Reactant.TracedRArray
-        y = Reactant.promote_to(Reactant.TracedRArray{eltype(x),2}, y)
+        y = Reactant.TracedUtils.promote_to(Reactant.TracedRArray{eltype(x),2}, y)
     end
     return x .+ y
 end
@@ -639,4 +650,17 @@ end
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(f_row_major(x_ra)) ≈ f_row_major(x)
+end
+
+@testset "ifelse" begin
+    @test 1.0 ==
+        @jit ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    @test @jit(
+        ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    ) isa ConcreteRNumber{Float64}
+    @test 0.0f0 ==
+        @jit ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    @test @jit(
+        ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
+    ) isa ConcreteRNumber{Float32}
 end

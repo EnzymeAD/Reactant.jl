@@ -58,6 +58,7 @@ export default defineConfig({
         text: "API",
         items: [
           { text: "Core Reactant API", link: "/api/api" },
+          { text: "Ops", link: "/api/ops" },
           {
             text: "MLIR Dialects",
             items: [
@@ -77,7 +78,8 @@ export default defineConfig({
               { text: "MLIR API", link: "/api/mlirc" },
               { text: "XLA", link: "/api/xla" },
             ],
-          }
+          },
+          { text: "Internal API", link: "/api/internal" },
         ],
       },
       {
@@ -108,6 +110,7 @@ export default defineConfig({
             text: "Reactant API",
             link: "/api/api",
           },
+          { text: "Ops", link: "/api/ops" },
           {
             text: "MLIR Dialects",
             collapsed: false,
@@ -130,6 +133,7 @@ export default defineConfig({
               { text: "XLA", link: "/api/xla" },
             ],
           },
+          { text: "Internal API", link: "/api/internal" },
         ],
       },
     },

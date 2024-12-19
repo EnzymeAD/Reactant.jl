@@ -2,8 +2,10 @@ module ReactantNNlibExt
 
 using NNlib
 using GPUArraysCore: @allowscalar
-using Reactant:
-    Reactant, TracedRArray, AnyTracedRArray, materialize_traced_array, MLIR, TracedRNumber
+using Reactant: Reactant, Ops, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
+
+using Reactant.TracedUtils: materialize_traced_array, get_mlir_data, set_mlir_data!
+
 using ReactantCore: @trace
 using LinearAlgebra: LinearAlgebra, triu
 
@@ -12,14 +14,7 @@ for (jlop, hloop) in (
     (:(NNlib.sigmoid_fast), :logistic),
     (:(NNlib.sigmoid), :logistic),
 )
-    @eval function $(jlop)(x::TracedRNumber{T}) where {T}
-        return TracedRNumber{T}(
-            (),
-            Reactant.MLIR.IR.result(
-                Reactant.MLIR.Dialects.stablehlo.$(hloop)(x.mlir_data), 1
-            ),
-        )
-    end
+    @eval $(jlop)(x::TracedRNumber) = Ops.$(hloop)(x)
 end
 
 function NNlib.softmax!(out::TracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
@@ -82,13 +77,6 @@ function NNlib.conv!(
     kernel_input_dim = N - 1
     kernel_output_dim = N
 
-    output_spatial_shapes = map(input_spatial_dims) do i
-        K = kernel_size[i]
-        pl, pr = padding[2i - 1], padding[2i]
-        d = dilation[i]
-        s = stride[i]
-        return (size(x, i) + pl + pr - d * (K - 1) - 1) ÷ s + 1
-    end
     output_batch_dim = input_batch_dim
     output_feature_dim = input_feature_dim
     output_spatial_dims = input_spatial_dims
@@ -113,18 +101,14 @@ function NNlib.conv!(
     )
     result_type = Reactant.MLIR.IR.TensorType(size(y), Reactant.MLIR.IR.Type(T))
 
-    weight = W.mlir_data
+    weight = W
     if !flipkernel
-        weight = Reactant.MLIR.IR.result(
-            Reactant.MLIR.Dialects.stablehlo.reverse(
-                weight; dimensions=collect(kernel_spatial_dims .- 1)
-            ),
-        )
+        weight = Reactant.Ops.reverse(weight; dimensions=kernel_spatial_dims)
     end
 
     conv = Reactant.MLIR.Dialects.stablehlo.convolution(
-        x.mlir_data,
-        weight;
+        get_mlir_data(x),
+        get_mlir_data(weight);
         result_0=result_type,
         window_strides=collect(stride),
         padding,
@@ -134,7 +118,7 @@ function NNlib.conv!(
         feature_group_count,
         batch_group_count=1,
     )
-    y.mlir_data = Reactant.MLIR.IR.result(conv)
+    set_mlir_data!(y, Reactant.MLIR.IR.result(conv))
     return y
 end
 
@@ -169,7 +153,9 @@ function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
     output_shape = (output_spatial_shapes..., size(x, N - 1), size(x, N))
     result_type = Reactant.MLIR.IR.TensorType(output_shape, Reactant.MLIR.IR.Type(T))
 
-    unranked = Reactant.MLIR.IR.TensorType((), eltype(Reactant.MLIR.IR.type(x.mlir_data)))
+    unranked = Reactant.MLIR.IR.TensorType(
+        (), eltype(Reactant.MLIR.IR.type(get_mlir_data(x)))
+    )
     body =
         let body = Reactant.MLIR.IR.Region(),
             loc = Reactant.MLIR.IR.Location(),
@@ -193,7 +179,7 @@ function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
         Reactant.MLIR.Dialects.stablehlo.constant(; value=attr)
     )
     reduction = Reactant.MLIR.Dialects.stablehlo.reduce_window(
-        [x.mlir_data],
+        [get_mlir_data(x)],
         [init_value];
         result_0=[result_type],
         window_dimensions,
@@ -209,10 +195,10 @@ end
 function NNlib.maxpool!(
     y::TracedRArray{T}, x::AnyTracedRArray, pdims::NNlib.PoolDims
 ) where {T}
-    y.mlir_data =
-        reduce_window(
-            Reactant.MLIR.Dialects.stablehlo.maximum, T.(x), pdims; init=typemin(T)
-        ).mlir_data
+    res = reduce_window(
+        Reactant.MLIR.Dialects.stablehlo.maximum, T.(x), pdims; init=typemin(T)
+    )
+    set_mlir_data!(y, get_mlir_data(res))
     return y
 end
 
@@ -220,13 +206,13 @@ function NNlib.meanpool!(
     y::TracedRArray{T}, x::AnyTracedRArray, pdims::NNlib.PoolDims
 ) where {T}
     res = reduce_window(Reactant.MLIR.Dialects.stablehlo.add, T.(x), pdims; init=zero(T))
-    y.mlir_data = (res ./ T(prod(NNlib.kernel_size(pdims)))).mlir_data
+    set_mlir_data!(y, get_mlir_data(res ./ T(prod(NNlib.kernel_size(pdims)))))
     return y
 end
 
-NNlib.batched_transpose(x::AnyTracedRArray{T,3}) where {T} = permutedims(x, (2, 1, 3))
+NNlib.batched_transpose(x::AnyTracedRArray{T,3}) where {T} = PermutedDimsArray(x, (2, 1, 3))
 function NNlib.batched_adjoint(x::AnyTracedRArray{T,3}) where {T}
-    y = permutedims(x, (2, 1, 3))
+    y = NNlib.batched_transpose(x)
     conj!(y)
     return y
 end
@@ -242,79 +228,47 @@ function NNlib.batched_mul!(
             ),
         )
     end
-    x = permutedims(x, (3, 1, 2))
-    y = permutedims(y, (3, 1, 2))
 
-    B = max(size(x, 1), size(y, 1))
-    out_shape = (B, size(x, 2), size(y, 3))
-    resty = MLIR.IR.TensorType(out_shape, eltype(MLIR.IR.type(res.mlir_data)))
-
-    if size(x, 1) != size(y, 1)
-        if size(x, 1) == 1
-            x = Reactant.broadcast_to_size(x, (B, size(x, 2), size(x, 3)))
-        elseif size(y, 1) == 1
-            y = Reactant.broadcast_to_size(y, (B, size(y, 2), size(y, 3)))
+    if size(x, 3) != size(y, 3)
+        B = max(size(x, 3), size(y, 3))
+        if size(x, 3) == 1
+            x = Reactant.TracedUtils.broadcast_to_size(x, (size(x, 1), size(x, 2), B))
+        elseif size(y, 3) == 1
+            y = Reactant.TracedUtils.broadcast_to_size(y, (size(y, 1), size(y, 2), B))
         end
     end
 
-    dot_dimension_numbers = MLIR.API.stablehloDotDimensionNumbersGet(
-        MLIR.IR.context(), 1, [0], 1, [0], 1, [2], 1, [1]
-    )
+    x = permutedims(x, (3, 1, 2))
+    y = permutedims(y, (3, 1, 2))
 
-    prec = MLIR.IR.Attribute(
-        MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.context(), "DEFAULT")
+    if size(x, 1) != size(y, 1)
+        B = max(size(x, 1), size(y, 1))
+        if size(x, 1) == 1
+            x = Reactant.TracedUtils.broadcast_to_size(x, (B, size(x, 2), size(x, 3)))
+        elseif size(y, 1) == 1
+            y = Reactant.TracedUtils.broadcast_to_size(y, (B, size(y, 2), size(y, 3)))
+        end
+    end
+
+    tmp = Ops.dot_general(
+        T1.(materialize_traced_array(x)),
+        T1.(materialize_traced_array(y));
+        contracting_dimensions=([3], [2]),
+        batching_dimensions=([1], [1]),
     )
-    tmp = TracedRArray{T1,3}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.dot_general(
-                x.mlir_data,
-                y.mlir_data;
-                result_0=resty,
-                dot_dimension_numbers=dot_dimension_numbers,
-                precision_config=prec,
-            ),
-            1,
-        ),
-        size(resty),
-    )
-    res.mlir_data = permutedims(tmp, (2, 3, 1)).mlir_data
+    set_mlir_data!(res, get_mlir_data(permutedims(tmp, (2, 3, 1))))
+
     return res
 end
 
 function NNlib.pad_constant(
-    x::TracedRArray{T,N}, pad::NTuple{N,Tuple{Int,Int}}, value
+    x::AnyTracedRArray{T,N}, pad::NTuple{N,Tuple{Int,Int}}, value
 ) where {T,N}
-    value = Reactant.promote_to(TracedRNumber{T}, value)
-    edge_padding_low = [i[1] for i in pad]
-    edge_padding_high = [i[2] for i in pad]
-    interior_padding = [0 for i in pad]
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.pad(
-            x.mlir_data,
-            value.mlir_data;
-            edge_padding_low,
-            edge_padding_high,
-            interior_padding,
-        ),
-        1,
-    )
-    return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
-end
-
-function NNlib.make_causal_mask(x::AnyTracedRArray; dims::Int=2)
-    len = size(x, dims)
-    # directly generating booleans were causing an incorrect constant attribute generation
-    # but the optimized IR removes the type case so we are probably ok
-    mask = MLIR.IR.DenseElementsAttribute(collect(triu(fill(1, (len, len)))))
-    return Reactant.promote_to(
-        TracedRArray{Bool,2},
-        TracedRArray{Int,2}(
-            (),
-            MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=mask), 1),
-            (len, len),
-        ),
-    )
+    value = Reactant.TracedUtils.promote_to(TracedRNumber{T}, value)
+    low = [i[1] for i in pad]
+    high = [i[2] for i in pad]
+    interior = [0 for i in pad]
+    return Ops.pad(materialize_traced_array(x), value; low, high, interior)
 end
 
 # XXX: reevaluate this manual optimization once
@@ -324,7 +278,7 @@ function NNlib.gather!(
     src::AnyTracedRArray{T2,2},
     idxs::Union{AbstractUnitRange{<:Number}},
 ) where {T1,T2}
-    dst.mlir_data = src[:, idxs].mlir_data
+    set_mlir_data!(dst, get_mlir_data(src[:, idxs]))
     return dst
 end
 
@@ -333,8 +287,8 @@ function NNlib.gather!(
 ) where {T1,T2}
     dims = NNlib.scatter_dims(src, dst, idxs)
     @assert dims == 1  # scatter_dims lets us do some size checks so we call that function
-    idxs = (Reactant.promote_to(TracedRArray{Int,1}, idxs) .- 1).mlir_data
-    slice_sizes = Reactant.promote_to(TracedRArray{Int,1}, [size(src, 1), 1]).mlir_data
+    idxs = get_mlir_data(Reactant.promote_to(TracedRArray{Int,1}, idxs) .- 1)
+    slice_sizes = get_mlir_data(Reactant.promote_to(TracedRArray{Int,1}, [size(src, 1), 1]))
 
     #! format: off
     dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
@@ -350,11 +304,11 @@ function NNlib.gather!(
 
     res = MLIR.IR.result(
         Reactant.MLIR.Dialects.stablehlo.dynamic_gather(
-            src.mlir_data, idxs, slice_sizes; dimension_numbers
+            get_mlir_data(src), idxs, slice_sizes; dimension_numbers
         ),
         1,
     )
-    dst.mlir_data = res
+    set_mlir_data!(dst, res)
     return dst
 end
 
@@ -369,12 +323,225 @@ function NNlib.gather!(dst::TracedRArray, src::AnyTracedRArray, idxs::AbstractAr
     start_sizes = ntuple(i -> size(src, i), dims)
     results = map(CartesianIndices(idxs)) do k
         res = @allowscalar src[colons..., Tuple(idxs[k])...]
-        res isa TracedRNumber && (res = Reactant.broadcast_to_size(res, (1,)))
+        res isa TracedRNumber &&
+            (res = Reactant.TracedUtils.broadcast_to_size(res, (1,)))
         return reshape(res, start_sizes..., :)
     end
     res = reshape(cat(results...; dims=(dims + 1)), size(dst))
-    dst.mlir_data = res.mlir_data
+    set_mlir_data!(dst, get_mlir_data(res))
     return dst
+end
+
+dilate_shape(s, d) = max(0, 1 + d * (s - 1))
+
+# see lax._conv_general_dilated_transpose_rhs
+# https://github.com/jax-ml/jax/blob/a1dfdc1d6164ad49afb337da9effd269d430d68b/jax/_src/lax/convolution.py#L495
+function NNlib.∇conv_filter!(
+    dw::TracedRArray{T,N},
+    x::AnyTracedRArray,
+    dy::AnyTracedRArray,
+    cdims::NNlib.DenseConvDims,
+) where {T,N}
+    # (w, h, cin, b)
+    # (w, h, cout, b)
+    # -> (w, h, cin, cout)
+
+    x = T.(materialize_traced_array(x))
+    dy = T.(materialize_traced_array(dy))
+
+    num_spatial_dims = N - 2
+    input_batch_dim = N - 1
+    input_feature_dim = N
+
+    kernel_input_dim = N
+    kernel_output_dim = N - 1
+
+    output_batch_dim = N - 1
+    output_feature_dim = N
+
+    output_spatial_dims = kernel_spatial_dims = input_spatial_dims = 1:num_spatial_dims
+
+    padding = reshape(collect(NNlib.padding(cdims)), (2, num_spatial_dims))
+    stride = NNlib.stride(cdims)
+    dilation = NNlib.dilation(cdims)
+    feature_group_count = NNlib.groupcount(cdims)
+
+    padding =
+        let lhs_shape = first(size(x), num_spatial_dims),
+            rhs_shape = dilate_shape.(first(size(dw), num_spatial_dims), dilation),
+            out_shape = dilate_shape.(first(size(dy), num_spatial_dims), stride),
+
+            padding = reduce(
+                hcat,
+                (
+                    let pad_before = padding[1, i],
+                        pad_after = (
+                            out_shape[i] - lhs_shape[i] + rhs_shape[i] - pad_before - 1
+                        )
+
+                        [pad_before, pad_after]
+                    end for i in 1:num_spatial_dims
+                ),
+            )
+
+            Reactant.MLIR.IR.DenseElementsAttribute(padding')
+        end
+
+    batch_group_count = 1
+    if feature_group_count > 1
+        batch_group_count = feature_group_count
+        feature_group_count = 1
+    end
+
+    dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(input_batch_dim - 1),
+        Int64(input_feature_dim - 1),
+        length(input_spatial_dims),
+        Int64[i - 1 for i in input_spatial_dims],
+        Int64(kernel_input_dim - 1),
+        Int64(kernel_output_dim - 1),
+        length(kernel_spatial_dims),
+        Int64[i - 1 for i in kernel_spatial_dims],
+        Int64(output_batch_dim - 1),
+        Int64(output_feature_dim - 1),
+        length(output_spatial_dims),
+        Int64[i - 1 for i in output_spatial_dims],
+    )
+
+    result_type = Reactant.MLIR.IR.TensorType(size(dw), Reactant.MLIR.IR.Type(T))
+    conv = MLIR.Dialects.stablehlo.convolution(
+        get_mlir_data(x),
+        get_mlir_data(dy);
+        result_0=result_type,
+        window_strides=collect(dilation),
+        padding,
+        dimension_numbers,
+        rhs_dilation=collect(stride),
+        feature_group_count,
+        batch_group_count,
+    )
+    set_mlir_data!(dw, MLIR.IR.result(conv))
+
+    if !NNlib.flipkernel(cdims)
+        set_mlir_data!(
+            dw, get_mlir_data(Reactant.Ops.reverse(dw; dimensions=output_spatial_dims))
+        )
+    end
+
+    return dw
+end
+
+# see lax._conv_general_dilated_transpose_lhs
+# https://github.com/jax-ml/jax/blob/a1dfdc1d6164ad49afb337da9effd269d430d68b/jax/_src/lax/convolution.py#L457
+function NNlib.∇conv_data!(
+    dx::Reactant.TracedRArray{T,N},
+    dy::AnyTracedRArray,
+    w::AnyTracedRArray,
+    cdims::NNlib.DenseConvDims,
+) where {T,N}
+    # (w, h, cout, b)
+    # (w, h, cin, cout)
+    # -> (w, h, cin, b)
+
+    dy = T.(materialize_traced_array(dy))
+    w = T.(materialize_traced_array(w))
+
+    num_spatial_dims = N - 2
+    input_batch_dim = N
+    input_feature_dim = N - 1
+
+    kernel_input_dim = N
+    kernel_output_dim = N - 1
+
+    output_batch_dim = N
+    output_feature_dim = N - 1
+
+    output_spatial_dims = kernel_spatial_dims = input_spatial_dims = 1:num_spatial_dims
+
+    padding = reshape(collect(NNlib.padding(cdims)), (2, num_spatial_dims))
+    stride = NNlib.stride(cdims)
+    dilation = NNlib.dilation(cdims)
+    feature_group_count = NNlib.groupcount(cdims)
+
+    # jax does
+    # (cout, cin, h, w) -> (group, cout ÷ group, cin , h, w) -> (cout ÷ group, group, cin, h, w) -> (cout, cin * group, h, w)
+    # we perform the same operation but in transposed form
+    # (w, h, cin, cout) -> (w, h, cin, cout ÷ group, group) -> (w, h, cin, group, cout ÷ group) -> (w, h, cin * group, cout ÷ group)
+    if feature_group_count > 1
+        w = reshape(
+            w,
+            (size(w, i) for i in kernel_spatial_dims)...,
+            size(w, N - 1),
+            size(w, N) ÷ feature_group_count,
+            feature_group_count,
+        )
+        w = permutedims(w, (kernel_spatial_dims..., N - 1, N + 1, N))
+        w = reshape(
+            w,
+            (size(w, i) for i in kernel_spatial_dims)...,
+            size(w, N - 1) * feature_group_count,
+            size(w, N + 1),
+        )
+    end
+
+    padding =
+        let lhs_shape = first(size(dx), num_spatial_dims),
+            rhs_shape = dilate_shape.(first(size(w), num_spatial_dims), dilation),
+            out_shape = dilate_shape.(first(size(dy), num_spatial_dims), stride),
+
+            padding = reduce(
+                hcat,
+                (
+                    let pad_before = rhs_shape[i] - padding[2i - 1] - 1,
+                        pad_after =
+                            lhs_shape[i] + rhs_shape[i] - 1 - out_shape[i] - pad_before
+
+                        [pad_before, pad_after]
+                    end for i in input_spatial_dims
+                ),
+            )
+
+            Reactant.MLIR.IR.DenseElementsAttribute(padding')
+        end
+
+    dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(input_batch_dim - 1),
+        Int64(input_feature_dim - 1),
+        length(input_spatial_dims),
+        Int64[i - 1 for i in input_spatial_dims],
+        Int64(kernel_input_dim - 1),
+        Int64(kernel_output_dim - 1),
+        length(kernel_spatial_dims),
+        Int64[i - 1 for i in kernel_spatial_dims],
+        Int64(output_batch_dim - 1),
+        Int64(output_feature_dim - 1),
+        length(output_spatial_dims),
+        Int64[i - 1 for i in output_spatial_dims],
+    )
+
+    result_type = Reactant.MLIR.IR.TensorType(size(dx), Reactant.MLIR.IR.Type(T))
+
+    if NNlib.flipkernel(cdims)
+        w = Reactant.Ops.reverse(w; dimensions=kernel_spatial_dims)
+    end
+
+    conv = MLIR.Dialects.stablehlo.convolution(
+        get_mlir_data(dy),
+        get_mlir_data(w);
+        result_0=result_type,
+        window_strides=1,
+        padding,
+        lhs_dilation=collect(stride),
+        rhs_dilation=collect(dilation),
+        dimension_numbers,
+        feature_group_count,
+        batch_group_count=1,
+    )
+    set_mlir_data!(dx, MLIR.IR.result(conv))
+
+    return dx
 end
 
 end # module ReactantNNlibExt

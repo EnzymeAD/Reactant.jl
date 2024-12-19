@@ -284,6 +284,10 @@ function make_tracer(
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
 
+    if TT === Module || TT === String
+        return prev
+    end
+
     if ismutabletype(TT)
         y = ccall(:jl_new_struct_uninit, Any, (Any,), TT)
         seen[prev] = y
@@ -494,14 +498,18 @@ function make_tracer(
             return ConcreteRNumber(prev)
         else
             if mode == TracedTrack
-                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                res = TracedRNumber{RT}(
+                    (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
+                )
                 if !haskey(seen, prev)
                     return seen[prev] = res
                 end
                 return res
             elseif mode == TracedSetPath
                 haskey(seen, prev) && return seen[prev]
-                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                res = TracedRNumber{RT}(
+                    (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
+                )
                 seen[prev] = res
                 return res
             elseif mode == TracedToConcrete

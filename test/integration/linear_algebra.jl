@@ -45,7 +45,7 @@ function mul_with_view3(A, x)
     return C
 end
 
-@testset begin
+@testset "Matrix Multiplication" begin
     A = rand(4, 4)
     x = rand(4, 2)
     b = rand(4)
@@ -76,4 +76,69 @@ end
     C_ra = similar(A_ra, Float32, size(A, 1), size(x, 2))
     @jit(mul!(C_ra, A_ra, x_ra))
     @test C_ra ≈ A * x
+end
+
+@testset "triu & tril" begin
+    A = rand(4, 6)
+    A_ra = Reactant.to_rarray(A)
+
+    @test @jit(triu(A_ra)) ≈ triu(A)
+    @test @jit(tril(A_ra)) ≈ tril(A)
+    @test @jit(triu(A_ra, 2)) ≈ triu(A, 2)
+    @test @jit(tril(A_ra, 2)) ≈ tril(A, 2)
+    @test @jit(triu(A_ra, -1)) ≈ triu(A, -1)
+    @test @jit(tril(A_ra, -1)) ≈ tril(A, -1)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(triu!(A_ra))
+    @test A_ra ≈ triu(A)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(tril!(A_ra))
+    @test A_ra ≈ tril(A)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(triu!(A_ra, 2))
+    @test A_ra ≈ triu(A, 2)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(tril!(A_ra, 2))
+    @test A_ra ≈ tril(A, 2)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(triu!(A_ra, -1))
+    @test A_ra ≈ triu(A, -1)
+
+    A_ra = Reactant.to_rarray(A)
+    @jit(tril!(A_ra, -1))
+    @test A_ra ≈ tril(A, -1)
+end
+
+@testset "diag / diagm" begin
+    x = rand(2, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @testset for k in (-size(x, 1) + 1):(size(x, 1) - 1)
+        @test @jit(diag(x_ra, k)) ≈ diag(x, k)
+    end
+
+    x = rand(4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(diagm(x_ra)) ≈ diagm(x)
+    @test @jit(diagm(5, 4, x_ra)) ≈ diagm(5, 4, x)
+    @test @jit(diagm(4, 5, x_ra)) ≈ diagm(4, 5, x)
+    @test @jit(diagm(6, 6, x_ra)) ≈ diagm(6, 6, x)
+    @test_throws DimensionMismatch @jit(diagm(3, 3, x_ra))
+end
+
+# TODO: Currently Diagonal(x) * x goes down the generic matmul path but it should clearly be
+#       optimized
+mul_diagonal(x) = Diagonal(x) * x
+
+@testset "mul_diagonal" begin
+    x = rand(4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(mul_diagonal(x_ra)) ≈ mul_diagonal(x)
 end
