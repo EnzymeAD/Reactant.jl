@@ -290,6 +290,10 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
+const cuLaunch = Ref{UInt}(0)
+const cuFunc = Ref{UInt}(0)
+const cuModule = Ref{UInt}(0)
+
 function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
@@ -311,7 +315,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     if isdefined(Reactant_jll, :ptxas_path)
 	 toolkit = Reactant_jll.ptxas_path[1:end-length("/bin/ptxas")]
     end
-    kern = "lower-kernel{toolkitPath=$toolkit}"
+    kern = "lower-kernel{toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])}"
     if optimize === :all
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
