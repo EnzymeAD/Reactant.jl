@@ -283,7 +283,7 @@ function overload_autodiff(
         end
     end
     for (i, act) in enumerate(activity)
-        if act == enzyme_out || (reverse && (act == enzyme_dup || act == enzyme_dupnoneed))
+        if act == enzyme_out || act == enzyme_dup || act == enzyme_dupnoneed
             if width == 1
                 push!(outtys, in_tys[i])
             else
