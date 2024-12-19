@@ -1385,4 +1385,102 @@ julia> Reactant.@jit(
     end
 end
 
+"""
+    scatter_setindex(dest, scatter_indices, updates)
+
+Uses [`MLIR.Dialects.stablehlo.scatter`](@ref) to set the values of `dest` at the indices
+specified by `scatter_indices` to the values in `updates`. If the indices are contiguous it
+is recommended to directly use [`MLIR.Dialects.stablehlo.dynamic_update_slice`](@ref)
+instead.
+"""
+@noinline function scatter_setindex(
+    dest::TracedRArray{T,N},
+    scatter_indices::TracedRArray{Int64,2},
+    updates::TracedRArray{T,1},
+) where {T,N}
+    @assert length(updates) == size(scatter_indices, 1)
+    @assert size(scatter_indices, 2) == N
+
+    update_computation = MLIR.IR.Region()
+    block = MLIR.IR.Block(
+        [mlir_type(TracedRNumber{T}), mlir_type(TracedRNumber{T})],
+        [MLIR.IR.Location(), MLIR.IR.Location()],
+    )
+    return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
+    MLIR.IR.rmfromparent!(return_op)
+    push!(block, return_op)
+    pushfirst!(update_computation, block)
+
+    #! format: off
+    scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(0), Int64[],
+        Int64(N), collect(Int64, 0:(N - 1)),
+        Int64(0), Int64[],
+        Int64(0), Int64[],
+        Int64(N), collect(Int64, 0:(N - 1)),
+        Int64(1)
+    )
+    #! format: on
+
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.scatter(
+                [dest.mlir_data],
+                scatter_indices.mlir_data,
+                [updates.mlir_data];
+                result_0=[mlir_type(TracedRArray{T,N}, size(dest))],
+                update_computation,
+                scatter_dimension_numbers,
+            ),
+            1,
+        ),
+        size(dest),
+    )
+end
+
+"""
+    gather_getindex(src, gather_indices)
+
+Uses [`MLIR.Dialects.stablehlo.gather`](@ref) to get the values of `src` at the indices
+specified by `gather_indices`. If the indices are contiguous it is recommended to directly
+use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
+"""
+@noinline function gather_getindex(
+    src::TracedRArray{T,N}, gather_indices::TracedRArray{Int64,2}
+) where {T,N}
+    @assert size(gather_indices, 2) == N
+
+    #! format: off
+    dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(1), Int64[1],
+        Int64(N - 1), collect(Int64, 0:(N - 2)),
+        Int64(0), Int64[],
+        Int64(0), Int64[],
+        Int64(N), collect(Int64, 0:(N - 1)),
+        1
+    )
+    #! format: on
+
+    return reshape(
+        TracedRArray{T,2}(
+            (),
+            MLIR.IR.result(
+                MLIR.Dialects.stablehlo.gather(
+                    src.mlir_data,
+                    gather_indices.mlir_data;
+                    dimension_numbers,
+                    slice_sizes=fill(Int64(1), N),
+                    indices_are_sorted=false,
+                ),
+                1,
+            ),
+            (size(gather_indices, 1), 1),
+        ),
+        size(gather_indices, 1),
+    )
+end
+
 end # module Ops
