@@ -1426,7 +1426,7 @@ specified by `scatter_indices` to the values in `updates`. If the indices are co
 is recommended to directly use [`MLIR.Dialects.stablehlo.dynamic_update_slice`](@ref)
 instead.
 """
-function scatter_setindex(
+@noinline function scatter_setindex(
     dest::TracedRArray{T,N},
     scatter_indices::TracedRArray{Int64,2},
     updates::TracedRArray{T,1},
@@ -1480,7 +1480,7 @@ Uses [`MLIR.Dialects.stablehlo.gather`](@ref) to get the values of `src` at the 
 specified by `gather_indices`. If the indices are contiguous it is recommended to directly
 use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
 """
-function gather_getindex(
+@noinline function gather_getindex(
     src::TracedRArray{T,N}, gather_indices::TracedRArray{Int64,2}
 ) where {T,N}
     @assert size(gather_indices, 2) == N
