@@ -246,6 +246,7 @@ const opt_passes::String = join(
                 "if_inline<1>",
                 "if_to_select<1>",
                 "dynamic_update_slice_const_prop",
+                "dynamic_gather_op_is_not_dynamic<16>",
             ],
             ';',
         ) *
