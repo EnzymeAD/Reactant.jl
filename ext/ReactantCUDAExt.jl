@@ -335,12 +335,6 @@ function link(job, compiled)
     return compiled
 end
 
-function transpose_val(val)
-    attr = MLIR.IR.DenseArrayAttribute(
-        Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...]
-    )
-    return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
-end
 
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
@@ -366,7 +360,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
         push!(rarrays, ta)
         arg = ta.mlir_data
-        arg = transpose_val(arg)
+        arg = Reactant.TracedUtils.transpose_val(arg)
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
         push!(
@@ -399,7 +393,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     )
     # call = MLIR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases, backend_config=MLIR.IR.Attribute(func.mod))
     for (i, res) in enumerate(rarrays)
-        res.mlir_data = transpose_val(MLIR.IR.result(call, i))
+        res.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, i))
     end
 
     @show blockdim
