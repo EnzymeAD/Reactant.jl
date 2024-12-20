@@ -85,6 +85,16 @@ function TPUClient(tpu_path::String)
     return Client(client)
 end
 
+function MetalClient(libpath::String)
+    f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeMetalClient")
+    refstr = Ref{Cstring}()
+    client = ccall(f, Ptr{Cvoid}, (Cstring, Ptr{Cstring}), libpath, refstr)
+    if client == C_NULL
+        throw(AssertionError(unsafe_string(refstr[])))
+    end
+    return Client(client)
+end
+
 const backends = Dict{String,Client}()
 const default_backend = Ref{Client}()
 const default_device_idx = Ref{Int}(0)
@@ -100,7 +110,34 @@ function __init__()
     backends["cpu"] = cpu
     default_backend[] = cpu
 
-    @static if !Sys.isapple()
+    @static if Sys.isapple()
+        metaldir = @get_scratch!("pjrt-plugin-metal")
+        if !isfile(metaldir * "/pjrt_plugin_metal_14.dylib")
+            Downloads.download(
+                if Sys.ARCH === :aarch64
+                    "https://files.pythonhosted.org/packages/80/af/ed482a421a868726e7ca3f51ac19b0c9a8e37f33f54413312c37e9056acc/jax_metal-0.1.0-py3-none-macosx_11_0_arm64.whl"
+                else
+                    "https://files.pythonhosted.org/packages/51/6a/1c0e2d07d92c6583e874ef2bbf4382662a3469bbb661d885eeaaddca426f/jax_metal-0.1.0-py3-none-macosx_10_14_x86_64.whl"
+                end,
+                joinpath(metaldir, "pjrt-plugin-metal.zip"),
+            )
+            run(`unzip -qq $(metaldir*"/pjrt-plugin-metal.zip") -d $(metaldir)/tmp`)
+            run(
+                `mv $(metaldir)/tmp/jax_plugins/metal_plugin/pjrt_plugin_metal_14.dylib $(metaldir)/pjrt_plugin_metal_14.dylib`,
+            )
+            rm(metaldir * "/tmp"; recursive=true)
+            rm(metaldir * "/pjrt-plugin-metal.zip"; recursive=true)
+        end
+
+        try
+            metal = MetalClient(metaldir * "/pjrt_plugin_metal_14.dylib")
+            backends["metal"] = metal
+            # NOTE Float64, ComplexF64, ComplexF128 not yet supported, so don't make it default
+            # default_backend[] = metal
+        catch e
+            println(stdout, e)
+        end
+    else
         if isfile("/usr/lib/libtpu.so")
             dataset_dir = @get_scratch!("libtpu")
             if !isfile(dataset_dir * "/libtpu.so")
