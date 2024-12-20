@@ -442,6 +442,26 @@ end
     @test @allowscalar all(isone, x_ra_array[4, :])
 end
 
+function non_contiguous_setindex!(x)
+    x[[1, 3, 2], [1, 2, 3, 4]] .= 1.0
+    return x
+end
+
+@testset "non-contiguous setindex!" begin
+    x = rand(6, 6)
+    x_ra = Reactant.to_rarray(x)
+
+    y = @jit(non_contiguous_setindex!(x_ra))
+    y = Array(y)
+    x_ra = Array(x_ra)
+    @test all(isone, y[1:3, 1:4])
+    @test all(isone, x_ra[1:3, 1:4])
+    @test !all(isone, y[4:end, :])
+    @test !all(isone, x_ra[4:end, :])
+    @test !all(isone, y[:, 5:end])
+    @test !all(isone, x_ra[:, 5:end])
+end
+
 tuple_byref(x) = (; a=(; b=x))
 tuple_byref2(x) = abs2.(x), tuple_byref2(x)
 
