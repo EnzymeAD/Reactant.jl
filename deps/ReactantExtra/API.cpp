@@ -98,7 +98,7 @@ using namespace xla;
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
 // Utilities for `StatusOr`.
-template <typename T> T ValueOrThrow(absl::StatusOr<T> v) {
+template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
   if (ReactantThrowError) {
     if (!v.ok()) {
       ReactantThrowError(v.status().ToString().c_str());
@@ -127,7 +127,7 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
       unwrap(loc), cast<ComplexType>(unwrap(type)), real, imag));
 }
 
-// TODO mlirComplexAttrGetValue
+// TODO mlirComplexAttrGetnValue
 // TODO extern "C" MlirTypeID mlirComplexAttrGetTypeID(void) { return
 // wrap(complex::NumberAttr::getTypeID()); }
 #pragma endregion
@@ -200,7 +200,7 @@ extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
   // options.num_nodes = num_nodes;
   // options.collectives = num_nodes;
   options.asynchronous = asynchronous != 0;
-  auto client = ValueOrThrow(GetTfrtCpuClient(options));
+  auto client = MyValueOrThrow(GetTfrtCpuClient(options));
   return client.release();
 }
 
@@ -307,12 +307,12 @@ extern "C" int ClientProcessIndex(PjRtClient *client) {
 }
 
 extern "C" PjRtDevice *ClientGetDevice(PjRtClient *client, int device_id) {
-  return ValueOrThrow(client->LookupDevice(PjRtGlobalDeviceId(device_id)));
+  return MyValueOrThrow(client->LookupDevice(PjRtGlobalDeviceId(device_id)));
 }
 
 extern "C" PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
                                                   int device_id) {
-  return ValueOrThrow(
+  return MyValueOrThrow(
       client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
 }
 
@@ -355,7 +355,7 @@ std::vector<int64_t> row_major(int64_t dim) {
 static void noop() {}
 
 extern "C" void *UnsafeBufferPointer(PjRtBuffer *buffer) {
-  auto unsafe = ValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
+  auto unsafe = MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
   return (void *)unsafe;
 }
 
@@ -368,10 +368,10 @@ extern "C" PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   PjRtClient::HostBufferSemantics semantics =
       PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
   // xla::Layout layout(col_major(dim));
-  // auto buffer = xla::ValueOrThrow(client->BufferFromHostBuffer(data,
+  // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
   // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
   // &layout));
-  auto buffer = ValueOrThrow(
+  auto buffer = MyValueOrThrow(
       client->BufferFromHostBuffer(data, primtype, shape, /*byte_strides*/ {},
                                    semantics, /*ondone*/ {}, device));
   auto bres = buffer.release();
@@ -382,12 +382,12 @@ extern "C" uint8_t BufferOnCPU(PjRtBuffer *buffer) { return buffer->IsOnCpu(); }
 
 extern "C" PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
                                           PjRtDevice *dst_device) {
-  auto res = ValueOrThrow(buffer->CopyToDevice(dst_device));
+  auto res = MyValueOrThrow(buffer->CopyToDevice(dst_device));
   return res.release();
 }
 
 extern "C" void BufferToHost(PjRtBuffer *buffer, void *data) {
-  Shape shape(ValueOrThrow(buffer->HostShape()));
+  Shape shape(MyValueOrThrow(buffer->HostShape()));
   /// Grumpily the cpu copy code does not respect layout and does a raw copy
   /// For now, we assume a non-julia row major ordering
   /// If in the future it supports col_major we can swap to that.
@@ -459,7 +459,7 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
     }
   }
   auto exec =
-      ValueOrThrow(client->Compile(cast<ModuleOp>(*unwrap(cmod)), options));
+      MyValueOrThrow(client->Compile(cast<ModuleOp>(*unwrap(cmod)), options));
   return exec.release();
 }
 
@@ -487,7 +487,7 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
   }
   options.untuple_result = true;
   std::optional<std::vector<FutureType>> returned_futures;
-  auto results = ValueOrThrow(
+  auto results = MyValueOrThrow(
       exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
                         argument_handles),
                     options, returned_futures));
@@ -694,7 +694,7 @@ ifrt_pjrt_tuple_ctor(ifrt::PjRtCompatibleClient *client, ifrt::Value *values,
     values_ptr[i].reset(&values[i]);
   }
   auto span = absl::Span<tsl::RCReference<ifrt::Value>>(values_ptr, nvalues);
-  return ValueOrThrow(ifrt::PjRtTuple::Create(client, span)).release();
+  return MyValueOrThrow(ifrt::PjRtTuple::Create(client, span)).release();
 }
 
 extern "C" void ifrt_pjrt_tuple_free(ifrt::PjRtTuple *tuple) { delete tuple; }
@@ -743,12 +743,12 @@ extern "C" const char *ifrt_dtype_debug_string(ifrt::DType *dtype) {
 
 // xla::PrimitiveType is a enum, so we use int to represent it on Julia side
 extern "C" xla::PrimitiveType ifrt_to_primitive_type(ifrt::DType *dtype) {
-  return ValueOrThrow(ifrt::ToPrimitiveType(*dtype));
+  return MyValueOrThrow(ifrt::ToPrimitiveType(*dtype));
 }
 
 // xla::PrimitiveType is a enum, so we use int to represent it on Julia side
 extern "C" ifrt::DType *ifrt_to_dtype(xla::PrimitiveType primitive_type) {
-  auto dtype = ValueOrThrow(ifrt::ToDType(primitive_type));
+  auto dtype = MyValueOrThrow(ifrt::ToDType(primitive_type));
   return new ifrt::DType(dtype.kind());
 }
 #pragma endregion
@@ -778,7 +778,7 @@ extern "C" ifrt::DynamicShape *
 ifrt_dynamicshape_ctor(ifrt::Shape *shape, const bool *dynamic_dims_mask) {
   auto tag = ifrt::BoundedDynamicShapeTag(
       absl::Span<const bool>(dynamic_dims_mask, shape->dims().size()));
-  auto dynshape = ValueOrThrow(ifrt::DynamicShape::Create(*shape, tag));
+  auto dynshape = MyValueOrThrow(ifrt::DynamicShape::Create(*shape, tag));
   return new ifrt::DynamicShape(dynshape);
 }
 
@@ -800,7 +800,7 @@ extern "C" bool ifrt_dynamicshape_ne(ifrt::DynamicShape *shape1,
 
 extern "C" ifrt::Shape *
 ifrt_dynamicshape_get_padded_shape(ifrt::DynamicShape *shape) {
-  auto padshape = ValueOrThrow(shape->GetPaddedShape());
+  auto padshape = MyValueOrThrow(shape->GetPaddedShape());
   return new ifrt::Shape(padshape);
 }
 
@@ -1050,7 +1050,7 @@ extern "C" const char *ifrt_device_debug_string(ifrt::Device *device) {
 }
 
 extern "C" ifrt::Memory *ifrt_device_default_memory(ifrt::Device *device) {
-  return ValueOrThrow(device->DefaultMemory());
+  return MyValueOrThrow(device->DefaultMemory());
 }
 
 // TODO ifrt_device_memories
@@ -1125,7 +1125,7 @@ extern "C" const ifrt::Sharding *ifrt_array_sharding(ifrt::Array *array) {
 }
 
 extern "C" PjRtLayout *ifrt_array_layout(ifrt::Array *array) {
-  return ValueOrThrow(array->layout()).release();
+  return MyValueOrThrow(array->layout()).release();
 }
 
 // TODO xla::ifrt::Array::DisassembleIntoSingleDeviceArrays
@@ -1184,7 +1184,7 @@ ifrt_topology_device_descriptions(ifrt::Topology *topology) {
 // TODO xla::ifrt::Topology::GetDefaultLayout
 
 extern "C" const char *ifrt_topology_serialize(ifrt::Topology *topology) {
-  return cstr_from_string(ValueOrThrow(topology->Serialize()));
+  return cstr_from_string(MyValueOrThrow(topology->Serialize()));
 }
 
 // TODO xla::ifrt::Topology::Attributes
@@ -1230,12 +1230,12 @@ extern "C" int ifrt_client_process_index(ifrt::Client *client) {
 
 extern "C" ifrt::Device *ifrt_client_lookup_device(ifrt::Client *client,
                                                    int device_id) {
-  return ValueOrThrow(client->LookupDevice(ifrt::DeviceId(device_id)));
+  return MyValueOrThrow(client->LookupDevice(ifrt::DeviceId(device_id)));
 }
 
 extern "C" ifrt::Device *
 ifrt_client_lookup_addressable_device(ifrt::Client *client, int device_id) {
-  return ValueOrThrow(client->LookupAddressableDevice(device_id));
+  return MyValueOrThrow(client->LookupAddressableDevice(device_id));
 }
 
 extern "C" ifrt::Compiler *ifrt_client_default_compiler(ifrt::Client *client) {
@@ -1250,7 +1250,7 @@ extern "C" ifrt::Compiler *ifrt_client_default_compiler(ifrt::Client *client) {
 // TODO support more parameters of `PjRtClient::CreateOptions`
 extern "C" ifrt::PjRtClient *
 ifrt_pjrt_client_ctor(xla::PjRtClient *pjrt_client) {
-  return ValueOrThrow(ifrt::PjRtClient::Create(ifrt::PjRtClient::CreateOptions{
+  return MyValueOrThrow(ifrt::PjRtClient::Create(ifrt::PjRtClient::CreateOptions{
                           std::shared_ptr<xla::PjRtClient>{pjrt_client}}))
       .release();
 }
@@ -1269,7 +1269,7 @@ ifrt_pjrt_client_pjrt_client(ifrt::PjRtClient *client) {
 // ifrt_pjrt_client_create_pjrt_array(ifrt::PjRtClient* client, xla::PjRtBuffer*
 // pjrt_buffer) {
 //     auto buffer_ptr = std::make_shared<xla::PjRtBuffer>(*pjrt_buffer);
-//     return ValueOrThrow(client->CreatePjRtArray(buffer_ptr)).release();
+//     return MyValueOrThrow(client->CreatePjRtArray(buffer_ptr)).release();
 // }
 
 // TODO extern "C" ifrt::PjRtCompatibleArray*
@@ -1279,13 +1279,13 @@ ifrt_pjrt_client_pjrt_client(ifrt::PjRtClient *client) {
 extern "C" ifrt::PjRtCompatibleDevice *
 ifrt_pjrt_client_lookup_pjrt_device(ifrt::PjRtClient *client,
                                     xla::PjRtDevice *pjrt_device) {
-  return ValueOrThrow(client->LookupPjRtDevice(pjrt_device));
+  return MyValueOrThrow(client->LookupPjRtDevice(pjrt_device));
 }
 
 extern "C" ifrt::PjRtCompatibleMemory *
 ifrt_pjrt_client_lookup_pjrt_memory(ifrt::PjRtClient *client,
                                     xla::PjRtMemorySpace *pjrt_memory_space) {
-  return ValueOrThrow(client->LookupPjRtMemory(pjrt_memory_space));
+  return MyValueOrThrow(client->LookupPjRtMemory(pjrt_memory_space));
 }
 #pragma endregion
 
@@ -1305,7 +1305,7 @@ ifrt_loadedhostcallback_client(ifrt::LoadedHostCallback *host_callback) {
 extern "C" const char *
 ifrt_loadedhostcallback_serialize(ifrt::LoadedHostCallback *host_callback) {
   // auto msg = ;
-  return cstr_from_string(ValueOrThrow(host_callback->Serialize()));
+  return cstr_from_string(MyValueOrThrow(host_callback->Serialize()));
 }
 #pragma endregion
 
@@ -1337,14 +1337,14 @@ extern "C" const char *ifrt_executable_name(ifrt::Executable *executable) {
 
 extern "C" const char *
 ifrt_executable_fingerprint(ifrt::Executable *executable) {
-  auto result = ValueOrThrow(executable->Fingerprint());
+  auto result = MyValueOrThrow(executable->Fingerprint());
   if (!result.has_value())
     return "";
   return cstr_from_string(result.value());
 }
 
 extern "C" const char *ifrt_executable_serialize(ifrt::Executable *executable) {
-  return cstr_from_string(ValueOrThrow(executable->Serialize()));
+  return cstr_from_string(MyValueOrThrow(executable->Serialize()));
 }
 
 extern "C" int ifrt_executable_num_devices(ifrt::Executable *executable) {
@@ -1375,7 +1375,7 @@ ifrt_executable_output_shardings(ifrt::Executable *executable) {
 
 extern "C" std::tuple<size_t, xla::PjRtLayout **>
 ifrt_executable_parameter_layouts(ifrt::Executable *executable) {
-  auto layouts = ValueOrThrow(executable->GetParameterLayouts());
+  auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
   for (int i = 0; i < layouts.size(); i++) {
     layouts_ptr[i] = layouts[i].release();
@@ -1385,7 +1385,7 @@ ifrt_executable_parameter_layouts(ifrt::Executable *executable) {
 
 extern "C" std::tuple<size_t, xla::PjRtLayout **>
 ifrt_executable_output_layouts(ifrt::Executable *executable) {
-  auto layouts = ValueOrThrow(executable->GetOutputLayouts());
+  auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
   for (int i = 0; i < layouts.size(); i++) {
     layouts_ptr[i] = layouts[i].release();
@@ -1395,7 +1395,7 @@ ifrt_executable_output_layouts(ifrt::Executable *executable) {
 
 extern "C" std::tuple<size_t, xla::HloModule **>
 ifrt_executable_hlo_modules(ifrt::Executable *executable) {
-  auto modules = ValueOrThrow(executable->GetHloModules());
+  auto modules = MyValueOrThrow(executable->GetHloModules());
   auto modules_ptr = new xla::HloModule *[modules.size()];
   for (int i = 0; i < modules.size(); i++) {
     modules_ptr[i] = modules[i].get();
@@ -1413,7 +1413,7 @@ ifrt_executable_hlo_modules(ifrt::Executable *executable) {
 //     auto pjrt_executable_shared =
 //     std::make_shared<xla::PjRtExecutable>(*pjrt_executable); auto options =
 //     std::make_unique<ifrt::XlaCompileOptions>(*compile_options); return
-//     ValueOrThrow(ifrt::PjRtExecutable::Create(pjrt_executable_shared,
+//     MyValueOrThrow(ifrt::PjRtExecutable::Create(pjrt_executable_shared,
 //     std::move(options))).release();
 // }
 
@@ -1440,7 +1440,7 @@ ifrt_loadedexecutable_name(ifrt::LoadedExecutable *executable) {
 
 extern "C" const char *
 ifrt_loadedexecutable_fingerprint(ifrt::LoadedExecutable *executable) {
-  auto result = ValueOrThrow(executable->Fingerprint());
+  auto result = MyValueOrThrow(executable->Fingerprint());
   if (!result.has_value())
     return "";
   return cstr_from_string(result.value());
@@ -1448,7 +1448,7 @@ ifrt_loadedexecutable_fingerprint(ifrt::LoadedExecutable *executable) {
 
 extern "C" const char *
 ifrt_loadedexecutable_serialize(ifrt::LoadedExecutable *executable) {
-  return cstr_from_string(ValueOrThrow(executable->Serialize()));
+  return cstr_from_string(MyValueOrThrow(executable->Serialize()));
 }
 
 extern "C" ifrt::Future<>
@@ -1486,7 +1486,7 @@ ifrt_loadedexecutable_output_shardings(ifrt::LoadedExecutable *executable) {
 
 extern "C" std::tuple<size_t, xla::PjRtLayout **>
 ifrt_loadedexecutable_parameter_layouts(ifrt::LoadedExecutable *executable) {
-  auto layouts = ValueOrThrow(executable->GetParameterLayouts());
+  auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
   for (int i = 0; i < layouts.size(); i++) {
     layouts_ptr[i] = layouts[i].release();
@@ -1496,7 +1496,7 @@ ifrt_loadedexecutable_parameter_layouts(ifrt::LoadedExecutable *executable) {
 
 extern "C" std::tuple<size_t, xla::PjRtLayout **>
 ifrt_loadedexecutable_output_layouts(ifrt::LoadedExecutable *executable) {
-  auto layouts = ValueOrThrow(executable->GetOutputLayouts());
+  auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
   for (int i = 0; i < layouts.size(); i++) {
     layouts_ptr[i] = layouts[i].release();
@@ -1506,7 +1506,7 @@ ifrt_loadedexecutable_output_layouts(ifrt::LoadedExecutable *executable) {
 
 extern "C" std::tuple<size_t, xla::HloModule **>
 ifrt_loadedexecutable_hlo_modules(ifrt::LoadedExecutable *executable) {
-  auto modules = ValueOrThrow(executable->GetHloModules());
+  auto modules = MyValueOrThrow(executable->GetHloModules());
   auto modules_ptr = new xla::HloModule *[modules.size()];
   for (int i = 0; i < modules.size(); i++) {
     modules_ptr[i] = modules[i].get();
@@ -1524,7 +1524,7 @@ ifrt_loadedexecutable_hlo_modules(ifrt::LoadedExecutable *executable) {
 //     std::vector<ifrt::Array*> arguments(args, args + args_size);
 //     std::vector<ifrt::Array*> result(results, results + results_size);
 //     std::vector<ifrt::Future<*>*> future(futures, futures + futures_size);
-//     return ValueOrThrow(executable->Execute(arguments, result, future));
+//     return MyValueOrThrow(executable->Execute(arguments, result, future));
 // }
 
 extern "C" ifrt::Future<>
@@ -1554,7 +1554,7 @@ ifrt_loadedexecutable_addressable_devices(ifrt::LoadedExecutable *executable) {
 // xla::PjRtLoadedExecutable* pjrt_loaded_executable) {
 //     auto pjrt_loaded_executable_ptr =
 //     std::make_shared<xla::PjRtLoadedExecutable>(*pjrt_loaded_executable);
-//     return ValueOrThrow(ifrt::PjRtLoadedExecutable::Create(client,
+//     return MyValueOrThrow(ifrt::PjRtLoadedExecutable::Create(client,
 //     pjrt_loaded_executable_ptr,
 //     std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>())).release();
 // }
@@ -1564,7 +1564,7 @@ extern "C" ifrt::LoadedExecutable *
 ifrt_pjrt_loadedexecutable_ctor_from_mlir_module(
     ifrt::PjRtCompatibleClient *client, mlir::ModuleOp *module,
     xla::CompileOptions *compile_options) {
-  return ValueOrThrow(
+  return MyValueOrThrow(
              ifrt::PjRtLoadedExecutable::Create(
                  client, *module, *compile_options,
                  std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>()))
@@ -1611,7 +1611,7 @@ ifrt_compiler_compile(ifrt::Compiler *compiler, ifrt::Program *program) {
   // set directly to the default
   auto program_ptr = std::make_unique<ifrt::Program>(*program);
   auto options = std::make_unique<ifrt::CompileOptions>();
-  return ValueOrThrow(
+  return MyValueOrThrow(
              compiler->Compile(std::move(program_ptr), std::move(options)))
       .release();
 }
@@ -1624,7 +1624,7 @@ ifrt_compiler_compile_with_topology(ifrt::Compiler *compiler,
   // set directly to the default
   auto options = std::make_unique<ifrt::CompileOptions>();
   auto program_ptr = std::make_unique<ifrt::Program>(*program);
-  auto exec_ptr = ValueOrThrow(compiler->Compile(std::move(program_ptr),
+  auto exec_ptr = MyValueOrThrow(compiler->Compile(std::move(program_ptr),
                                                  *topology, std::move(options)))
                       .release();
   return exec_ptr;
@@ -1636,7 +1636,7 @@ ifrt_compiler_deserialize_loadedexecutable(ifrt::Compiler *compiler,
   // apparently ifrt::DeserializeExecutableOptions is a legacy artifact so we
   // don't use it and set directly to the default
   auto options = std::make_unique<ifrt::DeserializeExecutableOptions>();
-  return ValueOrThrow(compiler->DeserializeLoadedExecutable(std::string(data),
+  return MyValueOrThrow(compiler->DeserializeLoadedExecutable(std::string(data),
                                                             std::move(options)))
       .release();
 }
