@@ -1,36 +1,38 @@
 #include "jlcxx/jlcxx.hpp"
+#include <iostream>
 
 // IFRT
-#include "xla/python/ifrt/value.h"
-#include "xla/python/ifrt/tuple.h"
+#include "xla/python/ifrt/array.h"
+#include "xla/python/ifrt/client.h"
+#include "xla/python/ifrt/compiler.h"
+#include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/dtype.h"
-#include "xla/python/ifrt/shape.h"
+#include "xla/python/ifrt/executable.h"
+#include "xla/python/ifrt/hlo/hlo_program.h"
+#include "xla/python/ifrt/host_callback.h"
 #include "xla/python/ifrt/index.h"
 #include "xla/python/ifrt/index_domain.h"
 #include "xla/python/ifrt/memory.h"
-#include "xla/python/ifrt/device.h"
+#include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
-#include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/topology.h"
-#include "xla/python/ifrt/client.h"
-#include "xla/python/ifrt/host_callback.h"
-#include "xla/python/ifrt/executable.h"
-#include "xla/python/ifrt/hlo/hlo_program.h"
-#include "xla/python/ifrt/compiler.h"
+#include "xla/python/ifrt/tuple.h"
+#include "xla/python/ifrt/value.h"
 
 // IFRT - PJRT
-#include "xla/python/pjrt_ifrt/pjrt_dtype.h"
-#include "xla/python/pjrt_ifrt/pjrt_tuple.h"
-#include "xla/python/pjrt_ifrt/pjrt_memory.h"
-#include "xla/python/pjrt_ifrt/pjrt_device.h"
 #include "xla/python/pjrt_ifrt/pjrt_array.h"
-#include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_client.h"
-#include "xla/python/pjrt_ifrt/pjrt_host_callback.h"
-#include "xla/python/pjrt_ifrt/pjrt_executable.h"
 #include "xla/python/pjrt_ifrt/pjrt_compiler.h"
+#include "xla/python/pjrt_ifrt/pjrt_device.h"
+#include "xla/python/pjrt_ifrt/pjrt_dtype.h"
+#include "xla/python/pjrt_ifrt/pjrt_executable.h"
+#include "xla/python/pjrt_ifrt/pjrt_host_callback.h"
+#include "xla/python/pjrt_ifrt/pjrt_memory.h"
+#include "xla/python/pjrt_ifrt/pjrt_topology.h"
+#include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
 using namespace xla;
+using namespace xla::ifrt;
 
 // #pragma region xla::ifrt
 
@@ -837,7 +839,8 @@ using namespace xla;
 
 // #pragma endregion
 
-JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod) {
+JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
+{
     // mod.add_type<ifrt::Value>("Value")
     //     .method("client", &ifrt::Value::client)
     //     .method("get_ready_future", &ifrt::Value::GetReadyFuture)
@@ -877,29 +880,28 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod) {
     mod.set_const("DTypeKindF8E5M2FNUZ", ifrt::DType::Kind::kF8E5M2FNUZ);
     mod.set_const("DTypeKindString", ifrt::DType::Kind::kString);
 
-    // TODO destructor??
-    // mod.add_type<ifrt::DType>("DType")
-    //     .constructor<ifrt::DType::Kind>(jlcxx::finalize_policy::no);
-        // .method("kind", &ifrt::DType::kind)
-        // .method("byte_size", &ifrt::DType::byte_size)
-        // .method("bit_size", &ifrt::DType::bit_size);
-    // mod.set_override_module(jl_base_module);
-    // mod.method("==", [](ifrt::DType* a, ifrt::DType* b) { return *a == *b; });
+    mod.add_type<DType>("DType")
+        .constructor<ifrt::DType::Kind>()
+        .method("kind", &ifrt::DType::kind);
+    // .method("byte_size", &ifrt::DType::byte_size)
+    // .method("bit_size", &ifrt::DType::bit_size);
+    mod.set_override_module(jl_base_module);
+    // mod.method("==", [](ifrt::DType& a, ifrt::DType& b) { return a == b; });
     // mod.method("!=", [](ifrt::DType* a, ifrt::DType* b) { return *a != *b; });
     // mod.method("copy", [](const ifrt::DType& x) { return ifrt::DType(x); });
-    // // mod.method("string", &ifrt::DType::DebugString);
-    // mod.unset_override_module();
+    mod.method("string", [](const ifrt::DType& x) { return x.DebugString(); });
+    mod.unset_override_module();
 
     // TODO conversion from/to `xla::PrimitiveType` using `ToPrimitiveType`,`ToDType`
-//     mod.add_type<ifrt::Shape>("Shape")
-//         // .constructor<...>() // TODO explicit constructor
-//         ;
-//     mod.set_override_module(jl_base_module);
-//     mod.method("==", [](ifrt::Shape* a, ifrt::Shape* b) { return *a == *b; });
-//     mod.method("!=", [](ifrt::Shape* a, ifrt::Shape* b) { return *a != *b; });
-//     mod.method("copy", [](const ifrt::Shape& x) { return ifrt::Shape(x); });
-//     mod.method("string", &ifrt::Shape::DebugString);
-//     mod.method("size", &ifrt::Shape::dims);
-//     mod.method("length", &ifrt::Shape::num_elements);
-//     mod.unset_override_module();
+    //     mod.add_type<ifrt::Shape>("Shape")
+    //         // .constructor<...>() // TODO explicit constructor
+    //         ;
+    //     mod.set_override_module(jl_base_module);
+    //     mod.method("==", [](ifrt::Shape* a, ifrt::Shape* b) { return *a == *b; });
+    //     mod.method("!=", [](ifrt::Shape* a, ifrt::Shape* b) { return *a != *b; });
+    //     mod.method("copy", [](const ifrt::Shape& x) { return ifrt::Shape(x); });
+    //     mod.method("string", &ifrt::Shape::DebugString);
+    //     mod.method("size", &ifrt::Shape::dims);
+    //     mod.method("length", &ifrt::Shape::num_elements);
+    //     mod.unset_override_module();
 }
