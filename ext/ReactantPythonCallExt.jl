@@ -8,37 +8,34 @@ using PythonCall
 
 const jaxptr = Ref{Py}()
 
-function PythonCall.pycall(f::Py, arg0::Reactant.TracedRArray, argNs::Reactant.TracedRArray...; kwargs...)
+function PythonCall.pycall(
+    f::Py, arg0::Reactant.TracedRArray, argNs::Reactant.TracedRArray...; kwargs...
+)
     jax = jaxptr[]
     numpy = jax.numpy
     inputs = map((arg0, argNs...)) do arg
-	JT = eltype(arg)
-	PT = nothing
-	for (CPT, CJT) in PythonCall.Convert.NUMPY_SIMPLE_TYPES
-	   if  JT == CJT
-		PT = CPT
-		break
-	   end
-	end
-        numpy.zeros(size(arg), dtype=getproperty(numpy, Symbol(PT)))
+        JT = eltype(arg)
+        PT = nothing
+        for (CPT, CJT) in PythonCall.Convert.NUMPY_SIMPLE_TYPES
+            if JT == CJT
+                PT = CPT
+                break
+            end
+        end
+        numpy.zeros(size(arg); dtype=getproperty(numpy, Symbol(PT)))
     end
     lowered = jax.jit(f).lower(inputs...)
     txt = pyconvert(String, lowered.as_text())
-    res = Reactant.Ops.hlo_call(
-      txt,  
-      arg0,
-      argNs...
-    )
+    res = Reactant.Ops.hlo_call(txt, arg0, argNs...)
     if length(res) == 0
-	return nothing
+        return nothing
     else
-	return res[1]
+        return res[1]
     end
 end
 
-
 function __init__()
-    jaxptr[] = pyimport("jax")
+    return jaxptr[] = pyimport("jax")
 end
 
 end # module ReactantPythonCallExt
