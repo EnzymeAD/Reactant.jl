@@ -6,19 +6,39 @@ using ReactantCore: @trace
 
 using PythonCall
 
-const jax = pyimport("jax")
-const numpy = jax.numpy
+const jaxptr = Ref{Py}()
 
-function PythonCall.pycall(f::Py, args::Reactant.TracedRArray...; kwargs...)
-    inputs = map(args) do arg
-        trules = PythonCall.pyconvert_rules_cache(eltype(arg))
-        numpy.array(size(arg), dtype=trules)
+function PythonCall.pycall(f::Py, arg0::Reactant.TracedRArray, argNs::Reactant.TracedRArray...; kwargs...)
+    jax = jaxptr[]
+    numpy = jax.numpy
+    inputs = map((arg0, argNs...)) do arg
+	JT = eltype(arg)
+	PT = nothing
+	for (CPT, CJT) in PythonCall.Convert.NUMPY_SIMPLE_TYPES
+	   if  JT == CJT
+		PT = CPT
+		break
+	   end
+	end
+        numpy.zeros(size(arg), dtype=getproperty(numpy, Symbol(PT)))
     end
     lowered = jax.jit(f).lower(inputs...)
-    return Ops.hlo_call(
-        pyconvert(String, lowered.as_text()),
-        args...
+    txt = pyconvert(String, lowered.as_text())
+    res = Reactant.Ops.hlo_call(
+      txt,  
+      arg0,
+      argNs...
     )
+    if length(res) == 0
+	return nothing
+    else
+	return res[1]
+    end
+end
+
+
+function __init__()
+    jaxptr[] = pyimport("jax")
 end
 
 end # module ReactantPythonCallExt
