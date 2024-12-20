@@ -56,6 +56,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Shortcuts to MLIR ops" include("ops.jl")
         @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
         @safetestset "Control Flow" include("control_flow.jl")
+        @safetestset "Python" include("python.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
