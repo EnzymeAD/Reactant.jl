@@ -9,5 +9,5 @@ using PythonCall
 
     result = @jit jax.numpy.sum(Reactant.to_rarray(Float32[1, 2, 3]))
     @test typeof(result) == ConcreteRNumber{Float32}
-    @test result typeof(result) ≈ 6
+    @test result ≈ 6
 end
