@@ -3,6 +3,7 @@ module ReactantCUDAExt
 using CUDA
 using Reactant: Reactant, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
+using Libdl
 
 using Adapt
 
@@ -345,8 +346,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     shmem::Integer=0,
     call_kwargs...,
 ) where {F,tt}
-    @show call_kwargs
-
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
 
@@ -382,26 +381,36 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     fname = Reactant.TracedUtils.get_attribute_by_name(func.entry, "sym_name")
     # Force public for now while we don't have real users
-    MLIR.IR.rmattr!(func.entry, "sym_visibility")
+    # MLIR.IR.rmattr!(func.entry, "sym_visibility")
 
-    call = MLIR.Dialects.stablehlo.custom_call(
-        mlir_args;
-        result_0=restys,
-        call_target_name="reactant_gpu_call",
-        output_operand_aliases,
-        backend_config=MLIR.IR.Attribute(fname),
+    operands = MLIR.IR.Value[]
+    for idx in (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
+        push!(operands, Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, idx).mlir_data)
+    end
+    for arg in mlir_args
+	push!(operands, arg)
+    end
+    owned_regions = MLIR.IR.Region[]
+    successors = MLIR.IR.Block[]
+    attributes = MLIR.IR.NamedAttribute[
+	MLIR.IR.NamedAttribute("fn", MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))),
+	MLIR.IR.NamedAttribute("output_operand_aliases", MLIR.IR.Attribute(output_operand_aliases))
+    ]
+
+    location = MLIR.IR.Location()
+    call = MLIR.IR.create_operation(
+        "enzymexla.kernel_call",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=restys,
+        result_inference=false,
     )
-    # call = MLIR.Dialects.stablehlo.custom_call(mlir_args; result_0=restys, call_target_name="reactant_gpu_call", output_operand_aliases, backend_config=MLIR.IR.Attribute(func.mod))
     for (i, res) in enumerate(rarrays)
         res.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, i))
     end
-
-    @show blockdim
-    @show threaddim
-    #CUDA.cuLaunchKernel(f,
-    #	       blockdim.x, blockdim.y, blockdim.z,
-    #	       threaddim.x, threaddim.y, threaddim.z,
-    #	       shmem, stream, kernelParams, C_NULL)  
 end
 
 # cache of compilation caches, per context
@@ -445,6 +454,26 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     return res
 end
 
-function __init__() end
+function __init__()
+   handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
+   if handle === nothing
+	handle = C_NULL
+	end
+   ptr1 = Reactant.XLA.Libdl.dlsym(handle, "cuLaunchKernel"; throw_error=false)
+   if ptr1 === nothing
+	ptr1 = C_NULL
+   end
+   ptr2 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleLoadData"; throw_error=false)
+   if ptr2 === nothing
+	ptr2 = C_NULL
+   end
+   ptr3 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleGetFunction"; throw_error=false)
+   if ptr3 === nothing
+	ptr3 = C_NULL
+   end
+   Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
+   Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
+   Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+end
 
 end # module ReactantCUDAExt

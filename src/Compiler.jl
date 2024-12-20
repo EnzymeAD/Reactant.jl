@@ -1,5 +1,7 @@
 module Compiler
 
+using Reactant_jll
+
 import ..Reactant:
     Reactant,
     MLIR,
@@ -290,6 +292,10 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
+const cuLaunch = Ref{UInt}(0)
+const cuFunc = Ref{UInt}(0)
+const cuModule = Ref{UInt}(0)
+
 function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
@@ -307,7 +313,28 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
+    toolkit = ""
+    if isdefined(Reactant_jll, :ptxas_path)
+	 toolkit = Reactant_jll.ptxas_path[1:end-length("/bin/ptxas")]
+    end
+    kern = "lower-kernel{toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])}"
     if optimize === :all
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+		    kern
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :before_kernel
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
@@ -358,6 +385,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
+		    kern
                 ],
                 ',',
             ),
@@ -366,7 +394,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
-            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math"
+            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,"*kern
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")

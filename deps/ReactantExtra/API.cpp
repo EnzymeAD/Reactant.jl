@@ -11,6 +11,7 @@
 #include "Enzyme/MLIR/Passes/Passes.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
+#include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/TransformOps/TransformOps.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -36,6 +37,7 @@
 #include "mlir/Transforms/Passes.h"
 #include "llvm/Support/TargetSelect.h"
 
+#include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 
@@ -50,7 +52,6 @@
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
-#include "xla/service/cpu/simple_orc_jit.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -460,10 +461,16 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable* exec, int num_args, PjRtBu
     }
 }
 
+void prepareRegistry(mlir::DialectRegistry &registry);
+
 extern "C" void RegisterDialects(MlirContext cctx) {
   mlir::MLIRContext &context = *unwrap(cctx);
+  DialectRegistry registry;
+  prepareRegistry(registry);
+  context.appendDialectRegistry(registry);
   context.loadDialect<mlir::arith::ArithDialect>();
   context.loadDialect<mlir::enzyme::EnzymeDialect>();
+  context.loadDialect<mlir::enzymexla::EnzymeXLADialect>();
   context.loadDialect<mlir::tensor::TensorDialect>();
   context.loadDialect<mlir::func::FuncDialect>();
   context.loadDialect<mlir::mhlo::MhloDialect>();
@@ -476,34 +483,10 @@ extern "C" void RegisterDialects(MlirContext cctx) {
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::DialectRegistry &registry = *unwrap(creg);
-
-  // Register MLIR stuff
-  registry.insert<mlir::affine::AffineDialect>();
-  registry.insert<mlir::LLVM::LLVMDialect>();
-  registry.insert<mlir::memref::MemRefDialect>();
-  registry.insert<mlir::async::AsyncDialect>();
-  registry.insert<mlir::tensor::TensorDialect>();
-  registry.insert<mlir::func::FuncDialect>();
-  registry.insert<mlir::arith::ArithDialect>();
-  registry.insert<mlir::cf::ControlFlowDialect>();
-  registry.insert<mlir::scf::SCFDialect>();
-  registry.insert<mlir::gpu::GPUDialect>();
-  registry.insert<mlir::NVVM::NVVMDialect>();
-  registry.insert<mlir::omp::OpenMPDialect>();
-  registry.insert<mlir::math::MathDialect>();
-  registry.insert<mlir::linalg::LinalgDialect>();
-  registry.insert<DLTIDialect>();
-  registry.insert<mlir::mhlo::MhloDialect>();
-  registry.insert<mlir::stablehlo::StablehloDialect>();
-  registry.insert<mlir::chlo::ChloDialect>();
-
-  registry.insert<mlir::enzyme::EnzymeDialect>();
+  prepareRegistry(registry);
 
   mlir::registerenzymePasses();
   regsiterenzymeXLAPasses();
-  mlir::enzyme::registerXLAAutoDiffInterfaces(registry);
-
-  mlir::func::registerInlinerExtension(registry);
 
   // Register the standard passes we want.
   mlir::registerCSEPass();
@@ -519,7 +502,6 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
 
   mlir::registerLLVMDialectImport(registry);
   mlir::registerNVVMDialectImport(registry);
-
   mlir::LLVM::registerInlinerInterface(registry);
 
 /*
@@ -538,15 +520,10 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   });
   */
 
-  // Register the autodiff interface implementations for upstream dialects.
-  enzyme::registerCoreDialectAutodiffInterfaces(registry);
-
   // Transform dialect and extensions.
   mlir::transform::registerInterpreterPass();
-  mlir::linalg::registerTransformDialectExtension(registry);
   mlir::enzyme::registerGenerateApplyPatternsPass();
   mlir::enzyme::registerRemoveTransformPass();
-  mlir::enzyme::registerEnzymeJaxTransformExtension(registry);
 }
 
 
