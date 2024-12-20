@@ -108,9 +108,9 @@ function transpose_ty(mlirty)
     return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
 end
 function transpose_val(val)
-    attr = MLIR.IR.DenseArrayAttribute(
-        Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...]
-    )
+    val_size = size(MLIR.IR.type(val))
+    val_size == () && return val
+    attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
@@ -323,7 +323,7 @@ end
 
 function push_val!(ad_inputs, x, path)
     for p in path
-        x = traced_getfield(x, p)
+        x = Reactant.Compiler.traced_getfield(x, p)
     end
     x = x.mlir_data
     return push!(ad_inputs, x)
@@ -343,7 +343,7 @@ end
 
 function set!(x, path, tostore; emptypath=false)
     for p in path
-        x = traced_getfield(x, p)
+        x = Reactant.Compiler.traced_getfield(x, p)
     end
 
     x.mlir_data = tostore

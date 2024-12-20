@@ -416,6 +416,7 @@ cc_library(
 "-Wl,-exported_symbol,_BufferToHost",
 "-Wl,-exported_symbol,_FreeClient",
 "-Wl,-exported_symbol,_ClientCompile",
+"-Wl,-exported_symbol,_LinkInModule",
 "-Wl,-exported_symbol,_FreeFuture",
 "-Wl,-exported_symbol,_FutureIsReady",
 "-Wl,-exported_symbol,_FutureAwait",
@@ -450,6 +451,10 @@ cc_library(
         "@llvm-project//mlir:SCFDialect",
         "@llvm-project//mlir:TransformDialect",
         "@llvm-project//mlir:Transforms",
+        
+        "@llvm-project//mlir:LLVMIRToLLVMTranslation",
+        "@llvm-project//mlir:LLVMIRToNVVMTranslation",
+        "@llvm-project//mlir:LLVMIRTransforms",
         
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
