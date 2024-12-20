@@ -354,7 +354,7 @@ function call_with_reactant_generator(
 
     ir, any_changed = rewrite_insts!(ir, interp)
     src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
-    src.slotnames = fill(:none, length(ir.argtypes)+1)
+    src.slotnames = fill(:none, length(ir.argtypes) + 1)
     src.slotflags = fill(zero(UInt8), length(ir.argtypes))
     src.slottypes = copy(ir.argtypes)
     src.rettype = rt
@@ -459,7 +459,7 @@ function call_with_reactant_generator(
             )
             push!(overdubbed_codelocs, code_info.codelocs[1])
         end
-    end    
+    end
 
     # ocva = method.isva
 
