@@ -617,6 +617,20 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "EnzymeXLAJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "EnzymeXLA.jl"
+        )
+    ],
+    td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/EnzymeXLAOps.td",
+    deps = [
+        "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
     name = "StableHLOJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
