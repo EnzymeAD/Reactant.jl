@@ -631,17 +631,45 @@ function codegen_unflatten!(
                 path = path[2:end]
                 result_stores[path] = concrete_res_name
                 continue
-            else
-                @assert path[1] == :resargs
+            elseif path[1] == :resargs
                 unflatcode = :(args[$(path[2])])
                 path = path[3:end]
+            else
+                @show "path[1] == $(path[1]) has been ignored..." # XXX: Validate this is correct
+                continue
             end
 
             # unroll path tree
-            for p in path
+            for p in path[1:(end - 1)]
                 unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
             end
-            unflatcode = :($unflatcode.data = $concrete_res_name)
+            if length(path) > 0
+                final_val = gensym("final_val")
+                unflatcode = quote
+                    $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
+                    if $final_val isa TracedRArray
+                        setfield!(
+                            $unflatcode,
+                            $(Meta.quot(path[end])),
+                            ConcreteRArray{eltype($final_val),ndims($final_val)}(
+                                $concrete_res_name, size($final_val)
+                            ),
+                        )
+                    elseif $final_val isa TracedRNumber
+                        setfield!(
+                            $unflatcode,
+                            $(Meta.quot(path[end])),
+                            ConcreteRNumber{eltype($final_val)}($concrete_res_name),
+                        )
+                    else
+                        setfield!($final_val, :data, $concrete_res_name)
+                    end
+                end
+            else
+                unflatcode = quote
+                    $unflatcode.data = $concrete_res_name
+                end
+            end
 
             push!(unflatten_code, unflatcode)
         end
