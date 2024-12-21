@@ -625,6 +625,7 @@ gentbl_cc_library(
     ],
     td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/EnzymeXLAOps.td",
     deps = [
+        "@enzyme//:EnzymeDialectTdFiles",
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
     ],
     tblgen = "//:mlir-jl-tblgen",
