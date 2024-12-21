@@ -94,6 +94,13 @@ using namespace mlir;
 using namespace llvm;
 using namespace xla;
 
+namespace mlir {
+namespace enzyme {
+void registerRemoveTransformPass();
+void registerGenerateApplyPatternsPass();
+} // namespace enzyme
+} // namespace mlir
+
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
 // Utilities for `StatusOr`.
@@ -105,7 +112,7 @@ template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
     }
     return std::move(v).value();
   } else {
-    return xla::ValueOrThrow(v);
+    return xla::ValueOrThrow(std::move(v));
   }
 }
 
@@ -1249,8 +1256,9 @@ extern "C" ifrt::Compiler *ifrt_client_default_compiler(ifrt::Client *client) {
 // TODO support more parameters of `PjRtClient::CreateOptions`
 extern "C" ifrt::PjRtClient *
 ifrt_pjrt_client_ctor(xla::PjRtClient *pjrt_client) {
-  return MyValueOrThrow(ifrt::PjRtClient::Create(ifrt::PjRtClient::CreateOptions{
-                          std::shared_ptr<xla::PjRtClient>{pjrt_client}}))
+  return MyValueOrThrow(
+             ifrt::PjRtClient::Create(ifrt::PjRtClient::CreateOptions{
+                 std::shared_ptr<xla::PjRtClient>{pjrt_client}}))
       .release();
 }
 
@@ -1623,9 +1631,10 @@ ifrt_compiler_compile_with_topology(ifrt::Compiler *compiler,
   // set directly to the default
   auto options = std::make_unique<ifrt::CompileOptions>();
   auto program_ptr = std::make_unique<ifrt::Program>(*program);
-  auto exec_ptr = MyValueOrThrow(compiler->Compile(std::move(program_ptr),
-                                                 *topology, std::move(options)))
-                      .release();
+  auto exec_ptr =
+      MyValueOrThrow(compiler->Compile(std::move(program_ptr), *topology,
+                                       std::move(options)))
+          .release();
   return exec_ptr;
 }
 
@@ -1635,8 +1644,8 @@ ifrt_compiler_deserialize_loadedexecutable(ifrt::Compiler *compiler,
   // apparently ifrt::DeserializeExecutableOptions is a legacy artifact so we
   // don't use it and set directly to the default
   auto options = std::make_unique<ifrt::DeserializeExecutableOptions>();
-  return MyValueOrThrow(compiler->DeserializeLoadedExecutable(std::string(data),
-                                                            std::move(options)))
+  return MyValueOrThrow(compiler->DeserializeLoadedExecutable(
+                            std::string(data), std::move(options)))
       .release();
 }
 #pragma endregion
