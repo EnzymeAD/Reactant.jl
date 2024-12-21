@@ -315,7 +315,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
 
     toolkit = ""
     if isdefined(Reactant_jll, :ptxas_path)
-	 toolkit = Reactant_jll.ptxas_path[1:end-length("/bin/ptxas")]
+        toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
     kern = "lower-kernel{toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])}"
     if optimize === :all
@@ -329,7 +329,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
-		    kern
+                    kern,
                 ],
                 ',',
             ),
@@ -385,7 +385,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
-		    kern
+                    kern,
                 ],
                 ',',
             ),
@@ -394,7 +394,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
-            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,"*kern
+            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math," * kern
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
