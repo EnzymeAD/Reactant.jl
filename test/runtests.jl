@@ -56,13 +56,13 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Shortcuts to MLIR ops" include("ops.jl")
         @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
         @safetestset "Control Flow" include("control_flow.jl")
-        @safetestset "Python" include("python.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
         @safetestset "Linear Algebra" include("integration/linear_algebra.jl")
         @safetestset "AbstractFFTs" include("integration/fft.jl")
         @safetestset "Random" include("integration/random.jl")
+        @safetestset "Python" include("integration/python.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
