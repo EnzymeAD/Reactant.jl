@@ -1973,6 +1973,20 @@ function mlirValueReplaceAllUsesOfWith(of, with)
 end
 
 """
+    mlirValueReplaceAllUsesExcept(of, with, numExceptions, exceptions)
+
+Replace all uses of 'of' value with 'with' value, updating anything in the IR that uses 'of' to use 'with' instead, except if the user is listed in 'exceptions'. The 'exceptions' parameter is an array of [`MlirOperation`](@ref) pointers with a length of 'numExceptions'.
+"""
+function mlirValueReplaceAllUsesExcept(of, with, numExceptions, exceptions)
+    @ccall mlir_c.mlirValueReplaceAllUsesExcept(
+        of::MlirValue,
+        with::MlirValue,
+        numExceptions::intptr_t,
+        exceptions::Ptr{MlirOperation},
+    )::Cvoid
+end
+
+"""
     mlirOpOperandIsNull(opOperand)
 
 Returns whether the op operand is null.
@@ -5856,9 +5870,9 @@ function mlirPassManagerRunOnOp(passManager, op)
 end
 
 """
-    mlirPassManagerEnableIRPrinting(passManager, printBeforeAll, printAfterAll, printModuleScope, printAfterOnlyOnChange, printAfterOnlyOnFailure)
+    mlirPassManagerEnableIRPrinting(passManager, printBeforeAll, printAfterAll, printModuleScope, printAfterOnlyOnChange, printAfterOnlyOnFailure, flags, treePrintingPath)
 
-Enable IR printing.
+Enable IR printing. The treePrintingPath argument is an optional path to a directory where the dumps will be produced. If it isn't provided then dumps are produced to stderr.
 """
 function mlirPassManagerEnableIRPrinting(
     passManager,
@@ -5867,6 +5881,8 @@ function mlirPassManagerEnableIRPrinting(
     printModuleScope,
     printAfterOnlyOnChange,
     printAfterOnlyOnFailure,
+    flags,
+    treePrintingPath,
 )
     @ccall mlir_c.mlirPassManagerEnableIRPrinting(
         passManager::MlirPassManager,
@@ -5875,6 +5891,8 @@ function mlirPassManagerEnableIRPrinting(
         printModuleScope::Bool,
         printAfterOnlyOnChange::Bool,
         printAfterOnlyOnFailure::Bool,
+        flags::MlirOpPrintingFlags,
+        treePrintingPath::MlirStringRef,
     )::Cvoid
 end
 
@@ -6329,6 +6347,14 @@ end
 
 function mlirRegisterConversionConvertMemRefToSPIRV()
     @ccall mlir_c.mlirRegisterConversionConvertMemRefToSPIRV()::Cvoid
+end
+
+function mlirCreateConversionConvertMeshToMPIPass()
+    @ccall mlir_c.mlirCreateConversionConvertMeshToMPIPass()::MlirPass
+end
+
+function mlirRegisterConversionConvertMeshToMPIPass()
+    @ccall mlir_c.mlirRegisterConversionConvertMeshToMPIPass()::Cvoid
 end
 
 function mlirCreateConversionConvertNVGPUToNVVMPass()
@@ -6873,6 +6899,10 @@ function mlirGetDialectHandle__cf__()
     @ccall mlir_c.mlirGetDialectHandle__cf__()::MlirDialectHandle
 end
 
+function mlirGetDialectHandle__emitc__()
+    @ccall mlir_c.mlirGetDialectHandle__emitc__()::MlirDialectHandle
+end
+
 function mlirGetDialectHandle__func__()
     @ccall mlir_c.mlirGetDialectHandle__func__()::MlirDialectHandle
 end
@@ -7104,6 +7134,15 @@ function mlirLLVMArrayTypeGet(elementType, numElements)
 end
 
 """
+    mlirLLVMArrayTypeGetElementType(type)
+
+Returns the element type of the llvm.array type.
+"""
+function mlirLLVMArrayTypeGetElementType(type)
+    @ccall mlir_c.mlirLLVMArrayTypeGetElementType(type::MlirType)::MlirType
+end
+
+"""
     mlirLLVMFunctionTypeGet(resultType, nArgumentTypes, argumentTypes, isVarArg)
 
 Creates an llvm.func type.
@@ -7331,17 +7370,17 @@ function mlirLLVMComdatAttrGet(ctx, comdat)
 end
 
 @cenum MlirLLVMLinkage::UInt32 begin
-    MlirLLVMLinkagePrivate = 0x0000000000000000
-    MlirLLVMLinkageInternal = 0x0000000000000001
-    MlirLLVMLinkageAvailableExternally = 0x0000000000000002
-    MlirLLVMLinkageLinkonce = 0x0000000000000003
+    MlirLLVMLinkageExternal = 0x0000000000000000
+    MlirLLVMLinkageAvailableExternally = 0x0000000000000001
+    MlirLLVMLinkageLinkonce = 0x0000000000000002
+    MlirLLVMLinkageLinkonceODR = 0x0000000000000003
     MlirLLVMLinkageWeak = 0x0000000000000004
-    MlirLLVMLinkageCommon = 0x0000000000000005
+    MlirLLVMLinkageWeakODR = 0x0000000000000005
     MlirLLVMLinkageAppending = 0x0000000000000006
-    MlirLLVMLinkageExternWeak = 0x0000000000000007
-    MlirLLVMLinkageLinkonceODR = 0x0000000000000008
-    MlirLLVMLinkageWeakODR = 0x0000000000000009
-    MlirLLVMLinkageExternal = 0x000000000000000a
+    MlirLLVMLinkageInternal = 0x0000000000000007
+    MlirLLVMLinkagePrivate = 0x0000000000000008
+    MlirLLVMLinkageExternWeak = 0x0000000000000009
+    MlirLLVMLinkageCommon = 0x000000000000000a
 end
 
 """

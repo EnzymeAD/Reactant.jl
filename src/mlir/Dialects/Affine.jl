@@ -82,19 +82,38 @@ In the above example, `%indices:3` conceptually holds the following:
 %indices_1 = affine.apply #map1()[%linear_index]
 %indices_2 = affine.apply #map2()[%linear_index]
 ```
+
+The basis may either contain `N` or `N-1` elements, where `N` is the number of results.
+If there are N basis elements, the first one will not be used during computations,
+but may be used during analysis and canonicalization to eliminate terms from
+the `affine.delinearize_index` or to enable conclusions about the total size of
+`%linear_index`.
+
+If the basis is fully provided, the delinearize_index operation is said to \"have
+an outer bound\". The builders assume that an `affine.delinearize_index` has
+an outer bound by default, as this is how the operation was initially defined.
+
+That is, the example above could also have been written
+```mlir
+%0:3 = affine.delinearize_index %linear_index into (244, 244) : index, index
+```
+
+Note that, due to the constraints of affine maps, all the basis elements must
+be strictly positive. A dynamic basis element being 0 or negative causes
+undefined behavior.
 """
 function delinearize_index(
     linear_index::Value,
-    basis::Vector{Value};
-    multi_index=nothing::Union{Nothing,Vector{IR.Type}},
+    dynamic_basis::Vector{Value};
+    multi_index::Vector{IR.Type},
+    static_basis,
     location=Location(),
 )
-    op_ty_results = IR.Type[]
-    operands = Value[linear_index, basis...]
+    op_ty_results = IR.Type[multi_index...,]
+    operands = Value[linear_index, dynamic_basis...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(multi_index) && push!(op_ty_results, multi_index...)
+    attributes = NamedAttribute[namedattribute("static_basis", static_basis),]
 
     return create_operation(
         "affine.delinearize_index",
@@ -103,8 +122,8 @@ function delinearize_index(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -327,6 +346,7 @@ func.func @pad_edges(%I : memref<10x10xf32>) -> (memref<12x12xf32) {
 function if_(
     operand_0::Vector{Value};
     results::Vector{IR.Type},
+    condition,
     thenRegion::Region,
     elseRegion::Region,
     location=Location(),
@@ -335,7 +355,7 @@ function if_(
     operands = Value[operand_0...,]
     owned_regions = Region[thenRegion, elseRegion]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[namedattribute("condition", condition),]
 
     return create_operation(
         "affine.if",
@@ -346,6 +366,75 @@ function if_(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`linearize_index`
+
+The `affine.linearize_index` operation takes a sequence of index values and a
+basis of the same length and linearizes the indices using that basis.
+
+That is, for indices `%idx_0` to `%idx_{N-1}` and basis elements `b_0`
+(or `b_1`) up to `b_{N-1}` it computes
+
+```
+sum(i = 0 to N-1) %idx_i * product(j = i + 1 to N-1) B_j
+```
+
+The basis may either have `N` or `N-1` elements, where `N` is the number of
+inputs to linearize_index. If `N` inputs are provided, the first one is not used
+in computation, but may be used during analysis or canonicalization as a bound
+on `%idx_0`.
+
+If all `N` basis elements are provided, the linearize_index operation is said to
+\"have an outer bound\".
+
+If the `disjoint` property is present, this is an optimization hint that,
+for all `i`, `0 <= %idx_i < B_i` - that is, no index affects any other index,
+except that `%idx_0` may be negative to make the index as a whole negative.
+
+Note that the outputs of `affine.delinearize_index` are, by definition, `disjoint`.
+
+# Example
+
+```mlir
+%linear_index = affine.linearize_index [%index_0, %index_1, %index_2] by (2, 3, 5) : index
+// Same effect
+%linear_index = affine.linearize_index [%index_0, %index_1, %index_2] by (3, 5) : index
+```
+
+In the above example, `%linear_index` conceptually holds the following:
+
+```mlir
+#map = affine_map<()[s0, s1, s2] -> (s0 * 15 + s1 * 5 + s2)>
+%linear_index = affine.apply #map()[%index_0, %index_1, %index_2]
+```
+"""
+function linearize_index(
+    multi_index::Vector{Value},
+    dynamic_basis::Vector{Value};
+    linear_index=nothing::Union{Nothing,IR.Type},
+    static_basis,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[multi_index..., dynamic_basis...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("static_basis", static_basis),]
+    push!(attributes, operandsegmentsizes([length(multi_index), length(dynamic_basis)]))
+    !isnothing(linear_index) && push!(op_ty_results, linear_index)
+
+    return create_operation(
+        "affine.linearize_index",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
