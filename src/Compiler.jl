@@ -315,7 +315,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
 
     toolkit = ""
     if isdefined(Reactant_jll, :ptxas_path)
-	 toolkit = Reactant_jll.ptxas_path[1:end-length("/bin/ptxas")]
+        toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
     kern = "lower-kernel{toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])}"
     if optimize === :all
@@ -329,7 +329,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
-		    kern
+                    kern,
                 ],
                 ',',
             ),
@@ -385,7 +385,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
-		    kern
+                    kern,
                 ],
                 ',',
             ),
@@ -394,7 +394,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
-            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,"*kern
+            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math," * kern
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
@@ -631,17 +631,38 @@ function codegen_unflatten!(
                 path = path[2:end]
                 result_stores[path] = concrete_res_name
                 continue
-            else
-                @assert path[1] == :resargs
+            elseif path[1] == :resargs
                 unflatcode = :(args[$(path[2])])
                 path = path[3:end]
+            else
+                continue
             end
 
             # unroll path tree
-            for p in path
+            for p in path[1:(end - 1)]
                 unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
             end
-            unflatcode = :($unflatcode.data = $concrete_res_name)
+            final_val = gensym("final_val")
+            unflatcode = quote
+                $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
+                if $final_val isa TracedRArray
+                    setfield!(
+                        $unflatcode,
+                        $(Meta.quot(path[end])),
+                        ConcreteRArray{eltype($final_val),ndims($final_val)}(
+                            $concrete_res_name, size($final_val)
+                        ),
+                    )
+                elseif $final_val isa TracedRNumber
+                    setfield!(
+                        $unflatcode,
+                        $(Meta.quot(path[end])),
+                        ConcreteRNumber{eltype($final_val)}($concrete_res_name),
+                    )
+                else
+                    setfield!($final_val, :data, $concrete_res_name)
+                end
+            end
 
             push!(unflatten_code, unflatcode)
         end
