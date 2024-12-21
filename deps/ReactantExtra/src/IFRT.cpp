@@ -31,40 +31,13 @@
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
-using namespace xla;
+// Utils
+#include "xla/pjrt/status_casters.h"
+
+// using namespace xla;
 using namespace xla::ifrt;
 
 // #pragma region xla::ifrt
-
-// #pragma region xla::ifrt::Value
-// extern "C" ifrt::Client* ifrt_value_client(ifrt::Value* value) {
-//     return value->client();
-// }
-
-// extern "C" ifrt::Future<> ifrt_value_get_ready_future(ifrt::Value* value) {
-//     return value->GetReadyFuture();
-// }
-
-// extern "C" ifrt::Future<> ifrt_value_delete(ifrt::Value* value) {
-//     return value->Delete();
-// }
-
-// extern "C" bool ifrt_value_is_deleted(ifrt::Value* value) {
-//     return value->IsDeleted();
-// }
-
-// extern "C" const char* ifrt_value_debug_string(ifrt::Value* value) {
-//     return cstr_from_string(value->DebugString());
-// }
-// #pragma endregion
-
-// #pragma region xla::ifrt::Tuple
-// extern "C" int ifrt_tuple_arity(ifrt::Tuple* tuple) {
-//     return tuple->Arity();
-// }
-
-// // TODO ifrt::Tuple::Unpack
-// #pragma endregion
 
 // #pragma region xla::ifrt::PjRtTuple
 // extern "C" ifrt::PjRtTuple* ifrt_pjrt_tuple_ctor(ifrt::PjRtCompatibleClient* client, ifrt::Value* values, int nvalues) {
@@ -79,228 +52,6 @@ using namespace xla::ifrt;
 
 // extern "C" void ifrt_pjrt_tuple_free(ifrt::PjRtTuple* tuple) {
 //     delete tuple;
-// }
-// #pragma endregion
-
-// #pragma region xla::ifrt::Shape
-// extern "C" ifrt::Shape* ifrt_shape_ctor(const int64_t* dims, size_t dims_size) {
-//     return new ifrt::Shape(absl::Span<const int64_t>(dims, dims_size));
-// }
-
-// extern "C" void ifrt_shape_free(ifrt::Shape* shape) {
-//     delete shape;
-// }
-
-// extern "C" const int64_t* ifrt_shape_dims(ifrt::Shape* shape) {
-//     return shape->dims().data();
-// }
-
-// extern "C" int64_t ifrt_shape_dims_num_elements(ifrt::Shape* shape) {
-//     return shape->num_elements();
-// }
-
-// extern "C" const char* ifrt_shape_debug_string(ifrt::Shape* shape) {
-//     return cstr_from_string(shape->DebugString());
-// }
-// #pragma endregion
-
-// #pragma region xla::ifrt::DynamicShape
-// extern "C" ifrt::DynamicShape* ifrt_dynamicshape_ctor(ifrt::Shape* shape, const bool* dynamic_dims_mask) {
-//     auto tag = ifrt::BoundedDynamicShapeTag(absl::Span<const bool>(dynamic_dims_mask, shape->dims().size()));
-//     auto dynshape = xla::ValueOrThrow(ifrt::DynamicShape::Create(*shape, tag));
-//     return new ifrt::DynamicShape(dynshape);
-// }
-
-// extern "C" void ifrt_dynamicshape_free(ifrt::DynamicShape* shape) {
-//     delete shape;
-// }
-
-// // TODO ifrt::DynamicShape::GetTag
-
-// extern "C" bool ifrt_dynamicshape_eq(ifrt::DynamicShape* shape1, ifrt::DynamicShape* shape2) {
-//     return *shape1 == *shape2;
-// }
-
-// extern "C" bool ifrt_dynamicshape_ne(ifrt::DynamicShape* shape1, ifrt::DynamicShape* shape2) {
-//     return *shape1 != *shape2;
-// }
-
-// extern "C" ifrt::Shape* ifrt_dynamicshape_get_padded_shape(ifrt::DynamicShape* shape) {
-//     auto padshape = xla::ValueOrThrow(shape->GetPaddedShape());
-//     return new ifrt::Shape(padshape);
-// }
-
-// extern "C" bool ifrt_dynamicshape_is_dynamic_dim(ifrt::DynamicShape* shape, int dimension) {
-//     return shape->IsDynamicDim(dimension);
-// }
-
-// extern "C" const char* ifrt_dynamicshape_debug_string(ifrt::DynamicShape* shape) {
-//     return cstr_from_string(shape->DebugString());
-// }
-// #pragma endregion
-
-// #pragma region xla::ifrt::Index
-// extern "C" ifrt::Index* ifrt_index_ctor(const int64_t* elements, size_t elements_size) {
-//     return new ifrt::Index(absl::Span<const int64_t>(elements, elements_size));
-// }
-
-// extern "C" ifrt::Index* ifrt_index_zeros(int num_elements) {
-//     return new ifrt::Index(ifrt::Index::Zeros(num_elements));
-// }
-
-// extern "C" void ifrt_index_free(ifrt::Index* index) {
-//     delete index;
-// }
-
-// extern "C" const int64_t* ifrt_index_elements(ifrt::Index* index) {
-//     return index->elements().data();
-// }
-
-// extern "C" int ifrt_index_count(ifrt::Index* index) {
-//     return index->elements().size();
-// }
-
-// extern "C" bool ifrt_index_eq(ifrt::Index* index1, ifrt::Index* index2) {
-//     return *index1 == *index2;
-// }
-
-// extern "C" bool ifrt_index_ne(ifrt::Index* index1, ifrt::Index* index2) {
-//     return *index1 != *index2;
-// }
-
-// extern "C" ifrt::Index* ifrt_index_add(ifrt::Index* index, ifrt::Index* offset) {
-//     return new ifrt::Index(*index + *offset);
-// }
-
-// extern "C" ifrt::Index* ifrt_index_sub(ifrt::Index* index, ifrt::Index* offset) {
-//     return new ifrt::Index(*index - *offset);
-// }
-
-// // WARN we're not checking if the multiplier has the same size as the index
-// extern "C" ifrt::Index* ifrt_index_mul(ifrt::Index* index, const int64_t* multiplier) {
-//     return new ifrt::Index(*index * absl::Span<const int64_t>(multiplier, ifrt_index_count(index)));
-// }
-
-// extern "C" void ifrt_index_add_inplace(ifrt::Index* index, ifrt::Index* offset) {
-//     *index += *offset;
-// }
-
-// extern "C" void ifrt_index_sub_inplace(ifrt::Index* index, ifrt::Index* offset) {
-//     *index -= *offset;
-// }
-
-// extern "C" void ifrt_index_mul_inplace(ifrt::Index* index, const int64_t* multiplier) {
-//     *index *= absl::Span<const int64_t>(multiplier, ifrt_index_count(index));
-// }
-
-// extern "C" const char* ifrt_index_debug_string(ifrt::Index* index) {
-//     return cstr_from_string(index->DebugString());
-// }
-// #pragma endregion
-
-// #pragma region xla::ifrt::IndexDomain
-// extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor(ifrt::Shape* shape) {
-//     return new ifrt::IndexDomain(*shape);
-// }
-
-// extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor_with_origin(ifrt::Index* origin, ifrt::Shape* shape) {
-//     return new ifrt::IndexDomain(*origin, *shape);
-// }
-
-// extern "C" void ifrt_indexdomain_free(ifrt::IndexDomain* index_domain) {
-//     delete index_domain;
-// }
-
-// extern "C" const ifrt::Index* ifrt_indexdomain_origin(ifrt::IndexDomain* index_domain) {
-//     return &index_domain->origin();
-// }
-
-// extern "C" const ifrt::Shape* ifrt_indexdomain_shape(ifrt::IndexDomain* index_domain) {
-//     return &index_domain->shape();
-// }
-
-// extern "C" bool ifrt_indexdomain_eq(ifrt::IndexDomain* index_domain1, ifrt::IndexDomain* index_domain2) {
-//     return *index_domain1 == *index_domain2;
-// }
-
-// extern "C" bool ifrt_indexdomain_ne(ifrt::IndexDomain* index_domain1, ifrt::IndexDomain* index_domain2) {
-//     return *index_domain1 != *index_domain2;
-// }
-
-// extern "C" ifrt::IndexDomain* ifrt_indexdomain_add(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
-//     return new ifrt::IndexDomain(*index_domain + *offset);
-// }
-
-// extern "C" ifrt::IndexDomain* ifrt_indexdomain_sub(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
-//     return new ifrt::IndexDomain(*index_domain - *offset);
-// }
-
-// extern "C" void ifrt_indexdomain_add_inplace(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
-//     *index_domain += *offset;
-// }
-
-// extern "C" void ifrt_indexdomain_sub_inplace(ifrt::IndexDomain* index_domain, ifrt::Index* offset) {
-//     *index_domain -= *offset;
-// }
-
-// extern "C" const char* ifrt_indexdomain_debug_string(ifrt::IndexDomain* index_domain) {
-//     return cstr_from_string(index_domain->DebugString());
-// }
-// #pragma endregion
-
-// #pragma region xla::ifrt::MemoryKind
-// // Pass a nullptr to create a `MemoryKind` with no memory chosen.
-// extern "C" ifrt::MemoryKind* ifrt_memorykind_ctor(const char* memory_kind) {
-//     if (memory_kind == nullptr)
-//         return new ifrt::MemoryKind();
-//     return new ifrt::MemoryKind(std::string(memory_kind));
-// }
-
-// extern "C" void ifrt_memorykind_free(ifrt::MemoryKind* memory_kind) {
-//     delete memory_kind;
-// }
-
-// extern "C" bool ifrt_memorykind_eq(ifrt::MemoryKind* mk1, ifrt::MemoryKind* mk2) {
-//     return *mk1 == *mk2;
-// }
-
-// extern "C" bool ifrt_memorykind_ne(ifrt::MemoryKind* mk1, ifrt::MemoryKind* mk2) {
-//     return *mk1 != *mk2;
-// }
-
-// extern "C" const char* ifrt_memorykind_string(ifrt::MemoryKind* memory_kind) {
-//     if (memory_kind->memory_kind().has_value())
-//         return cstr_from_string(memory_kind->memory_kind().value());
-//     else
-//         return nullptr;
-// }
-
-// extern "C" ifrt::MemoryKind* ifrt_memorykind_canonicalize(ifrt::MemoryKind* memory_kind, ifrt::Device* device) {
-//     return new ifrt::MemoryKind(CanonicalizeMemoryKind(*memory_kind, device));
-// }
-// #pragma endregion
-
-// #pragma region xla::ifrt::Memory
-// // MemoryId is a struct with a single int32_t field --> check out xla/python/ifrt/memory.h
-// extern "C" ifrt::MemoryId ifrt_memory_id(ifrt::Memory* memory) {
-//     return memory->Id();
-// }
-
-// extern "C" const ifrt::MemoryKind* ifrt_memory_kind(ifrt::Memory* memory) {
-//     return &(memory->Kind());
-// }
-
-// extern "C" const char* ifrt_memory_to_string(ifrt::Memory* memory) {
-//     return cstr_from_string(memory->ToString());
-// }
-
-// extern "C" const char* ifrt_memory_debug_string(ifrt::Memory* memory) {
-//     return cstr_from_string(memory->DebugString());
-// }
-
-// extern "C" std::tuple<size_t, ifrt::Device* const*> ifrt_memory_devices(ifrt::Memory* memory) {
-//     auto devices = memory->Devices();
-//     return std::make_tuple<size_t, ifrt::Device* const*>(devices.size(), devices.data());
 // }
 // #pragma endregion
 
@@ -322,45 +73,6 @@ using namespace xla::ifrt;
 // }
 // #pragma endregion
 
-// #pragma region xla::ifrt::Device
-// extern "C" ifrt::Client* ifrt_device_client(ifrt::Device* device) {
-//     return device->client();
-// }
-
-// // DeviceId is a struct with a single int32_t field --> check out xla/pjrt/pjrt_common.h
-// extern "C" ifrt::DeviceId ifrt_device_id(ifrt::Device* device) {
-//     return device->Id();
-// }
-
-// // TODO ifrt_device_attributes
-
-// extern "C" const char* ifrt_device_kind(ifrt::Device* device) {
-//     return cstr_from_string(device->Kind());
-// }
-
-// extern "C" const char* ifrt_device_to_string(ifrt::Device* device) {
-//     return cstr_from_string(device->ToString());
-// }
-
-// extern "C" const char* ifrt_device_debug_string(ifrt::Device* device) {
-//     return cstr_from_string(device->DebugString());
-// }
-
-// extern "C" ifrt::Memory* ifrt_device_default_memory(ifrt::Device* device) {
-//     return xla::ValueOrThrow(device->DefaultMemory());
-// }
-
-// // TODO ifrt_device_memories
-
-// extern "C" bool ifrt_device_is_addressable(ifrt::Device* device) {
-//     return device->IsAddressable();
-// }
-
-// extern "C" int ifrt_device_process_index(ifrt::Device* device) {
-//     return device->ProcessIndex();
-// }
-// #pragma endregion
-
 // #pragma region xla::ifrt::PjRtDevice
 // // DeviceId is a struct with a single int32_t field --> check out xla/pjrt/pjrt_common.h
 // // TODO support `attributes` parameter
@@ -377,53 +89,6 @@ using namespace xla::ifrt;
 // }
 // #pragma endregion
 
-// #pragma region xla::ifrt::Sharding
-// // TODO ifrt_sharding_devices
-// // TODO ifrt_sharding_memory_kind
-
-// // extern "C" void ifrt_sharding_disassemble(ifrt::Sharding* sharding, ifrt::Shape* shape, char** error) {
-// //     auto status = sharding->Disassemble(*shape);
-// //     if (!status.ok()) {
-// //         auto str = status.message();
-// //         char* err = (char*)malloc(str.size()+1);
-// //         memcpy(err, str.data(), str.size()+1);
-// //         *error = err;
-// //     }
-// // }
-
-// // TODO ifrt_sharding_disassemble_dynamic_shape
-// // TODO ifrt_sharding_index_domains
-
-// extern "C" const char* ifrt_sharding_debug_string(ifrt::Sharding* sharding) {
-//     return cstr_from_string(sharding->DebugString());
-// }
-// #pragma endregion
-
-// #pragma region xla::ifrt::Array
-// extern "C" ifrt::DType* ifrt_array_dtype(ifrt::Array* array) {
-//     return new ifrt::DType(array->dtype());
-// }
-
-// extern "C" const ifrt::Shape* ifrt_array_shape(ifrt::Array* array) {
-//     return &(array->shape());
-// }
-
-// extern "C" const ifrt::Sharding* ifrt_array_sharding(ifrt::Array* array) {
-//     return &(array->sharding());
-// }
-
-// extern "C" PjRtLayout* ifrt_array_layout(ifrt::Array* array) {
-//     return xla::ValueOrThrow(array->layout()).release();
-// }
-
-// // TODO xla::ifrt::Array::DisassembleIntoSingleDeviceArrays
-// // TODO xla::ifrt::Array::FullyReplicatedShard
-
-// extern "C" ifrt::Future<> ifrt_array_copy_to_host_buffer(ifrt::Array* array, void* data, const int64_t* byte_strides, int semantics) {
-//     return array->CopyToHostBuffer(data, absl::Span<const int64_t>(byte_strides, array->shape().num_elements()), ifrt::ArrayCopySemantics(semantics));
-// }
-// #pragma endregion
-
 // #pragma region xla::ifrt::PjRtArray
 // // TODO constructors / `Create`
 
@@ -435,39 +100,6 @@ using namespace xla::ifrt;
 //     }
 //     return std::make_tuple(buffers.size(), buffers_ptr);
 // }
-// #pragma endregion
-
-// #pragma region xla::ifrt::Topology
-// extern "C" const char* ifrt_topology_platform_name(ifrt::Topology* topology) {
-//     return cstr_from_string(topology->platform_name());
-// }
-
-// extern "C" const char* ifrt_topology_platform_version(ifrt::Topology* topology) {
-//     return cstr_from_string(topology->platform_version());
-// }
-
-// // returns PjRtPlatformId which is a type alias for uint64_t
-// extern "C" uint64_t ifrt_topology_platform_id(ifrt::Topology* topology) {
-//     return topology->platform_id();
-// }
-
-// extern "C" std::tuple<size_t, const xla::PjRtDeviceDescription**> ifrt_topology_device_descriptions(ifrt::Topology* topology) {
-//     auto descriptions = topology->DeviceDescriptions();
-//     auto descriptions_ptr = new const xla::PjRtDeviceDescription*[descriptions.size()];
-//     for (int i=0; i<descriptions.size(); i++) {
-//         descriptions_ptr[i] = descriptions[i].release();
-//     }
-//     return std::make_tuple(descriptions.size(), descriptions_ptr);
-// }
-
-// // TODO xla::ifrt::Topology::GetDefaultLayout
-
-// extern "C" const char* ifrt_topology_serialize(ifrt::Topology* topology) {
-//     return cstr_from_string(xla::ValueOrThrow(topology->Serialize()));
-// }
-
-// // TODO xla::ifrt::Topology::Attributes
-
 // #pragma endregion
 
 // #pragma region xla::ifrt::PjRtTopology
@@ -841,67 +473,240 @@ using namespace xla::ifrt;
 
 JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
 {
-    // mod.add_type<ifrt::Value>("Value")
-    //     .method("client", &ifrt::Value::client)
-    //     .method("get_ready_future", &ifrt::Value::GetReadyFuture)
-    //     .method("delete!", &ifrt::Value::Delete)
-    //     .method("isdeleted", &ifrt::Value::IsDeleted)
-    //     .method("debug_string", &ifrt::Value::DebugString);
+    mod.map_type<MemoryId>("Int32");
+    mod.map_type<DeviceId>("Int32");
+    mod.map_type<xla::PjRtPlatformId>("UInt64"); // TODO move to PjRT.cpp
 
-    mod.add_bits<ifrt::DType::Kind>("DTypeKind", jlcxx::julia_type("CppEnum"));
-    mod.set_const("DTypeKindInvalid", ifrt::DType::Kind::kInvalid);
-    mod.set_const("DTypeKindPred", ifrt::DType::Kind::kPred);
-    mod.set_const("DTypeKindS2", ifrt::DType::Kind::kS2);
-    mod.set_const("DTypeKindS4", ifrt::DType::Kind::kS4);
-    mod.set_const("DTypeKindS8", ifrt::DType::Kind::kS8);
-    mod.set_const("DTypeKindS16", ifrt::DType::Kind::kS16);
-    mod.set_const("DTypeKindS32", ifrt::DType::Kind::kS32);
-    mod.set_const("DTypeKindS64", ifrt::DType::Kind::kS64);
-    mod.set_const("DTypeKindU2", ifrt::DType::Kind::kU2);
-    mod.set_const("DTypeKindU4", ifrt::DType::Kind::kU4);
-    mod.set_const("DTypeKindU8", ifrt::DType::Kind::kU8);
-    mod.set_const("DTypeKindU16", ifrt::DType::Kind::kU16);
-    mod.set_const("DTypeKindU32", ifrt::DType::Kind::kU32);
-    mod.set_const("DTypeKindU64", ifrt::DType::Kind::kU64);
-    mod.set_const("DTypeKindF16", ifrt::DType::Kind::kF16);
-    mod.set_const("DTypeKindF32", ifrt::DType::Kind::kF32);
-    mod.set_const("DTypeKindF64", ifrt::DType::Kind::kF64);
-    mod.set_const("DTypeKindBF16", ifrt::DType::Kind::kBF16);
-    mod.set_const("DTypeKindC64", ifrt::DType::Kind::kC64);
-    mod.set_const("DTypeKindC128", ifrt::DType::Kind::kC128);
-    mod.set_const("DTypeKindToken", ifrt::DType::Kind::kToken);
-    // mod.set_const("DTypeKindOpaque", ifrt::DType::Kind::kOpaque);
-    mod.set_const("DTypeKindF8E3M4", ifrt::DType::Kind::kF8E3M4);
-    mod.set_const("DTypeKindF8E4M3", ifrt::DType::Kind::kF8E4M3);
-    mod.set_const("DTypeKindF8E4M3FN", ifrt::DType::Kind::kF8E4M3FN);
-    mod.set_const("DTypeKindF8E4M3B11FNUZ", ifrt::DType::Kind::kF8E4M3B11FNUZ);
-    mod.set_const("DTypeKindF8E4M3FNUZ", ifrt::DType::Kind::kF8E4M3FNUZ);
-    mod.set_const("DTypeKindF8E5M2", ifrt::DType::Kind::kF8E5M2);
-    mod.set_const("DTypeKindF8E5M2FNUZ", ifrt::DType::Kind::kF8E5M2FNUZ);
-    mod.set_const("DTypeKindString", ifrt::DType::Kind::kString);
+    auto wrap_future = mod.add_type<Future<>>("Future");
+    auto wrap_value = mod.add_type<Value>("Value");
+    auto wrap_tuple = mod.add_type<Tuple>("Tuple");
+    auto wrap_dtype = mod.add_type<DType>("DType");
+    auto wrap_shape = mod.add_type<Shape>("Shape");
+    auto wrap_boundeddynamicshapetag = mod.add_type<BoundedDynamicShapeTag>("BoundedDynamicShapeTag");
+    auto wrap_dynamicshape = mod.add_type<DynamicShape>("DynamicShape");
+    auto wrap_index = mod.add_type<Index>("Index");
+    auto wrap_indexdomain = mod.add_type<IndexDomain>("IndexDomain");
+    auto wrap_memorykind = mod.add_type<MemoryKind>("MemoryKind");
+    auto wrap_memory = mod.add_type<Memory>("Memory");
+    auto wrap_device = mod.add_type<Device>("Device");
+    auto wrap_pjrtdevice = mod.add_type<PjRtDevice>("PjRtDevice");
+    auto wrap_sharding = mod.add_type<Sharding>("Sharding");
+    auto wrap_array = mod.add_type<Array>("Array");
+    auto wrap_pjrtarray = mod.add_type<PjRtArray>("PjRtArray");
+    auto wrap_topology = mod.add_type<Topology>("Topology");
+    auto wrap_pjrttopology = mod.add_type<PjRtTopology>("PjRtTopology");
+    auto wrap_client = mod.add_type<Client>("Client");
+    // auto wrap_pjrtclient = mod.add_type<PjRtClient>("PjRtClient");
+    auto wrap_hostcallback = mod.add_type<HostCallback>("HostCallback");
+    auto wrap_loadedhostcallback = mod.add_type<LoadedHostCallback>("LoadedHostCallback");
+    auto wrap_pjrt_hostsendandrecv_loadedhostcallback = mod.add_type<PjRtHostSendAndRecvLoadedHostCallback>("PjRtHostSendAndRecvLoadedHostCallback");
+    auto wrap_executable = mod.add_type<Executable>("Executable");
+    auto wrap_pjrtexecutable = mod.add_type<PjRtExecutable>("PjRtExecutable");
+    auto wrap_loadedexecutable = mod.add_type<LoadedExecutable>("LoadedExecutable");
+    auto wrap_pjrtloadedexecutable = mod.add_type<PjRtLoadedExecutable>("PjRtLoadedExecutable");
+    // auto wrap_customcallprogram = mod.add_type<CustomCallProgram>("CustomCallProgram");
+    auto wrap_hloprogram = mod.add_type<HloProgram>("HloProgram");
+    auto wrap_compiler = mod.add_type<Compiler>("Compiler");
+    auto wrap_pjrtcompiler = mod.add_type<PjRtCompiler>("PjRtCompiler");
 
-    mod.add_type<DType>("DType")
-        .constructor<ifrt::DType::Kind>()
-        .method("kind", &ifrt::DType::kind);
-    // .method("byte_size", &ifrt::DType::byte_size)
-    // .method("bit_size", &ifrt::DType::bit_size);
+    // Value (virtual)
+    wrap_value.method("client", &Value::client)
+        .method("get_ready_future", &Value::GetReadyFuture)
+        .method("delete!", &Value::Delete)
+        .method("isdeleted", &Value::IsDeleted);
+
     mod.set_override_module(jl_base_module);
-    // mod.method("==", [](ifrt::DType& a, ifrt::DType& b) { return a == b; });
-    // mod.method("!=", [](ifrt::DType* a, ifrt::DType* b) { return *a != *b; });
-    // mod.method("copy", [](const ifrt::DType& x) { return ifrt::DType(x); });
-    mod.method("string", [](const ifrt::DType& x) { return x.DebugString(); });
+    wrap_value.method("string", &Value::DebugString);
     mod.unset_override_module();
 
+    // Tuple
+    // TODO Unpack
+    mod.set_override_module(jl_base_module);
+    wrap_tuple.method("length", &Tuple::Arity);
+    mod.unset_override_module();
+
+    // DType::Kind
+    mod.add_bits<DType::Kind>("DTypeKind", jlcxx::julia_type("CppEnum"));
+    mod.set_const("DTypeKindInvalid", DType::Kind::kInvalid);
+    mod.set_const("DTypeKindPred", DType::Kind::kPred);
+    mod.set_const("DTypeKindS2", DType::Kind::kS2);
+    mod.set_const("DTypeKindS4", DType::Kind::kS4);
+    mod.set_const("DTypeKindS8", DType::Kind::kS8);
+    mod.set_const("DTypeKindS16", DType::Kind::kS16);
+    mod.set_const("DTypeKindS32", DType::Kind::kS32);
+    mod.set_const("DTypeKindS64", DType::Kind::kS64);
+    mod.set_const("DTypeKindU2", DType::Kind::kU2);
+    mod.set_const("DTypeKindU4", DType::Kind::kU4);
+    mod.set_const("DTypeKindU8", DType::Kind::kU8);
+    mod.set_const("DTypeKindU16", DType::Kind::kU16);
+    mod.set_const("DTypeKindU32", DType::Kind::kU32);
+    mod.set_const("DTypeKindU64", DType::Kind::kU64);
+    mod.set_const("DTypeKindF16", DType::Kind::kF16);
+    mod.set_const("DTypeKindF32", DType::Kind::kF32);
+    mod.set_const("DTypeKindF64", DType::Kind::kF64);
+    mod.set_const("DTypeKindBF16", DType::Kind::kBF16);
+    mod.set_const("DTypeKindC64", DType::Kind::kC64);
+    mod.set_const("DTypeKindC128", DType::Kind::kC128);
+    mod.set_const("DTypeKindToken", DType::Kind::kToken);
+    // mod.set_const("DTypeKindOpaque", DType::Kind::kOpaque);
+    mod.set_const("DTypeKindF8E3M4", DType::Kind::kF8E3M4);
+    mod.set_const("DTypeKindF8E4M3", DType::Kind::kF8E4M3);
+    mod.set_const("DTypeKindF8E4M3FN", DType::Kind::kF8E4M3FN);
+    mod.set_const("DTypeKindF8E4M3B11FNUZ", DType::Kind::kF8E4M3B11FNUZ);
+    mod.set_const("DTypeKindF8E4M3FNUZ", DType::Kind::kF8E4M3FNUZ);
+    mod.set_const("DTypeKindF8E5M2", DType::Kind::kF8E5M2);
+    mod.set_const("DTypeKindF8E5M2FNUZ", DType::Kind::kF8E5M2FNUZ);
+    mod.set_const("DTypeKindString", DType::Kind::kString);
+
+    // DType
     // TODO conversion from/to `xla::PrimitiveType` using `ToPrimitiveType`,`ToDType`
-    //     mod.add_type<ifrt::Shape>("Shape")
-    //         // .constructor<...>() // TODO explicit constructor
-    //         ;
-    //     mod.set_override_module(jl_base_module);
-    //     mod.method("==", [](ifrt::Shape* a, ifrt::Shape* b) { return *a == *b; });
-    //     mod.method("!=", [](ifrt::Shape* a, ifrt::Shape* b) { return *a != *b; });
-    //     mod.method("copy", [](const ifrt::Shape& x) { return ifrt::Shape(x); });
-    //     mod.method("string", &ifrt::Shape::DebugString);
-    //     mod.method("size", &ifrt::Shape::dims);
-    //     mod.method("length", &ifrt::Shape::num_elements);
-    //     mod.unset_override_module();
+    wrap_dtype
+        .constructor<DType::Kind>()
+        .method("kind", &DType::kind);
+    // .method("byte_size", &DType::byte_size)
+    // .method("bit_size", &DType::bit_size);
+    mod.set_override_module(jl_base_module);
+    // mod.method("==", [](DType& a, DType& b) { return a == b; });
+    // mod.method("!=", [](DType* a, DType* b) { return *a != *b; });
+    // mod.method("copy", [](const DType& x) { return DType(x); });
+    mod.method("string", [](const DType& x) { return x.DebugString(); });
+    mod.unset_override_module();
+
+    // Shape
+    // wrap_shape
+    //     .constructor([](std::vector<int64_t> dims) {
+    //         return new Shape(dims);
+    //     });
+    mod.set_override_module(jl_base_module);
+    // mod.method("==", [](Shape* a, Shape* b) { return *a == *b; });
+    // mod.method("!=", [](Shape* a, Shape* b) { return *a != *b; });
+    // mod.method("copy", [](const Shape& x) { return Shape(x); });
+    mod.method("string", [](const Shape& x) { return x.DebugString(); });
+    // mod.method("size", [](const Shape& x) { return x.dims(); });
+    mod.method("length", [](const Shape& x) { return x.num_elements(); });
+    mod.unset_override_module();
+
+    // DynamicShape
+    // TODO implement remaining methods
+    wrap_dynamicshape
+        .method("isdyndim", &DynamicShape::IsDynamicDim);
+
+    mod.set_override_module(jl_base_module);
+    mod.method("string", [](const DynamicShape& x) { return x.DebugString(); });
+    mod.unset_override_module();
+
+    // Index
+    // TODO how do we overload +=, -=, *=?
+    // wrap_index
+    //     .constructor<std::vector<int64_t>>([](std::vector<int64_t> elements) { ... });
+    mod.set_override_module(jl_base_module);
+    mod.method("zeros", &Index::Zeros);
+    // mod.method("==", &Index::operator==);
+    // mod.method("!=", &Index::operator!=);
+    mod.method("+", [](const Index& a, const Index& b) { return a + b; });
+    mod.method("-", [](const Index& a, const Index& b) { return a - b; });
+    // mod.method("*", [](const Index& a, std::vector<const int64_t> mul) { return a * mul; });
+    mod.method("string", [](const Index& x) { return x.DebugString(); });
+    mod.unset_override_module();
+
+    // IndexDomain
+    // TODO how do we overload +=, -=, *=?
+    wrap_indexdomain
+        .constructor<Shape>()
+        .constructor<Index, Shape>()
+        .method("origin", &IndexDomain::origin)
+        .method("shape", &IndexDomain::shape);
+
+    mod.set_override_module(jl_base_module);
+    mod.method("+", [](const IndexDomain& x, const Index& offset) { return x + offset; });
+    mod.method("-", [](const IndexDomain& x, const Index& offset) { return x - offset; });
+    mod.method("string", [](const IndexDomain& x) { return x.DebugString(); });
+    mod.unset_override_module();
+
+    // MemoryKind
+    // TODO `memory_kind` returns optional
+    wrap_memorykind
+        .constructor<>()
+        .constructor([](const std::string& name) { return new MemoryKind(name); });
+
+    mod.set_override_module(jl_base_module);
+    // mod.method("string", [](const MemoryKind& x) { return x.DebugString(); });
+    mod.unset_override_module();
+
+    // TODO `CanonicalizeMemoryKind`
+
+    // Memory (virtual)
+    // TODO `Devices`
+    wrap_memory
+        .method("id", &Memory::Id)
+        .method("kind", &Memory::Kind)
+        // .method("devices", [](const Memory& x) {
+        //     auto devices_span = x.Devices();
+        //     return std::vector<Device*>(devices_span.begin(), devices_span.end());
+        // })
+        ;
+
+    mod.set_override_module(jl_base_module);
+    wrap_memory.method("string", [](const Memory& x) { return std::string(x.ToString()); });
+    mod.unset_override_module();
+
+    // Device (virtual)
+    // TODO `Memories`
+    wrap_device
+        .method("client", &Device::client)
+        .method("id", &Device::Id)
+        // .method("attributes", &Device::Attributes)
+        .method("kind", [](const Device& x) { return std::string(x.Kind()); })
+        .method("isaddressable", &Device::IsAddressable)
+        .method("process_index", &Device::ProcessIndex);
+
+    // Sharding (virtual)
+    mod.add_bits<SingleDeviceShardSemantics>("SingleDeviceShardSemantics", jlcxx::julia_type("CppEnum"));
+    mod.set_const("SingleDeviceShardSemanticsAddressable", SingleDeviceShardSemantics::kAddressableShards);
+    mod.set_const("SingleDeviceShardSemanticsAll", SingleDeviceShardSemantics::kAllShards);
+
+    wrap_sharding
+        // .method("devices", ...)
+        .method("kind", &Sharding::memory_kind)
+        .method("is_fully_replicated", &Sharding::IsFullyReplicated)
+        .method("has_same_partitioning", &Sharding::HasSamePartitioning)
+        // .method("with_device_assignment", &Sharding::WithDeviceAssignment)
+        // .method("disassemble", &Sharding::Disassemble)
+        // .method("IndexDomains", &Sharding::IndexDomains)
+        .method("get_shard_shape", [](const Sharding& x, const Shape& shape) { return xla::ValueOrThrow(x.GetShardShape(shape)); });
+    ;
+
+    mod.set_override_module(jl_base_module);
+    wrap_sharding.method("string", [](const Sharding& x) { return x.DebugString(); });
+    mod.unset_override_module();
+
+    // TODO SingleDeviceSharding, OpaqueSharding, ConcreteSharding, ConcreteEvenSharding, ShardingParamSharding
+
+    // Array (virtual)
+    mod.add_bits<ArrayCopySemantics>("ArrayCopySemantics", jlcxx::julia_type("CppEnum"));
+    mod.set_const("ArrayCopySemanticsAlwaysCopy", ArrayCopySemantics::kAlwaysCopy);
+    mod.set_const("ArrayCopySemanticsReuseInput", ArrayCopySemantics::kReuseInput);
+    mod.set_const("ArrayCopySemanticsDonateInput", ArrayCopySemantics::kDonateInput);
+
+    wrap_array
+        .method("dtype", &Array::dtype)
+        .method("shape", &Array::shape)
+        .method("sharding", &Array::sharding)
+        // .method("shared_ptr_sharding", &Array::shared_ptr_sharding)
+        // .method("layout", &Array::layout)
+        // .method("disassemble", &Array::DisassembleIntoSingleDeviceArrays)
+        // .method("replicate", &Array::FullyReplicatedShard)
+        // .method("copy_to_host_buffer", &Array::CopyToHostBuffer)
+        ;
+
+    // Topology (virtual)
+    wrap_topology
+        .method("platform_name", [](const Topology& x) { return std::string(x.platform_name()); })
+        .method("platform_version", [](const Topology& x) { return std::string(x.platform_version()); })
+        .method("platform_id", &Topology::platform_id)
+        // .method("descriptions", &Topology::DeviceDescriptions)
+        // .method("layout", &Topology::GetDefaultLayout)
+        // .method("serialize", &Topology::Serialize)
+        // .method("Attributes", &Topology::Attributes)
+        ;
 }
