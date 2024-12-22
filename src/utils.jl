@@ -346,7 +346,14 @@ function call_with_reactant_generator(
     method = mi.def
 
     @static if VERSION < v"1.11"
-        ir, rt = CC.typeinf_ircode(interp, method, mi.specTypes, mi.sparam_vals, nothing)
+        # For older Julia versions, we vendor in some of the code to prevent
+        # having to build the MethodInstance twice.
+        result = CC.InferenceResult(mi, CC.typeinf_lattice(interp))
+        frame = CC.InferenceState(result, :no, interp)
+        @assert !isnothing(frame)
+        CC.typeinf(interp, frame)
+        ir = CC.run_passes(frame.src, CC.OptimizationState(frame, interp), result, nothing)
+        rt = CC.widenconst(CC.ignorelimited(result.result))
     else
         ir, rt = CC.typeinf_ircode(interp, mi, nothing)
     end
