@@ -53,6 +53,18 @@ end
     end
 end
 
+function ∇conv_data_filter(x, weight, conv_dims)
+    dx, dweight = Enzyme.make_zero(x), Enzyme.make_zero(weight)
+    Enzyme.autodiff(
+        Reverse,
+        NNlib.conv,
+        Duplicated(x, dx),
+        Duplicated(weight, dweight),
+        Const(conv_dims),
+    )
+    return dx, dweight
+end
+
 @testset "Convolution" begin
     @testset for groups in (1, 2, 4)
         weight = randn(Float32, 4, 4, 8 ÷ groups, 4)
@@ -72,7 +84,7 @@ end
                 size(weight, ndims(weight)),
                 size(x, ndims(x)),
             )
-            dy = randn(Float32, output_size)
+            dy = ones(Float32, output_size)
             dy_reactant = Reactant.to_rarray(dy)
 
             conv_compiled = Reactant.compile(
@@ -82,10 +94,19 @@ end
             @test conv_compiled(x_reactant, weight_reactant, conv_dims) ≈
                 NNlib.conv(x, weight, conv_dims)
 
+            ∇data = NNlib.∇conv_data(dy, weight, conv_dims)
             @test Reactant.@jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
-                NNlib.∇conv_data(dy, weight, conv_dims)
+                ∇data
+
+            ∇filter = NNlib.∇conv_filter(x, dy, conv_dims)
             @test Reactant.@jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
-                NNlib.∇conv_filter(x, dy, conv_dims)
+                ∇filter
+
+            ∇data_enzyme, ∇filter_enzyme = Reactant.@jit ∇conv_data_filter(
+                x_reactant, weight_reactant, conv_dims
+            )
+            @test ∇data_enzyme ≈ ∇data
+            @test ∇filter_enzyme ≈ ∇filter
         end
     end
 

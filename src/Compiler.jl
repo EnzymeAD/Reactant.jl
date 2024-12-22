@@ -1,5 +1,7 @@
 module Compiler
 
+using Reactant_jll
+
 import ..Reactant:
     Reactant,
     MLIR,
@@ -118,6 +120,7 @@ const opt_passes::String = join(
                 "get_tuple_element_op_canon<16>",
                 "real_op_canon<16>",
                 "imag_op_canon<16>",
+                "conj_complex_negate<16>",
                 "get_dimension_size_op_canon<16>",
                 "gather_op_canon<16>",
                 "reshape_op_canon<16>",
@@ -157,6 +160,7 @@ const opt_passes::String = join(
                 "cos_simplify<16>",
                 "sin_simplify<16>",
                 "noop_slice<16>",
+                "noop_reverse<16>",
                 "const_prop_through_barrier<16>",
                 "slice_slice<16>",
                 "shift_right_logical_simplify<16>",
@@ -248,6 +252,7 @@ const opt_passes::String = join(
                 "if_inline<1>",
                 "if_to_select<1>",
                 "dynamic_update_slice_const_prop",
+                "dynamic_gather_op_is_not_dynamic<16>",
             ],
             ';',
         ) *
@@ -289,6 +294,10 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
+const cuLaunch = Ref{UInt}(0)
+const cuFunc = Ref{UInt}(0)
+const cuModule = Ref{UInt}(0)
+        
 function compile_mlir!(mod, f, args, callcache=Dict{Cached, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any}}(); optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
@@ -308,9 +317,45 @@ function compile_mlir!(mod, f, args, callcache=Dict{Cached, @NamedTuple{f_name::
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
+    toolkit = ""
+    if isdefined(Reactant_jll, :ptxas_path)
+        toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
+    end
+    kern = "lower-kernel{toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])}"
     if optimize === :all
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+                    kern,
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :before_kernel
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :no_enzyme
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
@@ -344,6 +389,7 @@ function compile_mlir!(mod, f, args, callcache=Dict{Cached, @NamedTuple{f_name::
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
+                    kern,
                 ],
                 ',',
             ),
@@ -352,7 +398,7 @@ function compile_mlir!(mod, f, args, callcache=Dict{Cached, @NamedTuple{f_name::
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
-            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math"
+            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math," * kern
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
@@ -628,7 +674,7 @@ function codegen_unflatten!(
                 if path[2:end] == argpath[2:end]
                     continue
                 end
-                res = :(args[path[2]])
+                res = :(args[$(path[2])])
                 path = path[3:end]
             end
             for p in path
@@ -781,13 +827,6 @@ function compile(f, args; client=nothing, optimize=true, sync=false)
 
     body = expr.args[2]
     return register_thunk(fname, body)
-end
-
-# Compiling within a compile should return simply the original function
-Reactant.@reactant_override function Reactant.Compiler.compile(
-    f, args; client=nothing, optimize=true, sync=false
-)
-    return f
 end
 
 # inspired by RuntimeGeneratedFunction.jl

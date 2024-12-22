@@ -3,6 +3,8 @@ load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_tool
 # load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
 licenses(["notice"])
 
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
+
 package(
     default_applicable_licenses = [],
     default_visibility = ["//:__subpackages__"],
@@ -358,8 +360,9 @@ cc_library(
         ],
 
     ) + [
+	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
-        "@xla//xla:xla.pb.cc",
+        # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
         "@xla//xla/stream_executor:device_description.pb.cc",
         "@xla//xla/service:hlo.pb.cc",
@@ -416,6 +419,7 @@ cc_library(
 "-Wl,-exported_symbol,_BufferToHost",
 "-Wl,-exported_symbol,_FreeClient",
 "-Wl,-exported_symbol,_ClientCompile",
+"-Wl,-exported_symbol,_LinkInModule",
 "-Wl,-exported_symbol,_FreeFuture",
 "-Wl,-exported_symbol,_FutureIsReady",
 "-Wl,-exported_symbol,_FutureAwait",
@@ -425,6 +429,7 @@ cc_library(
 "-Wl,-exported_symbol,_ifrt_*",
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
+"-Wl,-exported_symbol,_EnzymeGPUCustomCall",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -451,6 +456,10 @@ cc_library(
         "@llvm-project//mlir:TransformDialect",
         "@llvm-project//mlir:Transforms",
         
+        "@llvm-project//mlir:LLVMIRToLLVMTranslation",
+        "@llvm-project//mlir:LLVMIRToNVVMTranslation",
+        "@llvm-project//mlir:LLVMIRTransforms",
+        
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:AArch64AsmParser",
@@ -463,6 +472,12 @@ cc_library(
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
+        
+        "@xla//xla:xla_proto_cc",
+        "@xla//xla:xla_proto_cc_impl",
+
+        "@xla//xla/service:metrics_proto_cc",
+        "@xla//xla/service:metrics_proto_cc_impl",
 
         "@xla//xla/service/cpu:cpu_compiler",
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
@@ -499,12 +514,13 @@ cc_library(
         "@xla//xla/service/gpu/model:hlo_op_profiles",
         "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
         "@xla//xla/service/gpu:nvptx_compiler",
-        "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/service/gpu:gpu_transfer_manager",
         "@xla//xla/stream_executor:kernel", 
     ],
     "//conditions:default": [],
-    }),
+    }) + if_rocm([
+        "@xla//xla/service/gpu:amdgpu_compiler",
+    ]),
 )
 
 # cc_shared_library(
@@ -596,6 +612,21 @@ gentbl_cc_library(
     td_file = "@enzyme//:Enzyme/MLIR/Dialect/EnzymeOps.td",
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "EnzymeXLAJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "EnzymeXLA.jl"
+        )
+    ],
+    td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/EnzymeXLAOps.td",
+    deps = [
+        "@enzyme//:EnzymeDialectTdFiles",
+        "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
     ],
     tblgen = "//:mlir-jl-tblgen",
 )

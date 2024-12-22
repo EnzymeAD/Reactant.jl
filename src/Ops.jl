@@ -41,7 +41,7 @@ end
 
 @noinline function mlir_stacktrace(name, file, line)::MLIR.IR.Location
     # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
-    if DEBUG_MODE[]
+    if !DEBUG_MODE[]
         return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
     end
 
@@ -1016,19 +1016,150 @@ end
 end
 
 # random ops
+"""
+    rng_bit_generator(
+        ::Type{T},
+        seed::TracedRArray{UInt64,1},
+        shape;
+        algorithm::String="DEFAULT",
+        location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
+    )
+
+Generate a random array of type `T` with the given shape and seed from a uniform random
+distribution between 0 and 1. Returns a NamedTuple with the following fields:
+
+- `output_state`: The state of the random number generator after the operation.
+- `output`: The generated array.
+
+# Arguments
+
+- `T`: The type of the generated array.
+- `seed`: The seed for the random number generator.
+- `shape`: The shape of the generated array.
+- `algorithm`: The algorithm to use for generating the random numbers. Defaults to
+  "DEFAULT". Other options include "PHILOX" and "THREE_FRY".
+"""
 @noinline function rng_bit_generator(
+    ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
-)
-    output = MLIR.IR.TensorType(TracedRArray{UInt64,1}, shape)
+) where {T<:Integer}
+    @assert algorithm in ("DEFAULT", "PHILOX", "THREE_FRY")
+    if algorithm == "PHILOX"
+        @assert length(seed) ∈ (2, 3)
+    elseif algorithm == "THREE_FRY"
+        @assert length(seed) == 2
+    end
+
+    output = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    output_state = MLIR.IR.TensorType(size(seed), MLIR.IR.Type(UInt64))
     rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
-    op = stablehlo.rng_bit_generator(seed.mlir_data; output, rng_algorithm, location)
-    return (;
-        output_state=TracedRArray{UInt64,1}((), MLIR.IR.result(op, 1), MLIR.IR.size(seed)),
-        output=TracedRArray{T,length(shape)}((), MLIR.IR.result(op, 2), shape),
+    op = stablehlo.rng_bit_generator(
+        seed.mlir_data; output, output_state, rng_algorithm, location
     )
+    return (;
+        output_state=TracedRArray{UInt64,1}((), MLIR.IR.result(op, 1), size(seed)),
+        output=TracedRArray{T,length(shape)}((), MLIR.IR.result(op, 2), Tuple(shape)),
+    )
+end
+
+@noinline function rng_bit_generator(
+    ::Type{T},
+    seed::TracedRArray{UInt64,1},
+    shape;
+    algorithm::String="DEFAULT",
+    location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
+) where {T<:AbstractFloat}
+    nbits = sizeof(T) * 8
+    uT = nbits == 16 ? UInt16 : (nbits == 32 ? UInt32 : UInt64)
+    (; output_state, output) = rng_bit_generator(uT, seed, shape; algorithm, location)
+    output = divide(
+        convert(TracedRArray{T,ndims(output)}, output),
+        constant(fill(T(typemax(uT)), Tuple(shape)); location),
+    )
+    return (; output_state, output)
+end
+
+"""
+    randn(
+        ::Type{T},
+        seed::TracedRArray{UInt64,1},
+        shape;
+        algorithm::String="DEFAULT",
+        location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
+    )
+
+Generate a random array of type `T` with the given shape and seed from a standard normal
+distribution of mean 0 and standard deviation 1. Returns a NamedTuple with the following
+fields:
+
+- `output_state`: The state of the random number generator after the operation.
+- `output`: The generated array.
+
+# Arguments
+
+- `T`: The type of the generated array.
+- `seed`: The seed for the random number generator.
+- `shape`: The shape of the generated array.
+- `algorithm`: The algorithm to use for generating the random numbers. Defaults to
+  "DEFAULT". Other options include "PHILOX" and "THREE_FRY".
+"""
+@noinline function randn(
+    ::Type{T},
+    seed::TracedRArray{UInt64,1},
+    shape;
+    algorithm::String="DEFAULT",
+    location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
+) where {T}
+    res = rng_bit_generator(T, seed, shape; algorithm, location)
+    rand_uniform = res.output
+    seed = res.output_state
+    scaled_uniform = subtract(
+        multiply(rand_uniform, constant(fill(T(2), size(rand_uniform)))),
+        constant(fill(T(1), size(rand_uniform))),
+    )
+    probit = erf_inv(scaled_uniform)
+    rand_normal = multiply(probit, constant(fill(Base.sqrt(T(2)), size(rand_uniform))))
+    return (; output_state=seed, output=rand_normal)
+end
+
+"""
+    randexp(
+        ::Type{T},
+        seed::TracedRArray{UInt64,1},
+        shape;
+        algorithm::String="DEFAULT",
+        location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
+    )
+
+Generate a random array of type `T` with the given shape and seed from an exponential
+distribution with rate 1. Returns a NamedTuple with the following fields:
+
+- `output_state`: The state of the random number generator after the operation.
+- `output`: The generated array.
+
+# Arguments
+
+- `T`: The type of the generated array.
+- `seed`: The seed for the random number generator.
+- `shape`: The shape of the generated array.
+- `algorithm`: The algorithm to use for generating the random numbers. Defaults to
+  "DEFAULT". Other options include "PHILOX" and "THREE_FRY".
+"""
+@noinline function randexp(
+    ::Type{T},
+    seed::TracedRArray{UInt64,1},
+    shape;
+    algorithm::String="DEFAULT",
+    location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
+) where {T}
+    res = rng_bit_generator(T, seed, shape; algorithm, location)
+    rand_uniform = res.output
+    seed = res.output_state
+    rand_exp = negate(log_plus_one(negate(rand_uniform)))
+    return (; output_state=seed, output=rand_exp)
 end
 
 # functional ops

@@ -19,6 +19,7 @@ for file in [
     "Affine.jl",
     "Func.jl",
     "Enzyme.jl",
+    "EnzymeXLA.jl",
     "StableHLO.jl",
     "CHLO.jl",
     "VHLO.jl",

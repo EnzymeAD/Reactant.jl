@@ -1398,6 +1398,60 @@ function polygamma(
 end
 
 """
+`ragged_dot`
+
+
+This operation takes three tensor args---lhs, rhs, and group_sizes---and
+a \"ragged_dot_dimension_numbers\" attribute. Like dot_general, the lhs and
+rhs are allowed arbitrary batch and contracting dimensions. Additionally,
+the lhs is required to have one ragged dimension, and the rhs may have at
+most one group dimension. The op has three modes, depending on the kind of
+the lhs ragged dimension.
+
+In mode 1, the shape-signature is `[b,m,k], [g,b,k,n], [g] -> [b,m,n]`.
+Here the ragged dimension is an lhs non-contracting dimension (`m`). The
+dimensions `b` and `k` represent batch and contracting dimensions
+respectively. The rhs is required to have a group dimension (`g`).
+
+In mode 2, the shape-signature is `[b,m,k], [b,k,n], [g] -> [g,b,m,n]`.
+Here the ragged dimension is an lhs/rhs contracting dimension (`k`).
+
+In mode 3, the shape-signature is `[b,m,k], [b,k,n], [g] -> [b,m,n]`. Here
+the ragged dimension is an lhs/rhs batch dimension (`b`).
+"""
+function ragged_dot(
+    lhs::Value,
+    rhs::Value,
+    group_sizes::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    ragged_dot_dimension_numbers,
+    precision_config=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs, group_sizes]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute(
+        "ragged_dot_dimension_numbers", ragged_dot_dimension_numbers
+    ),]
+    !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(precision_config) &&
+        push!(attributes, namedattribute("precision_config", precision_config))
+
+    return create_operation(
+        "chlo.ragged_dot",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `sinh`
 
 Returns `Sinh(operand)` element-wise.
@@ -1417,6 +1471,36 @@ function sinh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
 
     return create_operation(
         "chlo.sinh",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`square`
+
+Returns `Square(operand)` element-wise.
+
+\$\$
+\\square(x) = complex((x.real - x.imag) * (x.real + x.imag), x.real * x.imag * 2) if x is a complex number
+           = x * x                                                               otherwise
+\$\$
+"""
+function square(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "chlo.square",
         location;
         operands,
         owned_regions,
