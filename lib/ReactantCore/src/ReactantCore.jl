@@ -3,7 +3,7 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools
 
-export @trace, within_tracing, MissingTracedValue
+export @trace, within_compile, MissingTracedValue
 
 # Traits
 is_traced(x) = false
@@ -20,11 +20,11 @@ const SPECIAL_SYMBOLS = [
 ]
 
 """
-    within_tracing()
+    within_compile()
 
-Returns true if within tracing, otherwise false.
+Returns true if this function is executed in a Reactant compilation context, otherwise false.
 """
-@inline within_tracing() = false # behavior is overwritten in Interpreter.jl
+@inline within_compile() = false # behavior is overwritten in Interpreter.jl
 
 # Code generation
 """
@@ -190,7 +190,8 @@ function trace_for(mod, expr)
     end
 
     return quote
-        if $(within_tracing)() && $(any)($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
+        if $(within_compile)() &&
+            $(any)($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -204,7 +205,7 @@ function trace_if_with_returns(mod, expr)
         mod, expr.args[2]; store_last_line=expr.args[1], depth=1
     )
     return quote
-        if $(within_tracing)() && $(any)($(is_traced), ($(all_check_vars...),))
+        if $(within_compile)() && $(any)($(is_traced), ($(all_check_vars...),))
             $(new_expr)
         else
             $(expr)
@@ -350,7 +351,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     )
 
     return quote
-        if $(within_tracing)() && $(any)($(is_traced), ($(all_check_vars...),))
+        if $(within_compile)() && $(any)($(is_traced), ($(all_check_vars...),))
             $(reactant_code_block)
         else
             $(original_expr)
@@ -362,7 +363,7 @@ function trace_call(mod, expr)
     f = expr.args[1]
     args = expr.args[2:end]
     return quote
-        if $(within_tracing)()
+        if $(within_compile)()
             $(traced_call)($f, $(args...))
         else
             $(expr)
