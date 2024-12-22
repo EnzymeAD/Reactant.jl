@@ -38,6 +38,8 @@ using namespace xla::ifrt;
 
 #define JLCXX_CLASS_DEF_EQ(WRAP, CLASS) WRAP.method("==", &CLASS::operator==);
 #define JLCXX_CLASS_DEF_NE(WRAP, CLASS) WRAP.method("!=", &CLASS::operator!=);
+#define JLCXX_CLASS_DEF_ADD(WRAP, CLASS) WRAP.method("+", &CLASS::operator+);
+#define JLCXX_CLASS_DEF_SUB(WRAP, CLASS) WRAP.method("-", &CLASS::operator-);
 
 JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
 {
@@ -166,15 +168,20 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
 
     // Index
     // TODO how do we overload +=, -=, *=?
-    // wrap_index
-    //     .constructor<std::vector<int64_t>>([](std::vector<int64_t> elements) { ... });
+    // TODO call `crete_index_zeros` from `zeros(::Type{Index}, ...)`
+    wrap_index
+        .constructor([](std::vector<int64_t>& elements) {
+            return new Index(absl::Span<const int64_t>(elements));
+        })
+        .method("elements", [](const Index& x) { return std::vector<int64_t>(x.elements().begin(), x.elements().end()); });
+    mod.method("create_index_zeros", &Index::Zeros);
+
     mod.set_override_module(jl_base_module);
-    mod.method("zeros", &Index::Zeros);
-    // mod.method("==", &Index::operator==);
-    // mod.method("!=", &Index::operator!=);
-    mod.method("+", [](const Index& a, const Index& b) { return a + b; });
-    mod.method("-", [](const Index& a, const Index& b) { return a - b; });
-    // mod.method("*", [](const Index& a, std::vector<const int64_t> mul) { return a * mul; });
+    JLCXX_CLASS_DEF_EQ(wrap_index, Index)
+    JLCXX_CLASS_DEF_NE(wrap_index, Index)
+    JLCXX_CLASS_DEF_ADD(wrap_index, Index)
+    JLCXX_CLASS_DEF_SUB(wrap_index, Index)
+    mod.method("*", [](const Index& a, std::vector<const int64_t> mul) { return a * absl::Span<const int64_t>(mul); });
     mod.method("string", [](const Index& x) { return x.DebugString(); });
     mod.unset_override_module();
 
@@ -187,6 +194,8 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
         .method("shape", &IndexDomain::shape);
 
     mod.set_override_module(jl_base_module);
+    JLCXX_CLASS_DEF_EQ(wrap_indexdomain, IndexDomain)
+    JLCXX_CLASS_DEF_NE(wrap_indexdomain, IndexDomain)
     mod.method("+", [](const IndexDomain& x, const Index& offset) { return x + offset; });
     mod.method("-", [](const IndexDomain& x, const Index& offset) { return x - offset; });
     mod.method("string", [](const IndexDomain& x) { return x.DebugString(); });
