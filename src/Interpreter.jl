@@ -39,7 +39,7 @@ function set_reactant_abi(
 )
     (; fargs, argtypes) = arginfo
 
-    if f === ReactantCore.within_tracing
+    if f === ReactantCore.within_compile
         if length(argtypes) != 1
             @static if VERSION < v"1.11.0-"
                 return CallMeta(Union{}, Effects(), NoCallInfo())
@@ -49,16 +49,11 @@ function set_reactant_abi(
         end
         @static if VERSION < v"1.11.0-"
             return CallMeta(
-                Core.Const(true),
-                Core.Compiler.EFFECTS_TOTAL,
-                MethodResultPure(),
+                Core.Const(true), Core.Compiler.EFFECTS_TOTAL, MethodResultPure()
             )
         else
             return CallMeta(
-                Core.Const(true),
-                Union{},
-                Core.Compiler.EFFECTS_TOTAL,
-                MethodResultPure(),
+                Core.Const(true), Union{}, Core.Compiler.EFFECTS_TOTAL, MethodResultPure()
             )
         end
     end

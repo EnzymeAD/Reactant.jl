@@ -1,6 +1,6 @@
 module Reactant
 
-using ReactantCore: ReactantCore, @trace, within_tracing, MissingTracedValue
+using ReactantCore: ReactantCore, @trace, within_compile, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
@@ -226,7 +226,7 @@ function Enzyme.make_zero(
 end
 
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
-export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace, within_tracing
+export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace, within_compile
 
 const registry = Ref{MLIR.IR.DialectRegistry}()
 function __init__()
