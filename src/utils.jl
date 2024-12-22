@@ -294,7 +294,6 @@ function call_with_reactant_generator(
 )
     @nospecialize
     args = redub_arguments
-    Core.println("in call_with_reactant_generator: ", redub_arguments)
     if DEBUG_INTERP[]
         safe_print("args", args)
     end
