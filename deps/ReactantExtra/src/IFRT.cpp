@@ -61,7 +61,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
 {
     mod.map_type<MemoryId>("Int32");
     mod.map_type<DeviceId>("Int32");
-    mod.map_type<xla::PjRtPlatformId>("UInt64"); // TODO move to PjRT.cpp
+    // mod.map_type<xla::PjRtPlatformId>("UInt64"); // TODO move to PjRT.cpp
 
     auto wrap_future = mod.add_type<Future<>>("Future");
     auto wrap_value = mod.add_type<Value>("Value");
@@ -72,6 +72,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
     auto wrap_dynamicshape = mod.add_type<DynamicShape>("DynamicShape");
     auto wrap_index = mod.add_type<Index>("Index");
     auto wrap_indexdomain = mod.add_type<IndexDomain>("IndexDomain");
+    auto wrap_attributemap = mod.add_type<AttributeMap>("AttributeMap");
     auto wrap_memorykind = mod.add_type<MemoryKind>("MemoryKind");
     auto wrap_memory = mod.add_type<Memory>("Memory");
     auto wrap_device = mod.add_type<Device>("Device");
@@ -217,6 +218,8 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
     JLCXX_CLASS_DEF_DBGSTR(wrap_indexdomain, IndexDomain)
     mod.unset_override_module();
 
+    // TODO AttributeMap
+
     // MemoryKind
     wrap_memorykind
         .constructor<>()
@@ -230,29 +233,38 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
     mod.unset_override_module();
 
     // Memory
-    // TODO check if `Devices` is correct (why does it return a span of pointers?)
+    // TODO check if `Devices` is correct (why does it return a span of pointers?) => errors due to `std::vector<Device>` conversion
     wrap_memory
-        .constructor<>()
         .method("id", &Memory::Id)
         .method("kind", &Memory::Kind)
-        .method("devices", [](const Memory& x) {
-            auto devices_span = x.Devices();
-            return std::vector<Device>(devices_span.begin(), devices_span.end());
-        });
+        // .method("devices", [](const Memory& x) {
+        //     auto devices_span = x.Devices();
+        //     return std::vector<Device>(devices_span.begin(), devices_span.end());
+        // })
+        ;
 
     mod.set_override_module(jl_base_module);
     JLCXX_CLASS_DEF_DBGSTR(wrap_memory, Memory)
     mod.unset_override_module();
 
     // Device
-    // TODO `Memories`
+    // TODO `Attributes`, check if `Memories` is ok
     wrap_device
-        .method("client", &Device::client)
+        .method("client", &Device::client) // why does it return a pointer?
         .method("id", &Device::Id)
         // .method("attributes", &Device::Attributes)
         .method("kind", [](const Device& x) { return std::string(x.Kind()); })
+        .method("default_memory", [](const Device& x) { return xla::ValueOrThrow(x.DefaultMemory()); })
+        .method("memories", [](const Device& x) {
+            auto mems = x.Memories();
+            return std::vector<Memory* const>(mems.begin(), mems.end());
+        })
         .method("isaddressable", &Device::IsAddressable)
         .method("process_index", &Device::ProcessIndex);
+
+    mod.set_override_module(jl_base_module);
+    JLCXX_CLASS_DEF_DBGSTR(wrap_device, Device)
+    mod.unset_override_module();
 
     // Sharding
     mod.add_bits<SingleDeviceShardSemantics>("SingleDeviceShardSemantics", jlcxx::julia_type("CppEnum"));
@@ -307,18 +319,24 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
     // Client
 
     // HostCallback
+    wrap_hostcallback.method("serialize", &HostCallback::Serialize);
 
     // LoadedHostCallback
-
-    // PjRtHostSendAndRecvLoadedHostCallback
+    wrap_loadedhostcallback
+        .method("client", &LoadedHostCallback::client)
+        .method("serialize", [](const LoadedHostCallback& x) { return xla::ValueOrThrow(x.Serialize()); });
 
     // Executable
+    wrap_executable
+        .method("name", [](const Executable& x) { return std::string(x.name()); });
 
     // LoadedExecutable
 
     // CustomCallProgram
 
     // HloProgram
+
+    // PluginProgram
 
     // Compiler
 }
