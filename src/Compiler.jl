@@ -635,7 +635,6 @@ function codegen_unflatten!(
                 unflatcode = :(args[$(path[2])])
                 path = path[3:end]
             else
-                @show "path[1] == $(path[1]) has been ignored..." # XXX: Validate this is correct
                 continue
             end
 
