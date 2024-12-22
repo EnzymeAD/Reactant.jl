@@ -36,11 +36,27 @@
 
 using namespace xla::ifrt;
 
+namespace jlcxx {
+// template <typename SourceT>
+// struct julia_type_factory<std::optional<SourceT>> {
+//     static inline jl_datatype_t* julia_type()
+//     {
+//         jl_datatype_t* union_params_types[2] = { julia_base_type<SourceT>(), jl_nothing_type };
+//         auto union_nothing = apply_type(jlcxx::julia_type("Union"), jl_nothing_type);
+//         // return apply_type(jlcxx::julia_type("Union"), reinterpret_cast<jl_value_t**>(&union_params_types), 2);
+//         return apply_type(jlcxx::julia_type("Union"), julia_base_type<SourceT>());
+//     }
+// };
+}
+
 #define JLCXX_CLASS_DEF_EQ(WRAP, CLASS) WRAP.method("==", &CLASS::operator==);
 #define JLCXX_CLASS_DEF_NE(WRAP, CLASS) WRAP.method("!=", &CLASS::operator!=);
 #define JLCXX_CLASS_DEF_ADD(WRAP, CLASS) WRAP.method("+", &CLASS::operator+);
 #define JLCXX_CLASS_DEF_SUB(WRAP, CLASS) WRAP.method("-", &CLASS::operator-);
+#define JLCXX_CLASS_DEF_DBGSTR(WRAP, CLASS) WRAP.method("string", &CLASS::DebugString);
 
+// TODO refactor `DebugString` calls for `AbslStringify`
+// TODO impl calls to `hash` using `AbslHashValue`
 JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
 {
     mod.map_type<MemoryId>("Int32");
@@ -86,7 +102,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
         .method("isdeleted", &Value::IsDeleted);
 
     mod.set_override_module(jl_base_module);
-    wrap_value.method("string", &Value::DebugString);
+    JLCXX_CLASS_DEF_DBGSTR(wrap_value, Value)
     mod.unset_override_module();
 
     // Tuple
@@ -140,7 +156,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
     mod.set_override_module(jl_base_module);
     JLCXX_CLASS_DEF_EQ(wrap_dtype, DType)
     JLCXX_CLASS_DEF_NE(wrap_dtype, DType)
-    mod.method("string", [](const DType& x) { return x.DebugString(); });
+    JLCXX_CLASS_DEF_DBGSTR(wrap_dtype, DType)
     mod.unset_override_module();
 
     // Shape
@@ -149,10 +165,10 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
     //         return new Shape(dims);
     //     });
     mod.set_override_module(jl_base_module);
-    // mod.method("==", [](Shape* a, Shape* b) { return *a == *b; });
-    // mod.method("!=", [](Shape* a, Shape* b) { return *a != *b; });
+    JLCXX_CLASS_DEF_EQ(wrap_shape, Shape)
+    JLCXX_CLASS_DEF_NE(wrap_shape, Shape)
     // mod.method("copy", [](const Shape& x) { return Shape(x); });
-    mod.method("string", [](const Shape& x) { return x.DebugString(); });
+    JLCXX_CLASS_DEF_DBGSTR(wrap_shape, Shape)
     // mod.method("size", [](const Shape& x) { return x.dims(); });
     mod.method("length", [](const Shape& x) { return x.num_elements(); });
     mod.unset_override_module();
@@ -163,7 +179,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
         .method("isdyndim", &DynamicShape::IsDynamicDim);
 
     mod.set_override_module(jl_base_module);
-    mod.method("string", [](const DynamicShape& x) { return x.DebugString(); });
+    JLCXX_CLASS_DEF_DBGSTR(wrap_dynamicshape, DynamicShape)
     mod.unset_override_module();
 
     // Index
@@ -182,7 +198,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
     JLCXX_CLASS_DEF_ADD(wrap_index, Index)
     JLCXX_CLASS_DEF_SUB(wrap_index, Index)
     mod.method("*", [](const Index& a, std::vector<const int64_t> mul) { return a * absl::Span<const int64_t>(mul); });
-    mod.method("string", [](const Index& x) { return x.DebugString(); });
+    JLCXX_CLASS_DEF_DBGSTR(wrap_index, Index)
     mod.unset_override_module();
 
     // IndexDomain
@@ -196,39 +212,39 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
     mod.set_override_module(jl_base_module);
     JLCXX_CLASS_DEF_EQ(wrap_indexdomain, IndexDomain)
     JLCXX_CLASS_DEF_NE(wrap_indexdomain, IndexDomain)
-    mod.method("+", [](const IndexDomain& x, const Index& offset) { return x + offset; });
-    mod.method("-", [](const IndexDomain& x, const Index& offset) { return x - offset; });
-    mod.method("string", [](const IndexDomain& x) { return x.DebugString(); });
+    JLCXX_CLASS_DEF_ADD(wrap_indexdomain, IndexDomain)
+    JLCXX_CLASS_DEF_SUB(wrap_indexdomain, IndexDomain)
+    JLCXX_CLASS_DEF_DBGSTR(wrap_indexdomain, IndexDomain)
     mod.unset_override_module();
 
     // MemoryKind
-    // TODO `memory_kind` returns optional
     wrap_memorykind
         .constructor<>()
-        .constructor([](const std::string& name) { return new MemoryKind(name); });
+        .constructor([](const std::string& name) { return new MemoryKind(name); })
+        .method("canonicalize", [](MemoryKind& x, Device& dev) { return CanonicalizeMemoryKind(x, &dev); });
 
     mod.set_override_module(jl_base_module);
-    // mod.method("string", [](const MemoryKind& x) { return x.DebugString(); });
+    JLCXX_CLASS_DEF_EQ(wrap_memorykind, MemoryKind)
+    JLCXX_CLASS_DEF_NE(wrap_memorykind, MemoryKind)
+    wrap_memorykind.method("string", [](const MemoryKind& x) { return std::string(x.memory_kind().value_or("")); });
     mod.unset_override_module();
 
-    // TODO `CanonicalizeMemoryKind`
-
-    // Memory (virtual)
-    // TODO `Devices`
+    // Memory
+    // TODO check if `Devices` is correct (why does it return a span of pointers?)
     wrap_memory
+        .constructor<>()
         .method("id", &Memory::Id)
         .method("kind", &Memory::Kind)
-        // .method("devices", [](const Memory& x) {
-        //     auto devices_span = x.Devices();
-        //     return std::vector<Device*>(devices_span.begin(), devices_span.end());
-        // })
-        ;
+        .method("devices", [](const Memory& x) {
+            auto devices_span = x.Devices();
+            return std::vector<Device>(devices_span.begin(), devices_span.end());
+        });
 
     mod.set_override_module(jl_base_module);
-    wrap_memory.method("string", [](const Memory& x) { return std::string(x.ToString()); });
+    JLCXX_CLASS_DEF_DBGSTR(wrap_memory, Memory)
     mod.unset_override_module();
 
-    // Device (virtual)
+    // Device
     // TODO `Memories`
     wrap_device
         .method("client", &Device::client)
@@ -238,7 +254,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
         .method("isaddressable", &Device::IsAddressable)
         .method("process_index", &Device::ProcessIndex);
 
-    // Sharding (virtual)
+    // Sharding
     mod.add_bits<SingleDeviceShardSemantics>("SingleDeviceShardSemantics", jlcxx::julia_type("CppEnum"));
     mod.set_const("SingleDeviceShardSemanticsAddressable", SingleDeviceShardSemantics::kAddressableShards);
     mod.set_const("SingleDeviceShardSemanticsAll", SingleDeviceShardSemantics::kAllShards);
@@ -260,7 +276,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
 
     // TODO SingleDeviceSharding, OpaqueSharding, ConcreteSharding, ConcreteEvenSharding, ShardingParamSharding
 
-    // Array (virtual)
+    // Array
     mod.add_bits<ArrayCopySemantics>("ArrayCopySemantics", jlcxx::julia_type("CppEnum"));
     mod.set_const("ArrayCopySemanticsAlwaysCopy", ArrayCopySemantics::kAlwaysCopy);
     mod.set_const("ArrayCopySemanticsReuseInput", ArrayCopySemantics::kReuseInput);
@@ -277,7 +293,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
         // .method("copy_to_host_buffer", &Array::CopyToHostBuffer)
         ;
 
-    // Topology (virtual)
+    // Topology
     wrap_topology
         .method("platform_name", [](const Topology& x) { return std::string(x.platform_name()); })
         .method("platform_version", [](const Topology& x) { return std::string(x.platform_version()); })
@@ -287,4 +303,22 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
         // .method("serialize", &Topology::Serialize)
         // .method("Attributes", &Topology::Attributes)
         ;
+
+    // Client
+
+    // HostCallback
+
+    // LoadedHostCallback
+
+    // PjRtHostSendAndRecvLoadedHostCallback
+
+    // Executable
+
+    // LoadedExecutable
+
+    // CustomCallProgram
+
+    // HloProgram
+
+    // Compiler
 }
