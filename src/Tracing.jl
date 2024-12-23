@@ -6,32 +6,32 @@
     TracedSetPath = 5
 end
 
-for T in (
-    DataType,
-    Module,
-    Nothing,
-    Symbol,
-    AbstractChar,
-    AbstractFloat,
-    Integer,
-    AbstractString,
-    RArray,
-    RNumber,
-)
-    @eval function traced_type(::Type{T}, seen, mode) where {T<:$T}
+for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, RArray, RNumber)
+    @eval function traced_type(::Type{T}, seen, mode, track_numbers) where {T<:$T}
         return T
     end
 end
 
-function traced_type(::Type{C}, seen::ST, mode::Val{Mode}) where {T,C<:Complex{T},ST,Mode}
+function traced_type(::Type{T}, seen, mode::Val{Mode}, track_numbers) where {T<:Number,Mode}
+    if Mode == ArrayToConcrete && any(Base.Fix1(<:, T), track_numbers)
+        return ConcreteRNumber{T}
+    end
+    return T
+end
+
+function traced_type(
+    ::Type{C}, seen::ST, mode::Val{Mode}, track_numbers::TN
+) where {T,C<:Complex{T},ST,Mode,TN}
     if !(C isa UnionAll)
-        return Complex{traced_type(T, seen, mode)}
+        return Complex{traced_type(T, seen, mode, track_numbers)}
     else
-        return @invoke traced_type(C::Type{Any}, seen::ST, mode::Val{Mode})
+        return @invoke traced_type(
+            C::Type{Any}, seen::ST, mode::Val{Mode}, track_numbers::TN
+        )
     end
 end
 
-function traced_type(::Type{T}, seen, mode) where {T<:Function}
+function traced_type(::Type{T}, seen, mode, track_numbers) where {T<:Function}
     # functions are directly returned
     if sizeof(T) == 0
         return T
@@ -41,7 +41,7 @@ function traced_type(::Type{T}, seen, mode) where {T<:Function}
     N = fieldcount(T)
     changed = false
     traced_fieldtypes = ntuple(Val(N)) do i
-        next = traced_type(fieldtype(T, i), seen, mode)
+        next = traced_type(fieldtype(T, i), seen, mode, track_numbers)
         changed |= next != fieldtype(T, i)
         next
     end
@@ -57,31 +57,34 @@ end
 @inline is_concrete_tuple(x::T2) where {T2} =
     (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
 
-function traced_type(::Type{T}, seen, mode) where {T<:Tuple}
+function traced_type(::Type{T}, seen, mode, track_numbers) where {T<:Tuple}
     if !Base.isconcretetype(T) || !is_concrete_tuple(T) || T isa UnionAll
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
     elseif is_concrete_tuple(T) && any(T2 isa Core.TypeofVararg for T2 in T.parameters)
         # Tuple{((T2 isa Core.TypeofVararg ? Any : T2) for T2 in T.parameters)...}
         throw(AssertionError("Type tuple of vararg $T is not supported"))
     end
-    TT = [traced_type(T.parameters[i], seen, mode) for i in 1:length(T.parameters)]
+    TT = [
+        traced_type(T.parameters[i], seen, mode, track_numbers) for
+        i in 1:length(T.parameters)
+    ]
     return Tuple{TT...}
 end
 
-function traced_type(::Type{T}, seen, mode) where {N,V,T<:NamedTuple{N,V}}
-    return NamedTuple{N,traced_type(V, seen, mode)}
+function traced_type(::Type{T}, seen, mode, track_numbers) where {N,V,T<:NamedTuple{N,V}}
+    return NamedTuple{N,traced_type(V, seen, mode, track_numbers)}
 end
 
-function traced_type(::Type{T}, seen, mode) where {K,V,T<:AbstractDict{K,V}}
+function traced_type(::Type{T}, seen, mode, track_numbers) where {K,V,T<:AbstractDict{K,V}}
     dictty = T.name.wrapper
-    return dictty{K,traced_type(V, seen, mode)}
+    return dictty{K,traced_type(V, seen, mode, track_numbers)}
 end
 
 @inline getmap(::Val{T}) where {T} = nothing
 @inline getmap(::Val{T}, a, b, args...) where {T} = getmap(Val(T), args...)
 @inline getmap(::Val{T}, ::Val{T}, ::Val{T2}, args...) where {T,T2} = T2
 
-function traced_type(::Type{T}, seen, mode) where {T}
+function traced_type(::Type{T}, seen, mode, track_numbers) where {T}
     if T === Any
         return T
     end
@@ -110,7 +113,10 @@ function traced_type(::Type{T}, seen, mode) where {T}
     end
 
     if T isa Union
-        return Union{traced_type(T.a, seen, mode),traced_type(T.b, seen, mode)}
+        return Union{
+            traced_type(T.a, seen, mode, track_numbers),
+            traced_type(T.b, seen, mode, track_numbers),
+        }
     end
 
     # if abstract it must be by reference
@@ -133,7 +139,7 @@ function traced_type(::Type{T}, seen, mode) where {T}
     subTys = Type[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
-        subTT = traced_type(subT, seen2, mode)
+        subTT = traced_type(subT, seen2, mode, track_numbers)
         changed |= subT != subTT
         push!(subTys, subTT)
     end
@@ -145,7 +151,7 @@ function traced_type(::Type{T}, seen, mode) where {T}
     subParms = []
     for SST in T.parameters
         if SST isa Type
-            TrT = traced_type(SST, seen, mode)
+            TrT = traced_type(SST, seen, mode, track_numbers)
             push!(subParms, TrT)
         else
             push!(subParms, SST)
@@ -163,7 +169,7 @@ function traced_type(::Type{T}, seen, mode) where {T}
         for f in 1:fieldcount(T)
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
-            subTT = traced_type(subT, seen3, mode)
+            subTT = traced_type(subT, seen3, mode, track_numbers)
             if subT2 != subTT
                 legal = false
                 break
@@ -178,7 +184,9 @@ function traced_type(::Type{T}, seen, mode) where {T}
     throw(NoFieldMatchError(T, TT2))
 end
 
-function traced_type(::Type{<:ConcreteRNumber{T}}, seen, ::Val{mode}) where {T,mode}
+function traced_type(
+    ::Type{<:ConcreteRNumber{T}}, seen, ::Val{mode}, track_numbers
+) where {T,mode}
     if mode == ConcreteToTraced
         return TracedRNumber{T}
     elseif mode == TracedToConcrete
@@ -188,7 +196,9 @@ function traced_type(::Type{<:ConcreteRNumber{T}}, seen, ::Val{mode}) where {T,m
     end
 end
 
-function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode}
+function traced_type(
+    ::Type{T}, seen, ::Val{mode}, track_numbers
+) where {T<:ConcreteRArray,mode}
     if mode == ConcreteToTraced
         @inline base_typet(TV::TT) where {TT<:UnionAll} =
             UnionAll(TV.var, base_typet(TV.body))
@@ -201,7 +211,9 @@ function traced_type(::Type{T}, seen, ::Val{mode}) where {T<:ConcreteRArray,mode
     end
 end
 
-function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedType,mode}
+function traced_type(
+    ::Type{T}, seen::ST, ::Val{mode}, track_numbers
+) where {ST,T<:TracedType,mode}
     T <: MissingTracedValue && error("TODO")
     if mode == ConcreteToTraced
         throw("TracedRArray $T cannot be traced")
@@ -218,26 +230,28 @@ function traced_type(::Type{T}, seen::ST, ::Val{mode}) where {ST,T<:TracedType,m
     end
 end
 
-function traced_type(::Type{T}, seen, mode) where {T<:XLAArray}
+function traced_type(::Type{T}, seen, mode, track_numbers) where {T<:XLAArray}
     throw("XLA $T array cannot be traced")
 end
 
-function traced_type(::Type{A}, seen::ST, ::Val{mode}) where {T,N,A<:Array{T,N},ST,mode}
+function traced_type(
+    ::Type{A}, seen::ST, ::Val{mode}, track_numbers
+) where {T,N,A<:Array{T,N},ST,mode}
     if mode == ArrayToConcrete && T <: ReactantPrimitive
         return ConcreteRArray{T,N}
     else
-        return Array{traced_type(T, seen, Val(mode)),N}
+        return Array{traced_type(T, seen, Val(mode), track_numbers),N}
     end
 end
 
 for P in (Ptr, Core.LLVMPtr, Base.RefValue)
-    @eval function traced_type(::Type{P}, seen, mode) where {T,P<:$P{T}}
-        return $P{traced_type(T, seen, mode)}
+    @eval function traced_type(::Type{P}, seen, mode, track_numbers) where {T,P<:$P{T}}
+        return $P{traced_type(T, seen, mode, track_numbers)}
     end
 end
 
-function traced_type(::Type{Val{T}}, seen, mode) where {T}
-    if traced_type(typeof(T), seen, mode) == typeof(T)
+function traced_type(::Type{Val{T}}, seen, mode, track_numbers) where {T}
+    if traced_type(typeof(T), seen, mode, track_numbers) == typeof(T)
         return Val{T}
     end
     throw("Val type $(Val{T}) cannot be traced")
@@ -274,12 +288,13 @@ function make_tracer(
     mode;
     toscalar=false,
     tobatch=nothing,
+    track_numbers=(),
     kwargs...,
 ) where {RT}
     if haskey(seen, prev)
         return seen[prev]
     end
-    TT = traced_type(RT, (), Val(mode))
+    TT = traced_type(RT, (), Val(mode), track_numbers)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
@@ -295,7 +310,16 @@ function make_tracer(
         for i in 1:nf
             if isdefined(prev, i)
                 xi = Base.getfield(prev, i)
-                xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
+                xi2 = make_tracer(
+                    seen,
+                    xi,
+                    append_path(path, i),
+                    mode;
+                    toscalar,
+                    tobatch,
+                    track_numbers,
+                    kwargs...,
+                )
                 if xi !== xi2
                     changed = true
                 end
@@ -318,7 +342,16 @@ function make_tracer(
     for i in 1:nf
         if isdefined(prev, i)
             xi = Base.getfield(prev, i)
-            xi2 = make_tracer(seen, xi, append_path(path, i), mode; toscalar, tobatch)
+            xi2 = make_tracer(
+                seen,
+                xi,
+                append_path(path, i),
+                mode;
+                toscalar,
+                tobatch,
+                track_numbers,
+                kwargs...,
+            )
             if xi !== xi2
                 changed = true
             end
@@ -543,7 +576,7 @@ function make_tracer(
 end
 
 function make_tracer(
-    seen, @nospecialize(prev::RT), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
 ) where {RT<:Array}
     if haskey(seen, prev)
         return seen[prev]
@@ -551,14 +584,14 @@ function make_tracer(
     if mode == ArrayToConcrete && eltype(RT) <: ReactantPrimitive
         return seen[prev] = ConcreteRArray(prev)
     end
-    TT = traced_type(eltype(RT), (), Val(mode))
+    TT = traced_type(eltype(RT), (), Val(mode), track_numbers)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
     seen[prev] = newa
     same = true
     for I in eachindex(prev)
         if isassigned(prev, I)
             pv = prev[I]
-            nv = make_tracer(seen, pv, append_path(path, I), mode; kwargs...)
+            nv = make_tracer(seen, pv, append_path(path, I), mode; track_numbers, kwargs...)
             if pv !== nv
                 same = false
             end
@@ -584,12 +617,22 @@ function make_tracer(
 end
 
 function make_tracer(
-    seen, @nospecialize(prev::NamedTuple{A,RT}), @nospecialize(path), mode; kwargs...
+    seen,
+    @nospecialize(prev::NamedTuple{A,RT}),
+    @nospecialize(path),
+    mode;
+    track_numbers=(),
+    kwargs...,
 ) where {A,RT}
-    return NamedTuple{A,traced_type(RT, (), Val(mode))}((
+    return NamedTuple{A,traced_type(RT, (), Val(mode), track_numbers)}((
         (
             make_tracer(
-                seen, Base.getfield(prev, i), append_path(path, i), mode; kwargs...
+                seen,
+                Base.getfield(prev, i),
+                append_path(path, i),
+                mode;
+                track_numbers,
+                kwargs...,
             ) for i in 1:length(A)
         )...,
     ))
