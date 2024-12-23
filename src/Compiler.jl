@@ -658,6 +658,7 @@ function codegen_unflatten!(
 
                 if length(path) > 0
                     final_val = gensym("final_val")
+<<<<<<< HEAD
                     clocal = gensym("clocal")
                     unflatcode = quote
                         $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
@@ -683,6 +684,24 @@ function codegen_unflatten!(
                                 $cache_dict[$final_val]
                             end
                             traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
+=======
+                    unflatcode = quote
+                        $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
+                        if $final_val isa TracedRArray
+                            traced_setfield!(
+                                $unflatcode,
+                                $(Meta.quot(path[end])),
+                                ConcreteRArray{eltype($final_val),ndims($final_val)}(
+                                    $concrete_res_name, size($final_val)
+                                ),
+                            )
+                        elseif $final_val isa TracedRNumber
+                            traced_setfield!(
+                                $unflatcode,
+                                $(Meta.quot(path[end])),
+                                ConcreteRNumber{eltype($final_val)}($concrete_res_name),
+                            )
+>>>>>>> d976c2a4 (fix: aliasing and add a test)
                         else
                             traced_setfield!($final_val, :data, $concrete_res_name)
                         end
