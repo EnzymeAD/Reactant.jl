@@ -1,4 +1,4 @@
-load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
+load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
 load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
 
@@ -378,9 +378,6 @@ cc_library(
         "-Werror=return-type",
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation",
-        # "-I$(location @libcxxwrap_julia//:include)",
-        "-Iexternal/libcxxwrap_julia/include/",
-        "-Iexternal/julia/include/julia/",
     ],
     linkopts = select({
         "//conditions:default": [],
@@ -391,7 +388,6 @@ cc_library(
     }),
     linkstatic = True,
     deps = [
-        "@libcxxwrap_julia",
         "@enzyme//:EnzymeMLIR",
         "@llvm-project//mlir:AffineDialect",
         "@llvm-project//mlir:AllPassesAndDialects",

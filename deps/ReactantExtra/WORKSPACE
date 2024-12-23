@@ -1,23 +1,19 @@
 workspace(name = "Reactant")
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
 load("//third_party/hedron_compile_commands:workspace.bzl", hedron_compile_commands_workspace = "repo")
 hedron_compile_commands_workspace()
+
 load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
 hedron_compile_commands_setup()
+
 load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
 hedron_compile_commands_setup_transitive()
+
 load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
 hedron_compile_commands_setup_transitive_transitive()
+
 load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
 hedron_compile_commands_setup_transitive_transitive_transitive()
-
-load("//third_party/julia:workspace.bzl", julia_workspace = "repo")
-julia_workspace()
-
-load("//third_party/libcxxwrap_julia:workspace.bzl", libcxxwrap_julia_workspace = "repo")
-libcxxwrap_julia_workspace()
 
 load("//third_party/nsync:workspace.bzl", nsync_workspace = "repo")
 nsync_workspace()
