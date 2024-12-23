@@ -8,7 +8,6 @@ using PythonCall
 
 const jaxptr = Ref{Py}()
 
-
 const NUMPY_SIMPLE_TYPES = (
     ("bool_", Bool),
     ("int8", Int8),
