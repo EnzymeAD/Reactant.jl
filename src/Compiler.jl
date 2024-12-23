@@ -17,9 +17,12 @@ import ..Reactant:
     TracedType
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
-@inline traced_getfield(
-    @nospecialize(obj::AbstractArray{<:Union{ConcreteRNumber,ConcreteRArray}}), field
-) = Base.getindex(obj, field)
+@inline traced_getfield(@nospecialize(obj::AbstractArray), field) =
+    Base.getindex(obj, field)
+
+@inline traced_setfield!(@nospecialize(obj), field, val) = Base.setfield!(obj, val, field)
+@inline traced_setfield!(@nospecialize(obj::AbstractArray), field, val) =
+    Base.setindex!(obj, val, field)
 
 function create_result(tocopy::T, path, result_stores) where {T}
     if !isstructtype(typeof(tocopy))
@@ -573,32 +576,32 @@ function codegen_flatten!(linear_args, result_stores)
         push!(flatten_code, :($usbuf = $flatcode.data))
         push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
 
-        # TODO
-        respaths = ((p for p in arg.paths if p[1] != :args)...,)
+        # TODO: unused for the time being
+        # respaths = ((p for p in arg.paths if p[1] == :result || p[1] == :resargs)...,)
 
         # resarg = false
-        for respath in respaths
-            if respath[1] == :result
-                flatcode = :result
-                respath = respath[2:end]
-                result_stores[respath] = usbuf
-                resarg = true
-            else
-                @assert respath[1] == :resargs
-                if respath[2] != path[2]
-                    continue
-                end
-                # flatcode = :(args[$(respath[2])])
-                path = path[3:end]
-            end
-            # for p in path
-            #     flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
-            # end
-            # resarg = true
-            # flatcode = :($flatcode.data = $usbuf)
-            # @show flatcode
-            # push!(flatten_code, res)
-        end
+        # for respath in respaths
+        #     if respath[1] == :result
+        #         flatcode = :result
+        #         respath = respath[2:end]
+        #         result_stores[respath] = usbuf
+        #         resarg = true
+        #     else
+        #         @assert respath[1] == :resargs
+        #         if respath[2] != path[2]
+        #             continue
+        #         end
+        #         # flatcode = :(args[$(respath[2])])
+        #         path = path[3:end]
+        #     end
+        #     # for p in path
+        #     #     flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
+        #     # end
+        #     # resarg = true
+        #     # flatcode = :($flatcode.data = $usbuf)
+        #     # @show flatcode
+        #     # push!(flatten_code, res)
+        # end
         # if resarg
         #     push!(resarg_code, :($usbuf = $flatcode.data))
         # end
@@ -624,53 +627,49 @@ function codegen_unflatten!(
 
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
-        paths = ((p for p in result.paths if p[1] != :args)...,)
+        paths = ((p for p in result.paths if p[1] == :result || p[1] == :resargs)...,)
         for path in paths
             if path[1] == :result
                 unflatcode = :result
                 path = path[2:end]
                 result_stores[path] = concrete_res_name
                 continue
-            elseif path[1] == :resargs
+            else
+                @assert path[1] == :resargs
                 unflatcode = :(args[$(path[2])])
                 path = path[3:end]
-            else
-                continue
-            end
 
-            # unroll path tree
-            for p in path[1:(end - 1)]
-                unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
-            end
-            if length(path) > 0
-                final_val = gensym("final_val")
-                unflatcode = quote
-                    $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
-                    if $final_val isa TracedRArray
-                        setfield!(
-                            $unflatcode,
-                            $(Meta.quot(path[end])),
-                            ConcreteRArray{eltype($final_val),ndims($final_val)}(
-                                $concrete_res_name, size($final_val)
-                            ),
-                        )
-                    elseif $final_val isa TracedRNumber
-                        setfield!(
-                            $unflatcode,
-                            $(Meta.quot(path[end])),
-                            ConcreteRNumber{eltype($final_val)}($concrete_res_name),
-                        )
-                    else
-                        setfield!($final_val, :data, $concrete_res_name)
+                for p in path[1:(end - 1)]
+                    unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
+                end
+
+                if length(path) > 0
+                    final_val = gensym("final_val")
+                    unflatcode = quote
+                        $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
+                        if $final_val isa TracedRArray
+                            traced_setfield!(
+                                $unflatcode,
+                                $(Meta.quot(path[end])),
+                                ConcreteRArray{eltype($final_val),ndims($final_val)}(
+                                    $concrete_res_name, size($final_val)
+                                ),
+                            )
+                        elseif $final_val isa TracedRNumber
+                            traced_setfield!(
+                                $unflatcode,
+                                $(Meta.quot(path[end])),
+                                ConcreteRNumber{eltype($final_val)}($concrete_res_name),
+                            )
+                        else
+                            traced_setfield!($final_val, :data, $concrete_res_name)
+                        end
                     end
+                else
+                    unflatcode = :($unflatcode.data = $concrete_res_name)
                 end
-            else
-                unflatcode = quote
-                    $unflatcode.data = $concrete_res_name
-                end
+                push!(unflatten_code, unflatcode)
             end
-
-            push!(unflatten_code, unflatcode)
         end
     end
 
