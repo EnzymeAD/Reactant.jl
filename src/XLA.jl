@@ -154,14 +154,9 @@ function __init__()
     # has the fix.
     try
         errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
-        unsafe_store!(errptr, @cfunction(
-            reactant_err,
-            Cvoid,
-            (Cstring,)
-        ))
+        unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
     finally
     end
-    
     return nothing
 end
 
