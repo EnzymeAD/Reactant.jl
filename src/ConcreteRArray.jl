@@ -366,19 +366,15 @@ function Base.fill!(a::ConcreteRArray{T,N}, val) where {T,N}
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
-            start = 0
-            for i in 1:N
-                start *= size(a, N - i + 1)
-                start += (args[N - i + 1] - 1)
+            for start in 1:length(a)
+                unsafe_store!(ptr, val, start)
             end
-            start += 1
-            unsafe_store!(ptr, val, start)
         end
         return a
     end
 
     idxs = ntuple(Returns(Colon()), N)
-    fn = compile(mysetindex!, (a, val, idxs...,))
+    fn = compile(mysetindex!, (a, val, idxs...))
     fn(a, val, idxs...)
     return a
 end

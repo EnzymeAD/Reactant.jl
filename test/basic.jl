@@ -664,3 +664,15 @@ end
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
     ) isa ConcreteRNumber{Float32}
 end
+
+@testset "fill! and zero on ConcreteRArray" begin
+    x_ra = Reactant.to_rarray(rand(3, 4))
+
+    z = zero(x_ra)
+    @test z isa ConcreteRArray
+    @test size(z) == size(x_ra)
+    @test all(iszero, Array(z))
+
+    fill!(z, 1.0)
+    @test all(==(1.0), Array(z))
+end
