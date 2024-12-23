@@ -242,7 +242,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     return convert(Array, a)[args...]
 end
 
-function mysetindex!(a, v, args::Vararg{Int,N}) where {N}
+function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
     setindex!(a, v, args...)
     return nothing
 end
@@ -352,4 +352,33 @@ end
 
 function Ops.constant(x::ConcreteRNumber{T}; kwargs...) where {T}
     return Ops.constant(Base.convert(T, x); kwargs...)
+end
+
+Base.zero(x::ConcreteRArray{T,N}) where {T,N} = ConcreteRArray(zeros(T, size(x)...))
+
+function Base.fill!(a::ConcreteRArray{T,N}, val) where {T,N}
+    if a.data == XLA.AsyncEmptyBuffer
+        throw("Cannot setindex! to empty buffer")
+    end
+
+    XLA.await(a.data)
+    if buffer_on_cpu(a)
+        buf = a.data.buffer
+        GC.@preserve buf begin
+            ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
+            start = 0
+            for i in 1:N
+                start *= size(a, N - i + 1)
+                start += (args[N - i + 1] - 1)
+            end
+            start += 1
+            unsafe_store!(ptr, val, start)
+        end
+        return a
+    end
+
+    idxs = ntuple(Returns(Colon()), N)
+    fn = compile(mysetindex!, (a, val, idxs...,))
+    fn(a, val, idxs...)
+    return a
 end
