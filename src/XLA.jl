@@ -92,13 +92,12 @@ using Reactant_jll
 using Libdl
 using Scratch, Downloads
 
-
 struct ReactantInternalError <: Base.Exception
     msg::String
 end
 
 function Base.showerror(io::IO, ece::ReactantInternalError)
-    print(io, ece.msg, '\n')
+    return print(io, ece.msg, '\n')
 end
 
 function reactant_err(msg::Cstring)::Cvoid
