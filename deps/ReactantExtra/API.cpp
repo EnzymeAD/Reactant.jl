@@ -49,6 +49,8 @@
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
+#include "xla/pjrt/pjrt_executable.h"
+#include "xla/pjrt/status_casters.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
