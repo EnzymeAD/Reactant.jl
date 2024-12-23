@@ -430,6 +430,7 @@ cc_library(
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
 "-Wl,-exported_symbol,_EnzymeGPUCustomCall",
+"-Wl,-exported_symbol,_ReactantThrowError",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -612,6 +613,21 @@ gentbl_cc_library(
     td_file = "@enzyme//:Enzyme/MLIR/Dialect/EnzymeOps.td",
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "EnzymeXLAJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "EnzymeXLA.jl"
+        )
+    ],
+    td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/EnzymeXLAOps.td",
+    deps = [
+        "@enzyme//:EnzymeDialectTdFiles",
+        "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
     ],
     tblgen = "//:mlir-jl-tblgen",
 )

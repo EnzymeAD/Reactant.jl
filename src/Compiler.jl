@@ -118,6 +118,7 @@ const opt_passes::String = join(
                 "get_tuple_element_op_canon<16>",
                 "real_op_canon<16>",
                 "imag_op_canon<16>",
+                "conj_complex_negate<16>",
                 "get_dimension_size_op_canon<16>",
                 "gather_op_canon<16>",
                 "reshape_op_canon<16>",
@@ -157,6 +158,7 @@ const opt_passes::String = join(
                 "cos_simplify<16>",
                 "sin_simplify<16>",
                 "noop_slice<16>",
+                "noop_reverse<16>",
                 "const_prop_through_barrier<16>",
                 "slice_slice<16>",
                 "shift_right_logical_simplify<16>",
@@ -313,7 +315,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
 
     toolkit = ""
     if isdefined(Reactant_jll, :ptxas_path)
-	 toolkit = Reactant_jll.ptxas_path[1:end-length("/bin/ptxas")]
+        toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
     kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])}"
     if optimize === :all
@@ -327,7 +329,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
-		    kern
+                    kern,
                 ],
                 ',',
             ),
@@ -335,6 +337,21 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     elseif optimize === :before_kernel
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :no_enzyme
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
@@ -368,7 +385,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
-		    kern
+                    kern,
                 ],
                 ',',
             ),
@@ -377,7 +394,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
-            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,"*kern
+            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math," * kern
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")

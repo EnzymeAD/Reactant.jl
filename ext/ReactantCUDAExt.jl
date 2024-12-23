@@ -336,13 +336,6 @@ function link(job, compiled)
     return compiled
 end
 
-function transpose_val(val)
-    attr = MLIR.IR.DenseArrayAttribute(
-        Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...]
-    )
-    return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
-end
-
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(false),
@@ -365,7 +358,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
         push!(rarrays, ta)
         arg = ta.mlir_data
-        arg = transpose_val(arg)
+        arg = Reactant.TracedUtils.transpose_val(arg)
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
         push!(
@@ -390,17 +383,23 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     # MLIR.IR.rmattr!(func.entry, "sym_visibility")
 
     operands = MLIR.IR.Value[]
-    for idx in (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
-        push!(operands, Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, idx).mlir_data)
+    for idx in
+        (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
+        push!(
+            operands,
+            Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, idx).mlir_data,
+        )
     end
     for arg in mlir_args
-	push!(operands, arg)
+        push!(operands, arg)
     end
     owned_regions = MLIR.IR.Region[]
     successors = MLIR.IR.Block[]
     attributes = MLIR.IR.NamedAttribute[
-	MLIR.IR.NamedAttribute("fn", MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))),
-	MLIR.IR.NamedAttribute("output_operand_aliases", MLIR.IR.Attribute(output_operand_aliases))
+        MLIR.IR.NamedAttribute("fn", MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))),
+        MLIR.IR.NamedAttribute(
+            "output_operand_aliases", MLIR.IR.Attribute(output_operand_aliases)
+        ),
     ]
 
     location = MLIR.IR.Location()
@@ -415,7 +414,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         result_inference=false,
     )
     for (i, res) in enumerate(rarrays)
-        res.mlir_data = transpose_val(MLIR.IR.result(call, i))
+        res.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, i))
     end
 end
 
@@ -461,25 +460,26 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 function __init__()
-   handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
-   if handle === nothing
-	handle = C_NULL
-	end
-   ptr1 = Reactant.XLA.Libdl.dlsym(handle, "cuLaunchKernel"; throw_error=false)
-   if ptr1 === nothing
-	ptr1 = C_NULL
-   end
-   ptr2 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleLoadData"; throw_error=false)
-   if ptr2 === nothing
-	ptr2 = C_NULL
-   end
-   ptr3 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleGetFunction"; throw_error=false)
-   if ptr3 === nothing
-	ptr3 = C_NULL
-   end
-   Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
-   Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
-   Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+    handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
+    if handle === nothing
+        handle = C_NULL
+    end
+    ptr1 = Reactant.XLA.Libdl.dlsym(handle, "cuLaunchKernel"; throw_error=false)
+    if ptr1 === nothing
+        ptr1 = C_NULL
+    end
+    ptr2 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleLoadData"; throw_error=false)
+    if ptr2 === nothing
+        ptr2 = C_NULL
+    end
+    ptr3 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleGetFunction"; throw_error=false)
+    if ptr3 === nothing
+        ptr3 = C_NULL
+    end
+    Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
+    Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
+    Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+    return
 end
 
 end # module ReactantCUDAExt
