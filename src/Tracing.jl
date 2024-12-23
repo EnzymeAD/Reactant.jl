@@ -12,7 +12,9 @@ for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, RArra
     end
 end
 
-function traced_type(::Type{T}, seen, mode::Val{Mode}, track_numbers) where {T<:Number,Mode}
+function traced_type(
+    ::Type{T}, seen, mode::Val{Mode}, track_numbers
+) where {T<:Union{AbstractFloat,Integer},Mode}
     if Mode == ArrayToConcrete && any(Base.Fix1(<:, T), track_numbers)
         return ConcreteRNumber{T}
     end

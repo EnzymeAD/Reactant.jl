@@ -10,6 +10,7 @@ import ..Reactant:
     ConcreteRNumber,
     TracedRArray,
     TracedRNumber,
+    RArray,
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
@@ -19,10 +20,13 @@ import ..Reactant:
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 @inline traced_getfield(@nospecialize(obj::AbstractArray), field) =
     Base.getindex(obj, field)
+@inline traced_getfield(@nospecialize(obj::RArray), field) = Base.getfield(obj, field)
 
-@inline traced_setfield!(@nospecialize(obj), field, val) = Base.setfield!(obj, val, field)
+@inline traced_setfield!(@nospecialize(obj), field, val) = Base.setfield!(obj, field, val)
 @inline traced_setfield!(@nospecialize(obj::AbstractArray), field, val) =
     Base.setindex!(obj, val, field)
+@inline traced_setfield!(@nospecialize(obj::RArray), field, val) =
+    Base.setfield!(obj, field, val)
 
 function create_result(tocopy::T, path, result_stores) where {T}
     if !isstructtype(typeof(tocopy))
