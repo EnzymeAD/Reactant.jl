@@ -151,13 +151,18 @@ function __init__()
         "CUDA"::Cstring,
     )::Cvoid
 
-    errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
-
-    unsafe_store!(errptr, @cfunction(
-        reactant_err,
-        Cvoid,
-        (Cstring,)
-    ))
+    # This wasn't properly exported on macos, we'll remove the try once macOS JLL
+    # has the fix.
+    try
+        errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
+        unsafe_store!(errptr, @cfunction(
+            reactant_err,
+            Cvoid,
+            (Cstring,)
+        ))
+    finally
+    end
+    
     return nothing
 end
 
