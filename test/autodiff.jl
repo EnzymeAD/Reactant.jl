@@ -91,7 +91,7 @@ function cached_return(x, stret::StateReturn)
     return loss
 end
 
-function cached_return(x, stret::StateReturn2)
+function cached_return(x, stret::StateReturn1)
     loss = sum(x)
     tmp = x .+ 1
     stret.st1 = tmp
@@ -110,7 +110,7 @@ end
     @test stret.st isa ConcreteRArray
     @test stret.st ≈ x .+ 1
 
-    stret = StateReturn2(nothing, nothing)
+    stret = StateReturn1(nothing, nothing)
     ret = @jit Enzyme.gradient(Reverse, cached_return, x_ra, Const(stret))
 
     @test @allowscalar all(isone, ret[1])

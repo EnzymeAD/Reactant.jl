@@ -11,6 +11,7 @@ import ..Reactant:
     TracedRArray,
     TracedRNumber,
     RArray,
+    RNumber,
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
@@ -18,15 +19,18 @@ import ..Reactant:
     TracedType
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
-@inline traced_getfield(@nospecialize(obj::AbstractArray), field) =
-    Base.getindex(obj, field)
-@inline traced_getfield(@nospecialize(obj::RArray), field) = Base.getfield(obj, field)
+@inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
+    (isbitstype(T) || obj isa RArray) && return Base.getfield(obj, field)
+    return Base.getindex(obj, field)
+end
 
 @inline traced_setfield!(@nospecialize(obj), field, val) = Base.setfield!(obj, field, val)
-@inline traced_setfield!(@nospecialize(obj::AbstractArray), field, val) =
-    Base.setindex!(obj, val, field)
-@inline traced_setfield!(@nospecialize(obj::RArray), field, val) =
-    Base.setfield!(obj, field, val)
+@inline function traced_setfield!(
+    @nospecialize(obj::AbstractArray{T}), field, val
+) where {T}
+    (isbitstype(T) || obj isa RArray) && return Base.setfield!(obj, field, val)
+    return Base.setindex!(obj, val, field)
+end
 
 function create_result(tocopy::T, path, result_stores) where {T}
     if !isstructtype(typeof(tocopy))
@@ -673,9 +677,9 @@ function codegen_unflatten!(
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcreteRNumber{
-                                    eltype($final_val)
-                                }($concrete_res_name)
+                                $cache_dict[$final_val] = ConcreteRNumber{eltype($final_val)}(
+                                    $concrete_res_name
+                                )
                                 $cache_dict[$final_val]
                             end
                             traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
