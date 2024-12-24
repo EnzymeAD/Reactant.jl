@@ -54,10 +54,7 @@ else
     }
 end
 
-abstract type RArray{T<:ReactantPrimitive,N} <: AbstractArray{T,N} end
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
-
-Base.collect(A::RArray) = copy(A)
 
 function ancestor(x::AbstractArray)
     p_x = parent(x)
@@ -71,7 +68,21 @@ include("Interpreter.jl")
 
 include("utils.jl")
 
-mutable struct TracedRArray{T,N} <: RArray{T,N}
+mutable struct TracedRNumber{T} <: RNumber{T}
+    paths::Tuple
+    mlir_data::Union{Nothing,MLIR.IR.Value}
+
+    function TracedRNumber{T}(
+        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+    ) where {T}
+        if !isnothing(mlir_data)
+            @assert size(MLIR.IR.type(mlir_data)) == ()
+        end
+        return new{T}(paths, mlir_data)
+    end
+end
+
+mutable struct TracedRArray{T,N} <: AbstractArray{TracedRNumber{T},N}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
     shape::NTuple{N,Int}
@@ -102,19 +113,29 @@ function TracedRArray(data::MLIR.IR.Value)
     )
 end
 
-mutable struct TracedRNumber{T} <: RNumber{T}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
+struct XLAArray{T,N} <: AbstractArray{T,N} end
 
-    function TracedRNumber{T}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
-    ) where {T}
-        if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == ()
-        end
-        return new{T}(paths, mlir_data)
-    end
+mutable struct ConcreteRNumber{T} <: RNumber{T}
+    data::XLA.AsyncBuffer
 end
+
+mutable struct ConcreteRArray{T,N} <: AbstractArray{ConcreteRNumber{T},N}
+    data::XLA.AsyncBuffer
+    shape::NTuple{N,Int}
+end
+
+unwrapped_eltype(::Type{T}) where {T<:Number} = T
+unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{<:TracedRArray{T,N}}) where {T,N} = T
+unwrapped_eltype(::Type{<:XLAArray{T,N}}) where {T,N} = T
+unwrapped_eltype(::Type{<:ConcreteRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{<:ConcreteRArray{T,N}}) where {T,N} = T
+unwrapped_eltype(x) = unwrapped_eltype(typeof(x))
+
+const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
+const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}
+
+const RArray{T,N} = Union{ConcreteRArray{T,N},TracedRArray{T,N},XLAArray{T,N}}
 
 include("Ops.jl")
 include("TracedUtils.jl")

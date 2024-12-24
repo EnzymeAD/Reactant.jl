@@ -1,20 +1,3 @@
-struct XLAArray{T,N} <: RArray{T,N}
-    # size::NTuple{N,Int}
-end
-
-mutable struct ConcreteRArray{T,N} <: RArray{T,N}
-    data::XLA.AsyncBuffer
-    #   data::XLAArray{T, N}
-    shape::NTuple{N,Int}
-end
-
-const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
-const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}
-
-mutable struct ConcreteRNumber{T} <: RNumber{T}
-    data::XLA.AsyncBuffer
-end
-
 function ConcreteRNumber{T}(
     data::T2; client=XLA.default_backend[], idx=XLA.default_device_idx[], device=nothing
 ) where {T<:Number,T2<:Number}
@@ -234,12 +217,12 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
                 # start += (args[i]-1)
             end
             start += 1
-            return unsafe_load(ptr, start)
+            return ConcreteRNumber(unsafe_load(ptr, start))
         end
     end
 
     GPUArraysCore.assertscalar("getindex(::ConcreteRArray, ::Vararg{Int, N})")
-    return convert(Array, a)[args...]
+    return ConcreteRNumber(convert(Array, a)[args...])
 end
 
 function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
