@@ -120,10 +120,9 @@ function should_rewrite_ft(@nospecialize(ft))
     if ft <: typeof(Base.hvcat)
         return false
     end
-    
     if ft <: typeof(Core.Compiler.concrete_eval_eligible)
         return false
-    end 
+    end
     if ft <: typeof(Core.Compiler.typeinf_type) || ft <: typeof(Core.Compiler.typeinf_ext)
         return false
     end
