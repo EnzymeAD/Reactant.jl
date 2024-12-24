@@ -478,7 +478,8 @@ function __init__()
     end
     Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
     Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
-    return Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+    Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+    return nothing
 end
 
 end # module ReactantCUDAExt
