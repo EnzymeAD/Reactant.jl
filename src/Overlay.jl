@@ -115,3 +115,26 @@ for randfun in (:rand, :randn, :randexp)
         # end
     end
 end
+
+# Type Conversions
+## We don't define it outside our interpreter since it is inconsistent with how it is
+## defined in Base for other types like Complex
+@reactant_overlay @noinline function (::Type{T})(x::TracedRNumber) where {T<:Number}
+    return TracedUtils.promote_to(TracedRNumber{T}, x)
+end
+
+@reactant_overlay @noinline function (::Type{TracedRNumber{T}})(x::TracedRNumber) where {T}
+    return TracedUtils.promote_to(TracedRNumber{T}, x)
+end
+
+@reactant_overlay @noinline function Base.convert(
+    ::Type{T}, x::TracedRNumber
+) where {T<:Number}
+    return TracedUtils.promote_to(TracedRNumber{T}, x)
+end
+
+@reactant_overlay @noinline function Base.convert(
+    ::Type{TracedRNumber{T}}, x::TracedRNumber
+) where {T<:Number}
+    return TracedUtils.promote_to(TracedRNumber{T}, x)
+end

@@ -704,3 +704,15 @@ end
 
     @test ptr_x == ptr_res == ptr_T1
 end
+
+@testset "eltype conversion inside interpreter" begin
+    function test_convert(x::AbstractArray{T}, eta) where {T}
+        eta = T(eta)
+        return x .* eta, eta
+    end
+
+    res = @jit test_convert(ConcreteRArray(rand(4, 2)), ConcreteRNumber(3.0f0))
+
+    @test res[1] isa ConcreteRArray{Float64,2}
+    @test res[2] isa ConcreteRNumber{Float64}
+end
