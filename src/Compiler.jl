@@ -627,7 +627,12 @@ function codegen_unflatten!(
     concrete_result,
     result_stores,
 )
-    unflatten_code = Expr[]
+    cache_dict = gensym("cache_dict")
+    unflatten_code = Expr[:(
+        $cache_dict = $(IdDict{
+            Union{TracedRArray,TracedRNumber},Union{ConcreteRArray,ConcreteRNumber}
+        }())
+    ),]
 
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
@@ -649,22 +654,31 @@ function codegen_unflatten!(
 
                 if length(path) > 0
                     final_val = gensym("final_val")
+                    clocal = gensym("clocal")
                     unflatcode = quote
                         $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
                         if $final_val isa TracedRArray
-                            traced_setfield!(
-                                $unflatcode,
-                                $(Meta.quot(path[end])),
-                                ConcreteRArray{eltype($final_val),ndims($final_val)}(
+                            $clocal = if haskey($cache_dict, $final_val)
+                                $cache_dict[$final_val]
+                            else
+                                $cache_dict[$final_val] = ConcreteRArray{
+                                    eltype($final_val),ndims($final_val)
+                                }(
                                     $concrete_res_name, size($final_val)
-                                ),
-                            )
+                                )
+                                $cache_dict[$final_val]
+                            end
+                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
                         elseif $final_val isa TracedRNumber
-                            traced_setfield!(
-                                $unflatcode,
-                                $(Meta.quot(path[end])),
-                                ConcreteRNumber{eltype($final_val)}($concrete_res_name),
-                            )
+                            $clocal = if haskey($cache_dict, $final_val)
+                                $cache_dict[$final_val]
+                            else
+                                $cache_dict[$final_val] = ConcreteRNumber{
+                                    eltype($final_val)
+                                }($concrete_res_name)
+                                $cache_dict[$final_val]
+                            end
+                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
                         else
                             traced_setfield!($final_val, :data, $concrete_res_name)
                         end

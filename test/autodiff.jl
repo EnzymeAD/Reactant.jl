@@ -80,9 +80,22 @@ mutable struct StateReturn
     st::Any
 end
 
+mutable struct StateReturn1
+    st1::Any
+    st2::Any
+end
+
 function cached_return(x, stret::StateReturn)
     loss = sum(x)
     stret.st = x .+ 1
+    return loss
+end
+
+function cached_return(x, stret::StateReturn2)
+    loss = sum(x)
+    tmp = x .+ 1
+    stret.st1 = tmp
+    stret.st2 = tmp
     return loss
 end
 
@@ -96,4 +109,14 @@ end
     @test @allowscalar all(isone, ret[1])
     @test stret.st isa ConcreteRArray
     @test stret.st ≈ x .+ 1
+
+    stret = StateReturn2(nothing, nothing)
+    ret = @jit Enzyme.gradient(Reverse, cached_return, x_ra, Const(stret))
+
+    @test @allowscalar all(isone, ret[1])
+    @test stret.st1 isa ConcreteRArray
+    @test stret.st1 ≈ x .+ 1
+    @test stret.st2 isa ConcreteRArray
+    @test stret.st2 ≈ x .+ 1
+    @test stret.st1 === stret.st2
 end
