@@ -22,7 +22,7 @@ function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 end
 
-function Base.convert(::Type{<:TracedRNumber{T}}, x::Number) where {T}
+function Base.convert(::Type{TracedRNumber{T}}, x::Number) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, T(x))
 end
 
@@ -47,10 +47,6 @@ end
 
 function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
-end
-
-function Base.convert(::Type{TracedRNumber{T}}, x::Number) where {T}
-    return TracedUtils.promote_to(TracedRNumber{T}, x)
 end
 
 TracedRNumber{T}(x::TracedRNumber{T}) where {T} = x
