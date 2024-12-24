@@ -75,3 +75,48 @@ end
     @test typeof(res) == Tuple{Enzyme.TupleArray{ConcreteRNumber{Float64},(2, 2),4,2}}
     @test res[1] ≈ ones(2, 2)
 end
+
+mutable struct StateReturn
+    st::Any
+end
+
+mutable struct StateReturn1
+    st1::Any
+    st2::Any
+end
+
+function cached_return(x, stret::StateReturn)
+    loss = sum(x)
+    stret.st = x .+ 1
+    return loss
+end
+
+function cached_return(x, stret::StateReturn1)
+    loss = sum(x)
+    tmp = x .+ 1
+    stret.st1 = tmp
+    stret.st2 = tmp
+    return loss
+end
+
+@testset "Cached Return: Issue #416" begin
+    x = rand(10)
+    x_ra = Reactant.to_rarray(x)
+
+    stret = StateReturn(nothing)
+    ret = @jit Enzyme.gradient(Reverse, cached_return, x_ra, Const(stret))
+
+    @test @allowscalar all(isone, ret[1])
+    @test stret.st isa ConcreteRArray
+    @test stret.st ≈ x .+ 1
+
+    stret = StateReturn1(nothing, nothing)
+    ret = @jit Enzyme.gradient(Reverse, cached_return, x_ra, Const(stret))
+
+    @test @allowscalar all(isone, ret[1])
+    @test stret.st1 isa ConcreteRArray
+    @test stret.st1 ≈ x .+ 1
+    @test stret.st2 isa ConcreteRArray
+    @test stret.st2 ≈ x .+ 1
+    @test stret.st1 === stret.st2
+end
