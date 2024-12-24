@@ -6,7 +6,7 @@
     TracedSetPath = 5
 end
 
-for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, RArray, RNumber)
+for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, RNumber)
     @eval function traced_type(::Type{T}, seen, mode, track_numbers) where {T<:$T}
         return T
     end

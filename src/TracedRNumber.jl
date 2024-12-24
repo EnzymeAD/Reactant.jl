@@ -1,16 +1,10 @@
 module TracedRNumberOverrides
 
-import ..TracedRNumber
-import ..TracedRArray
-import ..ReactantPrimitive
-using ..TracedUtils
-import ..Ops
-import ..MLIR
+using ..Reactant:
+    Reactant, TracedRNumber, TracedRArray, ReactantPrimitive, TracedUtils, Ops, MLIR
 using ReactantCore
 
 ReactantCore.is_traced(::TracedRNumber) = true
-
-Base.eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 Base.getindex(a::TracedRNumber{T}) where {T} = a
 
@@ -51,12 +45,6 @@ TracedRNumber{T}(x::TracedRNumber{T}) where {T} = x
 TracedRNumber{T}(x::TracedRNumber) where {T} = TracedUtils.promote_to(TracedRNumber{T}, x)
 TracedRNumber{T}(x::Number) where {T} = TracedUtils.promote_to(TracedRNumber{T}, x)
 
-(T::Type{<:Number})(x::TracedRNumber) = TracedUtils.promote_to(TracedRNumber{T}, x)
-
-function Base.convert(::Type{TracedRNumber{T}}, x::Number) where {T}
-    return TracedUtils.promote_to(TracedRNumber{T}, x)
-end
-
 function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
     if rhs isa TracedRNumber
         rhs isa TracedRNumber{T} && return rhs
@@ -64,7 +52,8 @@ function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
     end
     if rhs isa TracedRArray{<:Any,0}
         return TracedUtils.promote_to(
-            TracedRNumber{T}, TracedRNumber{eltype(rhs)}((), rhs.mlir_data)
+            TracedRNumber{T},
+            TracedRNumber{Reactant.unwrapped_eltype(rhs)}((), rhs.mlir_data),
         )
     end
     rhs isa Number &&

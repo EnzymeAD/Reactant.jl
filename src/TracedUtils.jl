@@ -6,18 +6,17 @@ module TracedUtils
 using LinearAlgebra: LinearAlgebra
 using Adapt: Adapt
 using ..Reactant:
-    RArray,
+    Reactant,
+    MLIR,
     RNumber,
     TracedRArray,
     TracedRNumber,
     WrappedTracedRArray,
     AnyTracedRArray,
     MissingTracedValue,
-    OrderedIdDict
-import ..Reactant
-import ..Reactant.MLIR
-import ..ReactantPrimitive
-import ..Ops
+    OrderedIdDict,
+    ReactantPrimitive,
+    Ops
 
 materialize_traced_array(x::TracedRArray) = x
 materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
@@ -164,7 +163,10 @@ function make_mlir_fn(
     end
 
     in_tys = if toscalar
-        [MLIR.IR.TensorType((), MLIR.IR.Type(eltype(arg))) for arg in linear_args]
+        [
+            MLIR.IR.TensorType((), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
+            arg in linear_args
+        ]
     elseif do_transpose
         [transpose_ty(Ops.mlir_type(arg)) for arg in linear_args]
     else
@@ -416,7 +418,8 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     in_tys2 = [Ops.mlir_type(invmap[arg]) for arg in linear_args]
 
     out_tys2 = [
-        MLIR.IR.TensorType(OutShape, MLIR.IR.Type(eltype(arg))) for arg in linear_results
+        MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
+        arg in linear_results
     ]
 
     fname = get_attribute_by_name(func2, "sym_name")
@@ -487,11 +490,9 @@ end
 
 broadcast_to_size(arg::Number, rsize) = Ops.constant(Base.fill(arg, Tuple(rsize)))
 
-function broadcast_to_size(arg::TracedRNumber, rsize)
+function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     length(rsize) == 0 && return arg
-    return broadcast_to_size_internal(
-        TracedRArray{eltype(arg),0}((), arg.mlir_data, ()), rsize
-    )
+    return broadcast_to_size_internal(TracedRArray{T,0}((), arg.mlir_data, ()), rsize)
 end
 
 function broadcast_to_size(arg::AnyTracedRArray{T,0}, rsize) where {T}
@@ -512,7 +513,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
     return broadcast_to_size_internal(x, rsize)
 end
 
-@noinline function broadcast_to_size_internal(x::TracedRArray, rsize)
+@noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
     dims = collect(Int64, 0:(length(size(x)) - 1))
 
     if length(size(MLIR.IR.type(x.mlir_data))) != length(dims)
@@ -525,7 +526,7 @@ end
     @assert length(size(MLIR.IR.type(x.mlir_data))) == length(dims)
     mlirty = MLIR.IR.type(x.mlir_data)
 
-    return TracedRArray{eltype(x),Int(length(rsize))}(
+    return TracedRArray{T,Int(length(rsize))}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.broadcast_in_dim(

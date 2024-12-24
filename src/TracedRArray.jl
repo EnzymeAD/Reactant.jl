@@ -136,6 +136,8 @@ Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(Base.getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
 
+Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
+
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 # TODO is there a way to create an unitialized `tensor`? does it show an advantage? maybe `fill`?
