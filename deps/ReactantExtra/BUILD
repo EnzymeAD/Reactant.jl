@@ -429,7 +429,7 @@ cc_library(
 "-Wl,-exported_symbol,_ifrt_*",
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
-"-Wl,-exported_symbol,_EnzymeGPUCustomCall",
+"-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
 "-Wl,-exported_symbol,_ReactantThrowError",
     ]}),
     deps = [
