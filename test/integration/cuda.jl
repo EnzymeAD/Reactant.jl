@@ -24,6 +24,6 @@ end
         @test all(Array(A) .≈ (oA .* oA .* 100))
         @test all(Array(B) .≈ (oA .* 100))
     else
-        @compile optimize=:before_kernel square!(A, B)
+        @compile optimize = :before_kernel square!(A, B)
     end
 end
