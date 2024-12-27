@@ -580,11 +580,32 @@ mutable struct ConvolutionParams
     batchGroupCount::Int64
 end
 
-function inferConvolutionOp(loc::Location, lhsType::MLIR.IR.Type, rhsType::MLIR.IR.Type, windowStrides::MLIR.IR.Attribute, padding::MLIR.IR.Attribute, lhsDilation::MLIR.IR.Attribute, rhsDilation::MLIR.IR.Attribute, windowReversal::MLIR.IR.Attribute, dimensionNumber::MLIR.IR.Attribute, featureGroupCount::Int, batchGroupCount::Int)
-    cp = ConvolutionParams(windowStrides, padding, lhsDilation, rhsDilation, windowReversal, dimensionNumber, featureGroupCount, batchGroupCount)
+function inferConvolutionOp(
+    loc::Location,
+    lhsType::MLIR.IR.Type,
+    rhsType::MLIR.IR.Type,
+    windowStrides::MLIR.IR.Attribute,
+    padding::MLIR.IR.Attribute,
+    lhsDilation::MLIR.IR.Attribute,
+    rhsDilation::MLIR.IR.Attribute,
+    windowReversal::MLIR.IR.Attribute,
+    dimensionNumber::MLIR.IR.Attribute,
+    featureGroupCount::Int,
+    batchGroupCount::Int,
+)
+    cp = ConvolutionParams(
+        windowStrides,
+        padding,
+        lhsDilation,
+        rhsDilation,
+        windowReversal,
+        dimensionNumber,
+        featureGroupCount,
+        batchGroupCount,
+    )
     @ccall mlir_c.inferConvolutionOp(
-        loc::MlirLocation, lhsType::MlirType, rhsType::MlirType,
-        cp::Ref{ConvolutionParams})::MlirType
+        loc::MlirLocation, lhsType::MlirType, rhsType::MlirType, cp::Ref{ConvolutionParams}
+    )::MlirType
 end
 
 function convolution(
@@ -639,14 +660,6 @@ function convolution(
         ),
     )
     return TracedRArray{T,N}((), res, size(output_type))
-end
-
-x = Reactant.to_rarray(randn(Float64, 224, 224, 1, 1))
-ker = Reactant.to_rarray(randn(Float64, 10, 10, 1, 1))
-
-function v(x, ker)
-    pp = dimension_number(4, 3, 2, 3, 4)
-    return convolution(x, ker, pp; padding=[1 2; 3 4])
 end
 
 @noinline function dot_general(
