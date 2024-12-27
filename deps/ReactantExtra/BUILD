@@ -469,6 +469,7 @@ cc_library(
         "@llvm-project//llvm:X86CodeGen",
         "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
+        "@enzyme_ad//src/enzyme_ad/jax:gpu",
         "@stablehlo//:chlo_ops",
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
