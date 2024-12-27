@@ -361,6 +361,7 @@ cc_library(
 
     ) + [
 	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
+	"@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
@@ -469,7 +470,9 @@ cc_library(
         "@llvm-project//llvm:X86CodeGen",
         "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
-        "@enzyme_ad//src/enzyme_ad/jax:gpu",
+        # "@enzyme_ad//src/enzyme_ad/jax:gpu",
+        "@xla//xla/ffi/api:ffi",
+        "@xla//xla/ffi:ffi_api",
         "@stablehlo//:chlo_ops",
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
