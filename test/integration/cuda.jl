@@ -19,7 +19,11 @@ end
     oA = collect(1:1:64)
     A = Reactant.to_rarray(oA)
     B = Reactant.to_rarray(100 .* oA)
-    @jit square!(A, B)
-    @test all(Array(A) .≈ (oA .* oA .* 100))
-    @test all(Array(B) .≈ (oA .* 100))
+    if CUDA.functional()
+        @jit square!(A, B)
+        @test all(Array(A) .≈ (oA .* oA .* 100))
+        @test all(Array(B) .≈ (oA .* 100))
+    else
+        @compile optimize=:before_kernel square!(A, B)
+    end
 end
