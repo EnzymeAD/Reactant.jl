@@ -54,6 +54,9 @@ cc_toolchain_config(
     coverage_link_flags = ["--coverage"],
     cpu = "k8",
     cxx_builtin_include_directories = [
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0/x86_64-linux-musl",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0/backward",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0/x86_64-linux-musl",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0/backward",
@@ -149,14 +152,14 @@ cc_toolchain_config(
     abi_libc_version = "local",
     abi_version = "local",
     cxx_builtin_include_directories = [
-        "/opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include",
-        "/opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include-fixed",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include-fixed",
         "/opt/BB_TARGET/BB_TARGET/include",
         "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/BB_TARGET",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/backward",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/parallel"
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/BB_TARGET",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/backward",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/parallel"
     ],
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
