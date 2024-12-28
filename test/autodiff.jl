@@ -11,7 +11,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
 
     res1 = @jit(
         fwd(
-            set_abi(Forward, Reactant.ReactantABI),
+            Forward,
             Duplicated,
             ConcreteRArray(ones(3, 2)),
             ConcreteRArray(3.1 * ones(3, 2)),
@@ -42,12 +42,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     @test typeof(ores1) == Tuple{}
 
     res1 = @jit(
-        fwd(
-            set_abi(Forward, Reactant.ReactantABI),
-            Const,
-            ConcreteRArray(ones(3, 2)),
-            ConcreteRArray(3.1 * ones(3, 2)),
-        )
+        fwd(Forward, Const, ConcreteRArray(ones(3, 2)), ConcreteRArray(3.1 * ones(3, 2)))
     )
 
     @test typeof(res1) == Tuple{}
@@ -79,4 +74,49 @@ end
     # to make sure this gets merged as a tracedrarray
     @test typeof(res) == Tuple{Enzyme.TupleArray{ConcreteRNumber{Float64},(2, 2),4,2}}
     @test res[1] ≈ ones(2, 2)
+end
+
+mutable struct StateReturn
+    st::Any
+end
+
+mutable struct StateReturn1
+    st1::Any
+    st2::Any
+end
+
+function cached_return(x, stret::StateReturn)
+    loss = sum(x)
+    stret.st = x .+ 1
+    return loss
+end
+
+function cached_return(x, stret::StateReturn1)
+    loss = sum(x)
+    tmp = x .+ 1
+    stret.st1 = tmp
+    stret.st2 = tmp
+    return loss
+end
+
+@testset "Cached Return: Issue #416" begin
+    x = rand(10)
+    x_ra = Reactant.to_rarray(x)
+
+    stret = StateReturn(nothing)
+    ret = @jit Enzyme.gradient(Reverse, cached_return, x_ra, Const(stret))
+
+    @test @allowscalar all(isone, ret[1])
+    @test stret.st isa ConcreteRArray
+    @test stret.st ≈ x .+ 1
+
+    stret = StateReturn1(nothing, nothing)
+    ret = @jit Enzyme.gradient(Reverse, cached_return, x_ra, Const(stret))
+
+    @test @allowscalar all(isone, ret[1])
+    @test stret.st1 isa ConcreteRArray
+    @test stret.st1 ≈ x .+ 1
+    @test stret.st2 isa ConcreteRArray
+    @test stret.st2 ≈ x .+ 1
+    @test stret.st1 === stret.st2
 end

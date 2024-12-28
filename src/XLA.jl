@@ -91,6 +91,19 @@ const default_device_idx = Ref{Int}(0)
 using Reactant_jll
 using Libdl
 using Scratch, Downloads
+
+struct ReactantInternalError <: Base.Exception
+    msg::String
+end
+
+function Base.showerror(io::IO, ece::ReactantInternalError)
+    return print(io, ece.msg, '\n')
+end
+
+function reactant_err(msg::Cstring)::Cvoid
+    throw(ReactantInternalError(Base.unsafe_string(msg)))
+end
+
 function __init__()
     initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
     ccall(initLogs, Cvoid, ())
@@ -131,6 +144,16 @@ function __init__()
         end
     end
 
+    @ccall MLIR.API.mlir_c.RegisterCustomCallTarget(
+        "enzymexla_gpu"::Cstring,
+        cglobal((:EnzymeGPUCustomCall, MLIR.API.mlir_c))::Ptr{Cvoid},
+        "CUDA"::Cstring,
+    )::Cvoid
+
+    # This wasn't properly exported on macos, we'll remove the try once macOS JLL
+    # has the fix.
+    errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
+    unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
     return nothing
 end
 
