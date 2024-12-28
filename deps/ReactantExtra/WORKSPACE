@@ -1,20 +1,5 @@
 workspace(name = "Reactant")
 
-load("//third_party/hedron_compile_commands:workspace.bzl", hedron_compile_commands_workspace = "repo")
-hedron_compile_commands_workspace()
-
-load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
-hedron_compile_commands_setup()
-
-load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
-hedron_compile_commands_setup_transitive()
-
-load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
-hedron_compile_commands_setup_transitive_transitive()
-
-load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
-hedron_compile_commands_setup_transitive_transitive_transitive()
-
 load("//third_party/nsync:workspace.bzl", nsync_workspace = "repo")
 nsync_workspace()
 
@@ -152,3 +137,18 @@ load(
     "nccl_configure",
 )
 nccl_configure(name = "local_config_nccl")
+
+load("@enzyme_ad//third_party/hedron_compile_commands:workspace.bzl", hedron_compile_commands_workspace = "repo")
+hedron_compile_commands_workspace()
+
+load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
+hedron_compile_commands_setup()
+
+load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
+hedron_compile_commands_setup_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
+hedron_compile_commands_setup_transitive_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
+hedron_compile_commands_setup_transitive_transitive_transitive()

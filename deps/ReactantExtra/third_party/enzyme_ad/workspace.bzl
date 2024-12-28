@@ -2,7 +2,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-ENZYMEXLA_COMMIT = "f6587e37ff7298f2a1a273b08c24d69fca7ff30f"
+ENZYMEXLA_COMMIT = "52e14543628df5e3f806dce096243c4603d3e103"
 ENZYMEXLA_SHA256 = ""
 
 def repo():
