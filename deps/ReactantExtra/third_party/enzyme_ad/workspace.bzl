@@ -1,9 +1,7 @@
 """Loads Enzyme-JAX."""
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-ENZYMEXLA_COMMIT = "52e14543628df5e3f806dce096243c4603d3e103"
-ENZYMEXLA_SHA256 = ""
+load("//:workspace.bzl", "ENZYMEXLA_COMMIT", "ENZYMEXLA_SHA256")
 
 def repo():
     http_archive(

@@ -1,9 +1,7 @@
 """Loads nsync."""
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
-NSYNC_SHA256 = ""
+load("//:workspace.bzl", "NSYNC_COMMIT", "NSYNC_SHA256")
 
 def repo():
     http_archive(
