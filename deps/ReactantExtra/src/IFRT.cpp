@@ -32,7 +32,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
 // Utils
-#include "xla/pjrt/status_casters.h"
+#include "Helpers.hpp"
 
 using namespace xla::ifrt;
 
@@ -254,7 +254,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
         .method("id", &Device::Id)
         // .method("attributes", &Device::Attributes)
         .method("kind", [](const Device& x) { return std::string(x.Kind()); })
-        .method("default_memory", [](const Device& x) { return xla::ValueOrThrow(x.DefaultMemory()); })
+        .method("default_memory", [](const Device& x) { return MyValueOrThrow(x.DefaultMemory()); })
         .method("memories", [](const Device& x) {
             auto mems = x.Memories();
             return std::vector<Memory* const>(mems.begin(), mems.end());
@@ -279,7 +279,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
         // .method("with_device_assignment", &Sharding::WithDeviceAssignment)
         // .method("disassemble", &Sharding::Disassemble)
         // .method("IndexDomains", &Sharding::IndexDomains)
-        .method("get_shard_shape", [](const Sharding& x, const Shape& shape) { return xla::ValueOrThrow(x.GetShardShape(shape)); });
+        .method("get_shard_shape", [](const Sharding& x, const Shape& shape) { return MyValueOrThrow(x.GetShardShape(shape)); });
     ;
 
     mod.set_override_module(jl_base_module);
@@ -324,7 +324,7 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
     // LoadedHostCallback
     wrap_loadedhostcallback
         .method("client", &LoadedHostCallback::client)
-        .method("serialize", [](const LoadedHostCallback& x) { return xla::ValueOrThrow(x.Serialize()); });
+        .method("serialize", [](const LoadedHostCallback& x) { return MyValueOrThrow(x.Serialize()); });
 
     // Executable
     wrap_executable
@@ -336,7 +336,27 @@ JLCXX_MODULE reactant_module_ifrt(jlcxx::Module& mod)
 
     // HloProgram
 
-    // PluginProgram
-
     // Compiler
+    // TODO `DeserializeLoadedExecutable`
+    wrap_compiler
+        .method("compile", [](Compiler* compiler, Program* program) {
+            // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and
+            // set directly to the default
+            auto program_ptr = std::make_unique<ifrt::Program>(*program);
+            auto options = std::make_unique<ifrt::CompileOptions>();
+            return MyValueOrThrow(
+                compiler->Compile(std::move(program_ptr), std::move(options)))
+                .release();
+        })
+        .method("compile", [](Compiler* compiler, Program* program, const Topology* topology) {
+            // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and
+            // set directly to the default
+            auto options = std::make_unique<ifrt::CompileOptions>();
+            auto program_ptr = std::make_unique<ifrt::Program>(*program);
+            auto exec_ptr = MyValueOrThrow(compiler->Compile(std::move(program_ptr), *topology, std::move(options))).release();
+            return exec_ptr;
+        });
+
+    // PjRtCompiler
+    wrap_pjrtcompiler.constructor<PjRtClient*>();
 }
