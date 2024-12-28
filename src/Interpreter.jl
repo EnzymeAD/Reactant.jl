@@ -235,7 +235,7 @@ function overload_autodiff(
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = Reactant.TracedUtils.make_mlir_fn(
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = TracedUtils.make_mlir_fn(
         primf, primargs, (), string(f) * "_autodiff", false
     )
 
@@ -302,7 +302,7 @@ function overload_autodiff(
                 cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
                 push!(ad_inputs, cst)
             end
-        else
+        elseif TracedUtils.has_argidx(a)
             idx, path = TracedUtils.get_argidx(a)
             if idx == 1 && fnwrap
                 act = act_from_type(f, reverse, true)
@@ -321,6 +321,12 @@ function overload_autodiff(
                     continue
                 end
                 TracedUtils.push_val!(ad_inputs, args[idx].dval, path[3:end])
+            end
+        else
+            act = act_from_type(Enzyme.Const, reverse, true)
+            push!(ret_activity, act)
+            if act != enzyme_out && act != enzyme_outnoneed
+                continue
             end
         end
     end
@@ -385,7 +391,7 @@ function overload_autodiff(
                 end
                 residx += 1
             end
-        else
+        elseif TracedUtils.has_argidx(a)
             idx, path = TracedUtils.get_argidx(a)
             if idx == 1 && fnwrap
                 TracedUtils.set!(
@@ -405,6 +411,9 @@ function overload_autodiff(
                 )
                 residx += 1
             end
+        else
+            TracedUtils.set!(a, (), TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
+            residx += 1
         end
     end
 

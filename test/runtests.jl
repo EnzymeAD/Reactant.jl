@@ -63,6 +63,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "AbstractFFTs" include("integration/fft.jl")
         @safetestset "SpecialFunctions" include("integration/special_functions.jl")
         @safetestset "Random" include("integration/random.jl")
+        @safetestset "Python" include("integration/python.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"

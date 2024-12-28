@@ -90,7 +90,7 @@ using Test
                 (Val{:x}, Val{:x}),
             ]
                 tracedty = traced_type(
-                    origty, Reactant.OrderedIdDict(), Val(ConcreteToTraced)
+                    origty, Reactant.OrderedIdDict(), Val(ConcreteToTraced), ()
                 )
                 @test tracedty == targetty
             end
@@ -102,13 +102,13 @@ using Test
                 TracedRArray{Float64,3},
             ]
                 @test_throws Union{ErrorException,String} traced_type(
-                    type, Reactant.OrderedIdDict(), Val(ConcreteToTraced)
+                    type, Reactant.OrderedIdDict(), Val(ConcreteToTraced), ()
                 )
             end
         end
         @testset "traced_type exceptions" begin
             @test_throws TracedTypeError Reactant.traced_type(
-                Real, Reactant.OrderedIdDict(), Val(Reactant.ArrayToConcrete)
+                Real, Reactant.OrderedIdDict(), Val(Reactant.ArrayToConcrete), ()
             )
 
             struct Node
@@ -116,7 +116,7 @@ using Test
                 y::Union{Nothing,Node}
             end
             @test_throws NoFieldMatchError traced_type(
-                Node, Reactant.OrderedIdDict(), Val(ArrayToConcrete)
+                Node, Reactant.OrderedIdDict(), Val(ArrayToConcrete), ()
             )
         end
     end

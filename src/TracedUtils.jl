@@ -108,9 +108,9 @@ function transpose_ty(mlirty)
     return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
 end
 function transpose_val(val)
-    attr = MLIR.IR.DenseArrayAttribute(
-        Int64[reverse(0:(length(size(MLIR.IR.type(val))) - 1))...]
-    )
+    val_size = size(MLIR.IR.type(val))
+    val_size == () && return val
+    attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
@@ -339,6 +339,18 @@ function get_argidx(x)
         end
     end
     throw(AssertionError("No path found for $x"))
+end
+
+function has_argidx(x)
+    for path in x.paths
+        if length(path) == 0
+            continue
+        end
+        if path[1] == :args
+            return true
+        end
+    end
+    return false
 end
 
 function set!(x, path, tostore; emptypath=false)
