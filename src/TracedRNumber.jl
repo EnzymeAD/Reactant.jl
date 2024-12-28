@@ -232,6 +232,11 @@ function Base.float(x::TracedRNumber{T}) where {T}
 end
 
 using Reactant: ReactantFloat
+
+Base.round(A::TracedRNumber{<:ReactantFloat}) = Base.round(A, RoundNearest)
+Base.floor(A::TracedRNumber{<:ReactantFloat}) = Base.round(A, RoundDown)
+Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Base.round(A, RoundUp)
+
 function Base.round(A::TracedRNumber{<:ReactantFloat}, ::RoundingMode{R}) where {R}
     if R == :Nearest
         Ops.round_nearest_even(A)
