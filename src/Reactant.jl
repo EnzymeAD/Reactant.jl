@@ -64,6 +64,17 @@ function ancestor(x::AbstractArray)
     return ancestor(p_x)
 end
 
+function ancestor(T::Type{<:AbstractArray})
+    if applicable(Adapt.parent_type, T)
+        p_T = Adapt.parent_type(T)
+        p_T == T && return T
+        return ancestor(p_T)
+    end
+    @warn "`Adapt.parent_type` is not implemented for $(T). Assuming $T isn't a wrapped \
+           array." maxlog = 1
+    return T
+end
+
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")
@@ -100,6 +111,8 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     end
 end
 
+Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
+
 const WrappedTracedRArray{T,N} = WrappedArray{
     TracedRNumber{T},N,TracedRArray,TracedRArray{T,N}
 }
@@ -119,6 +132,8 @@ end
 
 struct XLAArray{T,N} <: RArray{T,N} end
 
+Adapt.parent_type(::Type{XLAArray{T,N}}) where {T,N} = XLAArray{T,N}
+
 mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
 end
@@ -127,6 +142,8 @@ mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     data::XLA.AsyncBuffer
     shape::NTuple{N,Int}
 end
+
+Adapt.parent_type(::Type{ConcreteRArray{T,N}}) where {T,N} = ConcreteRArray{T,N}
 
 const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
 const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}

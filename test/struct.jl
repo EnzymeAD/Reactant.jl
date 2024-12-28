@@ -1,5 +1,6 @@
 using Reactant
 using Test
+using Adapt
 
 # from bsc-quantic/Tenet.jl
 struct MockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
@@ -10,6 +11,8 @@ end
 MockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}} = MockTensor{T,N,A}(data, inds)
 Base.parent(t::MockTensor) = t.data
 Base.size(t::MockTensor) = size(parent(t))
+
+Adapt.parent_type(::Type{MockTensor{T,N,A}}) where {T,N,A} = A
 
 Base.cos(x::MockTensor) = MockTensor(cos.(parent(x)), x.inds)
 bcast_cos(x::MockTensor) = cos(x)
@@ -22,8 +25,11 @@ end
 function MutableMockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}}
     return MutableMockTensor{T,N,A}(data, inds)
 end
+
 Base.parent(t::MutableMockTensor) = t.data
 Base.size(t::MutableMockTensor) = size(parent(t))
+
+Adapt.parent_type(::Type{MutableMockTensor{T,N,A}}) where {T,N,A} = A
 
 Base.cos(x::MutableMockTensor) = MutableMockTensor(cos.(parent(x)), x.inds)
 
