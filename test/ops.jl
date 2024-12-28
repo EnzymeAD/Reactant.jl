@@ -692,10 +692,11 @@ end
     basic_sort(x, dimension) = Reactant.Ops.sort(x; comparator=(a, b) -> a < b, dimension)
     for i in 1:3
         t_size = tuple(fill(10, (i,))...)
-        x = Reactant.to_rarray(randn(t_size))
+        x = randn(t_size)
+        xa = Reactant.to_rarray(x)
 
         for j in 1:i
-            @test (i == 1 ? sort(x) : sort(x; dims=j)) == @jit basic_sort(x, j)
+            @test (i == 1 ? sort(x) : sort(x; dims=j)) == @jit basic_sort(xa, j)
         end
     end
 end

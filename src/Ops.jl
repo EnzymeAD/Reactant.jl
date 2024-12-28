@@ -961,13 +961,13 @@ end
     @assert 0 < dimension <= ndims(x) "$x invalid dimension"
 
     (a, b) = (Reactant.ConcreteRNumber(T(0)), Reactant.ConcreteRNumber(T(0)))
-    func = Reactant.TracedUtils.make_mlir_fn(comparator, (a, b), (), "main"; no_args_in_result=true, return_dialect=:stablehlo)[2]
+    func = Reactant.TracedUtils.make_mlir_fn(comparator, (a, b), (), "comparator"; no_args_in_result=true, return_dialect=:stablehlo)[2]
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
         MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
     )
     #C5:
-    @assert fn_name == "main" "$comparator: no function generated"
+    @assert fn_name == "comparator" "$comparator: no function generated"
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
     @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
