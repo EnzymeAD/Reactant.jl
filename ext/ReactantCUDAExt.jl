@@ -460,6 +460,7 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 function __init__()
+    if CUDA.CUDA_Driver_jll.libcuda !== nothing
     handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
     if handle === nothing
         handle = C_NULL
@@ -479,6 +480,7 @@ function __init__()
     Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
     Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
     Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+        end
     return nothing
 end
 
