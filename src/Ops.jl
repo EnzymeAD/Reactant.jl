@@ -950,28 +950,49 @@ end
 #     return TracedRArray{T,N}((), res, size(x))
 # end
 
-# sorting ops
-# TODO need to trace over `comparator`
-# function sort(
-#     x::TracedRArray{T,N};
-#     comparator,
-#     dimension=-1,
-#     is_stable=false,
-#     location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
-# ) where {T,N}
-#     dimension = MLIR.IR.Attribute(dimension)
-#     is_stable = MLIR.IR.Attribute(is_stable)
-#     res = MLIR.IR.result(
-#         stablehlo.sort(
-#             x.mlir_data;
-#             result=mlir_type(TracedRArray{T,N}, size(x)),
-#             dimension,
-#             is_stable,
-#             location,
-#         ),
-#     )
-#     return TracedRArray{T,N}((), res, size(x))
-# end
+@noinline function sort(
+    x::TracedRArray{T,N};
+    comparator,
+    dimension=1,
+    is_stable=false,
+    location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
+) where {T,N}
+    #C4:
+    @assert 0 < dimension <= ndims(x) "$x invalid dimension"
+
+    (a, b) = (Reactant.ConcreteRNumber(T(0)), Reactant.ConcreteRNumber(T(0)))
+    func = Reactant.TracedUtils.make_mlir_fn(comparator, (a, b), (), "comparator"; no_args_in_result=true, return_dialect=:stablehlo)[2]
+    @assert MLIR.IR.nregions(func) == 1
+    fn_name = String(
+        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+    )
+    #C5:
+    @assert fn_name == "comparator" "$comparator: no function generated"
+    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype = MLIR.IR.Type(ftype_attr)
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
+        "$comparator return type is not tensor<i1>"
+    )
+
+    comparator = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
+    MLIR.IR.rmfromparent!(func)
+
+    dimension = MLIR.IR.Attribute(dimension - 1)
+    is_stable = MLIR.IR.Attribute(is_stable)
+
+    res = MLIR.IR.result(
+        stablehlo.sort(
+            [x.mlir_data];
+            result_0=[mlir_type(TracedRArray{T,N}, size(x))],
+            dimension,
+            is_stable,
+            comparator,
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(x))
+end
 
 @noinline function top_k(
     x::TracedRArray{T,N}, k; location=mlir_stacktrace("top_k", @__FILE__, @__LINE__)
