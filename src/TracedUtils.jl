@@ -341,6 +341,18 @@ function get_argidx(x)
     throw(AssertionError("No path found for $x"))
 end
 
+function has_argidx(x)
+    for path in x.paths
+        if length(path) == 0
+            continue
+        end
+        if path[1] == :args
+            return true
+        end
+    end
+    return false
+end
+
 function set!(x, path, tostore; emptypath=false)
     for p in path
         x = Reactant.Compiler.traced_getfield(x, p)

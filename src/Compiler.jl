@@ -1,5 +1,7 @@
 module Compiler
 
+using Reactant_jll
+
 import ..Reactant:
     Reactant,
     MLIR,
@@ -8,6 +10,8 @@ import ..Reactant:
     ConcreteRNumber,
     TracedRArray,
     TracedRNumber,
+    RArray,
+    RNumber,
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
@@ -17,9 +21,18 @@ import ..Reactant:
 using ExpressionExplorer
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
-@inline traced_getfield(
-    @nospecialize(obj::AbstractArray{<:Union{ConcreteRNumber,ConcreteRArray}}), field
-) = Base.getindex(obj, field)
+@inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
+    (isbitstype(T) || obj isa RArray) && return Base.getfield(obj, field)
+    return Base.getindex(obj, field)
+end
+
+@inline traced_setfield!(@nospecialize(obj), field, val) = Base.setfield!(obj, field, val)
+@inline function traced_setfield!(
+    @nospecialize(obj::AbstractArray{T}), field, val
+) where {T}
+    (isbitstype(T) || obj isa RArray) && return Base.setfield!(obj, field, val)
+    return Base.setindex!(obj, val, field)
+end
 
 function create_result(tocopy::T, path, result_stores) where {T}
     if !isstructtype(typeof(tocopy))
@@ -292,6 +305,10 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
+const cuLaunch = Ref{UInt}(0)
+const cuFunc = Ref{UInt}(0)
+const cuModule = Ref{UInt}(0)
+
 function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
@@ -309,7 +326,28 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
+    toolkit = ""
+    if isdefined(Reactant_jll, :ptxas_path)
+        toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
+    end
+    kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])}"
     if optimize === :all
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes,
+                    kern,
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :before_kernel
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
@@ -360,6 +398,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes,
+                    kern,
                 ],
                 ',',
             ),
@@ -368,7 +407,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true)
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(mod, "enzyme,arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
-            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math"
+            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math," * kern
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
@@ -600,32 +639,32 @@ function codegen_flatten!(linear_args, result_stores)
         push!(flatten_code, :($usbuf = $flatcode.data))
         push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
 
-        # TODO
-        respaths = ((p for p in arg.paths if p[1] != :args)...,)
+        # TODO: unused for the time being
+        # respaths = ((p for p in arg.paths if p[1] == :result || p[1] == :resargs)...,)
 
         # resarg = false
-        for respath in respaths
-            if respath[1] == :result
-                flatcode = :result
-                respath = respath[2:end]
-                result_stores[respath] = usbuf
-                resarg = true
-            else
-                @assert respath[1] == :resargs
-                if respath[2] != path[2]
-                    continue
-                end
-                # flatcode = :(args[$(respath[2])])
-                path = path[3:end]
-            end
-            # for p in path
-            #     flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
-            # end
-            # resarg = true
-            # flatcode = :($flatcode.data = $usbuf)
-            # @show flatcode
-            # push!(flatten_code, res)
-        end
+        # for respath in respaths
+        #     if respath[1] == :result
+        #         flatcode = :result
+        #         respath = respath[2:end]
+        #         result_stores[respath] = usbuf
+        #         resarg = true
+        #     else
+        #         @assert respath[1] == :resargs
+        #         if respath[2] != path[2]
+        #             continue
+        #         end
+        #         # flatcode = :(args[$(respath[2])])
+        #         path = path[3:end]
+        #     end
+        #     # for p in path
+        #     #     flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
+        #     # end
+        #     # resarg = true
+        #     # flatcode = :($flatcode.data = $usbuf)
+        #     # @show flatcode
+        #     # push!(flatten_code, res)
+        # end
         # if resarg
         #     push!(resarg_code, :($usbuf = $flatcode.data))
         # end
@@ -647,11 +686,16 @@ function codegen_unflatten!(
     concrete_result,
     result_stores,
 )
-    unflatten_code = Expr[]
+    cache_dict = gensym("cache_dict")
+    unflatten_code = Expr[:(
+        $cache_dict = $(IdDict{
+            Union{TracedRArray,TracedRNumber},Union{ConcreteRArray,ConcreteRNumber}
+        }())
+    ),]
 
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
-        paths = ((p for p in result.paths if p[1] != :args)...,)
+        paths = ((p for p in result.paths if p[1] == :result || p[1] == :resargs)...,)
         for path in paths
             if path[1] == :result
                 unflatcode = :result
@@ -662,15 +706,47 @@ function codegen_unflatten!(
                 @assert path[1] == :resargs
                 unflatcode = :(args[$(path[2])])
                 path = path[3:end]
-            end
 
-            # unroll path tree
-            for p in path
-                unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
-            end
-            unflatcode = :($unflatcode.data = $concrete_res_name)
+                for p in path[1:(end - 1)]
+                    unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
+                end
 
-            push!(unflatten_code, unflatcode)
+                if length(path) > 0
+                    final_val = gensym("final_val")
+                    clocal = gensym("clocal")
+                    unflatcode = quote
+                        $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
+                        if $final_val isa TracedRArray
+                            $clocal = if haskey($cache_dict, $final_val)
+                                $cache_dict[$final_val]
+                            else
+                                $cache_dict[$final_val] = ConcreteRArray{
+                                    eltype($final_val),ndims($final_val)
+                                }(
+                                    $concrete_res_name, size($final_val)
+                                )
+                                $cache_dict[$final_val]
+                            end
+                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
+                        elseif $final_val isa TracedRNumber
+                            $clocal = if haskey($cache_dict, $final_val)
+                                $cache_dict[$final_val]
+                            else
+                                $cache_dict[$final_val] = ConcreteRNumber{eltype($final_val)}(
+                                    $concrete_res_name
+                                )
+                                $cache_dict[$final_val]
+                            end
+                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
+                        else
+                            traced_setfield!($final_val, :data, $concrete_res_name)
+                        end
+                    end
+                else
+                    unflatcode = :($unflatcode.data = $concrete_res_name)
+                end
+                push!(unflatten_code, unflatcode)
+            end
         end
     end
 

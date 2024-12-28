@@ -9,7 +9,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "f6587e37ff7298f2a1a273b08c24d69fca7ff30f"
+ENZYMEXLA_COMMIT = "b6d6563aa3a3050474a4250bf18322f7ebf0b486"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
@@ -19,6 +19,34 @@ http_archive(
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
 
+
+http_archive(
+    name = "rules_python",
+    sha256 = "778aaeab3e6cfd56d681c89f5c10d7ad6bf8d2f1a72de9de55b23081b2d31618",
+    strip_prefix = "rules_python-0.34.0",
+    url = "https://github.com/bazelbuild/rules_python/releases/download/0.34.0/rules_python-0.34.0.tar.gz",
+)
+
+# Hedron's Compile Commands Extractor for Bazel
+# https://github.com/hedronvision/bazel-compile-commands-extractor
+http_archive(
+    name = "hedron_compile_commands",
+
+    # Replace the commit hash (0e990032f3c5a866e72615cf67e5ce22186dcb97) in both places (below) with the latest (https://github.com/hedronvision/bazel-compile-commands-extractor/commits/main), rather than using the stale one here.
+    # Even better, set up Renovate and let it do the work for you (see "Suggestion: Updates" in the README).
+    url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/4f28899228fb3ad0126897876f147ca15026151e.tar.gz",
+    strip_prefix = "bazel-compile-commands-extractor-4f28899228fb3ad0126897876f147ca15026151e",
+    # When you first run this tool, it'll recommend a sha256 hash to put here with a message like: "DEBUG: Rule 'hedron_compile_commands' indicated that a canonical reproducible form can be obtained by modifying arguments sha256 = ..."
+)
+load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
+hedron_compile_commands_setup()
+load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
+hedron_compile_commands_setup_transitive()
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
+hedron_compile_commands_setup_transitive_transitive()
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
+hedron_compile_commands_setup_transitive_transitive_transitive()
+
 load("@enzyme_ad//:workspace.bzl", "JAX_COMMIT", "JAX_SHA256", "ENZYME_COMMIT", "ENZYME_SHA256", "XLA_PATCHES")
 
 XLA_PATCHES = XLA_PATCHES + [
@@ -27,6 +55,9 @@ sed -i.bak0 "s/__cpp_lib_hardware_interference_size/HW_INTERFERENCE_SIZE/g" xla/
 """,
 """
 sed -i.bak0 "s/__cpp_lib_hardware_interference_size/HW_INTERFERENCE_SIZE/g" xla/stream_executor/host/host_kernel.cc
+""",
+"""
+sed -i.bak0 "s/__cpp_lib_hardware_interference_size/HW_INTERFERENCE_SIZE/g" xla/tsl/concurrency/async_value_ref.h
 """,
 """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_LINK_H=1\\/HAVE_LINK_H=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
@@ -57,19 +88,6 @@ sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.
 # """,
 ]
 
-http_archive(
-    name = "rules_cc",
-    sha256 = "85723d827f080c5e927334f1fb18a294c0b3f94fee6d6b45945f5cdae6ea0fd4",
-    strip_prefix = "rules_cc-c8c38f8c710cbbf834283e4777916b68261b359c",
-    urls = [
-        "https://github.com/bazelbuild/rules_cc/archive/c8c38f8c710cbbf834283e4777916b68261b359c.tar.gz",
-    ],
-)
-
-load("@rules_cc//cc:repositories.bzl", "rules_cc_dependencies")
-
-rules_cc_dependencies()
-
 LLVM_TARGETS = select({
     "@bazel_tools//src/conditions:windows": ["AMDGPU", "NVPTX"],
     "@bazel_tools//src/conditions:darwin": [],
@@ -97,7 +115,7 @@ http_archive(
 
 load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
 python_init_rules()
-
+ 
 load("@xla//third_party/py:python_init_repositories.bzl", "python_init_repositories")
 python_init_repositories(
     requirements = {
@@ -108,23 +126,23 @@ python_init_repositories(
         "3.13": "//build:requirements_lock_3_13.txt",
     },
 )
-
+ 
 load("@xla//third_party/py:python_init_toolchains.bzl", "python_init_toolchains")
 python_init_toolchains()
-
-load("@xla//third_party/py:python_init_pip.bzl", "python_init_pip")
-python_init_pip()
-
-load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
-python_init_rules()
-
-load("@rules_python//python:repositories.bzl", "py_repositories")
-
-py_repositories()
-
-load("@rules_python//python/pip_install:repositories.bzl", "pip_install_dependencies")
-
-pip_install_dependencies()
+# 
+# load("@xla//third_party/py:python_init_pip.bzl", "python_init_pip")
+# python_init_pip()
+# 
+# load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
+# python_init_rules()
+# 
+# load("@rules_python//python:repositories.bzl", "py_repositories")
+# 
+# py_repositories()
+# 
+# load("@rules_python//python/pip_install:repositories.bzl", "pip_install_dependencies")
+# 
+# pip_install_dependencies()
 
 http_archive(
     name = "enzyme",
