@@ -12,7 +12,9 @@ function ConcreteRNumber(
     return ConcreteRNumber{T}(crarray.data)
 end
 
-Base.collect(x::ConcreteRNumber{T}) where {T} = ConcreteRArray{T,0}(copy(x).data, ())
+function Base.collect(x::ConcreteRNumber{T}) where {T}
+    return collect(ConcreteRArray{T,0}(copy(x).data, ()))
+end
 
 Base.size(::ConcreteRNumber) = ()
 Base.real(x::ConcreteRNumber{<:Real}) = x
@@ -217,12 +219,12 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
                 # start += (args[i]-1)
             end
             start += 1
-            return ConcreteRNumber(unsafe_load(ptr, start))
+            return unsafe_load(ptr, start)
         end
     end
 
     GPUArraysCore.assertscalar("getindex(::ConcreteRArray, ::Vararg{Int, N})")
-    return ConcreteRNumber(convert(Array, a)[args...])
+    return convert(Array, a)[args...]
 end
 
 function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
@@ -305,6 +307,8 @@ function Base.copyto!(dest::ConcreteRArray, src::ConcreteRArray)
     dest.data = src.data
     return dest
 end
+
+Base.collect(x::AnyConcreteRArray) = convert(Array, x)
 
 function Base.mapreduce(
     @nospecialize(f),

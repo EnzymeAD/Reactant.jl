@@ -4,7 +4,7 @@
 module TracedUtils
 
 using LinearAlgebra: LinearAlgebra
-using Adapt: Adapt
+using Adapt: Adapt, WrappedReshapedArray
 using ..Reactant:
     Reactant,
     MLIR,
@@ -21,26 +21,30 @@ using ..Reactant:
 materialize_traced_array(x::TracedRArray) = x
 materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
 function materialize_traced_array(
-    x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}
-) where {T,N}
+    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}
+) where {T,N,M}
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 function materialize_traced_array(
-    x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}
+    x::LinearAlgebra.Transpose{TracedRNumber{T},TracedRArray{T,N}}
 ) where {T,N}
     px = parent(x)
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
 end
-function materialize_traced_array(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}) where {T,N}
+function materialize_traced_array(
+    x::LinearAlgebra.Adjoint{TracedRNumber{T},TracedRArray{T,N}}
+) where {T,N}
     return conj(materialize_traced_array(transpose(parent(x))))
 end
 function materialize_traced_array(
-    x::PermutedDimsArray{T,N,perm,iperm,<:TracedRArray{T,N}}
+    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}
 ) where {T,N,perm,iperm}
     return permutedims(parent(x), perm)
 end
-function materialize_traced_array(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}) where {T}
+function materialize_traced_array(
+    x::LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}}
+) where {T}
     return LinearAlgebra.diagm(parent(x))
 end
 
@@ -54,12 +58,16 @@ function set_mlir_data!(x::TracedRArray, data)
     x.mlir_data = data
     return x
 end
-function set_mlir_data!(x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}, data) where {T,N}
+function set_mlir_data!(
+    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, data
+) where {T,N,M}
     res_mlir_data = Ops.reshape(TracedRArray(data), size(parent(x))...).mlir_data
     set_mlir_data!(parent(x), res_mlir_data)
     return x
 end
-function set_mlir_data!(x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}, data) where {T,N}
+function set_mlir_data!(
+    x::LinearAlgebra.Transpose{TracedRNumber{T},TracedRArray{T,N}}, data
+) where {T,N}
     tdata = TracedRArray(data)
     px = parent(x)
     px.mlir_data = (
@@ -71,7 +79,9 @@ function set_mlir_data!(x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}, data) w
     ).mlir_data
     return x
 end
-function set_mlir_data!(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}, data) where {T,N}
+function set_mlir_data!(
+    x::LinearAlgebra.Adjoint{TracedRNumber{T},TracedRArray{T,N}}, data
+) where {T,N}
     tdata = TracedRArray(data)
     px = parent(x)
     transposed_data =
@@ -80,12 +90,14 @@ function set_mlir_data!(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}, data) whe
     return x
 end
 function set_mlir_data!(
-    x::PermutedDimsArray{T,N,perm,iperm,TracedRArray{T,N}}, data
+    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}, data
 ) where {T,N,perm,iperm}
     parent(x).mlir_data = permutedims(TracedRArray(data), iperm).mlir_data
     return x
 end
-function set_mlir_data!(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}, data) where {T}
+function set_mlir_data!(
+    x::LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}}, data
+) where {T}
     parent(x).mlir_data = LinearAlgebra.diag(TracedRArray(data)).mlir_data
     return x
 end
@@ -310,9 +322,7 @@ function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
     return TracedUtils.promote_to(TracedRNumber{T}, x)
 end
 
-function elem_apply(
-    ::Type{T}, x::TracedRArray{T2}
-) where {T<:ReactantPrimitive,T2<:ReactantPrimitive}
+function elem_apply(::Type{T}, x::TracedRArray) where {T<:ReactantPrimitive}
     # Special Path to prevent going down a despecialized path
     return elem_apply(TypeCast{T}(), x)
 end

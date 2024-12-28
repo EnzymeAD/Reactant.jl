@@ -56,6 +56,8 @@ end
 
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
+abstract type RArray{T,N} <: AbstractArray{T,N} end
+
 function ancestor(x::AbstractArray)
     p_x = parent(x)
     p_x === x && return x
@@ -82,7 +84,7 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
-mutable struct TracedRArray{T,N} <: AbstractArray{TracedRNumber{T},N}
+mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
     shape::NTuple{N,Int}
@@ -98,7 +100,9 @@ mutable struct TracedRArray{T,N} <: AbstractArray{TracedRNumber{T},N}
     end
 end
 
-const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+const WrappedTracedRArray{T,N} = WrappedArray{
+    TracedRNumber{T},N,TracedRArray,TracedRArray{T,N}
+}
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = Union{
@@ -113,29 +117,35 @@ function TracedRArray(data::MLIR.IR.Value)
     )
 end
 
-struct XLAArray{T,N} <: AbstractArray{T,N} end
+struct XLAArray{T,N} <: RArray{T,N} end
 
 mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
 end
 
-mutable struct ConcreteRArray{T,N} <: AbstractArray{ConcreteRNumber{T},N}
+mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     data::XLA.AsyncBuffer
     shape::NTuple{N,Int}
 end
 
-unwrapped_eltype(::Type{T}) where {T<:Number} = T
-unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{<:TracedRArray{T,N}}) where {T,N} = T
-unwrapped_eltype(::Type{<:XLAArray{T,N}}) where {T,N} = T
-unwrapped_eltype(::Type{<:ConcreteRNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{<:ConcreteRArray{T,N}}) where {T,N} = T
-unwrapped_eltype(x) = unwrapped_eltype(typeof(x))
-
 const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
 const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}
 
-const RArray{T,N} = Union{ConcreteRArray{T,N},TracedRArray{T,N},XLAArray{T,N}}
+unwrapped_eltype(::Type{T}) where {T<:Number} = T
+unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
+
+unwrapped_eltype(::T) where {T<:Number} = T
+unwrapped_eltype(::RNumber{T}) where {T} = T
+unwrapped_eltype(::TracedRNumber{T}) where {T} = T
+
+unwrapped_eltype(::Type{<:RArray{T,N}}) where {T,N} = T
+unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
+unwrapped_eltype(::Type{<:AnyTracedRArray{T,N}}) where {T,N} = T
+
+unwrapped_eltype(::RArray{T,N}) where {T,N} = T
+unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
+unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 include("Ops.jl")
 include("TracedUtils.jl")

@@ -1,7 +1,14 @@
 module TracedRNumberOverrides
 
 using ..Reactant:
-    Reactant, TracedRNumber, TracedRArray, ReactantPrimitive, TracedUtils, Ops, MLIR
+    Reactant,
+    TracedRNumber,
+    TracedRArray,
+    ReactantPrimitive,
+    TracedUtils,
+    Ops,
+    MLIR,
+    unwrapped_eltype
 using ReactantCore
 
 ReactantCore.is_traced(::TracedRNumber) = true
@@ -42,8 +49,12 @@ end
 # NOTE: This is inconsistent with the behavior of `convert` but we do it since it is a very
 #       common usecase
 TracedRNumber{T}(x::TracedRNumber{T}) where {T} = x
-TracedRNumber{T}(x::TracedRNumber) where {T} = TracedUtils.promote_to(TracedRNumber{T}, x)
-TracedRNumber{T}(x::Number) where {T} = TracedUtils.promote_to(TracedRNumber{T}, x)
+function TracedRNumber{T}(x::TracedRNumber) where {T}
+    return TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(T)}, x)
+end
+function TracedRNumber{T}(x::Number) where {T}
+    return TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(T)}, x)
+end
 
 function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
     if rhs isa TracedRNumber

@@ -626,8 +626,7 @@ end
 
     @testset "ConcreteRNumber" begin
         y = collect(x_ra)
-        @test y isa ConcreteRArray{Int,0}
-        @test y == x
+        @test y isa Array{Int,0}
     end
 
     @testset "TracedRArray" begin
@@ -637,10 +636,12 @@ end
     end
 end
 
-function f_row_major(x)
+function f_row_major(x::AbstractArray{T}) where {T}
     y = [1 2; 3 4; 5 6]
     if x isa Reactant.TracedRArray
-        y = Reactant.TracedUtils.promote_to(Reactant.TracedRArray{eltype(x),2}, y)
+        y = Reactant.TracedUtils.promote_to(
+            Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y
+        )
     end
     return x .+ y
 end
