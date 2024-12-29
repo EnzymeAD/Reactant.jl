@@ -243,7 +243,7 @@ function Base.round(A::TracedRNumber{<:ReactantFloat}, ::RoundingMode{R}) where 
     elseif R == :Down
         Ops.floor(A)
     else
-        @error "$R is unsupported"
+        error("$R is unsupported")
     end
 end
 
