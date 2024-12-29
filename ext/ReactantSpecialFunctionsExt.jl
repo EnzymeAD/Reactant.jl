@@ -32,7 +32,9 @@ function SpecialFunctions.trigamma(x::TracedRNumber{<:ReactantFloatInt})
     return Ops.polygamma(Ops.constant(Float64(1)), float(x))#TODO: change Ops definition
 end
 
-function SpecialFunctions.polygamma(n::TracedRNumber{<:ReactantFloatInt}, x::TracedRNumber{<:ReactantFloatInt})
+function SpecialFunctions.polygamma(
+    n::TracedRNumber{<:ReactantFloatInt}, x::TracedRNumber{<:ReactantFloatInt}
+)
     return Ops.polygamma(float(n), float(x))
 end
 
@@ -48,11 +50,15 @@ end
 
 #SpecialFunctions.gamma ...
 
-function SpecialFunctions.beta(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:ReactantFloatInt}
+function SpecialFunctions.beta(
+    x::TracedRNumber{T}, y::TracedRNumber{T}
+) where {T<:ReactantFloatInt}
     return gamma(x) * gamma(y) / gamma(x + y)
 end
 
-function SpecialFunctions.logbeta(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:ReactantFloatInt}
+function SpecialFunctions.logbeta(
+    x::TracedRNumber{T}, y::TracedRNumber{T}
+) where {T<:ReactantFloatInt}
     return log(abs(beta(x, y)))
 end
 
@@ -64,13 +70,17 @@ end
 
 #utilities...
 
-function SpecialFunctions.erf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:ReactantFloatInt}
+function SpecialFunctions.erf(
+    x::TracedRNumber{T}, y::TracedRNumber{T}
+) where {T<:ReactantFloatInt}
     return erf(y) - erf(x)
 end
 
 #SpecialFunctions.erfcinv
 
-function SpecialFunctions.logerf(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:ReactantFloatInt}
+function SpecialFunctions.logerf(
+    x::TracedRNumber{T}, y::TracedRNumber{T}
+) where {T<:ReactantFloatInt}
     return log(erf(x, y))
 end
 
@@ -99,7 +109,9 @@ end
 
 #Elliptic Integrals
 
-function SpecialFunctions.zeta(z::TracedRNumber{T}, s::TracedRNumber{T}) where {T<:ReactantFloatInt}
+function SpecialFunctions.zeta(
+    z::TracedRNumber{T}, s::TracedRNumber{T}
+) where {T<:ReactantFloatInt}
     return Ops.zeta(z, s)
 end
 

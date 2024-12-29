@@ -23,27 +23,14 @@ else
     const ReactantFloat = Union{Float16,Float32,Float64}
 end
 
-const ReactantInt = Union{
-    Int8,
-    UInt8,
-    Int16,
-    UInt16,
-    Int32,
-    UInt32,
-    Int64,
-    UInt64,
-}
+const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64}
 
 const ReactantFloatInt = Union{
-    Base.uniontypes(ReactantInt)...,
-    Base.uniontypes(ReactantFloat)...
+    Base.uniontypes(ReactantInt)...,Base.uniontypes(ReactantFloat)...
 }
 
 const ReactantPrimitive = Union{
-    Bool,
-    Base.uniontypes(ReactantFloatInt)...,
-    Complex{Float32},
-    Complex{Float64},
+    Bool,Base.uniontypes(ReactantFloatInt)...,Complex{Float32},Complex{Float64}
 }
 
 abstract type RArray{T<:ReactantPrimitive,N} <: AbstractArray{T,N} end
