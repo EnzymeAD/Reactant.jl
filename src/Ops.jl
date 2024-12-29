@@ -1445,14 +1445,21 @@ instead.
     pushfirst!(update_computation, block)
 
     #! format: off
+    update_window_dims = Int64[]
+    inserted_window_dims = collect(Int64, 0:(N - 1))
+    input_batching_dims = Int64[]
+    scatter_indices_batching_dims = Int64[]
+    scatter_dims_to_operand_dims = collect(Int64, 0:(N - 1))
+    index_vector_dim = Int64(1)
+
     scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
         MLIR.IR.context(),
-        Int64(0), Int64[],
-        Int64(N), collect(Int64, 0:(N - 1)),
-        Int64(0), Int64[],
-        Int64(0), Int64[],
-        Int64(N), collect(Int64, 0:(N - 1)),
-        Int64(1)
+        length(update_window_dims), update_window_dims,
+        length(inserted_window_dims), inserted_window_dims,
+        length(input_batching_dims), input_batching_dims,
+        length(scatter_indices_batching_dims), scatter_indices_batching_dims,
+        length(scatter_dims_to_operand_dims), scatter_dims_to_operand_dims,
+        index_vector_dim,
     )
     #! format: on
 
@@ -1486,20 +1493,26 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
     @assert size(gather_indices, 2) == N
 
     #! format: off
+    offset_dims = Int64[1]
+    collapsed_slice_dims = collect(Int64, 0:(N - 2))
+    operand_batching_dims = Int64[]
+    start_indices_batching_dims = Int64[]
+    start_index_map = collect(Int64, 0:(N - 1))
+    index_vector_dim = Int64(1)
+
     dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
         MLIR.IR.context(),
-        Int64(1), Int64[1],
-        Int64(N - 1), collect(Int64, 0:(N - 2)),
-        Int64(0), Int64[],
-        Int64(0), Int64[],
-        Int64(N), collect(Int64, 0:(N - 1)),
-        1
+        Int64(length(offset_dims)), offset_dims,
+        Int64(length(collapsed_slice_dims)), collapsed_slice_dims,
+        Int64(length(operand_batching_dims)), operand_batching_dims,
+        Int64(length(start_indices_batching_dims)), start_indices_batching_dims,
+        Int64(length(start_index_map)), start_index_map,
+        Int64(index_vector_dim),
     )
     #! format: on
 
     return reshape(
-        TracedRArray{T,2}(
-            (),
+        TracedRArray{T}(
             MLIR.IR.result(
                 MLIR.Dialects.stablehlo.gather(
                     src.mlir_data,
@@ -1510,7 +1523,6 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
                 ),
                 1,
             ),
-            (size(gather_indices, 1), 1),
         ),
         size(gather_indices, 1),
     )

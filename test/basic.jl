@@ -737,3 +737,57 @@ end
     @test res[1] isa ConcreteRArray{Float64,2}
     @test res[2] isa ConcreteRNumber{Float64}
 end
+
+@testset "non-contiguous indexing" begin
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1(x) = x[[1, 3, 2], :, :]
+    non_contiguous_indexing2(x) = x[:, [1, 2, 1, 3], [1, 3]]
+
+    @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x)
+    @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x)
+
+    x = rand(4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1(x) = x[[1, 3, 2], :]
+    non_contiguous_indexing2(x) = x[:, [1, 2, 2]]
+
+    @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x)
+    @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x)
+
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1!(x) = x[[1, 3, 2], :, :] .= 2
+    non_contiguous_indexing2!(x) = x[:, [1, 2, 1, 3], [1, 3]] .= 2
+
+    @jit(non_contiguous_indexing1!(x_ra))
+    non_contiguous_indexing1!(x)
+    @test x_ra ≈ x
+
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    @jit(non_contiguous_indexing2!(x_ra))
+    non_contiguous_indexing2!(x)
+    @test x_ra ≈ x
+
+    x = rand(4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1!(x) = x[[1, 3, 2], :] .= 2
+    non_contiguous_indexing2!(x) = x[:, [1, 2, 2]] .= 2
+
+    @jit(non_contiguous_indexing1!(x_ra))
+    non_contiguous_indexing1!(x)
+    @test x_ra ≈ x
+
+    x = rand(4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    @jit(non_contiguous_indexing2!(x_ra))
+    non_contiguous_indexing2!(x)
+    @test x_ra ≈ x
+end

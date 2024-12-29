@@ -56,9 +56,7 @@ function Base.getindex(
     return TracedRNumber{T}((), res2)
 end
 
-function Base.getindex(a::TracedRArray{T,0}) where {T}
-    return TracedRNumber{T}((), a.mlir_data)
-end
+Base.getindex(a::TracedRArray{T,0}) where {T} = TracedRNumber{T}((), a.mlir_data)
 
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
@@ -80,12 +78,13 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 
     if non_contiguous_getindex
         indices_tuples = collect(Iterators.product(indices...))
-        indices = Matrix{Int}(undef, (length(indices_tuples), 2))
+        indices = Matrix{Int}(
+            undef, (length(indices_tuples), length(first(indices_tuples)))
+        )
         for (i, idx) in enumerate(indices_tuples)
-            indices[i, 1] = idx[1] - 1
-            indices[i, 2] = idx[2] - 1
+            indices[i, :] .= idx .- 1
         end
-        indices = promote_to(TracedRArray{Int,2}, indices)
+        indices = TracedUtils.promote_to(TracedRArray{Int,2}, indices)
         res = Ops.gather_getindex(a, indices)
         return Ops.reshape(res, size(indices_tuples)...)
     end
@@ -133,10 +132,11 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
 
     if non_contiguous_setindex
         indices_tuples = collect(Iterators.product(indices...))
-        indices = Matrix{Int}(undef, (length(indices_tuples), 2))
+        indices = Matrix{Int}(
+            undef, (length(indices_tuples), length(first(indices_tuples)))
+        )
         for (i, idx) in enumerate(indices_tuples)
-            indices[i, 1] = idx[1] - 1
-            indices[i, 2] = idx[2] - 1
+            indices[i, :] .= idx .- 1
         end
         indices = TracedUtils.promote_to(TracedRArray{Int,2}, indices)
         res = Ops.scatter_setindex(a, indices, Ops.reshape(v, length(v)))
