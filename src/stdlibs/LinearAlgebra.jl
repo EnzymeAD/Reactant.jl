@@ -269,7 +269,7 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     #   <unknown>:0: note: see current operation: %0 = "tensor.empty"() : () -> tensor<0xf64>
     length(indices) ≤ 0 && return TracedUtils.promote_to(TracedRArray{T,1}, T[])
 
-    return Ops.gather_getindex(x, TracedUtils.promote_to(TracedRArray{Int,2}, indices))
+    return Ops.gather_getindex(y, TracedUtils.promote_to(TracedRArray{Int,2}, indices))
 end
 
 function LinearAlgebra._diagm(
