@@ -13,6 +13,7 @@ function ArrayInterface.aos_to_soa(x::AbstractArray{<:ConcreteRNumber{T}}) where
     return x_c
 end
 
+ArrayInterface.aos_to_soa(x::TracedRArray) = x
 function ArrayInterface.aos_to_soa(x::AbstractArray{<:TracedRNumber{T}}) where {T}
     return Ops.reshape(vcat(x...), size(x)...)
 end

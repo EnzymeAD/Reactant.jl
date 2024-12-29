@@ -4,23 +4,28 @@
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme
-using ..Reactant: Reactant, TracedRArray, TracedRNumber, RArray, RNumber, MissingTracedValue
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    RArray,
+    RNumber,
+    MissingTracedValue,
+    unwrapped_eltype
 
-function mlir_type(x::RArray{T,N}) where {T,N}
-    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
+function mlir_type(x::Union{RNumber,RArray})
+    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(unwrapped_eltype(x)))
 end
-
-mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
 
 mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 
-function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
+function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
-    return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    return MLIR.IR.TensorType(shape, MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(::Type{<:RNumber{T}}) where {T}
-    return MLIR.IR.TensorType((), MLIR.IR.Type(T))
+function mlir_type(RT::Type{<:RNumber})
+    return MLIR.IR.TensorType((), MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
 function mlir_type(::Type{<:MissingTracedValue})

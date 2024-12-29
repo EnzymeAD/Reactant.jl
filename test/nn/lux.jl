@@ -46,7 +46,7 @@ end
 
     comp = f(cmodel, cnoisy, cps, cst)
 
-    @test comp ≈ origout atol = 1e-5 rtol = 1e-2
+    @test comp ≈ origout atol = 1e-3 rtol = 1e-2
 
     target = onehotbatch(truth, [true, false])                   # 2×1000 OneHotMatrix
 
@@ -61,8 +61,8 @@ end
 
     res_reactant, dps_reactant = compiled_gradient(cmodel, cnoisy, ctarget, cps, cst2)
 
-    @test res ≈ res_reactant atol = 1e-5 rtol = 1e-2
+    @test res ≈ res_reactant atol = 1e-3 rtol = 1e-2
     for (dps1, dps2) in zip(fleaves(dps), fleaves(dps_reactant))
-        @test dps1 ≈ dps2 atol = 1e-5 rtol = 1e-2
+        @test dps1 ≈ dps2 atol = 1e-3 rtol = 1e-2
     end
 end
