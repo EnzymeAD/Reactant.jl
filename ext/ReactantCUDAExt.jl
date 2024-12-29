@@ -327,9 +327,7 @@ function compile(job)
         String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
 
-    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(
-        nothing, entry
-    )
+    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entry)
 end
 
 # link into an executable kernel
