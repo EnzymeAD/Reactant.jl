@@ -6,27 +6,82 @@ macro ≈(a, b)
     end
 end
 
-@testset "$op" for (op, n_args) in [
-    (:gamma, 1),
-    (:loggamma, 1),
-    (:digamma, 1),
-    (:trigamma, 1),
-    (:beta, 2),
-    (:logbeta, 2),
-    (:erf, 1),
-    (:erf, 2),
-    (:erfc, 1),
-    (:logerf, 2),
-    (:erfcx, 1),
-    (:logerfc, 1),
-    (:logerfcx, 1),
-]
-    for data in ([0.5, 0.6], [2, 4])
-        x = data[1:n_args]
-        @eval @test @≈ float(@jit(SpecialFunctions.$op(ConcreteRNumber.($x)...))) SpecialFunctions.$op(
-            $x...
-        )
-    end
+@testset "gamma" begin
+    @test SpecialFunctions.gamma(0.5) ≈ @jit(SpecialFunctions.gamma(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.gamma(2) ≈ @jit(SpecialFunctions.gamma(ConcreteRNumber(2)))
+end
+
+@testset "loggamma" begin
+    @test SpecialFunctions.loggamma(0.5) ≈
+        @jit(SpecialFunctions.loggamma(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.loggamma(2) ≈ @jit(SpecialFunctions.loggamma(ConcreteRNumber(2)))
+end
+
+@testset "digamma" begin
+    @test SpecialFunctions.digamma(0.5) ≈
+        @jit(SpecialFunctions.digamma(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.digamma(2) ≈ @jit(SpecialFunctions.digamma(ConcreteRNumber(2)))
+end
+
+@testset "trigamma" begin
+    @test SpecialFunctions.trigamma(0.5) ≈
+        @jit(SpecialFunctions.trigamma(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.trigamma(2) ≈ @jit(SpecialFunctions.trigamma(ConcreteRNumber(2)))
+end
+
+@testset "beta" begin
+    @test SpecialFunctions.beta(0.5, 0.6) ≈
+        @jit(SpecialFunctions.beta(ConcreteRNumber(0.5), ConcreteRNumber(0.6)))
+    @test SpecialFunctions.beta(2, 4) ≈
+        @jit(SpecialFunctions.beta(ConcreteRNumber(2), ConcreteRNumber(4)))
+end
+
+@testset "logbeta" begin
+    @test SpecialFunctions.logbeta(0.5, 0.6) ≈
+        @jit(SpecialFunctions.logbeta(ConcreteRNumber(0.5), ConcreteRNumber(0.6)))
+    @test SpecialFunctions.logbeta(2, 4) ≈
+        @jit(SpecialFunctions.logbeta(ConcreteRNumber(2), ConcreteRNumber(4)))
+end
+
+@testset "erf" begin
+    @test SpecialFunctions.erf(0.5) ≈ @jit(SpecialFunctions.erf(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.erf(2) ≈ @jit(SpecialFunctions.erf(ConcreteRNumber(2)))
+end
+
+@testset "erf with 2 arguments" begin
+    @test SpecialFunctions.erf(0.5, 0.6) ≈
+        @jit(SpecialFunctions.erf(ConcreteRNumber(0.5), ConcreteRNumber(0.6)))
+    @test SpecialFunctions.erf(2, 4) ≈
+        @jit(SpecialFunctions.erf(ConcreteRNumber(2), ConcreteRNumber(4)))
+end
+
+@testset "erfc" begin
+    @test SpecialFunctions.erfc(0.5) ≈ @jit(SpecialFunctions.erfc(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.erfc(2) ≈ @jit(SpecialFunctions.erfc(ConcreteRNumber(2)))
+end
+
+@testset "logerf" begin
+    @test SpecialFunctions.logerf(0.5, 0.6) ≈
+        @jit(SpecialFunctions.logerf(ConcreteRNumber(0.5), ConcreteRNumber(0.6)))
+    @test SpecialFunctions.logerf(2, 4) ≈
+        @jit(SpecialFunctions.logerf(ConcreteRNumber(2), ConcreteRNumber(4)))
+end
+
+@testset "erfcx" begin
+    @test SpecialFunctions.erfcx(0.5) ≈ @jit(SpecialFunctions.erfcx(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.erfcx(2) ≈ @jit(SpecialFunctions.erfcx(ConcreteRNumber(2)))
+end
+
+@testset "logerfc" begin
+    @test SpecialFunctions.logerfc(0.5) ≈
+        @jit(SpecialFunctions.logerfc(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.logerfc(2) ≈ @jit(SpecialFunctions.logerfc(ConcreteRNumber(2)))
+end
+
+@testset "logerfcx" begin
+    @test SpecialFunctions.logerfcx(0.5) ≈
+        @jit(SpecialFunctions.logerfcx(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.logerfcx(2) ≈ @jit(SpecialFunctions.logerfcx(ConcreteRNumber(2)))
 end
 
 @testset "loggamma1p" begin
