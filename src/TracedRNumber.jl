@@ -231,21 +231,9 @@ end
 
 using Reactant: ReactantFloat
 
-Base.round(A::TracedRNumber{<:ReactantFloat}) = Base.round(A, RoundNearest)
-Base.floor(A::TracedRNumber{<:ReactantFloat}) = Base.round(A, RoundDown)
-Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Base.round(A, RoundUp)
-
-function Base.round(A::TracedRNumber{<:ReactantFloat}, ::RoundingMode{R}) where {R}
-    if R == :Nearest
-        Ops.round_nearest_even(A)
-    elseif R == :Up
-        Ops.ceil(A)
-    elseif R == :Down
-        Ops.floor(A)
-    else
-        error("$R is unsupported")
-    end
-end
+Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
+Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
+Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
 
 Base.round(A::TracedRNumber{<:Integer}) = A
 Base.floor(A::TracedRNumber{<:Integer}) = A
