@@ -329,7 +329,9 @@ function compile(job)
 
         entry
     end
-    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, String(Reactant.TracedUtils.get_attribute_by_name(entry, "sym_name")))
+    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(
+        nothing, String(Reactant.TracedUtils.get_attribute_by_name(entry, "sym_name"))
+    )
 end
 
 # link into an executable kernel
