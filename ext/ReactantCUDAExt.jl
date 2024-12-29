@@ -220,9 +220,11 @@ end
 
 const _kernel_instances = Dict{Any,Any}()
 
+# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
+# and not the operation itself).
 struct LLVMFunc{F,tt}
     f::Union{F,Nothing}
-    entry::MLIR.IR.Operation
+    entry::String
 end
 
 const GPUCompiler = CUDA.GPUCompiler
@@ -327,7 +329,7 @@ function compile(job)
 
         entry
     end
-    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entry)
+    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, String(Reactant.TracedUtils.get_attribute_by_name(entry, "sym_name")))
 end
 
 # link into an executable kernel
@@ -378,9 +380,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     output_operand_aliases = MLIR.IR.Attribute(aliases)
 
-    fname = Reactant.TracedUtils.get_attribute_by_name(func.entry, "sym_name")
-    # Force public for now while we don't have real users
-    # MLIR.IR.rmattr!(func.entry, "sym_visibility")
+    fname = func.entry
 
     operands = MLIR.IR.Value[]
     for idx in
