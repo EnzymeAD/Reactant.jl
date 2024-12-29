@@ -105,7 +105,7 @@ function create_result(tocopy::D, path, result_stores) where {K,V,D<:AbstractDic
 end
 
 function create_result(
-    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol},
+    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
     path,
     result_stores,
 )
