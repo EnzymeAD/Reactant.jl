@@ -581,7 +581,7 @@ mutable struct ConvolutionParams
 end
 
 function inferConvolutionOp(
-    loc::Location,
+    loc::MLIR.IR.Location,
     lhsType::MLIR.IR.Type,
     rhsType::MLIR.IR.Type,
     windowStrides::MLIR.IR.Attribute,
@@ -603,9 +603,9 @@ function inferConvolutionOp(
         featureGroupCount,
         batchGroupCount,
     )
-    @ccall mlir_c.inferConvolutionOp(
-        loc::MlirLocation, lhsType::MlirType, rhsType::MlirType, cp::Ref{ConvolutionParams}
-    )::MlirType
+    @ccall MLIR.API.mlir_c.inferConvolutionOp(
+        loc::MLIR.API.MlirLocation, lhsType::MLIR.API.MlirType, rhsType::MLIR.API.MlirType, cp::Ref{ConvolutionParams}
+    )::MLIR.API.MlirType
 end
 
 function convolution(
