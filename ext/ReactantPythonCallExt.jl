@@ -8,22 +8,22 @@ using PythonCall
 
 const jaxptr = Ref{Py}()
 
-const NUMPY_SIMPLE_TYPES = (
-    ("bool_", Bool),
-    ("int8", Int8),
-    ("int16", Int16),
-    ("int32", Int32),
-    ("int64", Int64),
-    ("uint8", UInt8),
-    ("uint16", UInt16),
-    ("uint32", UInt32),
-    ("uint64", UInt64),
-    ("float16", Float16),
-    ("float32", Float32),
-    ("float64", Float64),
-    ("complex32", ComplexF16),
-    ("complex64", ComplexF32),
-    ("complex128", ComplexF64),
+const NUMPY_SIMPLE_TYPES = Dict(
+    Bool => :bool_,
+    Int8 => :int8,
+    Int16 => :int16,
+    Int32 => :int32,
+    Int64 => :int64,
+    UInt8 => :uint8,
+    UInt16 => :uint16,
+    UInt32 => :uint32,
+    UInt64 => :uint64,
+    Float16 => :float16,
+    Float32 => :float32,
+    Float64 => :float64,
+    ComplexF16 => :complex32,
+    ComplexF32 => :complex64,
+    ComplexF64 => :complex128,
 )
 
 function PythonCall.pycall(
@@ -32,15 +32,10 @@ function PythonCall.pycall(
     jax = jaxptr[]
     numpy = jax.numpy
     inputs = map((arg0, argNs...)) do arg
-        JT = eltype(arg)
-        PT = nothing
-        for (CPT, CJT) in NUMPY_SIMPLE_TYPES
-            if JT == CJT
-                PT = CPT
-                break
-            end
-        end
-        numpy.zeros(size(arg); dtype=getproperty(numpy, Symbol(PT)))
+        numpy.zeros(
+            size(arg);
+            dtype=getproperty(numpy, NUMPY_SIMPLE_TYPES[Reactant.unwrapped_eltype(arg)]),
+        )
     end
     lowered = jax.jit(f).lower(inputs...)
     txt = pyconvert(String, lowered.as_text())

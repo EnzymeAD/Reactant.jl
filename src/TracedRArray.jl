@@ -3,17 +3,19 @@ module TracedRArrayOverrides
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
-import ..TracedRArray
-import ..TracedRNumber
-import ..ReactantPrimitive
-import ..WrappedTracedRArray
-import ..AnyTracedRArray
-using ..TracedUtils
-import ..Ops
-import ..MLIR
-import ..ancestor
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    ReactantPrimitive,
+    WrappedTracedRArray,
+    AnyTracedRArray,
+    Ops,
+    MLIR,
+    ancestor,
+    unwrapped_eltype
 using ReactantCore: ReactantCore
-import ..TracedUtils: materialize_traced_array
+using ..TracedUtils: TracedUtils, materialize_traced_array
 using GPUArraysCore: GPUArraysCore
 
 ReactantCore.is_traced(::TracedRArray) = true
@@ -136,11 +138,13 @@ Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(Base.getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
 
+Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
+
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 # TODO is there a way to create an unitialized `tensor`? does it show an advantage? maybe `fill`?
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return Ops.constant(zeros(T, dims))
+    return Ops.constant(zeros(unwrapped_eltype(T), dims))
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
@@ -207,8 +211,6 @@ function Base.mapreduce(
         else
             init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
         end
-    else
-        init = init::T
     end
 
     init = [TracedUtils.broadcast_to_size(init, ()).mlir_data]
@@ -325,10 +327,10 @@ function Base.similar(
 end
 
 function Base.similar(
-    bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:ReactantPrimitive,N}
     @assert N isa Int
-    return TracedRArray{T,N}((), nothing, map(length, dims))
+    return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
 end
 
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
@@ -342,27 +344,12 @@ Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
-    ElType = Broadcast.combine_eltypes(bc.f, bc.args)
-    if ElType == Any
-        a1 = bc.args[1]
-        @show a1
-        b1 = a1.args[1]
-        @show b1
-        @show typeof(b1)
-        @show eltype(b1)
-        @show Broadcast._broadcast_getindex_eltype(a1.args[1])
-        @show Broadcast.eltypes(a1.args)
-        @show Broadcast._broadcast_getindex_eltype(a1)
-        @show typeof(bc.args)
-        argT = Broadcast.eltypes(bc.args)
-        @show argT
-        RT = Base._return_type(bc.f, argT)
-        @show RT
-        T = Base.promote_typejoin_union(RT)
-        @show T
-        @show bc.f, bc.args
+    ElType = if bc.f isa Type && bc.f <: ReactantPrimitive
+        Broadcast.combine_eltypes(TracedUtils.TypeCast{bc.f}(), bc.args)
+    else
+        Broadcast.combine_eltypes(bc.f, bc.args)
     end
-    @assert ElType != Any
+    @assert ElType != Any && ElType != Union{}
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
 end
@@ -459,7 +446,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
 
     catdims = Base.dims2cat(dims)
     shape = Base.cat_size_shape(catdims, X...)
-    RT = Base.promote_eltype(T, X...)
+    RT = unwrapped_eltype(Base.promote_eltype(T, X...))
 
     # convert to the target eltype
     X = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{RT,length(shape)}), X)

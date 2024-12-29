@@ -16,11 +16,12 @@ import ..Reactant:
     make_tracer,
     TracedToConcrete,
     append_path,
+    ancestor,
     TracedType
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
-    (isbitstype(T) || obj isa RArray) && return Base.getfield(obj, field)
+    (isbitstype(T) || ancestor(obj) isa RArray) && return Base.getfield(obj, field)
     return Base.getindex(obj, field)
 end
 
@@ -28,7 +29,7 @@ end
 @inline function traced_setfield!(
     @nospecialize(obj::AbstractArray{T}), field, val
 ) where {T}
-    (isbitstype(T) || obj isa RArray) && return Base.setfield!(obj, field, val)
+    (isbitstype(T) || ancestor(obj) isa RArray) && return Base.setfield!(obj, field, val)
     return Base.setindex!(obj, val, field)
 end
 
@@ -666,7 +667,8 @@ function codegen_unflatten!(
                                 $cache_dict[$final_val]
                             else
                                 $cache_dict[$final_val] = ConcreteRArray{
-                                    eltype($final_val),ndims($final_val)
+                                    $(Reactant.unwrapped_eltype)($final_val),
+                                    ndims($final_val),
                                 }(
                                     $concrete_res_name, size($final_val)
                                 )
@@ -677,7 +679,9 @@ function codegen_unflatten!(
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcreteRNumber{eltype($final_val)}(
+                                $cache_dict[$final_val] = ConcreteRNumber{
+                                    $(Reactant.unwrapped_eltype)($final_val)
+                                }(
                                     $concrete_res_name
                                 )
                                 $cache_dict[$final_val]

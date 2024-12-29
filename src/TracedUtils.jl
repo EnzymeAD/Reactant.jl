@@ -4,44 +4,47 @@
 module TracedUtils
 
 using LinearAlgebra: LinearAlgebra
-using Adapt: Adapt
+using Adapt: Adapt, WrappedReshapedArray
 using ..Reactant:
-    RArray,
+    Reactant,
+    MLIR,
     RNumber,
     TracedRArray,
     TracedRNumber,
     WrappedTracedRArray,
     AnyTracedRArray,
     MissingTracedValue,
-    OrderedIdDict
-import ..Reactant
-import ..Reactant.MLIR
-import ..ReactantPrimitive
-import ..Ops
+    OrderedIdDict,
+    ReactantPrimitive,
+    Ops
 
 materialize_traced_array(x::TracedRArray) = x
 materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
 function materialize_traced_array(
-    x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}
-) where {T,N}
+    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}
+) where {T,N,M}
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 function materialize_traced_array(
-    x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}
+    x::LinearAlgebra.Transpose{TracedRNumber{T},TracedRArray{T,N}}
 ) where {T,N}
     px = parent(x)
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
 end
-function materialize_traced_array(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}) where {T,N}
+function materialize_traced_array(
+    x::LinearAlgebra.Adjoint{TracedRNumber{T},TracedRArray{T,N}}
+) where {T,N}
     return conj(materialize_traced_array(transpose(parent(x))))
 end
 function materialize_traced_array(
-    x::PermutedDimsArray{T,N,perm,iperm,<:TracedRArray{T,N}}
+    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}
 ) where {T,N,perm,iperm}
     return permutedims(parent(x), perm)
 end
-function materialize_traced_array(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}) where {T}
+function materialize_traced_array(
+    x::LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}}
+) where {T}
     return LinearAlgebra.diagm(parent(x))
 end
 
@@ -55,12 +58,16 @@ function set_mlir_data!(x::TracedRArray, data)
     x.mlir_data = data
     return x
 end
-function set_mlir_data!(x::Adapt.WrappedReshapedArray{T,N,<:TracedRArray}, data) where {T,N}
+function set_mlir_data!(
+    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, data
+) where {T,N,M}
     res_mlir_data = Ops.reshape(TracedRArray(data), size(parent(x))...).mlir_data
     set_mlir_data!(parent(x), res_mlir_data)
     return x
 end
-function set_mlir_data!(x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}, data) where {T,N}
+function set_mlir_data!(
+    x::LinearAlgebra.Transpose{TracedRNumber{T},TracedRArray{T,N}}, data
+) where {T,N}
     tdata = TracedRArray(data)
     px = parent(x)
     px.mlir_data = (
@@ -72,7 +79,9 @@ function set_mlir_data!(x::LinearAlgebra.Transpose{T,TracedRArray{T,N}}, data) w
     ).mlir_data
     return x
 end
-function set_mlir_data!(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}, data) where {T,N}
+function set_mlir_data!(
+    x::LinearAlgebra.Adjoint{TracedRNumber{T},TracedRArray{T,N}}, data
+) where {T,N}
     tdata = TracedRArray(data)
     px = parent(x)
     transposed_data =
@@ -81,12 +90,14 @@ function set_mlir_data!(x::LinearAlgebra.Adjoint{T,TracedRArray{T,N}}, data) whe
     return x
 end
 function set_mlir_data!(
-    x::PermutedDimsArray{T,N,perm,iperm,TracedRArray{T,N}}, data
+    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}, data
 ) where {T,N,perm,iperm}
     parent(x).mlir_data = permutedims(TracedRArray(data), iperm).mlir_data
     return x
 end
-function set_mlir_data!(x::LinearAlgebra.Diagonal{T,TracedRArray{T,1}}, data) where {T}
+function set_mlir_data!(
+    x::LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}}, data
+) where {T}
     parent(x).mlir_data = LinearAlgebra.diag(TracedRArray(data)).mlir_data
     return x
 end
@@ -164,7 +175,10 @@ function make_mlir_fn(
     end
 
     in_tys = if toscalar
-        [MLIR.IR.TensorType((), MLIR.IR.Type(eltype(arg))) for arg in linear_args]
+        [
+            MLIR.IR.TensorType((), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
+            arg in linear_args
+        ]
     elseif do_transpose
         [transpose_ty(Ops.mlir_type(arg)) for arg in linear_args]
     else
@@ -308,9 +322,7 @@ function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
     return TracedUtils.promote_to(TracedRNumber{T}, x)
 end
 
-function elem_apply(
-    ::Type{T}, x::TracedRArray{T2}
-) where {T<:ReactantPrimitive,T2<:ReactantPrimitive}
+function elem_apply(::Type{T}, x::TracedRArray) where {T<:ReactantPrimitive}
     # Special Path to prevent going down a despecialized path
     return elem_apply(TypeCast{T}(), x)
 end
@@ -416,7 +428,8 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     in_tys2 = [Ops.mlir_type(invmap[arg]) for arg in linear_args]
 
     out_tys2 = [
-        MLIR.IR.TensorType(OutShape, MLIR.IR.Type(eltype(arg))) for arg in linear_results
+        MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
+        arg in linear_results
     ]
 
     fname = get_attribute_by_name(func2, "sym_name")
@@ -487,11 +500,9 @@ end
 
 broadcast_to_size(arg::Number, rsize) = Ops.constant(Base.fill(arg, Tuple(rsize)))
 
-function broadcast_to_size(arg::TracedRNumber, rsize)
+function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     length(rsize) == 0 && return arg
-    return broadcast_to_size_internal(
-        TracedRArray{eltype(arg),0}((), arg.mlir_data, ()), rsize
-    )
+    return broadcast_to_size_internal(TracedRArray{T,0}((), arg.mlir_data, ()), rsize)
 end
 
 function broadcast_to_size(arg::AnyTracedRArray{T,0}, rsize) where {T}
@@ -512,7 +523,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
     return broadcast_to_size_internal(x, rsize)
 end
 
-@noinline function broadcast_to_size_internal(x::TracedRArray, rsize)
+@noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
     dims = collect(Int64, 0:(length(size(x)) - 1))
 
     if length(size(MLIR.IR.type(x.mlir_data))) != length(dims)
@@ -525,7 +536,7 @@ end
     @assert length(size(MLIR.IR.type(x.mlir_data))) == length(dims)
     mlirty = MLIR.IR.type(x.mlir_data)
 
-    return TracedRArray{eltype(x),Int(length(rsize))}(
+    return TracedRArray{T,Int(length(rsize))}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.broadcast_in_dim(

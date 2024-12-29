@@ -6,7 +6,7 @@
     TracedSetPath = 5
 end
 
-for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, RArray, RNumber)
+for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, RNumber)
     @eval function traced_type(::Type{T}, seen, mode, track_numbers) where {T<:$T}
         return T
     end
@@ -150,13 +150,27 @@ function traced_type(::Type{T}, seen, mode, track_numbers) where {T}
         return T
     end
 
+    wrapped_carray = T <: AbstractArray && ancestor(T) <: ConcreteRArray
+    wrapped_tracedarray = T <: AbstractArray && ancestor(T) <: TracedRArray
+
     subParms = []
-    for SST in T.parameters
-        if SST isa Type
-            TrT = traced_type(SST, seen, mode, track_numbers)
+    for (i, SST) in enumerate(T.parameters)
+        if wrapped_carray && i == 1 && SST isa Type && SST <: ReactantPrimitive
+            TrT = traced_type(ConcreteRNumber{SST}, seen, mode, track_numbers)
+            push!(subParms, TrT)
+        elseif wrapped_tracedarray &&
+            i == 1 &&
+            SST isa Type &&
+            SST <: TracedRNumber{<:ReactantPrimitive}
+            TrT = traced_type(unwrapped_eltype(SST), seen, mode, track_numbers)
             push!(subParms, TrT)
         else
-            push!(subParms, SST)
+            if SST isa Type
+                TrT = traced_type(SST, seen, mode, track_numbers)
+                push!(subParms, TrT)
+            else
+                push!(subParms, SST)
+            end
         end
     end
 
