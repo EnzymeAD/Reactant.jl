@@ -23,7 +23,7 @@ end
 ]
     for data in ([0.5, 0.6], [2, 4])
         x = data[1:n_args]
-        @eval @test @≈ @jit(SpecialFunctions.$op(ConcreteRNumber.($x)...)) SpecialFunctions.$op(
+        @eval @test @≈ @jit(float(SpecialFunctions.$op(ConcreteRNumber.($x)...))) SpecialFunctions.$op(
             $x...
         )
     end
