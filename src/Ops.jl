@@ -4,23 +4,28 @@
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme
-using ..Reactant: Reactant, TracedRArray, TracedRNumber, RArray, RNumber, MissingTracedValue
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    RArray,
+    RNumber,
+    MissingTracedValue,
+    unwrapped_eltype
 
-function mlir_type(x::RArray{T,N}) where {T,N}
-    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
+function mlir_type(x::Union{RNumber,RArray})
+    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(unwrapped_eltype(x)))
 end
-
-mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
 
 mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 
-function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
+function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
-    return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    return MLIR.IR.TensorType(shape, MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(::Type{<:RNumber{T}}) where {T}
-    return MLIR.IR.TensorType((), MLIR.IR.Type(T))
+function mlir_type(RT::Type{<:RNumber})
+    return MLIR.IR.TensorType((), MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
 function mlir_type(::Type{<:MissingTracedValue})
@@ -950,28 +955,56 @@ end
 #     return TracedRArray{T,N}((), res, size(x))
 # end
 
-# sorting ops
-# TODO need to trace over `comparator`
-# function sort(
-#     x::TracedRArray{T,N};
-#     comparator,
-#     dimension=-1,
-#     is_stable=false,
-#     location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
-# ) where {T,N}
-#     dimension = MLIR.IR.Attribute(dimension)
-#     is_stable = MLIR.IR.Attribute(is_stable)
-#     res = MLIR.IR.result(
-#         stablehlo.sort(
-#             x.mlir_data;
-#             result=mlir_type(TracedRArray{T,N}, size(x)),
-#             dimension,
-#             is_stable,
-#             location,
-#         ),
-#     )
-#     return TracedRArray{T,N}((), res, size(x))
-# end
+@noinline function sort(
+    x::TracedRArray{T,N};
+    comparator,
+    dimension=1,
+    is_stable=false,
+    location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
+) where {T,N}
+    #C4:
+    @assert 0 < dimension <= ndims(x) "$x invalid dimension"
+
+    (a, b) = (Reactant.ConcreteRNumber(T(0)), Reactant.ConcreteRNumber(T(0)))
+    func = Reactant.TracedUtils.make_mlir_fn(
+        comparator,
+        (a, b),
+        (),
+        "comparator";
+        no_args_in_result=true,
+        return_dialect=:stablehlo,
+    )[2]
+    @assert MLIR.IR.nregions(func) == 1
+    fn_name = String(
+        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+    )
+    #C5:
+    @assert fn_name == "comparator" "$comparator: no function generated"
+    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype = MLIR.IR.Type(ftype_attr)
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
+        "$comparator return type is not tensor<i1>"
+    )
+
+    comparator = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
+    MLIR.IR.rmfromparent!(func)
+
+    dimension = MLIR.IR.Attribute(dimension - 1)
+    is_stable = MLIR.IR.Attribute(is_stable)
+
+    res = MLIR.IR.result(
+        stablehlo.sort(
+            [x.mlir_data];
+            result_0=[mlir_type(TracedRArray{T,N}, size(x))],
+            dimension,
+            is_stable,
+            comparator,
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(x))
+end
 
 @noinline function top_k(
     x::TracedRArray{T,N}, k; location=mlir_stacktrace("top_k", @__FILE__, @__LINE__)

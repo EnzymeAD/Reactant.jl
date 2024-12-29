@@ -54,6 +54,9 @@ cc_toolchain_config(
     coverage_link_flags = ["--coverage"],
     cpu = "k8",
     cxx_builtin_include_directories = [
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0/x86_64-linux-musl",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0/backward",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0/x86_64-linux-musl",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0/backward",
@@ -149,14 +152,14 @@ cc_toolchain_config(
     abi_libc_version = "local",
     abi_version = "local",
     cxx_builtin_include_directories = [
-        "/opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include",
-        "/opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include-fixed",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include-fixed",
         "/opt/BB_TARGET/BB_TARGET/include",
         "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/BB_TARGET",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/backward",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/parallel"
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/BB_TARGET",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/backward",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/parallel"
     ],
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
@@ -193,14 +196,14 @@ cc_toolchain_config(
         "-Wno-free-nonheap-object",
         "-fno-omit-frame-pointer",
         # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include",
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include-fixed",
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include",
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include-fixed",
         "-isystem /opt/BB_TARGET/BB_TARGET/include",
         "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/BB_TARGET",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/backward",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/parallel",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/BB_TARGET",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/backward",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/parallel",
     ],
     opt_compile_flags = [
         "-g0",
@@ -361,6 +364,7 @@ cc_library(
 
     ) + [
 	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
+	"@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
@@ -429,7 +433,7 @@ cc_library(
 "-Wl,-exported_symbol,_ifrt_*",
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
-"-Wl,-exported_symbol,_EnzymeGPUCustomCall",
+"-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
 "-Wl,-exported_symbol,_ReactantThrowError",
     ]}),
     deps = [
@@ -469,6 +473,9 @@ cc_library(
         "@llvm-project//llvm:X86CodeGen",
         "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
+        # "@enzyme_ad//src/enzyme_ad/jax:gpu",
+        "@xla//xla/ffi/api:ffi",
+        "@xla//xla/ffi:ffi_api",
         "@stablehlo//:chlo_ops",
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",

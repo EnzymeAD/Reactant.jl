@@ -218,11 +218,11 @@ function Adapt.adapt_storage(::CUDA.KernelAdaptor, xs::TracedRArray{T,N}) where 
     return res
 end
 
-const _kernel_instances = Dict{Any,Any}()
-
+# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
+# and not the operation itself).
 struct LLVMFunc{F,tt}
     f::Union{F,Nothing}
-    entry::MLIR.IR.Operation
+    entry::String
 end
 
 const GPUCompiler = CUDA.GPUCompiler
@@ -324,9 +324,9 @@ function compile(job)
         )::MLIR.API.MlirOperation
 
         entry = MLIR.IR.Operation(linkRes)
-
-        entry
+        String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
+
     return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entry)
 end
 
@@ -378,9 +378,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     output_operand_aliases = MLIR.IR.Attribute(aliases)
 
-    fname = Reactant.TracedUtils.get_attribute_by_name(func.entry, "sym_name")
-    # Force public for now while we don't have real users
-    # MLIR.IR.rmattr!(func.entry, "sym_visibility")
+    fname = func.entry
 
     operands = MLIR.IR.Value[]
     for idx in
@@ -460,25 +458,27 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 function __init__()
-    handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
-    if handle === nothing
-        handle = C_NULL
+    if CUDA.CUDA_Driver_jll.libcuda !== nothing
+        handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
+        if handle === nothing
+            handle = C_NULL
+        end
+        ptr1 = Reactant.XLA.Libdl.dlsym(handle, "cuLaunchKernel"; throw_error=false)
+        if ptr1 === nothing
+            ptr1 = C_NULL
+        end
+        ptr2 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleLoadData"; throw_error=false)
+        if ptr2 === nothing
+            ptr2 = C_NULL
+        end
+        ptr3 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleGetFunction"; throw_error=false)
+        if ptr3 === nothing
+            ptr3 = C_NULL
+        end
+        Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
+        Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
+        Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
     end
-    ptr1 = Reactant.XLA.Libdl.dlsym(handle, "cuLaunchKernel"; throw_error=false)
-    if ptr1 === nothing
-        ptr1 = C_NULL
-    end
-    ptr2 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleLoadData"; throw_error=false)
-    if ptr2 === nothing
-        ptr2 = C_NULL
-    end
-    ptr3 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleGetFunction"; throw_error=false)
-    if ptr3 === nothing
-        ptr3 = C_NULL
-    end
-    Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
-    Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
-    Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
     return nothing
 end
 

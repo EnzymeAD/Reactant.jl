@@ -364,7 +364,10 @@ function call_with_reactant_generator(
         ir, rt = CC.typeinf_ircode(interp, mi, nothing)
     end
 
-    ir, any_changed = rewrite_insts!(ir, interp)
+    if !is_reactant_method(mi::Core.MethodInstance)
+        ir, any_changed = rewrite_insts!(ir, interp)
+    end
+
     src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
     src.slotnames = fill(:none, length(ir.argtypes) + 1)
     src.slotflags = fill(zero(UInt8), length(ir.argtypes))

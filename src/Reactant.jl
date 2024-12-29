@@ -33,15 +33,25 @@ const ReactantPrimitive = Union{
     Bool,Base.uniontypes(ReactantFloatInt)...,Complex{Float32},Complex{Float64}
 }
 
-abstract type RArray{T<:ReactantPrimitive,N} <: AbstractArray{T,N} end
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
-Base.collect(A::RArray) = copy(A)
+abstract type RArray{T,N} <: AbstractArray{T,N} end
 
 function ancestor(x::AbstractArray)
     p_x = parent(x)
     p_x === x && return x
     return ancestor(p_x)
+end
+
+function ancestor(T::Type{<:AbstractArray})
+    if applicable(Adapt.parent_type, T)
+        p_T = Adapt.parent_type(T)
+        p_T == T && return T
+        return ancestor(p_T)
+    end
+    @warn "`Adapt.parent_type` is not implemented for $(T). Assuming $T isn't a wrapped \
+           array." maxlog = 1
+    return T
 end
 
 include("mlir/MLIR.jl")
@@ -50,7 +60,21 @@ include("Interpreter.jl")
 
 include("utils.jl")
 
-mutable struct TracedRArray{T,N} <: RArray{T,N}
+mutable struct TracedRNumber{T} <: RNumber{T}
+    paths::Tuple
+    mlir_data::Union{Nothing,MLIR.IR.Value}
+
+    function TracedRNumber{T}(
+        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+    ) where {T}
+        if !isnothing(mlir_data)
+            @assert size(MLIR.IR.type(mlir_data)) == ()
+        end
+        return new{T}(paths, mlir_data)
+    end
+end
+
+mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
     shape::NTuple{N,Int}
@@ -66,7 +90,11 @@ mutable struct TracedRArray{T,N} <: RArray{T,N}
     end
 end
 
-const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
+
+const WrappedTracedRArray{T,N} = WrappedArray{
+    TracedRNumber{T},N,TracedRArray,TracedRArray{T,N}
+}
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = Union{
@@ -81,19 +109,39 @@ function TracedRArray(data::MLIR.IR.Value)
     )
 end
 
-mutable struct TracedRNumber{T} <: RNumber{T}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
+struct XLAArray{T,N} <: RArray{T,N} end
 
-    function TracedRNumber{T}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
-    ) where {T}
-        if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == ()
-        end
-        return new{T}(paths, mlir_data)
-    end
+Adapt.parent_type(::Type{XLAArray{T,N}}) where {T,N} = XLAArray{T,N}
+
+mutable struct ConcreteRNumber{T} <: RNumber{T}
+    data::XLA.AsyncBuffer
 end
+
+mutable struct ConcreteRArray{T,N} <: RArray{T,N}
+    data::XLA.AsyncBuffer
+    shape::NTuple{N,Int}
+end
+
+Adapt.parent_type(::Type{ConcreteRArray{T,N}}) where {T,N} = ConcreteRArray{T,N}
+
+const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
+const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}
+
+unwrapped_eltype(::Type{T}) where {T<:Number} = T
+unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
+
+unwrapped_eltype(::T) where {T<:Number} = T
+unwrapped_eltype(::RNumber{T}) where {T} = T
+unwrapped_eltype(::TracedRNumber{T}) where {T} = T
+
+unwrapped_eltype(::Type{<:RArray{T,N}}) where {T,N} = T
+unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
+unwrapped_eltype(::Type{<:AnyTracedRArray{T,N}}) where {T,N} = T
+
+unwrapped_eltype(::RArray{T,N}) where {T,N} = T
+unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
+unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 include("Ops.jl")
 include("TracedUtils.jl")
