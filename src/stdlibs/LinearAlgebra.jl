@@ -1,20 +1,170 @@
 module TracedLinearAlgebra
 
-using ..Reactant
-import ..TracedRArray
-import ..TracedRNumber
-import ..AnyTracedRArray
-import ..AnyTracedRMatrix
-import ..AnyTracedRVector
+using ..Reactant:
+    TracedRArray,
+    TracedRNumber,
+    AnyTracedRArray,
+    AnyTracedRMatrix,
+    AnyTracedRVector,
+    Ops,
+    MLIR
 
-import ..TracedUtils
-using ..TracedUtils: get_mlir_data, materialize_traced_array, set_mlir_data!
+using ..TracedUtils: TracedUtils, get_mlir_data, materialize_traced_array, set_mlir_data!
 
-import ..Ops
-import ..MLIR
 using LinearAlgebra
 
-function LinearAlgebra.mul!(
+# Various Wrapper Arrays defined in LinearAlgebra
+function TracedUtils.materialize_traced_array(
+    x::Transpose{TracedRNumber{T},TracedRArray{T,N}}
+) where {T,N}
+    px = parent(x)
+    A = ndims(px) == 1 ? reshape(px, :, 1) : px
+    return permutedims(A, (2, 1))
+end
+
+function TracedUtils.materialize_traced_array(
+    x::Adjoint{TracedRNumber{T},TracedRArray{T,N}}
+) where {T,N}
+    return conj(materialize_traced_array(transpose(parent(x))))
+end
+
+function TracedUtils.materialize_traced_array(
+    x::Diagonal{TracedRNumber{T},TracedRArray{T,1}}
+) where {T}
+    return diagm(parent(x))
+end
+
+function TracedUtils.materialize_traced_array(
+    x::Tridiagonal{TracedRNumber{T},TracedRArray{T,1}}
+) where {T}
+    return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
+end
+
+for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
+    uAT = Symbol(:Unit, AT)
+    @eval begin
+        function TracedUtils.materialize_traced_array(
+            x::$(AT){TracedRNumber{T},TracedRArray{T,2}}
+        ) where {T}
+            m, n = size(x)
+            row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
+            col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
+            indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(comp))
+            return Ops.select(indicator, parent(x), zero(parent(x)))
+        end
+
+        function TracedUtils.materialize_traced_array(
+            x::$(uAT){TracedRNumber{T},TracedRArray{T,2}}
+        ) where {T}
+            m, n = size(x)
+            row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
+            col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
+            nondiag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="NE")
+            x = materialize_traced_array($(AT)(parent(x)))
+            return Ops.select(nondiag_indicator, x, one.(x))
+        end
+    end
+end
+
+function TracedUtils.materialize_traced_array(
+    x::Symmetric{TracedRNumber{T},TracedRArray{T,2}}
+) where {T}
+    m, n = size(x)
+    row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
+    col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
+    if x.uplo == 'L'
+        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="GT")
+        x_lt = Ops.select(indicator, parent(x), zero(parent(x)))
+        x_ltd = materialize_traced_array(LowerTriangular(parent(x)))
+        return Ops.add(x_lt, Ops.transpose(x_ltd, [2, 1]))
+    else
+        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="LT")
+        x_ut = Ops.select(indicator, parent(x), zero(parent(x)))
+        x_utd = materialize_traced_array(UpperTriangular(parent(x)))
+        return Ops.add(Ops.transpose(x_utd, [2, 1]), x_ut)
+    end
+end
+
+function TracedUtils.set_mlir_data!(
+    x::Transpose{TracedRNumber{T},TracedRArray{T,N}}, data
+) where {T,N}
+    tdata = TracedRArray{T}(data)
+    px = parent(x)
+    px.mlir_data = (
+        if ndims(px) == 1
+            Ops.reshape(tdata, length(tdata))
+        else
+            Ops.transpose(tdata, [2, 1])
+        end
+    ).mlir_data
+    return x
+end
+
+function TracedUtils.set_mlir_data!(
+    x::Adjoint{TracedRNumber{T},TracedRArray{T,N}}, data
+) where {T,N}
+    tdata = TracedRArray{T}(data)
+    px = parent(x)
+    transposed_data =
+        ndims(px) == 1 ? Ops.reshape(tdata, length(tdata)) : Ops.transpose(tdata, [2, 1])
+    px.mlir_data = (T <: Real ? transposed_data : Ops.conj(transposed_data)).mlir_data
+    return x
+end
+
+function TracedUtils.set_mlir_data!(
+    x::Diagonal{TracedRNumber{T},TracedRArray{T,1}}, data
+) where {T}
+    parent(x).mlir_data = diag(TracedRArray{T}(data)).mlir_data
+    return x
+end
+
+for (AT, dcomp, ocomp) in (
+    (:LowerTriangular, "GE", "LT"),
+    (:UnitLowerTriangular, "GT", "LE"),
+    (:UpperTriangular, "LE", "GT"),
+    (:UnitUpperTriangular, "LT", "GE"),
+)
+    @eval function TracedUtils.set_mlir_data!(
+        x::$(AT){TracedRNumber{T},TracedRArray{T,2}}, data
+    ) where {T}
+        tdata = TracedRArray{T}(data)
+        z = zero(tdata)
+        m, n = size(x)
+        row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
+        col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
+        data_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(dcomp))
+        original_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(ocomp))
+        res = Ops.add(
+            Ops.select(data_indicator, tdata, z), Ops.select(original_indicator, x.data, z)
+        )
+        set_mlir_data!(x.data, res.mlir_data)
+        return x
+    end
+end
+
+function TracedUtils.set_mlir_data!(
+    x::Symmetric{TracedRNumber{T},TracedRArray{T,2}}, data
+) where {T}
+    if x.uplo == 'L'
+        set_mlir_data!(LowerTriangular(parent(x)), data)
+    else
+        set_mlir_data!(UpperTriangular(parent(x)), data)
+    end
+    return x
+end
+
+function TracedUtils.set_mlir_data!(
+    x::Tridiagonal{TracedRNumber{T},TracedRArray{T,1}}, data
+) where {T}
+    tdata = TracedRArray{T}(data)
+    set_mlir_data!(x.dl, diag(tdata, -1).mlir_data)
+    set_mlir_data!(x.d, diag(tdata, 0).mlir_data)
+    set_mlir_data!(x.du, diag(tdata, 1).mlir_data)
+    return x
+end
+
+# Core functions
+function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,1}),
     @nospecialize(A::AnyTracedRMatrix),
     @nospecialize(B::AnyTracedRVector),
@@ -23,23 +173,23 @@ function LinearAlgebra.mul!(
 ) where {T}
     # TODO: The reshape operations are not getting optimized, we should directly call dot_general
     rC = Ops.reshape(C, length(C), 1)
-    LinearAlgebra.mul!(rC, A, reshape(B, :, 1), α, β)
+    overloaded_mul!(rC, A, reshape(B, :, 1), α, β)
     C.mlir_data = get_mlir_data(vec(rC))
     return C
 end
 
-function LinearAlgebra.mul!(
+function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,2}),
     @nospecialize(A::AnyTracedRMatrix),
     @nospecialize(B::AnyTracedRVector),
     α::Number=true,
     β::Number=false,
 ) where {T}
-    LinearAlgebra.mul!(C, A, reshape(B, :, 1), α, β)
+    overloaded_mul!(C, A, reshape(B, :, 1), α, β)
     return C
 end
 
-function LinearAlgebra.mul!(
+function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,2}),
     @nospecialize(A::AnyTracedRMatrix),
     @nospecialize(B::AnyTracedRMatrix),
@@ -119,50 +269,52 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     #   <unknown>:0: note: see current operation: %0 = "tensor.empty"() : () -> tensor<0xf64>
     length(indices) ≤ 0 && return TracedUtils.promote_to(TracedRArray{T,1}, T[])
 
-    idxs = get_mlir_data(TracedUtils.promote_to(TracedRArray{Int,2}, indices))
-
-    #! format: off
-    dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
-        MLIR.IR.context(),
-        Int64(0), Int64[],
-        Int64(2), Int64[0, 1],
-        Int64(0), Int64[],
-        Int64(0), Int64[],
-        Int64(2), Int64[0, 1],
-        Int64(1)
-    )
-    #! format: on
-
-    slice_sizes = get_mlir_data(
-        Reactant.TracedUtils.promote_to(TracedRArray{Int,1}, [1, 1])
-    )
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dynamic_gather(
-            get_mlir_data(y), idxs, slice_sizes; dimension_numbers
-        ),
-        1,
-    )
-    return TracedRArray{T,1}((), res, (diag_length,))
+    return Ops.gather_getindex(x, TracedUtils.promote_to(TracedRArray{Int,2}, indices))
 end
 
-function LinearAlgebra.diagm(v::AnyTracedRArray{T,1}) where {T}
-    return LinearAlgebra.diagm(length(v), length(v), v)
-end
-function LinearAlgebra.diagm(m::Integer, n::Integer, v::AnyTracedRArray{T,1}) where {T}
-    m, n = LinearAlgebra.diagm_size((m, n), 0 => v) # size check
+function LinearAlgebra._diagm(
+    shape, kv::Pair{<:Integer,<:AnyTracedRArray{T,1}}...
+) where {T}
+    m, n = LinearAlgebra.diagm_size(shape, kv...)
 
-    v = materialize_traced_array(v)
-    D = length(v)
-    row_idxs = Ops.iota(Int, [D, D]; iota_dimension=1)
-    col_idxs = Ops.iota(Int, [D, D]; iota_dimension=2)
-    diag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="EQ")
+    # For repeated indices we need to aggregate the values
+    kv_updated = Dict{Integer,AnyTracedRArray{T,1}}()
+    for (k, v) in kv
+        if haskey(kv_updated, k)
+            kv_updated[k] = kv_updated[k] + v
+        else
+            kv_updated[k] = v
+        end
+    end
 
-    mat = (v .+ zero(v)') .* diag_indicator
-    return Ops.pad(
-        mat,
-        TracedUtils.promote_to(TracedRNumber{T}, 0);
-        high=[m - length(v), n - length(v)],
+    scatter_indices = Matrix{Int64}[]
+    concat_inputs = MLIR.IR.Value[]
+    for (k, v) in pairs(kv_updated)
+        push!(scatter_indices, diagonal_indices_zero_indexed(m, n, k)[1:length(v), :])
+        push!(concat_inputs, get_mlir_data(v))
+    end
+    scatter_indices = Ops.constant(reduce(vcat, scatter_indices))
+    values = TracedRArray{T,1}(
+        (),
+        MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=0), 1),
+        (size(scatter_indices, 1),),
     )
+    return Ops.scatter_setindex(
+        Ops.constant(fill(zero(T), (m, n))), scatter_indices, values
+    )
+end
+
+# Common Utilities
+## The cartesian version doesn't exist in julia 1.10
+function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
+    idx1, idx2 = 1 + max(0, -k), 1 + max(0, k)
+    L = max(0, k ≤ 0 ? min(m + k, n) : min(m, n - k))
+    indices = Matrix{Int}(undef, (L, 2))
+    for i in axes(indices, 1)
+        indices[i, 1] = idx1 + i - 2
+        indices[i, 2] = idx2 + i - 2
+    end
+    return indices
 end
 
 end

@@ -172,3 +172,33 @@ end
         @test all(iszero, y_res)
     end
 end
+
+function lower_triangular_write(x)
+    y = LowerTriangular(copy(x))
+    @. y *= 2
+    return y
+end
+
+function upper_triangular_write(x)
+    y = UpperTriangular(copy(x))
+    @. y *= 2
+    return y
+end
+
+function tridiagonal_write(x)
+    y = Tridiagonal(copy(x))
+    @. y *= 2
+    return y
+end
+
+@testset "Broadcasted Multiply and Alloate" begin
+    @testset "$(aType)" for (aType, fn) in [
+        ("LowerTriangular", lower_triangular_write),
+        ("UpperTriangular", upper_triangular_write),
+        ("Tridiagonal", tridiagonal_write),
+    ]
+        x = rand(4, 4)
+        x_ra = Reactant.to_rarray(x)
+        @test @jit(fn(x_ra)) ≈ fn(x)
+    end
+end

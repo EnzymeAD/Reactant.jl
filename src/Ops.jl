@@ -1418,4 +1418,114 @@ julia> Reactant.@jit(
     end
 end
 
+"""
+    scatter_setindex(dest, scatter_indices, updates)
+
+Uses [`MLIR.Dialects.stablehlo.scatter`](@ref) to set the values of `dest` at the indices
+specified by `scatter_indices` to the values in `updates`. If the indices are contiguous it
+is recommended to directly use [`MLIR.Dialects.stablehlo.dynamic_update_slice`](@ref)
+instead.
+"""
+@noinline function scatter_setindex(
+    dest::TracedRArray{T,N},
+    scatter_indices::TracedRArray{Int64,2},
+    updates::TracedRArray{T,1},
+) where {T,N}
+    @assert length(updates) == size(scatter_indices, 1)
+    @assert size(scatter_indices, 2) == N
+
+    update_computation = MLIR.IR.Region()
+    block = MLIR.IR.Block(
+        [mlir_type(TracedRNumber{T}), mlir_type(TracedRNumber{T})],
+        [MLIR.IR.Location(), MLIR.IR.Location()],
+    )
+    return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
+    MLIR.IR.rmfromparent!(return_op)
+    push!(block, return_op)
+    pushfirst!(update_computation, block)
+
+    #! format: off
+    update_window_dims = Int64[]
+    inserted_window_dims = collect(Int64, 0:(N - 1))
+    input_batching_dims = Int64[]
+    scatter_indices_batching_dims = Int64[]
+    scatter_dims_to_operand_dims = collect(Int64, 0:(N - 1))
+    index_vector_dim = Int64(1)
+
+    scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
+        MLIR.IR.context(),
+        length(update_window_dims), update_window_dims,
+        length(inserted_window_dims), inserted_window_dims,
+        length(input_batching_dims), input_batching_dims,
+        length(scatter_indices_batching_dims), scatter_indices_batching_dims,
+        length(scatter_dims_to_operand_dims), scatter_dims_to_operand_dims,
+        index_vector_dim,
+    )
+    #! format: on
+
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.scatter(
+                [dest.mlir_data],
+                scatter_indices.mlir_data,
+                [updates.mlir_data];
+                result_0=[mlir_type(TracedRArray{T,N}, size(dest))],
+                update_computation,
+                scatter_dimension_numbers,
+            ),
+            1,
+        ),
+        size(dest),
+    )
+end
+
+"""
+    gather_getindex(src, gather_indices)
+
+Uses [`MLIR.Dialects.stablehlo.gather`](@ref) to get the values of `src` at the indices
+specified by `gather_indices`. If the indices are contiguous it is recommended to directly
+use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
+"""
+@noinline function gather_getindex(
+    src::TracedRArray{T,N}, gather_indices::TracedRArray{Int64,2}
+) where {T,N}
+    @assert size(gather_indices, 2) == N
+
+    #! format: off
+    offset_dims = Int64[1]
+    collapsed_slice_dims = collect(Int64, 0:(N - 2))
+    operand_batching_dims = Int64[]
+    start_indices_batching_dims = Int64[]
+    start_index_map = collect(Int64, 0:(N - 1))
+    index_vector_dim = Int64(1)
+
+    dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(length(offset_dims)), offset_dims,
+        Int64(length(collapsed_slice_dims)), collapsed_slice_dims,
+        Int64(length(operand_batching_dims)), operand_batching_dims,
+        Int64(length(start_indices_batching_dims)), start_indices_batching_dims,
+        Int64(length(start_index_map)), start_index_map,
+        Int64(index_vector_dim),
+    )
+    #! format: on
+
+    return reshape(
+        TracedRArray{T}(
+            MLIR.IR.result(
+                MLIR.Dialects.stablehlo.gather(
+                    src.mlir_data,
+                    gather_indices.mlir_data;
+                    dimension_numbers,
+                    slice_sizes=fill(Int64(1), N),
+                    indices_are_sorted=false,
+                ),
+                1,
+            ),
+        ),
+        size(gather_indices, 1),
+    )
+end
+
 end # module Ops
