@@ -274,9 +274,20 @@ function LinearAlgebra._diagm(
     shape, kv::Pair{<:Integer,<:AnyTracedRArray{T,1}}...
 ) where {T}
     m, n = LinearAlgebra.diagm_size(shape, kv...)
+
+    # For repeated indices we need to aggregate the values
+    kv_updated = Dict{Integer,AnyTracedRArray{T,1}}()
+    for (k, v) in kv
+        if haskey(kv_updated, k)
+            kv_updated[k] = kv_updated[k] + v
+        else
+            kv_updated[k] = v
+        end
+    end
+
     scatter_indices = Matrix{Int64}[]
     concat_inputs = MLIR.IR.Value[]
-    for (k, v) in kv
+    for (k, v) in pairs(kv_updated)
         push!(scatter_indices, diagonal_indices_zero_indexed(m, n, k)[1:length(v), :])
         push!(concat_inputs, get_mlir_data(v))
     end
