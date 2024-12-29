@@ -58,6 +58,41 @@ end
 
 Base.getindex(a::TracedRArray{T,0}) where {T} = TracedRNumber{T}((), a.mlir_data)
 
+function generate_index_list(i1, is...)
+    list = reshape(i1, :, 1) .- 1
+    for i in is
+        i = reshape(i, :, 1)
+        lorig = size(list, 1)
+        list = repeat(list, size(i, 1), 1)
+        i = repeat(i; inner=(lorig, 1)) .- 1
+        list = hcat(list, i)
+    end
+    return list
+end
+
+function scalar_index_to_cartesian(idx::AbstractVector{T}, sz::NTuple{N,Int}) where {T,N}
+    idx = idx .- 1
+    idxs = materialize_traced_array(reshape(idx .% T(sz[1]), :, 1))
+    idx = idx .÷ T(sz[1])
+    for i in 1:N
+        idxs = hcat(idxs, idx .% T(sz[i]))
+        idx = idx .÷ T(sz[i])
+    end
+    return idxs
+end
+
+function Base.getindex(a::TracedRArray{T,N}, indices) where {T,N}
+    if indices isa TracedRNumber
+        error("Not implemented")
+    elseif indices isa TracedRArray
+    elseif indices isa Number
+        error("Not implemented")
+    else
+        indices = TracedUtils.promote_to(TracedRArray{Int,1}, collect(indices))
+    end
+    return Ops.gather_getindex(a, scalar_index_to_cartesian(indices, size(a)))
+end
+
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
         i isa Colon && return 1:size(a, idx)
@@ -65,28 +100,25 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         return i
     end
 
-    non_contiguous_getindex = false
+    use_gather_getindex = false
     for idxs in indices
         idxs isa Number && continue
+        if idxs isa Reactant.TracedType
+            use_gather_getindex = true
+            break
+        end
         contiguous = all(isone, diff(idxs))
-        # XXX: We want to throw error even for dynamic indexing
         if typeof(contiguous) <: Bool && !contiguous
-            non_contiguous_getindex = true
+            use_gather_getindex = true
             break
         end
     end
 
-    if non_contiguous_getindex
-        indices_tuples = collect(Iterators.product(indices...))
-        indices = Matrix{Int}(
-            undef, (length(indices_tuples), length(first(indices_tuples)))
-        )
-        for (i, idx) in enumerate(indices_tuples)
-            indices[i, :] .= idx .- 1
-        end
-        indices = TracedUtils.promote_to(TracedRArray{Int,2}, indices)
-        res = Ops.gather_getindex(a, indices)
-        return Ops.reshape(res, size(indices_tuples)...)
+    if use_gather_getindex
+        indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
+        indices_list = generate_index_list(indices_list...)
+        res = Ops.gather_getindex(a, indices_list)
+        return Ops.reshape(res, length.(indices)...)
     end
 
     start_indices = map(indices) do i
@@ -99,7 +131,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 
     x = TracedRArray{T,N}((), res, Tuple(length.(indices)))
     ddims = findall(Base.Fix2(isa, Integer), indices)
-    isempty(ddims) || return dropdims(x; dims=Tuple(ddims))
+    isempty(ddims) || return materialize_traced_array(dropdims(x; dims=Tuple(ddims)))
     return x
 end
 
@@ -119,27 +151,24 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         return i
     end
 
-    non_contiguous_setindex = false
+    use_scatter_setindex = false
     for idxs in indices
         idxs isa Number && continue
+        if idxs isa Reactant.TracedType
+            use_scatter_setindex = true
+            break
+        end
         contiguous = all(isone, diff(idxs))
-        # XXX: We want to throw error even for dynamic indexing
         if typeof(contiguous) <: Bool && !contiguous
-            non_contiguous_setindex = true
+            use_scatter_setindex = true
             break
         end
     end
 
-    if non_contiguous_setindex
-        indices_tuples = collect(Iterators.product(indices...))
-        indices = Matrix{Int}(
-            undef, (length(indices_tuples), length(first(indices_tuples)))
-        )
-        for (i, idx) in enumerate(indices_tuples)
-            indices[i, :] .= idx .- 1
-        end
-        indices = TracedUtils.promote_to(TracedRArray{Int,2}, indices)
-        res = Ops.scatter_setindex(a, indices, Ops.reshape(v, length(v)))
+    if use_scatter_setindex
+        indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
+        indices_list = generate_index_list(indices_list...)
+        res = Ops.scatter_setindex(a, indices_list, Ops.reshape(v, length(v)))
         a.mlir_data = res.mlir_data
         return v
     end
