@@ -249,9 +249,9 @@ function Base.round(A::TracedRNumber{<:ReactantFloat}, ::RoundingMode{R}) where 
     end
 end
 
-function Base.round(A::TracedRNumber{<:Integer}, _)
-    return A
-end
+Base.round(A::TracedRNumber{<:Integer}) = A
+Base.floor(A::TracedRNumber{<:Integer}) = A
+Base.ceil(A::TracedRNumber{<:Integer}) = A
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
