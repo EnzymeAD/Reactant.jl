@@ -115,3 +115,28 @@ for randfun in (:rand, :randn, :randexp)
         # end
     end
 end
+
+# LinearAlgebra.jl overloads
+## `_mul!` goes through too many layers of abstractions and we aren't able to overload
+## without specializing on every possible combination of types
+@reactant_overlay @noinline function LinearAlgebra.mul!(
+    C::AbstractVector, A::AbstractMatrix, B::AbstractVector, α::Number, β::Number
+)
+    if any(Base.Fix2(isa, TracedRArray) ∘ ancestor, (C, A, B))
+        TracedLinearAlgebra.overloaded_mul!(C, A, B, α, β)
+    else
+        LinearAlgebra._mul!(C, A, B, α, β)
+    end
+    return C
+end
+
+@reactant_overlay @noinline function LinearAlgebra.mul!(
+    C::AbstractMatrix, A::AbstractMatrix, B::AbstractVecOrMat, α::Number, β::Number
+)
+    if any(Base.Fix2(isa, TracedRArray) ∘ ancestor, (C, A, B))
+        TracedLinearAlgebra.overloaded_mul!(C, A, B, α, β)
+    else
+        LinearAlgebra._mul!(C, A, B, α, β)
+    end
+    return C
+end

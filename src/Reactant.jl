@@ -119,7 +119,9 @@ const WrappedTracedRArray{T,N} = WrappedArray{
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = Union{
-    AnyTracedRArray{T,2},LinearAlgebra.Diagonal{T,TracedRArray{T,1}}
+    AnyTracedRArray{T,2},
+    LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}},
+    LinearAlgebra.Tridiagonal{TracedRNumber{T},TracedRArray{T,1}},
 }
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 

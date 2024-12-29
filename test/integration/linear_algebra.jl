@@ -1,4 +1,4 @@
-using LinearAlgebra, Reactant
+using LinearAlgebra, Reactant, Test
 
 function muladd2(A, x, b)
     C = similar(A, promote_type(eltype(A), eltype(b)), size(A, 1), size(x, 2))
@@ -143,13 +143,29 @@ end
     @test @jit(diagm(1 => x_ra1, 1 => x_ra2)) ≈ diagm(1 => x1, 1 => x2)
 end
 
-# TODO: Currently Diagonal(x) * x goes down the generic matmul path but it should clearly be
-#       optimized
+# TODO: Currently <Wrapper Type>(x) * x goes down the generic matmul path but it should
+#       clearly be optimized
 mul_diagonal(x) = Diagonal(x) * x
+mul_tridiagonal(x) = Tridiagonal(x) * x
+mul_unit_lower_triangular(x) = UnitLowerTriangular(x) * x
+mul_unit_upper_triangular(x) = UnitUpperTriangular(x) * x
+mul_lower_triangular(x) = LowerTriangular(x) * x
+mul_upper_triangular(x) = UpperTriangular(x) * x
+mul_symmetric(x) = Symmetric(x) * x
 
-@testset "mul_diagonal" begin
-    x = rand(4)
+@testset "Wrapper Types Matrix Multiplication" begin
+    x = rand(4, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(mul_diagonal(x_ra)) ≈ mul_diagonal(x)
+    @testset "$(wrapper_type)" for (wrapper_type, fn) in [
+        (Diagonal, mul_diagonal),
+        (Tridiagonal, mul_tridiagonal),
+        (UnitLowerTriangular, mul_unit_lower_triangular),
+        (UnitUpperTriangular, mul_unit_upper_triangular),
+        (LowerTriangular, mul_lower_triangular),
+        (UpperTriangular, mul_upper_triangular),
+        (Symmetric, mul_symmetric),
+    ]
+        @test @jit(fn(x_ra)) ≈ fn(x)
+    end
 end

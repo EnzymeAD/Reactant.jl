@@ -34,7 +34,9 @@ function TracedUtils.materialize_traced_array(
     return diagm(parent(x))
 end
 
-function TracedUtils.materialize_traced_array(x::Tridiagonal{T,TracedRArray{T,1}}) where {T}
+function TracedUtils.materialize_traced_array(
+    x::Tridiagonal{TracedRNumber{T},TracedRArray{T,1}}
+) where {T}
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
 end
 
@@ -162,7 +164,7 @@ function TracedUtils.set_mlir_data!(
 end
 
 # Core functions
-function LinearAlgebra.mul!(
+function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,1}),
     @nospecialize(A::AnyTracedRMatrix),
     @nospecialize(B::AnyTracedRVector),
@@ -171,23 +173,23 @@ function LinearAlgebra.mul!(
 ) where {T}
     # TODO: The reshape operations are not getting optimized, we should directly call dot_general
     rC = Ops.reshape(C, length(C), 1)
-    mul!(rC, A, reshape(B, :, 1), α, β)
+    overloaded_mul!(rC, A, reshape(B, :, 1), α, β)
     C.mlir_data = get_mlir_data(vec(rC))
     return C
 end
 
-function LinearAlgebra.mul!(
+function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,2}),
     @nospecialize(A::AnyTracedRMatrix),
     @nospecialize(B::AnyTracedRVector),
     α::Number=true,
     β::Number=false,
 ) where {T}
-    mul!(C, A, reshape(B, :, 1), α, β)
+    overloaded_mul!(C, A, reshape(B, :, 1), α, β)
     return C
 end
 
-function LinearAlgebra.mul!(
+function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,2}),
     @nospecialize(A::AnyTracedRMatrix),
     @nospecialize(B::AnyTracedRMatrix),
