@@ -536,4 +536,17 @@ function Base.repeat(x::AnyTracedRArray{T,N}, counts::Vararg{Int,M}) where {T,N,
     return x_final
 end
 
+# stack
+function overloaded_stack(dims::Union{Integer,Colon}, xs)
+    @assert allequal(ndims, xs) "All arrays must have the same number of dimensions..."
+    dims = dims isa Colon ? ndims(first(xs)) + 1 : dims
+    res = map(xs) do x
+        new_shape = ntuple(
+            i -> i == dims ? 1 : (i < dims ? size(x, i) : size(x, i - 1)), ndims(x) + 1
+        )
+        return materialize_traced_array(reshape(x, new_shape))
+    end
+    return cat(res...; dims)
+end
+
 end
