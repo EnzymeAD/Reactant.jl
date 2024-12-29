@@ -218,8 +218,6 @@ function Adapt.adapt_storage(::CUDA.KernelAdaptor, xs::TracedRArray{T,N}) where 
     return res
 end
 
-const _kernel_instances = Dict{Any,Any}()
-
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
 # and not the operation itself).
 struct LLVMFunc{F,tt}
@@ -326,11 +324,11 @@ function compile(job)
         )::MLIR.API.MlirOperation
 
         entry = MLIR.IR.Operation(linkRes)
-
-        entry
+        String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
+
     return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(
-        nothing, String(Reactant.TracedUtils.get_attribute_by_name(entry, "sym_name"))
+        nothing, entry
     )
 end
 
