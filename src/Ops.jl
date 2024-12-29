@@ -961,7 +961,14 @@ end
     @assert 0 < dimension <= ndims(x) "$x invalid dimension"
 
     (a, b) = (Reactant.ConcreteRNumber(T(0)), Reactant.ConcreteRNumber(T(0)))
-    func = Reactant.TracedUtils.make_mlir_fn(comparator, (a, b), (), "comparator"; no_args_in_result=true, return_dialect=:stablehlo)[2]
+    func = Reactant.TracedUtils.make_mlir_fn(
+        comparator,
+        (a, b),
+        (),
+        "comparator";
+        no_args_in_result=true,
+        return_dialect=:stablehlo,
+    )[2]
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
         MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
