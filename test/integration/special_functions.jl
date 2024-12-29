@@ -1,6 +1,10 @@
 using SpecialFunctions, Reactant
 
-macro ≈(a,b) return quote isapprox($a, $b, atol=1e-14) end end
+macro ≈(a, b)
+    return quote
+        isapprox($a, $b; atol=1e-14)
+    end
+end
 
 @testset "$op" for (op, n_args) in [
     (:gamma, 1),
@@ -19,7 +23,9 @@ macro ≈(a,b) return quote isapprox($a, $b, atol=1e-14) end end
 ]
     for data in ([0.5, 0.6], [2, 4])
         x = data[1:n_args]
-        @eval @test @≈ @jit(SpecialFunctions.$op(ConcreteRNumber.($x)...)) SpecialFunctions.$op($x...)
+        @eval @test @≈ @jit(SpecialFunctions.$op(ConcreteRNumber.($x)...)) SpecialFunctions.$op(
+            $x...
+        )
     end
 end
 
