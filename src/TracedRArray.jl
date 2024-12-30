@@ -101,9 +101,12 @@ end
 Base.getindex(a::TracedRArray{T,N}, ::Colon) where {T,N} = materialize_traced_array(vec(a))
 
 function Base.getindex(a::TracedRArray{T,N}, indices::CartesianIndex{N}) where {T,N}
-    indices = materialize_traced_array(
-        reshape(TracedUtils.promote_to(TracedRArray{Int,1}, vcat(Tuple(indices)...)), 1, N)
-    ) .- 1
+    indices =
+        materialize_traced_array(
+            reshape(
+                TracedUtils.promote_to(TracedRArray{Int,1}, vcat(Tuple(indices)...)), 1, N
+            ),
+        ) .- 1
     return Ops.gather_getindex(a, indices)[1]
 end
 
