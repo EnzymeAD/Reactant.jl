@@ -229,27 +229,15 @@ function Base.float(x::TracedRNumber{T}) where {T}
     return TracedUtils.promote_to(TracedRNumber{float(T)}, x)
 end
 
-using Reactant: ReactantFloat
+using Reactant: ReactantFloat, ReactantInt
 
-Base.round(A::TracedRNumber{<:ReactantFloat}) = Base.round(A, RoundNearest)
-Base.floor(A::TracedRNumber{<:ReactantFloat}) = Base.round(A, RoundDown)
-Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Base.round(A, RoundUp)
+Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
+Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
+Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
 
-function Base.round(A::TracedRNumber{<:ReactantFloat}, ::RoundingMode{R}) where {R}
-    if R == :Nearest
-        Ops.round_nearest_even(A)
-    elseif R == :Up
-        Ops.ceil(A)
-    elseif R == :Down
-        Ops.floor(A)
-    else
-        error("$R is unsupported")
-    end
-end
-
-Base.round(A::TracedRNumber{<:Integer}) = A
-Base.floor(A::TracedRNumber{<:Integer}) = A
-Base.ceil(A::TracedRNumber{<:Integer}) = A
+Base.round(A::TracedRNumber{<:ReactantInt}) = A
+Base.floor(A::TracedRNumber{<:ReactantInt}) = A
+Base.ceil(A::TracedRNumber{<:ReactantInt}) = A
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
