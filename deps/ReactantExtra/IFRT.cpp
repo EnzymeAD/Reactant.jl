@@ -28,7 +28,39 @@
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
+namespace reactant {
+template <typename T>
+struct Type { };
+
+template <typename T>
+struct span {
+    size_t size;
+    T* ptr;
+}
+
+template <typename T>
+auto convert(Type<span<T>>, std::vector<T> vec) -> span<T>
+{
+    T* ptr = new T[vec.size()];
+    for (int i = 0; i < vec.size(); i++) {
+        ptr[i] = vec[i];
+    }
+    return span<T> { vec.size(), ptr };
+}
+
+template <typename T>
+auto convert(Type<span<T>>, absl::Span<T> span) -> span<T>
+{
+    T* ptr = new T[span.size()];
+    for (int i = 0; i < span.size(); i++) {
+        ptr[i] = span[i];
+    }
+    return span<T> { span.size(), ptr };
+}
+} // namespace reactant
+
 using namespace xla::ifrt;
+using namespace reactant;
 
 #pragma region xla::ifrt
 
@@ -152,9 +184,19 @@ extern "C" ifrt::Shape* ifrt_shape_ctor(const int64_t* dims, size_t dims_size)
 
 extern "C" void ifrt_shape_free(ifrt::Shape* shape) { delete shape; }
 
-extern "C" const int64_t* ifrt_shape_dims(ifrt::Shape* shape)
+extern "C" span<const int64_t> ifrt_shape_dims(ifrt::Shape* shape)
 {
-    return shape->dims().data();
+    return reactant::convert(Type<span<const int64_t>>(), shape->dims());
+}
+
+extern "C" bool ifrt_shape_eq(ifrt::Shape* shape1, ifrt::Shape* shape2)
+{
+    return *shape1 == *shape2;
+}
+
+extern "C" bool ifrt_shape_ne(ifrt::Shape* shape1, ifrt::Shape* shape2)
+{
+    return *shape1 != *shape2;
 }
 
 extern "C" int64_t ifrt_shape_dims_num_elements(ifrt::Shape* shape)
@@ -224,12 +266,12 @@ extern "C" ifrt::Index* ifrt_index_ctor(const int64_t* elements,
     return new ifrt::Index(absl::Span<const int64_t>(elements, elements_size));
 }
 
+extern "C" void ifrt_index_free(ifrt::Index* index) { delete index; }
+
 extern "C" ifrt::Index* ifrt_index_zeros(int num_elements)
 {
     return new ifrt::Index(ifrt::Index::Zeros(num_elements));
 }
-
-extern "C" void ifrt_index_free(ifrt::Index* index) { delete index; }
 
 extern "C" const int64_t* ifrt_index_elements(ifrt::Index* index)
 {
@@ -315,13 +357,13 @@ extern "C" void ifrt_indexdomain_free(ifrt::IndexDomain* index_domain)
 extern "C" const ifrt::Index*
 ifrt_indexdomain_origin(ifrt::IndexDomain* index_domain)
 {
-    return &index_domain->origin();
+    return new ifrt::Index(index_domain->origin());
 }
 
 extern "C" const ifrt::Shape*
 ifrt_indexdomain_shape(ifrt::IndexDomain* index_domain)
 {
-    return &index_domain->shape();
+    return new ifrt::Shape(index_domain->shape());
 }
 
 extern "C" bool ifrt_indexdomain_eq(ifrt::IndexDomain* index_domain1,
@@ -661,6 +703,11 @@ ifrt_pjrt_topology_ctor(const xla::PjRtTopologyDescription* description)
 {
     return new ifrt::PjRtTopology(
         std::shared_ptr<const xla::PjRtTopologyDescription> { description });
+}
+
+extern "C" void ifrt_pjrt_topology_free(ifrt::PjRtTopology* topology)
+{
+    delete topology;
 }
 
 extern "C" const xla::PjRtTopologyDescription*
