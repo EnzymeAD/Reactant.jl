@@ -105,7 +105,7 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     ) where {T,N}
         shape = Tuple(shape)
         if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == shape
+            @assert size(MLIR.IR.type(mlir_data)) == shape "Expected: $(shape), got: $(size(MLIR.IR.type(mlir_data)))"
         end
         return new{T,N}(paths, mlir_data, shape)
     end
@@ -119,15 +119,23 @@ const WrappedTracedRArray{T,N} = WrappedArray{
 const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = Union{
-    AnyTracedRArray{T,2},LinearAlgebra.Diagonal{T,TracedRArray{T,1}}
+    AnyTracedRArray{T,2},
+    LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}},
+    LinearAlgebra.Tridiagonal{TracedRNumber{T},TracedRArray{T,1}},
 }
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
-function TracedRArray(data::MLIR.IR.Value)
+function TracedRArray{T}(data::MLIR.IR.Value) where {T}
     data_type = MLIR.IR.type(data)
-    return TracedRArray{eltype(MLIR.IR.julia_type(data_type)),ndims(data_type)}(
-        (), data, size(data_type)
-    )
+    if T == eltype(MLIR.IR.julia_type(data_type))
+        return TracedRArray{T,ndims(data_type)}((), data, size(data_type))
+    end
+    tdata = TracedRArray(data)
+    return Ops.convert(TracedRArray{T,ndims(data_type)}, tdata)
+end
+
+function TracedRArray(data::MLIR.IR.Value)
+    return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
 end
 
 struct XLAArray{T,N} <: RArray{T,N} end

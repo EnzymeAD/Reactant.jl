@@ -442,6 +442,26 @@ end
     @test @allowscalar all(isone, x_ra_array[4, :])
 end
 
+function non_contiguous_setindex!(x)
+    x[[1, 3, 2], [1, 2, 3, 4]] .= 1.0
+    return x
+end
+
+@testset "non-contiguous setindex!" begin
+    x = rand(6, 6)
+    x_ra = Reactant.to_rarray(x)
+
+    y = @jit(non_contiguous_setindex!(x_ra))
+    y = Array(y)
+    x_ra = Array(x_ra)
+    @test all(isone, y[1:3, 1:4])
+    @test all(isone, x_ra[1:3, 1:4])
+    @test !all(isone, y[4:end, :])
+    @test !all(isone, x_ra[4:end, :])
+    @test !all(isone, y[:, 5:end])
+    @test !all(isone, x_ra[:, 5:end])
+end
+
 tuple_byref(x) = (; a=(; b=x))
 tuple_byref2(x) = abs2.(x), tuple_byref2(x)
 
@@ -716,4 +736,58 @@ end
 
     @test res[1] isa ConcreteRArray{Float64,2}
     @test res[2] isa ConcreteRNumber{Float64}
+end
+
+@testset "non-contiguous indexing" begin
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1(x) = x[[1, 3, 2], :, :]
+    non_contiguous_indexing2(x) = x[:, [1, 2, 1, 3], [1, 3]]
+
+    @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x)
+    @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x)
+
+    x = rand(4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1(x) = x[[1, 3, 2], :]
+    non_contiguous_indexing2(x) = x[:, [1, 2, 2]]
+
+    @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x)
+    @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x)
+
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1!(x) = x[[1, 3, 2], :, :] .= 2
+    non_contiguous_indexing2!(x) = x[:, [1, 2, 1, 3], [1, 3]] .= 2
+
+    @jit(non_contiguous_indexing1!(x_ra))
+    non_contiguous_indexing1!(x)
+    @test x_ra ≈ x
+
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    @jit(non_contiguous_indexing2!(x_ra))
+    non_contiguous_indexing2!(x)
+    @test x_ra ≈ x
+
+    x = rand(4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1!(x) = x[[1, 3, 2], :] .= 2
+    non_contiguous_indexing2!(x) = x[:, [1, 2, 2]] .= 2
+
+    @jit(non_contiguous_indexing1!(x_ra))
+    non_contiguous_indexing1!(x)
+    @test x_ra ≈ x
+
+    x = rand(4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    @jit(non_contiguous_indexing2!(x_ra))
+    non_contiguous_indexing2!(x)
+    @test x_ra ≈ x
 end

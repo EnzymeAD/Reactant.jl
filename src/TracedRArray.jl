@@ -14,8 +14,9 @@ using ..Reactant:
     MLIR,
     ancestor,
     unwrapped_eltype
+using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
+
 using ReactantCore: ReactantCore
-using ..TracedUtils: TracedUtils, materialize_traced_array
 using GPUArraysCore: GPUArraysCore
 
 ReactantCore.is_traced(::TracedRArray) = true
@@ -55,11 +56,8 @@ function Base.getindex(
     return TracedRNumber{T}((), res2)
 end
 
-function Base.getindex(a::TracedRArray{T,0}) where {T}
-    return TracedRNumber{T}((), a.mlir_data)
-end
+Base.getindex(a::TracedRArray{T,0}) where {T} = TracedRNumber{T}((), a.mlir_data)
 
-# XXX: We want to support https://github.com/EnzymeAD/Reactant.jl/issues/242 eventually
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
         i isa Colon && return 1:size(a, idx)
@@ -67,13 +65,28 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         return i
     end
 
-    foreach(indices) do idxs
-        idxs isa Number && return nothing
+    non_contiguous_getindex = false
+    for idxs in indices
+        idxs isa Number && continue
         contiguous = all(isone, diff(idxs))
         # XXX: We want to throw error even for dynamic indexing
-        if typeof(a) <: Bool
-            contiguous || error("non-contiguous indexing is not supported")
+        if typeof(contiguous) <: Bool && !contiguous
+            non_contiguous_getindex = true
+            break
         end
+    end
+
+    if non_contiguous_getindex
+        indices_tuples = collect(Iterators.product(indices...))
+        indices = Matrix{Int}(
+            undef, (length(indices_tuples), length(first(indices_tuples)))
+        )
+        for (i, idx) in enumerate(indices_tuples)
+            indices[i, :] .= idx .- 1
+        end
+        indices = TracedUtils.promote_to(TracedRArray{Int,2}, indices)
+        res = Ops.gather_getindex(a, indices)
+        return Ops.reshape(res, size(indices_tuples)...)
     end
 
     start_indices = map(indices) do i
@@ -99,16 +112,41 @@ function Base.getindex(a::WrappedTracedRArray, indices...)
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
 end
 
-function Base.setindex!(
-    a::TracedRArray{T,N},
-    v,
-    indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int,TracedRNumber{Int}},N},
-) where {T,N}
+function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
-        i isa Int ? (i:i) : (i isa Colon ? (1:size(a, idx)) : i)
+        i isa Colon && return 1:size(a, idx)
+        i isa CartesianIndex && return Tuple(i)
+        return i
     end
+
+    non_contiguous_setindex = false
+    for idxs in indices
+        idxs isa Number && continue
+        contiguous = all(isone, diff(idxs))
+        # XXX: We want to throw error even for dynamic indexing
+        if typeof(contiguous) <: Bool && !contiguous
+            non_contiguous_setindex = true
+            break
+        end
+    end
+
+    if non_contiguous_setindex
+        indices_tuples = collect(Iterators.product(indices...))
+        indices = Matrix{Int}(
+            undef, (length(indices_tuples), length(first(indices_tuples)))
+        )
+        for (i, idx) in enumerate(indices_tuples)
+            indices[i, :] .= idx .- 1
+        end
+        indices = TracedUtils.promote_to(TracedRArray{Int,2}, indices)
+        res = Ops.scatter_setindex(a, indices, Ops.reshape(v, length(v)))
+        a.mlir_data = res.mlir_data
+        return v
+    end
+
     v = TracedUtils.broadcast_to_size(v, length.(indices))
     v = TracedUtils.promote_to(TracedRArray{T,N}, v)
+
     indices = [
         (
             TracedUtils.promote_to(TracedRNumber{Int}, i isa Colon ? 1 : first(i)) - 1
@@ -124,11 +162,7 @@ function Base.setindex!(
     return v
 end
 
-function Base.setindex!(
-    a::AnyTracedRArray{T,N},
-    v,
-    indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int,TracedRNumber{Int}},N},
-) where {T,N}
+function Base.setindex!(a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
     ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
     setindex!(ancestor(a), v, ancestor_indices...)
     return a
