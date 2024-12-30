@@ -74,20 +74,27 @@ function scalar_index_to_cartesian(idx::AbstractVector{T}, sz::NTuple{N,Int}) wh
     idx = idx .- 1
     idxs = materialize_traced_array(reshape(idx .% T(sz[1]), :, 1))
     idx = idx .÷ T(sz[1])
-    for i in 1:N
+    for i in 2:N
         idxs = hcat(idxs, idx .% T(sz[i]))
         idx = idx .÷ T(sz[i])
     end
     return idxs
 end
 
+function Base.getindex(
+    a::TracedRArray{T,N}, indices::Union{Int,TracedRNumber{Int}}
+) where {T,N}
+    if indices isa Int
+        indices = TracedUtils.promote_to(TracedRNumber{Int}, indices)
+    end
+    indices = TracedUtils.broadcast_to_size(indices, (1,))
+    return Ops.gather_getindex(a, scalar_index_to_cartesian(indices, size(a)))[1]
+end
+
 function Base.getindex(a::TracedRArray{T,N}, indices) where {T,N}
-    if indices isa TracedRNumber
-        error("Not implemented")
-    elseif indices isa TracedRArray
-    elseif indices isa Number
-        error("Not implemented")
-    else
+    indices isa Colon && return materialize_traced_array(vec(a))
+    if !(indices isa TracedRArray)
+        indices isa CartesianIndex && (indices = Tuple(indices))
         indices = TracedUtils.promote_to(TracedRArray{Int,1}, collect(indices))
     end
     return Ops.gather_getindex(a, scalar_index_to_cartesian(indices, size(a)))

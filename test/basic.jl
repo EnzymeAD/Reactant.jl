@@ -762,11 +762,11 @@ end
     x = rand(4, 2)
     x_ra = Reactant.to_rarray(x)
 
-    non_contiguous_indexing1(x) = x[[1, 3, 2], :]
-    non_contiguous_indexing2(x) = x[:, [1, 2, 2]]
+    non_contiguous_indexing3(x) = x[[1, 3, 2], :]
+    non_contiguous_indexing4(x) = x[:, [1, 2, 2]]
 
-    @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x)
-    @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x)
+    @test @jit(non_contiguous_indexing3(x_ra)) ≈ non_contiguous_indexing3(x)
+    @test @jit(non_contiguous_indexing4(x_ra)) ≈ non_contiguous_indexing4(x)
 
     x = rand(4, 4, 3)
     x_ra = Reactant.to_rarray(x)
@@ -788,17 +788,59 @@ end
     x = rand(4, 2)
     x_ra = Reactant.to_rarray(x)
 
-    non_contiguous_indexing1!(x) = x[[1, 3, 2], :] .= 2
-    non_contiguous_indexing2!(x) = x[:, [1, 2, 2]] .= 2
+    non_contiguous_indexing3!(x) = x[[1, 3, 2], :] .= 2
+    non_contiguous_indexing4!(x) = x[:, [1, 2, 2]] .= 2
 
-    @jit(non_contiguous_indexing1!(x_ra))
-    non_contiguous_indexing1!(x)
+    @jit(non_contiguous_indexing3!(x_ra))
+    non_contiguous_indexing3!(x)
     @test x_ra ≈ x
 
     x = rand(4, 2)
     x_ra = Reactant.to_rarray(x)
 
-    @jit(non_contiguous_indexing2!(x_ra))
-    non_contiguous_indexing2!(x)
+    @jit(non_contiguous_indexing4!(x_ra))
+    non_contiguous_indexing4!(x)
     @test x_ra ≈ x
+end
+
+@testset "indexing with traced arrays" begin
+    x = rand(4, 4, 3)
+    idx1 = [1, 3, 2]
+    idx3 = [1, 2, 1, 3]
+
+    x_ra = Reactant.to_rarray(x)
+    idx1_ra = Reactant.to_rarray(idx1)
+    idx3_ra = Reactant.to_rarray(idx3)
+
+    getindex1(x, idx1) = x[idx1, :, :]
+    getindex2(x, idx1) = x[:, idx1, :]
+    getindex3(x, idx3) = x[:, :, idx3]
+    getindex4(x, idx1, idx3) = x[idx1, :, idx3]
+
+    @test @jit(getindex1(x_ra, idx1_ra)) ≈ getindex1(x, idx1)
+    @test @jit(getindex2(x_ra, idx1_ra)) ≈ getindex2(x, idx1)
+    @test @jit(getindex3(x_ra, idx3_ra)) ≈ getindex3(x, idx3)
+    @test @jit(getindex4(x_ra, idx1_ra, idx3_ra)) ≈ getindex4(x, idx1, idx3)
+end
+
+@testset "linear indexing" begin
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    getindex_linear_scalar(x, idx) = @allowscalar x[idx]
+
+    @testset for i in 1:length(x)
+        @test @jit(getindex_linear_scalar(x_ra, i)) ≈ getindex_linear_scalar(x, i)
+        @test @jit(
+            getindex_linear_scalar(x_ra, Reactant.to_rarray(i; track_numbers=(Number,)))
+        ) ≈ getindex_linear_scalar(x, i)
+    end
+
+    idx = rand(1:length(x), 8)
+    idx_ra = Reactant.to_rarray(idx)
+
+    getindex_linear_vector(x, idx) = x[idx]
+
+    @test @jit(getindex_linear_vector(x_ra, idx_ra)) ≈ getindex_linear_vector(x, idx)
+    @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, idx)
 end
