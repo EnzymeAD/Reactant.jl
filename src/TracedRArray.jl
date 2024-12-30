@@ -541,15 +541,16 @@ Base.all(f::Function, x::AnyTracedRArray) = mapreduce(f, &, x)
 Base.any(f::Function, x::AnyTracedRArray) = mapreduce(f, |, x)
 
 # outer repeat
-# Overridden because we don't need to further recur into the definitions here
-function Base.repeat(x::AnyTracedRArray{T,N}, counts::Vararg{Int,M}) where {T,N,M}
+function Base._RepeatInnerOuter.repeat_outer(
+    x::AnyTracedRArray{T,N}, counts::NTuple{M,Int}
+) where {T,N,M}
     P = max(N, M) # potentially padded
 
     # (d1, d2, ..., dP) -> (d1, 1, d2, 1, ..., dP, 1)
     interleaved_size = ones(Int, 2P)
     interleaved_size[1:2:(2N)] .= size(x)
 
-    x_interleaved = reshape(x, interleaved_size...)
+    x_interleaved = reshape(materialize_traced_array(x), interleaved_size...)
 
     # (d1, 1, d2, 1, ..., dP, 1) -> (d1, r1, d2, r2, ..., dP, rP)
     broadcast_target_size = interleaved_size
@@ -560,9 +561,31 @@ function Base.repeat(x::AnyTracedRArray{T,N}, counts::Vararg{Int,M}) where {T,N,
     # (d1, r1, d2, r2, ..., dP, rP) -> (d1*r1, d2*r2, ..., dP*rP)
     final_size = vec(prod(reshape(broadcast_target_size, 2, :); dims=1))
 
-    x_final = reshape(x_broadcasted, final_size...)
+    return materialize_traced_array(reshape(x_broadcasted, final_size...))
+end
 
-    return x_final
+# inner repeat
+function Base._RepeatInnerOuter.repeat_inner(
+    x::AnyTracedRArray{T,N}, counts::NTuple{M,Int}
+) where {T,N,M}
+    P = max(N, M) # potentially padded
+
+    # (d1, d2, ..., dP) -> (1, d1, 1, d2, 1, ..., 1, dP)
+    interleaved_size = ones(Int, 2P)
+    interleaved_size[2:2:(2N)] .= size(x)
+
+    x_interleaved = reshape(materialize_traced_array(x), interleaved_size...)
+
+    # (1, d1, 1, d2, 1, ..., 1, dP) -> (r1, d1, r2, d2, ..., rP, dP)
+    broadcast_target_size = interleaved_size
+    broadcast_target_size[1:2:(2N)] .= counts
+
+    x_broadcasted = TracedUtils.broadcast_to_size(x_interleaved, broadcast_target_size)
+
+    # (r1, d1, r2, d2, ..., rP, dP) -> (d1*r1, d2*r2, ..., dP*rP)
+    final_size = vec(prod(reshape(broadcast_target_size, 2, :); dims=1))
+
+    return materialize_traced_array(reshape(x_broadcasted, final_size...))
 end
 
 end
