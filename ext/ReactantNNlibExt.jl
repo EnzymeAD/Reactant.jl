@@ -323,7 +323,7 @@ function NNlib.gather!(dst::TracedRArray, src::AnyTracedRArray, idxs::AbstractAr
            This case is not optimized and will be slow." maxlog = 1
     dims = NNlib.scatter_dims(src, dst, idxs)
     colons = ntuple(Returns(Colon()), dims)
-    start_sizes = ntuple(i -> size(src, i), dims)
+    start_sizes = ntuple(Base.Fix1(size, src), dims)
     results = map(CartesianIndices(idxs)) do k
         res = @allowscalar src[colons..., Tuple(idxs[k])...]
         res isa TracedRNumber && (res = TracedUtils.broadcast_to_size(res, (1,)))
