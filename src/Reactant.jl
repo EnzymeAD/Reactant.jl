@@ -238,6 +238,8 @@ include("Tracing.jl")
 include("Compiler.jl")
 include("Profiler.jl")
 
+include("IFRT.jl")
+
 include("Overlay.jl")
 
 function Enzyme.make_zero(
