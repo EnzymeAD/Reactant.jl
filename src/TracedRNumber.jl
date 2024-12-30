@@ -229,11 +229,11 @@ function Base.float(x::TracedRNumber{T}) where {T}
     return TracedUtils.promote_to(TracedRNumber{float(T)}, x)
 end
 
-using Reactant: ReactantFloatInt
+using Reactant: ReactantFloat
 
-Base.round(A::TracedRNumber{<:ReactantFloatInt}) = Ops.round_nearest_even(A)
-Base.floor(A::TracedRNumber{<:ReactantFloatInt}) = Ops.floor(A)
-Base.ceil(A::TracedRNumber{<:ReactantFloatInt}) = Ops.ceil(A)
+Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
+Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
+Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
