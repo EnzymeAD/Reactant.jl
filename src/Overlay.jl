@@ -127,9 +127,7 @@ for (cT, aT, bT) in (
         @reactant_overlay @noinline function LinearAlgebra.mul!(
             C::$cT, A::$aT, B::$bT, α::Number, β::Number
         )
-            C = aos_to_soa(C)
-            A = aos_to_soa(A)
-            B = aos_to_soa(B)
+            A, B = aos_to_soa(A), aos_to_soa(B)
             if any(Base.Fix2(isa, TracedRArray) ∘ ancestor, (C, A, B))
                 TracedLinearAlgebra.overloaded_mul!(C, A, B, α, β)
             else
