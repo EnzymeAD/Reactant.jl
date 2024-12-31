@@ -201,6 +201,20 @@ mutable struct TracedRNG <: Random.AbstractRNG
     const algorithm::String
 end
 
+use_overlayed_version(iter) = any(use_overlayed_version, iter)
+
+use_overlayed_version(::TracedRArray) = true
+use_overlayed_version(::TracedRNumber) = true
+use_overlayed_version(::Number) = false
+use_overlayed_version(::MissingTracedValue) = true
+use_overlayed_version(::TracedRNG) = true
+
+function use_overlayed_version(x::AbstractArray)
+    a = ancestor(x)
+    a === x && return false
+    return use_overlayed_version(a)
+end
+
 # StdLib Overloads
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")

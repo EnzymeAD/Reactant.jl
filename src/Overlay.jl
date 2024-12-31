@@ -128,7 +128,7 @@ for (cT, aT, bT) in (
             C::$cT, A::$aT, B::$bT, α::Number, β::Number
         )
             A, B = aos_to_soa(A), aos_to_soa(B)
-            if any(Base.Fix2(isa, TracedRArray) ∘ ancestor, (C, A, B))
+            if use_overlayed_version((C, A, B))
                 TracedLinearAlgebra.overloaded_mul!(C, A, B, α, β)
             else
                 LinearAlgebra.mul!(C, A, B, α, β)
@@ -141,5 +141,14 @@ for (cT, aT, bT) in (
             call_with_reactant(LinearAlgebra.mul!, C, A, B, true, false)
             return C
         end
+    end
+end
+
+# Base overloads
+@reactant_overlay @noinline function Base._stack(dims::Union{Integer,Colon}, iter)
+    if use_overlayed_version(iter)
+        return TracedRArrayOverrides.overloaded_stack(dims, iter)
+    else
+        return Base._stack(dims, Base.IteratorSize(iter), iter)
     end
 end

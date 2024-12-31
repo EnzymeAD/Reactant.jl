@@ -844,3 +844,26 @@ end
     @test @jit(getindex_linear_vector(x_ra, idx_ra)) ≈ getindex_linear_vector(x, idx)
     @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, idx)
 end
+
+@testset "stack" begin
+    x = rand(4, 4)
+    y = rand(4, 4)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    s1(x) = stack((x, x))
+    s2(x) = stack((x, x); dims=2)
+    s3(x, y) = stack((x, y); dims=2)
+    s4(x, y) = stack((x, y, x); dims=1)
+
+    @test @jit(s1(x_ra)) ≈ s1(x)
+    @test @jit(s2(x_ra)) ≈ s2(x)
+    @test @jit(s3(x_ra, y_ra)) ≈ s3(x, y)
+    @test @jit(s4(x_ra, y_ra)) ≈ s4(x, y)
+
+    # Test that we don't hit illegal instruction; `x` is intentionally not a traced array
+    @test @jit(s1(x)) isa Any
+    @test @jit(s2(x)) isa Any
+    @test @jit(s3(x, y)) isa Any
+    @test @jit(s4(x, y)) isa Any
+end
