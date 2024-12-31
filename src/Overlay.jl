@@ -130,14 +130,18 @@ for (cT, aT, bT) in (
             if any(Base.Fix2(isa, TracedRArray) ∘ ancestor, (C, A, B))
                 TracedLinearAlgebra.overloaded_mul!(C, A, B, α, β)
             else
-                LinearAlgebra._mul!(C, A, B, α, β)
+                LinearAlgebra.mul!(C, A, B, α, β)
             end
             return C
         end
 
         # Needed mostly for 1.10 where 3-arg mul is often specialized
         @reactant_overlay @noinline function LinearAlgebra.mul!(C::$cT, A::$aT, B::$bT)
-            call_with_reactant(LinearAlgebra.mul!, C, A, B, true, false)
+            if any(Base.Fix2(isa, TracedRArray) ∘ ancestor, (C, A, B))
+                TracedLinearAlgebra.overloaded_mul!(C, A, B, true, false)
+            else
+                LinearAlgebra.mul!(C, A, B)
+            end
             return C
         end
     end
