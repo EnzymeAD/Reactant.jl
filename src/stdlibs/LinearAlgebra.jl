@@ -163,26 +163,6 @@ function TracedUtils.set_mlir_data!(
     return x
 end
 
-function overloaded_mul!(
-    @nospecialize(C::TracedRArray),
-    @nospecialize(A::AbstractArray{<:TracedRNumber})
-    @nospecialize(B::AbstractArray),
-    α::Number=true,
-    β::Number=false,
-) where {T}
-    overloaded_mul!(C, Ops.reshape(vcat(A...), size(A)...), B, α, β)
-end
-
-function overloaded_mul!(
-    @nospecialize(C::TracedRArray),
-    @nospecialize(A::AbstractArray),
-    @nospecialize(B::AbstractArray{<:TracedRNumber})
-    α::Number=true,
-    β::Number=false,
-) where {T}
-    overloaded_mul!(C, A, Ops.reshape(vcat(B...), size(B)...), α, β)
-end
-
 # Core functions
 function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,1}),
