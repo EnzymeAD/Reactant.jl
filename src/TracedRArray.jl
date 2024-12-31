@@ -607,7 +607,7 @@ end
 
 # stack
 function overloaded_stack(dims::Union{Integer,Colon}, xs)
-    @assert allequal(ndims, xs) "All arrays must have the same number of dimensions..."
+    @assert allequal(ndims.(xs)) "All arrays must have the same number of dimensions..."
     dims = dims isa Colon ? ndims(first(xs)) + 1 : dims
     res = map(xs) do x
         new_shape = ntuple(
