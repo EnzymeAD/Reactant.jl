@@ -6,84 +6,198 @@ const libxla = Reactant_jll.libReactantExtra
 
 const Span = @NamedTuple{len::Csize_t, ptr::Ptr{Cvoid}}
 
-# TODO pass docs
-macro cbinding(namexpr, destructor=nothing)
-    name = if namexpr isa Symbol
-        namexpr
-    elseif Base.isexpr(namexpr, :(<:))
-        namexpr.args[1]
-    else
-        error("Invalid expression")
-    end
-
-    absname = Symbol(:Abstract, name)
-
-    absexpr = if namexpr isa Symbol
-        absname
-    elseif Base.isexpr(namexpr, :(<:))
-        :($absname <: $(namexpr.args[2]))
-    end
-
-    if isnothing(destructor)
-        quote
-            abstract type $absexpr end
-            struct $name <: $absname
-                ptr::Ptr{Cvoid}
-                function $name(x)
-                    @assert x != C_NULL
-                    return new(x)
-                end
-
-                Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$name) = x.ptr
-            end
-        end
-    else
-        @assert Base.isexpr(destructor, :(=)) && destructor.args[1] == :destructor
-        destructor = destructor.args[2]
-
-        quote
-            abstract type $absexpr end
-            mutable struct $name <: $absname
-                ptr::Ptr{Cvoid}
-                function $name(x)
-                    @assert x != C_NULL
-                    y = new(x)
-                    finalizer(y) do z
-                        @ccall $destructor(z::Ptr{Cvoid})::Cvoid
-                    end
-                    return y
-                end
-
-                Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$name) = x.ptr
-            end
-        end
-    end
-end
-
 abstract type AbstractSerializable end
 
 # Base virtual classes
-@cbinding Value
-@cbinding Tuple <: AbstractValue
-@cbinding Memory
-@cbinding Device
-@cbinding Sharding <: AbstractSerializable
-@cbinding Array
-@cbinding Topology
-@cbinding Client
-@cbinding HostCallback
-@cbinding LoadedHostCallback
-@cbinding Executable
-@cbinding LoadedExecutable
-@cbinding Compiler
+abstract type AbstractValue end
+struct Value <: AbstractValue
+    ptr::Ptr{Cvoid}
+    function Value(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractTuple <: AbstractValue end
+struct Tuple <: AbstractTuple
+    ptr::Ptr{Cvoid}
+    function Tuple(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractMemory end
+struct Memory <: AbstractMemory
+    ptr::Ptr{Cvoid}
+    function Memory(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractDevice end
+struct Device <: AbstractDevice
+    ptr::Ptr{Cvoid}
+    function Device(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractSharding <: AbstractSerializable end
+struct Sharding <: AbstractSharding
+    ptr::Ptr{Cvoid}
+    function Sharding(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractArray end
+struct Array <: AbstractArray
+    ptr::Ptr{Cvoid}
+    function Array(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractTopology end
+struct Topology <: AbstractTopology
+    ptr::Ptr{Cvoid}
+    function Topology(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractClient end
+struct Client <: AbstractClient
+    ptr::Ptr{Cvoid}
+    function Client(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractHostCallback end
+struct HostCallback <: AbstractHostCallback
+    ptr::Ptr{Cvoid}
+    function HostCallback(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractLoadedHostCallback end
+struct LoadedHostCallback <: AbstractLoadedHostCallback
+    ptr::Ptr{Cvoid}
+    function LoadedHostCallback(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractExecutable end
+struct Executable <: AbstractExecutable
+    ptr::Ptr{Cvoid}
+    function Executable(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractLoadedExecutable end
+struct LoadedExecutable <: AbstractLoadedExecutable
+    ptr::Ptr{Cvoid}
+    function LoadedExecutable(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractCompiler end
+struct Compiler <: AbstractCompiler
+    ptr::Ptr{Cvoid}
+    function Compiler(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
 
 # Concrete classes
-@cbinding DType destructor = libxla.ifrt_dtype_free
-@cbinding Shape destructor = libxla.ifrt_shape_free
-@cbinding DynamicShape destructor = libxla.ifrt_dynamic_shape_free
-@cbinding Index destructor = libxla.ifrt_index_free
-@cbinding IndexDomain destructor = libxla.ifrt_indexdomain_free
-@cbinding MemoryKind destructor = libxla.ifrt_memorykind_free
+mutable struct DType
+    ptr::Ptr{Cvoid}
+    function DType(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_dtype_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct Shape
+    ptr::Ptr{Cvoid}
+    function Shape(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_shape_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct DynamicShape
+    ptr::Ptr{Cvoid}
+    function DynamicShape(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_dynamic_shape_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct Index
+    ptr::Ptr{Cvoid}
+    function Index(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_index_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct IndexDomain
+    ptr::Ptr{Cvoid}
+    function IndexDomain(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_indexdomain_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct MemoryKind
+    ptr::Ptr{Cvoid}
+    function MemoryKind(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_memorykind_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
 
 # Value
 function client(x::AbstractValue)
@@ -452,18 +566,126 @@ function serialize(x::AbstractLoadedHostCallback)
 end
 
 # IFRT-PjRt backend
-@cbinding PjRtTuple <: AbstractTuple destructor = libxla.ifrt_pjrt_tuple_free
-@cbinding PjRtMemory <: AbstractMemory destructor = libxla.ifrt_pjrt_memory_free
-@cbinding PjRtDevice <: AbstractDevice destructor = libxla.ifrt_pjrt_device_free
-@cbinding PjRtArray <: AbstractArray destructor = libxla.ifrt_pjrt_array_free
-@cbinding PjRtTopology <: AbstractTopology destructor = libxla.ifrt_pjrt_topology_free
-@cbinding PjRtClient <: AbstractClient destructor = libxla.ifrt_pjrt_client_free
-@cbinding PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallback destructor =
-    libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free
-@cbinding PjRtExecutable <: AbstractExecutable destructor = libxla.ifrt_pjrt_executable_free
-@cbinding PjRtLoadedExecutable <: AbstractLoadedExecutable destructor =
-    libxla.ifrt_pjrt_loadedexecutable_free
-@cbinding PjRtCompiler <: AbstractCompiler destructor = libxla.ifrt_pjrt_compiler_free
+
+mutable struct PjRtTuple <: AbstractTuple
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_tuple_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct PjRtMemory <: AbstractMemory
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_memory_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct PjRtDevice <: AbstractDevice
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_device_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct PjRtArray <: AbstractArray
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_array_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct PjRtTopology <: AbstractTopology
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_topology_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct PjRtClient <: AbstractClient
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_client_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallback
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct PjRtExecutable <: AbstractExecutable
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_executable_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct PjRtLoadedExecutable <: AbstractLoadedExecutable
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_loadedexecutable_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
+
+mutable struct PjRtCompiler <: AbstractCompiler
+    ptr::Ptr{Cvoid}
+    function _(x::Ptr{Cvoid})
+        @assert x != C_NULL
+        y = new(x)
+        finalizer(y) do z
+            @ccall libxla.ifrt_pjrt_compiler_free(z::Ptr{Cvoid})
+        end
+        return y
+    end
+end
 
 # function PjRtTuple(client::AbstractPjRtCompatibleClient, values::Vector{AbstractValue})
 #     return PjRtTuple(
