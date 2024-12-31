@@ -127,10 +127,11 @@ for (cT, aT, bT) in (
         @reactant_overlay @noinline function LinearAlgebra.mul!(
             C::$cT, A::$aT, B::$bT, α::Number, β::Number
         )
+            A, B = aos_to_soa(A), aos_to_soa(B)
             if use_overlayed_version((C, A, B))
                 TracedLinearAlgebra.overloaded_mul!(C, A, B, α, β)
             else
-                LinearAlgebra._mul!(C, A, B, α, β)
+                LinearAlgebra.mul!(C, A, B, α, β)
             end
             return C
         end
