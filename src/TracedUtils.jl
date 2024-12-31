@@ -449,7 +449,9 @@ end
 new_traced_value(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), nothing, size(A))
 new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
 
-broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize) = broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
+function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
+    return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
+end
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
 
 function broadcast_to_size(arg::Base.RefValue, rsize)
