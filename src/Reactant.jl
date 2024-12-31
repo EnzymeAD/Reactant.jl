@@ -173,7 +173,7 @@ unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
-aos_to_soa(x::TracedRArray) = x
+aos_to_soa(x::AnyTracedRArray) = x
 function aos_to_soa(x::AbstractArray{<:ConcreteRNumber{T}}) where {T}
     x_c = ConcreteRArray(zeros(T, size(x)))
     x_c .= x
