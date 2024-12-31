@@ -92,6 +92,33 @@ function batch(
     )
 end
 
+"""
+`broadcast`
+
+Broadcast the operand by adding extra dimensions with sizes provided by the `shape` attribute to the front.
+For scalar operands, ranked tensor is created.
+
+NOTE: Only works for scalar and *ranked* tensor operands for now.
+"""
+function broadcast(input::Value; output::IR.Type, shape, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("shape", shape),]
+
+    return create_operation(
+        "enzyme.broadcast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function fwddiff(
     inputs::Vector{Value};
     outputs::Vector{IR.Type},

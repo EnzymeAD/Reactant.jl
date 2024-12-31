@@ -84,12 +84,18 @@ for (jlop, hloop) in (
     (:(Base.:*), :multiply),
     (:(Base.:/), :divide),
     (:(Base.:^), :power),
+    (:(Base.mod), :remainder),
+    (:(Base.rem), :remainder),
 )
     @eval function $(jlop)(
         @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
     ) where {T}
         return Ops.$(hloop)(lhs, rhs)
     end
+end
+
+function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T<:Integer}
+    return Ops.divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
 
 function Base.div(

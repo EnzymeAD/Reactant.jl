@@ -41,6 +41,9 @@ function create_result(tocopy::T, path, result_stores) where {T}
     elems = Union{Symbol,Expr}[]
 
     for i in 1:fieldcount(T)
+        # If the field is undefined we don't set it. A common example for this is `du2`
+        # for Tridiagonal
+        isdefined(tocopy, i) || continue
         ev = create_result(getfield(tocopy, i), append_path(path, i), result_stores)
         push!(elems, ev)
     end
@@ -102,7 +105,7 @@ function create_result(tocopy::D, path, result_stores) where {K,V,D<:AbstractDic
 end
 
 function create_result(
-    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol},
+    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
     path,
     result_stores,
 )

@@ -365,12 +365,23 @@ end
 end
 
 @testset "repeat" begin
+    fn_inner(x, counts) = repeat(x; inner=counts)
+
     @testset for (size, counts) in Iterators.product(
         [(2,), (2, 3), (2, 3, 4), (2, 3, 4, 5)],
         [(), (1,), (2,), (2, 1), (1, 2), (2, 2), (2, 2, 2), (1, 1, 1, 1, 1)],
     )
         x = rand(size...)
-        @test (@jit repeat(Reactant.to_rarray(x), counts...)) == repeat(x, counts...)
+
+        @testset "outer repeat" begin
+            @test (@jit repeat(Reactant.to_rarray(x), counts...)) == repeat(x, counts...)
+        end
+
+        length(counts) < length(size) && continue
+
+        @testset "inner repeat" begin
+            @test (@jit fn_inner(Reactant.to_rarray(x), counts)) == fn_inner(x, counts)
+        end
     end
 end
 
@@ -440,6 +451,26 @@ end
     @test @allowscalar all(iszero, x_ra_array[2, :])
     @test @allowscalar all(isone, x_ra_array[3, :])
     @test @allowscalar all(isone, x_ra_array[4, :])
+end
+
+function non_contiguous_setindex!(x)
+    x[[1, 3, 2], [1, 2, 3, 4]] .= 1.0
+    return x
+end
+
+@testset "non-contiguous setindex!" begin
+    x = rand(6, 6)
+    x_ra = Reactant.to_rarray(x)
+
+    y = @jit(non_contiguous_setindex!(x_ra))
+    y = Array(y)
+    x_ra = Array(x_ra)
+    @test all(isone, y[1:3, 1:4])
+    @test all(isone, x_ra[1:3, 1:4])
+    @test !all(isone, y[4:end, :])
+    @test !all(isone, x_ra[4:end, :])
+    @test !all(isone, y[:, 5:end])
+    @test !all(isone, x_ra[:, 5:end])
 end
 
 tuple_byref(x) = (; a=(; b=x))
@@ -722,4 +753,123 @@ end
 
     @test res[1] isa ConcreteRArray{Float64,2}
     @test res[2] isa ConcreteRNumber{Float64}
+end
+
+@testset "non-contiguous indexing" begin
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1(x) = x[[1, 3, 2], :, :]
+    non_contiguous_indexing2(x) = x[:, [1, 2, 1, 3], [1, 3]]
+
+    @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x)
+    @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x)
+
+    x = rand(4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing3(x) = x[[1, 3, 2], :]
+    non_contiguous_indexing4(x) = x[:, [1, 2, 2]]
+
+    @test @jit(non_contiguous_indexing3(x_ra)) ≈ non_contiguous_indexing3(x)
+    @test @jit(non_contiguous_indexing4(x_ra)) ≈ non_contiguous_indexing4(x)
+
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing1!(x) = x[[1, 3, 2], :, :] .= 2
+    non_contiguous_indexing2!(x) = x[:, [1, 2, 1, 3], [1, 3]] .= 2
+
+    @jit(non_contiguous_indexing1!(x_ra))
+    non_contiguous_indexing1!(x)
+    @test x_ra ≈ x
+
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    @jit(non_contiguous_indexing2!(x_ra))
+    non_contiguous_indexing2!(x)
+    @test x_ra ≈ x
+
+    x = rand(4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    non_contiguous_indexing3!(x) = x[[1, 3, 2], :] .= 2
+    non_contiguous_indexing4!(x) = x[:, [1, 2, 2]] .= 2
+
+    @jit(non_contiguous_indexing3!(x_ra))
+    non_contiguous_indexing3!(x)
+    @test x_ra ≈ x
+
+    x = rand(4, 2)
+    x_ra = Reactant.to_rarray(x)
+
+    @jit(non_contiguous_indexing4!(x_ra))
+    non_contiguous_indexing4!(x)
+    @test x_ra ≈ x
+end
+
+@testset "indexing with traced arrays" begin
+    x = rand(4, 4, 3)
+    idx1 = [1, 3, 2]
+    idx3 = [1, 2, 1, 3]
+
+    x_ra = Reactant.to_rarray(x)
+    idx1_ra = Reactant.to_rarray(idx1)
+    idx3_ra = Reactant.to_rarray(idx3)
+
+    getindex1(x, idx1) = x[idx1, :, :]
+    getindex2(x, idx1) = x[:, idx1, :]
+    getindex3(x, idx3) = x[:, :, idx3]
+    getindex4(x, idx1, idx3) = x[idx1, :, idx3]
+
+    @test @jit(getindex1(x_ra, idx1_ra)) ≈ getindex1(x, idx1)
+    @test @jit(getindex2(x_ra, idx1_ra)) ≈ getindex2(x, idx1)
+    @test @jit(getindex3(x_ra, idx3_ra)) ≈ getindex3(x, idx3)
+    @test @jit(getindex4(x_ra, idx1_ra, idx3_ra)) ≈ getindex4(x, idx1, idx3)
+end
+
+@testset "linear indexing" begin
+    x = rand(4, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    getindex_linear_scalar(x, idx) = @allowscalar x[idx]
+
+    @testset for i in 1:length(x)
+        @test @jit(getindex_linear_scalar(x_ra, i)) ≈ getindex_linear_scalar(x, i)
+        @test @jit(
+            getindex_linear_scalar(x_ra, Reactant.to_rarray(i; track_numbers=(Number,)))
+        ) ≈ getindex_linear_scalar(x, i)
+    end
+
+    idx = rand(1:length(x), 8)
+    idx_ra = Reactant.to_rarray(idx)
+
+    getindex_linear_vector(x, idx) = x[idx]
+
+    @test @jit(getindex_linear_vector(x_ra, idx_ra)) ≈ getindex_linear_vector(x, idx)
+    @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, idx)
+end
+
+@testset "stack" begin
+    x = rand(4, 4)
+    y = rand(4, 4)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    s1(x) = stack((x, x))
+    s2(x) = stack((x, x); dims=2)
+    s3(x, y) = stack((x, y); dims=2)
+    s4(x, y) = stack((x, y, x); dims=1)
+
+    @test @jit(s1(x_ra)) ≈ s1(x)
+    @test @jit(s2(x_ra)) ≈ s2(x)
+    @test @jit(s3(x_ra, y_ra)) ≈ s3(x, y)
+    @test @jit(s4(x_ra, y_ra)) ≈ s4(x, y)
+
+    # Test that we don't hit illegal instruction; `x` is intentionally not a traced array
+    @test @jit(s1(x)) isa Any
+    @test @jit(s2(x)) isa Any
+    @test @jit(s3(x, y)) isa Any
+    @test @jit(s4(x, y)) isa Any
 end
