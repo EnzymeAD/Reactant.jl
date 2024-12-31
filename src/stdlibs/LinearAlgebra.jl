@@ -6,6 +6,7 @@ using ..Reactant:
     AnyTracedRArray,
     AnyTracedRMatrix,
     AnyTracedRVector,
+    unwrapped_eltype,
     Ops,
     MLIR
 
@@ -190,12 +191,12 @@ function overloaded_mul!(
 end
 
 function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,2}),
+    @nospecialize(C::TracedRArray{T,2} where T),
     @nospecialize(A::AnyTracedRMatrix),
     @nospecialize(B::AnyTracedRMatrix),
     α::Number=true,
     β::Number=false,
-) where {T}
+)
     if size(C) != (size(A, 1), size(B, 2))
         throw(
             DimensionMismatch(
@@ -207,6 +208,7 @@ function overloaded_mul!(
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
     end
 
+    T = unwrapped_eltype(C)
     tmp = Ops.dot_general(
         T.(materialize_traced_array(A)),
         T.(materialize_traced_array(B));
