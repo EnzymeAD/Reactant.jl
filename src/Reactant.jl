@@ -18,41 +18,20 @@ using Enzyme
 struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
 @static if isdefined(Core, :BFloat16)
-    const ReactantPrimitive = Union{
-        Bool,
-        Int8,
-        UInt8,
-        Int16,
-        UInt16,
-        Int32,
-        UInt32,
-        Int64,
-        UInt64,
-        Float16,
-        Core.BFloat16,
-        Float32,
-        Float64,
-        Complex{Float32},
-        Complex{Float64},
-    }
+    const ReactantFloat = Union{Float16,Core.BFloat16,Float32,Float64}
 else
-    const ReactantPrimitive = Union{
-        Bool,
-        Int8,
-        UInt8,
-        Int16,
-        UInt16,
-        Int32,
-        UInt32,
-        Int64,
-        UInt64,
-        Float16,
-        Float32,
-        Float64,
-        Complex{Float32},
-        Complex{Float64},
-    }
+    const ReactantFloat = Union{Float16,Float32,Float64}
 end
+
+const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64}
+
+const ReactantFloatInt = Union{
+    Base.uniontypes(ReactantInt)...,Base.uniontypes(ReactantFloat)...
+}
+
+const ReactantPrimitive = Union{
+    Bool,Base.uniontypes(ReactantFloatInt)...,Complex{Float32},Complex{Float64}
+}
 
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 

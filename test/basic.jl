@@ -618,6 +618,12 @@ end
     end
 end
 
+@testset "$op" for op in [:round, :ceil, :floor]
+    for x in (rand(Float32, (3, 3)), rand(Float64))
+        @eval @test @jit($op.(ConcreteRNumber.($x))) == $op.($x)
+    end
+end
+
 @testset "dynamic indexing" begin
     x = randn(5, 3)
     x_ra = Reactant.to_rarray(x)
