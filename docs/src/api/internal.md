@@ -8,5 +8,4 @@ These functions are not part of the public API and are subject to change at any 
 
 ```@docs
 Reactant.REDUB_ARGUMENTS_NAME
-Reactant.within_reactant_interpreter
 ```

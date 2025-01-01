@@ -175,8 +175,13 @@ include("TracedRArray.jl")
 
 include("ConcreteRArray.jl")
 
+mutable struct ConcreteRNG <: Random.AbstractRNG
+    seed::ConcreteRArray{UInt64,1}
+    const algorithm::String
+end
+
 mutable struct TracedRNG <: Random.AbstractRNG
-    seed::Union{ConcreteRArray{UInt64,1},TracedRArray{UInt64,1}}
+    seed::TracedRArray{UInt64,1}
     const algorithm::String
 end
 
