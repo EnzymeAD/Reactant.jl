@@ -531,7 +531,7 @@ end
 function is_tracking_call(input)
     Meta.isexpr(input, :call) || return false
     function_name = (ExpressionExplorer.explore_funcdef!(input, ExpressionExplorer.ScopeState()))[1].parts[end]
-    function_name in [:to_rarray, :ConcreteRNumber, :ConcreteRArray]
+    return function_name in [:to_rarray, :ConcreteRNumber, :ConcreteRArray]
 end
 
 #check if an expression need to be wrap in a closure

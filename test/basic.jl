@@ -106,7 +106,7 @@ end
     y = Reactant.ConcreteRNumber(3)
     f(x) = x .+ 1
     kw(x; a) = x * a
-    @test @jit(kw(x; a = y)) ≈ x * y
+    @test @jit(kw(x; a=y)) ≈ x * y
     @test @jit(x + x - x + x * float(Base.pi) * 0) ≈ x
     @test @jit(f(f(f(f(x)))) .+ Reactant.to_rarray(ones(3))) ≈ @allowscalar x .+ 5
 end
