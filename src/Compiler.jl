@@ -17,9 +17,7 @@ import ..Reactant:
     TracedToConcrete,
     append_path,
     ancestor,
-    TracedType,
-    Cached
-using ScopedValues
+    TracedType
 
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
@@ -315,7 +313,7 @@ function compile_mlir(f, args; kwargs...)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        evalinfo = compile_mlir!(mod, f, args, callcache; kwargs...)
+        evalinfo = compile_mlir!(mod, f, args; kwargs...)
         return mod, evalinfo...
     end
 end
@@ -323,8 +321,8 @@ end
 const cuLaunch = Ref{UInt}(0)
 const cuFunc = Ref{UInt}(0)
 const cuModule = Ref{UInt}(0)
-
-function compile_mlir!(mod, f, args, callcache=Dict{Cached, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any}}(); optimize::Union{Bool,Symbol}=true)
+        
+function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any}}(); optimize::Union{Bool,Symbol}=true)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = MLIR.IR.mmodule!(mod) do

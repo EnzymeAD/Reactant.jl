@@ -148,11 +148,13 @@ function ReactantCore.traced_call(f::Function, args...)
         v.paths = v.paths[1:end-1]
     end
 
-    cache_key = Cached((f, args...))
-    callcache = Reactant.Compiler.callcache()
-    if haskey(callcache, cache_key)
+    seen = Dict()
+    cache_key = []
+    make_tracer(seen, (f, args...), cache_key, TracedToTypes)
+    cache = Reactant.Compiler.callcache()
+    if haskey(cache, cache_key)
         # cache lookup:
-        (; f_name, mlir_result_types, traced_result) = callcache[cache_key]
+        (; f_name, mlir_result_types, traced_result) = cache[cache_key]
     else
         f_name = String(gensym(Symbol(f)))
         temp = Reactant.TracedUtils.make_mlir_fn(
@@ -166,7 +168,7 @@ function ReactantCore.traced_call(f::Function, args...)
         )
         traced_result, ret = temp[[3, 6]]
         mlir_result_types = [MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)]
-        callcache[cache_key] = (; f_name, mlir_result_types, traced_result)
+        cache[cache_key] = (; f_name, mlir_result_types, traced_result)
     end
 
     call_op = MLIR.Dialects.func.call(
@@ -226,47 +228,3 @@ function get_region_removing_missing_values(compiled_fn, insertions)
     end
     return region
 end
-
-struct Cached
-    obj
-    # `deepcopy` is needed for when a Cached object is used as a key in a Dict.
-    # If the original object is mutated, the key should stay the same:
-    Cached(obj) = new(deepcopy(obj))
-end
-Base.:(==)(a::Cached, b::Cached) = recursive_equal(a.obj, b.obj)
-Base.hash(a::Cached, h::UInt) = recursive_hash(a.obj, h)
-
-recursive_equal(a, b) = false
-function recursive_equal(a::T, b::T) where {T}
-    fn = fieldnames(T)
-    isempty(fn) && return a == b
-    for name in fn
-        !recursive_equal(getfield(a, name), getfield(b, name)) && return false
-    end
-    return true
-end
-function recursive_equal(a::T, b::T) where {T<:AbstractArray}
-    for (el_a, el_b) in zip(a, b)
-        !recursive_equal(el_a, el_b) && return false
-    end
-    return true
-end
-recursive_equal(a::T, b::T) where {T<:TracedRArray} = MLIR.IR.type(a.mlir_data) == MLIR.IR.type(b.mlir_data)
-
-
-function recursive_hash(a::T, h::UInt) where T
-    fn = fieldnames(T)
-    isempty(fn) && return hash(a, h)
-    h = hash(T, h) # include type in the hash
-    for name in fn
-        h = recursive_hash(getfield(a, name), h)
-    end
-    return h
-end
-function recursive_hash(a::AbstractArray, h::UInt)
-    for el in a
-        h = recursive_hash(el, h)
-    end
-    return h
-end
-recursive_hash(a::TracedRArray, h::UInt) = hash(MLIR.IR.type(a.mlir_data), h)
