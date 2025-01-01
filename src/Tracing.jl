@@ -227,6 +227,16 @@ function traced_type(
     end
 end
 
+function traced_type(::Type{<:ConcreteRNG}, seen, ::Val{mode}, track_numbers) where {mode}
+    if mode == ConcreteToTraced
+        return TracedRNG
+    elseif mode == TracedToConcrete
+        return ConcreteRNG
+    else
+        throw("Unsupported mode: $mode")
+    end
+end
+
 function traced_type(
     ::Type{T}, seen::ST, ::Val{mode}, track_numbers
 ) where {ST,T<:TracedType,mode}
@@ -243,6 +253,18 @@ function traced_type(
         return T
     else
         throw("Abstract RArray $T cannot be made concrete in mode $mode")
+    end
+end
+
+function traced_type(::Type{T}, seen, ::Val{mode}, track_numbers) where {T<:TracedRNG,mode}
+    if mode == ConcreteToTraced
+        throw("TracedRNG cannot be traced")
+    elseif mode == TracedToConcrete
+        return ConcreteRNG
+    elseif mode == TracedTrack || mode == TracedSetPath
+        return T
+    else
+        throw("Unsupported mode: $mode")
     end
 end
 

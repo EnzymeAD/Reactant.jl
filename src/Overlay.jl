@@ -3,15 +3,6 @@
 #       correctly. Once that (https://github.com/timholy/Revise.jl/issues/646) is resolved
 #       we should move all the reactant_overrides to relevant files.
 
-# Helper Function to determine if we are inside the ReactantInterpreter
-"""
-    within_reactant_interpreter()
-
-Returns `true` if we are currently inside the ReactantInterpreter.
-"""
-@noinline within_reactant_interpreter() = false
-@reactant_overlay @noinline within_reactant_interpreter() = true
-
 # Compiling within a compile should return simply the original function
 @reactant_overlay function Compiler.compile(
     f, args; client=nothing, optimize=true, sync=false
@@ -35,6 +26,12 @@ end
 # Random.jl overlays
 @reactant_overlay @noinline function Random.default_rng()
     return call_with_reactant(TracedRandom.default_rng)
+end
+
+@reactant_overlay @noinline function TracedRandom.default_rng()
+    return TracedRNG(
+        TracedUtils.promote_to(TracedRArray{UInt64,1}, TracedRandom.make_seed()), "DEFAULT"
+    )
 end
 
 ## Only problematic edge case here is the direct `<randfun!>(rng, A::AbstractArray)` call
