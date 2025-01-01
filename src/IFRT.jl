@@ -4,7 +4,9 @@ using CEnum
 using Reactant_jll
 const libxla = Reactant_jll.libReactantExtra
 
-const Span = @NamedTuple{len::Csize_t, ptr::Ptr{Cvoid}}
+import ..PjRt
+
+const Cspan = @NamedTuple{len::Csize_t, ptr::Ptr{Cvoid}}
 
 abstract type AbstractSerializable end
 
@@ -133,7 +135,7 @@ mutable struct DType
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_dtype_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_dtype_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -145,7 +147,7 @@ mutable struct Shape
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_shape_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_shape_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -157,7 +159,7 @@ mutable struct DynamicShape
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_dynamic_shape_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_dynamic_shape_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -169,7 +171,7 @@ mutable struct Index
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_index_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_index_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -181,7 +183,7 @@ mutable struct IndexDomain
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_indexdomain_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_indexdomain_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -193,37 +195,13 @@ mutable struct MemoryKind
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_memorykind_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_memorykind_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
 end
 
-# Value
-function client(x::AbstractValue)
-    return Client(@ccall libxla.ifrt_value_client(x::Ptr{Cvoid})::Ptr{Cvoid})
-end
-
-# TODO `get_ready_future`
-
-# TODO it returns a `Future` object
-# function Base.empty!(x::AbstractValue)
-#     @ccall libxla.ifrt_value_delete(x::Ptr{Cvoid})::Cvoid
-#     return x
-# end
-
-Base.isempty(x::AbstractValue) = @ccall libxla.ifrt_value_is_deleted(x::Ptr{Cvoid})::Bool
-
-function debug_string(x::AbstractValue)
-    return Base.unsafe_string(@ccall libxla.ifrt_value_debug_string(x::Ptr{Cvoid})::Cstring)
-end
-
-# Tuple
-Base.length(x::AbstractTuple) = @ccall libxla.ifrt_tuple_arity(x::Ptr{Cvoid})::Int
-
-# TODO `Unpack`?
-
-# DTypeKind
+# Enums
 @cenum DTypeKind::Int32 begin
     # Invalid data type.
     DTypeKindInvalid = 0
@@ -283,58 +261,212 @@ Base.length(x::AbstractTuple) = @ccall libxla.ifrt_tuple_arity(x::Ptr{Cvoid})::I
     DTypeKindString = 99
 end
 
-Base.convert(::Type{DTypeKind}, ::Type) = DTypeKindInvalid
-Base.convert(::Type{DTypeKind}, ::Type{Bool}) = DTypeKindPred
-Base.convert(::Type{DTypeKind}, ::Type{Int8}) = DTypeKindS8
-Base.convert(::Type{DTypeKind}, ::Type{Int16}) = DTypeKindS16
-Base.convert(::Type{DTypeKind}, ::Type{Int32}) = DTypeKindS32
-Base.convert(::Type{DTypeKind}, ::Type{Int64}) = DTypeKindS64
-Base.convert(::Type{DTypeKind}, ::Type{UInt8}) = DTypeKindU8
-Base.convert(::Type{DTypeKind}, ::Type{UInt16}) = DTypeKindU16
-Base.convert(::Type{DTypeKind}, ::Type{UInt32}) = DTypeKindU32
-Base.convert(::Type{DTypeKind}, ::Type{UInt64}) = DTypeKindU64
-Base.convert(::Type{DTypeKind}, ::Type{Float16}) = DTypeKindF16
-Base.convert(::Type{DTypeKind}, ::Type{Float32}) = DTypeKindF32
-Base.convert(::Type{DTypeKind}, ::Type{Float64}) = DTypeKindF64
-Base.convert(::Type{DTypeKind}, ::Type{Complex{Float32}}) = DTypeKindC64
-Base.convert(::Type{DTypeKind}, ::Type{Complex{Float64}}) = DTypeKindC128
-Base.convert(::Type{DTypeKind}, ::Type{String}) = DTypeKindString
-
-function Base.convert(::Type{Type}, x::DTypeKind)
-    if x == DTypeKindPred
-        Bool
-    elseif x == DTypeKindS8
-        Int8
-    elseif x == DTypeKindS16
-        Int16
-    elseif x == DTypeKindS32
-        Int32
-    elseif x == DTypeKindS64
-        Int64
-    elseif x == DTypeKindU8
-        UInt8
-    elseif x == DTypeKindU16
-        UInt16
-    elseif x == DTypeKindU32
-        UInt32
-    elseif x == DTypeKindU64
-        UInt64
-    elseif x == DTypeKindF16
-        Float16
-    elseif x == DTypeKindF32
-        Float32
-    elseif x == DTypeKindF64
-        Float64
-    elseif x == DTypeKindC64
-        Complex{Float32}
-    elseif x == DTypeKindC128
-        Complex{Float64}
-    elseif x == DTypeKindString
-        String
-    else
-        error("Unknown mapping of DType to Julia type")
-    end
+@cenum ArrayCopySemantics::Int32 begin
+    ArrayCopySemanticsAlwaysCopy = 0
+    ArrayCopySemanticsReuseInput = 1
+    ArrayCopySemanticsDonateInput = 2
 end
+
+# Value
+function client(x::AbstractValue)
+    return Client(@ccall libxla.ifrt_value_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+# TODO `get_ready_future`
+
+# TODO it returns a `Future` object
+# function Base.empty!(x::AbstractValue)
+#     @ccall libxla.ifrt_value_delete(x::Ptr{Cvoid})::Cvoid
+#     return x
+# end
+
+Base.isempty(x::AbstractValue) = @ccall libxla.ifrt_value_is_deleted(x::Ptr{Cvoid})::Bool
+
+function debug_string(x::AbstractValue)
+    return Base.unsafe_string(@ccall libxla.ifrt_value_debug_string(x::Ptr{Cvoid})::Cstring)
+end
+
+# Tuple
+Base.length(x::AbstractTuple) = @ccall libxla.ifrt_tuple_arity(x::Ptr{Cvoid})::Int
+
+# TODO `Unpack`?
+
+# Memory
+function id(x::Memory)
+    return @ccall libxla.ifrt_memory_id(x::Ptr{Cvoid})::Int32
+end
+
+function kind(x::Memory)
+    return MemoryKind(@ccall libxla.ifrt_memory_kind(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+# TODO check ownership of passing vector
+function devices(x::Memory)
+    (; len, ptr) = @ccall libxla.ifrt_memory_devices(x::Ptr{Cvoid})::Cspan
+    return Base.unsafe_wrap(Base.Vector, reinterpret(Ptr{Device}, ptr), len; own=false)
+end
+
+function Base.string(x::Memory)
+    return Base.unsafe_string(@ccall libxla.ifrt_memory_string(x::Ptr{Cvoid})::Cstring)
+end
+
+function debug_string(x::Memory)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_memory_debug_string(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+# Device
+function client(x::AbstractClient)
+    return Client(@ccall libxla.ifrt_device_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+function id(x::AbstractDevice)
+    return @ccall libxla.ifrt_device_id(x::Ptr{Cvoid})::Int32
+end
+
+function kind(x::AbstractDevice)
+    return Base.unsafe_string(@ccall libxla.ifrt_device_kind(x::Ptr{Cvoid})::Cstring)
+end
+
+function debug_string(x::AbstractDevice)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_device_debug_string(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function default_memory(x::AbstractDevice)
+    return Memory(@ccall libxla.ifrt_device_default_memory(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+function isaddressable(x::AbstractDevice)
+    return @ccall libxla.ifrt_device_is_addressable(x::Ptr{Cvoid})::Bool
+end
+
+function pid(x::AbstractDevice)
+    return @ccall libxla.ifrt_device_process_index(x::Ptr{Cvoid})::Int
+end
+
+# TODO Sharding
+
+# Array
+function dtype(x::AbstractArray)
+    return DType(@ccall libxla.ifrt_array_dtype(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+# convert DType of Array to Julia type
+Base.eltype(x::AbstractArray) = convert(Type, dtype(x))
+
+function shape(x::AbstractArray)
+    return Shape(@ccall libxla.ifrt_array_shape(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+# TODO `shape` to `size`
+
+function sharding(x::AbstractArray)
+    return Sharding(@ccall libxla.ifrt_array_sharding(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+# TODO layout, copy_to_host_buffer
+
+# Topology
+function platformname(x::AbstractTopology)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_topology_platform_name(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function platformversion(x::AbstractTopology)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_topology_platform_version(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function platformid(x::AbstractTopology)
+    return @ccall libxla.ifrt_topology_platform_id(x::Ptr{Cvoid})::UInt64
+end
+
+# TODO `descriptions` from `ifrt_topology_device_descriptions`
+# TODO `default_layout` from `xla::ifrt::Topology::GetDefaultLayout`
+
+function serialize(x::AbstractTopology)
+    return Base.unsafe_string(@ccall libxla.ifrt_topology_serialize(x::Ptr{Cvoid})::Cstring)
+end
+
+# Client
+# TODO a lot of methods...
+
+function runtime_type(x::AbstractClient)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_client_runtime_type(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function platformname(x::AbstractClient)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_client_platform_name(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function platformversion(x::AbstractClient)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_client_platform_version(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function platformid(x::AbstractClient)
+    return @ccall libxla.ifrt_client_platform_id(x::Ptr{Cvoid})::UInt64
+end
+
+function devices(x::AbstractClient; addressable::Bool=false)
+    (; len, ptr) = if addressable
+        @ccall libxla.ifrt_client_addressable_devices(x::Ptr{Cvoid})::Cspan
+    else
+        @ccall libxla.ifrt_client_devices(x::Ptr{Cvoid})::Cspan
+    end
+    return Base.unsafe_wrap(Base.Vector, reinterpret(Ptr{Device}, ptr), len; own=true)
+end
+
+function pid(x::AbstractClient)
+    return @ccall libxla.ifrt_client_process_index(x::Ptr{Cvoid})::Int
+end
+
+# NOTE potentially deprecated
+function lookup_device(x::AbstractClient, id::Int; addressable::Bool=false)
+    return Device(
+        if addressable
+            @ccall libxla.ifrt_client_lookup_addressable_device(
+                x::Ptr{Cvoid}, id::Int
+            )::Ptr{Cvoid}
+        else
+            @ccall libxla.ifrt_client_lookup_device(x::Ptr{Cvoid}, id::Int)::Ptr{Cvoid}
+        end,
+    )
+end
+
+# NOTE potentially deprecated
+function default_compiler(x::AbstractClient)
+    return Compiler(@ccall libxla.ifrt_client_default_compiler(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+# TODO ifrt_client_topology_for_devices, ifrt_client_default_layout_for_device
+
+# TODO HostCallback
+
+# LoadedHostCallback
+function client(x::AbstractLoadedHostCallback)
+    return Client(@ccall libxla.ifrt_loadedhostcallback_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+function serialize(x::AbstractLoadedHostCallback)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_loadedhostcallback_serialize(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+# TODO Executable
+# TODO LoadedExecutable
+# TODO Compiler
 
 # DType
 DType(x::DTypeKind) = DType(@ccall libxla.ifrt_dtype_ctor(x::Int32)::Ptr{Cvoid})
@@ -370,7 +502,7 @@ function Shape(x::Vector{Int64})
 end
 
 # function Base.ndims(x::Shape)
-#     (; len, ptr) = @ccall libxla.ifrt_shape_dims(x::Ptr{Cvoid})::Span
+#     (; len, ptr) = @ccall libxla.ifrt_shape_dims(x::Ptr{Cvoid})::Cspan
 #     @show len ptr
 #     return Base.unsafe_wrap(Base.Array, reinterpret(Ptr{Int64}, ptr), len; own=false)
 # end
@@ -535,45 +667,68 @@ function canonicalize(x::MemoryKind, dev::Device)
     )
 end
 
-# Memory
-function id(x::Memory)
-    return @ccall libxla.ifrt_memory_id(x::Ptr{Cvoid})::Int32
-end
+# DTypeKind
+Base.convert(::Type{DTypeKind}, ::Type) = DTypeKindInvalid
+Base.convert(::Type{DTypeKind}, ::Type{Bool}) = DTypeKindPred
+Base.convert(::Type{DTypeKind}, ::Type{Int8}) = DTypeKindS8
+Base.convert(::Type{DTypeKind}, ::Type{Int16}) = DTypeKindS16
+Base.convert(::Type{DTypeKind}, ::Type{Int32}) = DTypeKindS32
+Base.convert(::Type{DTypeKind}, ::Type{Int64}) = DTypeKindS64
+Base.convert(::Type{DTypeKind}, ::Type{UInt8}) = DTypeKindU8
+Base.convert(::Type{DTypeKind}, ::Type{UInt16}) = DTypeKindU16
+Base.convert(::Type{DTypeKind}, ::Type{UInt32}) = DTypeKindU32
+Base.convert(::Type{DTypeKind}, ::Type{UInt64}) = DTypeKindU64
+Base.convert(::Type{DTypeKind}, ::Type{Float16}) = DTypeKindF16
+Base.convert(::Type{DTypeKind}, ::Type{Float32}) = DTypeKindF32
+Base.convert(::Type{DTypeKind}, ::Type{Float64}) = DTypeKindF64
+Base.convert(::Type{DTypeKind}, ::Type{Complex{Float32}}) = DTypeKindC64
+Base.convert(::Type{DTypeKind}, ::Type{Complex{Float64}}) = DTypeKindC128
+Base.convert(::Type{DTypeKind}, ::Type{String}) = DTypeKindString
 
-function kind(x::Memory)
-    return MemoryKind(@ccall libxla.ifrt_memory_kind(x::Ptr{Cvoid})::Ptr{Cvoid})
-end
-
-function Base.string(x::Memory)
-    return Base.unsafe_string(@ccall libxla.ifrt_memory_string(x::Ptr{Cvoid})::Cstring)
-end
-
-function debug_string(x::Memory)
-    return Base.unsafe_string(
-        @ccall libxla.ifrt_memory_debug_string(x::Ptr{Cvoid})::Cstring
-    )
-end
-
-# LoadedHostCallback
-function client(x::AbstractLoadedHostCallback)
-    return Client(@ccall libxla.ifrt_loadedhostcallback_client(x::Ptr{Cvoid})::Ptr{Cvoid})
-end
-
-function serialize(x::AbstractLoadedHostCallback)
-    return Base.unsafe_string(
-        @ccall libxla.ifrt_loadedhostcallback_serialize(x::Ptr{Cvoid})::Cstring
-    )
+function Base.convert(::Type{Type}, x::DTypeKind)
+    if x == DTypeKindPred
+        Bool
+    elseif x == DTypeKindS8
+        Int8
+    elseif x == DTypeKindS16
+        Int16
+    elseif x == DTypeKindS32
+        Int32
+    elseif x == DTypeKindS64
+        Int64
+    elseif x == DTypeKindU8
+        UInt8
+    elseif x == DTypeKindU16
+        UInt16
+    elseif x == DTypeKindU32
+        UInt32
+    elseif x == DTypeKindU64
+        UInt64
+    elseif x == DTypeKindF16
+        Float16
+    elseif x == DTypeKindF32
+        Float32
+    elseif x == DTypeKindF64
+        Float64
+    elseif x == DTypeKindC64
+        Complex{Float32}
+    elseif x == DTypeKindC128
+        Complex{Float64}
+    elseif x == DTypeKindString
+        String
+    else
+        error("Unknown mapping of DType to Julia type")
+    end
 end
 
 # IFRT-PjRt backend
-
 mutable struct PjRtTuple <: AbstractTuple
     ptr::Ptr{Cvoid}
     function _(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_tuple_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_tuple_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -585,7 +740,7 @@ mutable struct PjRtMemory <: AbstractMemory
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_memory_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_memory_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -597,7 +752,7 @@ mutable struct PjRtDevice <: AbstractDevice
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_device_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_device_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -609,7 +764,7 @@ mutable struct PjRtArray <: AbstractArray
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_array_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_array_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -621,7 +776,7 @@ mutable struct PjRtTopology <: AbstractTopology
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_topology_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_topology_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -633,7 +788,7 @@ mutable struct PjRtClient <: AbstractClient
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_client_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_client_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -645,7 +800,9 @@ mutable struct PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallba
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free(
+                z::Ptr{Cvoid}
+            )::Cvoid
         end
         return y
     end
@@ -657,7 +814,7 @@ mutable struct PjRtExecutable <: AbstractExecutable
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_executable_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_executable_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -669,7 +826,7 @@ mutable struct PjRtLoadedExecutable <: AbstractLoadedExecutable
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_loadedexecutable_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_loadedexecutable_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
@@ -681,7 +838,7 @@ mutable struct PjRtCompiler <: AbstractCompiler
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_compiler_free(z::Ptr{Cvoid})
+            @ccall libxla.ifrt_pjrt_compiler_free(z::Ptr{Cvoid})::Cvoid
         end
         return y
     end
