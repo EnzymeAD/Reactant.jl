@@ -210,8 +210,6 @@ for (jlop, hloop) in (
     (:(Base.log), :log),
     (:(Base.log1p), :log_plus_one),
     (:(Base.sqrt), :sqrt),
-    (:(Base.ceil), :ceil),
-    (:(Base.floor), :floor),
 )
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
 end
@@ -236,6 +234,12 @@ end
 function Base.float(x::TracedRNumber{T}) where {T}
     return TracedUtils.promote_to(TracedRNumber{float(T)}, x)
 end
+
+using Reactant: ReactantFloat
+
+Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
+Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
+Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
