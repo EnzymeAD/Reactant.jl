@@ -6,6 +6,7 @@ using ..Reactant:
     AnyTracedRArray,
     AnyTracedRMatrix,
     AnyTracedRVector,
+    unwrapped_eltype,
     Ops,
     MLIR
 
@@ -190,12 +191,12 @@ function overloaded_mul!(
 end
 
 function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,2}),
+    @nospecialize(C::TracedRArray{T,2} where {T}),
     @nospecialize(A::AnyTracedRMatrix),
     @nospecialize(B::AnyTracedRMatrix),
     α::Number=true,
     β::Number=false,
-) where {T}
+)
     if size(C) != (size(A, 1), size(B, 2))
         throw(
             DimensionMismatch(
@@ -207,6 +208,7 @@ function overloaded_mul!(
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
     end
 
+    T = unwrapped_eltype(C)
     tmp = Ops.dot_general(
         T.(materialize_traced_array(A)),
         T.(materialize_traced_array(B));
@@ -315,6 +317,34 @@ function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
         indices[i, 2] = idx2 + i - 2
     end
     return indices
+end
+
+function LinearAlgebra.ldiv!(
+    B::Union{
+        AbstractArray{<:TracedRNumber{T},1},
+        AbstractArray{<:TracedRNumber{T},2},
+        AnyTracedRArray{T,1},
+        AnyTracedRArray{T,2},
+    },
+    D::Diagonal,
+    A::AbstractVecOrMat,
+) where {T}
+    LinearAlgebra.require_one_based_indexing(A, B)
+    dd = D.diag
+    d = length(dd)
+    m, n = size(A, 1), size(A, 2)
+    m′, n′ = size(B, 1), size(B, 2)
+    m == d || throw(DimensionMismatch("right hand side has $m rows but D is $d by $d"))
+    (m, n) == (m′, n′) ||
+        throw(DimensionMismatch("expect output to be $m by $n, but got $m′ by $n′"))
+    B .= dd .\ A
+    # OG implementation below, we don't currently support the conditional throw exception
+    #j = findfirst(iszero, D.diag)
+    #isnothing(j) || throw(SingularException(j))
+    #@inbounds for j = 1:n, i = 1:m
+    #    B[i, j] = dd[i] \ A[i, j]
+    #end
+    return B
 end
 
 end

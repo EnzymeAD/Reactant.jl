@@ -13,6 +13,8 @@ using ..Reactant:
     Ops,
     MLIR,
     ancestor,
+    allowscalar,
+    aos_to_soa,
     unwrapped_eltype
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
 
@@ -29,6 +31,9 @@ function Base.convert(::Type{TracedRArray{T,N}}, x::AbstractArray) where {T,N}
     end
     x isa WrappedTracedRArray &&
         return convert(TracedRArray{T,N}, materialize_traced_array(x))
+    if eltype(x) <: TracedRNumber
+        return convert(TracedRArray{T,N}, aos_to_soa(x))
+    end
     return convert(TracedRArray{T,N}, Ops.constant(collect(x)))
 end
 
@@ -457,6 +462,21 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
 
     res = TracedUtils.elem_apply(bc.f, args...)
     TracedUtils.set_mlir_data!(dest, res.mlir_data)
+    return dest
+end
+
+function _copyto!(dest::AbstractArray{<:TracedRNumber}, bc::Broadcasted)
+    axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
+    isempty(dest) && return dest
+
+    bc = Broadcast.preprocess(dest, bc)
+
+    args = (TracedUtils.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
+
+    res = TracedUtils.elem_apply(bc.f, args...)
+    for I in 1:length(dest)
+        dest[I] = Reactant.@allowscalar res[I]
+    end
     return dest
 end
 
