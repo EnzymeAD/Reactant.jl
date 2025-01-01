@@ -125,12 +125,12 @@ for (cT, aT, bT) in (
             C::$cT, A::$aT, B::$bT, α::Number, β::Number
         )
             A, B = aos_to_soa(A), aos_to_soa(B)
-	    C2 = aos_to_soa(C)
+            C2 = aos_to_soa(C)
             if use_overlayed_version((C2, A, B))
                 TracedLinearAlgebra.overloaded_mul!(C2, A, B, α, β)
                 if C2 !== C
-		   C .= C2
-		end
+                    C .= C2
+                end
             else
                 LinearAlgebra.mul!(C, A, B, α, β)
             end

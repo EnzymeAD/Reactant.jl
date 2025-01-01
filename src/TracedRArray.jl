@@ -474,10 +474,9 @@ function _copyto!(dest::AbstractArray{<:TracedRNumber}, bc::Broadcasted)
     args = (TracedUtils.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
     res = TracedUtils.elem_apply(bc.f, args...)
-    
     for I in 1:length(dest)
-      dest[I] = Reactant.@allowscalar res[I]
-    end   
+        dest[I] = Reactant.@allowscalar res[I]
+    end
     return dest
 end
 
