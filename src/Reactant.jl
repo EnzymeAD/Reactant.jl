@@ -238,6 +238,7 @@ include("Tracing.jl")
 include("Compiler.jl")
 include("Profiler.jl")
 
+include("PjRt.jl")
 include("IFRT.jl")
 
 include("Overlay.jl")
