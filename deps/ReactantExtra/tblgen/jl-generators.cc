@@ -153,7 +153,7 @@ extern bool disableModuleWrap;
 
 std::string emitEnum(EnumAttr e) {
   auto default_v = e.getDefaultValue().str();
-  auto name = e.getEnumClassName().str();
+  auto name = sanitizeName(e.getEnumClassName().str());
   // e.getBaseAttrClass()->getName()
 
   auto is_specialized = e.genSpecializedAttr();
@@ -415,7 +415,7 @@ end
       if (entry != attrMap.end()) {
         auto e = entry->getValue();
         auto is_specialized = e.genSpecializedAttr();
-        var_type = e.getEnumClassName().str() + ".T";
+        var_type = sanitizeName(e.getEnumClassName().str()) + ".T";
         if (is_specialized) {
           pushed_expression = llvm::formatv(R"(Int({0}))", var_name);
         } else {
