@@ -144,11 +144,7 @@ function __init__()
         end
     end
 
-    @ccall MLIR.API.mlir_c.RegisterCustomCallTarget(
-        "enzymexla_gpu"::Cstring,
-        cglobal((:EnzymeGPUCustomCall, MLIR.API.mlir_c))::Ptr{Cvoid},
-        "CUDA"::Cstring,
-    )::Cvoid
+    @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
     # This wasn't properly exported on macos, we'll remove the try once macOS JLL
     # has the fix.

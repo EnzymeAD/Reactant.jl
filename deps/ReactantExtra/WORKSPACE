@@ -1,121 +1,29 @@
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+workspace(name = "Reactant")
 
-NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
-NSYNC_SHA256 = ""
-http_archive(
-    name = "nsync",
-    sha256 = NSYNC_SHA256,
-    strip_prefix = "nsync-" + NSYNC_COMMIT,
-    urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
-)
+load("//third_party/nsync:workspace.bzl", nsync_workspace = "repo")
+nsync_workspace()
 
-ENZYMEXLA_COMMIT = "b6d6563aa3a3050474a4250bf18322f7ebf0b486"
-ENZYMEXLA_SHA256 = ""
+load("//third_party/rules_python:workspace.bzl", rules_python_workspace = "repo")
+rules_python_workspace()
 
-http_archive(
-    name = "enzyme_ad",
-    sha256 = ENZYMEXLA_SHA256,
-    strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
-    urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
-)
+load("//third_party/enzyme_ad:workspace.bzl", enzyme_ad_workspace = "repo")
+enzyme_ad_workspace()
 
+load("//third_party/rules_cc:workspace.bzl", rules_cc_workspace = "repo")
+rules_cc_workspace()
 
-http_archive(
-    name = "rules_python",
-    sha256 = "778aaeab3e6cfd56d681c89f5c10d7ad6bf8d2f1a72de9de55b23081b2d31618",
-    strip_prefix = "rules_python-0.34.0",
-    url = "https://github.com/bazelbuild/rules_python/releases/download/0.34.0/rules_python-0.34.0.tar.gz",
-)
+load("@rules_cc//cc:repositories.bzl", "rules_cc_dependencies")
+rules_cc_dependencies()
 
-# Hedron's Compile Commands Extractor for Bazel
-# https://github.com/hedronvision/bazel-compile-commands-extractor
-http_archive(
-    name = "hedron_compile_commands",
+load("//third_party/jax:workspace.bzl", jax_workspace = "repo")
+jax_workspace()
 
-    # Replace the commit hash (0e990032f3c5a866e72615cf67e5ce22186dcb97) in both places (below) with the latest (https://github.com/hedronvision/bazel-compile-commands-extractor/commits/main), rather than using the stale one here.
-    # Even better, set up Renovate and let it do the work for you (see "Suggestion: Updates" in the README).
-    url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/4f28899228fb3ad0126897876f147ca15026151e.tar.gz",
-    strip_prefix = "bazel-compile-commands-extractor-4f28899228fb3ad0126897876f147ca15026151e",
-    # When you first run this tool, it'll recommend a sha256 hash to put here with a message like: "DEBUG: Rule 'hedron_compile_commands' indicated that a canonical reproducible form can be obtained by modifying arguments sha256 = ..."
-)
-load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
-hedron_compile_commands_setup()
-load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
-hedron_compile_commands_setup_transitive()
-load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
-hedron_compile_commands_setup_transitive_transitive()
-load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
-hedron_compile_commands_setup_transitive_transitive_transitive()
-
-load("@enzyme_ad//:workspace.bzl", "JAX_COMMIT", "JAX_SHA256", "ENZYME_COMMIT", "ENZYME_SHA256", "XLA_PATCHES")
-
-XLA_PATCHES = XLA_PATCHES + [
-"""
-sed -i.bak0 "s/__cpp_lib_hardware_interference_size/HW_INTERFERENCE_SIZE/g" xla/backends/cpu/runtime/thunk_executor.h
-""",
-"""
-sed -i.bak0 "s/__cpp_lib_hardware_interference_size/HW_INTERFERENCE_SIZE/g" xla/stream_executor/host/host_kernel.cc
-""",
-"""
-sed -i.bak0 "s/__cpp_lib_hardware_interference_size/HW_INTERFERENCE_SIZE/g" xla/tsl/concurrency/async_value_ref.h
-""",
-"""
-sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_LINK_H=1\\/HAVE_LINK_H=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
-""",
-"""
-sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/LLVM_ENABLE_THREADS=1\\/LLVM_ENABLE_THREADS=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
-""",
-"""
-sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_MALLINFO=1\\/DONT_HAVE_ANY_MALLINFO=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
-""",
-"""
-sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_PTHREAD_GETNAME_NP=1\\/FAKE_HAVE_PTHREAD_GETNAME_NP=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
-""",
-"""
-sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_PTHREAD_SETNAME_NP=1\\/FAKE_HAVE_PTHREAD_SETNAME_NP=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
-""",
-"""
-sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.h -exec sed -i.bak0 's\\/ENABLE_CRASH_OVERRIDES 1\\/ENABLE_CRASH_OVERRIDES 0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
-""",
-"""
-sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.h -exec sed -i.bak0 's\\/HAVE_PTHREAD_GETNAME_NP\\/FAKE_HAVE_PTHREAD_GETNAME_NP\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
-""",
-"""
-sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.h -exec sed -i.bak0 's\\/HAVE_PTHREAD_SETNAME_NP\\/FAKE_HAVE_PTHREAD_SETNAME_NP\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
-""",
-# """
-# sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\['find . -type f -name BUILD.bazel -exec sed -i.bak0 \\\\\\'s\\/\\\"CAPIIR\\\",\\/\\\"CAPIIR\\\",alwayslink=1,\\/g\\\\\\\\' {} +',/g" third_party/llvm/workspace.bzl
-# """,
-]
-
-LLVM_TARGETS = select({
-    "@bazel_tools//src/conditions:windows": ["AMDGPU", "NVPTX"],
-    "@bazel_tools//src/conditions:darwin": [],
-    "//conditions:default": ["AMDGPU", "NVPTX"],
-}) + ["AArch64", "X86", "ARM"]
-
-http_archive(
-    name = "jax",
-    sha256 = JAX_SHA256,
-    strip_prefix = "jax-" + JAX_COMMIT,
-    urls = ["https://github.com/google/jax/archive/{commit}.tar.gz".format(commit = JAX_COMMIT)],
-    patch_args = ["-p1"],
-    patches = ["@enzyme_ad//:patches/jax.patch"],
-)
-
-load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
-
-http_archive(
-    name = "xla",
-    sha256 = XLA_SHA256,
-    strip_prefix = "xla-" + XLA_COMMIT,
-    urls = ["https://github.com/wsmoses/xla/archive/{commit}.tar.gz".format(commit = XLA_COMMIT)],
-    patch_cmds = XLA_PATCHES
-)
+load("//third_party/xla:workspace.bzl", xla_workspace = "repo")
+xla_workspace()
 
 load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
 python_init_rules()
- 
+
 load("@xla//third_party/py:python_init_repositories.bzl", "python_init_repositories")
 python_init_repositories(
     requirements = {
@@ -126,7 +34,7 @@ python_init_repositories(
         "3.13": "//build:requirements_lock_3_13.txt",
     },
 )
- 
+
 load("@xla//third_party/py:python_init_toolchains.bzl", "python_init_toolchains")
 python_init_toolchains()
 # 
@@ -144,41 +52,23 @@ python_init_toolchains()
 # 
 # pip_install_dependencies()
 
-http_archive(
-    name = "enzyme",
-    sha256 = ENZYME_SHA256,
-    strip_prefix = "Enzyme-" + ENZYME_COMMIT + "/enzyme",
-    urls = ["https://github.com/EnzymeAD/Enzyme/archive/{commit}.tar.gz".format(commit = ENZYME_COMMIT)],
-)
+load("//third_party/enzyme:workspace.bzl", enzyme_workspace = "repo")
+enzyme_workspace()
 
-http_archive(
-    name = "build_bazel_rules_apple",
-    sha256 = "34c41bfb59cdaea29ac2df5a2fa79e5add609c71bb303b2ebb10985f93fa20e7",
-    url = "https://github.com/bazelbuild/rules_apple/releases/download/3.1.1/rules_apple.3.1.1.tar.gz",
-)
+load("//third_party/build_bazel_rules_apple:workspace.bzl", build_bazel_rules_apple_workspace = "repo")
+build_bazel_rules_apple_workspace()
 
 load(
     "@build_bazel_rules_apple//apple:repositories.bzl",
     "apple_rules_dependencies",
 )
-
 apple_rules_dependencies()
 
-
-http_archive(
-    name = "upb",
-    sha256 = "61d0417abd60e65ed589c9deee7c124fe76a4106831f6ad39464e1525cef1454",
-    strip_prefix = "upb-9effcbcb27f0a665f9f345030188c0b291e32482",
-    patch_cmds = [
-        "sed -i.bak0 's/@bazel_tools\\/\\/platforms:windows/@platforms\\/\\/os:windows/g' BUILD",
-        "sed -i.bak0 's/-Werror//g' BUILD"
-    ],
-    url = "https://github.com/protocolbuffers/upb/archive/9effcbcb27f0a665f9f345030188c0b291e32482.tar.gz"
-)
+load("//third_party/upb:workspace.bzl", upb_workspace = "repo")
+upb_workspace()
 
 load("@jax//third_party/xla:workspace.bzl", jax_xla_workspace = "repo")
 jax_xla_workspace()
-
 
 load("@xla//:workspace4.bzl", "xla_workspace4")
 xla_workspace4()
@@ -187,6 +77,12 @@ load("@xla//:workspace3.bzl", "xla_workspace3")
 xla_workspace3()
 
 load("@xla//:workspace2.bzl", "xla_workspace2")
+
+LLVM_TARGETS = select({
+    "@bazel_tools//src/conditions:windows": ["AMDGPU", "NVPTX"],
+    "@bazel_tools//src/conditions:darwin": [],
+    "//conditions:default": ["AMDGPU", "NVPTX"],
+}) + ["AArch64", "X86", "ARM"]
 
 load("@llvm-raw//utils/bazel:configure.bzl", "llvm_configure")
 llvm_configure(name = "llvm-project", targets = LLVM_TARGETS)
@@ -205,7 +101,6 @@ load(
     "@tsl//third_party/gpus/cuda/hermetic:cuda_json_init_repository.bzl",
     "cuda_json_init_repository",
 )
-
 cuda_json_init_repository()
 
 load(
@@ -218,11 +113,9 @@ load(
     "cuda_redist_init_repositories",
     "cudnn_redist_init_repository",
 )
-
 cuda_redist_init_repositories(
     cuda_redistributions = CUDA_REDISTRIBUTIONS,
 )
-
 cudnn_redist_init_repository(
     cudnn_redistributions = CUDNN_REDISTRIBUTIONS,
 )
@@ -231,19 +124,31 @@ load(
     "@tsl//third_party/gpus/cuda/hermetic:cuda_configure.bzl",
     "cuda_configure",
 )
-
 cuda_configure(name = "local_config_cuda")
 
 load(
     "@tsl//third_party/nccl/hermetic:nccl_redist_init_repository.bzl",
     "nccl_redist_init_repository",
 )
-
 nccl_redist_init_repository()
 
 load(
     "@tsl//third_party/nccl/hermetic:nccl_configure.bzl",
     "nccl_configure",
 )
-
 nccl_configure(name = "local_config_nccl")
+
+load("@enzyme_ad//third_party/hedron_compile_commands:workspace.bzl", hedron_compile_commands_workspace = "repo")
+hedron_compile_commands_workspace()
+
+load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
+hedron_compile_commands_setup()
+
+load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
+hedron_compile_commands_setup_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
+hedron_compile_commands_setup_transitive_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
+hedron_compile_commands_setup_transitive_transitive_transitive()

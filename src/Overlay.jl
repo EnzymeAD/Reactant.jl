@@ -115,3 +115,40 @@ for randfun in (:rand, :randn, :randexp)
         # end
     end
 end
+
+# LinearAlgebra.jl overloads
+## `_mul!` goes through too many layers of abstractions and we aren't able to overload
+## without specializing on every possible combination of types
+for (cT, aT, bT) in (
+    (:AbstractVector, :AbstractMatrix, :AbstractVector),
+    (:AbstractMatrix, :AbstractMatrix, :AbstractVecOrMat),
+)
+    @eval begin
+        @reactant_overlay @noinline function LinearAlgebra.mul!(
+            C::$cT, A::$aT, B::$bT, α::Number, β::Number
+        )
+            A, B = aos_to_soa(A), aos_to_soa(B)
+            if use_overlayed_version((C, A, B))
+                TracedLinearAlgebra.overloaded_mul!(C, A, B, α, β)
+            else
+                LinearAlgebra.mul!(C, A, B, α, β)
+            end
+            return C
+        end
+
+        # Needed mostly for 1.10 where 3-arg mul is often specialized
+        @reactant_overlay @noinline function LinearAlgebra.mul!(C::$cT, A::$aT, B::$bT)
+            call_with_reactant(LinearAlgebra.mul!, C, A, B, true, false)
+            return C
+        end
+    end
+end
+
+# Base overloads
+@reactant_overlay @noinline function Base._stack(dims::Union{Integer,Colon}, iter)
+    if use_overlayed_version(iter)
+        return TracedRArrayOverrides.overloaded_stack(dims, iter)
+    else
+        return Base._stack(dims, Base.IteratorSize(iter), iter)
+    end
+end

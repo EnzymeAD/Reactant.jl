@@ -168,6 +168,15 @@ Creates an f16 type in the given context. The type is owned by the context.
 """
 Type(::Core.Type{Float16}; context::Context=context()) = Type(API.mlirF16TypeGet(context))
 
+if isdefined(Core, :BFloat16)
+    """
+        Type(::Core.Type{Core.BFloat16}; context=context())
+
+    Creates an bf16 type in the given context. The type is owned by the context.
+    """
+    Type(::Core.Type{Core.BFloat16}; context::Context=context()) = BFloat16Type(; context)
+end
+
 """
     Type(Core.Type{Float32}; context=context())
 
@@ -721,6 +730,8 @@ function julia_type(type::Type)
                 throw("could not convert unsigned $width-bit integer type to julia")
             end
         end
+    elseif isbf16(type)
+        Core.BFloat16
     elseif isf16(type)
         Float16
     elseif isf32(type)

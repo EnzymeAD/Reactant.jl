@@ -1,16 +1,17 @@
 module TracedRNumberOverrides
 
-import ..TracedRNumber
-import ..TracedRArray
-import ..ReactantPrimitive
-using ..TracedUtils
-import ..Ops
-import ..MLIR
+using ..Reactant:
+    Reactant,
+    TracedRNumber,
+    TracedRArray,
+    ReactantPrimitive,
+    TracedUtils,
+    Ops,
+    MLIR,
+    unwrapped_eltype
 using ReactantCore
 
 ReactantCore.is_traced(::TracedRNumber) = true
-
-Base.eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 Base.getindex(a::TracedRNumber{T}) where {T} = a
 
@@ -20,10 +21,6 @@ Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data,
 
 function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
-end
-
-function Base.convert(::Type{<:TracedRNumber{T}}, x::Number) where {T}
-    return TracedUtils.promote_to(TracedRNumber{T}, T(x))
 end
 
 function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
@@ -49,14 +46,14 @@ function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
 
-function Base.convert(::Type{TracedRNumber{T}}, x::Number) where {T}
-    return TracedUtils.promote_to(TracedRNumber{T}, x)
-end
-
+# NOTE: This is inconsistent with the behavior of `convert` but we do it since it is a very
+#       common usecase
 TracedRNumber{T}(x::TracedRNumber{T}) where {T} = x
-
+function TracedRNumber{T}(x::TracedRNumber) where {T}
+    return TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(T)}, x)
+end
 function TracedRNumber{T}(x::Number) where {T}
-    return TracedUtils.promote_to(TracedRNumber{T}, x)
+    return TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(T)}, x)
 end
 
 function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
@@ -66,7 +63,8 @@ function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
     end
     if rhs isa TracedRArray{<:Any,0}
         return TracedUtils.promote_to(
-            TracedRNumber{T}, TracedRNumber{eltype(rhs)}((), rhs.mlir_data)
+            TracedRNumber{T},
+            TracedRNumber{Reactant.unwrapped_eltype(rhs)}((), rhs.mlir_data),
         )
     end
     rhs isa Number &&
@@ -86,12 +84,18 @@ for (jlop, hloop) in (
     (:(Base.:*), :multiply),
     (:(Base.:/), :divide),
     (:(Base.:^), :power),
+    (:(Base.mod), :remainder),
+    (:(Base.rem), :remainder),
 )
     @eval function $(jlop)(
         @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
     ) where {T}
         return Ops.$(hloop)(lhs, rhs)
     end
+end
+
+function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T<:Integer}
+    return Ops.divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
 
 function Base.div(

@@ -3,17 +3,20 @@ module TracedRArrayOverrides
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
-import ..TracedRArray
-import ..TracedRNumber
-import ..ReactantPrimitive
-import ..WrappedTracedRArray
-import ..AnyTracedRArray
-using ..TracedUtils
-import ..Ops
-import ..MLIR
-import ..ancestor
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    ReactantPrimitive,
+    WrappedTracedRArray,
+    AnyTracedRArray,
+    Ops,
+    MLIR,
+    ancestor,
+    unwrapped_eltype
+using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
+
 using ReactantCore: ReactantCore
-import ..TracedUtils: materialize_traced_array
 using GPUArraysCore: GPUArraysCore
 
 ReactantCore.is_traced(::TracedRArray) = true
@@ -53,11 +56,60 @@ function Base.getindex(
     return TracedRNumber{T}((), res2)
 end
 
-function Base.getindex(a::TracedRArray{T,0}) where {T}
-    return TracedRNumber{T}((), a.mlir_data)
+Base.getindex(a::TracedRArray{T,0}) where {T} = TracedRNumber{T}((), a.mlir_data)
+
+function generate_index_list(i1, is...)
+    list = reshape(i1, :, 1) .- 1
+    for i in is
+        i = reshape(i, :, 1)
+        lorig = size(list, 1)
+        list = repeat(list, size(i, 1), 1)
+        i = repeat(i; inner=(lorig, 1)) .- 1
+        list = hcat(list, i)
+    end
+    return list
 end
 
-# XXX: We want to support https://github.com/EnzymeAD/Reactant.jl/issues/242 eventually
+function scalar_index_to_cartesian(idx::AbstractVector{T}, sz::NTuple{N,Int}) where {T,N}
+    idx = idx .- 1
+    idxs = materialize_traced_array(reshape(idx .% T(sz[1]), :, 1))
+    idx = idx .÷ T(sz[1])
+    for i in 2:N
+        idxs = hcat(idxs, idx .% T(sz[i]))
+        idx = idx .÷ T(sz[i])
+    end
+    return idxs
+end
+
+function Base.getindex(
+    a::TracedRArray{T,N}, indices::Union{Int,TracedRNumber{Int}}
+) where {T,N}
+    if indices isa Int
+        indices = TracedUtils.promote_to(TracedRNumber{Int}, indices)
+    end
+    indices = TracedUtils.broadcast_to_size(indices, (1,))
+    return Ops.gather_getindex(a, scalar_index_to_cartesian(indices, size(a)))[1]
+end
+
+function Base.getindex(a::TracedRArray{T,N}, indices) where {T,N}
+    if !(indices isa TracedRArray)
+        indices = TracedUtils.promote_to(TracedRArray{Int,1}, collect(indices))
+    end
+    return Ops.gather_getindex(a, scalar_index_to_cartesian(indices, size(a)))
+end
+
+Base.getindex(a::TracedRArray{T,N}, ::Colon) where {T,N} = materialize_traced_array(vec(a))
+
+function Base.getindex(a::TracedRArray{T,N}, indices::CartesianIndex{N}) where {T,N}
+    indices =
+        materialize_traced_array(
+            reshape(
+                TracedUtils.promote_to(TracedRArray{Int,1}, vcat(Tuple(indices)...)), 1, N
+            ),
+        ) .- 1
+    return Ops.gather_getindex(a, indices)[1]
+end
+
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
         i isa Colon && return 1:size(a, idx)
@@ -65,13 +117,25 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         return i
     end
 
-    foreach(indices) do idxs
-        idxs isa Number && return nothing
-        contiguous = all(isone, diff(idxs))
-        # XXX: We want to throw error even for dynamic indexing
-        if typeof(a) <: Bool
-            contiguous || error("non-contiguous indexing is not supported")
+    use_gather_getindex = false
+    for idxs in indices
+        idxs isa Number && continue
+        if idxs isa Reactant.TracedType
+            use_gather_getindex = true
+            break
         end
+        contiguous = all(isone, diff(idxs))
+        if typeof(contiguous) <: Bool && !contiguous
+            use_gather_getindex = true
+            break
+        end
+    end
+
+    if use_gather_getindex
+        indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
+        indices_list = generate_index_list(indices_list...)
+        res = Ops.gather_getindex(a, indices_list)
+        return Ops.reshape(res, length.(indices)...)
     end
 
     start_indices = map(indices) do i
@@ -84,7 +148,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 
     x = TracedRArray{T,N}((), res, Tuple(length.(indices)))
     ddims = findall(Base.Fix2(isa, Integer), indices)
-    isempty(ddims) || return dropdims(x; dims=Tuple(ddims))
+    isempty(ddims) || return materialize_traced_array(dropdims(x; dims=Tuple(ddims)))
     return x
 end
 
@@ -97,16 +161,38 @@ function Base.getindex(a::WrappedTracedRArray, indices...)
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
 end
 
-function Base.setindex!(
-    a::TracedRArray{T,N},
-    v,
-    indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int,TracedRNumber{Int}},N},
-) where {T,N}
+function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
-        i isa Int ? (i:i) : (i isa Colon ? (1:size(a, idx)) : i)
+        i isa Colon && return 1:size(a, idx)
+        i isa CartesianIndex && return Tuple(i)
+        return i
     end
+
+    use_scatter_setindex = false
+    for idxs in indices
+        idxs isa Number && continue
+        if idxs isa Reactant.TracedType
+            use_scatter_setindex = true
+            break
+        end
+        contiguous = all(isone, diff(idxs))
+        if typeof(contiguous) <: Bool && !contiguous
+            use_scatter_setindex = true
+            break
+        end
+    end
+
+    if use_scatter_setindex
+        indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
+        indices_list = generate_index_list(indices_list...)
+        res = Ops.scatter_setindex(a, indices_list, Ops.reshape(v, length(v)))
+        a.mlir_data = res.mlir_data
+        return v
+    end
+
     v = TracedUtils.broadcast_to_size(v, length.(indices))
     v = TracedUtils.promote_to(TracedRArray{T,N}, v)
+
     indices = [
         (
             TracedUtils.promote_to(TracedRNumber{Int}, i isa Colon ? 1 : first(i)) - 1
@@ -122,11 +208,7 @@ function Base.setindex!(
     return v
 end
 
-function Base.setindex!(
-    a::AnyTracedRArray{T,N},
-    v,
-    indices::Vararg{Union{Base.AbstractUnitRange,Colon,Int,TracedRNumber{Int}},N},
-) where {T,N}
+function Base.setindex!(a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
     ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
     setindex!(ancestor(a), v, ancestor_indices...)
     return a
@@ -136,11 +218,13 @@ Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(Base.getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
 
+Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
+
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 # TODO is there a way to create an unitialized `tensor`? does it show an advantage? maybe `fill`?
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return Ops.constant(zeros(T, dims))
+    return Ops.constant(zeros(unwrapped_eltype(T), dims))
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
@@ -207,8 +291,6 @@ function Base.mapreduce(
         else
             init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
         end
-    else
-        init = init::T
     end
 
     init = [TracedUtils.broadcast_to_size(init, ()).mlir_data]
@@ -325,10 +407,10 @@ function Base.similar(
 end
 
 function Base.similar(
-    bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:ReactantPrimitive,N}
     @assert N isa Int
-    return TracedRArray{T,N}((), nothing, map(length, dims))
+    return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
 end
 
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
@@ -342,27 +424,12 @@ Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
-    ElType = Broadcast.combine_eltypes(bc.f, bc.args)
-    if ElType == Any
-        a1 = bc.args[1]
-        @show a1
-        b1 = a1.args[1]
-        @show b1
-        @show typeof(b1)
-        @show eltype(b1)
-        @show Broadcast._broadcast_getindex_eltype(a1.args[1])
-        @show Broadcast.eltypes(a1.args)
-        @show Broadcast._broadcast_getindex_eltype(a1)
-        @show typeof(bc.args)
-        argT = Broadcast.eltypes(bc.args)
-        @show argT
-        RT = Base._return_type(bc.f, argT)
-        @show RT
-        T = Base.promote_typejoin_union(RT)
-        @show T
-        @show bc.f, bc.args
+    ElType = if bc.f isa Type && bc.f <: ReactantPrimitive
+        Broadcast.combine_eltypes(TracedUtils.TypeCast{bc.f}(), bc.args)
+    else
+        Broadcast.combine_eltypes(bc.f, bc.args)
     end
-    @assert ElType != Any
+    @assert ElType != Any && ElType != Union{}
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
 end
@@ -459,7 +526,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
 
     catdims = Base.dims2cat(dims)
     shape = Base.cat_size_shape(catdims, X...)
-    RT = Base.promote_eltype(T, X...)
+    RT = unwrapped_eltype(Base.promote_eltype(T, X...))
 
     # convert to the target eltype
     X = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{RT,length(shape)}), X)
@@ -491,15 +558,16 @@ Base.all(f::Function, x::AnyTracedRArray) = mapreduce(f, &, x)
 Base.any(f::Function, x::AnyTracedRArray) = mapreduce(f, |, x)
 
 # outer repeat
-# Overridden because we don't need to further recur into the definitions here
-function Base.repeat(x::AnyTracedRArray{T,N}, counts::Vararg{Int,M}) where {T,N,M}
+function Base._RepeatInnerOuter.repeat_outer(
+    x::AnyTracedRArray{T,N}, counts::NTuple{M,Int}
+) where {T,N,M}
     P = max(N, M) # potentially padded
 
     # (d1, d2, ..., dP) -> (d1, 1, d2, 1, ..., dP, 1)
     interleaved_size = ones(Int, 2P)
     interleaved_size[1:2:(2N)] .= size(x)
 
-    x_interleaved = reshape(x, interleaved_size...)
+    x_interleaved = reshape(materialize_traced_array(x), interleaved_size...)
 
     # (d1, 1, d2, 1, ..., dP, 1) -> (d1, r1, d2, r2, ..., dP, rP)
     broadcast_target_size = interleaved_size
@@ -510,9 +578,44 @@ function Base.repeat(x::AnyTracedRArray{T,N}, counts::Vararg{Int,M}) where {T,N,
     # (d1, r1, d2, r2, ..., dP, rP) -> (d1*r1, d2*r2, ..., dP*rP)
     final_size = vec(prod(reshape(broadcast_target_size, 2, :); dims=1))
 
-    x_final = reshape(x_broadcasted, final_size...)
+    return materialize_traced_array(reshape(x_broadcasted, final_size...))
+end
 
-    return x_final
+# inner repeat
+function Base._RepeatInnerOuter.repeat_inner(
+    x::AnyTracedRArray{T,N}, counts::NTuple{M,Int}
+) where {T,N,M}
+    P = max(N, M) # potentially padded
+
+    # (d1, d2, ..., dP) -> (1, d1, 1, d2, 1, ..., 1, dP)
+    interleaved_size = ones(Int, 2P)
+    interleaved_size[2:2:(2N)] .= size(x)
+
+    x_interleaved = reshape(materialize_traced_array(x), interleaved_size...)
+
+    # (1, d1, 1, d2, 1, ..., 1, dP) -> (r1, d1, r2, d2, ..., rP, dP)
+    broadcast_target_size = interleaved_size
+    broadcast_target_size[1:2:(2N)] .= counts
+
+    x_broadcasted = TracedUtils.broadcast_to_size(x_interleaved, broadcast_target_size)
+
+    # (r1, d1, r2, d2, ..., rP, dP) -> (d1*r1, d2*r2, ..., dP*rP)
+    final_size = vec(prod(reshape(broadcast_target_size, 2, :); dims=1))
+
+    return materialize_traced_array(reshape(x_broadcasted, final_size...))
+end
+
+# stack
+function overloaded_stack(dims::Union{Integer,Colon}, xs)
+    @assert allequal(ndims.(xs)) "All arrays must have the same number of dimensions..."
+    dims = dims isa Colon ? ndims(first(xs)) + 1 : dims
+    res = map(xs) do x
+        new_shape = ntuple(
+            i -> i == dims ? 1 : (i < dims ? size(x, i) : size(x, i - 1)), ndims(x) + 1
+        )
+        return materialize_traced_array(reshape(x, new_shape))
+    end
+    return cat(res...; dims)
 end
 
 end

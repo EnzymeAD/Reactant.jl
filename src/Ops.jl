@@ -4,23 +4,28 @@
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme
-using ..Reactant: Reactant, TracedRArray, TracedRNumber, RArray, RNumber, MissingTracedValue
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    RArray,
+    RNumber,
+    MissingTracedValue,
+    unwrapped_eltype
 
-function mlir_type(x::RArray{T,N}) where {T,N}
-    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(T))
+function mlir_type(x::Union{RNumber,RArray})
+    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(unwrapped_eltype(x)))
 end
-
-mlir_type(::RNumber{T}) where {T} = MLIR.IR.TensorType((), MLIR.IR.Type(T))
 
 mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 
-function mlir_type(::Type{<:RArray{T,N}}, shape) where {T,N}
+function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
-    return MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    return MLIR.IR.TensorType(shape, MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(::Type{<:RNumber{T}}) where {T}
-    return MLIR.IR.TensorType((), MLIR.IR.Type(T))
+function mlir_type(RT::Type{<:RNumber})
+    return MLIR.IR.TensorType((), MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
 function mlir_type(::Type{<:MissingTracedValue})
@@ -950,28 +955,56 @@ end
 #     return TracedRArray{T,N}((), res, size(x))
 # end
 
-# sorting ops
-# TODO need to trace over `comparator`
-# function sort(
-#     x::TracedRArray{T,N};
-#     comparator,
-#     dimension=-1,
-#     is_stable=false,
-#     location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
-# ) where {T,N}
-#     dimension = MLIR.IR.Attribute(dimension)
-#     is_stable = MLIR.IR.Attribute(is_stable)
-#     res = MLIR.IR.result(
-#         stablehlo.sort(
-#             x.mlir_data;
-#             result=mlir_type(TracedRArray{T,N}, size(x)),
-#             dimension,
-#             is_stable,
-#             location,
-#         ),
-#     )
-#     return TracedRArray{T,N}((), res, size(x))
-# end
+@noinline function sort(
+    x::TracedRArray{T,N};
+    comparator,
+    dimension=1,
+    is_stable=false,
+    location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
+) where {T,N}
+    #C4:
+    @assert 0 < dimension <= ndims(x) "$x invalid dimension"
+
+    (a, b) = (Reactant.ConcreteRNumber(T(0)), Reactant.ConcreteRNumber(T(0)))
+    func = Reactant.TracedUtils.make_mlir_fn(
+        comparator,
+        (a, b),
+        (),
+        "comparator";
+        no_args_in_result=true,
+        return_dialect=:stablehlo,
+    )[2]
+    @assert MLIR.IR.nregions(func) == 1
+    fn_name = String(
+        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+    )
+    #C5:
+    @assert fn_name == "comparator" "$comparator: no function generated"
+    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype = MLIR.IR.Type(ftype_attr)
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
+        "$comparator return type is not tensor<i1>"
+    )
+
+    comparator = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
+    MLIR.IR.rmfromparent!(func)
+
+    dimension = MLIR.IR.Attribute(dimension - 1)
+    is_stable = MLIR.IR.Attribute(is_stable)
+
+    res = MLIR.IR.result(
+        stablehlo.sort(
+            [x.mlir_data];
+            result_0=[mlir_type(TracedRArray{T,N}, size(x))],
+            dimension,
+            is_stable,
+            comparator,
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(x))
+end
 
 @noinline function top_k(
     x::TracedRArray{T,N}, k; location=mlir_stacktrace("top_k", @__FILE__, @__LINE__)
@@ -1383,6 +1416,116 @@ julia> Reactant.@jit(
             Reactant.TracedRArray{T,N}((), out, sz)
         end
     end
+end
+
+"""
+    scatter_setindex(dest, scatter_indices, updates)
+
+Uses [`MLIR.Dialects.stablehlo.scatter`](@ref) to set the values of `dest` at the indices
+specified by `scatter_indices` to the values in `updates`. If the indices are contiguous it
+is recommended to directly use [`MLIR.Dialects.stablehlo.dynamic_update_slice`](@ref)
+instead.
+"""
+@noinline function scatter_setindex(
+    dest::TracedRArray{T,N},
+    scatter_indices::TracedRArray{Int64,2},
+    updates::TracedRArray{T,1},
+) where {T,N}
+    @assert length(updates) == size(scatter_indices, 1)
+    @assert size(scatter_indices, 2) == N
+
+    update_computation = MLIR.IR.Region()
+    block = MLIR.IR.Block(
+        [mlir_type(TracedRNumber{T}), mlir_type(TracedRNumber{T})],
+        [MLIR.IR.Location(), MLIR.IR.Location()],
+    )
+    return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
+    MLIR.IR.rmfromparent!(return_op)
+    push!(block, return_op)
+    pushfirst!(update_computation, block)
+
+    #! format: off
+    update_window_dims = Int64[]
+    inserted_window_dims = collect(Int64, 0:(N - 1))
+    input_batching_dims = Int64[]
+    scatter_indices_batching_dims = Int64[]
+    scatter_dims_to_operand_dims = collect(Int64, 0:(N - 1))
+    index_vector_dim = Int64(1)
+
+    scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
+        MLIR.IR.context(),
+        length(update_window_dims), update_window_dims,
+        length(inserted_window_dims), inserted_window_dims,
+        length(input_batching_dims), input_batching_dims,
+        length(scatter_indices_batching_dims), scatter_indices_batching_dims,
+        length(scatter_dims_to_operand_dims), scatter_dims_to_operand_dims,
+        index_vector_dim,
+    )
+    #! format: on
+
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.scatter(
+                [dest.mlir_data],
+                scatter_indices.mlir_data,
+                [updates.mlir_data];
+                result_0=[mlir_type(TracedRArray{T,N}, size(dest))],
+                update_computation,
+                scatter_dimension_numbers,
+            ),
+            1,
+        ),
+        size(dest),
+    )
+end
+
+"""
+    gather_getindex(src, gather_indices)
+
+Uses [`MLIR.Dialects.stablehlo.gather`](@ref) to get the values of `src` at the indices
+specified by `gather_indices`. If the indices are contiguous it is recommended to directly
+use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
+"""
+@noinline function gather_getindex(
+    src::TracedRArray{T,N}, gather_indices::TracedRArray{Int64,2}
+) where {T,N}
+    @assert size(gather_indices, 2) == N
+
+    #! format: off
+    offset_dims = Int64[1]
+    collapsed_slice_dims = collect(Int64, 0:(N - 2))
+    operand_batching_dims = Int64[]
+    start_indices_batching_dims = Int64[]
+    start_index_map = collect(Int64, 0:(N - 1))
+    index_vector_dim = Int64(1)
+
+    dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(length(offset_dims)), offset_dims,
+        Int64(length(collapsed_slice_dims)), collapsed_slice_dims,
+        Int64(length(operand_batching_dims)), operand_batching_dims,
+        Int64(length(start_indices_batching_dims)), start_indices_batching_dims,
+        Int64(length(start_index_map)), start_index_map,
+        Int64(index_vector_dim),
+    )
+    #! format: on
+
+    return reshape(
+        TracedRArray{T}(
+            MLIR.IR.result(
+                MLIR.Dialects.stablehlo.gather(
+                    src.mlir_data,
+                    gather_indices.mlir_data;
+                    dimension_numbers,
+                    slice_sizes=fill(Int64(1), N),
+                    indices_are_sorted=false,
+                ),
+                1,
+            ),
+        ),
+        size(gather_indices, 1),
+    )
 end
 
 end # module Ops

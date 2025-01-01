@@ -1,9 +1,9 @@
-load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
+load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
+
 # load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
 licenses(["notice"])
-
-load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 
 package(
     default_applicable_licenses = [],
@@ -54,6 +54,9 @@ cc_toolchain_config(
     coverage_link_flags = ["--coverage"],
     cpu = "k8",
     cxx_builtin_include_directories = [
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0/x86_64-linux-musl",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0/backward",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0/x86_64-linux-musl",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0/backward",
@@ -89,7 +92,7 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++"
+        "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
@@ -99,10 +102,10 @@ cc_toolchain_config(
         #"gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-gcc",
         #"cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-g++",
         #"ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld",
-		"gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang",
-		"g++": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
-		"cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
-		"ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
+        "gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang",
+        "g++": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
+        "cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
+        "ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
         #"gcc": "/opt/x86_64-linux-musl/bin/clang",
         #"ld": "/opt/x86_64-linux-musl/bin/ld.lld",
         #"cpp": "/opt/x86_64-linux-musl/bin/clang++",
@@ -141,23 +144,60 @@ cc_toolchain(
 # TODO distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_aarch64_toolchain_config",
-    cpu = "aarch64",
-    compiler = "compiler",
-    toolchain_identifier = "ygg_aarch64",
-    target_system_name = "aarch64-unknown-linux-gnu",
-    target_libc = "",
     abi_libc_version = "local",
     abi_version = "local",
+    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
+    compile_flags = [
+        "-fstack-protector",
+        "-Wall",
+        "-Wunused-but-set-parameter",
+        "-Wno-free-nonheap-object",
+        "-fno-omit-frame-pointer",
+        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include",
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include-fixed",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include",
+        "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/BB_TARGET",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/backward",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/parallel",
+    ],
+    compiler = "compiler",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    cpu = "aarch64",
     cxx_builtin_include_directories = [
-        "/opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include",
-        "/opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include-fixed",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include-fixed",
         "/opt/BB_TARGET/BB_TARGET/include",
         "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/BB_TARGET",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/backward",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/parallel"
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/BB_TARGET",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/backward",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/parallel"
     ],
+    dbg_compile_flags = ["-g"],
+    host_system_name = "linux",
+    link_flags = [],
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+        # "-stdlib=libstdc++",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
+    supports_start_end_lib = False,
+    target_libc = "",
+    target_system_name = "aarch64-unknown-linux-gnu",
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
         "as": "/opt/bin/BB_FULL_TARGET/as",
@@ -186,38 +226,7 @@ cc_toolchain_config(
         "llvm-profdata": "/opt/x86_64-linux-musl/bin/llvm-profdata",
         "objdump": "/usr/bin/objdump",
     },
-    compile_flags = [
-        "-fstack-protector",
-        "-Wall",
-        "-Wunused-but-set-parameter",
-        "-Wno-free-nonheap-object",
-        "-fno-omit-frame-pointer",
-        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include",
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/10.2.0/include-fixed",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/BB_TARGET",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/backward",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/10.2.0/parallel",
-    ],
-    opt_compile_flags = [
-        "-g0",
-        "-O2",
-        "-D_FORTIFY_SOURCE=1",
-        "-DNDEBUG",
-        "-ffunction-sections",
-        "-fdata-sections",
-        # "-stdlib=libstdc++",
-    ],
-    dbg_compile_flags = ["-g"],
-    link_flags = [],
-    link_libs = [
-        "-lstdc++",
-        "-lm",
-    ],
-    opt_link_flags = ["-Wl,--gc-sections"],
+    toolchain_identifier = "ygg_aarch64",
     unfiltered_compile_flags = [
         "-no-canonical-prefixes",
         "-Wno-builtin-macro-redefined",
@@ -227,12 +236,6 @@ cc_toolchain_config(
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
     ],
-    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
-    coverage_compile_flags = ["--coverage"],
-    coverage_link_flags = ["--coverage"],
-    host_system_name = "linux",
-    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
-    supports_start_end_lib = False,
 )
 
 cc_toolchain(
@@ -268,7 +271,8 @@ cc_toolchain_config(
         "/usr/include/c++/11",
         "/usr/include/x86_64-linux-gnu/c++/11",
     ],
-    dbg_compile_flags = ["-g",
+    dbg_compile_flags = [
+        "-g",
         "-I/usr/include/c++/11",
     ],
     host_system_name = "linux",
@@ -276,7 +280,7 @@ cc_toolchain_config(
         "-fuse-ld=lld",
         "--ld-path=/home/wmoses/llvms/llvm16/install/bin/ld.lld",
         "-stdlib=libstdc++",
-        "-static-libstdc++"
+        "-static-libstdc++",
     ],
     link_libs = [
         "-lstdc++",
@@ -301,9 +305,9 @@ cc_toolchain_config(
         # "/usr/bin/gcc": "/home/wmoses/git/Reactant.jl/deps/clang",
         # "gcc": "/home/wmoses/git/Reactant.jl/deps/clang",
         "gcc": "/home/wmoses/llvms/llvm16/install/bin/clang",
-		"g++": "/home/wmoses/llvms/llvm16/install/bin/clang++",
-		"cpp": "/home/wmoses/llvms/llvm16/install/bin/clang++",
-		"ld": "/home/wmoses/llvms/llvm16/install/bin/ld.lld",
+        "g++": "/home/wmoses/llvms/llvm16/install/bin/clang++",
+        "cpp": "/home/wmoses/llvms/llvm16/install/bin/clang++",
+        "ld": "/home/wmoses/llvms/llvm16/install/bin/ld.lld",
     },
     toolchain_identifier = "beast_x86_toolchain",
     unfiltered_compile_flags = [
@@ -317,8 +321,6 @@ cc_toolchain_config(
     ],
 )
 
-
-
 platform(
     name = "darwin_x86_64",
     constraint_values = [
@@ -326,7 +328,6 @@ platform(
         "@platforms//cpu:x86_64",
     ],
 )
-
 
 platform(
     name = "darwin_arm64",
@@ -355,12 +356,10 @@ platform(
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
-        [
-            "*.cpp",
-        ],
-
+        ["src/*.cpp"],
     ) + [
-	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
+        "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
@@ -373,7 +372,7 @@ cc_library(
         "@xla//xla:autotuning.pb.cc",
         "@xla//xla:autotune_results.pb.cc",
         "@xla//xla/service:buffer_assignment.pb.cc",
-        ],
+    ],
     hdrs = glob([
         "*.h",
     ]),
@@ -382,58 +381,18 @@ cc_library(
         "-Werror=unused-but-set-variable",
         "-Werror=return-type",
         "-Werror=unused-result",
-        "-Wno-error=stringop-truncation"
+        "-Wno-error=stringop-truncation",
     ],
-    alwayslink = True,
-    linkstatic = True,
     linkopts = select({
-    "//conditions:default": [],
-    "@bazel_tools//src/conditions:darwin": [
-"-Wl,-exported_symbol,_stablehlo*",
-"-Wl,-exported_symbol,_mlir*",
-"-Wl,-exported_symbol,_InitializeLogs",
-"-Wl,-exported_symbol,_SetLogLevel",
-"-Wl,-exported_symbol,_SetModuleLogLevel",
-"-Wl,-exported_symbol,_GetDefaultTargetTriple",
-"-Wl,-exported_symbol,_enzymeActivityAttrGet",
-"-Wl,-exported_symbol,_MakeCPUClient",
-"-Wl,-exported_symbol,_MakeGPUClient",
-"-Wl,-exported_symbol,_MakeTPUClient",
-"-Wl,-exported_symbol,_LoadPjrtPlugin",
-"-Wl,-exported_symbol,_InitializePjrtPlugin",
-"-Wl,-exported_symbol,_GetCApiClient",
-"-Wl,-exported_symbol,_ClientNumDevices",
-"-Wl,-exported_symbol,_ClientNumAddressableDevices",
-"-Wl,-exported_symbol,_ClientProcessIndex",
-"-Wl,-exported_symbol,_ClientGetDevice",
-"-Wl,-exported_symbol,_ClientGetAddressableDevice",
-"-Wl,-exported_symbol,_ExecutableFree",
-"-Wl,-exported_symbol,_BufferToDevice",
-"-Wl,-exported_symbol,_BufferToClient",
-"-Wl,-exported_symbol,_DeviceToClient",
-"-Wl,-exported_symbol,_PjRtBufferFree",
-"-Wl,-exported_symbol,_UnsafeBufferPointer",
-"-Wl,-exported_symbol,_ArrayFromHostBuffer",
-"-Wl,-exported_symbol,_BufferOnCPU",
-"-Wl,-exported_symbol,_CopyBufferToDevice",
-"-Wl,-exported_symbol,_BufferToHost",
-"-Wl,-exported_symbol,_FreeClient",
-"-Wl,-exported_symbol,_ClientCompile",
-"-Wl,-exported_symbol,_LinkInModule",
-"-Wl,-exported_symbol,_FreeFuture",
-"-Wl,-exported_symbol,_FutureIsReady",
-"-Wl,-exported_symbol,_FutureAwait",
-"-Wl,-exported_symbol,_XLAExecute",
-"-Wl,-exported_symbol,_RegisterDialects",
-"-Wl,-exported_symbol,_InitializeRegistryAndPasses",
-"-Wl,-exported_symbol,_ifrt_*",
-"-Wl,-exported_symbol,_RegisterCustomCallTarget",
-"-Wl,-exported_symbol,_ConvertLLVMToMLIR",
-"-Wl,-exported_symbol,_EnzymeGPUCustomCall",
-"-Wl,-exported_symbol,_ReactantThrowError",
-    ]}),
+        "//conditions:default": [],
+        "@bazel_tools//src/conditions:darwin": [
+            "-fvisibility=default",
+            "-Wl,-unexported_symbol,_*llvm*",
+        ],
+    }),
+    linkstatic = True,
     deps = [
-                "@enzyme//:EnzymeMLIR",
+        "@enzyme//:EnzymeMLIR",
         "@llvm-project//mlir:AffineDialect",
         "@llvm-project//mlir:AllPassesAndDialects",
         "@llvm-project//mlir:ArithDialect",
@@ -456,11 +415,9 @@ cc_library(
         "@llvm-project//mlir:SCFDialect",
         "@llvm-project//mlir:TransformDialect",
         "@llvm-project//mlir:Transforms",
-        
         "@llvm-project//mlir:LLVMIRToLLVMTranslation",
         "@llvm-project//mlir:LLVMIRToNVVMTranslation",
         "@llvm-project//mlir:LLVMIRTransforms",
-        
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:AArch64AsmParser",
@@ -469,35 +426,32 @@ cc_library(
         "@llvm-project//llvm:X86CodeGen",
         "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
+        # "@enzyme_ad//src/enzyme_ad/jax:gpu",
+        "@xla//xla/ffi/api:ffi",
+        "@xla//xla/ffi:ffi_api",
         "@stablehlo//:chlo_ops",
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
-        
         "@xla//xla:xla_proto_cc",
         "@xla//xla:xla_proto_cc_impl",
-
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
-
         "@xla//xla/service/cpu:cpu_compiler",
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
         "@xla//xla/stream_executor/tpu:tpu_executor",
         "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
-        
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
-       
-	"@xla//xla/tsl/protobuf:protos_all_cc_impl",
+        "@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
-
         "@xla//xla/pjrt:status_casters",
-        "@xla//xla/python/ifrt:ifrt",
-        "@xla//xla/python/pjrt_ifrt:pjrt_ifrt",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/ffi:call_frame",
         "@com_google_protobuf//:protobuf",
-	"@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
+        "@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
         "@xla//xla/tsl/profiler/backends/cpu:traceme_recorder_impl",
         "@xla//xla/tsl/profiler/utils:time_utils_impl",
         "@tsl//tsl/platform:env_impl",
@@ -505,36 +459,43 @@ cc_library(
         "@xla//xla/mlir/utils:type_util",
         "@stablehlo//:stablehlo_capi_objects",
         "@stablehlo//:chlo_capi_objects",
-        "@com_google_absl//absl/hash:hash",
+        "@com_google_absl//absl/hash",
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
     ] + select({
-    "@xla//xla/tsl:is_cuda_enabled_and_oss":[
-        "@xla//xla/stream_executor/cuda:all_runtime", 
-        "@xla//xla/service/gpu/model:hlo_op_profiles",
-        "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
-        "@xla//xla/service/gpu:nvptx_compiler",
-        "@xla//xla/service/gpu:gpu_transfer_manager",
-        "@xla//xla/stream_executor:kernel", 
-    ],
-    "//conditions:default": [],
+        "@xla//xla/tsl:is_cuda_enabled_and_oss": [
+            "@xla//xla/service/gpu:gpu_transfer_manager",
+            "@xla//xla/service/gpu:nvptx_compiler",
+            "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
+            "@xla//xla/service/gpu/model:hlo_op_profiles",
+            "@xla//xla/stream_executor:kernel",
+            "@xla//xla/stream_executor/cuda:all_runtime",
+        ],
+        "//conditions:default": [],
     }) + if_rocm([
         "@xla//xla/service/gpu:amdgpu_compiler",
     ]),
+    alwayslink = True,
 )
 
 # cc_shared_library(
 cc_binary(
     name = "libReactantExtra.so",
-    linkshared = 1,     ## important
-    linkstatic = 1,     ## important
+    linkshared = 1,  ## important
+    linkstatic = 1,  ## important
     deps = [":ReactantExtraLib"],
 )
 
 cc_binary(
     name = "mlir-jl-tblgen",
-    srcs = ["//tblgen:mlir-jl-tblgen.cc", "//tblgen:jl-generators.cc"],
+    srcs = [
+        "//tblgen:jl-generators.cc",
+        "//tblgen:mlir-jl-tblgen.cc",
+    ],
+    tags = [
+        "optional",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "@llvm-project//llvm:Support",
@@ -542,143 +503,173 @@ cc_binary(
         "@llvm-project//llvm:config",
         "@llvm-project//mlir:TableGen",
     ],
-    tags = [
-        "optional"
-    ],
 )
 
 gentbl_cc_library(
     name = "BuiltinJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Builtin.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Builtin.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/IR/BuiltinOps.td",
     deps = [
         "@llvm-project//mlir:BuiltinDialectTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "ArithJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Arith.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Arith.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/Arith/IR/ArithOps.td",
     deps = [
         "@llvm-project//mlir:ArithOpsTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "AffineJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Affine.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Affine.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/Affine/IR/AffineOps.td",
     deps = [
         "@llvm-project//mlir:AffineOpsTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "FuncJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Func.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Func.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/Func/IR/FuncOps.td",
     deps = [
         "@llvm-project//mlir:FuncTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "EnzymeJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Enzyme.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Enzyme.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@enzyme//:Enzyme/MLIR/Dialect/EnzymeOps.td",
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "EnzymeXLAJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "EnzymeXLA.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "EnzymeXLA.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/EnzymeXLAOps.td",
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "StableHLOJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "StableHLO.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "StableHLO.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@stablehlo//:stablehlo/dialect/StablehloOps.td",
     deps = [
         "@stablehlo//:stablehlo_ops_td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "CHLOJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "CHLO.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "CHLO.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@stablehlo//:stablehlo/dialect/ChloOps.td",
     deps = [
         "@stablehlo//:chlo_ops_td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "VHLOJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "VHLO.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "VHLO.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@stablehlo//:stablehlo/dialect/VhloOps.td",
     deps = [
         "@stablehlo//:vhlo_ops_td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 genrule(
     name = "libMLIR_h.jl",
-    tags = [
-        "jlrule"
-    ],
     srcs = [
         "@llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h",
         "@llvm-project//llvm:include/llvm-c/Support.h",
@@ -697,8 +688,11 @@ genrule(
         "//:Manifest.toml",
         "//:wrap.toml",
         "//:missing_defs.jl",
-        "//:make.jl"
+        "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
     cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$@\"",
+    tags = [
+        "jlrule",
+    ],
 )
