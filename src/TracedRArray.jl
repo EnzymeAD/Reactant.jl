@@ -14,6 +14,7 @@ using ..Reactant:
     MLIR,
     ancestor,
     allowscalar,
+    aos_to_soa,
     unwrapped_eltype
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
 
@@ -30,6 +31,9 @@ function Base.convert(::Type{TracedRArray{T,N}}, x::AbstractArray) where {T,N}
     end
     x isa WrappedTracedRArray &&
         return convert(TracedRArray{T,N}, materialize_traced_array(x))
+    if eltype(x) <: TracedRNumber
+        return convert(TracedRArray{T,N}, aos_to_soa(x))
+    end
     return convert(TracedRArray{T,N}, Ops.constant(collect(x)))
 end
 
