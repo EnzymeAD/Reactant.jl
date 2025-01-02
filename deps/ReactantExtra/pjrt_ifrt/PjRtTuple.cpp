@@ -4,15 +4,10 @@
 using namespace xla::ifrt;
 using namespace reactant;
 
-extern "C" PjRtTuple* ifrt_pjrt_tuple_ctor(PjRtCompatibleClient* client, Value* values, int nvalues)
+extern "C" PjRtTuple* ifrt_pjrt_tuple_ctor(PjRtCompatibleClient* client, span<Value*> c_values)
 {
-    auto values_ptr = new tsl::RCReference<Value>[nvalues];
-    for (int i = 0; i < nvalues; i++) {
-        values_ptr[i] = tsl::RCReference<Value>();
-        values_ptr[i].reset(&values[i]);
-    }
-    auto span = absl::Span<tsl::RCReference<Value>>(values_ptr, nvalues);
-    return MyValueOrThrow(PjRtTuple::Create(client, span)).release();
+    auto values = convert(Type<absl::Span<tsl::RCReference<Value>>>(), c_values);
+    return MyValueOrThrow(PjRtTuple::Create(client, values)).release();
 }
 
 extern "C" void ifrt_pjrt_tuple_free(PjRtTuple* tuple) { delete tuple; }
