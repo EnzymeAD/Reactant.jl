@@ -1,8 +1,10 @@
 name: Regenerate MLIR Bindings
+
 on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
+
 jobs:
   make:
     runs-on: ubuntu-latest
@@ -57,6 +59,7 @@ jobs:
           title: 'Regenerate MLIR Bindings'
           branch: regenerate-mlir-bindings
           delete-branch: true
+          author: enzyme-ci-bot[bot] <78882869+enzyme-ci-bot[bot]@users.noreply.github.com>
       - name: Check outputs
         run: |
           echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
