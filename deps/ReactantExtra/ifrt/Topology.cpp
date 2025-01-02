@@ -1,28 +1,29 @@
-#include "../type_conversion.hpp"
+#include "src/type_conversion.hpp"
+#include "src/error_handling.hpp"
 #include "xla/python/ifrt/topology.h"
 
 using namespace xla::ifrt;
 using namespace reactant;
 
-extern "C" const char* ifrt_topology_platform_name(ifrt::Topology* topology)
+extern "C" const char* ifrt_topology_platform_name(Topology* topology)
 {
-    return cstr_from_string(topology->platform_name());
+    return convert(Type<const char*>(), topology->platform_name());
 }
 
 extern "C" const char*
-ifrt_topology_platform_version(ifrt::Topology* topology)
+ifrt_topology_platform_version(Topology* topology)
 {
-    return cstr_from_string(topology->platform_version());
+    return convert(Type<const char*>(), topology->platform_version());
 }
 
 // returns PjRtPlatformId which is a type alias for uint64_t
-extern "C" uint64_t ifrt_topology_platform_id(ifrt::Topology* topology)
+extern "C" uint64_t ifrt_topology_platform_id(Topology* topology)
 {
     return topology->platform_id();
 }
 
 extern "C" std::tuple<size_t, const xla::PjRtDeviceDescription**>
-ifrt_topology_device_descriptions(ifrt::Topology* topology)
+ifrt_topology_device_descriptions(Topology* topology)
 {
     auto descriptions = topology->DeviceDescriptions();
     auto descriptions_ptr = new const xla::PjRtDeviceDescription*[descriptions.size()];
@@ -32,11 +33,11 @@ ifrt_topology_device_descriptions(ifrt::Topology* topology)
     return std::make_tuple(descriptions.size(), descriptions_ptr);
 }
 
-// TODO xla::ifrt::Topology::GetDefaultLayout
+// TODO xla::Topology::GetDefaultLayout
 
-extern "C" const char* ifrt_topology_serialize(ifrt::Topology* topology)
+extern "C" const char* ifrt_topology_serialize(Topology* topology)
 {
-    return cstr_from_string(MyValueOrThrow(topology->Serialize()));
+    return convert(Type<const char*>(), MyValueOrThrow(topology->Serialize()));
 }
 
-// TODO xla::ifrt::Topology::Attributes
+// TODO xla::Topology::Attributes

@@ -1,4 +1,5 @@
-#include "../type_conversion.hpp"
+#include "src/type_conversion.hpp"
+#include "src/error_handling.hpp"
 #include "xla/python/ifrt/executable.h"
 
 using namespace xla::ifrt;
@@ -11,7 +12,7 @@ extern "C" Client* ifrt_loadedexecutable_client(LoadedExecutable* executable)
 
 extern "C" const char* ifrt_loadedexecutable_name(LoadedExecutable* executable)
 {
-    return cstr_from_string(executable->name());
+    return convert(Type<const char*>(), executable->name());
 }
 
 extern "C" const char* ifrt_loadedexecutable_fingerprint(LoadedExecutable* executable)
@@ -19,12 +20,12 @@ extern "C" const char* ifrt_loadedexecutable_fingerprint(LoadedExecutable* execu
     auto result = MyValueOrThrow(executable->Fingerprint());
     if (!result.has_value())
         return "";
-    return cstr_from_string(result.value());
+    return convert(Type<const char*>(), result.value());
 }
 
 extern "C" const char* ifrt_loadedexecutable_serialize(LoadedExecutable* executable)
 {
-    return cstr_from_string(MyValueOrThrow(executable->Serialize()));
+    return convert(Type<const char*>(), MyValueOrThrow(executable->Serialize()));
 }
 
 extern "C" Future<> ifrt_loadedexecutable_get_ready_future(LoadedExecutable* executable)
