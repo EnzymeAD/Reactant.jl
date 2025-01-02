@@ -873,3 +873,15 @@ end
     @test @jit(s3(x, y)) isa Any
     @test @jit(s4(x, y)) isa Any
 end
+
+@testset "Boolean Indexing" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 4, 16))
+    idxs_ra = Reactant.to_rarray(rand(Bool, 16))
+
+    fn(x, idxs) = x[:, idxs]
+
+    @test_throws ErrorException @jit(fn(x_ra, idxs_ra))
+
+    res = @jit fn(x_ra, Array(idxs_ra))
+    @test res ≈ fn(Array(x_ra), Array(idxs_ra))
+end

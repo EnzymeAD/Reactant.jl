@@ -119,6 +119,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
         i isa Colon && return 1:size(a, idx)
         i isa CartesianIndex && return Tuple(i)
+        i isa AbstractArray{<:Bool} && return findall(i)
         return i
     end
 
@@ -137,6 +138,11 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     end
 
     if use_gather_getindex
+        # TODO: This will create a dynamically sized tensor and we need to implement
+        #       `findall` for it.
+        if any(i -> unwrapped_eltype(i) <: Bool, indices)
+            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
+        end
         indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
         indices_list = generate_index_list(indices_list...)
         res = Ops.gather_getindex(a, indices_list)
@@ -170,6 +176,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     indices = map(enumerate(indices)) do (idx, i)
         i isa Colon && return 1:size(a, idx)
         i isa CartesianIndex && return Tuple(i)
+        i isa AbstractArray{<:Bool} && return findall(i)
         return i
     end
 
@@ -188,6 +195,11 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     end
 
     if use_scatter_setindex
+        # TODO: This will create a dynamically sized tensor and we need to implement
+        #       `findall` for it.
+        if any(i -> unwrapped_eltype(i) <: Bool, indices)
+            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
+        end
         indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
         indices_list = generate_index_list(indices_list...)
         res = Ops.scatter_setindex(a, indices_list, Ops.reshape(v, length(v)))
