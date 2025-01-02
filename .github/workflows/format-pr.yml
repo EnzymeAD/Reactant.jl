@@ -1,4 +1,5 @@
 name: Format 'main'
+
 on:
   schedule:
     - cron: '0 0 * * *'
@@ -38,6 +39,7 @@ jobs:
           branch: format-main
           delete-branch: true
           labels: format
+          author: enzyme-ci-bot[bot] <78882869+enzyme-ci-bot[bot]@users.noreply.github.com>
       - name: Check outputs
         run: |
           echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
