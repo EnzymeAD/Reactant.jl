@@ -60,6 +60,8 @@
 
 #include "llvm-c/TargetMachine.h"
 
+#include "src/error_handling.hpp"
+
 using namespace mlir;
 using namespace llvm;
 using namespace xla;
@@ -70,21 +72,6 @@ void registerRemoveTransformPass();
 void registerGenerateApplyPatternsPass();
 } // namespace enzyme
 } // namespace mlir
-
-extern "C" void (*ReactantThrowError)(const char *) = nullptr;
-
-// Utilities for `StatusOr`.
-template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
-  if (ReactantThrowError) {
-    if (!v.ok()) {
-      ReactantThrowError(v.status().ToString().c_str());
-      throw xla::XlaRuntimeError(v.status().ToString().c_str());
-    }
-    return std::move(v).value();
-  } else {
-    return xla::ValueOrThrow(std::move(v));
-  }
-}
 
 // MLIR C-API extras
 #pragma region MLIR Extra
@@ -106,29 +93,6 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
 // TODO mlirComplexAttrGetnValue
 // TODO extern "C" MlirTypeID mlirComplexAttrGetTypeID(void) { return
 // wrap(complex::NumberAttr::getTypeID()); }
-#pragma endregion
-
-// auxiliar functions
-#pragma region utils
-template <typename T> const char *cstr_from_string(T text) {
-  char *cstr = (char *)malloc(text.size() + 1);
-  memcpy(cstr, text.data(), text.size());
-  cstr[text.size()] = '\0';
-  return cstr;
-}
-
-template <typename T>
-T *unwrap_absl_statusor(absl::StatusOr<T> status, char **error_msg) {
-  *error_msg = nullptr;
-  if (!status.ok()) {
-    auto str = status.message();
-    char *err = (char *)malloc(str.size() + 1);
-    memcpy(err, str.data(), str.size() + 1);
-    *error_msg = err;
-    return nullptr;
-  }
-  return status.value();
-}
 #pragma endregion
 
 // int google::protobuf::io::CodedInputStream::default_recursion_limit_ = 100;

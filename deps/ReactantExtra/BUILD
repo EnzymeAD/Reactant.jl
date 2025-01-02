@@ -175,7 +175,7 @@ cc_toolchain_config(
         "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0",
         "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/BB_TARGET",
         "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/backward",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/parallel"
+        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/parallel",
     ],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
@@ -356,7 +356,7 @@ platform(
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
-        ["src/*.cpp"],
+        ["src/**/*.cpp"],
     ) + [
         "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
@@ -374,7 +374,8 @@ cc_library(
         "@xla//xla/service:buffer_assignment.pb.cc",
     ],
     hdrs = glob([
-        "*.h",
+        "src/*.h",
+        "src/*.hpp",
     ]),
     copts = [
         "-Werror=unused-variable",
