@@ -276,12 +276,7 @@ const transform_passes::String = join(
 
 # Optimization passes which apply to an individual function
 const func_passes::String = join(
-    [
-        "canonicalize,cse",
-        "canonicalize",
-	transform_passes
-    ],
-    ",",
+    ["canonicalize,cse", "canonicalize", transform_passes], ","
 )
 
 const opt_passes::String = join(
