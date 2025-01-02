@@ -1,70 +1,69 @@
-#include "../type_conversion.hpp"
+#include "src/type_conversion.hpp"
 #include "xla/python/ifrt/index_domain.h"
 
 using namespace xla::ifrt;
 using namespace reactant;
 
-#pragma region xla::ifrt::IndexDomain
-extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor(ifrt::Shape* shape)
+extern "C" IndexDomain* ifrt_indexdomain_ctor(Shape* shape)
 {
-    return new ifrt::IndexDomain(*shape);
+    return new IndexDomain(*shape);
 }
 
-extern "C" ifrt::IndexDomain* ifrt_indexdomain_ctor_with_origin(ifrt::Index* origin, ifrt::Shape* shape)
+extern "C" IndexDomain* ifrt_indexdomain_ctor_with_origin(Index* origin, Shape* shape)
 {
-    return new ifrt::IndexDomain(*origin, *shape);
+    return new IndexDomain(*origin, *shape);
 }
 
-extern "C" void ifrt_indexdomain_free(ifrt::IndexDomain* index_domain)
+extern "C" void ifrt_indexdomain_free(IndexDomain* index_domain)
 {
     delete index_domain;
 }
 
-extern "C" const ifrt::Index* ifrt_indexdomain_origin(ifrt::IndexDomain* index_domain)
+extern "C" const Index* ifrt_indexdomain_origin(IndexDomain* index_domain)
 {
-    return new ifrt::Index(index_domain->origin());
+    return new Index(index_domain->origin());
 }
 
-extern "C" const ifrt::Shape* ifrt_indexdomain_shape(ifrt::IndexDomain* index_domain)
+extern "C" const Shape* ifrt_indexdomain_shape(IndexDomain* index_domain)
 {
-    return new ifrt::Shape(index_domain->shape());
+    return new Shape(index_domain->shape());
 }
 
-extern "C" bool ifrt_indexdomain_eq(ifrt::IndexDomain* index_domain1, ifrt::IndexDomain* index_domain2)
+extern "C" bool ifrt_indexdomain_eq(IndexDomain* index_domain1, IndexDomain* index_domain2)
 {
     return *index_domain1 == *index_domain2;
 }
 
-extern "C" bool ifrt_indexdomain_ne(ifrt::IndexDomain* index_domain1,
-    ifrt::IndexDomain* index_domain2)
+extern "C" bool ifrt_indexdomain_ne(IndexDomain* index_domain1,
+    IndexDomain* index_domain2)
 {
     return *index_domain1 != *index_domain2;
 }
 
-extern "C" ifrt::IndexDomain* ifrt_indexdomain_add(ifrt::IndexDomain* index_domain, ifrt::Index* offset)
+extern "C" IndexDomain* ifrt_indexdomain_add(IndexDomain* index_domain, Index* offset)
 {
-    return new ifrt::IndexDomain(*index_domain + *offset);
+    return new IndexDomain(*index_domain + *offset);
 }
 
-extern "C" ifrt::IndexDomain* ifrt_indexdomain_sub(ifrt::IndexDomain* index_domain, ifrt::Index* offset)
+extern "C" IndexDomain* ifrt_indexdomain_sub(IndexDomain* index_domain, Index* offset)
 {
-    return new ifrt::IndexDomain(*index_domain - *offset);
+    return new IndexDomain(*index_domain - *offset);
 }
 
-extern "C" void ifrt_indexdomain_add_inplace(ifrt::IndexDomain* index_domain,
-    ifrt::Index* offset)
+extern "C" void ifrt_indexdomain_add_inplace(IndexDomain* index_domain,
+    Index* offset)
 {
     *index_domain += *offset;
 }
 
-extern "C" void ifrt_indexdomain_sub_inplace(ifrt::IndexDomain* index_domain,
-    ifrt::Index* offset)
+extern "C" void ifrt_indexdomain_sub_inplace(IndexDomain* index_domain,
+    Index* offset)
 {
     *index_domain -= *offset;
 }
 
-extern "C" const char* ifrt_indexdomain_debug_string(ifrt::IndexDomain* index_domain)
+extern "C" const char* ifrt_indexdomain_debug_string(IndexDomain* index_domain)
 {
-    return cstr_from_string(index_domain->DebugString());
+    return convert(Type<const char*>(), index_domain->DebugString());
 }
 #pragma endregion

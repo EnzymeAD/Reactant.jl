@@ -1,4 +1,5 @@
-#include "type_conversion.hpp"
+#include "src/type_conversion.hpp"
+#include "src/error_handling.hpp"
 #include "xla/python/pjrt_ifrt/pjrt_client.h"
 
 using namespace xla::ifrt;
