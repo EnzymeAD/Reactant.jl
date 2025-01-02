@@ -101,3 +101,29 @@ end
     @test @allowscalar(x_ra[1]) ≈ x[1]
     @test @allowscalar(x_ra[1:1]) ≈ x[1:1]
 end
+
+@testset "no_nan passes" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 4, 16))
+    y_ra = Reactant.to_rarray(rand(Float32, 4, 16))
+
+    fn(x) = x .- x
+
+    hlo = @code_hlo fn(x_ra)
+    @test occursin("subtract", repr(hlo))
+    @test !occursin("constant", repr(hlo))
+    hlo = @code_hlo no_nan=true fn(x_ra)
+    @test !occursin("subtract", repr(hlo))
+    @test occursin("constant", repr(hlo))
+
+    fn(x, y) = begin
+        c = x .+ y
+        return c .- y
+    end
+
+    hlo = @code_hlo fn(x_ra, y_ra)
+    @test occursin("subtract", repr(hlo))
+    @test occursin("add", repr(hlo))
+    hlo = @code_hlo no_nan=true fn(x_ra, y_ra)
+    @test !occursin("subtract", repr(hlo))
+    @test !occursin("add", repr(hlo))
+end
