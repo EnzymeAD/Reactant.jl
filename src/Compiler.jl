@@ -112,11 +112,9 @@ function create_result(
     return Meta.quot(tocopy)
 end
 
-# Optimization passes which apply to an individual function
-const func_passes::String = join(
+# Optimization passes via transform dialect
+const transform_passes::String = join(
     [
-        "canonicalize,cse",
-        "canonicalize",
         "enzyme-hlo-generate-td{" *
         join(
             [
@@ -272,6 +270,16 @@ const func_passes::String = join(
         "}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
+	],
+	","
+)
+
+# Optimization passes which apply to an individual function
+const func_passes::String = join(
+    [
+        "canonicalize,cse",
+        "canonicalize",
+	transform_passes
     ],
     ",",
 )
@@ -280,7 +288,9 @@ const opt_passes::String = join(
     ["inline{default-pipeline=canonicalize max-iterations=4}", func_passes], ','
 )
 
-const enzyme_pass::String = "enzyme{postpasses=\"canonicalize,$func_passes,remove-unnecessary-enzyme-ops,enzyme-simplify-math,$func_passes\"}"
+# TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
+# However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
+const enzyme_pass::String = "enzyme{postpasses=\"canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
 
 function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     pm = MLIR.IR.PassManager()

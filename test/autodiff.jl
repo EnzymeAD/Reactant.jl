@@ -120,3 +120,13 @@ end
     @test stret.st2 ≈ x .+ 1
     @test stret.st1 === stret.st2
 end
+
+@testset "Nested AD" begin
+	x = ConcreteRNumber(3.1)
+	f(x) = x^4
+	df(x) = Enzyme.gradient(Reverse, f, x)[1]
+	@test @jit df(x) ≈ 4 * 3.1 ^ 3
+	ddf(x) = Enzyme.gradient(Reverse, df, x)[1]
+	ddf(x) = Enzyme.gradient(Reverse, df, x)[1]
+	@test @jit ddf(x) ≈ 4 * 3 * 3.1 ^ 2
+end
