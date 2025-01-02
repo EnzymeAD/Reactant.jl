@@ -270,8 +270,8 @@ const transform_passes::String = join(
         "}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
-	],
-	","
+    ],
+    ",",
 )
 
 # Optimization passes which apply to an individual function
