@@ -458,7 +458,7 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 function __init__()
-    if CUDA.CUDA_Driver_jll.libcuda !== nothing
+    if isdefined(CUDA.CUDA_Driver_jll, :libcuda) && CUDA.CUDA_Driver_jll.libcuda !== nothing
         handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
         if handle === nothing
             handle = C_NULL
