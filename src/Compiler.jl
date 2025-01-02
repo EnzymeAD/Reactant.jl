@@ -290,7 +290,7 @@ const opt_passes::String = join(
 
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
-const enzyme_pass::String = "enzyme{postpasses=\"canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
+const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
 
 function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     pm = MLIR.IR.PassManager()
