@@ -76,6 +76,8 @@
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
+#include "src/error_handling.hpp"
+
 using namespace mlir;
 using namespace llvm;
 using namespace xla;
@@ -86,21 +88,6 @@ void registerRemoveTransformPass();
 void registerGenerateApplyPatternsPass();
 } // namespace enzyme
 } // namespace mlir
-
-extern "C" void (*ReactantThrowError)(const char *) = nullptr;
-
-// Utilities for `StatusOr`.
-template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
-  if (ReactantThrowError) {
-    if (!v.ok()) {
-      ReactantThrowError(v.status().ToString().c_str());
-      throw xla::XlaRuntimeError(v.status().ToString().c_str());
-    }
-    return std::move(v).value();
-  } else {
-    return xla::ValueOrThrow(std::move(v));
-  }
-}
 
 extern "C" void ReactantHandleCuResult(uint32_t curesult) {
   if (curesult != 0) {
@@ -144,29 +131,6 @@ extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
       .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
 
-#pragma endregion
-
-// auxiliar functions
-#pragma region utils
-template <typename T> const char *cstr_from_string(T text) {
-  char *cstr = (char *)malloc(text.size() + 1);
-  memcpy(cstr, text.data(), text.size());
-  cstr[text.size()] = '\0';
-  return cstr;
-}
-
-template <typename T>
-T *unwrap_absl_statusor(absl::StatusOr<T> status, char **error_msg) {
-  *error_msg = nullptr;
-  if (!status.ok()) {
-    auto str = status.message();
-    char *err = (char *)malloc(str.size() + 1);
-    memcpy(err, str.data(), str.size() + 1);
-    *error_msg = err;
-    return nullptr;
-  }
-  return status.value();
-}
 #pragma endregion
 
 // int google::protobuf::io::CodedInputStream::default_recursion_limit_ = 100;

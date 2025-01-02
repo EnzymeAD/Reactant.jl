@@ -1,37 +1,38 @@
-#include "../type_conversion.hpp"
+#include "src/type_conversion.hpp"
+#include "src/error_handling.hpp"
 #include "xla/python/ifrt/compiler.h"
 
 using namespace xla::ifrt;
 using namespace reactant;
 
-extern "C" ifrt::LoadedExecutable* ifrt_compiler_compile(ifrt::Compiler* compiler, ifrt::Program* program)
+extern "C" LoadedExecutable* ifrt_compiler_compile(Compiler* compiler, Program* program)
 {
-    // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and
+    // apparently CompileOptions is a legacy artifact so we don't use it and
     // set directly to the default
-    auto program_ptr = std::make_unique<ifrt::Program>(*program);
-    auto options = std::make_unique<ifrt::CompileOptions>();
+    auto program_ptr = std::make_unique<Program>(*program);
+    auto options = std::make_unique<CompileOptions>();
     return MyValueOrThrow(
         compiler->Compile(std::move(program_ptr), std::move(options)))
         .release();
 }
 
-extern "C" ifrt::Executable* ifrt_compiler_compile_with_topology(ifrt::Compiler* compiler, ifrt::Program* program, const ifrt::Topology* topology)
+extern "C" Executable* ifrt_compiler_compile_with_topology(Compiler* compiler, Program* program, const Topology* topology)
 {
-    // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and
+    // apparently CompileOptions is a legacy artifact so we don't use it and
     // set directly to the default
-    auto options = std::make_unique<ifrt::CompileOptions>();
-    auto program_ptr = std::make_unique<ifrt::Program>(*program);
+    auto options = std::make_unique<CompileOptions>();
+    auto program_ptr = std::make_unique<Program>(*program);
     auto exec_ptr = MyValueOrThrow(compiler->Compile(std::move(program_ptr), *topology,
                                        std::move(options)))
                         .release();
     return exec_ptr;
 }
 
-extern "C" ifrt::LoadedExecutable* ifrt_compiler_deserialize_loadedexecutable(ifrt::Compiler* compiler, const char* data)
+extern "C" LoadedExecutable* ifrt_compiler_deserialize_loadedexecutable(Compiler* compiler, const char* data)
 {
-    // apparently ifrt::DeserializeExecutableOptions is a legacy artifact so we
+    // apparently DeserializeExecutableOptions is a legacy artifact so we
     // don't use it and set directly to the default
-    auto options = std::make_unique<ifrt::DeserializeExecutableOptions>();
+    auto options = std::make_unique<DeserializeExecutableOptions>();
     return MyValueOrThrow(compiler->DeserializeLoadedExecutable(
                               std::string(data), std::move(options)))
         .release();

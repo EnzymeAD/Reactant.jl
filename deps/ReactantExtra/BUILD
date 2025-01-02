@@ -355,10 +355,7 @@ platform(
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
-        [
-            "*.cpp",
-        ],
-
+        ["src/**/*.cpp"],
     ) + [
         "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
@@ -377,7 +374,8 @@ cc_library(
         "@xla//xla/service:buffer_assignment.pb.cc",
         ],
     hdrs = glob([
-        "*.h",
+        "src/*.h",
+        "src/*.hpp",
     ]),
     copts = [
         "-Werror=unused-variable",

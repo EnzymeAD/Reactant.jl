@@ -1,4 +1,4 @@
-#include "../type_conversion.hpp"
+#include "src/type_conversion.hpp"
 #include "xla/python/ifrt/memory.h"
 
 using namespace xla::ifrt;
@@ -6,28 +6,27 @@ using namespace reactant;
 
 // MemoryId is a struct with a single int32_t field --> check out
 // xla/python/ifrt/memory.h
-extern "C" ifrt::MemoryId ifrt_memory_id(ifrt::Memory* memory)
+extern "C" MemoryId ifrt_memory_id(Memory* memory)
 {
     return memory->Id();
 }
 
-extern "C" const ifrt::MemoryKind* ifrt_memory_kind(ifrt::Memory* memory)
+extern "C" const MemoryKind* ifrt_memory_kind(Memory* memory)
 {
     return &(memory->Kind());
 }
 
-extern "C" const char* ifrt_memory_to_string(ifrt::Memory* memory)
+extern "C" const char* ifrt_memory_to_string(Memory* memory)
 {
-    return cstr_from_string(memory->ToString());
+    return convert(Type<const char*>(), memory->ToString());
 }
 
-extern "C" const char* ifrt_memory_debug_string(ifrt::Memory* memory)
+extern "C" const char* ifrt_memory_debug_string(Memory* memory)
 {
-    return cstr_from_string(memory->DebugString());
+    return convert(Type<const char*>(), memory->DebugString());
 }
 
-extern "C" span<ifrt::Device*>
-ifrt_memory_devices(ifrt::Memory* memory)
+extern "C" span<Device*> ifrt_memory_devices(Memory* memory)
 {
-    return convert(Type<span<ifrt::Device*>>, memory->Devices());
+    return convert(Type<span<Device*>>(), memory->Devices());
 }
