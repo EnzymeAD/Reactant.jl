@@ -1,40 +1,41 @@
-#include "../type_conversion.hpp"
+#include "src/type_conversion.hpp"
+#include "src/error_handling.hpp"
 #include "xla/python/ifrt/executable.h"
 
 using namespace xla::ifrt;
 using namespace reactant;
 
-extern "C" const char* ifrt_executable_name(ifrt::Executable* executable)
+extern "C" const char* ifrt_executable_name(Executable* executable)
 {
-    return cstr_from_string(executable->name());
+    return convert(Type<const char*>(), executable->name());
 }
 
-extern "C" const char* ifrt_executable_fingerprint(ifrt::Executable* executable)
+extern "C" const char* ifrt_executable_fingerprint(Executable* executable)
 {
     auto result = MyValueOrThrow(executable->Fingerprint());
     if (!result.has_value())
         return "";
-    return cstr_from_string(result.value());
+    return convert(Type<const char*>(), result.value());
 }
 
-extern "C" const char* ifrt_executable_serialize(ifrt::Executable* executable)
+extern "C" const char* ifrt_executable_serialize(Executable* executable)
 {
-    return cstr_from_string(MyValueOrThrow(executable->Serialize()));
+    return convert(Type<const char*>(), MyValueOrThrow(executable->Serialize()));
 }
 
-extern "C" int ifrt_executable_num_devices(ifrt::Executable* executable)
+extern "C" int ifrt_executable_num_devices(Executable* executable)
 {
     return executable->num_devices();
 }
 
-extern "C" int64_t ifrt_executable_size(ifrt::Executable* executable)
+extern "C" int64_t ifrt_executable_size(Executable* executable)
 {
     return executable->SizeOfGeneratedCodeInBytes();
 }
 
-// TODO xla::ifrt::Executable::GetCompiledMemoryStats
+// TODO xla::Executable::GetCompiledMemoryStats
 
-extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_parameter_shardings(ifrt::Executable* executable)
+extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_parameter_shardings(Executable* executable)
 {
     auto shardings = executable->GetParameterShardings();
     if (!shardings.has_value())
@@ -42,7 +43,7 @@ extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_parameter_shardings(i
     return std::make_tuple(shardings.value().size(), shardings.value().data());
 }
 
-extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_output_shardings(ifrt::Executable* executable)
+extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_output_shardings(Executable* executable)
 {
     auto shardings = executable->GetOutputShardings();
     if (!shardings.has_value())
@@ -50,7 +51,7 @@ extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_output_shardings(ifrt
     return std::make_tuple(shardings.value().size(), shardings.value().data());
 }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_executable_parameter_layouts(ifrt::Executable* executable)
+extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_executable_parameter_layouts(Executable* executable)
 {
     auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
     auto layouts_ptr = new xla::PjRtLayout*[layouts.size()];
@@ -60,7 +61,7 @@ extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_executable_parameter_layou
     return std::make_tuple(layouts.size(), layouts_ptr);
 }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_executable_output_layouts(ifrt::Executable* executable)
+extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_executable_output_layouts(Executable* executable)
 {
     auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
     auto layouts_ptr = new xla::PjRtLayout*[layouts.size()];
@@ -70,7 +71,7 @@ extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_executable_output_layouts(
     return std::make_tuple(layouts.size(), layouts_ptr);
 }
 
-extern "C" std::tuple<size_t, xla::HloModule**> ifrt_executable_hlo_modules(ifrt::Executable* executable)
+extern "C" std::tuple<size_t, xla::HloModule**> ifrt_executable_hlo_modules(Executable* executable)
 {
     auto modules = MyValueOrThrow(executable->GetHloModules());
     auto modules_ptr = new xla::HloModule*[modules.size()];
@@ -80,4 +81,4 @@ extern "C" std::tuple<size_t, xla::HloModule**> ifrt_executable_hlo_modules(ifrt
     return std::make_tuple(modules.size(), modules_ptr);
 }
 
-// TODO xla::ifrt::Executable::GetCostAnalysis
+// TODO xla::Executable::GetCostAnalysis
