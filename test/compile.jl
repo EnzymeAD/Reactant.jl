@@ -111,7 +111,7 @@ end
     hlo = @code_hlo fn(x_ra)
     @test occursin("subtract", repr(hlo))
     @test !occursin("constant", repr(hlo))
-    hlo = @code_hlo no_nan=true fn(x_ra)
+    hlo = @code_hlo no_nan = true fn(x_ra)
     @test !occursin("subtract", repr(hlo))
     @test occursin("constant", repr(hlo))
 
@@ -123,7 +123,7 @@ end
     hlo = @code_hlo fn(x_ra, y_ra)
     @test occursin("subtract", repr(hlo))
     @test occursin("add", repr(hlo))
-    hlo = @code_hlo no_nan=true fn(x_ra, y_ra)
+    hlo = @code_hlo no_nan = true fn(x_ra, y_ra)
     @test !occursin("subtract", repr(hlo))
     @test !occursin("add", repr(hlo))
 end

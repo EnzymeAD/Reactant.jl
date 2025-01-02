@@ -309,8 +309,7 @@ const opt_passes::String = join(
     ["inline{default-pipeline=canonicalize max-iterations=4}", func_passes], ','
 )
 const no_nan_opt_passes::String = join(
-    ["inline{default-pipeline=canonicalize max-iterations=4}", no_nan_func_passes],
-    ',',
+    ["inline{default-pipeline=canonicalize max-iterations=4}", no_nan_func_passes], ','
 )
 
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
