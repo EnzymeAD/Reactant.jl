@@ -215,11 +215,8 @@ for (jlop, hloop) in (
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
 end
 
-for (jlop, hloop) in (
-    (:(Base.sinpi), :sine),
-    (:(Base.cospi), :cosine),
-    (:(Base.tanpi), :tan),
-)
+for (jlop, hloop) in
+    ((:(Base.sinpi), :sine), (:(Base.cospi), :cosine), (:(Base.tanpi), :tan))
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber{T})) where {T} = Ops.$(hloop)(T(π) * lhs)
 end
 
