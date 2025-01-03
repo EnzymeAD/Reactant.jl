@@ -18,7 +18,7 @@ extern "C" PjRtDevice* ifrt_pjrt_device_ctor(
 {
     return new PjRtDevice(
         client, device_id, kind, to_string, debug_string, process_index,
-        absl::flat_hash_map<std::string, PjRtDeviceAttribute>(), pjrt_device);
+        absl::flat_hash_map<std::string, xla::PjRtDeviceAttribute>(), pjrt_device);
 }
 
 extern "C" void ifrt_pjrt_device_free(PjRtDevice* device)
