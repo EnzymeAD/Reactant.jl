@@ -230,7 +230,7 @@ function rewrite_inst(inst, ir, interp)
     return false, inst
 end
 
-const oc_capture_vec = Vector{Dict}()
+const oc_capture_vec = Vector{Any}()
 
 # Caching is both good to reducing compile times and necessary to work around julia bugs
 # in OpaqueClosure's: https://github.com/JuliaLang/julia/issues/56833
@@ -259,6 +259,34 @@ function make_oc(
             true,
         )::Core.OpaqueClosure
         oc_captures[key] = ores
+        return ores
+    end
+end
+
+function make_oc(
+    oc_captures::Base.RefValue{Core.OpaqueClosure},
+    sig::Type, rt::Type, src::Core.CodeInfo, nargs::Int, isva::Bool, f::FT
+)::Core.OpaqueClosure where FT
+    if Base.isassigned(oc_captures)
+        return oc_captures[]
+    else
+        ores = ccall(
+            :jl_new_opaque_closure_from_code_info,
+            Any,
+            (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+            sig,
+            rt,
+            rt,
+            @__MODULE__,
+            src,
+            0,
+            nothing,
+            nargs,
+            isva,
+            f,
+            true,
+        )::Core.OpaqueClosure
+        oc_captures[] = ores
         return ores
     end
 end
@@ -495,8 +523,12 @@ function call_with_reactant_generator(
     # Opaque closures also require taking the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
 
+    dict = if Base.issingletontype(args[1])
+        Base.Ref{Core.OpaqueClosure}()
+    else
+        Dict{args[1], Core.OpaqueClosure}()
+    end
 
-    dict = Dict{args[1], Core.OpaqueClosure}
     push!(oc_capture_vec, dict)
 
     oc = if false && Base.issingletontype(args[1])
