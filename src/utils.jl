@@ -538,28 +538,7 @@ function call_with_reactant_generator(
 
     else
         farg = fn_args[1]
-
-        ocmin_world = Ref{UInt}(typemin(UInt))
-        ocmax_world = Ref{UInt}(typemax(UInt))
-
-        ocsig = Tuple{typeof(make_oc), typeof(dict), typeof(octup), typeof(rt), typeof(src), typeof(ocnargs), typeof(ocva), typeof(farg)}
-
-        oclookup_result = lookup_world(ocsig, interp.world, nothing, ocmin_world, ocmax_world)
-
-        match = lookup_result::Core.MethodMatch
-        # look up the method and code instance
-        ocmi = ccall(
-            :jl_specializations_get_linfo,
-            Ref{Core.MethodInstance},
-            (Any, Any, Any),
-            match.method,
-            match.spec_types,
-            match.sparams,
-        )
-
-        rep = Expr(:invoke, ocmi, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
-        # rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
-
+        rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
         push!(overdubbed_code, rep)
         push!(overdubbed_codelocs, code_info.codelocs[1])
         Core.SSAValue(length(overdubbed_code))
