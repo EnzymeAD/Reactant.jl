@@ -235,9 +235,14 @@ const oc_capture_vec = Vector{Any}()
 # Caching is both good to reducing compile times and necessary to work around julia bugs
 # in OpaqueClosure's: https://github.com/JuliaLang/julia/issues/56833
 function make_oc_dict(
-    @nospecialize(oc_captures::Dict{FT, Core.OpaqueClosure}),
-    @nospecialize(sig::Type), @nospecialize(rt::Type), @nospecialize(src::Core.CodeInfo), nargs::Int, isva::Bool, @nospecialize(f::FT)
-)::Core.OpaqueClosure where FT
+    @nospecialize(oc_captures::Dict{FT,Core.OpaqueClosure}),
+    @nospecialize(sig::Type),
+    @nospecialize(rt::Type),
+    @nospecialize(src::Core.CodeInfo),
+    nargs::Int,
+    isva::Bool,
+    @nospecialize(f::FT)
+)::Core.OpaqueClosure where {FT}
     key = f
     if haskey(oc_captures, key)
         return oc_captures[key]
@@ -265,7 +270,12 @@ end
 
 function make_oc_ref(
     oc_captures::Base.RefValue{Core.OpaqueClosure},
-    @nospecialize(sig::Type), @nospecialize(rt::Type), @nospecialize(src::Core.CodeInfo), nargs::Int, isva::Bool, @nospecialize(f)
+    @nospecialize(sig::Type),
+    @nospecialize(rt::Type),
+    @nospecialize(src::Core.CodeInfo),
+    nargs::Int,
+    isva::Bool,
+    @nospecialize(f)
 )::Core.OpaqueClosure
     if Base.isassigned(oc_captures)
         return oc_captures[]
@@ -526,7 +536,7 @@ function call_with_reactant_generator(
     dict, make_oc = if Base.issingletontype(args[1])
         Base.Ref{Core.OpaqueClosure}(), make_oc_ref
     else
-        Dict{args[1], Core.OpaqueClosure}(), make_oc_dict
+        Dict{args[1],Core.OpaqueClosure}(), make_oc_dict
     end
 
     push!(oc_capture_vec, dict)
