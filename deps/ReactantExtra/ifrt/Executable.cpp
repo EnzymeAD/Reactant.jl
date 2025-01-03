@@ -51,34 +51,25 @@ extern "C" int64_t ifrt_executable_size(Executable* executable)
 //     return std::make_tuple(shardings.value().size(), shardings.value().data());
 // }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_executable_parameter_layouts(Executable* executable)
-{
-    auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
-    auto layouts_ptr = new xla::PjRtLayout*[layouts.size()];
-    for (int i = 0; i < layouts.size(); i++) {
-        layouts_ptr[i] = layouts[i].release();
-    }
-    return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// TODO fix type conversion
+// extern "C" span<xla::PjRtLayout*> ifrt_executable_parameter_layouts(Executable* executable)
+// {
+//     auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
+//     return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+// }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_executable_output_layouts(Executable* executable)
-{
-    auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-    auto layouts_ptr = new xla::PjRtLayout*[layouts.size()];
-    for (int i = 0; i < layouts.size(); i++) {
-        layouts_ptr[i] = layouts[i].release();
-    }
-    return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// TODO fix type conversion
+// extern "C" span<xla::PjRtLayout*> ifrt_executable_output_layouts(Executable* executable)
+// {
+//     auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
+//     return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+// }
 
-extern "C" std::tuple<size_t, xla::HloModule**> ifrt_executable_hlo_modules(Executable* executable)
-{
-    auto modules = MyValueOrThrow(executable->GetHloModules());
-    auto modules_ptr = new xla::HloModule*[modules.size()];
-    for (int i = 0; i < modules.size(); i++) {
-        modules_ptr[i] = modules[i].get();
-    }
-    return std::make_tuple(modules.size(), modules_ptr);
-}
+// TODO fix type conversion
+// extern "C" span<xla::HloModule*> ifrt_executable_hlo_modules(Executable* executable)
+// {
+//     auto modules = MyValueOrThrow(executable->GetHloModules());
+//     return convert(Type<span<xla::HloModule*>>(), modules);
+// }
 
 // TODO xla::Executable::GetCostAnalysis

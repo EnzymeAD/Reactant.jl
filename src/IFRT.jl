@@ -5,6 +5,7 @@ using Reactant_jll
 const libxla = Reactant_jll.libReactantExtra
 
 import ..PjRt
+import ..XLA
 
 const Cspan = @NamedTuple{len::Csize_t, ptr::Ptr{Cvoid}}
 
@@ -317,7 +318,7 @@ function debug_string(x::Memory)
 end
 
 # Device
-function client(x::AbstractClient)
+function client(x::AbstractDevice)
     return Client(@ccall libxla.ifrt_device_client(x::Ptr{Cvoid})::Ptr{Cvoid})
 end
 
@@ -424,7 +425,7 @@ function devices(x::AbstractClient; addressable::Bool=false)
     else
         @ccall libxla.ifrt_client_devices(x::Ptr{Cvoid})::Cspan
     end
-    return Base.unsafe_wrap(Base.Vector, reinterpret(Ptr{Device}, ptr), len; own=true)
+    return Base.unsafe_wrap(Base.Array, reinterpret(Ptr{Device}, ptr), len; own=true)
 end
 
 function pid(x::AbstractClient)
@@ -724,7 +725,7 @@ end
 # IFRT-PjRt backend
 mutable struct PjRtTuple <: AbstractTuple
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtTuple(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -736,7 +737,7 @@ end
 
 mutable struct PjRtMemory <: AbstractMemory
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtMemory(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -748,7 +749,7 @@ end
 
 mutable struct PjRtDevice <: AbstractDevice
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtDevice(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -760,7 +761,7 @@ end
 
 mutable struct PjRtArray <: AbstractArray
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtArray(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -772,7 +773,7 @@ end
 
 mutable struct PjRtTopology <: AbstractTopology
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtTopology(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -784,7 +785,7 @@ end
 
 mutable struct PjRtClient <: AbstractClient
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtClient(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -794,9 +795,11 @@ mutable struct PjRtClient <: AbstractClient
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtClient) = x.ptr
+
 mutable struct PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallback
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtHostSendAndRecvLoadedHostCallback(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -810,7 +813,7 @@ end
 
 mutable struct PjRtExecutable <: AbstractExecutable
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtExecutable(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -822,7 +825,7 @@ end
 
 mutable struct PjRtLoadedExecutable <: AbstractLoadedExecutable
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtLoadedExecutable(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -834,7 +837,7 @@ end
 
 mutable struct PjRtCompiler <: AbstractCompiler
     ptr::Ptr{Cvoid}
-    function _(x::Ptr{Cvoid})
+    function PjRtCompiler(x::Ptr{Cvoid})
         @assert x != C_NULL
         y = new(x)
         finalizer(y) do z
@@ -853,5 +856,9 @@ end
 # end
 
 # TODO for PjRt-IFRT backend, implement `ifrt_to_primitive_type` and `ifrt_to_dtype`
+
+function PjRtClient(x::XLA.Client)
+    return PjRtClient(@ccall libxla.ifrt_pjrt_client_ctor(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
 
 end
