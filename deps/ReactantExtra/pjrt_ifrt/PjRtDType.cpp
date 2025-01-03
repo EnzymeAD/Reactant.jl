@@ -1,7 +1,6 @@
 #include "src/type_conversion.hpp"
 #include "src/error_handling.hpp"
-#include "xla/python/ifrt/dtype.h"
-#include "xla/xla_data.pb.h"
+#include "xla/python/pjrt_ifrt/pjrt_dtype.h"
 
 using namespace xla::ifrt;
 using namespace reactant;
