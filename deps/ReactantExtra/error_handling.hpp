@@ -4,7 +4,7 @@
 #include "xla/pjrt/exceptions.h"
 #include "xla/pjrt/status_casters.h"
 
-extern "C" void (*ReactantThrowError)(const char *) = nullptr;
+extern "C" extern void (*ReactantThrowError)(const char *);
 
 // Utilities for `StatusOr`.
 template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
