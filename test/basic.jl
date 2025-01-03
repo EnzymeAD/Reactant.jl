@@ -885,3 +885,28 @@ end
     res = @jit fn(x_ra, Array(idxs_ra))
     @test res ≈ fn(Array(x_ra), Array(idxs_ra))
 end
+
+@testset "Common Trig Functions" begin
+    x = rand(Float32, 4, 16)
+    x_ra = Reactant.to_rarray(x)
+
+    @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
+        @test @jit(fn.(x_ra)) ≈ fn.(x)
+        @test @jit(fn.(x_ra)) isa ConcreteRArray{Float32,2}
+    end
+
+    x = 0.235f0
+    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+
+    @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
+        @test @jit(fn.(x_ra)) ≈ fn.(x)
+        @test @jit(fn.(x_ra)) isa ConcreteRNumber{Float32}
+    end
+    @testset for fn in (sincospi, sincos)
+        res = @jit fn(x_ra)
+        @test res[1] ≈ fn(x)[1]
+        @test res[2] ≈ fn(x)[2]
+        @test res[1] isa ConcreteRNumber{Float32}
+        @test res[2] isa ConcreteRNumber{Float32}
+    end
+end
