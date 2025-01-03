@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cctype>
+#include <cstdint>
+#include <optional>
 #include <regex>
 #include <string>
 
@@ -105,11 +108,11 @@ std::string formatDescription(mlir::tblgen::Operator op) {
 
 std::string getDialectName(llvm::ArrayRef<const llvm::Record *> op_defs) {
   mlir::tblgen::Operator any_op(op_defs.front());
-  /*assert(
-      std::all_of(op_defs.begin(), op_defs.end(), [&any_op](llvm::Record *op) {
-        return mlir::tblgen::Operator(op).getDialectName() ==
-               any_op.getDialectName();
-      }));*/
+  assert(std::all_of(op_defs.begin(), op_defs.end(),
+                     [&any_op](const llvm::Record *op) {
+                       return mlir::tblgen::Operator(op).getDialectName() ==
+                              any_op.getDialectName();
+                     }));
   std::string dialect_name;
   if (DialectName.empty()) {
     dialect_name = any_op.getDialectName().str();
@@ -174,6 +177,109 @@ std::string emitEnum(EnumAttr e) {
   return julia_enum + '\n';
 }
 
+const llvm::StringMap<std::string> cppJuliaTypeMap = {
+    {"int64_t", "Int"},
+    {"bool", "Bool"},
+    {"Type", "IR.Type"},
+    {"Attribute", "IR.Attribute"}};
+
+std::string toPascalCase(std::string s) {
+  std::string output = "";
+  auto next_up = true;
+  for (auto c : s) {
+    if (next_up) {
+      output += std::toupper(c);
+      next_up = false;
+      continue;
+    }
+    if (c == '_') {
+      next_up = true;
+      continue;
+    }
+    output += c;
+  }
+  return output;
+}
+
+std::string removeNamespace(std::string s) {
+  auto pos = s.rfind("::");
+  if (pos >= s.length())
+    return s;
+  return s.substr(pos + 2);
+}
+
+llvm::StringMap<std::string> structMap;
+
+std::string emitStruct(llvm::Record def, std::string dialect) {
+  auto mnemonic = def.getValueAsString("mnemonic").str();
+  auto StructName = toPascalCase(mnemonic);
+  auto params = def.getValueAsDag("parameters");
+  auto predicate = def.getValue("predicate")->getValue()->getAsString();
+  structMap.insert({predicate, StructName});
+  auto structDef = "struct " + StructName + '\n';
+  auto mlirAttributeDef = "IR.Attribute(s::" + StructName +
+                          ") = parse(IR.Attribute,\"#" + dialect + "." +
+                          mnemonic + '<';
+  for (auto [arg, name_] :
+       llvm::zip(params->getArgs(), params->getArgNames())) {
+    auto name = name_->getAsUnquotedString();
+    auto isArray = false;
+    auto isEnum = false;
+    std::string cpp_type;
+    std::optional<std::string> julia_type;
+    if (auto init = dyn_cast<llvm::DefInit>(arg)) { // not a cpp type
+      auto sub_def = init->getDef();
+      cpp_type = sub_def->getValueAsString("cppType").str();
+      auto type = sub_def->getType()->getAsString();
+      llvm::StringSwitch<std::function<void()>>(type)
+          .Case("APFloatParameter", [&]() { julia_type = "Float64"; })
+          .Case("StringRefParameter", [&]() { julia_type = "String"; })
+          .Case("EnumParameter",
+                [&]() {
+                  cpp_type = removeNamespace(toPascalCase(cpp_type));
+                  isEnum = true;
+                })
+          .Case("ArrayRefParameter",
+                [&]() {
+                  auto pos_start = cpp_type.find('<') + 1;
+                  auto pos_stop = cpp_type.rfind('>') - 1;
+                  assert(pos_start < cpp_type.length() && pos < pos_stop.length());
+                  cpp_type = cpp_type.substr(pos_start, pos_stop);
+                  cpp_type.pop_back();
+                  cpp_type = removeNamespace(cpp_type);
+                  isArray = true;
+                })
+          .Default([&]() { llvm::errs() << "unknown pattern"; })();
+
+    } else
+      cpp_type = arg->getAsUnquotedString();
+
+    if (!julia_type) {
+      if (!isEnum) {
+        auto julia_type_entry = cppJuliaTypeMap.find(cpp_type);
+        if (julia_type_entry == cppJuliaTypeMap.end()) {
+          llvm::errs() << cpp_type << '\n';
+          continue;
+        }
+        julia_type = julia_type_entry->getValue();
+      } else {
+        julia_type = cpp_type;
+      }
+    }
+    structDef +=
+        '\t' + name + "::" +
+        (isArray ? llvm::formatv("Vector{{{}}", *julia_type) : *julia_type) +
+        '\n';
+    mlirAttributeDef += llvm::formatv("{0} = $(s.{0}), ", name);
+  }
+
+  structDef += "end";
+  mlirAttributeDef.resize(mlirAttributeDef.length() - 2);
+  mlirAttributeDef += ">\")";
+
+  return structDef + '\n' + mlirAttributeDef;
+}
+
 bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
                      llvm::raw_ostream &os) {
 
@@ -192,6 +298,15 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
   llvm::ArrayRef<const llvm::Record *> opdefs =
       recordKeeper.getAllDerivedDefinitionsIfDefined("Op");
 
+  std::string modulename;
+
+  auto dialect_name = getDialectName(opdefs);
+  if (!DialectName.empty()) {
+    modulename = DialectName;
+  } else {
+    modulename = dialect_name;
+  }
+
   llvm::ArrayRef<const llvm::Record *> attrdefs =
       recordKeeper.getAllDerivedDefinitionsIfDefined("Attr");
 
@@ -207,6 +322,13 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
       auto s = enumAttr.getCppNamespace() +
                "::" + enumAttr.getSpecializedAttrClassName();
       attrMap.insert({s.str(), enumAttr});
+      continue;
+    }
+    if (attr.getDef().getType()->getAsString() == "EnumAttr")
+      continue;
+    if (attr.getDef().getValue("attrName")) { // detect "struct" attributes
+      attribs += emitStruct(attr.getDef(), modulename);
+      // a->dump();
     }
   }
   const char *moduleTemplate;
@@ -253,15 +375,6 @@ end
          // result_inference
 
   std::string modulecontents = "";
-
-  std::string modulename;
-
-  auto dialect_name = getDialectName(opdefs);
-  if (!DialectName.empty()) {
-    modulename = DialectName;
-  } else {
-    modulename = dialect_name;
-  }
 
   for (const auto *def : opdefs) {
     mlir::tblgen::Operator op(*def);
@@ -421,16 +534,24 @@ end
         } else {
           pushed_expression =
               llvm::formatv(R"(parse(Attribute,"#{0}.{1}<$(string({1}))>"))",
-                            dialect_name, var_name, var_type);
+                            dialect_name, var_name);
         }
       } else {
-        auto entry = standardAttribute.find(attr.getDefName());
+        auto entry = standardAttribute.find(
+            attr.getDefName()); // TODO: use predicate & fuse with structMap
         if (entry != standardAttribute.end()) {
           var_type = entry->second;
           pushed_expression = "Attribute(" + var_name + ")";
         } else {
-          pushed_expression = var_name;
-          var_type = "Attribute";
+          auto entry = structMap.find(
+              attr.getDef().getValue("predicate")->getValue()->getAsString());
+          if (entry != structMap.end()) {
+            var_type = entry->second;
+            pushed_expression = "Attribute(" + var_name + ")";
+          } else {
+            pushed_expression = var_name;
+            var_type = "Attribute";
+          }
         }
       }
 
