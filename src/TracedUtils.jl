@@ -115,8 +115,9 @@ function make_mlir_fn(
 
     N = length(args)
     seen_args = OrderedIdDict()
-    traced_args = ntuple(N) do i
-        return Reactant.make_tracer(
+    traced_args = Vector{Any}(undef, N)
+    for i in 1:N
+        @inbounds traced_args[i] = Reactant.make_tracer(
             seen_args,
             args[i],
             (:args, i),
@@ -166,7 +167,10 @@ function make_mlir_fn(
 
     @assert MLIR.IR._has_block()
 
-    result = MLIR.IR.block!(fnbody) do
+    # Explicitly don't use block! to avoid creating a closure, which creates
+    # both compile-time and relocatability issues
+    MLIR.IR.activate!(fnbody)
+    result = try
         for (i, arg) in enumerate(linear_args)
             if construct_function_without_args
                 arg.mlir_data = args[i].mlir_data
@@ -177,12 +181,9 @@ function make_mlir_fn(
             end
         end
 
-        # TODO fix it for kwargs
-        #if concretein
         Reactant.call_with_reactant(f, traced_args...)
-        #else
-        #    f(traced_args...)
-        #end
+    finally
+        MLIR.IR.deactivate!(fnbody)
     end
 
     seen_results = OrderedIdDict()
@@ -215,7 +216,8 @@ function make_mlir_fn(
 
     out_tys = [transpose_ty(Ops.mlir_type(arg)) for arg in linear_results]
 
-    ret = MLIR.IR.block!(fnbody) do
+    MLIR.IR.activate!(fnbody)
+    ret = try
         vals = MLIR.IR.Value[]
         for res in linear_results
             col_maj = if res isa MissingTracedValue
@@ -230,7 +232,9 @@ function make_mlir_fn(
         !no_args_in_result && @assert length(vals) == length(linear_results)
 
         dialect = getfield(MLIR.Dialects, return_dialect)
-        return dialect.return_(vals)
+        dialect.return_(vals)
+    finally
+        MLIR.IR.deactivate!(fnbody)
     end
 
     name2 = name
