@@ -95,13 +95,16 @@ function should_rewrite_ft(@nospecialize(ft))
         return false
     end
     if ft <: Core.Function
-        mod = ft.name.module
-        # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
-        if has_ancestor(mod, Reactant.Ops) ||
-            has_ancestor(mod, Reactant.TracedUtils) ||
-            has_ancestor(mod, Reactant.MLIR) ||
-            has_ancestor(mod, Reactant.TracedRandom)
-            return false
+        # We need this for closures to work
+        if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :module)
+            mod = ft.name.module
+            # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
+            if has_ancestor(mod, Reactant.Ops) ||
+                has_ancestor(mod, Reactant.TracedUtils) ||
+                has_ancestor(mod, Reactant.MLIR) ||
+                has_ancestor(mod, Reactant.TracedRandom)
+                return false
+            end
         end
     end
     # Don't rewrite Val
