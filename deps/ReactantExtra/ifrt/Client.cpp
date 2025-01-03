@@ -38,17 +38,12 @@ extern "C" span<Array*> ifrt_client_copy_arrays(Client* client, span<Array*> c_a
     auto memory_kind = convert(Type<std::optional<MemoryKind>>(), c_memory_kind);
     auto res = MyValueOrThrow(client->CopyArrays(arrays, devices, memory_kind, semantics));
     return convert(Type<span<Array*>>(), res);
-} 
+}
 
-extern "C" Tuple* ifrt_client_make_tuple(Client* client, Value* values, int nvalues)
+extern "C" Tuple* ifrt_client_make_tuple(Client* client, span<Value*> c_values)
 {
-    auto values_ptr = new tsl::RCReference<Value>[nvalues];
-    for (int i = 0; i < nvalues; i++) {
-        values_ptr[i] = tsl::RCReference<Value>();
-        values_ptr[i].reset(&values[i]);
-    }
-    auto span = absl::Span<tsl::RCReference<Value>>(values_ptr, nvalues);
-    return MyValueOrThrow(client->MakeTuple(span)).release();
+    auto values = convert(Type<absl::Span<tsl::RCReference<Value>>>(), c_values);
+    return MyValueOrThrow(client->MakeTuple(values)).release();
 }
 
 extern "C" const char* ifrt_client_runtime_type(Client* client)
@@ -108,8 +103,7 @@ extern "C" Device* ifrt_client_lookup_device(Client* client,
     return MyValueOrThrow(client->LookupDevice(DeviceId(device_id)));
 }
 
-extern "C" Device*
-ifrt_client_lookup_addressable_device(Client* client, int device_id)
+extern "C" Device* ifrt_client_lookup_addressable_device(Client* client, int device_id)
 {
     return MyValueOrThrow(client->LookupAddressableDevice(device_id));
 }

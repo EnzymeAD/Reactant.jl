@@ -82,6 +82,8 @@ end
     @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, client::Client) = client.client
+
 function to_row_major(x::Array{T,N}) where {T,N}
     return permutedims(x, reverse(Base.OneTo(N)))
 end
