@@ -8,11 +8,18 @@ using namespace reactant;
 // TODO support more parameters of `PjRtClient::CreateOptions`
 extern "C" PjRtClient* ifrt_pjrt_client_ctor(xla::PjRtClient* pjrt_client)
 {
-    return MyValueOrThrow(
-        PjRtClient::Create(PjRtClient::CreateOptions {
-            std::shared_ptr<xla::PjRtClient> { pjrt_client } }))
-        .release();
+    auto options = PjRtClient::CreateOptions{std::shared_ptr<xla::PjRtClient>(pjrt_client)};
+    return MyValueOrThrow(PjRtClient::Create(options)).release();
 }
+
+// NOTE deprecated
+// extern "C" PjRtClient* ifrt_pjrt_client_ctor(xla::PjRtClient* pjrt_client)
+// {
+//     return MyValueOrThrow(
+//         PjRtClient::Create(PjRtClient::CreateOptions {
+//             std::shared_ptr<xla::PjRtClient> { pjrt_client } }))
+//         .release();
+// }
 
 extern "C" void ifrt_pjrt_client_free(PjRtClient* client) { delete client; }
 

@@ -5,6 +5,8 @@
 #include "xla/tsl/concurrency/ref_count.h"
 #include <type_traits>
 #include <optional>
+#include <vector>
+#include <memory>
 
 namespace reactant {
 template <typename T>
@@ -82,10 +84,28 @@ auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<T*> span) -> absl::Span
 }
 
 template <typename T>
-auto convert(Type<span<T*>>, std::vector<tsl::RCReference<T>> vec) -> span<T*> {
+auto convert(Type<span<T*>>, std::vector<std::unique_ptr<T>> vec) -> span<T*> {
+    T** ptr = new T*[vec.size()];
+    for (int i = 0; i < vec.size(); i++) {
+        ptr[i] = vec[i].release();
+    }
+    return span<T*>(vec.size(), ptr);
+}
+
+template <typename T>
+auto convert(Type<span<T*>>, std::vector<std::shared_ptr<T>> vec) -> span<T*> {
     T** ptr = new T*[vec.size()];
     for (int i = 0; i < vec.size(); i++) {
         ptr[i] = vec[i].get();
+    }
+    return span<T*>(vec.size(), ptr);
+}
+
+template <typename T>
+auto convert(Type<span<T*>>, std::vector<tsl::RCReference<T>> vec) -> span<T*> {
+    T** ptr = new T*[vec.size()];
+    for (int i = 0; i < vec.size(); i++) {
+        ptr[i] = vec[i].release();
     }
     return span<T*>(vec.size(), ptr);
 }
