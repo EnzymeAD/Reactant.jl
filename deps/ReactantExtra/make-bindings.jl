@@ -23,6 +23,10 @@ for file in [
     "StableHLO.jl",
     "CHLO.jl",
     "VHLO.jl",
+    "Llvm.jl",
+    "Nvvm.jl",
+    "Gpu.jl",
+    "Affine.jl",
 ]
     build_file(joinpath(src_dir, "mlir", "Dialects", file))
 end

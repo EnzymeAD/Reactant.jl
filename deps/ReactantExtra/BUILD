@@ -611,6 +611,48 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "LlvmJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Llvm.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/LLVMIR/LLVMOps.td",
+    deps = [
+        "@llvm-project//mlir:LLVMOpsTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "NvvmIncJLGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Nvvm.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/LLVMIR/NVVMOps.td",
+    deps = [
+        "@llvm-project//mlir:NVVMOpsTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "GpuIncJLGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Gpu.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/GPU/IR/GPUOps.td",
+    deps = [
+        "@llvm-project//mlir:GPUOpsTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
     name = "EnzymeJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
