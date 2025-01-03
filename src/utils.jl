@@ -230,14 +230,15 @@ function rewrite_inst(inst, ir, interp)
     return false, inst
 end
 
-const oc_captures = Dict{Tuple{Type,Type,Core.CodeInfo,Int,Bool,Any},Core.OpaqueClosure}()
+const oc_capture_vec = Vector{Dict}()
 
 # Caching is both good to reducing compile times and necessary to work around julia bugs
 # in OpaqueClosure's: https://github.com/JuliaLang/julia/issues/56833
 function make_oc(
-    sig::Type, rt::Type, src::Core.CodeInfo, nargs::Int, isva::Bool, f::Any
-)::Core.OpaqueClosure
-    key = (sig, rt, src, nargs, isva, f)
+    oc_captures::Dict{FT, Core.OpaqueClosure},
+    sig::Type, rt::Type, src::Core.CodeInfo, nargs::Int, isva::Bool, f::FT
+)::Core.OpaqueClosure where FT
+    key = f
     if haskey(oc_captures, key)
         return oc_captures[key]
     else
@@ -493,14 +494,19 @@ function call_with_reactant_generator(
     # inner code during compilation without special handling (i.e. call_in_world_total).
     # Opaque closures also require taking the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
+
+
+    dict = Dict{args[1], Core.OpaqueClosure}
+    push!(oc_capture_vec, dict)
+
     oc = if false && Base.issingletontype(args[1])
         res = Core._call_in_world_total(
-            world, make_oc, octup, rt, src, ocnargs, ocva, args[1].instance
+            world, make_oc, dict, octup, rt, src, ocnargs, ocva, args[1].instance
         )::Core.OpaqueClosure
 
     else
         farg = fn_args[1]
-        push!(overdubbed_code, Expr(:call, make_oc, octup, rt, src, ocnargs, ocva, farg))
+        push!(overdubbed_code, Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         Core.SSAValue(length(overdubbed_code))
     end
