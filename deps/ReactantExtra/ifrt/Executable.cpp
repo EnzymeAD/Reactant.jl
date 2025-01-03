@@ -35,21 +35,21 @@ extern "C" int64_t ifrt_executable_size(Executable* executable)
 
 // TODO xla::Executable::GetCompiledMemoryStats
 
-extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_parameter_shardings(Executable* executable)
-{
-    auto shardings = executable->GetParameterShardings();
-    if (!shardings.has_value())
-        return std::make_tuple(0, nullptr);
-    return std::make_tuple(shardings.value().size(), shardings.value().data());
-}
+// extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_parameter_shardings(Executable* executable)
+// {
+//     auto shardings = executable->GetParameterShardings();
+//     if (!shardings.has_value())
+//         return std::make_tuple(0, nullptr);
+//     return std::make_tuple(shardings.value().size(), shardings.value().data());
+// }
 
-extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_output_shardings(Executable* executable)
-{
-    auto shardings = executable->GetOutputShardings();
-    if (!shardings.has_value())
-        return std::make_tuple(0, nullptr);
-    return std::make_tuple(shardings.value().size(), shardings.value().data());
-}
+// extern "C" std::tuple<size_t, OpSharding*> ifrt_executable_output_shardings(Executable* executable)
+// {
+//     auto shardings = executable->GetOutputShardings();
+//     if (!shardings.has_value())
+//         return std::make_tuple(0, nullptr);
+//     return std::make_tuple(shardings.value().size(), shardings.value().data());
+// }
 
 extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_executable_parameter_layouts(Executable* executable)
 {

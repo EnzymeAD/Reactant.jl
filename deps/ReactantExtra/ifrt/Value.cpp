@@ -9,14 +9,14 @@ extern "C" Client* ifrt_value_client(Value* value)
     return value->client();
 }
 
-extern "C" Future<> ifrt_value_get_ready_future(Value* value)
+extern "C" Future<>* ifrt_value_get_ready_future(Value* value)
 {
-    return value->GetReadyFuture();
+    return new Future<>(value->GetReadyFuture());
 }
 
-extern "C" Future<> ifrt_value_delete(Value* value)
+extern "C" Future<>* ifrt_value_delete(Value* value)
 {
-    return value->Delete();
+    return new Future<>(value->Delete());
 }
 
 extern "C" bool ifrt_value_is_deleted(Value* value)

@@ -5,6 +5,8 @@
 using namespace xla::ifrt;
 using namespace reactant;
 
+// TODO translate std::tuple to reactant::span
+
 extern "C" Client* ifrt_loadedexecutable_client(LoadedExecutable* executable)
 {
     return executable->client();
@@ -45,21 +47,21 @@ extern "C" int64_t ifrt_loadedexecutable_size(LoadedExecutable* executable)
 
 // TODO xla::GetCompiledMemoryStats
 
-extern "C" std::tuple<size_t, OpSharding*> ifrt_loadedexecutable_parameter_shardings(LoadedExecutable* executable)
-{
-    auto shardings = executable->GetParameterShardings();
-    if (!shardings.has_value())
-        return std::make_tuple(0, nullptr);
-    return std::make_tuple(shardings.value().size(), shardings.value().data());
-}
+// extern "C" std::tuple<size_t, OpSharding*> ifrt_loadedexecutable_parameter_shardings(LoadedExecutable* executable)
+// {
+//     auto shardings = executable->GetParameterShardings();
+//     if (!shardings.has_value())
+//         return std::make_tuple(0, nullptr);
+//     return std::make_tuple(shardings.value().size(), shardings.value().data());
+// }
 
-extern "C" std::tuple<size_t, OpSharding*> ifrt_loadedexecutable_output_shardings(LoadedExecutable* executable)
-{
-    auto shardings = executable->GetOutputShardings();
-    if (!shardings.has_value())
-        return std::make_tuple(0, nullptr);
-    return std::make_tuple(shardings.value().size(), shardings.value().data());
-}
+// extern "C" std::tuple<size_t, OpSharding*> ifrt_loadedexecutable_output_shardings(LoadedExecutable* executable)
+// {
+//     auto shardings = executable->GetOutputShardings();
+//     if (!shardings.has_value())
+//         return std::make_tuple(0, nullptr);
+//     return std::make_tuple(shardings.value().size(), shardings.value().data());
+// }
 
 extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_loadedexecutable_parameter_layouts(LoadedExecutable* executable)
 {
