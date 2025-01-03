@@ -4,7 +4,7 @@
 using namespace xla::ifrt;
 using namespace reactant;
 
-extern "C" PjRtHostSendAndRecvLoadedHostCallback* ifrt_pjrt_hostsendandrecv_loadhostcallback_ctor(PjRtClient* client, xla::HostCallback* host_callback)
+extern "C" PjRtHostSendAndRecvLoadedHostCallback* ifrt_pjrt_hostsendandrecv_loadhostcallback_ctor(Client* client, xla::HostCallback* host_callback)
 {
     auto xla_callback_ptr = std::make_unique<xla::HostCallback>(*host_callback);
     return new PjRtHostSendAndRecvLoadedHostCallback(client, std::move(xla_callback_ptr));
