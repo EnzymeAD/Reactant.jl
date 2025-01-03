@@ -11,10 +11,11 @@ extern "C" Shape* ifrt_shape_ctor(const int64_t* dims, size_t dims_size)
 
 extern "C" void ifrt_shape_free(Shape* shape) { delete shape; }
 
-extern "C" span<const int64_t> ifrt_shape_dims(Shape* shape)
-{
-    return reactant::convert(Type<span<const int64_t>>(), shape->dims());
-}
+// TODO fix type conversion
+// extern "C" span<const int64_t> ifrt_shape_dims(Shape* shape)
+// {
+//     return reactant::convert(Type<span<const int64_t>>(), shape->dims());
+// }
 
 extern "C" bool ifrt_shape_eq(Shape* shape1, Shape* shape2)
 {
@@ -31,7 +32,8 @@ extern "C" int64_t ifrt_shape_dims_num_elements(Shape* shape)
     return shape->num_elements();
 }
 
-extern "C" const char* ifrt_shape_debug_string(Shape* shape)
-{
-    return convert(Type<const char*>(), shape->DebugString());
-}
+// TODO fix type conversion
+// extern "C" const char* ifrt_shape_debug_string(Shape* shape)
+// {
+//     return convert(Type<const char*>(), shape->DebugString());
+// }
