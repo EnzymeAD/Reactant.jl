@@ -14,7 +14,6 @@
 // limitations under the License.
 
 #include <cctype>
-#include <cstdint>
 #include <optional>
 #include <regex>
 #include <string>
@@ -84,15 +83,15 @@ std::string formatDescription(mlir::tblgen::Operator op) {
   size_t pos = 0;
   while (description[pos] == '\n')
     ++pos;
-  size_t leading_spaces = 0;
+  size_t leadingSpaces = 0;
   while (description[pos++] == ' ')
-    ++leading_spaces;
-  if (leading_spaces) {
-    std::string leading_spaces_str;
-    for (size_t i = 0; i < leading_spaces; ++i)
-      leading_spaces_str += "[ ]";
+    ++leadingSpaces;
+  if (leadingSpaces) {
+    std::string leadingSpacesStr;
+    for (size_t i = 0; i < leadingSpaces; ++i)
+      leadingSpacesStr += "[ ]";
     description = std::regex_replace(
-        description, std::regex("\n" + leading_spaces_str), "\n");
+        description, std::regex("\n" + leadingSpacesStr), "\n");
   }
   description = std::regex_replace(description, std::regex(R"(\\)"), R"(\\)");
   description = std::regex_replace(description, std::regex("(['\"$])"), "\\$1");
@@ -106,20 +105,20 @@ std::string formatDescription(mlir::tblgen::Operator op) {
   return description;
 }
 
-std::string getDialectName(llvm::ArrayRef<const llvm::Record *> op_defs) {
-  mlir::tblgen::Operator any_op(op_defs.front());
-  assert(std::all_of(op_defs.begin(), op_defs.end(),
-                     [&any_op](const llvm::Record *op) {
+std::string getDialectName(llvm::ArrayRef<const llvm::Record *> opDefs) {
+  mlir::tblgen::Operator anyOp(opDefs.front());
+  assert(std::all_of(opDefs.begin(), opDefs.end(),
+                     [&anyOp](const llvm::Record *op) {
                        return mlir::tblgen::Operator(op).getDialectName() ==
-                              any_op.getDialectName();
+                              anyOp.getDialectName();
                      }));
-  std::string dialect_name;
+  std::string dialectName;
   if (DialectName.empty()) {
-    dialect_name = any_op.getDialectName().str();
+    dialectName = anyOp.getDialectName().str();
   } else {
-    dialect_name = DialectName;
+    dialectName = DialectName;
   }
-  return dialect_name;
+  return dialectName;
 }
 
 std::string sanitizeName(std::string name,
@@ -155,45 +154,52 @@ std::string sanitizeName(std::string name,
 extern bool disableModuleWrap;
 
 std::string emitEnum(EnumAttr e) {
-  auto default_v = e.getDefaultValue().str();
   auto name = sanitizeName(e.getEnumClassName().str());
-  // e.getBaseAttrClass()->getName()
-
-  auto is_specialized = e.genSpecializedAttr();
-
-  auto julia_enum = "@enumx " + name + ' ';
-
-  if (!is_specialized) { // parse the attribute using the name
+  auto juliaEnum = "@enumx " + name + ' ';
+  auto isSpecialized = e.genSpecializedAttr();
+  if (!isSpecialized) { // parse the attribute using the name
     for (auto c : e.getAllCases()) {
-      julia_enum += sanitizeName(c.getStr().str()) + ' ';
+      juliaEnum += sanitizeName(c.getStr().str()) +
+                   ' '; // TODO: handle the case where a enum variant name is a
+                        // reserved keyword
     }
   } else {
     for (auto c : e.getAllCases()) {
-      julia_enum += sanitizeName(c.getStr().str()) + '=' +
-                    std::to_string(c.getValue()) + ' ';
+      juliaEnum += sanitizeName(c.getStr().str()) + '=' +
+                   std::to_string(c.getValue()) + ' ';
     }
   }
 
-  return julia_enum + '\n';
+  return juliaEnum + '\n';
 }
 
-const llvm::StringMap<std::string> cppJuliaTypeMap = {
+const llvm::StringMap<std::string> cppToJuliaTypeMap = {
     {"int64_t", "Int"},
     {"bool", "Bool"},
     {"Type", "IR.Type"},
     {"Attribute", "IR.Attribute"}};
 
+const llvm::StringMap<std::string> standardAttributeToJuliaTypeMap = {
+    {"I32Attr", "Int32"},
+    {"I64Attr", "Int64"},
+    {"DenseI64ArrayAttr", "Vector{Int64}"},
+    {"F32Attr", "Float32"},
+    {"F64Attr", "Float64"},
+    {"BoolAttr", "Bool"},
+    {"StrAttr", "String"},
+};
+
 std::string toPascalCase(std::string s) {
   std::string output = "";
-  auto next_up = true;
+  auto nextUp = true;
   for (auto c : s) {
-    if (next_up) {
+    if (nextUp) {
       output += std::toupper(c);
-      next_up = false;
+      nextUp = false;
       continue;
     }
     if (c == '_') {
-      next_up = true;
+      nextUp = true;
       continue;
     }
     output += c;
@@ -210,12 +216,11 @@ std::string removeNamespace(std::string s) {
 
 llvm::StringMap<std::string> structMap;
 
-std::string emitStruct(llvm::Record def, std::string dialect) {
+std::optional<std::string> emitStruct(llvm::Record def, std::string dialect) {
   auto mnemonic = def.getValueAsString("mnemonic").str();
   auto StructName = toPascalCase(mnemonic);
   auto params = def.getValueAsDag("parameters");
   auto predicate = def.getValue("predicate")->getValue()->getAsString();
-  structMap.insert({predicate, StructName});
   auto structDef = "struct " + StructName + '\n';
   auto mlirAttributeDef = "IR.Attribute(s::" + StructName +
                           ") = parse(IR.Attribute,\"#" + dialect + "." +
@@ -224,51 +229,46 @@ std::string emitStruct(llvm::Record def, std::string dialect) {
        llvm::zip(params->getArgs(), params->getArgNames())) {
     auto name = name_->getAsUnquotedString();
     auto isArray = false;
-    auto isEnum = false;
-    std::string cpp_type;
-    std::optional<std::string> julia_type;
+    std::string cppType;
+    std::optional<std::string> juliaType;
     if (auto init = dyn_cast<llvm::DefInit>(arg)) { // not a cpp type
-      auto sub_def = init->getDef();
-      cpp_type = sub_def->getValueAsString("cppType").str();
-      auto type = sub_def->getType()->getAsString();
+      auto subDef = init->getDef();
+      cppType = subDef->getValueAsString("cppType").str();
+      auto type = subDef->getType()->getAsString();
       llvm::StringSwitch<std::function<void()>>(type)
-          .Case("APFloatParameter", [&]() { julia_type = "Float64"; })
-          .Case("StringRefParameter", [&]() { julia_type = "String"; })
+          .Case("APFloatParameter", [&]() { juliaType = "Float64"; })
+          .Case("StringRefParameter", [&]() { juliaType = "String"; })
           .Case("EnumParameter",
-                [&]() {
-                  cpp_type = removeNamespace(toPascalCase(cpp_type));
-                  isEnum = true;
-                })
+                [&]() { juliaType = removeNamespace(toPascalCase(cppType)); })
           .Case("ArrayRefParameter",
                 [&]() {
-                  auto pos_start = cpp_type.find('<') + 1;
-                  auto pos_stop = cpp_type.rfind('>') - 1;
-                  assert(pos_start < cpp_type.length() && pos < pos_stop.length());
-                  cpp_type = cpp_type.substr(pos_start, pos_stop);
-                  cpp_type.pop_back();
-                  cpp_type = removeNamespace(cpp_type);
+                  auto posStart = cppType.find('<') + 1;
+                  auto posStop = cppType.rfind('>') - 1;
+                  assert(posStart < cppType.length() &&
+                         posStop < cppType.length());
+                  cppType = cppType.substr(posStart, posStop);
+                  cppType.pop_back();
+                  cppType = removeNamespace(cppType);
                   isArray = true;
                 })
-          .Default([&]() { llvm::errs() << "unknown pattern"; })();
+          .Default([&]() {
+            llvm::errs() << "unknown pattern : " << type << '\n';
+          })();
 
     } else
-      cpp_type = arg->getAsUnquotedString();
+      cppType = arg->getAsUnquotedString();
 
-    if (!julia_type) {
-      if (!isEnum) {
-        auto julia_type_entry = cppJuliaTypeMap.find(cpp_type);
-        if (julia_type_entry == cppJuliaTypeMap.end()) {
-          llvm::errs() << cpp_type << '\n';
-          continue;
-        }
-        julia_type = julia_type_entry->getValue();
-      } else {
-        julia_type = cpp_type;
+    if (!juliaType) {
+      auto juliaTypeEntry = cppToJuliaTypeMap.find(cppType);
+      if (juliaTypeEntry == cppToJuliaTypeMap.end()) {
+        llvm::errs() << cppType << '\n';
+        return std::nullopt;
       }
+      juliaType = juliaTypeEntry->getValue();
     }
     structDef +=
         '\t' + name + "::" +
-        (isArray ? llvm::formatv("Vector{{{}}", *julia_type) : *julia_type) +
+        (isArray ? llvm::formatv("Vector{{{}}", *juliaType) : *juliaType) +
         '\n';
     mlirAttributeDef += llvm::formatv("{0} = $(s.{0}), ", name);
   }
@@ -277,34 +277,24 @@ std::string emitStruct(llvm::Record def, std::string dialect) {
   mlirAttributeDef.resize(mlirAttributeDef.length() - 2);
   mlirAttributeDef += ">\")";
 
-  return structDef + '\n' + mlirAttributeDef;
+  structMap.insert({predicate, StructName});
+  return structDef + '\n' + mlirAttributeDef + '\n';
 }
 
 bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
                      llvm::raw_ostream &os) {
 
   llvm::StringMap<EnumAttr> attrMap;
-
-  const llvm::StringMap<std::string> standardAttribute = {
-      {"I32Attr", "Int32"},
-      {"I64Attr", "Int64"},
-      {"DenseI64ArrayAttr", "Vector{Int64}"},
-      {"F32Attr", "Float32"},
-      {"F64Attr", "Float64"},
-      {"BoolAttr", "Bool"},
-      {"StrAttr", "String"},
-  };
-
   llvm::ArrayRef<const llvm::Record *> opdefs =
       recordKeeper.getAllDerivedDefinitionsIfDefined("Op");
 
-  std::string modulename;
-
-  auto dialect_name = getDialectName(opdefs);
+  std::string moduleName;
+ 
   if (!DialectName.empty()) {
-    modulename = DialectName;
+    moduleName = DialectName;
   } else {
-    modulename = dialect_name;
+    moduleName = getDialectName(opdefs);
+    DialectName = moduleName;
   }
 
   llvm::ArrayRef<const llvm::Record *> attrdefs =
@@ -327,7 +317,10 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
     if (attr.getDef().getType()->getAsString() == "EnumAttr")
       continue;
     if (attr.getDef().getValue("attrName")) { // detect "struct" attributes
-      attribs += emitStruct(attr.getDef(), modulename);
+      auto complexAttr = emitStruct(attr.getDef(), moduleName);
+      if (!complexAttr)
+        continue;
+      attribs += *complexAttr;
       // a->dump();
     }
   }
@@ -353,13 +346,13 @@ end # {0}
 )";
   }
 
-  const char *functiontemplate = R"(
+  const char *functionTemplate = R"(
 {3}
 function {0}({1}location=Location())
     {2}
 end
 )";      // 0: functionname, 1: functionarguments, 2: functionbody
-  const char *functionbodytemplate = R"(op_ty_results = IR.Type[{0}]
+  const char *functionBodyTemplate = R"(op_ty_results = IR.Type[{0}]
     operands = Value[{1}]
     owned_regions = Region[{2}]
     successors = Block[{3}]
@@ -374,23 +367,23 @@ end
          // attributes, 5: optionals, 6: opname, 7: results expression, 8:
          // result_inference
 
-  std::string modulecontents = "";
+  std::string moduleContents = "";
 
   for (const auto *def : opdefs) {
     mlir::tblgen::Operator op(*def);
 
-    std::string operandarguments = "";
-    std::string operandcontainer = "";
+    std::string operandArguments = "";
+    std::string operandContainer = "";
     std::string optionals = "";
 
     auto opname = op.getOperationName();
-    auto functionname = opname.substr(op.getDialectName().str().length() +
+    auto functionName = opname.substr(op.getDialectName().str().length() +
                                       1); // get rid of "dialect." prefix.
-    functionname = sanitizeName(functionname, modulename);
+    functionName = sanitizeName(functionName, moduleName);
 
     std::string description = "";
     if (op.hasDescription()) {
-      description = "\"\"\"\n`" + functionname + "`\n" + formatDescription(op) +
+      description = "\"\"\"\n`" + functionName + "`\n" + formatDescription(op) +
                     "\n\"\"\"";
     }
     bool inferrable = canInferType(op);
@@ -400,9 +393,9 @@ end
                // is used to insert a single semicolon (;) instead of a comma
                // (,) as separator between positional and keyword arguments.
     for (int i = 0; i < op.getNumOperands(); i++) {
-      const auto &named_operand = op.getOperand(i);
+      const auto &namedOperand = op.getOperand(i);
       std::string defaultvalue = "";
-      std::string operandname = named_operand.name.str();
+      std::string operandname = namedOperand.name.str();
       if (operandname.empty()) {
         operandname = "operand_" + std::to_string(i);
       }
@@ -410,8 +403,8 @@ end
 
       std::string type = "Value";
 
-      bool optional = named_operand.isOptional();
-      bool variadic = named_operand.isVariadic();
+      bool optional = namedOperand.isOptional();
+      bool variadic = namedOperand.isVariadic();
 
       if (variadic) {
         type = "Vector{" + type + "}";
@@ -430,15 +423,15 @@ end
           separator = "; ";
         }
       } else {
-        operandcontainer += operandname + (variadic ? "..." : "") + ", ";
+        operandContainer += operandname + (variadic ? "..." : "") + ", ";
         separator =
             (!alreadykeyword && i == op.getNumOperands() - 1) ? "; " : ", ";
       }
 
-      operandarguments += operandname + "::" + type + defaultvalue + separator;
+      operandArguments += operandname + "::" + type + defaultvalue + separator;
     }
-    if (operandarguments == "") {
-      operandarguments = "; ";
+    if (operandArguments == "") {
+      operandArguments = "; ";
     }
 
     if (op.getTrait("::mlir::OpTrait::AttrSizedOperandSegments")) {
@@ -463,12 +456,12 @@ end
                         operandsegmentsizes);
     }
 
-    std::string resultarguments = "";
-    std::string resultcontainer = "";
+    std::string resultArguments = "";
+    std::string resultContainer = "";
     for (int i = 0; i < op.getNumResults(); i++) {
-      const auto &named_result = op.getResult(i);
+      const auto &namedResult = op.getResult(i);
       std::string defaultvalue = "";
-      std::string resultname = named_result.name.str();
+      std::string resultname = namedResult.name.str();
       if (resultname.empty()) {
         resultname =
             op.getNumResults() == 1 ? "result" : "result_" + std::to_string(i);
@@ -476,8 +469,8 @@ end
       resultname = sanitizeName(resultname);
       std::string type = "IR.Type";
 
-      bool optional = named_result.isOptional() || inferrable;
-      bool variadic = named_result.isVariadic();
+      bool optional = namedResult.isOptional() || inferrable;
+      bool variadic = namedResult.isVariadic();
 
       if (variadic) {
         type = "Tuple{Vararg{" + type + "}}";
@@ -491,66 +484,66 @@ end
         type = "Union{Nothing, " + type + "}";
         defaultvalue = "=nothing";
       } else {
-        resultcontainer += resultname + (variadic ? "..." : "") + ", ";
+        resultContainer += resultname + (variadic ? "..." : "") + ", ";
       }
-      resultarguments += resultname + "::" + type + defaultvalue + ", ";
+      resultArguments += resultname + "::" + type + defaultvalue + ", ";
     }
 
     std::string resultsexpression =
         (inferrable ? "(isempty(op_ty_results) ? nothing : op_ty_results)"
                     : "op_ty_results");
-    std::string resultinference =
+    std::string resultInference =
         (inferrable ? "isempty(op_ty_results)" : "false");
 
-    std::string attributearguments = "";
-    std::string attributecontainer = "";
+    std::string attributeArguments = "";
+    std::string attributeContainer = "";
     for (int i = 0; i < op.getNumAttributes(); i++) {
-      const auto &named_attr = op.getAttribute(i);
-      auto attr = named_attr.attr;
+      const auto &namedAttr = op.getAttribute(i);
+      auto attr = namedAttr.attr;
       // Derived attributes are never materialized and don't have to be
       // specified.
       if (attr.isDerivedAttr())
         continue;
 
-      std::string defaultvalue = "";
-      std::string attributename = named_attr.name.str();
+      std::string defaultValue = "";
+      std::string attributeName = namedAttr.name.str();
 
-      assert(!attributename.empty() &&
+      assert(!attributeName.empty() &&
              "expected NamedAttribute to have a name");
 
       auto optional = attr.isOptional() || attr.hasDefaultValue();
 
-      std::string var_name = sanitizeName(attributename);
-      std::string pushed_expression;
-      std::string var_type;
+      std::string VarName = sanitizeName(attributeName);
+      std::string pushedExpression;
+      std::string varType;
 
       auto entry = attrMap.find(attr.getStorageType());
       if (entry != attrMap.end()) {
         auto e = entry->getValue();
-        auto is_specialized = e.genSpecializedAttr();
-        var_type = sanitizeName(e.getEnumClassName().str()) + ".T";
-        if (is_specialized) {
-          pushed_expression = llvm::formatv(R"(Int({0}))", var_name);
+        auto isSpecialized = e.genSpecializedAttr();
+        varType = sanitizeName(e.getEnumClassName().str()) + ".T";
+        if (isSpecialized) {
+          pushedExpression = llvm::formatv(R"(Int({0}))", VarName);
         } else {
-          pushed_expression =
+          pushedExpression =
               llvm::formatv(R"(parse(Attribute,"#{0}.{1}<$(string({1}))>"))",
-                            dialect_name, var_name);
+                            DialectName, VarName);
         }
       } else {
-        auto entry = standardAttribute.find(
+        auto entry = standardAttributeToJuliaTypeMap.find(
             attr.getDefName()); // TODO: use predicate & fuse with structMap
-        if (entry != standardAttribute.end()) {
-          var_type = entry->second;
-          pushed_expression = "Attribute(" + var_name + ")";
+        if (entry != standardAttributeToJuliaTypeMap.end()) {
+          varType = entry->second;
+          pushedExpression = "Attribute(" + VarName + ")";
         } else {
           auto entry = structMap.find(
               attr.getDef().getValue("predicate")->getValue()->getAsString());
           if (entry != structMap.end()) {
-            var_type = entry->second;
-            pushed_expression = "Attribute(" + var_name + ")";
+            varType = entry->second;
+            pushedExpression = "Attribute(" + VarName + ")";
           } else {
-            pushed_expression = var_name;
-            var_type = "Attribute";
+            pushedExpression = VarName;
+            varType = "Attribute";
           }
         }
       }
@@ -559,77 +552,77 @@ end
         optionals += llvm::formatv(
             R"(!isnothing({0}) && push!(attributes, namedattribute("{0}", {1}))
     )",
-            attributename, pushed_expression);
-        defaultvalue = "=nothing";
-        var_type = "Union{" + var_type + ", Nothing}";
+            attributeName, pushedExpression);
+        defaultValue = "=nothing";
+        varType = "Union{" + varType + ", Nothing}";
       } else {
-        attributecontainer += "namedattribute(\"" + attributename + "\", " +
-                              pushed_expression + "), ";
+        attributeContainer += "namedattribute(\"" + attributeName + "\", " +
+                              pushedExpression + "), ";
       }
-      attributearguments += var_name + "::" + var_type + defaultvalue + ", ";
+      attributeArguments += VarName + "::" + varType + defaultValue + ", ";
     }
 
-    std::string regionarguments = "";
-    std::string regioncontainer = "";
+    std::string regionArguments = "";
+    std::string regionContainer = "";
     for (size_t i = 0; i < op.getNumRegions(); i++) {
-      const auto &named_region = op.getRegion(i);
+      const auto &namedRegion = op.getRegion(i);
       std::string defaultvalue = "";
-      std::string regionname = named_region.name.str();
-      if (regionname.empty()) {
-        regionname = "region_" + std::to_string(i);
+      std::string regionName = namedRegion.name.str();
+      if (regionName.empty()) {
+        regionName = "region_" + std::to_string(i);
       }
-      regionname = sanitizeName(regionname);
+      regionName = sanitizeName(regionName);
       std::string type = "Region";
 
-      bool variadic = named_region.isVariadic();
+      bool variadic = namedRegion.isVariadic();
 
       if (variadic) {
         type = "Vector{" + type + "}";
       }
 
-      regioncontainer += regionname + (variadic ? "..." : "") + ", ";
-      regionarguments += regionname + "::" + type + defaultvalue + ", ";
+      regionContainer += regionName + (variadic ? "..." : "") + ", ";
+      regionArguments += regionName + "::" + type + defaultvalue + ", ";
     }
 
-    std::string successorarguments = "";
-    std::string successorcontainer = "";
+    std::string successorArguments = "";
+    std::string successorContainer = "";
     for (size_t i = 0; i < op.getNumSuccessors(); i++) {
-      const auto &named_successor = op.getSuccessor(i);
-      std::string defaultvalue = "";
-      std::string successorname = named_successor.name.str();
-      if (successorname.empty()) {
-        successorname = "successor_" + std::to_string(i);
+      const auto &namedSuccessor = op.getSuccessor(i);
+      std::string defaultValue = "";
+      std::string successorName = namedSuccessor.name.str();
+      if (successorName.empty()) {
+        successorName = "successor_" + std::to_string(i);
       }
-      successorname = sanitizeName(successorname);
+      successorName = sanitizeName(successorName);
       std::string type = "Block";
 
-      bool variadic = named_successor.isVariadic();
+      bool variadic = namedSuccessor.isVariadic();
       if (variadic) {
         type = "Vector{" + type + "}";
       }
 
-      successorcontainer += successorname + (variadic ? "..." : "") + ", ";
-      successorarguments += successorname + "::" + type + defaultvalue + ", ";
+      successorContainer += successorName + (variadic ? "..." : "") + ", ";
+      successorArguments += successorName + "::" + type + defaultValue + ", ";
     }
 
-    std::string arguments = operandarguments + resultarguments +
-                            attributearguments + regionarguments +
-                            successorarguments;
-    std::string functionbody =
-        llvm::formatv(functionbodytemplate, resultcontainer, operandcontainer,
-                      regioncontainer, successorcontainer, attributecontainer,
-                      optionals, opname, resultsexpression, resultinference);
+    std::string arguments = operandArguments + resultArguments +
+                            attributeArguments + regionArguments +
+                            successorArguments;
+    std::string functionBody =
+        llvm::formatv(functionBodyTemplate, resultContainer, operandContainer,
+                      regionContainer, successorContainer, attributeContainer,
+                      optionals, opname, resultsexpression, resultInference);
 
-    modulecontents += llvm::formatv(functiontemplate, functionname, arguments,
-                                    functionbody, description);
+    moduleContents += llvm::formatv(functionTemplate, functionName, arguments,
+                                    functionBody, description);
   }
 
-  modulecontents = attribs + modulecontents;
+  moduleContents = attribs + moduleContents;
 
   if (disableModuleWrap) {
-    os << llvm::formatv(moduleTemplate, modulecontents);
+    os << llvm::formatv(moduleTemplate, moduleContents);
   } else {
-    os << llvm::formatv(moduleTemplate, modulename, modulecontents);
+    os << llvm::formatv(moduleTemplate, moduleName, moduleContents);
   }
 
   return false;
