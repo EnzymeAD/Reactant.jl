@@ -26,8 +26,7 @@ extern "C" const char* ifrt_memory_debug_string(Memory* memory)
     return convert(Type<const char*>(), memory->DebugString());
 }
 
-// TODO fix type conversion
-// extern "C" span<Device*> ifrt_memory_devices(Memory* memory)
-// {
-//     return convert(Type<span<Device*>>(), memory->Devices());
-// }
+extern "C" span<Device*> ifrt_memory_devices(Memory* memory)
+{
+    return convert(Type<span<Device*>>(), memory->Devices());
+}
