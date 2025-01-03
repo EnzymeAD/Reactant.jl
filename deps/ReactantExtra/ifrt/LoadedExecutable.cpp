@@ -63,35 +63,26 @@ extern "C" int64_t ifrt_loadedexecutable_size(LoadedExecutable* executable)
 //     return std::make_tuple(shardings.value().size(), shardings.value().data());
 // }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_loadedexecutable_parameter_layouts(LoadedExecutable* executable)
-{
-    auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
-    auto layouts_ptr = new xla::PjRtLayout*[layouts.size()];
-    for (int i = 0; i < layouts.size(); i++) {
-        layouts_ptr[i] = layouts[i].release();
-    }
-    return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// TODO fix type conversion
+// extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_parameter_layouts(LoadedExecutable* executable)
+// {
+//     auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
+//     return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+// }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout**> ifrt_loadedexecutable_output_layouts(LoadedExecutable* executable)
-{
-    auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-    auto layouts_ptr = new xla::PjRtLayout*[layouts.size()];
-    for (int i = 0; i < layouts.size(); i++) {
-        layouts_ptr[i] = layouts[i].release();
-    }
-    return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// TODO fix type conversion
+// extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_output_layouts(LoadedExecutable* executable)
+// {
+//     auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
+//     return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+// }
 
-extern "C" std::tuple<size_t, xla::HloModule**> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
-{
-    auto modules = MyValueOrThrow(executable->GetHloModules());
-    auto modules_ptr = new xla::HloModule*[modules.size()];
-    for (int i = 0; i < modules.size(); i++) {
-        modules_ptr[i] = modules[i].get();
-    }
-    return std::make_tuple(modules.size(), modules_ptr);
-}
+// TODO fix type conversion
+// extern "C" span<xla::HloModule*> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
+// {
+//     auto modules = MyValueOrThrow(executable->GetHloModules());
+//     return convert(Type<span<xla::HloModule*>>(), modules);
+// }
 
 // TODO xla::LoadedExecutable::GetOutputMemoryKinds
 // TODO xla::LoadedExecutable::GetCostAnalysis
@@ -106,9 +97,9 @@ extern "C" std::tuple<size_t, xla::HloModule**> ifrt_loadedexecutable_hlo_module
 //     return MyValueOrThrow(executable->Execute(arguments, result, future));
 // }
 
-extern "C" Future<> ifrt_loadedexecutable_delete(LoadedExecutable* executable)
+extern "C" Future<>* ifrt_loadedexecutable_delete(LoadedExecutable* executable)
 {
-    return executable->Delete();
+    return new Future<>(executable->Delete());
 }
 
 extern "C" bool ifrt_loadedexecutable_is_deleted(LoadedExecutable* executable)
@@ -116,10 +107,10 @@ extern "C" bool ifrt_loadedexecutable_is_deleted(LoadedExecutable* executable)
     return executable->IsDeleted();
 }
 
-extern "C" std::tuple<size_t, Device* const*> ifrt_loadedexecutable_addressable_devices(LoadedExecutable* executable)
+extern "C" span<Device*> ifrt_loadedexecutable_addressable_devices(LoadedExecutable* executable)
 {
     auto devices = executable->addressable_devices();
-    return std::make_tuple(devices.size(), devices.data());
+    return convert(Type<span<Device*>>(), devices);
 }
 
 // TODO auxiliary functions for xla::LoadedExecutable::ExecuteResult
