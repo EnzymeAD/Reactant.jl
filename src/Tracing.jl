@@ -705,7 +705,7 @@ function to_rarray_internal(@nospecialize(::TracedRArray), ::Tuple)
 end
 @inline to_rarray_internal(@nospecialize(x::ConcreteRArray), ::Tuple) = x
 @inline function to_rarray_internal(
-    @nospecialize(x::AbstractArray{<:ReactantPrimitive}), ::Tuple
+    @nospecialize(x::Array{<:ReactantPrimitive}), ::Tuple
 )
     return ConcreteRArray(x)
 end

@@ -230,14 +230,20 @@ function rewrite_inst(inst, ir, interp)
     return false, inst
 end
 
-const oc_captures = Dict{Tuple{Type,Type,Core.CodeInfo,Int,Bool,Any},Core.OpaqueClosure}()
+const oc_capture_vec = Vector{Any}()
 
 # Caching is both good to reducing compile times and necessary to work around julia bugs
 # in OpaqueClosure's: https://github.com/JuliaLang/julia/issues/56833
-function make_oc(
-    sig::Type, rt::Type, src::Core.CodeInfo, nargs::Int, isva::Bool, f::Any
-)::Core.OpaqueClosure
-    key = (sig, rt, src, nargs, isva, f)
+function make_oc_dict(
+    @nospecialize(oc_captures::Dict{FT,Core.OpaqueClosure}),
+    @nospecialize(sig::Type),
+    @nospecialize(rt::Type),
+    @nospecialize(src::Core.CodeInfo),
+    nargs::Int,
+    isva::Bool,
+    @nospecialize(f::FT)
+)::Core.OpaqueClosure where {FT}
+    key = f
     if haskey(oc_captures, key)
         return oc_captures[key]
     else
@@ -258,6 +264,39 @@ function make_oc(
             true,
         )::Core.OpaqueClosure
         oc_captures[key] = ores
+        return ores
+    end
+end
+
+function make_oc_ref(
+    oc_captures::Base.RefValue{Core.OpaqueClosure},
+    @nospecialize(sig::Type),
+    @nospecialize(rt::Type),
+    @nospecialize(src::Core.CodeInfo),
+    nargs::Int,
+    isva::Bool,
+    @nospecialize(f)
+)::Core.OpaqueClosure
+    if Base.isassigned(oc_captures)
+        return oc_captures[]
+    else
+        ores = ccall(
+            :jl_new_opaque_closure_from_code_info,
+            Any,
+            (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+            sig,
+            rt,
+            rt,
+            @__MODULE__,
+            src,
+            0,
+            nothing,
+            nargs,
+            isva,
+            f,
+            true,
+        )::Core.OpaqueClosure
+        oc_captures[] = ores
         return ores
     end
 end
@@ -493,19 +532,29 @@ function call_with_reactant_generator(
     # inner code during compilation without special handling (i.e. call_in_world_total).
     # Opaque closures also require taking the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
+
+    dict, make_oc = if Base.issingletontype(args[1])
+        Base.Ref{Core.OpaqueClosure}(), make_oc_ref
+    else
+        Dict{args[1],Core.OpaqueClosure}(), make_oc_dict
+    end
+
+    push!(oc_capture_vec, dict)
+
     oc = if false && Base.issingletontype(args[1])
         res = Core._call_in_world_total(
-            world, make_oc, octup, rt, src, ocnargs, ocva, args[1].instance
+            world, make_oc, dict, octup, rt, src, ocnargs, ocva, args[1].instance
         )::Core.OpaqueClosure
 
     else
         farg = fn_args[1]
-        push!(overdubbed_code, Expr(:call, make_oc, octup, rt, src, ocnargs, ocva, farg))
+        rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
+        push!(overdubbed_code, rep)
         push!(overdubbed_codelocs, code_info.codelocs[1])
         Core.SSAValue(length(overdubbed_code))
     end
 
-    push!(overdubbed_code, Expr(:(call), oc, fn_args[2:end]...))
+    push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
 
     push!(overdubbed_codelocs, code_info.codelocs[1])
 
