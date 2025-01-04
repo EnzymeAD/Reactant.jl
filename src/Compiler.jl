@@ -334,12 +334,18 @@ const cuFunc = Ref{UInt}(0)
 const cuModule = Ref{UInt}(0)
 
 function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false)
-    fnwrapped,
-    func2, traced_result, result, seen_args, ret, linear_args, in_tys,
-    linear_results = MLIR.IR.mmodule!(mod) do
-        MLIR.IR.block!(MLIR.IR.body(mod)) do
-            return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
-        end
+    # Explicitly don't use block! to avoid creating a closure, which creates
+    # both compile-time and relocatability issues
+    
+    MLIR.IR.activate!(mod)
+    MLIR.IR.activate!(MLIR.IR.body(mod))
+    fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys,
+    linear_results = 
+    try
+        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+    finally
+        MLIR.IR.deactivate!(MLIR.IR.body(mod))
+        MLIR.IR.deactivate!(mod)
     end
 
     concrete_seen = OrderedIdDict()
@@ -828,7 +834,8 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    return MLIR.IR.context!(ctx) do
+    MLIR.IR.activate!(ctx)
+    return try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
@@ -851,6 +858,8 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
         return exec,
         linear_args, linear_results, preserved_args, seen_args, concrete_result,
         isclosure
+    finally
+        MLIR.IR.deactivate!(ctx)
     end
 end
 

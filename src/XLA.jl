@@ -6,12 +6,13 @@ mutable struct Client
     client::Ptr{Cvoid}
 
     function Client(client::Ptr{Cvoid})
+        @assert client != C_NULL
         return new(client)
-        #@assert client != C_NULL
-        #finalizer(new(client)) do client
-        #    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
-        #end
     end
+end
+
+@inline function free_client(client::Client)
+    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
 end
 
 function to_row_major(x::Array{T,N}) where {T,N}
@@ -42,11 +43,11 @@ SetLogLevel(x) = @ccall MLIR.API.mlir_c.SetLogLevel(x::Cint)::Cvoid
 
 const cpuclientcount = Ref(0)
 # TODO synchronization when async is not working because `future` in `ConcreteRArray` is always `nothing`
-function CPUClient(asynchronous=false, node_id=0, num_nodes=1)
-    global cpuclientcount
-    @assert cpuclientcount[] == 0
-    cpuclientcount[] += 1
-
+function CPUClient(asynchronous=false, node_id=0, num_nodes=1; checkcount=true)
+    if checkcount
+        @assert cpuclientcount[] == 0
+        cpuclientcount[] += 1
+    end
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
     client = ccall(f, Ptr{Cvoid}, (UInt, Cint, Cint), asynchronous, node_id, num_nodes)
     #client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}

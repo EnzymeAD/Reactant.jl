@@ -64,8 +64,8 @@ end
             ReactantCacheToken(),
             REACTANT_METHOD_TABLE,
             world,
-            true,            #=forward_rules=#
-            true,            #=reverse_rules=#
+            false,            #=forward_rules=#
+            false,            #=reverse_rules=#
             false,            #=broadcast_rewrite=#
             set_reactant_abi,
         )
@@ -80,8 +80,8 @@ else
             REACTANT_CACHE,
             REACTANT_METHOD_TABLE,
             world,
-            true,            #=forward_rules=#
-            true,            #=forward_rules=#
+            false,            #=forward_rules=#
+            false,            #=forward_rules=#
             false,            #=broadcast_rewrite=#
             set_reactant_abi,
         )
