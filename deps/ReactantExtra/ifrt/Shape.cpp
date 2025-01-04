@@ -26,7 +26,7 @@ extern "C" bool ifrt_shape_ne(Shape* shape1, Shape* shape2)
     return *shape1 != *shape2;
 }
 
-extern "C" int64_t ifrt_shape_dims_num_elements(Shape* shape)
+extern "C" int64_t ifrt_shape_num_elements(Shape* shape)
 {
     return shape->num_elements();
 }
