@@ -12,6 +12,23 @@ import ...IR:
     IndexType
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
+using EnumX
+
+@enumx CmpFPredicate false_ = 0 oeq = 1 ogt = 2 oge = 3 olt = 4 ole = 5 one = 6 ord = 7 ueq =
+    8 ugt = 9 uge = 10 ult = 11 ule = 12 une = 13 uno = 14 true_ = 15
+
+@enumx CmpIPredicate eq = 0 ne = 1 slt = 2 sle = 3 sgt = 4 sge = 5 ult = 6 ule = 7 ugt = 8 uge =
+    9
+
+@enumx IntegerOverflowFlags none nsw nuw
+
+@enumx RoundingMode to_nearest_even = 0 downward = 1 upward = 2 toward_zero = 3 to_nearest_away =
+    4
+
+@enumx AtomicRMWKind addf = 0 addi = 1 assign = 2 maximumf = 3 maxs = 4 maxu = 5 minimumf =
+    6 mins = 7 minu = 8 mulf = 9 muli = 10 ori = 11 andi = 12 maxnumf = 13 minnumf = 14
+
+@enumx FastMathFlags none reassoc nnan ninf nsz arcp contract afn fast
 
 """
 `addf`
@@ -40,8 +57,8 @@ math, contraction, rounding mode, and other controls.
 function addf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -50,7 +67,12 @@ function addf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.addf",
@@ -59,8 +81,8 @@ function addf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -101,8 +123,8 @@ This op supports `nuw`/`nsw` overflow flags which stands stand for
 function addi(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    overflowFlags=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    overflowFlags::Union{IntegerOverflowFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -111,8 +133,13 @@ function addi(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(overflowFlags) &&
-        push!(attributes, namedattribute("overflowFlags", overflowFlags))
+    !isnothing(overflowFlags) && push!(
+        attributes,
+        namedattribute(
+            "overflowFlags",
+            parse(Attribute, "#arith.overflowFlags<$(string(overflowFlags))>"),
+        ),
+    )
 
     return create_operation(
         "arith.addi",
@@ -121,8 +148,8 @@ function addi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -190,7 +217,7 @@ has no standard attributes.
 ```
 """
 function andi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -206,8 +233,8 @@ function andi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -266,7 +293,7 @@ signed division overflow.
 ```
 """
 function ceildivsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -282,8 +309,8 @@ function ceildivsi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -306,7 +333,7 @@ zero.
 ```
 """
 function ceildivui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -322,8 +349,8 @@ function ceildivui(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -357,18 +384,23 @@ attribute by the parser.
 function cmpf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    predicate,
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    predicate::CmpFPredicate.T,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("predicate", predicate),]
+    attributes = NamedAttribute[namedattribute("predicate", Int(predicate)),]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.cmpf",
@@ -377,8 +409,8 @@ function cmpf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -450,15 +482,15 @@ complement or large positives
 function cmpi(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    predicate,
+    result::Union{Nothing,IR.Type}=nothing,
+    predicate::CmpIPredicate.T,
     location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("predicate", predicate),]
+    attributes = NamedAttribute[namedattribute("predicate", Int(predicate)),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -468,8 +500,8 @@ function cmpi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -490,7 +522,9 @@ forms simple integer and floating point constants.
 %1 = \"arith.constant\"() {value = 42 : i32} : () -> i32
 ```
 """
-function constant(; result=nothing::Union{Nothing,IR.Type}, value, location=Location())
+function constant(;
+    result::Union{Nothing,IR.Type}=nothing, value::Attribute, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -505,16 +539,16 @@ function constant(; result=nothing::Union{Nothing,IR.Type}, value, location=Loca
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
 function divf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -523,7 +557,12 @@ function divf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.divf",
@@ -532,8 +571,8 @@ function divf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -562,7 +601,7 @@ signed division overflow.
 ```
 """
 function divsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -578,8 +617,8 @@ function divsi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -608,7 +647,7 @@ zero.
 ```
 """
 function divui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -624,8 +663,8 @@ function divui(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -636,13 +675,23 @@ Cast a floating-point value to a larger floating-point-typed value.
 The destination type must to be strictly wider than the source type.
 When operating on vectors, casts elementwise.
 """
-function extf(in::Value; out::IR.Type, fastmath=nothing, location=Location())
+function extf(
+    in::Value;
+    out::IR.Type,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.extf",
@@ -804,7 +853,7 @@ signed division overflow.
 ```
 """
 function floordivsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -820,8 +869,8 @@ function floordivsi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -896,8 +945,8 @@ If one of the arguments is NaN, then the result is the other argument.
 function maxnumf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -906,7 +955,12 @@ function maxnumf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.maxnumf",
@@ -915,13 +969,13 @@ function maxnumf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
 function maxsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -937,13 +991,13 @@ function maxsi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
 function maxui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -959,8 +1013,8 @@ function maxui(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -980,8 +1034,8 @@ If one of the arguments is NaN, then the result is also NaN.
 function maximumf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -990,7 +1044,12 @@ function maximumf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.maximumf",
@@ -999,8 +1058,8 @@ function maximumf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1021,8 +1080,8 @@ If one of the arguments is NaN, then the result is the other argument.
 function minnumf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1031,7 +1090,12 @@ function minnumf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.minnumf",
@@ -1040,13 +1104,13 @@ function minnumf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
 function minsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1062,13 +1126,13 @@ function minsi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
 function minui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1084,8 +1148,8 @@ function minui(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1105,8 +1169,8 @@ If one of the arguments is NaN, then the result is also NaN.
 function minimumf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1115,7 +1179,12 @@ function minimumf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.minimumf",
@@ -1124,8 +1193,8 @@ function minimumf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1156,8 +1225,8 @@ math, contraction, rounding mode, and other controls.
 function mulf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1166,7 +1235,12 @@ function mulf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.mulf",
@@ -1175,8 +1249,8 @@ function mulf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1217,8 +1291,8 @@ This op supports `nuw`/`nsw` overflow flags which stands stand for
 function muli(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    overflowFlags=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    overflowFlags::Union{IntegerOverflowFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1227,8 +1301,13 @@ function muli(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(overflowFlags) &&
-        push!(attributes, namedattribute("overflowFlags", overflowFlags))
+    !isnothing(overflowFlags) && push!(
+        attributes,
+        namedattribute(
+            "overflowFlags",
+            parse(Attribute, "#arith.overflowFlags<$(string(overflowFlags))>"),
+        ),
+    )
 
     return create_operation(
         "arith.muli",
@@ -1237,8 +1316,8 @@ function muli(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1266,8 +1345,8 @@ the same operands.
 function mulsi_extended(
     lhs::Value,
     rhs::Value;
-    low=nothing::Union{Nothing,IR.Type},
-    high=nothing::Union{Nothing,IR.Type},
+    low::Union{Nothing,IR.Type}=nothing,
+    high::Union{Nothing,IR.Type}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1285,8 +1364,8 @@ function mulsi_extended(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1314,8 +1393,8 @@ the same operands.
 function mului_extended(
     lhs::Value,
     rhs::Value;
-    low=nothing::Union{Nothing,IR.Type},
-    high=nothing::Union{Nothing,IR.Type},
+    low::Union{Nothing,IR.Type}=nothing,
+    high::Union{Nothing,IR.Type}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1333,8 +1412,8 @@ function mului_extended(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1361,8 +1440,8 @@ It has no standard attributes.
 """
 function negf(
     operand::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1371,7 +1450,12 @@ function negf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.negf",
@@ -1380,8 +1464,8 @@ function negf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1407,7 +1491,7 @@ standard attributes.
 ```
 """
 function ori(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1423,8 +1507,8 @@ function ori(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1437,8 +1521,8 @@ The remainder has the same sign as the dividend (lhs operand).
 function remf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1447,7 +1531,12 @@ function remf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.remf",
@@ -1456,8 +1545,8 @@ function remf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1485,7 +1574,7 @@ zero.
 ```
 """
 function remsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1501,8 +1590,8 @@ function remsi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1530,7 +1619,7 @@ zero.
 ```
 """
 function remui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1546,8 +1635,8 @@ function remui(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1604,8 +1693,8 @@ This op supports `nuw`/`nsw` overflow flags which stands stand for
 function shli(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    overflowFlags=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    overflowFlags::Union{IntegerOverflowFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1614,8 +1703,13 @@ function shli(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(overflowFlags) &&
-        push!(attributes, namedattribute("overflowFlags", overflowFlags))
+    !isnothing(overflowFlags) && push!(
+        attributes,
+        namedattribute(
+            "overflowFlags",
+            parse(Attribute, "#arith.overflowFlags<$(string(overflowFlags))>"),
+        ),
+    )
 
     return create_operation(
         "arith.shli",
@@ -1624,8 +1718,8 @@ function shli(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1651,7 +1745,7 @@ returns poison.
 ```
 """
 function shrsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1667,8 +1761,8 @@ function shrsi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1690,7 +1784,7 @@ bitwidth of the first operand, then the operation returns poison.
 ```
 """
 function shrui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1706,8 +1800,8 @@ function shrui(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1738,8 +1832,8 @@ math, contraction, rounding mode, and other controls.
 function subf(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    fastmath=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1748,7 +1842,12 @@ function subf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.subf",
@@ -1757,8 +1856,8 @@ function subf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1799,8 +1898,8 @@ This op supports `nuw`/`nsw` overflow flags which stands stand for
 function subi(
     lhs::Value,
     rhs::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    overflowFlags=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    overflowFlags::Union{IntegerOverflowFlags.T,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1809,8 +1908,13 @@ function subi(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(overflowFlags) &&
-        push!(attributes, namedattribute("overflowFlags", overflowFlags))
+    !isnothing(overflowFlags) && push!(
+        attributes,
+        namedattribute(
+            "overflowFlags",
+            parse(Attribute, "#arith.overflowFlags<$(string(overflowFlags))>"),
+        ),
+    )
 
     return create_operation(
         "arith.subi",
@@ -1819,8 +1923,8 @@ function subi(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1834,7 +1938,11 @@ provided rounding mode or the default one if no rounding mode is provided.
 When operating on vectors, casts elementwise.
 """
 function truncf(
-    in::Value; out::IR.Type, roundingmode=nothing, fastmath=nothing, location=Location()
+    in::Value;
+    out::IR.Type,
+    roundingmode::Union{RoundingMode.T,Nothing}=nothing,
+    fastmath::Union{FastMathFlags.T,Nothing}=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
@@ -1842,8 +1950,13 @@ function truncf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(roundingmode) &&
-        push!(attributes, namedattribute("roundingmode", roundingmode))
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+        push!(attributes, namedattribute("roundingmode", Int(roundingmode)))
+    !isnothing(fastmath) && push!(
+        attributes,
+        namedattribute(
+            "fastmath", parse(Attribute, "#arith.fastmath<$(string(fastmath))>")
+        ),
+    )
 
     return create_operation(
         "arith.truncf",
@@ -1943,7 +2056,7 @@ has no standard attributes.
 ```
 """
 function xori(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value, rhs::Value; result::Union{Nothing,IR.Type}=nothing, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1959,8 +2072,8 @@ function xori(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2005,7 +2118,7 @@ function select(
     condition::Value,
     true_value::Value,
     false_value::Value;
-    result=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -2022,8 +2135,8 @@ function select(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 

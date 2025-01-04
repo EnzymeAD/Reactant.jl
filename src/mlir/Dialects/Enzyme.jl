@@ -12,6 +12,9 @@ import ...IR:
     IndexType
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
+using EnumX
+
+@enumx Activity enzyme_active enzyme_dup enzyme_const enzyme_dupnoneed enzyme_activenoneed enzyme_constnoneed
 
 """
 `addTo`
@@ -39,11 +42,11 @@ end
 
 function autodiff(
     inputs::Vector{Value};
-    outputs::Vector{IR.Type},
-    fn,
-    activity,
-    ret_activity,
-    width=nothing,
+    outputs::Tuple{Vararg{IR.Type}},
+    fn::Attribute,
+    activity::Attribute,
+    ret_activity::Attribute,
+    width::Union{Int64,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
@@ -55,7 +58,7 @@ function autodiff(
         namedattribute("activity", activity),
         namedattribute("ret_activity", ret_activity),
     ]
-    !isnothing(width) && push!(attributes, namedattribute("width", width))
+    !isnothing(width) && push!(attributes, namedattribute("width", Attribute(width)))
 
     return create_operation(
         "enzyme.autodiff",
@@ -70,14 +73,18 @@ function autodiff(
 end
 
 function batch(
-    inputs::Vector{Value}; outputs::Vector{IR.Type}, fn, batch_shape, location=Location()
+    inputs::Vector{Value};
+    outputs::Tuple{Vararg{IR.Type}},
+    fn::Attribute,
+    batch_shape::Vector{Int64},
+    location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fn", fn), namedattribute("batch_shape", batch_shape)
+        namedattribute("fn", fn), namedattribute("batch_shape", Attribute(batch_shape))
     ]
 
     return create_operation(
@@ -100,12 +107,12 @@ For scalar operands, ranked tensor is created.
 
 NOTE: Only works for scalar and *ranked* tensor operands for now.
 """
-function broadcast(input::Value; output::IR.Type, shape, location=Location())
+function broadcast(input::Value; output::IR.Type, shape::Vector{Int64}, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("shape", shape),]
+    attributes = NamedAttribute[namedattribute("shape", Attribute(shape)),]
 
     return create_operation(
         "enzyme.broadcast",
@@ -121,11 +128,11 @@ end
 
 function fwddiff(
     inputs::Vector{Value};
-    outputs::Vector{IR.Type},
-    fn,
-    activity,
-    ret_activity,
-    width=nothing,
+    outputs::Tuple{Vararg{IR.Type}},
+    fn::Attribute,
+    activity::Attribute,
+    ret_activity::Attribute,
+    width::Union{Int64,Nothing}=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
@@ -137,7 +144,7 @@ function fwddiff(
         namedattribute("activity", activity),
         namedattribute("ret_activity", ret_activity),
     ]
-    !isnothing(width) && push!(attributes, namedattribute("width", width))
+    !isnothing(width) && push!(attributes, namedattribute("width", Attribute(width)))
 
     return create_operation(
         "enzyme.fwddiff",
@@ -154,11 +161,11 @@ end
 function genericAdjoint(
     inputs::Vector{Value},
     outputs::Vector{Value};
-    result_tensors::Vector{IR.Type},
-    indexing_maps,
-    iterator_types,
-    doc=nothing,
-    library_call=nothing,
+    result_tensors::Tuple{Vararg{IR.Type}},
+    indexing_maps::Attribute,
+    iterator_types::Attribute,
+    doc::Union{String,Nothing}=nothing,
+    library_call::Union{String,Nothing}=nothing,
     region::Region,
     location=Location(),
 )
@@ -171,9 +178,9 @@ function genericAdjoint(
         namedattribute("iterator_types", iterator_types),
     ]
     push!(attributes, operandsegmentsizes([length(inputs), length(outputs)]))
-    !isnothing(doc) && push!(attributes, namedattribute("doc", doc))
+    !isnothing(doc) && push!(attributes, namedattribute("doc", Attribute(doc)))
     !isnothing(library_call) &&
-        push!(attributes, namedattribute("library_call", library_call))
+        push!(attributes, namedattribute("library_call", Attribute(library_call)))
 
     return create_operation(
         "enzyme.genericAdjoint",
@@ -187,8 +194,8 @@ function genericAdjoint(
     )
 end
 
-function get(gradient::Value; result_0::IR.Type, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function get(gradient::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[gradient,]
     owned_regions = Region[]
     successors = Block[]
@@ -206,8 +213,8 @@ function get(gradient::Value; result_0::IR.Type, location=Location())
     )
 end
 
-function init(; result_0::IR.Type, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function init(; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]

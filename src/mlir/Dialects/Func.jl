@@ -12,6 +12,7 @@ import ...IR:
     IndexType
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
+using EnumX
 
 """
 `call_indirect`
@@ -33,7 +34,7 @@ Function values can be created with the
 function call_indirect(
     callee::Value,
     callee_operands::Vector{Value};
-    results::Vector{IR.Type},
+    results::Tuple{Vararg{IR.Type}},
     location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -70,12 +71,12 @@ symbol reference attribute named \"callee\".
 """
 function call(
     operands::Vector{Value};
-    result_0::Vector{IR.Type},
-    callee,
-    no_inline=nothing,
+    result::Tuple{Vararg{IR.Type}},
+    callee::Attribute,
+    no_inline::Union{Attribute,Nothing}=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
@@ -115,8 +116,8 @@ the compiler is multithreaded, and disallowing SSA values to directly
 reference a function simplifies this
 ([rationale](../Rationale/Rationale.md#multithreading-the-compiler)).
 """
-function constant(; result_0::IR.Type, value, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function constant(; result::IR.Type, value::Attribute, location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
@@ -174,12 +175,12 @@ func.func private @example_fn_attr() attributes {dialectName.attrName = false}
 ```
 """
 function func_(;
-    sym_name,
-    function_type,
-    sym_visibility=nothing,
-    arg_attrs=nothing,
-    res_attrs=nothing,
-    no_inline=nothing,
+    sym_name::Attribute,
+    function_type::Attribute,
+    sym_visibility::Union{String,Nothing}=nothing,
+    arg_attrs::Union{Attribute,Nothing}=nothing,
+    res_attrs::Union{Attribute,Nothing}=nothing,
+    no_inline::Union{Attribute,Nothing}=nothing,
     body::Region,
     location=Location(),
 )
@@ -191,7 +192,7 @@ function func_(;
         namedattribute("sym_name", sym_name), namedattribute("function_type", function_type)
     ]
     !isnothing(sym_visibility) &&
-        push!(attributes, namedattribute("sym_visibility", sym_visibility))
+        push!(attributes, namedattribute("sym_visibility", Attribute(sym_visibility)))
     !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))

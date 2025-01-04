@@ -12,6 +12,23 @@ import ...IR:
     IndexType
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
+using EnumX
+
+@enumx ComparisonDirectionV1 EQ NE GE GT LE LT
+
+@enumx ComparisonTypeV1 NOTYPE FLOAT TOTALORDER SIGNED UNSIGNED
+
+@enumx CustomCallApiVersionV1 API_VERSION_UNSPECIFIED API_VERSION_ORIGINAL API_VERSION_STATUS_RETURNING API_VERSION_STATUS_RETURNING_UNIFIED API_VERSION_TYPED_FFI
+
+@enumx FftTypeV1 FFT IFFT RFFT IRFFT
+
+@enumx PrecisionV1 DEFAULT HIGH HIGHEST
+
+@enumx RngAlgorithmV1 DEFAULT THREE_FRY PHILOX
+
+@enumx RngDistributionV1 UNIFORM NORMAL
+
+@enumx TransposeV1 TRANSPOSE_INVALID NO_TRANSPOSE TRANSPOSE ADJOINT
 
 function abs_v1(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
@@ -73,10 +90,10 @@ end
 function all_gather_v1(
     operand::Value;
     result::IR.Type,
-    all_gather_dim,
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
+    all_gather_dim::Attribute,
+    replica_groups::Attribute,
+    channel_id::Attribute,
+    use_global_device_ids::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -104,11 +121,11 @@ end
 
 function all_gather_v2(
     operands::Vector{Value};
-    results::Vector{IR.Type},
-    all_gather_dim,
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
+    results::Tuple{Vararg{IR.Type}},
+    all_gather_dim::Attribute,
+    replica_groups::Attribute,
+    channel_id::Attribute,
+    use_global_device_ids::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -137,9 +154,9 @@ end
 function all_reduce_v1(
     operand::Value;
     result::IR.Type,
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
+    replica_groups::Attribute,
+    channel_id::Attribute,
+    use_global_device_ids::Attribute,
     computation::Region,
     location=Location(),
 )
@@ -167,10 +184,10 @@ end
 
 function all_reduce_v2(
     operands::Vector{Value};
-    results::Vector{IR.Type},
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
+    results::Tuple{Vararg{IR.Type}},
+    replica_groups::Attribute,
+    channel_id::Attribute,
+    use_global_device_ids::Attribute,
     computation::Region,
     location=Location(),
 )
@@ -199,11 +216,11 @@ end
 function all_to_all_v1(
     operand::Value;
     result::IR.Type,
-    split_dimension,
-    concat_dimension,
-    split_count,
-    replica_groups,
-    channel_id,
+    split_dimension::Attribute,
+    concat_dimension::Attribute,
+    split_count::Attribute,
+    replica_groups::Attribute,
+    channel_id::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -232,12 +249,12 @@ end
 
 function all_to_all_v2(
     operands::Vector{Value};
-    results::Vector{IR.Type},
-    split_dimension,
-    concat_dimension,
-    split_count,
-    replica_groups,
-    channel_id,
+    results::Tuple{Vararg{IR.Type}},
+    split_dimension::Attribute,
+    concat_dimension::Attribute,
+    split_count::Attribute,
+    replica_groups::Attribute,
+    channel_id::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -311,8 +328,8 @@ function batch_norm_grad_v1(
     grad_operand::IR.Type,
     grad_scale::IR.Type,
     grad_offset::IR.Type,
-    epsilon,
-    feature_index,
+    epsilon::Attribute,
+    feature_index::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[grad_operand, grad_scale, grad_offset]
@@ -342,8 +359,8 @@ function batch_norm_inference_v1(
     mean::Value,
     variance::Value;
     result::IR.Type,
-    epsilon,
-    feature_index,
+    epsilon::Attribute,
+    feature_index::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -373,8 +390,8 @@ function batch_norm_training_v1(
     output::IR.Type,
     batch_mean::IR.Type,
     batch_var::IR.Type,
-    epsilon,
-    feature_index,
+    epsilon::Attribute,
+    feature_index::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[output, batch_mean, batch_var]
@@ -417,7 +434,7 @@ function bitcast_convert_v1(operand::Value; result::IR.Type, location=Location()
 end
 
 function broadcast_in_dim_v1(
-    operand::Value; result::IR.Type, broadcast_dimensions, location=Location()
+    operand::Value; result::IR.Type, broadcast_dimensions::Attribute, location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -439,7 +456,9 @@ function broadcast_in_dim_v1(
     )
 end
 
-function broadcast_v1(operand::Value; result::IR.Type, broadcast_sizes, location=Location())
+function broadcast_v1(
+    operand::Value; result::IR.Type, broadcast_sizes::Attribute, location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -459,7 +478,10 @@ function broadcast_v1(operand::Value; result::IR.Type, broadcast_sizes, location
 end
 
 function call_v1(
-    operands::Vector{Value}; results::Vector{IR.Type}, callee, location=Location()
+    operands::Vector{Value};
+    results::Tuple{Vararg{IR.Type}},
+    callee::Attribute,
+    location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[operands...,]
@@ -480,7 +502,10 @@ function call_v1(
 end
 
 function case_v1(
-    index::Value; results::Vector{IR.Type}, branches::Vector{Region}, location=Location()
+    index::Value;
+    results::Tuple{Vararg{IR.Type}},
+    branches::Vector{Region},
+    location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[index,]
@@ -538,7 +563,7 @@ function ceil_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function cholesky_v1(a::Value; result::IR.Type, lower, location=Location())
+function cholesky_v1(a::Value; result::IR.Type, lower::Attribute, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[a,]
     owned_regions = Region[]
@@ -598,7 +623,11 @@ function count_leading_zeros_v1(operand::Value; result::IR.Type, location=Locati
 end
 
 function collective_broadcast_v1(
-    operand::Value; result::IR.Type, replica_groups, channel_id, location=Location()
+    operand::Value;
+    result::IR.Type,
+    replica_groups::Attribute,
+    channel_id::Attribute,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -622,7 +651,11 @@ function collective_broadcast_v1(
 end
 
 function collective_permute_v1(
-    operand::Value; result::IR.Type, source_target_pairs, channel_id, location=Location()
+    operand::Value;
+    result::IR.Type,
+    source_target_pairs::Attribute,
+    channel_id::Attribute,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -649,8 +682,8 @@ function compare_v1(
     lhs::Value,
     rhs::Value;
     result::IR.Type,
-    comparison_direction,
-    compare_type,
+    comparison_direction::Attribute,
+    compare_type::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -695,11 +728,11 @@ end
 
 function composite_v1(
     inputs::Vector{Value};
-    results::Vector{IR.Type},
-    name,
-    composite_attributes,
-    decomposition,
-    version,
+    results::Tuple{Vararg{IR.Type}},
+    name::Attribute,
+    composite_attributes::Attribute,
+    decomposition::Attribute,
+    version::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -726,7 +759,7 @@ function composite_v1(
 end
 
 function concatenate_v1(
-    inputs::Vector{Value}; result::IR.Type, dimension, location=Location()
+    inputs::Vector{Value}; result::IR.Type, dimension::Attribute, location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[inputs...,]
@@ -746,7 +779,7 @@ function concatenate_v1(
     )
 end
 
-function constant_v1(; output::IR.Type, value, location=Location())
+function constant_v1(; output::IR.Type, value::Attribute, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -788,23 +821,23 @@ function convolution_v1(
     lhs::Value,
     rhs::Value;
     result::IR.Type,
-    window_strides,
-    padding,
-    lhs_dilation,
-    rhs_dilation,
-    window_reversal,
-    input_batch_dimension,
-    input_feature_dimension,
-    input_spatial_dimensions,
-    kernel_input_feature_dimension,
-    kernel_output_feature_dimension,
-    kernel_spatial_dimensions,
-    output_batch_dimension,
-    output_feature_dimension,
-    output_spatial_dimensions,
-    feature_group_count,
-    batch_group_count,
-    precision_config,
+    window_strides::Attribute,
+    padding::Attribute,
+    lhs_dilation::Attribute,
+    rhs_dilation::Attribute,
+    window_reversal::Attribute,
+    input_batch_dimension::Attribute,
+    input_feature_dimension::Attribute,
+    input_spatial_dimensions::Attribute,
+    kernel_input_feature_dimension::Attribute,
+    kernel_output_feature_dimension::Attribute,
+    kernel_spatial_dimensions::Attribute,
+    output_batch_dimension::Attribute,
+    output_feature_dimension::Attribute,
+    output_spatial_dimensions::Attribute,
+    feature_group_count::Attribute,
+    batch_group_count::Attribute,
+    precision_config::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -882,7 +915,7 @@ function create_token_v1(; output::IR.Type, location=Location())
 end
 
 function cross_replica_sum_v1(
-    operand::Value; result::IR.Type, replica_groups, location=Location()
+    operand::Value; result::IR.Type, replica_groups::Attribute, location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -904,15 +937,15 @@ end
 
 function custom_call_v1(
     inputs::Vector{Value};
-    results::Vector{IR.Type},
-    call_target_name,
-    has_side_effect,
-    backend_config,
-    api_version,
-    called_computations,
-    operand_layouts,
-    result_layouts,
-    output_operand_aliases,
+    results::Tuple{Vararg{IR.Type}},
+    call_target_name::Attribute,
+    has_side_effect::Attribute,
+    backend_config::Attribute,
+    api_version::Attribute,
+    called_computations::Attribute,
+    operand_layouts::Attribute,
+    result_layouts::Attribute,
+    output_operand_aliases::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -965,11 +998,11 @@ function dot_general_v1(
     lhs::Value,
     rhs::Value;
     result::IR.Type,
-    lhs_batching_dimensions,
-    rhs_batching_dimensions,
-    lhs_contracting_dimensions,
-    rhs_contracting_dimensions,
-    precision_config,
+    lhs_batching_dimensions::Attribute,
+    rhs_batching_dimensions::Attribute,
+    lhs_contracting_dimensions::Attribute,
+    rhs_contracting_dimensions::Attribute,
+    precision_config::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1000,18 +1033,18 @@ function dot_general_v2(
     lhs::Value,
     rhs::Value;
     result::IR.Type,
-    lhs_batching_dimensions,
-    rhs_batching_dimensions,
-    lhs_contracting_dimensions,
-    rhs_contracting_dimensions,
-    precision_config,
-    lhs_precision_type,
-    rhs_precision_type,
-    accumulation_type,
-    lhs_component_count,
-    rhs_component_count,
-    num_primitive_operations,
-    allow_imprecise_accumulation,
+    lhs_batching_dimensions::Attribute,
+    rhs_batching_dimensions::Attribute,
+    lhs_contracting_dimensions::Attribute,
+    rhs_contracting_dimensions::Attribute,
+    precision_config::Attribute,
+    lhs_precision_type::Attribute,
+    rhs_precision_type::Attribute,
+    accumulation_type::Attribute,
+    lhs_component_count::Attribute,
+    rhs_component_count::Attribute,
+    num_primitive_operations::Attribute,
+    allow_imprecise_accumulation::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1046,7 +1079,11 @@ function dot_general_v2(
 end
 
 function dot_v1(
-    lhs::Value, rhs::Value; result::IR.Type, precision_config, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::IR.Type,
+    precision_config::Attribute,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -1070,9 +1107,9 @@ function dynamic_broadcast_in_dim_v1(
     operand::Value,
     output_dimensions::Value;
     result::IR.Type,
-    broadcast_dimensions,
-    known_expanding_dimensions,
-    known_nonexpanding_dimensions,
+    broadcast_dimensions::Attribute,
+    known_expanding_dimensions::Attribute,
+    known_nonexpanding_dimensions::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1102,23 +1139,23 @@ function dynamic_conv_v1(
     rhs::Value,
     d_padding::Value;
     result::IR.Type,
-    window_strides,
-    padding,
-    lhs_dilation,
-    rhs_dilation,
-    window_reversal,
-    input_batch_dimension,
-    input_feature_dimension,
-    input_spatial_dimensions,
-    kernel_input_feature_dimension,
-    kernel_output_feature_dimension,
-    kernel_spatial_dimensions,
-    output_batch_dimension,
-    output_feature_dimension,
-    output_spatial_dimensions,
-    feature_group_count,
-    batch_group_count,
-    precision_config,
+    window_strides::Attribute,
+    padding::Attribute,
+    lhs_dilation::Attribute,
+    rhs_dilation::Attribute,
+    window_reversal::Attribute,
+    input_batch_dimension::Attribute,
+    input_feature_dimension::Attribute,
+    input_spatial_dimensions::Attribute,
+    kernel_input_feature_dimension::Attribute,
+    kernel_output_feature_dimension::Attribute,
+    kernel_spatial_dimensions::Attribute,
+    output_batch_dimension::Attribute,
+    output_feature_dimension::Attribute,
+    output_spatial_dimensions::Attribute,
+    feature_group_count::Attribute,
+    batch_group_count::Attribute,
+    precision_config::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1162,22 +1199,22 @@ function dynamic_conv_v2(
     rhs::Value,
     padding::Value;
     result::IR.Type,
-    window_strides,
-    lhs_dilation,
-    rhs_dilation,
-    window_reversal,
-    input_batch_dimension,
-    input_feature_dimension,
-    input_spatial_dimensions,
-    kernel_input_feature_dimension,
-    kernel_output_feature_dimension,
-    kernel_spatial_dimensions,
-    output_batch_dimension,
-    output_feature_dimension,
-    output_spatial_dimensions,
-    feature_group_count,
-    batch_group_count,
-    precision_config,
+    window_strides::Attribute,
+    lhs_dilation::Attribute,
+    rhs_dilation::Attribute,
+    window_reversal::Attribute,
+    input_batch_dimension::Attribute,
+    input_feature_dimension::Attribute,
+    input_spatial_dimensions::Attribute,
+    kernel_input_feature_dimension::Attribute,
+    kernel_output_feature_dimension::Attribute,
+    kernel_spatial_dimensions::Attribute,
+    output_batch_dimension::Attribute,
+    output_feature_dimension::Attribute,
+    output_spatial_dimensions::Attribute,
+    feature_group_count::Attribute,
+    batch_group_count::Attribute,
+    precision_config::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1220,11 +1257,11 @@ function dynamic_gather_v1(
     start_indices::Value,
     slice_sizes::Value;
     result::IR.Type,
-    offset_dims,
-    collapsed_slice_dims,
-    start_index_map,
-    index_vector_dim,
-    indices_are_sorted,
+    offset_dims::Attribute,
+    collapsed_slice_dims::Attribute,
+    start_index_map::Attribute,
+    index_vector_dim::Attribute,
+    indices_are_sorted::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1256,13 +1293,13 @@ function dynamic_gather_v2(
     start_indices::Value,
     slice_sizes::Value;
     result::IR.Type,
-    offset_dims,
-    collapsed_slice_dims,
-    operand_batching_dims,
-    start_indices_batching_dims,
-    start_index_map,
-    index_vector_dim,
-    indices_are_sorted,
+    offset_dims::Attribute,
+    collapsed_slice_dims::Attribute,
+    operand_batching_dims::Attribute,
+    start_indices_batching_dims::Attribute,
+    start_index_map::Attribute,
+    index_vector_dim::Attribute,
+    indices_are_sorted::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1292,7 +1329,7 @@ function dynamic_gather_v2(
 end
 
 function dynamic_iota_v1(
-    output_shape::Value; result::IR.Type, iota_dimension, location=Location()
+    output_shape::Value; result::IR.Type, iota_dimension::Attribute, location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[output_shape,]
@@ -1366,7 +1403,7 @@ function dynamic_slice_v1(
     operand::Value,
     start_indices::Vector{Value};
     result::IR.Type,
-    slice_sizes,
+    slice_sizes::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1413,7 +1450,7 @@ function dynamic_update_slice_v1(
 end
 
 function einsum_v1(
-    lhs::Value, rhs::Value; result::IR.Type, einsum_config, location=Location()
+    lhs::Value, rhs::Value; result::IR.Type, einsum_config::Attribute, location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -1471,7 +1508,13 @@ function exponential_minus_one_v1(operand::Value; result::IR.Type, location=Loca
     )
 end
 
-function fft_v1(operand::Value; result::IR.Type, fft_type, fft_length, location=Location())
+function fft_v1(
+    operand::Value;
+    result::IR.Type,
+    fft_type::Attribute,
+    fft_length::Attribute,
+    location=Location(),
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1512,11 +1555,11 @@ function floor_v1(operand::Value; result::IR.Type, location=Location())
 end
 
 function func_v1(;
-    sym_name,
-    function_type,
-    sym_visibility,
-    arg_attrs,
-    res_attrs,
+    sym_name::Attribute,
+    function_type::Attribute,
+    sym_visibility::Attribute,
+    arg_attrs::Attribute,
+    res_attrs::Attribute,
     body::Region,
     location=Location(),
 )
@@ -1548,12 +1591,12 @@ function gather_v1(
     operand::Value,
     start_indices::Value;
     result::IR.Type,
-    offset_dims,
-    collapsed_slice_dims,
-    start_index_map,
-    index_vector_dim,
-    slice_sizes,
-    indices_are_sorted,
+    offset_dims::Attribute,
+    collapsed_slice_dims::Attribute,
+    start_index_map::Attribute,
+    index_vector_dim::Attribute,
+    slice_sizes::Attribute,
+    indices_are_sorted::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1585,14 +1628,14 @@ function gather_v2(
     operand::Value,
     start_indices::Value;
     result::IR.Type,
-    offset_dims,
-    collapsed_slice_dims,
-    operand_batching_dims,
-    start_indices_batching_dims,
-    start_index_map,
-    index_vector_dim,
-    slice_sizes,
-    indices_are_sorted,
+    offset_dims::Attribute,
+    collapsed_slice_dims::Attribute,
+    operand_batching_dims::Attribute,
+    start_indices_batching_dims::Attribute,
+    start_index_map::Attribute,
+    index_vector_dim::Attribute,
+    slice_sizes::Attribute,
+    indices_are_sorted::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1623,7 +1666,7 @@ function gather_v2(
 end
 
 function get_dimension_size_v1(
-    operand::Value; result::IR.Type, dimension, location=Location()
+    operand::Value; result::IR.Type, dimension::Attribute, location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -1643,7 +1686,9 @@ function get_dimension_size_v1(
     )
 end
 
-function get_tuple_element_v1(operand::Value; result::IR.Type, index, location=Location())
+function get_tuple_element_v1(
+    operand::Value; result::IR.Type, index::Attribute, location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1664,7 +1709,7 @@ end
 
 function if_v1(
     pred::Value;
-    results::Vector{IR.Type},
+    results::Tuple{Vararg{IR.Type}},
     true_branch::Region,
     false_branch::Region,
     location=Location(),
@@ -1707,7 +1752,11 @@ function imag_v1(operand::Value; result::IR.Type, location=Location())
 end
 
 function infeed_v1(
-    token::Value; results::Vector{IR.Type}, infeed_config, layout, location=Location()
+    token::Value;
+    results::Tuple{Vararg{IR.Type}},
+    infeed_config::Attribute,
+    layout::Attribute,
+    location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[token,]
@@ -1729,7 +1778,7 @@ function infeed_v1(
     )
 end
 
-function iota_v1(; output::IR.Type, iota_dimension, location=Location())
+function iota_v1(; output::IR.Type, iota_dimension::Attribute, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -1827,7 +1876,7 @@ end
 function map_v1(
     inputs::Vector{Value};
     result::IR.Type,
-    dimensions,
+    dimensions::Attribute,
     computation::Region,
     location=Location(),
 )
@@ -1945,7 +1994,7 @@ function not_v1(operand::Value; result::IR.Type, location=Location())
 end
 
 function optimization_barrier_v1(
-    operand::Vector{Value}; result::Vector{IR.Type}, location=Location()
+    operand::Vector{Value}; result::Tuple{Vararg{IR.Type}}, location=Location()
 )
     op_ty_results = IR.Type[result...,]
     operands = Value[operand...,]
@@ -1988,7 +2037,7 @@ function outfeed_v1(
     inputs::Vector{Value},
     token::Value;
     result::IR.Type,
-    outfeed_config,
+    outfeed_config::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -2013,9 +2062,9 @@ function pad_v1(
     operand::Value,
     padding_value::Value;
     result::IR.Type,
-    edge_padding_low,
-    edge_padding_high,
-    interior_padding,
+    edge_padding_low::Attribute,
+    edge_padding_high::Attribute,
+    interior_padding::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -2144,10 +2193,10 @@ end
 
 function recv_v1(
     token::Value;
-    results::Vector{IR.Type},
-    channel_id,
-    channel_type,
-    is_host_transfer,
+    results::Tuple{Vararg{IR.Type}},
+    channel_id::Attribute,
+    channel_type::Attribute,
+    is_host_transfer::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -2175,8 +2224,8 @@ end
 function reduce_v1(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    results::Vector{IR.Type},
-    dimensions,
+    results::Tuple{Vararg{IR.Type}},
+    dimensions::Attribute,
     body::Region,
     location=Location(),
 )
@@ -2199,7 +2248,11 @@ function reduce_v1(
 end
 
 function reduce_precision_v1(
-    operand::Value; output::IR.Type, exponent_bits, mantissa_bits, location=Location()
+    operand::Value;
+    output::IR.Type,
+    exponent_bits::Attribute,
+    mantissa_bits::Attribute,
+    location=Location(),
 )
     op_ty_results = IR.Type[output,]
     operands = Value[operand,]
@@ -2225,10 +2278,10 @@ end
 function reduce_scatter_v1(
     operand::Value;
     result::IR.Type,
-    scatter_dimension,
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
+    scatter_dimension::Attribute,
+    replica_groups::Attribute,
+    channel_id::Attribute,
+    use_global_device_ids::Attribute,
     computation::Region,
     location=Location(),
 )
@@ -2258,12 +2311,12 @@ end
 function reduce_window_v1(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    results::Vector{IR.Type},
-    window_dimensions,
-    window_strides,
-    base_dilations,
-    window_dilations,
-    padding,
+    results::Tuple{Vararg{IR.Type}},
+    window_dimensions::Attribute,
+    window_strides::Attribute,
+    base_dilations::Attribute,
+    window_dilations::Attribute,
+    padding::Attribute,
     body::Region,
     location=Location(),
 )
@@ -2367,7 +2420,9 @@ function return_v1(results::Vector{Value}; location=Location())
     )
 end
 
-function reverse_v1(operand::Value; result::IR.Type, dimensions, location=Location())
+function reverse_v1(
+    operand::Value; result::IR.Type, dimensions::Attribute, location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2390,7 +2445,7 @@ function rng_bit_generator_v1(
     initial_state::Value;
     output_state::IR.Type,
     output::IR.Type,
-    rng_algorithm,
+    rng_algorithm::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[output_state, output]
@@ -2412,7 +2467,12 @@ function rng_bit_generator_v1(
 end
 
 function rng_v1(
-    a::Value, b::Value, shape::Value; result::IR.Type, rng_distribution, location=Location()
+    a::Value,
+    b::Value,
+    shape::Value;
+    result::IR.Type,
+    rng_distribution::Attribute,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[a, b, shape]
@@ -2493,13 +2553,13 @@ function scatter_v1(
     inputs::Vector{Value},
     scatter_indices::Value,
     updates::Vector{Value};
-    results::Vector{IR.Type},
-    update_window_dims,
-    inserted_window_dims,
-    scatter_dims_to_operand_dims,
-    index_vector_dim,
-    indices_are_sorted,
-    unique_indices,
+    results::Tuple{Vararg{IR.Type}},
+    update_window_dims::Attribute,
+    inserted_window_dims::Attribute,
+    scatter_dims_to_operand_dims::Attribute,
+    index_vector_dim::Attribute,
+    indices_are_sorted::Attribute,
+    unique_indices::Attribute,
     update_computation::Region,
     location=Location(),
 )
@@ -2532,15 +2592,15 @@ function scatter_v2(
     inputs::Vector{Value},
     scatter_indices::Value,
     updates::Vector{Value};
-    results::Vector{IR.Type},
-    update_window_dims,
-    inserted_window_dims,
-    input_batching_dims,
-    scatter_indices_batching_dims,
-    scatter_dims_to_operand_dims,
-    index_vector_dim,
-    indices_are_sorted,
-    unique_indices,
+    results::Tuple{Vararg{IR.Type}},
+    update_window_dims::Attribute,
+    inserted_window_dims::Attribute,
+    input_batching_dims::Attribute,
+    scatter_indices_batching_dims::Attribute,
+    scatter_dims_to_operand_dims::Attribute,
+    index_vector_dim::Attribute,
+    indices_are_sorted::Attribute,
+    unique_indices::Attribute,
     update_computation::Region,
     location=Location(),
 )
@@ -2576,9 +2636,9 @@ function select_and_scatter_v1(
     source::Value,
     init_value::Value;
     result::IR.Type,
-    window_dimensions,
-    window_strides,
-    padding,
+    window_dimensions::Attribute,
+    window_strides::Attribute,
+    padding::Attribute,
     select::Region,
     scatter::Region,
     location=Location(),
@@ -2630,9 +2690,9 @@ function send_v1(
     inputs::Vector{Value},
     token::Value;
     result::IR.Type,
-    channel_id,
-    channel_type,
-    is_host_transfer,
+    channel_id::Attribute,
+    channel_type::Attribute,
+    is_host_transfer::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -2658,7 +2718,7 @@ function send_v1(
 end
 
 function set_dimension_size_v1(
-    operand::Value, size::Value; result::IR.Type, dimension, location=Location()
+    operand::Value, size::Value; result::IR.Type, dimension::Attribute, location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, size]
@@ -2780,9 +2840,9 @@ end
 function slice_v1(
     operand::Value;
     result::IR.Type,
-    start_indices,
-    limit_indices,
-    strides,
+    start_indices::Attribute,
+    limit_indices::Attribute,
+    strides::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -2809,9 +2869,9 @@ end
 
 function sort_v1(
     inputs::Vector{Value};
-    results::Vector{IR.Type},
-    dimension,
-    is_stable,
+    results::Tuple{Vararg{IR.Type}},
+    dimension::Attribute,
+    is_stable::Attribute,
     comparator::Region,
     location=Location(),
 )
@@ -2912,7 +2972,12 @@ function tanh_v1(operand::Value; result::IR.Type, location=Location())
 end
 
 function torch_index_select_v1(
-    operand::Value, index::Value; result::IR.Type, dim, batch_dims, location=Location()
+    operand::Value,
+    index::Value;
+    result::IR.Type,
+    dim::Attribute,
+    batch_dims::Attribute,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, index]
@@ -2934,7 +2999,9 @@ function torch_index_select_v1(
     )
 end
 
-function transpose_v1(operand::Value; result::IR.Type, permutation, location=Location())
+function transpose_v1(
+    operand::Value; result::IR.Type, permutation::Attribute, location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2957,10 +3024,10 @@ function triangular_solve_v1(
     a::Value,
     b::Value;
     result::IR.Type,
-    left_side,
-    lower,
-    unit_diagonal,
-    transpose_a,
+    left_side::Attribute,
+    lower::Attribute,
+    unit_diagonal::Attribute,
+    transpose_a::Attribute,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -3006,7 +3073,7 @@ function tuple_v1(val::Vector{Value}; result::IR.Type, location=Location())
 end
 
 function unary_einsum_v1(
-    operand::Value; result::IR.Type, einsum_config, location=Location()
+    operand::Value; result::IR.Type, einsum_config::Attribute, location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -3066,7 +3133,7 @@ end
 
 function while_v1(
     operand::Vector{Value};
-    results::Vector{IR.Type},
+    results::Tuple{Vararg{IR.Type}},
     cond::Region,
     body::Region,
     location=Location(),
