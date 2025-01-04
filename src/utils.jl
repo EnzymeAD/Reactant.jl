@@ -768,3 +768,29 @@ end
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
+
+macro cbinding(name, dtor)
+    supertyp = :Any
+    if Meta.isexpr(name, :<:)
+        name, supertyp = name.args
+    end
+
+    @assert Meta.isexpr(dtor, :(=)) && dtor.args[1] == :finalizer
+    dtor = dtor.args[2]
+
+    quote
+        mutable struct $(esc(name)) <: $(esc(supertyp))
+            ptr::Ptr{Cvoid}
+            function $(esc(name))(x)
+                @assert x != C_NULL
+                y = new(x)
+                finalizer(y) do z
+                    @ccall $(dtor)(z::Ptr{Cvoid})::Cvoid
+                end
+                return y
+            end
+        end
+
+        Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$(esc(name))) = x.ptr
+    end
+end

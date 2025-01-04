@@ -4,11 +4,13 @@ using CEnum
 using Reactant_jll
 const libxla = Reactant_jll.libReactantExtra
 
+import ..Reactant: @cbinding
 import ..PjRt
 import ..XLA
 
 const Cspan = @NamedTuple{len::Csize_t, ptr::Ptr{Cvoid}}
 
+# TODO remove this? `Serializable` doesn't have any method
 abstract type AbstractSerializable end
 
 # Base virtual classes
@@ -124,6 +126,15 @@ abstract type AbstractCompiler end
 struct Compiler <: AbstractCompiler
     ptr::Ptr{Cvoid}
     function Compiler(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+abstract type AbstractProgram <: AbstractSerializable end
+struct Program <: AbstractProgram
+    ptr::Ptr{Cvoid}
+    function Program(x)
         @assert x != C_NULL
         return new(x)
     end
@@ -273,15 +284,17 @@ function client(x::AbstractValue)
     return Client(@ccall libxla.ifrt_value_client(x::Ptr{Cvoid})::Ptr{Cvoid})
 end
 
-# TODO `get_ready_future`
+function ready_future(x::AbstractValue)
+    return XLA.Future(@ccall libxla.ifrt_value_ready(x::Ptr{Cvoid})::Cvoid)
+end
 
-# TODO it returns a `Future` object
-# function Base.empty!(x::AbstractValue)
-#     @ccall libxla.ifrt_value_delete(x::Ptr{Cvoid})::Cvoid
-#     return x
-# end
+# TODO use `Base.delete!` or `Base.empty!`?
+# TODO use `PjRt.Future` when moved there
+function delete!(x::AbstractValue)
+    return XLA.Future(@ccall libxla.ifrt_value_delete(x::Ptr{Cvoid})::Cvoid)
+end
 
-Base.isempty(x::AbstractValue) = @ccall libxla.ifrt_value_is_deleted(x::Ptr{Cvoid})::Bool
+isdeleted(x::AbstractValue) = @ccall libxla.ifrt_value_is_deleted(x::Ptr{Cvoid})::Bool
 
 function debug_string(x::AbstractValue)
     return Base.unsafe_string(@ccall libxla.ifrt_value_debug_string(x::Ptr{Cvoid})::Cstring)
@@ -470,8 +483,76 @@ function serialize(x::AbstractLoadedHostCallback)
     )
 end
 
-# TODO Executable
-# TODO LoadedExecutable
+# Executable
+function name(x::AbstractExecutable)
+    return Base.unsafe_string(@ccall libxla.ifrt_executable_name(x::Ptr{Cvoid})::Cstring)
+end
+
+function fingerprint(x::AbstractExecutable)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_executable_fingerprint(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function serialize(x::AbstractExecutable)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_executable_serialize(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function ndevices(x::AbstractExecutable)
+    return @ccall libxla.ifrt_executable_num_devices(x::Ptr{Cvoid})::Int
+end
+
+function byte_size(x::AbstractExecutable)
+    return @ccall libxla.ifrt_executable_byte_size(x::Ptr{Cvoid})::Int
+end
+
+# TODO missing `Executable` methods in the C-API
+
+# LoadedExecutable
+function client(x::AbstractLoadedExecutable)
+    return Client(@ccall libxla.ifrt_loadedexecutable_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+function name(x::AbstractLoadedExecutable)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_loadedexecutable_name(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function fingerprint(x::AbstractLoadedExecutable)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_loadedexecutable_fingerprint(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function serialize(x::AbstractLoadedExecutable)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_loadedexecutable_serialize(x::Ptr{Cvoid})::Cstring
+    )
+end
+
+function ndevices(x::AbstractLoadedExecutable)
+    return @ccall libxla.ifrt_loadedexecutable_num_devices(x::Ptr{Cvoid})::Int
+end
+
+function byte_size(x::AbstractLoadedExecutable)
+    return @ccall libxla.ifrt_loadedexecutable_byte_size(x::Ptr{Cvoid})::Int
+end
+
+# TODO maybe use `Base.delete!` or `Base.empty!`?
+# TODO use `PjRt.Future` when moved there
+function delete!(x::AbstractLoadedExecutable)
+    return XLA.Future(@ccall libxla.ifrt_loadedexecutable_delete(x::Ptr{Cvoid})::Cvoid)
+end
+
+function isdeleted(x::AbstractLoadedExecutable)
+    @ccall libxla.ifrt_loadedexecutable_is_deleted(x::Ptr{Cvoid})::Bool
+end
+
+# TODO missing `LoadedExecutable` methods in the C-API
+
 # Compiler
 function compile(compiler::AbstractCompiler, program::AbstractProgram)
     return LoadedExecutable(
@@ -783,139 +864,48 @@ function Base.convert(::Type{Type}, x::DTypeKind)
 end
 
 # IFRT-PjRt backend
-mutable struct PjRtTuple <: AbstractTuple
-    ptr::Ptr{Cvoid}
-    function PjRtTuple(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_tuple_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-mutable struct PjRtMemory <: AbstractMemory
-    ptr::Ptr{Cvoid}
-    function PjRtMemory(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_memory_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-mutable struct PjRtDevice <: AbstractDevice
-    ptr::Ptr{Cvoid}
-    function PjRtDevice(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_device_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-mutable struct PjRtArray <: AbstractArray
-    ptr::Ptr{Cvoid}
-    function PjRtArray(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_array_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-mutable struct PjRtTopology <: AbstractTopology
-    ptr::Ptr{Cvoid}
-    function PjRtTopology(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_topology_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-mutable struct PjRtClient <: AbstractClient
-    ptr::Ptr{Cvoid}
-    function PjRtClient(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_client_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtClient) = x.ptr
-
-mutable struct PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallback
-    ptr::Ptr{Cvoid}
-    function PjRtHostSendAndRecvLoadedHostCallback(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free(
-                z::Ptr{Cvoid}
-            )::Cvoid
-        end
-        return y
-    end
-end
-
-mutable struct PjRtExecutable <: AbstractExecutable
-    ptr::Ptr{Cvoid}
-    function PjRtExecutable(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_executable_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-mutable struct PjRtLoadedExecutable <: AbstractLoadedExecutable
-    ptr::Ptr{Cvoid}
-    function PjRtLoadedExecutable(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_loadedexecutable_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-mutable struct PjRtCompiler <: AbstractCompiler
-    ptr::Ptr{Cvoid}
-    function PjRtCompiler(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_pjrt_compiler_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-# function PjRtTuple(client::AbstractPjRtCompatibleClient, values::Vector{AbstractValue})
-#     return PjRtTuple(
-#         @ccall libxla.ifrt_pjrt_tuple_ctor(
-#             client::Ptr{Cvoid}, values::Vector{Ptr{Cvoid}}, length(values)::Int
-#         )::Ptr{Cvoid}
-#     )
-# end
+@cbinding PjRtTuple <: AbstractTuple finalizer = libxla.ifrt_pjrt_tuple_free
+@cbinding PjRtMemory <: AbstractMemory finalizer = libxla.ifrt_pjrt_memory_free
+@cbinding PjRtDevice <: AbstractDevice finalizer = libxla.ifrt_pjrt_device_free
+@cbinding PjRtArray <: AbstractArray finalizer = libxla.ifrt_pjrt_array_free
+@cbinding PjRtTopology <: AbstractTopology finalizer = libxla.ifrt_pjrt_topology_free
+@cbinding PjRtClient <: AbstractClient finalizer = libxla.ifrt_pjrt_client_free
+@cbinding(
+    PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallback,
+    finalizer = libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free,
+)
+@cbinding PjRtExecutable <: AbstractExecutable finalizer = libxla.ifrt_pjrt_executable_free
+@cbinding(
+    PjRtLoadedExecutable <: AbstractLoadedExecutable,
+    finalizer = libxla.ifrt_pjrt_loadedexecutable_free,
+)
+@cbinding PjRtCompiler <: AbstractCompiler finalizer = libxla.ifrt_pjrt_compiler_free
 
 # TODO for PjRt-IFRT backend, implement `ifrt_to_primitive_type` and `ifrt_to_dtype`
+
+function PjRtTuple(client::PjRtClient, values::Vector{Value})
+    return PjRtTuple(
+        @ccall libxla.ifrt_pjrt_tuple_ctor(
+            client::Ptr{Cvoid}, values::Vector{Ptr{Cvoid}}, length(values)::Int
+        )::Ptr{Cvoid}
+    )
+end
+
+function PjRtMemory(client::PjRtClient, mem_space::PjRt.MemorySpace)
+    return PjRtMemory(
+        @ccall libxla.ifrt_pjrt_memory_ctor(
+            client::Ptr{Cvoid}, mem_space::Ptr{Cvoid}
+        )::Ptr{Cvoid}
+    )
+end
+
+function client(x::PjRtMemory)
+    return PjRtClient(@ccall libxla.ifrt_pjrt_memory_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+function memory_space(x::PjRtMemory)
+    return PjRt.MemorySpace(@ccall libxla.ifrt_pjrt_memory_space(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
 
 function PjRtClient(x::XLA.Client)
     return PjRtClient(@ccall libxla.ifrt_pjrt_client_ctor(x::Ptr{Cvoid})::Ptr{Cvoid})
