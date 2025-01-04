@@ -562,6 +562,15 @@ function Base.zeros(::Type{Index}, dims::Int)
     return Index(@ccall libxla.ifrt_index_zeros(dims::Int)::Ptr{Cvoid})
 end
 
+function Base.collect(x::Index)
+    (; len, ptr) = @ccall libxla.ifrt_index_elements(x::Ptr{Cvoid})::Cspan
+    return Base.unsafe_wrap(Base.Array, reinterpret(Ptr{Int64}, ptr), len; own=true)
+end
+
+function Base.length(x::Index)
+    return @ccall libxla.ifrt_index_count(x::Ptr{Cvoid})::Int
+end
+
 function Base.:(==)(x::Index, y::Index)
     return x.ptr == y.ptr || @ccall libxla.ifrt_index_eq(x::Ptr{Cvoid}, y::Ptr{Cvoid})::Bool
 end
@@ -578,12 +587,26 @@ function Base.:(-)(x::Index, y::Index)
     return Index(@ccall libxla.ifrt_index_sub(x::Ptr{Cvoid}, y::Ptr{Cvoid})::Ptr{Cvoid})
 end
 
-# TODO
-# function Base.:(*)(x::Index, y::Index)
-#     return Index(@ccall libxla.ifrt_index_mul(x::Ptr{Cvoid}, y::Ptr{Cvoid})::Ptr{Cvoid})
-# end
+function Base.:(*)(x::Index, y::Vector{Int64})
+    @boundscheck length(x) == length(y)
+    return Index(@ccall libxla.ifrt_index_mul(x::Ptr{Cvoid}, y::Ptr{Cvoid})::Ptr{Cvoid})
+end
 
-# TODO add!, sub!, mul!
+function add!(x::Index, y::Index)
+    @ccall libxla.ifrt_index_add_inplace(x::Ptr{Cvoid}, y::Ptr{Cvoid})::Cvoid
+    return x
+end
+
+function sub!(x::Index, y::Index)
+    @ccall libxla.ifrt_index_sub_inplace(x::Ptr{Cvoid}, y::Ptr{Cvoid})::Cvoid
+    return x
+end
+
+function mul!(x::Index, y::Vector{Int64})
+    @boundscheck length(x) == length(y)
+    @ccall libxla.ifrt_index_mul_inplace(x::Ptr{Cvoid}, y::Ptr{Int})::Cvoid
+    return x
+end
 
 function debug_string(x::Index)
     return Base.unsafe_string(@ccall libxla.ifrt_index_debug_string(x::Ptr{Cvoid})::Cstring)
@@ -597,7 +620,7 @@ end
 function IndexDomain(origin::Index, shape::Shape)
     return IndexDomain(
         @ccall libxla.ifrt_indexdomain_ctor_with_orign(
-            index::Ptr{Cvoid}, shape::Ptr{Cvoid}
+            origin::Ptr{Cvoid}, shape::Ptr{Cvoid}
         )::Ptr{Cvoid}
     )
 end
@@ -621,19 +644,27 @@ function shape(x::IndexDomain)
     return Shape(@ccall libxla.ifrt_indexdomain_shape(x::Ptr{Cvoid})::Ptr{Cvoid})
 end
 
-function Base.:(+)(x::IndexDomain, y::IndexDomain)
+function Base.:(+)(x::IndexDomain, y::Index)
     return IndexDomain(
         @ccall libxla.ifrt_indexdomain_add(x::Ptr{Cvoid}, y::Ptr{Cvoid})::Ptr{Cvoid}
     )
 end
 
-function Base.:(-)(x::IndexDomain, y::IndexDomain)
+function Base.:(-)(x::IndexDomain, y::Index)
     return IndexDomain(
         @ccall libxla.ifrt_indexdomain_sub(x::Ptr{Cvoid}, y::Ptr{Cvoid})::Ptr{Cvoid}
     )
 end
 
-# TODO add!, sub!
+function add!(x::IndexDomain, offset::Index)
+    @ccall libxla.ifrt_indexdomain_add_inplace(x::Ptr{Cvoid}, offset::Ptr{Cvoid})::Cvoid
+    return x
+end
+
+function sub!(x::IndexDomain, offset::Index)
+    @ccall libxla.ifrt_indexdomain_sub_inplace(x::Ptr{Cvoid}, offset::Ptr{Cvoid})::Cvoid
+    return x
+end
 
 function debug_string(x::IndexDomain)
     return Base.unsafe_string(
