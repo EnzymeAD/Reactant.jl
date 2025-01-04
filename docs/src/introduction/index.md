@@ -61,7 +61,7 @@ f(input1, input2)
 
 When you encounter OOM (Out of Memory) errors, you can try to clear the cache by using `GC.gc()` between memory-intensive operations.
 
-```@example emptycache
+```julia
 using Reactant
 n = 5_0000_0000
 input1 = Reactant.ConcreteRArray(ones(n))
