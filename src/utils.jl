@@ -245,7 +245,8 @@ function make_oc_dict(
 )::Core.OpaqueClosure where {FT}
     key = f
     if haskey(oc_captures, key)
-        return oc_captures[key]
+        oc = oc_captures[key]
+        oc
     else
         ores = ccall(
             :jl_new_opaque_closure_from_code_info,
@@ -527,7 +528,7 @@ function call_with_reactant_generator(
     # octup = Tuple{method.sig.parameters[2:end]...}
     octup = Tuple{tys[2:end]...}
     ocva = false
-
+  
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
     # inner code during compilation without special handling (i.e. call_in_world_total).
     # Opaque closures also require taking the function argument. We can work around the latter
