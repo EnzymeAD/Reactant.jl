@@ -44,4 +44,12 @@ end
 #     Symbol.(map(x -> chopprefix(x, "HostBufferSemantics"),string.(instances(HostBufferSemantics))))
 # end
 
+struct MemorySpace
+    ptr::Ptr{Cvoid}
+    function MemorySpace(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
 end

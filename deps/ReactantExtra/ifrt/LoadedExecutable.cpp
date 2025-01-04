@@ -40,7 +40,7 @@ extern "C" int ifrt_loadedexecutable_num_devices(LoadedExecutable* executable)
     return executable->num_devices();
 }
 
-extern "C" int64_t ifrt_loadedexecutable_size(LoadedExecutable* executable)
+extern "C" int64_t ifrt_loadedexecutable_byte_size(LoadedExecutable* executable)
 {
     return executable->SizeOfGeneratedCodeInBytes();
 }
@@ -78,11 +78,11 @@ extern "C" int64_t ifrt_loadedexecutable_size(LoadedExecutable* executable)
 // }
 
 // TODO fix type conversion
-// extern "C" span<xla::HloModule*> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
-// {
-//     auto modules = MyValueOrThrow(executable->GetHloModules());
-//     return convert(Type<span<xla::HloModule*>>(), modules);
-// }
+extern "C" span<xla::HloModule*> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
+{
+    auto modules = MyValueOrThrow(executable->GetHloModules());
+    return convert(Type<span<xla::HloModule*>>(), modules);
+}
 
 // TODO xla::LoadedExecutable::GetOutputMemoryKinds
 // TODO xla::LoadedExecutable::GetCostAnalysis
