@@ -704,9 +704,7 @@ function to_rarray_internal(@nospecialize(::TracedRArray), ::Tuple)
     return error("Cannot convert TracedRArray to ConcreteRArray")
 end
 @inline to_rarray_internal(@nospecialize(x::ConcreteRArray), ::Tuple) = x
-@inline function to_rarray_internal(
-    @nospecialize(x::Array{<:ReactantPrimitive}), ::Tuple
-)
+@inline function to_rarray_internal(@nospecialize(x::Array{<:ReactantPrimitive}), ::Tuple)
     return ConcreteRArray(x)
 end
 
