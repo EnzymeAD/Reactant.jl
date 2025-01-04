@@ -63,7 +63,7 @@ When you encounter OOM (Out of Memory) errors, you can try to clear the cache by
 
 ```julia
 using Reactant
-n = 5_0000_0000
+n = 500_000_000
 input1 = Reactant.ConcreteRArray(ones(n))
 input2 = Reactant.ConcreteRArray(ones(n))
 
