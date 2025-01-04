@@ -90,8 +90,8 @@ std::string formatDescription(mlir::tblgen::Operator op) {
     std::string leadingSpacesStr;
     for (size_t i = 0; i < leadingSpaces; ++i)
       leadingSpacesStr += "[ ]";
-    description = std::regex_replace(
-        description, std::regex("\n" + leadingSpacesStr), "\n");
+    description = std::regex_replace(description,
+                                     std::regex("\n" + leadingSpacesStr), "\n");
   }
   description = std::regex_replace(description, std::regex(R"(\\)"), R"(\\)");
   description = std::regex_replace(description, std::regex("(['\"$])"), "\\$1");
@@ -177,6 +177,7 @@ const llvm::StringMap<std::string> cppToJuliaTypeMap = {
     {"int64_t", "Int"},
     {"bool", "Bool"},
     {"Type", "IR.Type"},
+    {"APInt", "Int64"}, //TODO: add support in reactant to AP
     {"Attribute", "IR.Attribute"}};
 
 const llvm::StringMap<std::string> standardAttributeToJuliaTypeMap = {
@@ -207,6 +208,7 @@ std::string toPascalCase(std::string s) {
   return output;
 }
 
+// TODO: template support
 std::string removeNamespace(std::string s) {
   auto pos = s.rfind("::");
   if (pos >= s.length())
@@ -256,7 +258,7 @@ std::optional<std::string> emitStruct(llvm::Record def, std::string dialect) {
           })();
 
     } else
-      cppType = arg->getAsUnquotedString();
+      cppType = removeNamespace(arg->getAsUnquotedString());
 
     if (!juliaType) {
       auto juliaTypeEntry = cppToJuliaTypeMap.find(cppType);
@@ -272,13 +274,13 @@ std::optional<std::string> emitStruct(llvm::Record def, std::string dialect) {
         '\n';
     mlirAttributeDef += llvm::formatv("{0} = $(s.{0}), ", name);
   }
-
   structDef += "end";
+  
   mlirAttributeDef.resize(mlirAttributeDef.length() - 2);
   mlirAttributeDef += ">\")";
 
   structMap.insert({predicate, StructName});
-  return structDef + '\n' + mlirAttributeDef + '\n';
+  return structDef + "\n\n" + mlirAttributeDef + "\n\n";
 }
 
 bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
@@ -289,7 +291,7 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
       recordKeeper.getAllDerivedDefinitionsIfDefined("Op");
 
   std::string moduleName;
- 
+
   if (!DialectName.empty()) {
     moduleName = DialectName;
   } else {
@@ -316,12 +318,12 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
     }
     if (attr.getDef().getType()->getAsString() == "EnumAttr")
       continue;
+    
     if (attr.getDef().getValue("attrName")) { // detect "struct" attributes
-      auto complexAttr = emitStruct(attr.getDef(), moduleName);
-      if (!complexAttr)
+      auto structAttr = emitStruct(attr.getDef(), moduleName);
+      if (!structAttr)
         continue;
-      attribs += *complexAttr;
-      // a->dump();
+      attribs += *structAttr;
     }
   }
   const char *moduleTemplate;
