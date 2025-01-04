@@ -472,7 +472,32 @@ end
 
 # TODO Executable
 # TODO LoadedExecutable
-# TODO Compiler
+# Compiler
+function compile(compiler::AbstractCompiler, program::AbstractProgram)
+    return LoadedExecutable(
+        @ccall libxla.ifrt_compiler_compile(
+            compiler::Ptr{Cvoid}, program::Ptr{Cvoid}
+        )::Ptr{Cvoid}
+    )
+end
+
+function compile(
+    compiler::AbstractCompiler, program::AbstractProgram, topology::AbstractTopology
+)
+    return Executable(
+        @ccall libxla.ifrt_compiler_compile_with_topology(
+            compiler::Ptr{Cvoid}, program::Ptr{Cvoid}, topology::Ptr{Cvoid}
+        )::Ptr{Cvoid}
+    )
+end
+
+function deserialize(compiler::AbstractCompiler, serialized::String)
+    return LoadedExecutable(
+        @ccall libxla.ifrt_compiler_deserialize_loadedexecutable(
+            compiler::Ptr{Cvoid}, serialized::Cstring
+        )::Ptr{Cvoid}
+    )
+end
 
 # DType
 DType(x::DTypeKind) = DType(@ccall libxla.ifrt_dtype_ctor(x::Int32)::Ptr{Cvoid})
