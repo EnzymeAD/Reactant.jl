@@ -502,13 +502,12 @@ function Shape(x::Vector{Int64})
     return Shape(@ccall libxla.ifrt_shape_ctor(x::Ptr{Int}, length(x)::Csize_t)::Ptr{Cvoid})
 end
 
-# function Base.ndims(x::Shape)
-#     (; len, ptr) = @ccall libxla.ifrt_shape_dims(x::Ptr{Cvoid})::Cspan
-#     @show len ptr
-#     return Base.unsafe_wrap(Base.Array, reinterpret(Ptr{Int64}, ptr), len; own=false)
-# end
-
 Base.length(x::Shape) = @ccall libxla.ifrt_shape_num_elements(x::Ptr{Cvoid})::Int
+
+function Base.size(x::Shape)
+    (; len, ptr) = @ccall libxla.ifrt_shape_dims(x::Ptr{Cvoid})::Cspan
+    return Base.unsafe_wrap(Base.Array, reinterpret(Ptr{Int64}, ptr), len; own=true)
+end
 
 function debug_string(x::Shape)
     return Base.unsafe_string(@ccall libxla.ifrt_shape_debug_string(x::Ptr{Cvoid})::Cstring)
