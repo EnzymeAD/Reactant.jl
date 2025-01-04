@@ -53,3 +53,29 @@ f = @compile sinsum_add(input1,input2)
 # one can now run the program
 f(input1, input2)
 ```
+
+
+## Tips
+
+### Empty Cache
+
+When you encounter OOM (Out of Memory) errors, you can try to clear the cache by using `GC.gc()` between memory-intensive operations.
+
+```@example emptycache
+using Reactant
+n = 5_0000_0000
+input1 = Reactant.ConcreteRArray(ones(n))
+input2 = Reactant.ConcreteRArray(ones(n))
+
+function sin_add(x, y)
+   return sin.(x) .+ y
+end
+
+f = @compile sin_add(input1,input2)
+
+for i = 1:10
+   GC.gc()
+   @info "gc... $i"
+   f(input1, input2) # May cause OOM here for a 24GB GPU if GC is not used
+end
+```
