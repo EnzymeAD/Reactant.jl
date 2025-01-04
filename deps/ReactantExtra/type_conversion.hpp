@@ -56,33 +56,6 @@ auto convert(Type<span<T>>, std::vector<T> vec) -> span<T>
     return span<T> { vec.size(), ptr };
 }
 
-template <typename T, typename U, typename = std::enable_if_t<std::is_convertible_v<T, U>>>
-auto convert(Type<span<T>>, absl::Span<U> _span) -> span<T>
-{
-    T* ptr = new T[_span.size()];
-    for (int i = 0; i < _span.size(); i++) {
-        ptr[i] = _span[i];
-    }
-    return span<T>(_span.size(), ptr);
-}
-
-template <typename T>
-auto convert(Type<absl::Span<T>>, span<T> span) -> absl::Span<T>
-{
-    return absl::Span<T>(span.ptr, span.size);
-}
-
-template <typename T>
-auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<T*> span) -> absl::Span<tsl::RCReference<T>>
-{
-    auto values_ptr = new tsl::RCReference<T>[span.size];
-    for (int i = 0; i < span.size; i++) {
-        values_ptr[i] = tsl::RCReference<T>();
-        values_ptr[i].reset(span[i]);
-    }
-    return absl::Span<tsl::RCReference<T>>(values_ptr, span.size);
-}
-
 template <typename T>
 auto convert(Type<span<T*>>, std::vector<std::unique_ptr<T>> vec) -> span<T*> {
     T** ptr = new T*[vec.size()];
@@ -108,6 +81,34 @@ auto convert(Type<span<T*>>, std::vector<tsl::RCReference<T>> vec) -> span<T*> {
         ptr[i] = vec[i].release();
     }
     return span<T*>(vec.size(), ptr);
+}
+
+template <typename T, typename U, typename = std::enable_if_t<std::is_convertible_v<T, U>>>
+auto convert(Type<span<T>>, absl::Span<U> _span) -> span<T>
+{
+    using G = std::remove_const_t<T>;
+    G* ptr = new G[_span.size()];
+    for (int i = 0; i < _span.size(); i++) {
+        ptr[i] = _span[i];
+    }
+    return span<T>(_span.size(), ptr);
+}
+
+template <typename T>
+auto convert(Type<absl::Span<T>>, span<T> span) -> absl::Span<T>
+{
+    return absl::Span<T>(span.ptr, span.size);
+}
+
+template <typename T>
+auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<T*> span) -> absl::Span<tsl::RCReference<T>>
+{
+    auto values_ptr = new tsl::RCReference<T>[span.size];
+    for (int i = 0; i < span.size; i++) {
+        values_ptr[i] = tsl::RCReference<T>();
+        values_ptr[i].reset(span[i]);
+    }
+    return absl::Span<tsl::RCReference<T>>(values_ptr, span.size);
 }
 
 template <typename T>
