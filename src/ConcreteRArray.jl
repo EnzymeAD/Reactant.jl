@@ -1,12 +1,12 @@
 function ConcreteRNumber{T}(
-    data::T2; client=XLA.default_backend[], idx=XLA.default_device_idx[], device=nothing
+                            data::T2; client::XLA.Client=XLA.default_backend[], idx::Int=XLA.default_device_idx[], device::Union{Nothing, XLA.Device}=nothing
 ) where {T<:Number,T2<:Number}
     data = convert(T, data)
     crarray = ConcreteRArray(fill(data); client, idx, device)
     return ConcreteRNumber{T}(crarray.data)
 end
 function ConcreteRNumber(
-    data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[], device=nothing
+        data::T; client::XLA.Client=XLA.default_backend[], idx::Int=XLA.default_device_idx[], device::Union{Nothing, XLA.Device}=nothing
 ) where {T<:Number}
     crarray = ConcreteRArray(fill(data); client, idx, device)
     return ConcreteRNumber{T}(crarray.data)
@@ -37,7 +37,7 @@ end
 Base.convert(::Type{T}, x::ConcreteRNumber) where {T<:Number} = convert(T, to_number(x))
 
 function ConcreteRArray(
-    data::T; client=XLA.default_backend[], idx=XLA.default_device_idx[], device=nothing
+        data::T; client::XLA.Client=XLA.default_backend[], idx::Int=XLA.default_device_idx[], device::Union{Nothing, XLA.Device}=nothing
 ) where {T<:Number}
     Base.depwarn(
         "ConcreteRArray(data::Number) is deprecated, use ConcreteRNumber(data) instead",
@@ -52,9 +52,9 @@ Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x
 
 function ConcreteRArray(
     data::Array{T,N};
-    client=XLA.default_backend[],
-    idx=XLA.default_device_idx[],
-    device=nothing,
+    client::XLA.Client=XLA.default_backend[],
+    idx::Int=XLA.default_device_idx[],
+    device::Union{Nothing, XLA.Device}=nothing,
 ) where {T,N}
     device = device === nothing ? XLA.ClientGetDevice(client, idx) : device
     return ConcreteRArray{T,N}(

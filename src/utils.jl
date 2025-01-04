@@ -245,7 +245,8 @@ function make_oc_dict(
 )::Core.OpaqueClosure where {FT}
     key = f
     if haskey(oc_captures, key)
-        return oc_captures[key]
+        oc = oc_captures[key]
+        oc
     else
         ores = ccall(
             :jl_new_opaque_closure_from_code_info,
@@ -527,11 +528,7 @@ function call_with_reactant_generator(
     # octup = Tuple{method.sig.parameters[2:end]...}
     octup = Tuple{tys[2:end]...}
     ocva = false
-    
-    # safe_print("src.relocatability", src.relocatability) 
-    # We explicitly embed the global cache here, so it is definitionally not relocatable
-    # src.relocatability = 0
-
+  
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
     # inner code during compilation without special handling (i.e. call_in_world_total).
     # Opaque closures also require taking the function argument. We can work around the latter
@@ -575,10 +572,6 @@ function call_with_reactant_generator(
     code_info.codelocs = overdubbed_codelocs
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
-
-    # We explicitly embed the global cache here, so it is definitionally not relocatable
-    # safe_print("code_info.relocatability", code_info.relocatability)
-    # code_info.relocatability = 0
 
     if DEBUG_INTERP[]
         safe_print("code_info", code_info)

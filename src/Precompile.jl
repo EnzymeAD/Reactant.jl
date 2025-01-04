@@ -34,31 +34,33 @@ function infer_sig(sig)
     end
 end
 
-@static if VERSION < v"1.10"
-else
 @setup_workload begin
     initialize_dialect()
     client = XLA.CPUClient(; checkcount=false)
     @compile_workload begin
         # Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
-        # infer_sig(Tuple{typeof(Base.sum), Reactant.TracedRArray{Float64, 2}})
-        # infer_sig(Tuple{typeof(Base.sin), Reactant.TracedRNumber{Float64}})
-        x = ConcreteRNumber(2.0; client)
-        Reactant.compile(sin, (x,); client)
-        
-        y = ConcreteRArray([2.0]; client)
-        Reactant.compile(Base.sum, (y,); client)
+        @static if VERSION < v"1.11"
+        else
+            # infer_sig(Tuple{typeof(Base.sum), Reactant.TracedRArray{Float64, 2}})
+            # infer_sig(Tuple{typeof(Base.sin), Reactant.TracedRNumber{Float64}})
+            x = ConcreteRNumber(2.0; client)
+            Reactant.compile(sin, (x,); client)
+            
+            y = ConcreteRArray([2.0]; client)
+            Reactant.compile(Base.sum, (y,); client)
+        end
     end
     XLA.free_client(client)
     client.client = C_NULL
     deinitialize_dialect()
-    # for v in oc_capture_vec
-    #     if v isa Base.RefValue
-    #         p = Ptr{Ptr{Cvoid}}(pointer_from_objref(v))
-    #         Base.atomic_pointerset(p, C_NULL, :monotonic)
-    #     else
-    #         empty!(v)
-    #     end
-    # end
-end
+    # Opaque closures capture the worldage of their compilation and thus are not relocatable
+    # Therefore we explicitly purge all OC's we have created here
+    for v in oc_capture_vec
+        if v isa Base.RefValue
+            p = Ptr{Ptr{Cvoid}}(pointer_from_objref(v))
+            Base.atomic_pointerset(p, C_NULL, :monotonic)
+        else
+            empty!(v)
+        end
+    end
 end
