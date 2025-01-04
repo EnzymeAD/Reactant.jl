@@ -59,7 +59,9 @@ f(input1, input2)
 
 ### Empty Cache
 
-When you encounter OOM (Out of Memory) errors, you can try to clear the cache by using `GC.gc()` between memory-intensive operations.
+When you encounter OOM (Out of Memory) errors, you can try to clear the cache by using Julia's builtin `GC.gc()` between memory-intensive operations.
+
+Note：This only will free memory which is not currently live. If the result of compiled function was stored in a vector, it would still be live and `GC.gc()` would not free it.
 
 ```julia
 using Reactant
