@@ -16,9 +16,9 @@ extern "C" Index* ifrt_index_zeros(int num_elements)
     return new Index(Index::Zeros(num_elements));
 }
 
-extern "C" span<const int64_t*> ifrt_index_elements(Index* index)
+extern "C" span<const int64_t> ifrt_index_elements(Index* index)
 {
-    return convert(Type<span<const int64_t*>>(), index->elements());
+    return convert(Type<span<const int64_t>>(), index->elements());
 }
 
 extern "C" int ifrt_index_count(Index* index)
@@ -47,7 +47,7 @@ extern "C" Index* ifrt_index_sub(Index* index, Index* offset)
 }
 
 // WARN we're not checking if the multiplier has the same size as the index -> check in Julia
-extern "C" Index* ifrt_index_mul(Index* index, span<const int64_t*> c_multiplier)
+extern "C" Index* ifrt_index_mul(Index* index, span<const int64_t> c_multiplier)
 {
     auto multiplier = convert(Type<absl::Span<const int64_t>>(), c_multiplier);
     return new Index(*index * multiplier);
@@ -64,7 +64,7 @@ extern "C" void ifrt_index_sub_inplace(Index* index, Index* offset)
 }
 
 // WARN we're not checking if the multiplier has the same size as the index -> check in Julia
-extern "C" void ifrt_index_mul_inplace(Index* index, span<const int64_t*> c_multiplier)
+extern "C" void ifrt_index_mul_inplace(Index* index, span<const int64_t> c_multiplier)
 {
     auto multiplier = convert(Type<absl::Span<const int64_t>>(), c_multiplier);
     *index *= multiplier;
