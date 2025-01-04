@@ -452,7 +452,12 @@ end
 
 # TODO ifrt_client_topology_for_devices, ifrt_client_default_layout_for_device
 
-# TODO HostCallback
+# HostCallback
+function serialize(x::AbstractHostCallback)
+    return Base.unsafe_string(
+        @ccall libxla.ifrt_hostcallback_serialize(x::Ptr{Cvoid})::Cstring
+    )
+end
 
 # LoadedHostCallback
 function client(x::AbstractLoadedHostCallback)
