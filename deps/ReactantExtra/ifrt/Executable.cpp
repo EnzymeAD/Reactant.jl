@@ -28,7 +28,7 @@ extern "C" int ifrt_executable_num_devices(Executable* executable)
     return executable->num_devices();
 }
 
-extern "C" int64_t ifrt_executable_size(Executable* executable)
+extern "C" int64_t ifrt_executable_byte_size(Executable* executable)
 {
     return executable->SizeOfGeneratedCodeInBytes();
 }
