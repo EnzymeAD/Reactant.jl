@@ -169,7 +169,9 @@ function is_reactant_method(mi::Core.MethodInstance)
     return mt === REACTANT_METHOD_TABLE
 end
 
-@generated function applyiterate_with_reactant(iteratefn, applyfn, args::Vararg{Any, N}) where N
+@generated function applyiterate_with_reactant(
+    iteratefn, applyfn, args::Vararg{Any,N}
+) where {N}
     @assert iteratefn == typeof(Base.iterate)
     newargs = Vector{Expr}(undef, N)
     for i in 1:N
