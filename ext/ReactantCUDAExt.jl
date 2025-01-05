@@ -457,6 +457,56 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     return res
 end
 
+function Reactant.traced_type(
+    ::Type{A}, seen::ST, ::Val{mode}, track_numbers
+) where {T,N,A<:CUDA.CuArray{T,N},ST,mode}
+    if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
+        return Reactant.ConcreteRArray{T,N}
+    else
+        TT = Reactant.traced_type(T, seen, Val(mode), track_numbers)
+        if TT === T
+            return A
+        else
+            return Array{traced_type(T, seen, Val(mode), track_numbers),N}
+        end
+    end
+end
+
+function Reactant.make_tracer(
+    seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
+) where {RT<:CUDA.CuArray}
+    if haskey(seen, prev)
+        return seen[prev]
+    end
+    if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
+        return seen[prev] = Reactant.ConcreteRArray(Array(prev))
+    end
+    TT = Reactant.traced_type(eltype(RT), (), Val(mode), track_numbers)
+    if TT === eltype(RT)
+        return prev
+    end
+    newa = Array{TT,ndims(RT)}(undef, size(prev))
+    seen[prev] = newa
+    same = true
+    for I in eachindex(prev)
+        if isassigned(prev, I)
+            pv = prev[I]
+            nv = Reactant.make_tracer(
+                seen, pv, append_path(path, I), mode; track_numbers, kwargs...
+            )
+            if pv !== nv
+                same = false
+            end
+            @inbounds newa[I] = nv
+        end
+    end
+    if same
+        seen[prev] = prev
+        return prev
+    end
+    return newa
+end
+
 function __init__()
     if isdefined(CUDA.CUDA_Driver_jll, :libcuda) && CUDA.CUDA_Driver_jll.libcuda !== nothing
         handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
