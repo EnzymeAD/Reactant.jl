@@ -353,7 +353,9 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     aliases = MLIR.IR.Attribute[]
     rarrays = TracedRArray[]
     for (i, a) in enumerate(args)
-        @assert a isa CuTracedArray
+        if !(a isa CuTracedArray)
+            throw(AssertionError("Expected a CuTracedArray found $(Core.Typeof(a)), $a"))
+        end
         ta =
             Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
         push!(rarrays, ta)
