@@ -148,7 +148,7 @@ end
 # Base overloads
 @reactant_overlay @noinline function Base._stack(dims::Union{Integer,Colon}, iter)
    iter2 = collect(iter)
-   if any(use_overlayed_version, iter2)
+   if use_overlayed_version(iter2) || any(use_overlayed_version, iter2)
         return TracedRArrayOverrides.overloaded_stack(dims, iter2)
     else
         return Base._stack(dims, iter2)
