@@ -161,7 +161,7 @@ Some type information was truncated. Use `show(err)` to see complete types.
 After using Julia's built-in `GC.gc()`:
 
 <details>
-  <summary>View Details</summary>
+  <summary>View Outputs</summary>
 
 ```bash
 [ Info: gc... 1
