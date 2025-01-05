@@ -5,15 +5,12 @@
 using namespace xla::ifrt;
 using namespace reactant;
 
-// TODO there are problems with using `make_shared
-// extern "C" Executable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable*
-// pjrt_executable, XlaCompileOptions* compile_options) {
-//     auto pjrt_executable_shared =
-//     std::make_shared<xla::PjRtExecutable>(*pjrt_executable); auto options =
-//     std::make_unique<XlaCompileOptions>(*compile_options); return
-//     MyValueOrThrow(PjRtExecutable::Create(pjrt_executable_shared,
-//     std::move(options))).release();
-// }
+// TODO is there any problem with ownership by using `std::shared_ptr` here?
+extern "C" Executable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable* c_pjrt_executable, XlaCompileOptions* c_compile_options) {
+    auto pjrt_executable = std::shared_ptr<xla::PjRtExecutable>(c_pjrt_executable);
+    auto compile_options = std::make_unique<XlaCompileOptions>(*c_compile_options);
+    return MyValueOrThrow(PjRtExecutable::Create(pjrt_executable, std::move(compile_options))).release();
+}
 
 extern "C" void ifrt_pjrt_executable_free(PjRtExecutable* executable) { delete executable; }
 
