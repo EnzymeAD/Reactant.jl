@@ -52,4 +52,29 @@ struct MemorySpace
     end
 end
 
+# TODO import from XLA module
+# struct Device
+#     x::Ptr{Cvoid}
+#     function Device(x)
+#         @assert x != C_NULL
+#         return new(x)
+#     end
+# end
+
+struct CompileOptions
+    x::Ptr{Cvoid}
+    function CompileOptions(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+struct Executable
+    x::Ptr{Cvoid}
+    function Executable(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
 end
