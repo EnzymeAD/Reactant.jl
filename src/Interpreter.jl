@@ -66,6 +66,7 @@ end
             world,
             false,            #=forward_rules=#
             false,            #=reverse_rules=#
+            false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
             set_reactant_abi,
         )
@@ -81,7 +82,8 @@ else
             REACTANT_METHOD_TABLE,
             world,
             false,            #=forward_rules=#
-            false,            #=forward_rules=#
+            false,            #=reverse_rules=#
+            false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
             set_reactant_abi,
         )
