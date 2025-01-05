@@ -19,7 +19,10 @@ import ..Reactant:
     ancestor,
     TracedType
 
-@inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
+@inline function traced_getfield(@nospecialize(obj), field)
+    return Base.getfield(obj, field)
+end
+
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
     (isbitstype(T) || ancestor(obj) isa RArray) && return Base.getfield(obj, field)
     return Base.getindex(obj, field)
@@ -905,37 +908,75 @@ function compile(f, args; client=nothing, optimize=true, sync=false, no_nan=fals
     end
 
     fname = gensym(Symbol(Symbol(f), :_reactant))
-    expr = :(function $(fname)(args...)
-        $(
-            # if `f` is a closure, then prepend the closure into `args`
-            # the closure fields will be correctly extracted from it as the tracer has already passed through it
-            if !(closure_ty <: Nothing)
-                :(args = ($fnwrap, args...))
-            end
-        )
+
+    body = quote
         $(flatten_code...)
         $(xla_call_code)
         $(sync_call)
         $(unflatten_code...)
         return result
-    end)
+    end
 
-    body = expr.args[2]
-    return register_thunk(fname, body)
+    return register_thunk(fname, Tuple{map(Core.Typeof, args)...}, body, f, isclosure)
 end
 
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_body_cache = Dict{Symbol,Expr}()
 
-struct Thunk{tag} end
-
-@generated function (thunk::Thunk{tag})(args...) where {tag}
-    return __thunk_body_cache[tag]
+struct Thunk{FTy,tag,IsClosure,ArgTypes}
+    f::FTy
 end
 
-function register_thunk(tag, body)
+struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
+
+function Base.showerror(
+    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}
+) where {FTy,tag,ArgTypes,FoundTypes,IsClosure}
+    print(
+        io,
+        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.",
+    )
+    print(
+        io,
+        "\nYou passed in arguments with types\n\t(" *
+        join(FoundTypes.parameters, ", ") *
+        ")",
+    )
+    return print(
+        io,
+        "\nHowever the method you are calling was compiled for arguments with types\n\t(" *
+        join(ArgTypes.parameters, ", ") *
+        ")",
+    )
+end
+
+@generated function (thunk::Thunk{FTy,tag,ArgTypes,IsClosure})(
+    args...
+) where {FTy,tag,ArgTypes,IsClosure}
+    FoundTypes = Tuple{args...}
+    if ArgTypes != FoundTypes
+        return quote
+            throw(
+                $(MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}())
+            )
+        end
+    end
+    body = __thunk_body_cache[tag]
+    if IsClosure
+        return quote
+            args = (thunk.f, args...)
+            $body
+        end
+    else
+        return body
+    end
+end
+
+function register_thunk(
+    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool
+)
     __thunk_body_cache[tag] = body
-    return Thunk{tag}()
+    return Thunk{Core.Typeof(f),tag,argtys,isclosure}(f)
 end
 
 end
