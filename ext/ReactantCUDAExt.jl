@@ -491,7 +491,9 @@ function Reactant.make_tracer(
     for I in eachindex(prev)
         if isassigned(prev, I)
             pv = prev[I]
-            nv = Reactant.make_tracer(seen, pv, append_path(path, I), mode; track_numbers, kwargs...)
+            nv = Reactant.make_tracer(
+                seen, pv, append_path(path, I), mode; track_numbers, kwargs...
+            )
             if pv !== nv
                 same = false
             end
