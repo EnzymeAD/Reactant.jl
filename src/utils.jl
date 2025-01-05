@@ -374,14 +374,14 @@ function call_with_reactant_generator(
 
     # look up the method match
     builtin_error = :(throw(
-        AssertionError("Unsupported call_with_reactant of builtin REDUB_ARGUMENTS_NAME")
+        AssertionError("Unsupported call_with_reactant of builtin $(args[1])")
     ))
 
     if args[1] <: Core.Builtin
         return stub(world, source, builtin_error)
     end
     method_error = :(throw(
-        MethodError(REDUB_ARGUMENTS_NAME[1], REDUB_ARGUMENTS_NAME[2:end], $world)
+        MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
     ))
 
     interp = ReactantInterpreter(; world)
