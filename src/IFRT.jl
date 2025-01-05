@@ -907,8 +907,67 @@ function memory_space(x::PjRtMemory)
     return PjRt.MemorySpace(@ccall libxla.ifrt_pjrt_memory_space(x::Ptr{Cvoid})::Ptr{Cvoid})
 end
 
+# PjRtDevice
+# TODO add `attributes` argument
+# TODO refactor `XLA.Device` to `PjRt.Device` when the move is done
+function PjRtDevice(
+    client::PjRtClient,
+    device_id::Int32,
+    kind::String,
+    to_string::String,
+    debug_string::String,
+    pid::Int,
+    pjrt_device::XLA.Device,
+)
+    return PjRtDevice(
+        @ccall libxla.ifrt_pjrt_device_ctor(
+            client::Ptr{Cvoid},
+            device_id::Int32,
+            kind::Cstring,
+            to_string::Cstring,
+            debug_string::Cstring,
+            pid::Int,
+            pjrt_device::Ptr{Cvoid},
+        )::Ptr{Cvoid}
+    )
+end
+
+# TODO refactor `XLA.Device` to `PjRt.Device` when the move is done
+function XLA.Device(x::PjRtDevice)
+    return PjRt.Device(
+        @ccall libxla.ifrt_pjrt_device_pjrt_device(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
+end
+
+# TODO PjRtArray
+# TODO PjRtTopology
+
 function PjRtClient(x::XLA.Client)
     return PjRtClient(@ccall libxla.ifrt_pjrt_client_ctor(x::Ptr{Cvoid})::Ptr{Cvoid})
+end
+
+# TODO PjRtHostSendAndRecvLoadedHostCallback
+
+# PjRtExecutable
+function PjRtExecutable(executable::PjRt.Executable, compile_options::PjRt.CompileOptions)
+    return PjRtExecutable(
+        @ccall libxla.ifrt_pjrt_executable_ctor(
+            executable::Ptr{Cvoid}, compile_options::Ptr{Cvoid}
+        )::Ptr{Cvoid}
+    )
+end
+
+function PjRt.Executable(x::PjRtExecutable)
+    return PjRt.Executable(
+        @ccall libxla.ifrt_pjrt_executable_pjrt_executable(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
+end
+
+# TODO PjRtLoadedExecutable
+
+# PjRtCompiler
+function PjRtCopiler(x::PjRtCompiler)
+    return PjRtCompiler(@ccall libxla.ifrt_pjrt_compiler_ctor(x::Ptr{Cvoid})::Ptr{Cvoid})
 end
 
 end
