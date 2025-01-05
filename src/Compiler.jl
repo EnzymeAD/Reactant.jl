@@ -938,7 +938,9 @@ function Base.showerror(
     )
     print(
         io,
-        "\nYou passed in arguments with types\n\t(" * join(FoundTypes.parameters, ", ") * ")",
+        "\nYou passed in arguments with types\n\t(" *
+        join(FoundTypes.parameters, ", ") *
+        ")",
     )
     return print(
         io,
