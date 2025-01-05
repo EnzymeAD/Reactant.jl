@@ -9,7 +9,9 @@ function Statistics._mean(f::F, A::AnyTracedRArray{T,N}, dims) where {F,T,N}
     return mapreduce(f, +, A; dims) / denom
 end
 
-function Statistics._var(A::AnyTracedRArray{T,N}, corrected::Bool, mean, ::Colon) where {T,N}
+function Statistics._var(
+    A::AnyTracedRArray{T,N}, corrected::Bool, mean, ::Colon
+) where {T,N}
     mean === nothing && (mean = Statistics.mean(A))
     denom = length(A) - corrected
     return mapreduce(abs2, +, A .- mean; dims=:) / denom
