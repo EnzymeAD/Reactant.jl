@@ -85,8 +85,7 @@ end
 
 If you **don't** use `GC.gc()` here, this may cause an OOM:
 
-<details>
-  <summary>View Outputs</summary>
+
 
 ```bash
 [ Info: gc... 1
@@ -157,12 +156,10 @@ Stacktrace:
 Some type information was truncated. Use `show(err)` to see complete types.
 ```
 
-</details>
 
 After using Julia's built-in `GC.gc()`:
 
-<details>
-  <summary>View Outputs</summary>
+
 
 ```bash
 [ Info: gc... 1
@@ -176,7 +173,7 @@ After using Julia's built-in `GC.gc()`:
 [ Info: gc... 9
 [ Info: gc... 10
 ```
-</details>
+
 
 
 
