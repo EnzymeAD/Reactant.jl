@@ -336,12 +336,12 @@ const cuModule = Ref{UInt}(0)
 function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false)
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
-    
+
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
-    fnwrapped, func2, traced_result, result, seen_args, ret, linear_args, in_tys,
-    linear_results = 
-    try
+    fnwrapped,
+    func2, traced_result, result, seen_args, ret, linear_args, in_tys,
+    linear_results = try
         Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
     finally
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
