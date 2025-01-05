@@ -45,7 +45,7 @@ end
             # infer_sig(Tuple{typeof(Base.sin), Reactant.TracedRNumber{Float64}})
             x = ConcreteRNumber(2.0; client)
             Reactant.compile(sin, (x,); client)
-            
+
             y = ConcreteRArray([2.0]; client)
             Reactant.compile(Base.sum, (y,); client)
         end
