@@ -20,7 +20,7 @@ import ..Reactant:
     TracedType
 
 @inline function traced_getfield(@nospecialize(obj), field)
-    Base.getfield(obj, field)
+    return Base.getfield(obj, field)
 end
 
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
@@ -923,24 +923,40 @@ end
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_body_cache = Dict{Symbol,Expr}()
 
-struct Thunk{FTy, tag, IsClosure, ArgTypes}
+struct Thunk{FTy,tag,IsClosure,ArgTypes}
     f::FTy
 end
 
-struct MisMatchedThunkTypeError{ThunkTy, FoundTypes} <: Base.Exception
+struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
+
+function Base.showerror(
+    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}
+) where {FTy,tag,ArgTypes,FoundTypes,IsClosure}
+    print(
+        io,
+        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.",
+    )
+    print(
+        io,
+        "\nYou passed in arguments with types (" * join(FoundTypes.parameters, ", ") * ")",
+    )
+    return print(
+        io,
+        "\nHowever the method you are calling was compiled for arguments with types (" *
+        join(ArgTypes.parameters, ", ") *
+        ")",
+    )
 end
 
-function Base.showerror(io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy, tag, ArgTypes, IsClosure}, FoundTypes}) where {FTy, tag, ArgTypes, FoundTypes, IsClosure}
-    print(io, "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.")
-    print(io, "\nYou passed in arguments with types ("*join(FoundTypes.parameters, ", ")*")")
-    print(io, "\nHowever the method you are calling was compiled for arguments with types ("*join(ArgTypes.parameters, ", ")*")")
-end
-
-@generated function (thunk::Thunk{FTy, tag, ArgTypes, IsClosure})(args...) where {FTy, tag, ArgTypes, IsClosure}
+@generated function (thunk::Thunk{FTy,tag,ArgTypes,IsClosure})(
+    args...
+) where {FTy,tag,ArgTypes,IsClosure}
     FoundTypes = Tuple{args...}
     if ArgTypes != FoundTypes
         return quote
-            throw($(MisMatchedThunkTypeError{Thunk{FTy, tag, ArgTypes, IsClosure}, FoundTypes}()))
+            throw(
+                $(MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}())
+            )
         end
     end
     body = __thunk_body_cache[tag]
@@ -954,9 +970,11 @@ end
     end
 end
 
-function register_thunk(tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool)
+function register_thunk(
+    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool
+)
     __thunk_body_cache[tag] = body
-    return Thunk{Core.Typeof(f), tag, argtys, isclosure}(f)
+    return Thunk{Core.Typeof(f),tag,argtys,isclosure}(f)
 end
 
 end
