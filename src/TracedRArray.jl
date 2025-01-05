@@ -438,13 +438,22 @@ end
 
 Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 
+function first_scalar(x)
+    Reactant.@allowscalar first(x)
+end
+
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
-    ElType = if bc.f isa Type && bc.f <: ReactantPrimitive
-        Broadcast.combine_eltypes(TracedUtils.TypeCast{bc.f}(), bc.args)
+    fn = if bc.f isa Type && bc.f <: ReactantPrimitive
+        TracedUtils.TypeCast{bc.f}()
     else
-        Broadcast.combine_eltypes(bc.f, bc.args)
+        bc.f
+    end
+    ElType = Broadcast.combine_eltypes(fn, bc.args)
+    # Special case a union{} return so we can see the better error message
+    if ElType === Union{}
+        fn(map(first_scalar, bc.args)...)
     end
     @assert ElType != Any && ElType != Union{}
     sim = similar(bc, ElType)
