@@ -19,6 +19,8 @@ import ..Reactant:
     ancestor,
     TracedType
 
+using ExpressionExplorer
+
 @inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
     (isbitstype(T) || ancestor(obj) isa RArray) && return Base.getfield(obj, field)
@@ -534,6 +536,56 @@ macro jit(args...)
     #! format: on
 end
 
+#create expression for more complex expression than a call
+function wrapped_expression(expr::Expr)
+    css = ExpressionExplorer.compute_symbols_state(expr)
+    tracked_definitions = []
+    tracked_names = []
+    alter_expr = (e::Expr) -> begin
+        for (i, arg) in enumerate(e.args)
+            arg isa Expr && alter_expr(arg)
+            is_tracking_call(arg) || continue
+            name = gensym(:tracked)
+            push!(tracked_definitions, arg)
+            push!(tracked_names, name)
+            e.args[i] = name
+        end
+    end
+    alter_expr(expr)
+
+    free_args = collect(css.references)
+    function_args = tuple([free_args; tracked_definitions]...)
+    args = tuple([free_args; tracked_names]...)
+    fname = gensym(:F)
+
+    return (
+        Expr(:tuple, function_args...),
+        quote
+            ($fname)($(args...)) = $expr
+        end,
+        quote
+            $(fname)
+        end,
+    )
+end
+
+function is_tracking_call(input)
+    Meta.isexpr(input, :call) || return false
+    function_name = (ExpressionExplorer.explore_funcdef!(input, ExpressionExplorer.ScopeState()))[1].parts[end]
+    return function_name in [:to_rarray, :ConcreteRNumber, :ConcreteRArray]
+end
+
+#check if an expression need to be wrap in a closure
+function need_wrap(expr::Expr)::Bool
+    for arg in expr.args
+        arg isa Expr || continue
+        Meta.isexpr(arg, :.) && continue
+        is_tracking_call(arg) && continue
+        return true
+    end
+    return false
+end
+
 function compile_call_expr(mod, compiler, options, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
@@ -546,36 +598,39 @@ function compile_call_expr(mod, compiler, options, args...)
         end
     end
     call = only(args)
-    f_symbol = gensym(:f)
     args_symbol = gensym(:args)
     compiled_symbol = gensym(:compiled)
-
-    if Meta.isexpr(call, :call)
-        bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
-        fname = if bcast
-            quote
-                if isdefined(mod, $(Meta.quot(fname_full)))
-                    $(fname_full)
-                else
-                    Base.Broadcast.BroadcastFunction($(fname))
-                end
-            end
-        else
-            :($(fname))
-        end
-        args_rhs = Expr(:tuple, call.args[2:end]...)
-    elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
-        fname = :($(Base.Broadcast.BroadcastFunction)($(call.args[1])))
-        args_rhs = only(call.args[2:end])
+    closure = ()
+    if call isa Expr && need_wrap(call)
+        (args_rhs, closure, fname) = wrapped_expression(call)
     else
-        error("Invalid function call: $(call)")
+        if Meta.isexpr(call, :call)
+            bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
+            fname = if bcast
+                quote
+                    if isdefined(mod, $(Meta.quot(fname_full)))
+                        $(fname_full)
+                    else
+                        Base.Broadcast.BroadcastFunction($(fname))
+                    end
+                end
+            else
+                :($(fname))
+            end
+            args_rhs = Expr(:tuple, call.args[2:end]...)
+        elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
+            fname = :($(Base.Broadcast.BroadcastFunction)($(call.args[1])))
+            args_rhs = only(call.args[2:end])
+        else
+            error("Invalid function call: $(call)")
+        end
     end
 
     return quote
-        $(f_symbol) = $(fname)
+        $closure
         $(args_symbol) = $(args_rhs)
         $(compiled_symbol) = $(compiler)(
-            $(f_symbol), $(args_symbol); $(Expr.(:kw, keys(options), values(options))...)
+            $(fname), $(args_symbol); $(Expr.(:kw, keys(options), values(options))...)
         )
     end,
     (; compiled=compiled_symbol, args=args_symbol)
