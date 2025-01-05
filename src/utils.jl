@@ -148,7 +148,8 @@ function should_rewrite_ft(@nospecialize(ft))
         ft <: typeof(Base.typemin) ||
         ft <: typeof(Base.getproperty) ||
         ft <: typeof(Base.vect) ||
-        ft <: typeof(Base.eltype)
+        ft <: typeof(Base.eltype) ||
+        ft <: typeof(Base.argtail)
         return false
     end
 
@@ -168,8 +169,16 @@ function is_reactant_method(mi::Core.MethodInstance)
     return mt === REACTANT_METHOD_TABLE
 end
 
-@inline function applyiterate_with_reactant(iteratefn, applyfn, args...)
-    call_with_reactant(iteratefn, applyfn, args...)
+@generated function applyiterate_with_reactant(iteratefn, applyfn, args::Vararg{Any, N}) where N
+    @assert iteratefn == typeof(Base.iterate)
+    newargs = Vector{Expr}(undef, N)
+    for i in 1:N
+        @inbounds newargs[i] = :(args[$i]...)
+    end
+    quote
+        Base.@_inline_meta
+        call_with_reactant(applyfn, $(newargs...))
+    end
 end
 
 function rewrite_inst(inst, ir, interp)
@@ -180,12 +189,14 @@ function rewrite_inst(inst, ir, interp)
         if ft == typeof(Core.kwcall)
             ft = Core.Compiler.widenconst(maybe_argextype(inst.args[3], ir))
         end
-        if should_rewrite_ft(ft)
-            rep = Expr(:call, call_with_reactant, inst.args...)
-            return true, rep
-        end
         if ft == typeof(Core._apply_iterate)
-            rep = Expr(:call, applyiterate_with_reactant, inst.args...)
+            ft = Core.Compiler.widenconst(maybe_argextype(inst.args[3], ir))
+            if should_rewrite_ft(ft)
+                rep = Expr(:call, applyiterate_with_reactant, inst.args[2:end]...)
+                return true, rep
+            end
+        elseif should_rewrite_ft(ft)
+            rep = Expr(:call, call_with_reactant, inst.args...)
             return true, rep
         end
     end
@@ -361,14 +372,14 @@ function call_with_reactant_generator(
 
     # look up the method match
     builtin_error = :(throw(
-        AssertionError("Unsupported call_with_reactant of builtin $redub_arguments")
+        AssertionError("Unsupported call_with_reactant of builtin REDUB_ARGUMENTS_NAME")
     ))
 
     if args[1] <: Core.Builtin
         return stub(world, source, builtin_error)
     end
     method_error = :(throw(
-        MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
+        MethodError(REDUB_ARGUMENTS_NAME[1], REDUB_ARGUMENTS_NAME[2:end], $world)
     ))
 
     interp = ReactantInterpreter(; world)
