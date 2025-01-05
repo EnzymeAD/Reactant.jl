@@ -168,6 +168,10 @@ function is_reactant_method(mi::Core.MethodInstance)
     return mt === REACTANT_METHOD_TABLE
 end
 
+@inline function applyiterate_with_reactant(iteratefn, applyfn, args...)
+    call_with_reactant(iteratefn, applyfn, args...)
+end
+
 function rewrite_inst(inst, ir, interp)
     if Meta.isexpr(inst, :call)
         # Even if type unstable we do not want (or need) to replace intrinsic
@@ -178,6 +182,10 @@ function rewrite_inst(inst, ir, interp)
         end
         if should_rewrite_ft(ft)
             rep = Expr(:call, call_with_reactant, inst.args...)
+            return true, rep
+        end
+        if ft == typeof(Core._apply_iterate)
+            rep = Expr(:call, applyiterate_with_reactant, inst.args...)
             return true, rep
         end
     end
