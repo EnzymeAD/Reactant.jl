@@ -39,8 +39,8 @@ end
     client = XLA.CPUClient(; checkcount=false)
     @compile_workload begin
         # Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
-        @static if VERSION < v"1.11"
-        else
+        # @static if VERSION < v"1.11"
+        # else
             # infer_sig(Tuple{typeof(Base.sum), Reactant.TracedRArray{Float64, 2}})
             # infer_sig(Tuple{typeof(Base.sin), Reactant.TracedRNumber{Float64}})
             x = ConcreteRNumber(2.0; client)
@@ -48,7 +48,7 @@ end
 
             y = ConcreteRArray([2.0]; client)
             Reactant.compile(Base.sum, (y,); client)
-        end
+        # end
     end
     XLA.free_client(client)
     client.client = C_NULL
