@@ -219,7 +219,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                     rep = Expr(:call, applyiterate_with_reactant, MustThrowError(), inst.args[2:end]...)
                     return true, rep, Union{}
                 else
-                    rep = Expr(:call, applyiterate_with_reactant, MustThrowError(), inst.args[2:end]...)
+                    rep = Expr(:call, applyiterate_with_reactant, inst.args[2:end]...)
                     return true, rep, Any
                 end
             end
