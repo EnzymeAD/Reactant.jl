@@ -131,7 +131,7 @@ for (cT, aT, bT) in (
                 if C2 !== C
                     C .= C2
                 end
-            else                
+            else
                 # Inference barrier is required when calling function recursively within overload
                 # This is required since otherwise type inference will think this is a recursive edge
                 # rather than a call to the base method

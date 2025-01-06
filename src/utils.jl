@@ -169,8 +169,7 @@ function is_reactant_method(mi::Core.MethodInstance)
     return mt === REACTANT_METHOD_TABLE
 end
 
-struct MustThrowError
-end
+struct MustThrowError end
 
 @generated function applyiterate_with_reactant(
     iteratefn, applyfn, args::Vararg{Any,N}
@@ -186,8 +185,8 @@ end
     end
 end
 
-@generated function applyiterate_with_reactant(mt::MustThrowError,
-    iteratefn, applyfn, args::Vararg{Any,N}
+@generated function applyiterate_with_reactant(
+    mt::MustThrowError, iteratefn, applyfn, args::Vararg{Any,N}
 ) where {N}
     @assert iteratefn == typeof(Base.iterate)
     newargs = Vector{Expr}(undef, N)
@@ -201,7 +200,11 @@ end
 end
 
 function certain_error()
-    throw(AssertionError("The inferred code was guaranteed to throw this error. And yet, it didn't. So here we are..."))
+    throw(
+        AssertionError(
+            "The inferred code was guaranteed to throw this error. And yet, it didn't. So here we are...",
+        ),
+    )
 end
 
 function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
@@ -216,7 +219,12 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
             ft = Core.Compiler.widenconst(maybe_argextype(inst.args[3], ir))
             if should_rewrite_ft(ft)
                 if RT === Union{}
-                    rep = Expr(:call, applyiterate_with_reactant, MustThrowError(), inst.args[2:end]...)
+                    rep = Expr(
+                        :call,
+                        applyiterate_with_reactant,
+                        MustThrowError(),
+                        inst.args[2:end]...,
+                    )
                     return true, rep, Union{}
                 else
                     rep = Expr(:call, applyiterate_with_reactant, inst.args[2:end]...)
@@ -250,9 +258,11 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
 
             if !method.isva || !Base.isvarargtype(sig.parameters[end])
                 if RT === Union{}
-                    sig2 = Tuple{typeof(call_with_reactant), MustThrowError, sig.parameters...}
+                    sig2 = Tuple{
+                        typeof(call_with_reactant),MustThrowError,sig.parameters...
+                    }
                 else
-                    sig2 = Tuple{typeof(call_with_reactant), sig.parameters...}
+                    sig2 = Tuple{typeof(call_with_reactant),sig.parameters...}
                 end
             else
                 vartup = inst.args[end]
@@ -263,7 +273,10 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                 end
                 if RT === Union{}
                     sig2 = Tuple{
-                        typeof(call_with_reactant),MustThrowError,sig.parameters[1:(end - 1)]...,ns...
+                        typeof(call_with_reactant),
+                        MustThrowError,
+                        sig.parameters[1:(end - 1)]...,
+                        ns...,
                     }
                 else
                     sig2 = Tuple{
@@ -288,7 +301,9 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
             )
             n_method_args = method.nargs
             if RT === Union{}
-                rep = Expr(:invoke, mi, call_with_reactant, MustThrowError(), inst.args[2:end]...)
+                rep = Expr(
+                    :invoke, mi, call_with_reactant, MustThrowError(), inst.args[2:end]...
+                )
                 return true, rep, Union{}
             else
                 rep = Expr(:invoke, mi, call_with_reactant, inst.args[2:end]...)
@@ -457,9 +472,8 @@ function call_with_reactant_generator(
     end
 
     # look up the method match
-    builtin_error = :(throw(
-        AssertionError("Unsupported call_with_reactant of builtin $fn")
-    ))
+    builtin_error =
+        :(throw(AssertionError("Unsupported call_with_reactant of builtin $fn")))
 
     if fn <: Core.Builtin
         return stub(world, source, builtin_error)
@@ -470,7 +484,6 @@ function call_with_reactant_generator(
     ))
 
     interp = ReactantInterpreter(; world)
-
 
     min_world = Ref{UInt}(typemin(UInt))
     max_world = Ref{UInt}(typemax(UInt))
@@ -623,7 +636,12 @@ function call_with_reactant_generator(
         push!(overdubbed_code, trailing_arguments)
         push!(overdubbed_codelocs, code_info.codelocs[1])
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
-        push!(tys, Tuple{redub_arguments[(n_method_args:n_actual_args) .+ (guaranteed_error ? 1 : 0)]...})
+        push!(
+            tys,
+            Tuple{
+                redub_arguments[(n_method_args:n_actual_args) .+ (guaranteed_error ? 1 : 0)]...,
+            },
+        )
 
         if DEBUG_INTERP[]
             push!(
@@ -681,15 +699,7 @@ function call_with_reactant_generator(
     ocres = Core.SSAValue(length(overdubbed_code))
 
     if DEBUG_INTERP[]
-        push!(
-            overdubbed_code,
-            Expr(
-                :call,
-                safe_print,
-                "ocres",
-                ocres,
-            ),
-        )
+        push!(overdubbed_code, Expr(:call, safe_print, "ocres", ocres))
         push!(overdubbed_codelocs, code_info.codelocs[1])
     end
 

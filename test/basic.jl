@@ -890,26 +890,26 @@ end
         xs = []
         push!(xs, x)
         push!(xs, x)
-        stack(xs)
+        return stack(xs)
     end
     function s2(x)
         xs = []
         push!(xs, x)
         push!(xs, x)
-        stack(xs; dims=2)
+        return stack(xs; dims=2)
     end
     function s3(x, y)
         xs = []
         push!(xs, x)
         push!(xs, y)
-        stack(xs; dims=2)
+        return stack(xs; dims=2)
     end
     function s4(x, y)
         xs = []
         push!(xs, x)
         push!(xs, y)
         push!(xs, x)
-        stack(xs; dims=2)
+        return stack(xs; dims=2)
     end
 
     @test @jit(s1(x_ra)) ≈ s1(x)
