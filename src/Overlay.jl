@@ -132,7 +132,10 @@ for (cT, aT, bT) in (
                     C .= C2
                 end
             else
-                LinearAlgebra.mul!(C, A, B, α, β)
+                # Inference barrier is required when calling function recursively within overload
+                # This is required since otherwise type inference will think this is a recursive edge
+                # rather than a call to the base method
+                Base.inferencebarrier(LinearAlgebra.mul!)(C, A, B, α, β)
             end
             return C
         end
@@ -150,6 +153,14 @@ end
     if use_overlayed_version(iter)
         return TracedRArrayOverrides.overloaded_stack(dims, iter)
     else
-        return Base._stack(dims, Base.IteratorSize(iter), iter)
+        iter2 = collect(iter)
+        if any(use_overlayed_version, iter2)
+            return TracedRArrayOverrides.overloaded_stack(dims, iter2)
+        else
+            # Inference barrier is required when calling function recursively within overload
+            # This is required since otherwise type inference will think this is a recursive edge
+            # rather than a call to the base method
+            return Base.inferencebarrier(Base._stack)(dims, iter2)
+        end
     end
 end
