@@ -373,9 +373,8 @@ function call_with_reactant_generator(
     )
 
     # look up the method match
-    builtin_error = :(throw(
-        AssertionError("Unsupported call_with_reactant of builtin $(args[1])")
-    ))
+    builtin_error =
+        :(throw(AssertionError("Unsupported call_with_reactant of builtin $(args[1])")))
 
     if args[1] <: Core.Builtin
         return stub(world, source, builtin_error)
