@@ -624,7 +624,7 @@ function call_with_reactant_generator(
         push!(overdubbed_code, trailing_arguments)
         push!(overdubbed_codelocs, code_info.codelocs[1])
         push!(fn_args, Core.SSAValue(length(overdubbed_code)))
-        push!(tys, Tuple{redub_arguments[(n_method_args:n_actual_args) + (guaranteed_error ? 1 : 0)]...})
+        push!(tys, Tuple{redub_arguments[(n_method_args:n_actual_args) .+ (guaranteed_error ? 1 : 0)]...})
 
         if DEBUG_INTERP[]
             push!(
