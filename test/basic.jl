@@ -936,6 +936,13 @@ end
     @test res ≈ fn(Array(x_ra), Array(idxs_ra))
 end
 
+@testset "duplicate args (#226)" begin
+    first_arg(x, y) = x
+    x_ra = Reactant.to_rarray(rand(2, 2))
+    res = @jit first_arg(x_ra, x_ra)
+    @test res ≈ x_ra
+end
+
 @testset "Common Trig Functions" begin
     x = rand(Float32, 4, 16)
     x_ra = Reactant.to_rarray(x)
