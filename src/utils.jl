@@ -286,7 +286,6 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                 match.spec_types,
                 match.sparams,
             )
-            safe_print("mi", mi)
             n_method_args = method.nargs
             if RT === Union{}
                 rep = Expr(:invoke, mi, call_with_reactant, MustThrowError(), inst.args[2:end]...)
