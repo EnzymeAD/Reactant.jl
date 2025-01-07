@@ -128,14 +128,17 @@ end
 
 function error_not_within_autodiff()
     !Enzyme.within_autodiff() && error("Not within autodiff")
-    return
+    return nothing
 end
 
 fwd_within_autodiff(Mode, RT) = Enzyme.autodiff(Mode, error_not_within_autodiff, RT)
 
 @testset "within_autodiff" begin
-    @test_thows ErrorException @jit error_not_within_autodiff()
-    @test isnothing(@jit fwd_within_autodiff(Forward, Const))
+    @test_throws ErrorException error_not_within_autodiff()
+    @test fwd_within_autodiff(Forward, Const) == ()
+
+    @test_throws ErrorException @jit error_not_within_autodiff()
+    @test (@jit fwd_within_autodiff(Forward, Const)) == ()
 end
 
 function gw(z)
