@@ -343,7 +343,7 @@ function set!(x, path, tostore; emptypath=false)
 
     set_mlir_data!(x, tostore)
 
-    emptypath && set_paths!(x, ())
+    return emptypath && set_paths!(x, ())
 end
 
 function get_residx(x)

@@ -214,7 +214,7 @@ function set_act!(inp, path, reverse, tostore; emptypath=false)
     #end
 
     emptypath && TracedUtils.set_paths!(x, ())
-    return
+    return nothing
 end
 
 function overload_autodiff(
