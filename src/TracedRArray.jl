@@ -172,7 +172,17 @@ function Base.getindex(a::WrappedTracedRArray, indices...)
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
 end
 
+function maybe_assert_scalar_setindexing(
+    ::TracedRArray{T,N}, ::Vararg{Union{Int,TracedRNumber{Int}},N}
+) where {T,N}
+    GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::Vararg{Int, N})")
+end
+
+maybe_assert_scalar_setindexing(args...) = nothing
+
 function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
+    maybe_assert_scalar_setindexing(a, indices...)
+
     indices = map(enumerate(indices)) do (idx, i)
         i isa Colon && return 1:size(a, idx)
         i isa CartesianIndex && return Tuple(i)
