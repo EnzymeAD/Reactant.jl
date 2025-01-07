@@ -105,6 +105,11 @@ function should_rewrite_ft(@nospecialize(ft))
                 has_ancestor(mod, Reactant.TracedRandom)
                 return false
             end
+            if string(mod) == "CUDA"
+                if ft.name.name == Symbol("#launch_configuration")
+                    return false
+                end
+            end
         end
     end
     # Don't rewrite Val
@@ -152,6 +157,8 @@ function should_rewrite_ft(@nospecialize(ft))
         ft <: typeof(Base.argtail)
         return false
     end
+
+    
 
     # Default assume all functions need to be reactant-ified
     return true
@@ -217,7 +224,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
         end
         if ft == typeof(Core._apply_iterate)
             ft = Core.Compiler.widenconst(maybe_argextype(inst.args[3], ir))
-            if should_rewrite_ft(ft)
+            if Base.invokelatest(should_rewrite_ft, ft)
                 if RT === Union{}
                     rep = Expr(
                         :call,
@@ -231,7 +238,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                     return true, rep, Any
                 end
             end
-        elseif should_rewrite_ft(ft)
+        elseif Base.invokelatest(should_rewrite_ft, ft)
             if RT === Union{}
                 rep = Expr(:call, call_with_reactant, MustThrowError(), inst.args...)
                 return true, rep, Union{}
@@ -248,7 +255,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
         if ft == typeof(Core.kwcall)
             ft = sig.parameters[3]
         end
-        if should_rewrite_ft(ft) && !is_reactant_method(omi)
+        if Base.invokelatest(should_rewrite_ft, ft) && !is_reactant_method(omi)
             method = omi.def::Core.Method
 
             min_world = Ref{UInt}(typemin(UInt))
@@ -479,9 +486,15 @@ function call_with_reactant_generator(
         return stub(world, source, builtin_error)
     end
 
-    method_error = :(throw(
-        MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
-    ))
+    if guaranteed_error
+        method_error = :(throw(
+            MethodError($REDUB_ARGUMENTS_NAME[2], $REDUB_ARGUMENTS_NAME[3:end], $world)
+        ))
+    else
+        method_error = :(throw(
+            MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
+        ))
+    end
 
     interp = ReactantInterpreter(; world)
 
@@ -675,7 +688,7 @@ function call_with_reactant_generator(
     dict, make_oc = if Base.issingletontype(fn)
         Base.Ref{Core.OpaqueClosure}(), make_oc_ref
     else
-        Dict{args[1],Core.OpaqueClosure}(), make_oc_dict
+        Dict{fn,Core.OpaqueClosure}(), make_oc_dict
     end
 
     push!(oc_capture_vec, dict)

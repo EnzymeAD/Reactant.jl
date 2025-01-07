@@ -225,6 +225,20 @@ struct LLVMFunc{F,tt}
     entry::String
 end
 
+function Base.getproperty(f::LLVMFunc{F, tt}, sym::Symbol) where {F, tt}
+    if sym === :fun
+        f
+    else
+        Base.getfield(f, sym)
+    end
+end
+
+# TODO in the future we may want to avoid doing a second cufunction compilation
+# for computing the thread/block count (or potentially do it ourselves).
+@noinline function CUDA.launch_configuration(f::LLVMFunc{F, tt}; shmem::Union{Integer, Base.Callable}=0, max_threads::Integer=0) where {F, tt}
+    CUDA.launch_configuration(Base.inferencebarrier(CUDA.cufunction)(f.f, Tuple{tt.parameters[2:end]...}).fun; shmem, max_threads)
+end
+
 const GPUCompiler = CUDA.GPUCompiler
 const LLVM = GPUCompiler.LLVM
 
@@ -456,7 +470,7 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         )
         CUDA.GPUCompiler.cached_compilation(cache, source, config, compile, link)
     end
-    return res
+    return Core.Typeof(res)(f, res.entry)
 end
 
 function Reactant.traced_type(
