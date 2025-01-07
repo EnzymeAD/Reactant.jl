@@ -88,7 +88,7 @@ end
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE
     struct ReactantCacheToken end
 
-    function ReactantInterpreter(; world::UInt=Base.get_world_counter())
+    function ReactantInterpreter(; world::UInt=Base.get_world_counter(), within_autodiff=false)
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             ReactantCacheToken(),
             REACTANT_METHOD_TABLE,
@@ -97,7 +97,7 @@ end
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
-            true,             #=defer_within_autodiff=#
+            !within_autodiff, #=defer_within_autodiff=#
             set_reactant_abi,
         )
     end
@@ -105,7 +105,7 @@ else
     const REACTANT_CACHE = Enzyme.GPUCompiler.CodeCache()
 
     function ReactantInterpreter(;
-        world::UInt=Base.get_world_counter(), code_cache=REACTANT_CACHE
+        world::UInt=Base.get_world_counter(), code_cache=REACTANT_CACHE, within_autodiff=false
     )
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             REACTANT_CACHE,
@@ -115,7 +115,7 @@ else
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
-            true,             #=defer_within_autodiff=#
+            !within_autodiff, #=defer_within_autodiff=#
             set_reactant_abi,
         )
     end
