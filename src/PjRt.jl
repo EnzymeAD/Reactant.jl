@@ -77,4 +77,12 @@ struct Executable
     end
 end
 
+struct TopologyDescription
+    x::Ptr{Cvoid}
+    function TopologyDescription(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
 end
