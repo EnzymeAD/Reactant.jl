@@ -322,6 +322,8 @@ function compile(job)
         LLVM.strip_debuginfo!(mod)
         modstr = string(mod)
 
+        println(modstr)
+
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
 
@@ -350,6 +352,19 @@ function link(job, compiled)
     return compiled
 end
 
+function to_bytes(x)
+	sz = sizeof(x)
+	ref = Ref(x)
+	GC.@preserve ref begin
+		ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
+		vec = Vector{UInt8}(undef, sz)
+		for i in 1:sz
+			@inbounds vec[i] = Base.unsafe_load(ptr, i)
+		end
+		vec
+	end
+end
+
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(false),
@@ -366,66 +381,115 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     restys = MLIR.IR.Type[]
     aliases = MLIR.IR.Attribute[]
     rarrays = TracedRArray[]
-    for (i, a) in enumerate(args)
-        if !(a isa CuTracedArray)
-            throw(AssertionError("Expected a CuTracedArray found $(Core.Typeof(a)), $a"))
+
+    fname = func.entry
+    
+    wrapper_tys = MLIR.IR.Type[]
+    ctx = MLIR.IR.context()
+    cullvm_ty = MLIR.API.mlirLLVMArrayTypeGet(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1), 1)
+    for (i, a) in Tuple{Int, Any}[(0, func.f), enumerate(args)...]
+        if sizeof(a) == 0
+            continue
         end
-        ta =
-            Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
-        push!(rarrays, ta)
-        arg = ta.mlir_data
-        arg = Reactant.TracedUtils.transpose_val(arg)
-        push!(restys, MLIR.IR.type(arg))
-        push!(mlir_args, arg)
-        push!(
-            aliases,
-            MLIR.IR.Attribute(
-                MLIR.API.stablehloOutputOperandAliasGet(
-                    MLIR.IR.context(),
-                    length(args) == 1 ? 0 : 1,
-                    length(args) == 1 ? C_NULL : Ref{Int64}(i - 1),
-                    i - 1,
-                    0,
-                    C_NULL,
-                ),
-            ),
+        if a isa CuTracedArray
+            push!(wrapper_tys, cullvm_ty)
+            continue
+        end
+        
+        # Per below we assume we can inline all other types directly in
+    end
+    
+    sym_name = gensym("call_$fname")
+    mod = MLIR.IR.mmodule()
+    wrapfunc = MLIR.IR.block!(MLIR.IR.body(mod)) do
+        return MLIR.Dialects.func.func_(;
+            sym_name,
+            function_type=MLIR.IR.FunctionType(wrapper_tys, []),
+            body=MLIR.IR.Region()
         )
+    end
+    wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
+    push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
+
+    wrapargs = MLIR.IR.Value[]
+    argidx = 1
+
+    symtab = MLIR.IR.SymbolTable(mod)
+    gpufunc = MLIR.IR.lookup(symtab, fname)
+    gpu_function_type = MLIR.IR.Type(Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type"))
+
+
+    c1 = MLIR.Dialects.llvm.mlir_constant(; res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1))
+    for (i, a) in Tuple{Int, Any}[(0, func.f), enumerate(args)...]
+        if sizeof(a) == 0
+            continue
+        end
+        if a isa CuTracedArray
+            ta =
+                Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
+            push!(rarrays, ta)
+            arg = ta.mlir_data
+            arg = Reactant.TracedUtils.transpose_val(arg)
+            push!(restys, MLIR.IR.type(arg))
+            push!(mlir_args, arg)
+            push!(
+                aliases,
+                MLIR.IR.Attribute(
+                    MLIR.API.stablehloOutputOperandAliasGet(
+                        MLIR.IR.context(),
+                        length(args) == 1 ? 0 : 1,
+                        length(args) == 1 ? C_NULL : Ref{Int64}(i - 1),
+                        i - 1,
+                        0,
+                        C_NULL,
+                    ),
+                ),
+            )
+            push!(wrapargs, MLIR.IR.argument(wrapbody, argidx))
+            argidx += 1
+            continue
+        end
+
+        # TODO check for only integer and explicitly non cutraced types
+        @show "Warning: using fallback for kernel argument type: $(Core.Typeof(a))"
+        MLIR.IR.block!(wrapbody) do
+            argty = MLIR.IR.input(gpu_function_type, argidx)
+            argidx += 1
+            alloc = MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(elem_type))
+           
+            sz = sizeof(a)
+            array_ty = MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(UInt8), sz)
+            cdata = MLIR.Dialects.llvm.mlir_constant(; res=array_type, value=MLIR.IR.Attribute(to_bytes(a)))
+            MLIR.Dialects.llvm.store(cdata, alloc)
+            argres = MLIR.Dialects.llvm.load(alloc; res=argty)
+            push!(wrapargs, argres)
+        end
+    end
+        
+    MLIR.IR.block!(wrapbody) do
+        MLIR.Dialects.func.call(wrapargs; result_0=MLIR.IR.Type[], callee=wrapfn)
+        MLIR.Dialects.func.return_(MLIR.IR.Value[])
     end
 
     output_operand_aliases = MLIR.IR.Attribute(aliases)
 
-    fname = func.entry
 
-    operands = MLIR.IR.Value[]
+    blk_operands = MLIR.IR.Value[]
     for idx in
         (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
         push!(
-            operands,
+            blk_operands,
             Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, idx).mlir_data,
         )
     end
-    for arg in mlir_args
-        push!(operands, arg)
-    end
-    owned_regions = MLIR.IR.Region[]
-    successors = MLIR.IR.Block[]
-    attributes = MLIR.IR.NamedAttribute[
-        MLIR.IR.NamedAttribute("fn", MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))),
-        MLIR.IR.NamedAttribute(
-            "output_operand_aliases", MLIR.IR.Attribute(output_operand_aliases)
-        ),
-    ]
 
     location = MLIR.IR.Location()
-    call = MLIR.IR.create_operation(
-        "enzymexla.kernel_call",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=restys,
-        result_inference=false,
+    call = MLIR.Dialects.enzymexla.kernel_call(
+        blk_operands...,
+        mlir_args;
+        result_0=restys,
+        fn=sym_name,
+        output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases)
     )
     for (i, res) in enumerate(rarrays)
         res.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, i))

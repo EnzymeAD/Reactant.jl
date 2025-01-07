@@ -516,6 +516,7 @@ cc_library(
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
+        "@llvm-project//mlir:CAPILLVMObjects",
     ] + select({
     "@xla//xla/tsl:is_cuda_enabled_and_oss":[
         "@xla//xla/stream_executor/cuda:all_runtime", 
