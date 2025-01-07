@@ -2,7 +2,6 @@ using Reactant
 using Test
 using CUDA
 
-@static if false
 function square_kernel!(x, y)
     i = threadIdx().x
     x[i] *= y[i]
@@ -27,8 +26,6 @@ end
     else
         @code_hlo optimize = :before_kernel square!(A, B)
     end
-end
-
 end
 
 function sin_kernel!(x, y)

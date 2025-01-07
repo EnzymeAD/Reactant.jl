@@ -354,8 +354,8 @@ function to_bytes(x)
 	sz = sizeof(x)
 	ref = Ref(x)
 	GC.@preserve ref begin
-		ptr = Base.reinterpret(Ptr{Int8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
-		vec = Vector{Int8}(undef, sz)
+		ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
+		vec = Vector{UInt8}(undef, sz)
 		for i in 1:sz
 			@inbounds vec[i] = Base.unsafe_load(ptr, i)
 		end
@@ -440,8 +440,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 MLIR.IR.Attribute(
                     MLIR.API.stablehloOutputOperandAliasGet(
                         MLIR.IR.context(),
-                        length(args) == 1 ? 0 : 1,
-                        length(args) == 1 ? C_NULL : Ref{Int64}(i - 1),
+                        length(wrapper_tys) == 1 ? 0 : 1,
+                        length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(i - 1),
                         i - 1,
                         0,
                         C_NULL,
@@ -456,17 +456,14 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         # TODO check for only integer and explicitly non cutraced types
         @show "Warning: using fallback for kernel argument type conversion for argument of type $(Core.Typeof(a)), if this contains a CuTracedArray this will segfault"
         MLIR.IR.block!(wrapbody) do
-            @show gpu_function_type
             argty = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, argidx-1))
-            @show argty
             argidx += 1
             c1 = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)), 1)
             alloc = MLIR.IR.result(MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(argty), res=MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))), 1)
            
             sz = sizeof(a)
             array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
-            @show array_ty
-            cdata = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=array_ty, value=MLIR.IR.Attribute(to_bytes(a))), 1)
+            cdata = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=array_ty, value=MLIR.IR.DenseElementsAttribute(to_bytes(a))), 1)
             MLIR.Dialects.llvm.store(cdata, alloc)
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
