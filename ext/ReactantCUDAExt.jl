@@ -456,16 +456,19 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         # TODO check for only integer and explicitly non cutraced types
         @show "Warning: using fallback for kernel argument type conversion for argument of type $(Core.Typeof(a)), if this contains a CuTracedArray this will segfault"
         MLIR.IR.block!(wrapbody) do
+            @show gpu_function_type
             argty = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, argidx-1))
+            @show argty
             argidx += 1
             c1 = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)), 1)
-            alloc = MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(argty), res=MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0)))
+            alloc = MLIR.IR.result(MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(argty), res=MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))), 1)
            
             sz = sizeof(a)
-            array_ty = MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
-            cdata = MLIR.Dialects.llvm.mlir_constant(; res=array_ty, value=MLIR.IR.Attribute(to_bytes(a)))
+            array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
+            @show array_ty
+            cdata = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=array_ty, value=MLIR.IR.Attribute(to_bytes(a))), 1)
             MLIR.Dialects.llvm.store(cdata, alloc)
-            argres = MLIR.Dialects.llvm.load(alloc; res=argty)
+            argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
         end
     end
