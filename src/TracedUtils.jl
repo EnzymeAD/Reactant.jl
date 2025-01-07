@@ -16,6 +16,7 @@ using ..Reactant:
     OrderedIdDict,
     ReactantPrimitive,
     Ops
+using ReactantCore: MissingTracedValue
 
 materialize_traced_array(x::TracedRArray) = x
 
@@ -42,6 +43,9 @@ get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
 get_paths(x::TracedRArray) = x.paths
 set_paths!(x::TracedRArray, paths) = (x.paths = paths; return x)
+
+get_paths(x::MissingTracedValue) = x.paths
+set_paths!(x::MissingTracedValue, paths) = (x.paths = paths; return x)
 
 function set_mlir_data!(x::TracedRArray, data)
     x.mlir_data = data
