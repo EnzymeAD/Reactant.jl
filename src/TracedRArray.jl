@@ -175,7 +175,8 @@ end
 function maybe_assert_scalar_setindexing(
     ::TracedRArray{T,N}, ::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
-    return GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::Vararg{Int, N})")
+    GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::Vararg{Int, N})")
+    return nothing
 end
 
 maybe_assert_scalar_setindexing(args...) = nothing

@@ -614,11 +614,13 @@ function codegen_flatten!(linear_args, result_stores)
     # resarg_code = Expr[]
 
     for (i, arg) in enumerate(linear_args)
-        paths = ((p for p in arg.paths if p[1] == :args)...,)
+        paths = ((p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :args)...,)
         path = if length(paths) == 1
             paths[1]
         else
-            throw("Invalid path duplication $(arg.paths) into $(paths)")
+            throw(
+                "Invalid path duplication $(Reactant.TracedUtils.get_paths(arg)) into $(paths)",
+            )
         end
 
         usbuf = Symbol(:usbuf_, i)
@@ -633,7 +635,7 @@ function codegen_flatten!(linear_args, result_stores)
         push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
 
         # TODO: unused for the time being
-        # respaths = ((p for p in arg.paths if p[1] == :result || p[1] == :resargs)...,)
+        # respaths = ((p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :result || p[1] == :resargs)...,)
 
         # resarg = false
         # for respath in respaths
@@ -688,7 +690,12 @@ function codegen_unflatten!(
 
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
-        paths = ((p for p in result.paths if p[1] == :result || p[1] == :resargs)...,)
+        paths = (
+            (
+                p for p in Reactant.TracedUtils.get_paths(result) if
+                p[1] == :result || p[1] == :resargs
+            )...,
+        )
         for path in paths
             if path[1] == :result
                 unflatcode = :result
@@ -739,7 +746,7 @@ function codegen_unflatten!(
                         end
                     end
                 else
-                    unflatcode = :($unflatcode.data = $concrete_res_name)
+                    unflatcode = :(traced_setfield!($unflatcode, :data, $concrete_res_name))
                 end
                 push!(unflatten_code, unflatcode)
             end
@@ -753,9 +760,18 @@ function codegen_unflatten!(
 
     # if some argument is mutated, change them to point to the correct concrete results
     for (result, arg_idx) in preserved_args
-        for path in result.paths
+        paths = (
+            (
+                p for p in Reactant.TracedUtils.get_paths(result) if
+                p[1] == :result || p[1] == :resargs || p[1] == :args
+            )...,
+        )
+
+        for path in paths
             arg = linear_args[arg_idx + 1]
-            argpath = only((p for p in arg.paths if p[1] == :args))
+            argpath = only((
+                p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :args
+            ))
 
             if path[1] == :result
                 res = :result
@@ -764,7 +780,7 @@ function codegen_unflatten!(
                     continue
                 end
             else
-                @assert path[1] == :resargs || path[1] == :args
+                @assert path[1] == :resargs || path[1] == :args "Expected :resargs or :args, got $(path[1])"
                 # We can optimize cases where we set the arg to itself
                 if path[2:end] == argpath[2:end]
                     continue

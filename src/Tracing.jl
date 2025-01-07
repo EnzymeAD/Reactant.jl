@@ -454,7 +454,7 @@ function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == TracedTrack
-        prev.paths = (prev.paths..., path)
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -500,7 +500,7 @@ function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == TracedTrack
-        prev.paths = (prev.paths..., path)
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -540,7 +540,7 @@ function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == TracedTrack
-        prev.paths = (prev.paths..., path)
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
