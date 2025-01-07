@@ -45,7 +45,9 @@ function set_reactant_abi(
         arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
     elseif interp.defer_within_autodiff && f === overload_autodiff
-        interp′ = Enzyme.Compiler.Interpreter.EnzymeInterpreter(interp; defer_within_autodiff=false)
+        interp′ = Enzyme.Compiler.Interpreter.EnzymeInterpreter(
+            interp; defer_within_autodiff=false
+        )
         return Base.@invoke abstract_call_known(
             interp′::Enzyme.Compiler.Interpreter.EnzymeInterpreter,
             f,
@@ -69,7 +71,9 @@ end
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE
     struct ReactantCacheToken end
 
-    function ReactantInterpreter(; world::UInt=Base.get_world_counter(), within_autodiff=false)
+    function ReactantInterpreter(;
+        world::UInt=Base.get_world_counter(), within_autodiff=false
+    )
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             ReactantCacheToken(),
             REACTANT_METHOD_TABLE,
@@ -86,7 +90,9 @@ else
     const REACTANT_CACHE = Enzyme.GPUCompiler.CodeCache()
 
     function ReactantInterpreter(;
-        world::UInt=Base.get_world_counter(), code_cache=REACTANT_CACHE, within_autodiff=false
+        world::UInt=Base.get_world_counter(),
+        code_cache=REACTANT_CACHE,
+        within_autodiff=false,
     )
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             REACTANT_CACHE,
