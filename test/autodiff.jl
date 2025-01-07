@@ -63,6 +63,18 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     @test res1[1] ≈ ores1[1]
 end
 
+function error_not_within_autodiff()
+    !Enzyme.within_autodiff() && error("Not within autodiff")
+    return
+end
+
+fwd_within_autodiff(Mode, RT) = Enzyme.autodiff(Mode, error_not_within_autodiff, RT)
+
+@testset "within_autodiff" begin
+    @test_thows ErrorException @jit error_not_within_autodiff()
+    @test isnothing(@jit fwd_within_autodiff(Forward, Const))
+end
+
 function gw(z)
     return Enzyme.gradient(Forward, sum, z; chunk=Val(1))
 end
