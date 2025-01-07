@@ -208,14 +208,13 @@ function set_act!(inp, path, reverse, tostore; emptypath=false)
     end
 
     #if inp isa Enzyme.Active || !reverse
-    x.mlir_data = tostore
+    TracedUtils.set_mlir_data!(x, tostore)
     #else
     #    x.mlir_data = MLIR.IR.result(MLIR.Dialects.stablehlo.add(x.mlir_data, tostore), 1)
     #end
 
-    if emptypath
-        x.paths = ()
-    end
+    emptypath && TracedUtils.set_paths!(x, ())
+    return
 end
 
 function overload_autodiff(
@@ -266,22 +265,35 @@ function overload_autodiff(
     for a in linear_results
         if TracedUtils.has_residx(a)
             if needs_primal(CMode)
-                push!(outtys, TracedUtils.transpose_ty(MLIR.IR.type(a.mlir_data)))
+                push!(
+                    outtys,
+                    TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a))),
+                )
             end
             if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
                 if width == 1
-                    push!(outtys, TracedUtils.transpose_ty(MLIR.IR.type(a.mlir_data)))
+                    push!(
+                        outtys,
+                        TracedUtils.transpose_ty(
+                            MLIR.IR.type(TracedUtils.get_mlir_data(a))
+                        ),
+                    )
                 else
                     push!(
                         outtys,
                         TracedUtils.batch_ty(
-                            width, TracedUtils.transpose_ty(MLIR.IR.type(a.mlir_data))
+                            width,
+                            TracedUtils.transpose_ty(
+                                MLIR.IR.type(TracedUtils.get_mlir_data(a))
+                            ),
                         ),
                     )
                 end
             end
         else
-            push!(outtys, TracedUtils.transpose_ty(MLIR.IR.type(a.mlir_data)))
+            push!(
+                outtys, TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a)))
+            )
         end
     end
     for (i, act) in enumerate(activity)

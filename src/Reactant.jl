@@ -167,14 +167,6 @@ function aos_to_soa(x::AbstractArray{<:TracedRNumber{T}}) where {T}
     return Ops.reshape(vcat(x...), size(x)...)
 end
 
-include("Ops.jl")
-include("TracedUtils.jl")
-
-include("TracedRNumber.jl")
-include("TracedRArray.jl")
-
-include("ConcreteRArray.jl")
-
 mutable struct ConcreteRNG <: Random.AbstractRNG
     seed::ConcreteRArray{UInt64,1}
     const algorithm::String
@@ -184,6 +176,14 @@ mutable struct TracedRNG <: Random.AbstractRNG
     seed::TracedRArray{UInt64,1}
     const algorithm::String
 end
+
+include("Ops.jl")
+include("TracedUtils.jl")
+
+include("TracedRNumber.jl")
+include("TracedRArray.jl")
+
+include("ConcreteRArray.jl")
 
 use_overlayed_version(iter) = any(use_overlayed_version, iter)
 
