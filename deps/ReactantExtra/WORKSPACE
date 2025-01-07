@@ -94,7 +94,7 @@ LLVM_TARGETS = select({
     "//conditions:default": ["AMDGPU", "NVPTX"],
 }) + ["AArch64", "X86", "ARM"]
 
-LLVM_COMMIT = "b5f21671ef04984bc00770263234dfb94833a274"
+LLVM_COMMIT = "5d633fab8679e4f6ebbbed9751a3ee34337c6f92"
 LLVM_SHA256 = ""
 http_archive(
     name = "llvm-raw",

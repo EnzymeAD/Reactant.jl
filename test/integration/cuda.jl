@@ -44,7 +44,7 @@ function sin!(x, y)
 end
 
 @testset "Sin Kernel" begin
-    oA = collect(1:1:64)
+    oA = collect(Float64, 1:1:64)
     A = Reactant.to_rarray(oA)
     B = Reactant.to_rarray(100 .* oA)
     if CUDA.functional()
@@ -73,7 +73,7 @@ end
     oA = collect(1:1:64)
     A = Reactant.to_rarray(oA)
     if CUDA.functional()
-        @jit smul!(A, B)
+        @jit smul!(A)
         @test all(Array(A) .≈ oA .* 15)
     else
         @code_hlo optimize = :before_kernel smul!(A)
