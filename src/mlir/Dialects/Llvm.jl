@@ -6,13 +6,14 @@ import ...API
 
 
 
-function ashr(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, location=Location())
+function ashr(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, isExact=nothing, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
     
     create_operation(
         "llvm.ashr", location;
@@ -1155,13 +1156,14 @@ function func(; sym_name, sym_visibility=nothing, function_type, linkage=nothing
 end
 
 
-function lshr(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, location=Location())
+function lshr(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, isExact=nothing, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
     
     create_operation(
         "llvm.lshr", location;
@@ -1245,7 +1247,7 @@ Examples:
 See the following link for more details:
 https://llvm.org/docs/LangRef.html#load-instruction
 """
-function load(addr::Value; res::IR.Type, alignment=nothing, volatile_=nothing, nontemporal=nothing, invariant=nothing, ordering=nothing, syncscope=nothing, access_groups=nothing, alias_scopes=nothing, noalias_scopes=nothing, tbaa=nothing, location=Location())
+function load(addr::Value; res::IR.Type, alignment=nothing, volatile_=nothing, nontemporal=nothing, invariant=nothing, invariantGroup=nothing, ordering=nothing, syncscope=nothing, access_groups=nothing, alias_scopes=nothing, noalias_scopes=nothing, tbaa=nothing, location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[addr, ]
     owned_regions = Region[]
@@ -1255,6 +1257,7 @@ function load(addr::Value; res::IR.Type, alignment=nothing, volatile_=nothing, n
     !isnothing(volatile_) && push!(attributes, namedattribute("volatile_", volatile_))
     !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
     !isnothing(invariant) && push!(attributes, namedattribute("invariant", invariant))
+    !isnothing(invariantGroup) && push!(attributes, namedattribute("invariantGroup", invariantGroup))
     !isnothing(ordering) && push!(attributes, namedattribute("ordering", ordering))
     !isnothing(syncscope) && push!(attributes, namedattribute("syncscope", syncscope))
     !isnothing(access_groups) && push!(attributes, namedattribute("access_groups", access_groups))
@@ -1318,13 +1321,14 @@ function mlir_none(; res=nothing::Union{Nothing, IR.Type}, location=Location())
 end
 
 
-function or(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, location=Location())
+function or(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, isDisjoint=nothing, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(isDisjoint) && push!(attributes, namedattribute("isDisjoint", isDisjoint))
     
     create_operation(
         "llvm.or", location;
@@ -1415,13 +1419,14 @@ function return_(arg=nothing::Union{Nothing, Value}; location=Location())
 end
 
 
-function sdiv(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, location=Location())
+function sdiv(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, isExact=nothing, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
     
     create_operation(
         "llvm.sdiv", location;
@@ -1557,7 +1562,7 @@ llvm.store %val, %ptr atomic monotonic {alignment = 8 : i64}
 See the following link for more details:
 https://llvm.org/docs/LangRef.html#store-instruction
 """
-function store(value::Value, addr::Value; alignment=nothing, volatile_=nothing, nontemporal=nothing, ordering=nothing, syncscope=nothing, access_groups=nothing, alias_scopes=nothing, noalias_scopes=nothing, tbaa=nothing, location=Location())
+function store(value::Value, addr::Value; alignment=nothing, volatile_=nothing, nontemporal=nothing, invariantGroup=nothing, ordering=nothing, syncscope=nothing, access_groups=nothing, alias_scopes=nothing, noalias_scopes=nothing, tbaa=nothing, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[value, addr, ]
     owned_regions = Region[]
@@ -1566,6 +1571,7 @@ function store(value::Value, addr::Value; alignment=nothing, volatile_=nothing, 
     !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
     !isnothing(volatile_) && push!(attributes, namedattribute("volatile_", volatile_))
     !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
+    !isnothing(invariantGroup) && push!(attributes, namedattribute("invariantGroup", invariantGroup))
     !isnothing(ordering) && push!(attributes, namedattribute("ordering", ordering))
     !isnothing(syncscope) && push!(attributes, namedattribute("syncscope", syncscope))
     !isnothing(access_groups) && push!(attributes, namedattribute("access_groups", access_groups))
@@ -1634,13 +1640,14 @@ function trunc(arg::Value; res::IR.Type, location=Location())
 end
 
 
-function udiv(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, location=Location())
+function udiv(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, isExact=nothing, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
     
     create_operation(
         "llvm.udiv", location;
@@ -1651,12 +1658,13 @@ function udiv(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, loca
 end
 
 
-function uitofp(arg::Value; res::IR.Type, location=Location())
+function uitofp(arg::Value; res::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[arg, ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(nonNeg) && push!(attributes, namedattribute("nonNeg", nonNeg))
     
     create_operation(
         "llvm.uitofp", location;
@@ -1763,12 +1771,13 @@ function xor(lhs::Value, rhs::Value; res=nothing::Union{Nothing, IR.Type}, locat
 end
 
 
-function zext(arg::Value; res::IR.Type, location=Location())
+function zext(arg::Value; res::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[arg, ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(nonNeg) && push!(attributes, namedattribute("nonNeg", nonNeg))
     
     create_operation(
         "llvm.zext", location;

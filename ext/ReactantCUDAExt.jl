@@ -281,7 +281,7 @@ function compile(job)
     # TODO: on 1.9, this actually creates a context. cache those.
     entry = GPUCompiler.JuliaContext() do ctx
         mod, meta = GPUCompiler.compile(
-            :llvm, job; optimize=false, cleanup=false, validate=false
+            :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
 
         entryname = LLVM.name(meta.entry)
@@ -322,8 +322,6 @@ function compile(job)
         LLVM.strip_debuginfo!(mod)
         modstr = string(mod)
 
-        println(modstr)
-
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
 
@@ -332,6 +330,7 @@ function compile(job)
                 modstr::Cstring, MLIR.IR.context()::MLIR.API.MlirContext
             )::MLIR.API.MlirModule
         )
+        @assert mmod != C_NULL
 
         linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
             MLIR.IR.mmodule()::MLIR.API.MlirModule,
@@ -339,7 +338,6 @@ function compile(job)
             entryname::Cstring,
         )::MLIR.API.MlirOperation
 
-        entry = MLIR.IR.Operation(linkRes)
         String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
 
@@ -401,11 +399,16 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     
     sym_name = String(gensym("call_$fname"))
     mod = MLIR.IR.mmodule()
+    CConv=MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvPTX_Kernel))
+    voidty = MLIR.IR.Type(MLIR.API.mlirLLVMVoidTypeGet(ctx))
+    wrapftype = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false))
     wrapfunc = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+        return MLIR.Dialects.llvm.func(;
             sym_name,
-            function_type=MLIR.IR.FunctionType(wrapper_tys, []),
-            body=MLIR.IR.Region()
+            sym_visibility=MLIR.IR.Attribute("private"),
+            function_type=wrapftype,
+            body=MLIR.IR.Region(),
+            CConv
         )
     end
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
@@ -416,6 +419,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     symtab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
     gpufunc = MLIR.IR.lookup(symtab, fname)
+    MLIR.IR.attr!(gpufunc, "CConv", MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)))
     gpu_function_type = MLIR.IR.Type(Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type"))
 
 
@@ -467,12 +471,11 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
         
     MLIR.IR.block!(wrapbody) do
-        MLIR.Dialects.func.call(wrapargs; result_0=MLIR.IR.Type[], callee=wrapfn)
-        MLIR.Dialects.func.return_(MLIR.IR.Value[])
+        MLIR.Dialects.llvm.call(wrapargs, MLIR.IR.Value[]; callee=MLIR.IR.FlatSymbolRefAttribute(Base.String(fname)), op_bundle_sizes=MLIR.IR.Attribute(Int32[]))
+        MLIR.Dialects.llvm.return_(nothing)
     end
 
     output_operand_aliases = MLIR.IR.Attribute(aliases)
-
 
     blk_operands = MLIR.IR.Value[]
     for idx in
@@ -488,7 +491,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         blk_operands...,
         mlir_args;
         result_0=restys,
-        fn=sym_name,
+        fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases)
     )
     for (i, res) in enumerate(rarrays)

@@ -95,6 +95,13 @@ function should_rewrite_ft(@nospecialize(ft))
         return false
     end
     if ft <: Core.Function
+        if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :name) && isdefined(ft.name, :name)
+            namestr = String(ft.name.name)
+            if startswith(namestr, "##(overlay (. Reactant (inert REACTANT_METHOD_TABLE)")
+                return false
+            end
+        end
+
         # We need this for closures to work
         if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :module)
             mod = ft.name.module

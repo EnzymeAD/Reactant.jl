@@ -432,11 +432,24 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   SMDiagnostic Err;
   auto llvmModule =
       llvm::parseIR(llvm::MemoryBufferRef(lmod, "conversion"), Err, Context);
+  if (!llvmModule) {
+    std::string err_str;
+    llvm::raw_string_ostream err_stream(err_str);
+    Err.print(/*ProgName=*/"LLVMToMLIR", err_stream);
+    err_stream.flush();
+    if (ReactantThrowError) {
+      ReactantThrowError(err_str.c_str());
+      return wrap((mlir::ModuleOp)nullptr);
+    }
+  }
   mlir::MLIRContext &context = *unwrap(cctx);
   auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context,
                                            /*emitExpensiveWarnings*/ false,
                                            /*dropDICompositeElements*/ false)
                  .release();
+  if (!res) {
+    ReactantThrowError("Could not translate LLVM IR to MLIR Module");
+  }
   return wrap(res);
 }
 

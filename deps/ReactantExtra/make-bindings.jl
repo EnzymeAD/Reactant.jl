@@ -27,6 +27,7 @@ for file in [
     "Nvvm.jl",
     "Gpu.jl",
     "Affine.jl",
+    "MosaicTPU.jl"
 ]
     build_file(joinpath(src_dir, "mlir", "Dialects", file))
 end
