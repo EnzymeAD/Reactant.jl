@@ -203,6 +203,9 @@ end
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
 
+# Other Integrations
+include("Enzyme.jl")
+
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
