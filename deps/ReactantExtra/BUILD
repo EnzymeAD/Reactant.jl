@@ -516,7 +516,8 @@ cc_library(
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
-        "@llvm-project//mlir:CAPILLVMObjects",
+        "@llvm-project//mlir:CAPILLVMObjects",    
+        "@jax//jaxlib/mosaic:tpu_dialect_capi",
     ] + select({
     "@xla//xla/tsl:is_cuda_enabled_and_oss":[
         "@xla//xla/stream_executor/cuda:all_runtime", 
@@ -678,6 +679,20 @@ gentbl_cc_library(
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "MosaicTPUJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "MosaicTPU.jl"
+        )
+    ],
+    td_file = "@jax//jaxlib/mosaic:dialect/tpu/tpu.td",
+    deps = [
+        "@jax//jaxlib/mosaic:tpu_td_files",
     ],
     tblgen = "//:mlir-jl-tblgen",
 )

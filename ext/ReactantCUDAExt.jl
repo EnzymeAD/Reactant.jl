@@ -386,7 +386,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     
     wrapper_tys = MLIR.IR.Type[]
     ctx = MLIR.IR.context()
-    cullvm_ty = MLIR.API.mlirLLVMArrayTypeGet(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1), 1)
+    cullvm_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1), 1))
     for (i, a) in Tuple{Int, Any}[(0, func.f), enumerate(args)...]
         if sizeof(a) == 0
             continue
@@ -399,7 +399,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         # Per below we assume we can inline all other types directly in
     end
     
-    sym_name = gensym("call_$fname")
+    sym_name = String(gensym("call_$fname"))
     mod = MLIR.IR.mmodule()
     wrapfunc = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
@@ -414,7 +414,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapargs = MLIR.IR.Value[]
     argidx = 1
 
-    symtab = MLIR.IR.SymbolTable(mod)
+    symtab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
     gpufunc = MLIR.IR.lookup(symtab, fname)
     gpu_function_type = MLIR.IR.Type(Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type"))
 
