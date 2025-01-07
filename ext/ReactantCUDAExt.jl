@@ -390,10 +390,13 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             continue
         end
         if a isa CuTracedArray
+            a =
+                Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
+        end
+        if a isa TracedRArray || a isa TracedRNumber
             push!(wrapper_tys, cullvm_ty)
             continue
-        end
-        
+        end 
         # Per below we assume we can inline all other types directly in
     end
     
@@ -422,16 +425,18 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     MLIR.IR.attr!(gpufunc, "CConv", MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)))
     gpu_function_type = MLIR.IR.Type(Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type"))
 
-
+    trueidx = 1
     for (i, a) in Tuple{Int, Any}[(0, func.f), enumerate(args)...]
         if sizeof(a) == 0
             continue
         end
         if a isa CuTracedArray
-            ta =
+            a =
                 Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
-            push!(rarrays, ta)
-            arg = ta.mlir_data
+        end
+        if a isa TracedRArray || a isa TracedRNumber
+            push!(rarrays, a)
+            arg = a.mlir_data
             arg = Reactant.TracedUtils.transpose_val(arg)
             push!(restys, MLIR.IR.type(arg))
             push!(mlir_args, arg)
@@ -441,8 +446,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                     MLIR.API.stablehloOutputOperandAliasGet(
                         MLIR.IR.context(),
                         length(wrapper_tys) == 1 ? 0 : 1,
-                        length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(i - 1),
-                        i - 1,
+                        length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
+                        argidx - 1,
                         0,
                         C_NULL,
                     ),
@@ -450,14 +455,15 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             )
             push!(wrapargs, MLIR.IR.argument(wrapbody, argidx))
             argidx += 1
+            trueidx += 1
             continue
         end
 
         # TODO check for only integer and explicitly non cutraced types
         @show "Warning: using fallback for kernel argument type conversion for argument of type $(Core.Typeof(a)), if this contains a CuTracedArray this will segfault"
         MLIR.IR.block!(wrapbody) do
-            argty = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, argidx-1))
-            argidx += 1
+            argty = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx-1))
+            trueidx += 1
             c1 = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)), 1)
             alloc = MLIR.IR.result(MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(argty), res=MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))), 1)
            
