@@ -448,6 +448,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     end
 
+    argidx = 1
     for arg in values(seen)
         for p in Reactant.TracedUtils.get_paths(arg)
             if p[1] !== kernelargsym
@@ -459,6 +460,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             # we need to now compute the offset in bytes of the path
             offset = 0
             ptr = MLIR.gep!(alloc
+
+            store ptr = arg of wrapped index
+
+            argidx += 1
         end
     end
 
