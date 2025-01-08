@@ -615,6 +615,12 @@ end
 
 function Reactant.traced_type(
     ::Type{A}, seen::ST, ::Val{mode}, track_numbers
+) where {T,N,A<:CuTracedArray,ST,mode}
+    return A
+end
+
+function Reactant.traced_type(
+    ::Type{A}, seen::ST, ::Val{mode}, track_numbers
 ) where {T,N,A<:CUDA.CuArray{T,N},ST,mode}
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         return Reactant.ConcreteRArray{T,N}
