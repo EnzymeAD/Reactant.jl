@@ -368,6 +368,27 @@ function Reactant.make_tracer(seen, @nospecialize(prev::CuTracedArray), @nospeci
     return Reactant.make_tracer(seen, x, path, mode; kwargs...)
 end
 
+function get_field_offset(T::Type, path)
+    offset = 0
+    current_type = T
+
+    for field in path
+        # Get the field index
+        field_idx = findfirst(==(field), fieldnames(current_type))
+        if field_idx === nothing
+            error("Field $field not found in type $current_type")
+        end
+
+        # Add the offset of this field
+        offset += fieldoffset(current_type, field_idx)
+
+        # Update current_type to the field's type for next iteration
+        current_type = fieldtype(current_type, field_idx)
+    end
+
+    return offset
+end
+
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(false),
@@ -395,8 +416,14 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     seen = Reactant.OrderedIdDict()
     prev = Any[func.f, args...]
     kernelargsym = gensym("kernelarg")
-    make_tracer(seen, prev, (kernelargsym,), Reactant.TracedSetPath)
-    wrapper_tys = fill(cullvm_ty, length(seen))
+    Reactant.make_tracer(seen, prev, (kernelargsym,), Reactant.TracedTrack)
+    wrapper_tys = MLIR.IR.Type[]
+    for arg in values(seen)
+        if !(arg isa TracedRArray || arg isa TracedRNumber)
+            continue
+        end
+        push!(wrapper_tys, cullvm_ty)
+    end
     
     sym_name = String(gensym("call_$fname"))
     mod = MLIR.IR.mmodule()
@@ -424,9 +451,14 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     gpu_function_type = MLIR.IR.Type(Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type"))
 
     trueidx = 1
-    allocs = MLIR.IR.Value[]
-    for (i, a) in Tuple{Int, Any}[(0, func.f), enumerate(args)...]
+    allocs = Union{MLIR.IR.Value, Nothing}[]
+
+    llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
+    i8 = MLIR.IR.Type(UInt8)
+    allargs = [func.f, args...]
+    for a in allargs
         if sizeof(a) == 0
+            push!(allocs, nothing)
             continue
         end
 
@@ -435,7 +467,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             argty = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx-1))
             trueidx += 1
             c1 = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)), 1)
-            alloc = MLIR.IR.result(MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(argty), res=MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))), 1)
+            alloc = MLIR.IR.result(MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr), 1)
             push!(allocs, alloc)
            
             sz = sizeof(a)
@@ -450,33 +482,39 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     argidx = 1
     for arg in values(seen)
+        @show arg
+        if !(arg isa TracedRArray || arg isa TracedRNumber)
+            continue
+        end
         for p in Reactant.TracedUtils.get_paths(arg)
             if p[1] !== kernelargsym
                 continue
             end
-            # Get the allocation corresponding to which arg we're doing
-            alloc = allocs[p[2]]
-
-            # we need to now compute the offset in bytes of the path
-            offset = 0
-            ptr = MLIR.gep!(alloc
-
-            store ptr = arg of wrapped index
-
-            argidx += 1
-        end
-    end
-
-        if a isa CuTracedArray
-            a =
-                Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
-        end
-        if a isa TracedRArray || a isa TracedRNumber
-            push!(rarrays, a)
-            arg = a.mlir_data
+            
+            arg = arg.mlir_data
             arg = Reactant.TracedUtils.transpose_val(arg)
             push!(restys, MLIR.IR.type(arg))
             push!(mlir_args, arg)
+            
+            # Get the allocation corresponding to which arg we're doing
+            alloc = allocs[p[2]]::MLIR.IR.Value
+
+            # we need to now compute the offset in bytes of the path
+            julia_arg = allargs[p[2]]
+            @show p
+            @show julia_arg
+            
+            offset = get_field_offset(typeof(julia_arg), p[3:end])
+            @show offset
+            MLIR.IR.block!(wrapbody) do
+                c_offset = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)), 1)
+                ptr = MLIR.IR.result(MLIR.Dialects.llvm.getelementptr(alloc, [c_offset], res=llvmptr, elem_type=i8, rawConstantIndices=MLIR.IR.Attribute(Int32[typemin(Int32)])), 1)
+                @show ptr
+                MLIR.Dialects.llvm.store(MLIR.IR.argument(wrapbody, argidx), ptr)
+            end
+
+            argidx += 1
+
             push!(
                 aliases,
                 MLIR.IR.Attribute(
@@ -490,10 +528,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                     ),
                 ),
             )
-            push!(wrapargs, MLIR.IR.argument(wrapbody, argidx))
-            argidx += 1
-            trueidx += 1
-            continue
         end
     end
         
@@ -521,8 +555,15 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases)
     )
-    for (i, res) in enumerate(rarrays)
-        res.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, i))
+    
+    argidx = 1
+    for arg in values(seen)
+        @show arg
+        if !(arg isa TracedRArray || arg isa TracedRNumber)
+            continue
+        end
+        arg.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, argidx))
+        argidx+=1
     end
 end
 
