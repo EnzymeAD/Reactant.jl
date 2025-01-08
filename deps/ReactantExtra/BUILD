@@ -685,10 +685,10 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
-    name = "MosaicTPUJLIncGen",
+    name = "TPUJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "MosaicTPU.jl"
+            "TPU.jl"
         )
     ],
     td_file = "@jax//jaxlib/mosaic:dialect/tpu/tpu.td",

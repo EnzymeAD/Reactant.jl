@@ -91,6 +91,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
 #include "triton/Dialect/Triton/IR/Dialect.h"
+#include "jax/jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -548,6 +549,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::enzyme::EnzymeDialect>();
   context.loadDialect<mlir::enzymexla::EnzymeXLADialect>();
   context.loadDialect<mlir::triton::TritonDialect>();
+  context.loadDialect<mlir::tpu::TPUDialect>();
   context.loadDialect<mlir::tensor::TensorDialect>();
   context.loadDialect<mlir::func::FuncDialect>();
   context.loadDialect<mlir::mhlo::MhloDialect>();
