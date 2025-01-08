@@ -66,6 +66,8 @@ function smul!(x)
     return nothing
 end
 
+# Broken pending jll update
+@static if false
 @testset "Constant Op Kernel" begin
     oA = collect(1:1:64)
     A = Reactant.to_rarray(oA)
@@ -75,4 +77,5 @@ end
     else
         @code_hlo optimize = :before_kernel smul!(A)
     end
+end
 end
