@@ -375,9 +375,14 @@ function get_field_offset(T::Type, path)
 
     for field in path
         # Get the field index
-        field_idx = findfirst(==(field), fieldnames(current_type))
+        field_idx = if field isa Integer
+            field
+        else
+            @assert field isa Symbol
+            findfirst(==(field), fieldnames(current_type))
+        end
         if field_idx === nothing
-            error("Field $field not found in type $current_type")
+            error("Field $field not found in type $current_type, fieldnames=$(fieldnames(current_type)) T=$T path=$path")
         end
 
         # Add the offset of this field
