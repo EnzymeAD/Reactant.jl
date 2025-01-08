@@ -1,9 +1,17 @@
 module gpu
 using ...IR
-import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
+import ...IR:
+    NamedAttribute,
+    Value,
+    Location,
+    Block,
+    Region,
+    Attribute,
+    create_operation,
+    context,
+    IndexType
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
-
 
 """
 `all_reduce`
@@ -33,21 +41,32 @@ accumulation as code region. The reduction operation must be one of:
 If `uniform` flag is set either none or all work items of a workgroup
 need to execute this op in convergence.
 """
-function all_reduce(value::Value; result=nothing::Union{Nothing, IR.Type}, op=nothing, uniform=nothing, body::Region, location=Location())
+function all_reduce(
+    value::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    op=nothing,
+    uniform=nothing,
+    body::Region,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[value, ]
-    owned_regions = Region[body, ]
+    operands = Value[value,]
+    owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(op) && push!(attributes, namedattribute("op", op))
     !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
-    
-    create_operation(
-        "gpu.all_reduce", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.all_reduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -73,21 +92,38 @@ memory accessible both on host and on device.
 %memref, %token = gpu.alloc async [%dep] host_shared (%width) : memref<64x?xf32, 1>
 ```
 """
-function alloc(asyncDependencies::Vector{Value}, dynamicSizes::Vector{Value}, symbolOperands::Vector{Value}; memref::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, hostShared=nothing, location=Location())
-    op_ty_results = IR.Type[memref, ]
-    operands = Value[asyncDependencies..., dynamicSizes..., symbolOperands..., ]
+function alloc(
+    asyncDependencies::Vector{Value},
+    dynamicSizes::Vector{Value},
+    symbolOperands::Vector{Value};
+    memref::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    hostShared=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[memref,]
+    operands = Value[asyncDependencies..., dynamicSizes..., symbolOperands...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    push!(attributes, operandsegmentsizes([length(asyncDependencies), length(dynamicSizes), length(symbolOperands), ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            length(asyncDependencies), length(dynamicSizes), length(symbolOperands)
+        ]),
+    )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(hostShared) && push!(attributes, namedattribute("hostShared", hostShared))
-    
-    create_operation(
-        "gpu.alloc", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.alloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -116,12 +152,16 @@ function barrier(; location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "gpu.barrier", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -156,14 +196,21 @@ function binary(; sym_name, offloadingHandler=nothing, objects, location=Locatio
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sym_name", sym_name), namedattribute("objects", objects), ]
-    !isnothing(offloadingHandler) && push!(attributes, namedattribute("offloadingHandler", offloadingHandler))
-    
-    create_operation(
-        "gpu.binary", location;
-        operands, owned_regions, successors, attributes,
+    attributes = NamedAttribute[
+        namedattribute("sym_name", sym_name), namedattribute("objects", objects)
+    ]
+    !isnothing(offloadingHandler) &&
+        push!(attributes, namedattribute("offloadingHandler", offloadingHandler))
+
+    return create_operation(
+        "gpu.binary",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -192,20 +239,29 @@ exceeds `upper_bound` cause undefined behavior.
 
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
-function block_dim(; result_0=nothing::Union{Nothing, IR.Type}, dimension, upper_bound=nothing, location=Location())
+function block_dim(;
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    upper_bound=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension), ]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.block_dim", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.block_dim",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -228,20 +284,29 @@ takes priority over bounds inferrable from context.
 
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
-function block_id(; result_0=nothing::Union{Nothing, IR.Type}, dimension, upper_bound=nothing, location=Location())
+function block_id(;
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    upper_bound=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension), ]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.block_id", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.block_id",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -262,20 +327,29 @@ is greater than `upper_bound` causes undefined behavior.
 
 There is an implicit upper bound of `kMaxClusterDim` (currently 8).
 """
-function cluster_block_id(; result_0=nothing::Union{Nothing, IR.Type}, dimension, upper_bound=nothing, location=Location())
+function cluster_block_id(;
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    upper_bound=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension), ]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.cluster_block_id", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.cluster_block_id",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -297,20 +371,29 @@ causes undefined behavior.
 
 There is an implicit upper bound of `kMaxClusterDim` (currently 8).
 """
-function cluster_dim_blocks(; result_0=nothing::Union{Nothing, IR.Type}, dimension, upper_bound=nothing, location=Location())
+function cluster_dim_blocks(;
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    upper_bound=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension), ]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.cluster_dim_blocks", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.cluster_dim_blocks",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -332,20 +415,29 @@ undefined behavior.
 
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
-function cluster_dim(; result_0=nothing::Union{Nothing, IR.Type}, dimension, upper_bound=nothing, location=Location())
+function cluster_dim(;
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    upper_bound=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension), ]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.cluster_dim", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.cluster_dim",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -367,20 +459,29 @@ greater than `upper_bound` causes undefined behavior.
 
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
-function cluster_id(; result_0=nothing::Union{Nothing, IR.Type}, dimension, upper_bound=nothing, location=Location())
+function cluster_id(;
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    upper_bound=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension), ]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.cluster_id", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.cluster_id",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -403,20 +504,33 @@ that case, it returns a !gpu.async.token in addition to the environment.
 %spmat, %token = gpu.create_2to4_spmat async [%dep] {PRUNE_AND_CHECK} %rows, %cols, %mem: memref<?xf64>
 ```
 """
-function create_2to4_spmat(asyncDependencies::Vector{Value}, rows::Value, cols::Value, memref::Value; spMat::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, pruneFlag=nothing, location=Location())
-    op_ty_results = IR.Type[spMat, ]
-    operands = Value[asyncDependencies..., rows, cols, memref, ]
+function create_2to4_spmat(
+    asyncDependencies::Vector{Value},
+    rows::Value,
+    cols::Value,
+    memref::Value;
+    spMat::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    pruneFlag=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[spMat,]
+    operands = Value[asyncDependencies..., rows, cols, memref]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(pruneFlag) && push!(attributes, namedattribute("pruneFlag", pruneFlag))
-    
-    create_operation(
-        "gpu.create_2to4_spmat", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.create_2to4_spmat",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -446,19 +560,46 @@ that case, it returns a !gpu.async.token in addition to the environment.
    %bRowPos, %bColIdxs, %values : memref<?xindex>, memref<?xindex>, memref<?xf64>
 ```
 """
-function create_bsr(asyncDependencies::Vector{Value}, brows::Value, bcols::Value, bnnz::Value, rBlockSize::Value, cBlockSize::Value, bRowPos::Value, bColIdxs::Value, values::Value; spmat::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
-    op_ty_results = IR.Type[spmat, ]
-    operands = Value[asyncDependencies..., brows, bcols, bnnz, rBlockSize, cBlockSize, bRowPos, bColIdxs, values, ]
+function create_bsr(
+    asyncDependencies::Vector{Value},
+    brows::Value,
+    bcols::Value,
+    bnnz::Value,
+    rBlockSize::Value,
+    cBlockSize::Value,
+    bRowPos::Value,
+    bColIdxs::Value,
+    values::Value;
+    spmat::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[spmat,]
+    operands = Value[
+        asyncDependencies...,
+        brows,
+        bcols,
+        bnnz,
+        rBlockSize,
+        cBlockSize,
+        bRowPos,
+        bColIdxs,
+        values,
+    ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.create_bsr", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.create_bsr",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -484,19 +625,33 @@ that case, it returns a !gpu.async.token in addition to the environment.
     %values : memref<?xindex>, memref<?xf64>
 ```
 """
-function create_coo_aos(asyncDependencies::Vector{Value}, rows::Value, cols::Value, nnz::Value, idxs::Value, values::Value; spmat::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
-    op_ty_results = IR.Type[spmat, ]
-    operands = Value[asyncDependencies..., rows, cols, nnz, idxs, values, ]
+function create_coo_aos(
+    asyncDependencies::Vector{Value},
+    rows::Value,
+    cols::Value,
+    nnz::Value,
+    idxs::Value,
+    values::Value;
+    spmat::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[spmat,]
+    operands = Value[asyncDependencies..., rows, cols, nnz, idxs, values]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.create_coo_aos", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.create_coo_aos",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -520,19 +675,34 @@ that case, it returns a !gpu.async.token in addition to the environment.
     %colIdx, %values : memref<?xindex>, memref<?xindex>, memref<?xf64>
 ```
 """
-function create_coo(asyncDependencies::Vector{Value}, rows::Value, cols::Value, nnz::Value, rowIdxs::Value, colIdxs::Value, values::Value; spmat::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
-    op_ty_results = IR.Type[spmat, ]
-    operands = Value[asyncDependencies..., rows, cols, nnz, rowIdxs, colIdxs, values, ]
+function create_coo(
+    asyncDependencies::Vector{Value},
+    rows::Value,
+    cols::Value,
+    nnz::Value,
+    rowIdxs::Value,
+    colIdxs::Value,
+    values::Value;
+    spmat::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[spmat,]
+    operands = Value[asyncDependencies..., rows, cols, nnz, rowIdxs, colIdxs, values]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.create_coo", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.create_coo",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -559,19 +729,34 @@ that case, it returns a !gpu.async.token in addition to the environment.
     %rowIdx, %values : memref<?xindex>, memref<?xindex>, memref<?xf64>
 ```
 """
-function create_csc(asyncDependencies::Vector{Value}, rows::Value, cols::Value, nnz::Value, colPos::Value, rowIdxs::Value, values::Value; spmat::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
-    op_ty_results = IR.Type[spmat, ]
-    operands = Value[asyncDependencies..., rows, cols, nnz, colPos, rowIdxs, values, ]
+function create_csc(
+    asyncDependencies::Vector{Value},
+    rows::Value,
+    cols::Value,
+    nnz::Value,
+    colPos::Value,
+    rowIdxs::Value,
+    values::Value;
+    spmat::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[spmat,]
+    operands = Value[asyncDependencies..., rows, cols, nnz, colPos, rowIdxs, values]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.create_csc", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.create_csc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -598,19 +783,34 @@ that case, it returns a !gpu.async.token in addition to the environment.
     %colIdx, %values : memref<?xindex>, memref<?xindex>, memref<?xf64>
 ```
 """
-function create_csr(asyncDependencies::Vector{Value}, rows::Value, cols::Value, nnz::Value, rowPos::Value, colIdxs::Value, values::Value; spmat::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
-    op_ty_results = IR.Type[spmat, ]
-    operands = Value[asyncDependencies..., rows, cols, nnz, rowPos, colIdxs, values, ]
+function create_csr(
+    asyncDependencies::Vector{Value},
+    rows::Value,
+    cols::Value,
+    nnz::Value,
+    rowPos::Value,
+    colIdxs::Value,
+    values::Value;
+    spmat::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[spmat,]
+    operands = Value[asyncDependencies..., rows, cols, nnz, rowPos, colIdxs, values]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.create_csr", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.create_csr",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -632,20 +832,31 @@ that case, it returns a !gpu.async.token in addition to the environment.
 %dmat, %token = gpu.create_dn_tensor async [%dep] %mem, %dims : index, index into memref<?xf64>
 ```
 """
-function create_dn_tensor(asyncDependencies::Vector{Value}, memref::Value, dims::Vector{Value}; dnTensor::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
-    op_ty_results = IR.Type[dnTensor, ]
-    operands = Value[asyncDependencies..., memref, dims..., ]
+function create_dn_tensor(
+    asyncDependencies::Vector{Value},
+    memref::Value,
+    dims::Vector{Value};
+    dnTensor::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[dnTensor,]
+    operands = Value[asyncDependencies..., memref, dims...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    push!(attributes, operandsegmentsizes([length(asyncDependencies), 1, length(dims), ]))
+    push!(attributes, operandsegmentsizes([length(asyncDependencies), 1, length(dims)]))
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.create_dn_tensor", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.create_dn_tensor",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -669,19 +880,28 @@ that case, it returns a !gpu.async.token.
 %token = gpu.dealloc async [%dep] %memref : memref<8x64xf32, 1>
 ```
 """
-function dealloc(asyncDependencies::Vector{Value}, memref::Value; asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
+function dealloc(
+    asyncDependencies::Vector{Value},
+    memref::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., memref, ]
+    operands = Value[asyncDependencies..., memref]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.dealloc", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.dealloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -702,19 +922,28 @@ that case, it returns a !gpu.async.token in addition to the environment.
 %token = gpu.destroy_dn_tensor async [%dep] %dnTensor
 ```
 """
-function destroy_dn_tensor(asyncDependencies::Vector{Value}, dnTensor::Value; asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
+function destroy_dn_tensor(
+    asyncDependencies::Vector{Value},
+    dnTensor::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., dnTensor, ]
+    operands = Value[asyncDependencies..., dnTensor]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.destroy_dn_tensor", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.destroy_dn_tensor",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -735,19 +964,28 @@ that case, it returns a !gpu.async.token in addition to the environment.
 %token = gpu.destroy_sp_mat async [%dep] %spmat
 ```
 """
-function destroy_sp_mat(asyncDependencies::Vector{Value}, spmat::Value; asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
+function destroy_sp_mat(
+    asyncDependencies::Vector{Value},
+    spmat::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., spmat, ]
+    operands = Value[asyncDependencies..., spmat]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.destroy_sp_mat", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.destroy_sp_mat",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -770,17 +1008,21 @@ Examples:
 ```
 """
 function dynamic_shared_memory(; resultMemref::IR.Type, location=Location())
-    op_ty_results = IR.Type[resultMemref, ]
+    op_ty_results = IR.Type[resultMemref,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "gpu.dynamic_shared_memory", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.dynamic_shared_memory",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -853,24 +1095,42 @@ The generic form illustrates the concept
 Note the non-default memory spaces used in memref types in memory
 attribution.
 """
-function func(; function_type, arg_attrs=nothing, res_attrs=nothing, workgroup_attrib_attrs=nothing, private_attrib_attrs=nothing, known_block_size=nothing, known_grid_size=nothing, body::Region, location=Location())
+function func(;
+    function_type,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    workgroup_attrib_attrs=nothing,
+    private_attrib_attrs=nothing,
+    known_block_size=nothing,
+    known_grid_size=nothing,
+    body::Region,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
-    owned_regions = Region[body, ]
+    owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("function_type", function_type), ]
+    attributes = NamedAttribute[namedattribute("function_type", function_type),]
     !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
-    !isnothing(workgroup_attrib_attrs) && push!(attributes, namedattribute("workgroup_attrib_attrs", workgroup_attrib_attrs))
-    !isnothing(private_attrib_attrs) && push!(attributes, namedattribute("private_attrib_attrs", private_attrib_attrs))
-    !isnothing(known_block_size) && push!(attributes, namedattribute("known_block_size", known_block_size))
-    !isnothing(known_grid_size) && push!(attributes, namedattribute("known_grid_size", known_grid_size))
-    
-    create_operation(
-        "gpu.func", location;
-        operands, owned_regions, successors, attributes,
+    !isnothing(workgroup_attrib_attrs) &&
+        push!(attributes, namedattribute("workgroup_attrib_attrs", workgroup_attrib_attrs))
+    !isnothing(private_attrib_attrs) &&
+        push!(attributes, namedattribute("private_attrib_attrs", private_attrib_attrs))
+    !isnothing(known_block_size) &&
+        push!(attributes, namedattribute("known_block_size", known_block_size))
+    !isnothing(known_grid_size) &&
+        push!(attributes, namedattribute("known_grid_size", known_grid_size))
+
+    return create_operation(
+        "gpu.func",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -913,20 +1173,31 @@ gpu.module @symbol_name2 <#gpu.select_object<1>> [
 }
 ```
 """
-function module_(; sym_name, targets=nothing, offloadingHandler=nothing, bodyRegion::Region, location=Location())
+function module_(;
+    sym_name,
+    targets=nothing,
+    offloadingHandler=nothing,
+    bodyRegion::Region,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
-    owned_regions = Region[bodyRegion, ]
+    owned_regions = Region[bodyRegion,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sym_name", sym_name), ]
+    attributes = NamedAttribute[namedattribute("sym_name", sym_name),]
     !isnothing(targets) && push!(attributes, namedattribute("targets", targets))
-    !isnothing(offloadingHandler) && push!(attributes, namedattribute("offloadingHandler", offloadingHandler))
-    
-    create_operation(
-        "gpu.module", location;
-        operands, owned_regions, successors, attributes,
+    !isnothing(offloadingHandler) &&
+        push!(attributes, namedattribute("offloadingHandler", offloadingHandler))
+
+    return create_operation(
+        "gpu.module",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -948,20 +1219,29 @@ The `upper_bound` attribute defines an upper bound analogously to the ones on
 `thread_id` and `block_id`. If one is not set, the bound may be inferred from
 a combination of `known_block_size` and `known_grid_size`-type annotations.
 """
-function global_id(; result_0=nothing::Union{Nothing, IR.Type}, dimension, upper_bound=nothing, location=Location())
+function global_id(;
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    upper_bound=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension), ]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.global_id", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.global_id",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -991,20 +1271,29 @@ exceed `upper_bound` cause undefined behavior.
 
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
-function grid_dim(; result_0=nothing::Union{Nothing, IR.Type}, dimension, upper_bound=nothing, location=Location())
+function grid_dim(;
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    upper_bound=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension), ]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.grid_dim", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.grid_dim",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1022,16 +1311,20 @@ the host after synchronizing with the device kernel completion.
 """
 function host_register(value::Value; location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[value, ]
+    operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "gpu.host_register", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.host_register",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1045,16 +1338,20 @@ This operation may not be supported in every environment, there is not yet a
 """
 function host_unregister(value::Value; location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[value, ]
+    operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "gpu.host_unregister", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.host_unregister",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1073,7 +1370,9 @@ subgroup cause undefined behavior. In the abscence of `upper_bound`,
 the lane id is still assumed to be non-negative and less than the
 target-independent `kMaxSubgroupSize` (currently 128).
 """
-function lane_id(; result=nothing::Union{Nothing, IR.Type}, upper_bound=nothing, location=Location())
+function lane_id(;
+    result=nothing::Union{Nothing,IR.Type}, upper_bound=nothing, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1081,12 +1380,16 @@ function lane_id(; result=nothing::Union{Nothing, IR.Type}, upper_bound=nothing,
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.lane_id", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.lane_id",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1187,25 +1490,78 @@ module attributes {gpu.container_module} {
 }
 ```
 """
-function launch_func(asyncDependencies::Vector{Value}, gridSizeX::Value, gridSizeY::Value, gridSizeZ::Value, blockSizeX::Value, blockSizeY::Value, blockSizeZ::Value, clusterSizeX=nothing::Union{Nothing, Value}; clusterSizeY=nothing::Union{Nothing, Value}, clusterSizeZ=nothing::Union{Nothing, Value}, dynamicSharedMemorySize=nothing::Union{Nothing, Value}, kernelOperands::Vector{Value}, asyncObject=nothing::Union{Nothing, Value}, asyncToken=nothing::Union{Nothing, IR.Type}, kernel, location=Location())
+function launch_func(
+    asyncDependencies::Vector{Value},
+    gridSizeX::Value,
+    gridSizeY::Value,
+    gridSizeZ::Value,
+    blockSizeX::Value,
+    blockSizeY::Value,
+    blockSizeZ::Value,
+    clusterSizeX=nothing::Union{Nothing,Value};
+    clusterSizeY=nothing::Union{Nothing,Value},
+    clusterSizeZ=nothing::Union{Nothing,Value},
+    dynamicSharedMemorySize=nothing::Union{Nothing,Value},
+    kernelOperands::Vector{Value},
+    asyncObject=nothing::Union{Nothing,Value},
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    kernel,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., gridSizeX, gridSizeY, gridSizeZ, blockSizeX, blockSizeY, blockSizeZ, kernelOperands..., ]
+    operands = Value[
+        asyncDependencies...,
+        gridSizeX,
+        gridSizeY,
+        gridSizeZ,
+        blockSizeX,
+        blockSizeY,
+        blockSizeZ,
+        kernelOperands...,
+    ]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("kernel", kernel), ]
+    attributes = NamedAttribute[namedattribute("kernel", kernel),]
     !isnothing(clusterSizeX) && push!(operands, clusterSizeX)
     !isnothing(clusterSizeY) && push!(operands, clusterSizeY)
     !isnothing(clusterSizeZ) && push!(operands, clusterSizeZ)
     !isnothing(dynamicSharedMemorySize) && push!(operands, dynamicSharedMemorySize)
     !isnothing(asyncObject) && push!(operands, asyncObject)
-    push!(attributes, operandsegmentsizes([length(asyncDependencies), 1, 1, 1, 1, 1, 1, (clusterSizeX==nothing) ? 0 : 1(clusterSizeY==nothing) ? 0 : 1(clusterSizeZ==nothing) ? 0 : 1(dynamicSharedMemorySize==nothing) ? 0 : 1length(kernelOperands), (asyncObject==nothing) ? 0 : 1]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            length(asyncDependencies),
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            if (clusterSizeX == nothing)
+                0
+            elseif 1(clusterSizeY == nothing)
+                0
+            elseif 1(clusterSizeZ == nothing)
+                0
+            elseif 1(dynamicSharedMemorySize == nothing)
+                0
+            else
+                1length(kernelOperands)
+            end,
+            (asyncObject == nothing) ? 0 : 1,
+        ]),
+    )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.launch_func", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.launch_func",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1314,24 +1670,73 @@ know what value corresponds to threadIdx.x for coalescing). We can recover
 these properties by analyzing the operations producing values, but it is
 easier just to have that information by construction.
 """
-function launch(asyncDependencies::Vector{Value}, gridSizeX::Value, gridSizeY::Value, gridSizeZ::Value, blockSizeX::Value, blockSizeY::Value, blockSizeZ::Value, clusterSizeX=nothing::Union{Nothing, Value}; clusterSizeY=nothing::Union{Nothing, Value}, clusterSizeZ=nothing::Union{Nothing, Value}, dynamicSharedMemorySize=nothing::Union{Nothing, Value}, asyncToken=nothing::Union{Nothing, IR.Type}, body::Region, location=Location())
+function launch(
+    asyncDependencies::Vector{Value},
+    gridSizeX::Value,
+    gridSizeY::Value,
+    gridSizeZ::Value,
+    blockSizeX::Value,
+    blockSizeY::Value,
+    blockSizeZ::Value,
+    clusterSizeX=nothing::Union{Nothing,Value};
+    clusterSizeY=nothing::Union{Nothing,Value},
+    clusterSizeZ=nothing::Union{Nothing,Value},
+    dynamicSharedMemorySize=nothing::Union{Nothing,Value},
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    body::Region,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., gridSizeX, gridSizeY, gridSizeZ, blockSizeX, blockSizeY, blockSizeZ, ]
-    owned_regions = Region[body, ]
+    operands = Value[
+        asyncDependencies...,
+        gridSizeX,
+        gridSizeY,
+        gridSizeZ,
+        blockSizeX,
+        blockSizeY,
+        blockSizeZ,
+    ]
+    owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(clusterSizeX) && push!(operands, clusterSizeX)
     !isnothing(clusterSizeY) && push!(operands, clusterSizeY)
     !isnothing(clusterSizeZ) && push!(operands, clusterSizeZ)
     !isnothing(dynamicSharedMemorySize) && push!(operands, dynamicSharedMemorySize)
-    push!(attributes, operandsegmentsizes([length(asyncDependencies), 1, 1, 1, 1, 1, 1, (clusterSizeX==nothing) ? 0 : 1(clusterSizeY==nothing) ? 0 : 1(clusterSizeZ==nothing) ? 0 : 1(dynamicSharedMemorySize==nothing) ? 0 : 1]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            length(asyncDependencies),
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            if (clusterSizeX == nothing)
+                0
+            elseif 1(clusterSizeY == nothing)
+                0
+            elseif 1(clusterSizeZ == nothing)
+                0
+            elseif 1(dynamicSharedMemorySize == nothing)
+                0
+            else
+                1
+            end,
+        ]),
+    )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.launch", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.launch",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1353,19 +1758,29 @@ that case, it returns a !gpu.async.token.
 %token = gpu.memcpy async [%dep] %dst, %src : memref<?xf32, 1>, memref<?xf32>
 ```
 """
-function memcpy(asyncDependencies::Vector{Value}, dst::Value, src::Value; asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
+function memcpy(
+    asyncDependencies::Vector{Value},
+    dst::Value,
+    src::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., dst, src, ]
+    operands = Value[asyncDependencies..., dst, src]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.memcpy", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.memcpy",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1387,19 +1802,29 @@ that case, it returns a !gpu.async.token.
 %token = gpu.memset async [%dep] %dst, %value : memref<?xf32, 1>, f32
 ```
 """
-function memset(asyncDependencies::Vector{Value}, dst::Value, value::Value; asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
+function memset(
+    asyncDependencies::Vector{Value},
+    dst::Value,
+    value::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., dst, value, ]
+    operands = Value[asyncDependencies..., dst, value]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.memset", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.memset",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1418,7 +1843,9 @@ If `upper_bound` is set, executions with more than `upper_bound` subgroups
 per workgroup cause undefined behavior. There is a default upper bound of
 `kMaxDim` (currently uint32_t::max).
 """
-function num_subgroups(; result=nothing::Union{Nothing, IR.Type}, upper_bound=nothing, location=Location())
+function num_subgroups(;
+    result=nothing::Union{Nothing,IR.Type}, upper_bound=nothing, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1426,12 +1853,16 @@ function num_subgroups(; result=nothing::Union{Nothing, IR.Type}, upper_bound=no
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.num_subgroups", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.num_subgroups",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1446,16 +1877,20 @@ imposed by one\'s target platform.
 """
 function printf(args::Vector{Value}; format, location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[args..., ]
+    operands = Value[args...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("format", format), ]
-    
-    create_operation(
-        "gpu.printf", location;
-        operands, owned_regions, successors, attributes,
+    attributes = NamedAttribute[namedattribute("format", format),]
+
+    return create_operation(
+        "gpu.printf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1468,16 +1903,20 @@ by an invocation of the `gpu.func`.
 """
 function return_(operands::Vector{Value}; location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[operands..., ]
+    operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "gpu.return", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.return",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1503,21 +1942,36 @@ The matrix arguments can also be associated with one of the following
 operators: NON_TRANSPOSE, TRANSPOSE, CONJUGATE_TRANSPOSE. The default value
 is NON_TRANSPOSE.
 """
-function sddmm_buffer_size(asyncDependencies::Vector{Value}, dnmatA::Value, dnmatB::Value, spmatC::Value; bufferSz::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, modeA=nothing, modeB=nothing, computeType, location=Location())
-    op_ty_results = IR.Type[bufferSz, ]
-    operands = Value[asyncDependencies..., dnmatA, dnmatB, spmatC, ]
+function sddmm_buffer_size(
+    asyncDependencies::Vector{Value},
+    dnmatA::Value,
+    dnmatB::Value,
+    spmatC::Value;
+    bufferSz::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    modeA=nothing,
+    modeB=nothing,
+    computeType,
+    location=Location(),
+)
+    op_ty_results = IR.Type[bufferSz,]
+    operands = Value[asyncDependencies..., dnmatA, dnmatB, spmatC]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType), ]
+    attributes = NamedAttribute[namedattribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
     !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
-    
-    create_operation(
-        "gpu.sddmm_buffer_size", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.sddmm_buffer_size",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1543,21 +1997,36 @@ The matrix arguments can also be associated with one of the following
 operators: NON_TRANSPOSE, TRANSPOSE, CONJUGATE_TRANSPOSE. The default value
 is NON_TRANSPOSE.
 """
-function sddmm(asyncDependencies::Vector{Value}, dnmatA::Value, dnmatB::Value, spmatC::Value, buffer::Value; asyncToken=nothing::Union{Nothing, IR.Type}, modeA=nothing, modeB=nothing, computeType, location=Location())
+function sddmm(
+    asyncDependencies::Vector{Value},
+    dnmatA::Value,
+    dnmatB::Value,
+    spmatC::Value,
+    buffer::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    modeA=nothing,
+    modeB=nothing,
+    computeType,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., dnmatA, dnmatB, spmatC, buffer, ]
+    operands = Value[asyncDependencies..., dnmatA, dnmatB, spmatC, buffer]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType), ]
+    attributes = NamedAttribute[namedattribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
     !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
-    
-    create_operation(
-        "gpu.sddmm", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.sddmm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1579,19 +2048,31 @@ that case, it returns a `!gpu.async.token` in addition to the environment.
       : memref<?xf32>, memref<?xindex>, memref<?xindex>
 ```
 """
-function set_csr_pointers(asyncDependencies::Vector{Value}, spmat::Value, positions::Value, coordinates::Value, values::Value; asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
+function set_csr_pointers(
+    asyncDependencies::Vector{Value},
+    spmat::Value,
+    positions::Value,
+    coordinates::Value,
+    values::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., spmat, positions, coordinates, values, ]
+    operands = Value[asyncDependencies..., spmat, positions, coordinates, values]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.set_csr_pointers", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.set_csr_pointers",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1604,16 +2085,20 @@ thread-local.
 """
 function set_default_device(devIndex::Value; location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[devIndex, ]
+    operands = Value[devIndex,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "gpu.set_default_device", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.set_default_device",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1668,20 +2153,32 @@ For lane `k`, returns the value from lane `(k - 1) % width`.
 
 Broadcasts the value from lane 0 to all lanes.
 """
-function shuffle(value::Value, offset::Value, width::Value; shuffleResult=nothing::Union{Nothing, IR.Type}, valid=nothing::Union{Nothing, IR.Type}, mode, location=Location())
+function shuffle(
+    value::Value,
+    offset::Value,
+    width::Value;
+    shuffleResult=nothing::Union{Nothing,IR.Type},
+    valid=nothing::Union{Nothing,IR.Type},
+    mode,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[value, offset, width, ]
+    operands = Value[value, offset, width]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("mode", mode), ]
+    attributes = NamedAttribute[namedattribute("mode", mode),]
     !isnothing(shuffleResult) && push!(op_ty_results, shuffleResult)
     !isnothing(valid) && push!(op_ty_results, valid)
-    
-    create_operation(
-        "gpu.shuffle", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.shuffle",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1705,21 +2202,36 @@ The matrix arguments can also be associated with one of the following
 operators: NON_TRANSPOSE, TRANSPOSE, CONJUGATE_TRANSPOSE. The default value
 is NON_TRANSPOSE.
 """
-function spgemm_copy(asyncDependencies::Vector{Value}, desc::Value, spmatA::Value, spmatB::Value, spmatC::Value; asyncToken=nothing::Union{Nothing, IR.Type}, modeA=nothing, modeB=nothing, computeType, location=Location())
+function spgemm_copy(
+    asyncDependencies::Vector{Value},
+    desc::Value,
+    spmatA::Value,
+    spmatB::Value,
+    spmatC::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    modeA=nothing,
+    modeB=nothing,
+    computeType,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., desc, spmatA, spmatB, spmatC, ]
+    operands = Value[asyncDependencies..., desc, spmatA, spmatB, spmatC]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType), ]
+    attributes = NamedAttribute[namedattribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
     !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
-    
-    create_operation(
-        "gpu.spgemm_copy", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.spgemm_copy",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1741,19 +2253,28 @@ that case, it returns a `!gpu.async.token` in addition to the environment.
 %desc, %token = gpu.spgemm_create_descr async [%dep]
 ```
 """
-function spgemm_create_descr(asyncDependencies::Vector{Value}; desc::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
-    op_ty_results = IR.Type[desc, ]
-    operands = Value[asyncDependencies..., ]
+function spgemm_create_descr(
+    asyncDependencies::Vector{Value};
+    desc::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[desc,]
+    operands = Value[asyncDependencies...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.spgemm_create_descr", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.spgemm_create_descr",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1772,19 +2293,28 @@ that case, it returns a `!gpu.async.token` in addition to the environment.
 %token = gpu.spgemm_destroy_descr async [%dep] %desc
 ```
 """
-function spgemm_destroy_descr(asyncDependencies::Vector{Value}, desc::Value; asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
+function spgemm_destroy_descr(
+    asyncDependencies::Vector{Value},
+    desc::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., desc, ]
+    operands = Value[asyncDependencies..., desc]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.spgemm_destroy_descr", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.spgemm_destroy_descr",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1817,21 +2347,42 @@ The matrix arguments can also be associated with one of the following
 operators: NON_TRANSPOSE, TRANSPOSE, CONJUGATE_TRANSPOSE. The default value
 is NON_TRANSPOSE.
 """
-function spgemm_work_estimation_or_compute(asyncDependencies::Vector{Value}, desc::Value, spmatA::Value, spmatB::Value, spmatC::Value, bufferSz::Value, buffer::Value; bufferSzNew::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, modeA=nothing, modeB=nothing, computeType, kind, location=Location())
-    op_ty_results = IR.Type[bufferSzNew, ]
-    operands = Value[asyncDependencies..., desc, spmatA, spmatB, spmatC, bufferSz, buffer, ]
+function spgemm_work_estimation_or_compute(
+    asyncDependencies::Vector{Value},
+    desc::Value,
+    spmatA::Value,
+    spmatB::Value,
+    spmatC::Value,
+    bufferSz::Value,
+    buffer::Value;
+    bufferSzNew::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    modeA=nothing,
+    modeB=nothing,
+    computeType,
+    kind,
+    location=Location(),
+)
+    op_ty_results = IR.Type[bufferSzNew,]
+    operands = Value[asyncDependencies..., desc, spmatA, spmatB, spmatC, bufferSz, buffer]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType), namedattribute("kind", kind), ]
+    attributes = NamedAttribute[
+        namedattribute("computeType", computeType), namedattribute("kind", kind)
+    ]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
     !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
-    
-    create_operation(
-        "gpu.spgemm_work_estimation_or_compute", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.spgemm_work_estimation_or_compute",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1857,21 +2408,36 @@ is NON_TRANSPOSE.
 %bufferszs, %token = gpu.spmm_buffer_size async [%dep] %spmatA{TRANSPOSE}, %dnmatB{TRANSPOSE}, %dnmatC : i64 into f32
 ```
 """
-function spmm_buffer_size(asyncDependencies::Vector{Value}, spmatA::Value, dnmatB::Value, dnmatC::Value; bufferSzs::Vector{IR.Type}, asyncToken=nothing::Union{Nothing, IR.Type}, modeA=nothing, modeB=nothing, computeType, location=Location())
-    op_ty_results = IR.Type[bufferSzs..., ]
-    operands = Value[asyncDependencies..., spmatA, dnmatB, dnmatC, ]
+function spmm_buffer_size(
+    asyncDependencies::Vector{Value},
+    spmatA::Value,
+    dnmatB::Value,
+    dnmatC::Value;
+    bufferSzs::Vector{IR.Type},
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    modeA=nothing,
+    modeB=nothing,
+    computeType,
+    location=Location(),
+)
+    op_ty_results = IR.Type[bufferSzs...,]
+    operands = Value[asyncDependencies..., spmatA, dnmatB, dnmatC]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType), ]
+    attributes = NamedAttribute[namedattribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
     !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
-    
-    create_operation(
-        "gpu.spmm_buffer_size", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.spmm_buffer_size",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1897,22 +2463,40 @@ is NON_TRANSPOSE.
 %token = gpu.spmm async [%dep] %spmatA{TRANSPOSE}, %dnmatB{TRANSPOSE}, %dnmatC, %buffers : type(\$buffers) into f32
 ```
 """
-function spmm(asyncDependencies::Vector{Value}, spmatA::Value, dnmatB::Value, dnmatC::Value, buffers::Vector{Value}; asyncToken=nothing::Union{Nothing, IR.Type}, modeA=nothing, modeB=nothing, computeType, location=Location())
+function spmm(
+    asyncDependencies::Vector{Value},
+    spmatA::Value,
+    dnmatB::Value,
+    dnmatC::Value,
+    buffers::Vector{Value};
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    modeA=nothing,
+    modeB=nothing,
+    computeType,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., spmatA, dnmatB, dnmatC, buffers..., ]
+    operands = Value[asyncDependencies..., spmatA, dnmatB, dnmatC, buffers...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType), ]
-    push!(attributes, operandsegmentsizes([length(asyncDependencies), 1, 1, 1, length(buffers), ]))
+    attributes = NamedAttribute[namedattribute("computeType", computeType),]
+    push!(
+        attributes,
+        operandsegmentsizes([length(asyncDependencies), 1, 1, 1, length(buffers)]),
+    )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
     !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
-    
-    create_operation(
-        "gpu.spmm", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.spmm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1938,20 +2522,34 @@ is NON_TRANSPOSE.
 %buffersz, %token = gpu.spmv_buffer_size async [%dep] %spmatA{TRANSPOSE}, %dnX, %dnY into f32
 ```
 """
-function spmv_buffer_size(asyncDependencies::Vector{Value}, spmatA::Value, dnX::Value, dnY::Value; bufferSz::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, modeA=nothing, computeType, location=Location())
-    op_ty_results = IR.Type[bufferSz, ]
-    operands = Value[asyncDependencies..., spmatA, dnX, dnY, ]
+function spmv_buffer_size(
+    asyncDependencies::Vector{Value},
+    spmatA::Value,
+    dnX::Value,
+    dnY::Value;
+    bufferSz::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    modeA=nothing,
+    computeType,
+    location=Location(),
+)
+    op_ty_results = IR.Type[bufferSz,]
+    operands = Value[asyncDependencies..., spmatA, dnX, dnY]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType), ]
+    attributes = NamedAttribute[namedattribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
-    
-    create_operation(
-        "gpu.spmv_buffer_size", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.spmv_buffer_size",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -1977,20 +2575,34 @@ is NON_TRANSPOSE.
 %token = gpu.spmv async [%dep] %spmatA{TRANSPOSE}, %dnX, %dnY : memref<?xf64> into bf16
 ```
 """
-function spmv(asyncDependencies::Vector{Value}, spmatA::Value, dnX::Value, dnY::Value, buffer::Value; asyncToken=nothing::Union{Nothing, IR.Type}, modeA=nothing, computeType, location=Location())
+function spmv(
+    asyncDependencies::Vector{Value},
+    spmatA::Value,
+    dnX::Value,
+    dnY::Value,
+    buffer::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    modeA=nothing,
+    computeType,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., spmatA, dnX, dnY, buffer, ]
+    operands = Value[asyncDependencies..., spmatA, dnX, dnY, buffer]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType), ]
+    attributes = NamedAttribute[namedattribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
-    
-    create_operation(
-        "gpu.spmv", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.spmv",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -2010,19 +2622,31 @@ that case, it returns a `!gpu.async.token` in addition to the environment.
 %rows, %cols, %nnz, %token = gpu.spmat_get_size async [%dep] %spmatC
 ```
 """
-function spmat_get_size(asyncDependencies::Vector{Value}, spmat::Value; rows::IR.Type, cols::IR.Type, nnz::IR.Type, asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
-    op_ty_results = IR.Type[rows, cols, nnz, ]
-    operands = Value[asyncDependencies..., spmat, ]
+function spmat_get_size(
+    asyncDependencies::Vector{Value},
+    spmat::Value;
+    rows::IR.Type,
+    cols::IR.Type,
+    nnz::IR.Type,
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[rows, cols, nnz]
+    operands = Value[asyncDependencies..., spmat]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.spmat_get_size", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.spmat_get_size",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -2042,7 +2666,9 @@ Executions where there are more than `upper_bound` subgroups per workgroup
 cause undefined behavior. There is an implicit upper bound of `kMaxDim`
 (currently uint32_t::max).
 """
-function subgroup_id(; result=nothing::Union{Nothing, IR.Type}, upper_bound=nothing, location=Location())
+function subgroup_id(;
+    result=nothing::Union{Nothing,IR.Type}, upper_bound=nothing, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -2050,12 +2676,16 @@ function subgroup_id(; result=nothing::Union{Nothing, IR.Type}, upper_bound=noth
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.subgroup_id", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.subgroup_id",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2090,21 +2720,33 @@ This op is meant to be used along with `gpu.subgroup_mma_store_matrix` and
   -> !gpu.mma_matrix<16x16xf16, \"COp\">
 ```
 """
-function subgroup_mma_compute(opA::Value, opB::Value, opC::Value; res=nothing::Union{Nothing, IR.Type}, a_transpose=nothing, b_transpose=nothing, location=Location())
+function subgroup_mma_compute(
+    opA::Value,
+    opB::Value,
+    opC::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    a_transpose=nothing,
+    b_transpose=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[opA, opB, opC, ]
+    operands = Value[opA, opB, opC]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(a_transpose) && push!(attributes, namedattribute("a_transpose", a_transpose))
     !isnothing(b_transpose) && push!(attributes, namedattribute("b_transpose", b_transpose))
-    
-    create_operation(
-        "gpu.subgroup_mma_compute", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.subgroup_mma_compute",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2132,17 +2774,21 @@ This op is meant to be used along with `gpu.subgroup_mma_compute`.
 ```
 """
 function subgroup_mma_constant_matrix(value::Value; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res, ]
-    operands = Value[value, ]
+    op_ty_results = IR.Type[res,]
+    operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "gpu.subgroup_mma_constant_matrix", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.subgroup_mma_constant_matrix",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -2166,18 +2812,24 @@ This op is meant to be used along with `gpu.subgroup_mma_compute`.
   -> !gpu.mma_matrix<16x16xf16, \"COp\">
 ```
 """
-function subgroup_mma_elementwise(args::Vector{Value}; res::IR.Type, opType, location=Location())
-    op_ty_results = IR.Type[res, ]
-    operands = Value[args..., ]
+function subgroup_mma_elementwise(
+    args::Vector{Value}; res::IR.Type, opType, location=Location()
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[args...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("opType", opType), ]
-    
-    create_operation(
-        "gpu.subgroup_mma_elementwise", location;
-        operands, owned_regions, successors, attributes,
+    attributes = NamedAttribute[namedattribute("opType", opType),]
+
+    return create_operation(
+        "gpu.subgroup_mma_elementwise",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -2209,19 +2861,30 @@ This op is often meant to be used along with `gpu.subgroup_mma_store_matrix` and
       : memref<32x32xf16, 3>, !gpu.mma_matrix<16x16xf16, \"AOp\">
 ```
 """
-function subgroup_mma_load_matrix(srcMemref::Value, indices::Vector{Value}; res::IR.Type, leadDimension, transpose=nothing, location=Location())
-    op_ty_results = IR.Type[res, ]
-    operands = Value[srcMemref, indices..., ]
+function subgroup_mma_load_matrix(
+    srcMemref::Value,
+    indices::Vector{Value};
+    res::IR.Type,
+    leadDimension,
+    transpose=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[srcMemref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("leadDimension", leadDimension), ]
+    attributes = NamedAttribute[namedattribute("leadDimension", leadDimension),]
     !isnothing(transpose) && push!(attributes, namedattribute("transpose", transpose))
-    
-    create_operation(
-        "gpu.subgroup_mma_load_matrix", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.subgroup_mma_load_matrix",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -2248,19 +2911,30 @@ gpu.subgroup_mma_store_matrix %D, %sg[%i,%j] : { leadDimension = 32 : i32}
                 : !gpu.mma_matrix<16x16xf16, \"COp\">, memref<32x32xf16, 3>
 ```
 """
-function subgroup_mma_store_matrix(src::Value, dstMemref::Value, indices::Vector{Value}; leadDimension, transpose=nothing, location=Location())
+function subgroup_mma_store_matrix(
+    src::Value,
+    dstMemref::Value,
+    indices::Vector{Value};
+    leadDimension,
+    transpose=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[src, dstMemref, indices..., ]
+    operands = Value[src, dstMemref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("leadDimension", leadDimension), ]
+    attributes = NamedAttribute[namedattribute("leadDimension", leadDimension),]
     !isnothing(transpose) && push!(attributes, namedattribute("transpose", transpose))
-    
-    create_operation(
-        "gpu.subgroup_mma_store_matrix", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.subgroup_mma_store_matrix",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -2298,22 +2972,36 @@ The reduction operation must be one of:
 *  Floating point types: `add`, `mul`, `minnumf`, `maxnumf`, `minimumf`,
    `maximumf`
 """
-function subgroup_reduce(value::Value; result=nothing::Union{Nothing, IR.Type}, op, uniform=nothing, cluster_size=nothing, cluster_stride=nothing, location=Location())
+function subgroup_reduce(
+    value::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    op,
+    uniform=nothing,
+    cluster_size=nothing,
+    cluster_stride=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[value, ]
+    operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("op", op), ]
+    attributes = NamedAttribute[namedattribute("op", op),]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
-    !isnothing(cluster_size) && push!(attributes, namedattribute("cluster_size", cluster_size))
-    !isnothing(cluster_stride) && push!(attributes, namedattribute("cluster_stride", cluster_stride))
-    
-    create_operation(
-        "gpu.subgroup_reduce", location;
-        operands, owned_regions, successors, attributes,
+    !isnothing(cluster_size) &&
+        push!(attributes, namedattribute("cluster_size", cluster_size))
+    !isnothing(cluster_stride) &&
+        push!(attributes, namedattribute("cluster_stride", cluster_stride))
+
+    return create_operation(
+        "gpu.subgroup_reduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2333,7 +3021,9 @@ undefined behavior. When no `upper_bound` is specified, range analyses and
 similar machinery assume the default bound of `kMaxSubgroupSize`, currently
 128.
 """
-function subgroup_size(; result=nothing::Union{Nothing, IR.Type}, upper_bound=nothing, location=Location())
+function subgroup_size(;
+    result=nothing::Union{Nothing,IR.Type}, upper_bound=nothing, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -2341,12 +3031,16 @@ function subgroup_size(; result=nothing::Union{Nothing, IR.Type}, upper_bound=no
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.subgroup_size", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.subgroup_size",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2363,12 +3057,16 @@ function terminator(; location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "gpu.terminator", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.terminator",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -2390,20 +3088,29 @@ than or equal to that bound cause undefined behavior.
 
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
-function thread_id(; result_0=nothing::Union{Nothing, IR.Type}, dimension, upper_bound=nothing, location=Location())
+function thread_id(;
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    upper_bound=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension), ]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
-    
-    create_operation(
-        "gpu.thread_id", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.thread_id",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false)
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2440,19 +3147,27 @@ once this op completes. Example usage:
 gpu.wait [%t0, %t1]
 ```
 """
-function wait(asyncDependencies::Vector{Value}; asyncToken=nothing::Union{Nothing, IR.Type}, location=Location())
+function wait(
+    asyncDependencies::Vector{Value};
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[asyncDependencies..., ]
+    operands = Value[asyncDependencies...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    
-    create_operation(
-        "gpu.wait", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.wait",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -2470,16 +3185,20 @@ gpu.yield %f0, %f1 : f32, f32
 """
 function yield(values::Vector{Value}; location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[values..., ]
+    operands = Value[values...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "gpu.yield", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "gpu.yield",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
