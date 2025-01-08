@@ -708,6 +708,9 @@ function DenseArrayAttribute end
     values::AbstractArray{Int8}; context::Context=context()
 ) = Attribute(API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values)))
 @llvmversioned min = v"16" DenseArrayAttribute(
+    values::AbstractArray{UInt8}; context::Context=context()
+) = Attribute(API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values)))
+@llvmversioned min = v"16" DenseArrayAttribute(
     values::AbstractArray{Int16}; context::Context=context()
 ) = Attribute(API.mlirDenseI16ArrayGet(context, length(values), to_row_major(values)))
 @llvmversioned min = v"16" DenseArrayAttribute(

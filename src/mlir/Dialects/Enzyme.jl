@@ -69,7 +69,7 @@ function autodiff(
     )
 end
 
-function batch(
+@noinline function batch(
     inputs::Vector{Value}; outputs::Vector{IR.Type}, fn, batch_shape, location=Location()
 )
     op_ty_results = IR.Type[outputs...,]
