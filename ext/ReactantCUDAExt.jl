@@ -363,7 +363,7 @@ function to_bytes(x)
 	end
 end
 
-function Reactant.make_tracer(seen, @nospecialize(prev::CuTracedArray{T,N}), @nospecialize(path), mode; kwargs...)
+function Reactant.make_tracer(seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...)
     x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))::TracedRArray
     return Reactant.make_tracer(seen, x, path, mode; kwargs...)
 end
