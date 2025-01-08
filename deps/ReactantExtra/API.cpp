@@ -440,6 +440,7 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
     Err.print(/*ProgName=*/"LLVMToMLIR", err_stream);
     err_stream.flush();
     if (ReactantThrowError) {
+      llvm::errs() << lmod << "\n";
       ReactantThrowError(err_str.c_str());
       return wrap((mlir::ModuleOp)nullptr);
     }
@@ -450,6 +451,7 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
                                            /*dropDICompositeElements*/ false)
                  .release();
   if (!res) {
+    llvm::errs() << lmod << "\n";
     ReactantThrowError("Could not translate LLVM IR to MLIR Module");
   }
   return wrap(res);
