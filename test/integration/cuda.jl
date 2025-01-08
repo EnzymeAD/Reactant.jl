@@ -1,4 +1,3 @@
-@static if !Sys.isapple()
 
 using Reactant
 using Test
@@ -17,6 +16,7 @@ function square!(x, y)
     return nothing
 end
 
+@static if !Sys.isapple()
 @testset "Square Kernel" begin
     oA = collect(1:1:64)
     A = Reactant.to_rarray(oA)
@@ -28,6 +28,7 @@ end
     else
         @code_hlo optimize = :before_kernel square!(A, B)
     end
+end
 end
 
 function sin_kernel!(x, y)
@@ -42,6 +43,7 @@ function sin!(x, y)
     return nothing
 end
 
+@static if !Sys.isapple()
 @testset "Sin Kernel" begin
     oA = collect(Float64, 1:1:64)
     A = Reactant.to_rarray(oA)
@@ -53,6 +55,7 @@ end
     else
         @code_hlo optimize = :before_kernel sin!(A, B)
     end
+end
 end
 
 function smul_kernel!(x, y)
@@ -67,6 +70,8 @@ function smul!(x)
     @cuda blocks = 1 threads = length(x) smul_kernel!(x, 5)
     return nothing
 end
+
+@static if !Sys.isapple()
 
 # Broken pending jll update
 @static if false
