@@ -1,3 +1,5 @@
+@static if !Sys.isapple()
+
 using Reactant
 using Test
 using CUDA
@@ -78,4 +80,6 @@ end
         @code_hlo optimize = :before_kernel smul!(A)
     end
 end
+end
+
 end
