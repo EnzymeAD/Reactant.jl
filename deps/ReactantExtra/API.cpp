@@ -1412,15 +1412,16 @@ ifrt_executable_output_shardings(ifrt::Executable *executable) {
 //   return std::make_tuple(layouts.size(), layouts_ptr);
 // }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout **>
-ifrt_executable_output_layouts(ifrt::Executable *executable) {
-  auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-  auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-  for (int i = 0; i < layouts.size(); i++) {
-    layouts_ptr[i] = layouts[i].release();
-  }
-  return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// @mofeng this is now a shared ptr, will let you fix
+// extern "C" std::tuple<size_t, xla::PjRtLayout **>
+// ifrt_executable_output_layouts(ifrt::Executable *executable) {
+//   auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
+//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
+//   for (int i = 0; i < layouts.size(); i++) {
+//     layouts_ptr[i] = layouts[i].release();
+//   }
+//   return std::make_tuple(layouts.size(), layouts_ptr);
+// }
 
 extern "C" std::tuple<size_t, xla::HloModule **>
 ifrt_executable_hlo_modules(ifrt::Executable *executable) {
@@ -1524,15 +1525,16 @@ ifrt_loadedexecutable_output_shardings(ifrt::LoadedExecutable *executable) {
 //   return std::make_tuple(layouts.size(), layouts_ptr);
 // }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout **>
-ifrt_loadedexecutable_output_layouts(ifrt::LoadedExecutable *executable) {
-  auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-  auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-  for (int i = 0; i < layouts.size(); i++) {
-    layouts_ptr[i] = layouts[i].release();
-  }
-  return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// @mofeng this is now a shared ptr, will let you fix
+// extern "C" std::tuple<size_t, xla::PjRtLayout **>
+// ifrt_loadedexecutable_output_layouts(ifrt::LoadedExecutable *executable) {
+//   auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
+//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
+//   for (int i = 0; i < layouts.size(); i++) {
+//     layouts_ptr[i] = layouts[i].release();
+//   }
+//   return std::make_tuple(layouts.size(), layouts_ptr);
+// }
 
 extern "C" std::tuple<size_t, xla::HloModule **>
 ifrt_loadedexecutable_hlo_modules(ifrt::LoadedExecutable *executable) {
