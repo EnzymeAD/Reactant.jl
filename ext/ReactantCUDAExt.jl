@@ -394,7 +394,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     # linearize kernel arguments
     seen = Reactant.OrderedIdDict()
     prev = Any[func.f, args...]
-    make_tracer(seen, prev, (:kernelarg,), Reactant.TracedSetPath)
+    kernelargsym = gensym("kernelarg")
+    make_tracer(seen, prev, (kernelargsym,), Reactant.TracedSetPath)
     wrapper_tys = fill(cullvm_ty, length(seen))
     
     sym_name = String(gensym("call_$fname"))
@@ -423,10 +424,44 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     gpu_function_type = MLIR.IR.Type(Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type"))
 
     trueidx = 1
+    allocs = MLIR.IR.Value[]
     for (i, a) in Tuple{Int, Any}[(0, func.f), enumerate(args)...]
         if sizeof(a) == 0
             continue
         end
+
+        # TODO check for only integer and explicitly non cutraced types
+        MLIR.IR.block!(wrapbody) do
+            argty = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx-1))
+            trueidx += 1
+            c1 = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)), 1)
+            alloc = MLIR.IR.result(MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(argty), res=MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))), 1)
+            push!(allocs, alloc)
+           
+            sz = sizeof(a)
+            array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
+            cdata = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=array_ty, value=MLIR.IR.DenseElementsAttribute(to_bytes(a))), 1)
+            MLIR.Dialects.llvm.store(cdata, alloc)
+            argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
+            push!(wrapargs, argres)
+        end
+
+    end
+
+    for arg in values(seen)
+        for p in Reactant.TracedUtils.get_paths(arg)
+            if p[1] !== kernelargsym
+                continue
+            end
+            # Get the allocation corresponding to which arg we're doing
+            alloc = allocs[p[2]]
+
+            # we need to now compute the offset in bytes of the path
+            offset = 0
+            ptr = MLIR.gep!(alloc
+        end
+    end
+
         if a isa CuTracedArray
             a =
                 Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
@@ -454,22 +489,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             argidx += 1
             trueidx += 1
             continue
-        end
-
-        # TODO check for only integer and explicitly non cutraced types
-        @show "Warning: using fallback for kernel argument type conversion for argument of type $(Core.Typeof(a)), if this contains a CuTracedArray this will segfault"
-        MLIR.IR.block!(wrapbody) do
-            argty = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx-1))
-            trueidx += 1
-            c1 = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)), 1)
-            alloc = MLIR.IR.result(MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(argty), res=MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))), 1)
-           
-            sz = sizeof(a)
-            array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
-            cdata = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=array_ty, value=MLIR.IR.DenseElementsAttribute(to_bytes(a))), 1)
-            MLIR.Dialects.llvm.store(cdata, alloc)
-            argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
-            push!(wrapargs, argres)
         end
     end
         
