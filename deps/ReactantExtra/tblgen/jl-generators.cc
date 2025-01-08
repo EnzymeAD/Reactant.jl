@@ -17,7 +17,6 @@
 #include <optional>
 #include <regex>
 #include <string>
-#include <tuple>
 
 #include "mlir/TableGen/Argument.h"
 #include "mlir/TableGen/CodeGenHelpers.h"
@@ -154,9 +153,12 @@ std::string sanitizeName(std::string name,
 
 extern bool disableModuleWrap;
 
-std::string emitEnum(EnumAttr e) {
-  auto name = sanitizeName(e.getEnumClassName().str());
+std::string emitEnum(EnumAttr e, std::string dialect) {
+  auto base = e.getBaseAttrClass();
+  auto enumName = e.getEnumClassName().str();
+  auto name = sanitizeName(enumName);
   auto juliaEnum = "@enumx " + name + ' ';
+  auto mlirAttributeDef = "IR.Attribute(e::" + name + ") =  ";
   auto isSpecialized = e.genSpecializedAttr();
   if (!isSpecialized) { // parse the attribute using the name
     for (auto c : e.getAllCases()) {
@@ -164,14 +166,18 @@ std::string emitEnum(EnumAttr e) {
                    ' '; // TODO: handle the case where a enum variant name is a
                         // reserved keyword
     }
+
+    mlirAttributeDef += llvm::formatv(
+          R"(parse(Attribute,"#{0}.{1}<$(string(e))>"))", dialect, enumName);
   } else {
     for (auto c : e.getAllCases()) {
       juliaEnum += sanitizeName(c.getStr().str()) + '=' +
                    std::to_string(c.getValue()) + ' ';
     }
+    mlirAttributeDef = "(Int(e))";
   }
 
-  return juliaEnum + '\n';
+  return juliaEnum + "\n\n" + mlirAttributeDef + "\n\n";
 }
 
 const llvm::StringMap<std::string> cppToJuliaTypeMap = {
@@ -323,6 +329,8 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
   llvm::ArrayRef<const llvm::Record *> opdefs =
       recordKeeper.getAllDerivedDefinitionsIfDefined("Op");
 
+      //recordKeeper.getDef("anonymous_637")
+
   std::string moduleName;
 
   if (!DialectName.empty()) {
@@ -346,15 +354,18 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
     if (attr.isEnumAttr()) { // Some EnumAttribute don't have an EnumAttrInfo
                              // bound : see VHLO dialect
       EnumAttr enumAttr(a);
-      attribs += emitEnum(enumAttr) + '\n';
+      attribs += emitEnum(enumAttr, moduleName) + '\n';
       auto s = enumAttr.getCppNamespace() +
                "::" + enumAttr.getSpecializedAttrClassName();
       attrMap.insert({s.str(), enumAttr});
       continue;
     }
 
-    if (attr.isSubClassOf("EnumAttr"))
+    if (attr.isSubClassOf("EnumAttr")){
+      attr.getDef().dump();
       continue;
+    }
+     
 
     if (attr.getDef().getValue("attrName")) { // detect "struct" attributes
       auto structAttr = emitStruct(attr.getDef(), moduleName);
@@ -434,11 +445,11 @@ end
     for (int i = 0; i < op.getNumOperands(); i++) {
       const auto &namedOperand = op.getOperand(i);
       std::string defaultvalue = "";
-      std::string operandname = namedOperand.name.str();
-      if (operandname.empty()) {
-        operandname = "operand_" + std::to_string(i);
+      std::string operandName = namedOperand.name.str();
+      if (operandName.empty()) {
+        operandName = "operand_" + std::to_string(i);
       }
-      operandname = sanitizeName(operandname);
+      operandName = sanitizeName(operandName);
 
       std::string type = "Value";
 
@@ -453,7 +464,7 @@ end
       if (optional) {
         optionals += llvm::formatv(R"(!isnothing({0}) && push!(operands, {0}{1})
     )",
-                                   operandname, (variadic ? "..." : ""));
+                                   operandName, (variadic ? "..." : ""));
         type = "Union{Nothing, " + type + "}";
         defaultvalue = "=nothing";
 
@@ -462,12 +473,12 @@ end
           separator = "; ";
         }
       } else {
-        operandContainer += operandname + (variadic ? "..." : "") + ", ";
+        operandContainer += operandName + (variadic ? "..." : "") + ", ";
         separator =
             (!alreadykeyword && i == op.getNumOperands() - 1) ? "; " : ", ";
       }
 
-      operandArguments += operandname + "::" + type + defaultvalue + separator;
+      operandArguments += operandName + "::" + type + defaultvalue + separator;
     }
     if (operandArguments == "") {
       operandArguments = "; ";
@@ -573,8 +584,8 @@ end
 
         auto attr_entry = cppToJuliaTypeMap.find(attr.getAttrDefName());
         if (attr_entry != cppToJuliaTypeMap.end()) {
-            varType = attr_entry->getValue();
-            pushedExpression = VarName;
+          varType = attr_entry->getValue();
+          pushedExpression = VarName;
         } else {
           auto fullCppType = attr.getDef()
                                  .getValue("returnType")
