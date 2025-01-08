@@ -63,9 +63,9 @@ function set_reactant_abi(
     if f === Reactant.call_with_reactant
         arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
-    elseif interp.defer_within_autodiff && f === overload_autodiff
+    elseif !(interp.within_autodiff_rewrite) && f === overload_autodiff
         interp′ = Enzyme.Compiler.Interpreter.EnzymeInterpreter(
-            interp; defer_within_autodiff=false
+            interp; within_autodiff_rewrite=true
         )
         return Base.@invoke abstract_call_known(
             interp′::Enzyme.Compiler.Interpreter.EnzymeInterpreter,
@@ -101,7 +101,7 @@ end
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
-            !within_autodiff, #=defer_within_autodiff=#
+            within_autodiff,  #=within_autodiff_rewrite=#
             set_reactant_abi,
         )
     end
@@ -121,7 +121,7 @@ else
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
-            !within_autodiff, #=defer_within_autodiff=#
+            within_autodiff,  #=within_autodiff_rewrite=#
             set_reactant_abi,
         )
     end
