@@ -363,6 +363,11 @@ function to_bytes(x)
 	end
 end
 
+function Reactant.make_tracer(seen, @nospecialize(prev::CuTracedArray{T,N}), @nospecialize(path), mode; kwargs...)
+    x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))::TracedRArray
+    return Reactant.make_tracer(seen, x, path, mode; kwargs...)
+end
+
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(false),
@@ -385,20 +390,12 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapper_tys = MLIR.IR.Type[]
     ctx = MLIR.IR.context()
     cullvm_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1), 1))
-    for (i, a) in Tuple{Int, Any}[(0, func.f), enumerate(args)...]
-        if sizeof(a) == 0
-            continue
-        end
-        if a isa CuTracedArray
-            a =
-                Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
-        end
-        if a isa TracedRArray || a isa TracedRNumber
-            push!(wrapper_tys, cullvm_ty)
-            continue
-        end 
-        # Per below we assume we can inline all other types directly in
-    end
+
+    # linearize kernel arguments
+    seen = Reactant.OrderedIdDict()
+    prev = Any[func.f, args...]
+    make_tracer(seen, prev, (:kernelarg,), Reactant.TracedSetPath)
+    wrapper_tys = fill(cullvm_ty, length(seen))
     
     sym_name = String(gensym("call_$fname"))
     mod = MLIR.IR.mmodule()
