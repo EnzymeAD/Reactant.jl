@@ -858,3 +858,18 @@ end
 function Base.convert(::Core.Type{API.MlirAttribute}, named_attribute::NamedAttribute)
     return named_attribute.named_attribute
 end
+
+
+struct FlatSymbol
+    attr::Attribute
+    FlatSymbol(s::String) = new(FlatSymbolRefAttribute(s))
+end
+
+Attribute(f::FlatSymbol) = f.attr
+Base.show(io::IO, f::FlatSymbol) = print(io, "@$(flatsymbol(f.attr))")
+
+struct DenseElements{T}
+    attr::Attribute
+    DenseElements(a::Vector{T}) where {T} = new{T}(IR.DenseElementsAttribute(a))
+end
+Attribute(d::DenseElements) = d.attr
