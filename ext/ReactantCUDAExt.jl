@@ -366,7 +366,8 @@ end
 
 function Reactant.make_tracer(seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...)
     x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))::TracedRArray
-    return Reactant.make_tracer(seen, x, path, mode; kwargs...)
+    Reactant.make_tracer(seen, x, path, mode; kwargs...)
+    return prev
 end
 
 function get_field_offset(T::Type, path)
@@ -416,7 +417,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     
     wrapper_tys = MLIR.IR.Type[]
     ctx = MLIR.IR.context()
-    cullvm_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1), 1))
+    cullvm_ty = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1))
 
     # linearize kernel arguments
     seen = Reactant.OrderedIdDict()
@@ -615,7 +616,7 @@ end
 
 function Reactant.traced_type(
     ::Type{A}, seen::ST, ::Val{mode}, track_numbers
-) where {T,N,A<:CuTracedArray,ST,mode}
+) where {A<:CuTracedArray,ST,mode}
     return A
 end
 
