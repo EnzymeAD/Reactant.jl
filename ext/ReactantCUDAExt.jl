@@ -282,9 +282,12 @@ function compile(job)
     entry = GPUCompiler.JuliaContext() do ctx
         mod, meta = GPUCompiler.compile(
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
-            :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
+            :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
+            # :llvm, job; optimize=false, cleanup=false, validate=true, libraries=false
+            # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
 
+        GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
         entryname = LLVM.name(meta.entry)
 
         GPUCompiler.optimize_module!(job, mod)
@@ -319,6 +322,8 @@ function compile(job)
                 Reactant.Enzyme.Compiler.eraseInst(mod, fn)
             end
         end
+
+        GPUCompiler.check_ir(job, mod)
 
         LLVM.strip_debuginfo!(mod)
         modstr = string(mod)
