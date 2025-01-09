@@ -116,6 +116,9 @@ function should_rewrite_ft(@nospecialize(ft))
                 if ft.name.name == Symbol("#launch_configuration")
                     return false
                 end
+                if ft.name.name == Symbol("cudaconvert")
+                    return false
+                end
             end
         end
     end
@@ -161,7 +164,9 @@ function should_rewrite_ft(@nospecialize(ft))
         ft <: typeof(Base.getproperty) ||
         ft <: typeof(Base.vect) ||
         ft <: typeof(Base.eltype) ||
-        ft <: typeof(Base.argtail)
+        ft <: typeof(Base.argtail) ||
+        ft <: typeof(Base.identity) ||
+        ft <: typeof(Adapt.adapt_structure)
         return false
     end
 

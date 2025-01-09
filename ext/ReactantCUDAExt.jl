@@ -282,7 +282,7 @@ function compile(job)
     entry = GPUCompiler.JuliaContext() do ctx
         mod, meta = GPUCompiler.compile(
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
-            :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
+            :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
             # :llvm, job; optimize=false, cleanup=false, validate=true, libraries=false
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
@@ -323,7 +323,7 @@ function compile(job)
             end
         end
 
-        GPUCompiler.check_ir(job, mod)
+        # GPUCompiler.check_ir(job, mod)
 
         LLVM.strip_debuginfo!(mod)
         modstr = string(mod)
