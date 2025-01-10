@@ -428,7 +428,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     seen = Reactant.OrderedIdDict()
     prev = Any[func.f, args...]
     kernelargsym = gensym("kernelarg")
-    Reactant.make_tracer(seen, prev, (kernelargsym,), Reactant.TracedTrack)
+    Reactant.make_tracer(seen, prev, (kernelargsym,), Reactant.NoStopTracedTrack)
     wrapper_tys = MLIR.IR.Type[]
     for arg in values(seen)
         if !(arg isa TracedRArray || arg isa TracedRNumber)
@@ -495,16 +495,19 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         if !(arg isa TracedRArray || arg isa TracedRNumber)
             continue
         end
-        for p in Reactant.TracedUtils.get_paths(arg)
+
+        paths = Reactant.TracedUtils.get_paths(arg)
+
+        arg = arg.mlir_data
+        arg = Reactant.TracedUtils.transpose_val(arg)
+        push!(restys, MLIR.IR.type(arg))
+        push!(mlir_args, arg)
+
+        for p in paths
             if p[1] !== kernelargsym
                 continue
             end
-            
-            arg = arg.mlir_data
-            arg = Reactant.TracedUtils.transpose_val(arg)
-            push!(restys, MLIR.IR.type(arg))
-            push!(mlir_args, arg)
-            
+                        
             # Get the allocation corresponding to which arg we're doing
             alloc = allocs[p[2]][1]
 
@@ -531,8 +534,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 ),
             )
             
-            argidx += 1
         end
+        argidx += 1
     end
         
     MLIR.IR.block!(wrapbody) do
