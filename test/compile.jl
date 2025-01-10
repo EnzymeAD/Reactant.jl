@@ -128,7 +128,7 @@ end
     @test !occursin("add", repr(hlo))
 end
 
-# While a bit specific, the following is used to check for a bug in `should_rewrite_ft`
+# While a bit specific, the following is used to check for a bug in `should_rewrite_call`
 function sinusoidal_embedding(
     x::AbstractArray{T,4}, min_freq, max_freq, embedding_dims::Int
 ) where {T}
