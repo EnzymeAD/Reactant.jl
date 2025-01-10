@@ -176,16 +176,22 @@ end
     mean_fn2(x) = mean(x; dims=1)
     mean_fn3(x) = mean(x; dims=(1, 2))
     mean_fn4(x) = mean(x; dims=(1, 3))
+    mean_f1abs2(x) = mean(abs2, x)
+    mean_f2abs2(x) = mean(abs2, x; dims=1)
 
     mean_fn1_compiled = @compile mean_fn1(x_ca)
     mean_fn2_compiled = @compile mean_fn2(x_ca)
     mean_fn3_compiled = @compile mean_fn3(x_ca)
     mean_fn4_compiled = @compile mean_fn4(x_ca)
+    mean_f1abs2_compiled = @compile mean_f1abs2(x_ca)
+    mean_f2abs2_compiled = @compile mean_f2abs2(x_ca)
 
     @test mean_fn1(x) ≈ mean_fn1_compiled(x_ca)
     @test mean_fn2(x) ≈ mean_fn2_compiled(x_ca)
     @test mean_fn3(x) ≈ mean_fn3_compiled(x_ca)
     @test mean_fn4(x) ≈ mean_fn4_compiled(x_ca)
+    @test mean_f1abs2(x) ≈ mean_f1abs2_compiled(x_ca)
+    @test mean_f2abs2(x) ≈ mean_f2abs2_compiled(x_ca)
 
     # XXX: @jit doesn't work with `;`
     # @test @jit(var(x_ca)) ≈ var(x)
@@ -872,4 +878,92 @@ end
     @test @jit(s2(x)) isa Any
     @test @jit(s3(x, y)) isa Any
     @test @jit(s4(x, y)) isa Any
+end
+
+@testset "unstable stack" begin
+    x = rand(4, 4)
+    y = rand(4, 4)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    function s1(x)
+        xs = []
+        push!(xs, x)
+        push!(xs, x)
+        return stack(xs)
+    end
+    function s2(x)
+        xs = []
+        push!(xs, x)
+        push!(xs, x)
+        return stack(xs; dims=2)
+    end
+    function s3(x, y)
+        xs = []
+        push!(xs, x)
+        push!(xs, y)
+        return stack(xs; dims=2)
+    end
+    function s4(x, y)
+        xs = []
+        push!(xs, x)
+        push!(xs, y)
+        push!(xs, x)
+        return stack(xs; dims=2)
+    end
+
+    @test @jit(s1(x_ra)) ≈ s1(x)
+    @test @jit(s2(x_ra)) ≈ s2(x)
+    @test @jit(s3(x_ra, y_ra)) ≈ s3(x, y)
+    @test @jit(s4(x_ra, y_ra)) ≈ s4(x, y)
+
+    # Test that we don't hit illegal instruction; `x` is intentionally not a traced array
+    @test @jit(s1(x)) isa Any
+    @test @jit(s2(x)) isa Any
+    @test @jit(s3(x, y)) isa Any
+    @test @jit(s4(x, y)) isa Any
+end
+
+@testset "Boolean Indexing" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 4, 16))
+    idxs_ra = Reactant.to_rarray(rand(Bool, 16))
+
+    fn(x, idxs) = x[:, idxs]
+
+    @test_throws ErrorException @jit(fn(x_ra, idxs_ra))
+
+    res = @jit fn(x_ra, Array(idxs_ra))
+    @test res ≈ fn(Array(x_ra), Array(idxs_ra))
+end
+
+@testset "duplicate args (#226)" begin
+    first_arg(x, y) = x
+    x_ra = Reactant.to_rarray(rand(2, 2))
+    res = @jit first_arg(x_ra, x_ra)
+    @test res ≈ x_ra
+end
+
+@testset "Common Trig Functions" begin
+    x = rand(Float32, 4, 16)
+    x_ra = Reactant.to_rarray(x)
+
+    @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
+        @test @jit(fn.(x_ra)) ≈ fn.(x)
+        @test @jit(fn.(x_ra)) isa ConcreteRArray{Float32,2}
+    end
+
+    x = 0.235f0
+    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+
+    @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
+        @test @jit(fn.(x_ra)) ≈ fn.(x)
+        @test @jit(fn.(x_ra)) isa ConcreteRNumber{Float32}
+    end
+    @testset for fn in (sincospi, sincos)
+        res = @jit fn(x_ra)
+        @test res[1] ≈ fn(x)[1]
+        @test res[2] ≈ fn(x)[2]
+        @test res[1] isa ConcreteRNumber{Float32}
+        @test res[2] isa ConcreteRNumber{Float32}
+    end
 end

@@ -90,6 +90,9 @@
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
+#include "triton/Dialect/Triton/IR/Dialect.h"
+#include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
+
 using namespace mlir;
 using namespace llvm;
 using namespace xla;
@@ -432,11 +435,26 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   SMDiagnostic Err;
   auto llvmModule =
       llvm::parseIR(llvm::MemoryBufferRef(lmod, "conversion"), Err, Context);
+  if (!llvmModule) {
+    std::string err_str;
+    llvm::raw_string_ostream err_stream(err_str);
+    Err.print(/*ProgName=*/"LLVMToMLIR", err_stream);
+    err_stream.flush();
+    if (ReactantThrowError) {
+      llvm::errs() << lmod << "\n";
+      ReactantThrowError(err_str.c_str());
+      return wrap((mlir::ModuleOp)nullptr);
+    }
+  }
   mlir::MLIRContext &context = *unwrap(cctx);
   auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context,
                                            /*emitExpensiveWarnings*/ false,
                                            /*dropDICompositeElements*/ false)
                  .release();
+  if (!res) {
+    llvm::errs() << lmod << "\n";
+    ReactantThrowError("Could not translate LLVM IR to MLIR Module");
+  }
   return wrap(res);
 }
 
@@ -530,6 +548,8 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::arith::ArithDialect>();
   context.loadDialect<mlir::enzyme::EnzymeDialect>();
   context.loadDialect<mlir::enzymexla::EnzymeXLADialect>();
+  context.loadDialect<mlir::triton::TritonDialect>();
+  context.loadDialect<mlir::tpu::TPUDialect>();
   context.loadDialect<mlir::tensor::TensorDialect>();
   context.loadDialect<mlir::func::FuncDialect>();
   context.loadDialect<mlir::mhlo::MhloDialect>();
@@ -1130,9 +1150,10 @@ extern "C" const ifrt::Sharding *ifrt_array_sharding(ifrt::Array *array) {
   return &(array->sharding());
 }
 
-extern "C" PjRtLayout *ifrt_array_layout(ifrt::Array *array) {
-  return MyValueOrThrow(array->layout()).release();
-}
+// @mofeng this is now a shared ptr, will let you fix
+// extern "C" PjRtLayout *ifrt_array_layout(ifrt::Array *array) {
+//  return MyValueOrThrow(array->layout()).release();
+// }
 
 // TODO xla::ifrt::Array::DisassembleIntoSingleDeviceArrays
 // TODO xla::ifrt::Array::FullyReplicatedShard
@@ -1380,25 +1401,27 @@ ifrt_executable_output_shardings(ifrt::Executable *executable) {
   return std::make_tuple(shardings.value().size(), shardings.value().data());
 }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout **>
-ifrt_executable_parameter_layouts(ifrt::Executable *executable) {
-  auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
-  auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-  for (int i = 0; i < layouts.size(); i++) {
-    layouts_ptr[i] = layouts[i].release();
-  }
-  return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// @mofeng this is now a shared ptr, will let you fix
+// extern "C" std::tuple<size_t, xla::PjRtLayout **>
+// ifrt_executable_parameter_layouts(ifrt::Executable *executable) {
+//   auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
+//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
+//   for (int i = 0; i < layouts.size(); i++) {
+//     layouts_ptr[i] = layouts[i].release();
+//   }
+//   return std::make_tuple(layouts.size(), layouts_ptr);
+// }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout **>
-ifrt_executable_output_layouts(ifrt::Executable *executable) {
-  auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-  auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-  for (int i = 0; i < layouts.size(); i++) {
-    layouts_ptr[i] = layouts[i].release();
-  }
-  return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// @mofeng this is now a shared ptr, will let you fix
+// extern "C" std::tuple<size_t, xla::PjRtLayout **>
+// ifrt_executable_output_layouts(ifrt::Executable *executable) {
+//   auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
+//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
+//   for (int i = 0; i < layouts.size(); i++) {
+//     layouts_ptr[i] = layouts[i].release();
+//   }
+//   return std::make_tuple(layouts.size(), layouts_ptr);
+// }
 
 extern "C" std::tuple<size_t, xla::HloModule **>
 ifrt_executable_hlo_modules(ifrt::Executable *executable) {
@@ -1491,25 +1514,27 @@ ifrt_loadedexecutable_output_shardings(ifrt::LoadedExecutable *executable) {
   return std::make_tuple(shardings.value().size(), shardings.value().data());
 }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout **>
-ifrt_loadedexecutable_parameter_layouts(ifrt::LoadedExecutable *executable) {
-  auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
-  auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-  for (int i = 0; i < layouts.size(); i++) {
-    layouts_ptr[i] = layouts[i].release();
-  }
-  return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// @mofeng this is now a shared ptr, will let you fix
+// extern "C" std::tuple<size_t, xla::PjRtLayout **>
+// ifrt_loadedexecutable_parameter_layouts(ifrt::LoadedExecutable *executable) {
+//   auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
+//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
+//   for (int i = 0; i < layouts.size(); i++) {
+//     layouts_ptr[i] = layouts[i].release();
+//   }
+//   return std::make_tuple(layouts.size(), layouts_ptr);
+// }
 
-extern "C" std::tuple<size_t, xla::PjRtLayout **>
-ifrt_loadedexecutable_output_layouts(ifrt::LoadedExecutable *executable) {
-  auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-  auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-  for (int i = 0; i < layouts.size(); i++) {
-    layouts_ptr[i] = layouts[i].release();
-  }
-  return std::make_tuple(layouts.size(), layouts_ptr);
-}
+// @mofeng this is now a shared ptr, will let you fix
+// extern "C" std::tuple<size_t, xla::PjRtLayout **>
+// ifrt_loadedexecutable_output_layouts(ifrt::LoadedExecutable *executable) {
+//   auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
+//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
+//   for (int i = 0; i < layouts.size(); i++) {
+//     layouts_ptr[i] = layouts[i].release();
+//   }
+//   return std::make_tuple(layouts.size(), layouts_ptr);
+// }
 
 extern "C" std::tuple<size_t, xla::HloModule **>
 ifrt_loadedexecutable_hlo_modules(ifrt::LoadedExecutable *executable) {

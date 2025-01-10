@@ -48,13 +48,9 @@ for randfun in (:rand, :randn, :randexp)
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T, dims)
             end
-            return error(
-                "Reactant doesn't support sampling of $(T) with the current interpreter."
-            )
-            # XXX: The following will lead to illegal instruction
-            # @warn "Reactant doesn't support sampling of $(T) with the current \
-            #        interpreter. Falling back to native interpreter." maxlog = 1
-            # return Random.$(randfun)(rng, T, dims)
+            @warn "Reactant doesn't support sampling of $(T) with the current \
+                   interpreter. Falling back to native interpreter." maxlog = 1
+            return Base.inferencebarrier(Random.$(randfun))(rng, T, dims)
         end
 
         @reactant_overlay @noinline function Random.$(randfun)(
@@ -69,13 +65,9 @@ for randfun in (:rand, :randn, :randexp)
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T, dim1, dims...)
             end
-            return error(
-                "Reactant doesn't support sampling of $(T) with the current interpreter."
-            )
-            # XXX: The following will lead to illegal instruction
-            # @warn "Reactant doesn't support sampling of $(T) with the current \
-            #        interpreter. Falling back to native interpreter." maxlog = 1
-            # return Random.$(randfun)(rng, T, dim1, dims...)
+            @warn "Reactant doesn't support sampling of $(T) with the current \
+                   interpreter. Falling back to native interpreter." maxlog = 1
+            return Base.inferencebarrier(Random.$(randfun))(rng, T, dim1, dims...)
         end
 
         # scalars
@@ -85,13 +77,9 @@ for randfun in (:rand, :randn, :randexp)
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T)
             end
-            return error(
-                "Reactant doesn't support sampling of $(T) with the current interpreter."
-            )
-            # XXX: The following will lead to illegal instruction
-            # @warn "Reactant doesn't support sampling of $(T) with the current \
-            #        interpreter. Falling back to native interpreter." maxlog = 1
-            # return Random.$(randfun)(rng, T)
+            @warn "Reactant doesn't support sampling of $(T) with the current \
+                   interpreter. Falling back to native interpreter." maxlog = 1
+            return Base.inferencebarrier(Random.$(randfun))(rng, T)
         end
 
         # inplace
@@ -100,21 +88,11 @@ for randfun in (:rand, :randn, :randexp)
         )
             return TracedRandom.$(overload_randfun!)(rng, A)
         end
-
-        # XXX: Uncomment once AbsInt issues with recursive calls are resolved
-        # @reactant_overlay @noinline function Random.$(randfun!)(
-        #     rng::AbstractRNG, A::AbstractArray
-        # )
-        #     @warn "Directly writing to an array using Random.jl functions inside \
-        #            ReactantInterpreter will generate a constant array in the IR. Use with \
-        #            caution." maxlog = 1
-        #     return Random.$(randfun!)(rng, A)
-        # end
     end
 end
 
 # LinearAlgebra.jl overloads
-## `_mul!` goes through too many layers of abstractions and we aren't able to overload
+## `mul!` goes through too many layers of abstractions and we aren't able to overload
 ## without specializing on every possible combination of types
 for (cT, aT, bT) in (
     (:AbstractVector, :AbstractMatrix, :AbstractVector),
@@ -132,7 +110,10 @@ for (cT, aT, bT) in (
                     C .= C2
                 end
             else
-                LinearAlgebra.mul!(C, A, B, α, β)
+                # Inference barrier is required when calling function recursively within overload
+                # This is required since otherwise type inference will think this is a recursive edge
+                # rather than a call to the base method
+                Base.inferencebarrier(LinearAlgebra.mul!)(C, A, B, α, β)
             end
             return C
         end
@@ -150,6 +131,14 @@ end
     if use_overlayed_version(iter)
         return TracedRArrayOverrides.overloaded_stack(dims, iter)
     else
-        return Base._stack(dims, Base.IteratorSize(iter), iter)
+        iter2 = collect(iter)
+        if any(use_overlayed_version, iter2)
+            return TracedRArrayOverrides.overloaded_stack(dims, iter2)
+        else
+            # Inference barrier is required when calling function recursively within overload
+            # This is required since otherwise type inference will think this is a recursive edge
+            # rather than a call to the base method
+            return Base.inferencebarrier(Base._stack)(dims, iter2)
+        end
     end
 end

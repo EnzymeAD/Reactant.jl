@@ -490,7 +490,7 @@ function make_tracer(
         return
     end
     if mode == TracedTrack
-        prev.paths = (prev.paths..., path)
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -540,7 +540,7 @@ function make_tracer(
         return
     end
     if mode == TracedTrack
-        prev.paths = (prev.paths..., path)
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -583,7 +583,7 @@ function make_tracer(
         throw("Cannot have MissingTracedValue as function call argument.")
     end
     if mode == TracedTrack
-        prev.paths = (prev.paths..., path)
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -815,9 +815,7 @@ function to_rarray_internal(@nospecialize(::TracedRArray), ::Tuple)
     return error("Cannot convert TracedRArray to ConcreteRArray")
 end
 @inline to_rarray_internal(@nospecialize(x::ConcreteRArray), ::Tuple) = x
-@inline function to_rarray_internal(
-    @nospecialize(x::AbstractArray{<:ReactantPrimitive}), ::Tuple
-)
+@inline function to_rarray_internal(@nospecialize(x::Array{<:ReactantPrimitive}), ::Tuple)
     return ConcreteRArray(x)
 end
 

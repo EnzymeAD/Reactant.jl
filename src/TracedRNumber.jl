@@ -46,6 +46,10 @@ function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
 
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{S}) where {T,S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+
 # NOTE: This is inconsistent with the behavior of `convert` but we do it since it is a very
 #       common usecase
 TracedRNumber{T}(x::TracedRNumber{T}) where {T} = x
@@ -202,6 +206,7 @@ for (jlop, hloop) in (
     (:(Base.:-), :negate),
     (:(Base.sin), :sine),
     (:(Base.cos), :cosine),
+    (:(Base.tan), :tan),
     (:(Base.tanh), :tanh),
     (:(Base.FastMath.tanh_fast), :tanh),
     (:(Base.exp), :exponential),
@@ -213,6 +218,13 @@ for (jlop, hloop) in (
 )
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
 end
+
+for (jlop, hloop) in
+    ((:(Base.sinpi), :sine), (:(Base.cospi), :cosine), (:(Base.tanpi), :tan))
+    @eval $(jlop)(@nospecialize(lhs::TracedRNumber{T})) where {T} = Ops.$(hloop)(T(π) * lhs)
+end
+
+Base.sincospi(x::TracedRNumber{T}) where {T} = Ops.sine(T(π) * x), Ops.cosine(T(π) * x)
 
 Base.conj(x::TracedRNumber) = x
 Base.conj(x::TracedRNumber{<:Complex}) = Ops.conj(x)

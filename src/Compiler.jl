@@ -19,7 +19,10 @@ import ..Reactant:
     ancestor,
     TracedType
 
-@inline traced_getfield(@nospecialize(obj), field) = Base.getfield(obj, field)
+@inline function traced_getfield(@nospecialize(obj), field)
+    return Base.getfield(obj, field)
+end
+
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
     (isbitstype(T) || ancestor(obj) isa RArray) && return Base.getfield(obj, field)
     return Base.getindex(obj, field)
@@ -113,175 +116,186 @@ function create_result(
 end
 
 # Optimization passes via transform dialect
-const transform_passes::String = join(
-    [
-        "enzyme-hlo-generate-td{" *
-        join(
-            [
-                "patterns=compare_op_canon<16>",
-                "transpose_transpose<16>",
-                "broadcast_in_dim_op_canon<16>",
-                "convert_op_canon<16>",
-                "dynamic_broadcast_in_dim_op_not_actually_dynamic<16>",
-                "chained_dynamic_broadcast_in_dim_canonicalization<16>",
-                "dynamic_broadcast_in_dim_all_dims_non_expanding<16>",
-                "noop_reduce_op_canon<16>",
-                "empty_reduce_op_canon<16>",
-                "dynamic_reshape_op_canon<16>",
-                "get_tuple_element_op_canon<16>",
-                "real_op_canon<16>",
-                "imag_op_canon<16>",
-                "conj_complex_negate<16>",
-                "get_dimension_size_op_canon<16>",
-                "gather_op_canon<16>",
-                "reshape_op_canon<16>",
-                "merge_consecutive_reshapes<16>",
-                "transpose_is_reshape<16>",
-                "zero_extent_tensor_canon<16>",
-                "reorder_elementwise_and_shape_op<16>",
-                "cse_broadcast_in_dim<16>",
-                "cse_slice<16>",
-                "cse_transpose<16>",
-                "cse_convert<16>",
-                "cse_pad<16>",
-                "cse_dot_general<16>",
-                "cse_reshape<16>",
-                "cse_mul<16>",
-                "cse_div<16>",
-                "cse_add<16>",
-                "cse_subtract<16>",
-                "cse_min<16>",
-                "cse_max<16>",
-                "cse_neg<16>",
-                "cse_concatenate<16>",
-                "concatenate_op_canon<16>(1024)",
-                "select_op_canon<16>(1024)",
-                "add_simplify<16>",
-                "sub_simplify<16>",
-                "and_simplify<16>",
-                "max_simplify<16>",
-                "min_simplify<16>",
-                "or_simplify<16>",
-                "negate_simplify<16>",
-                "mul_simplify<16>",
-                "div_simplify<16>",
-                "rem_simplify<16>",
-                "pow_simplify<16>",
-                "sqrt_simplify<16>",
-                "cos_simplify<16>",
-                "sin_simplify<16>",
-                "noop_slice<16>",
-                "noop_reverse<16>",
-                "const_prop_through_barrier<16>",
-                "slice_slice<16>",
-                "shift_right_logical_simplify<16>",
-                "pad_simplify<16>",
-                "negative_pad_to_slice<16>",
-                "tanh_simplify<16>",
-                "exp_simplify<16>",
-                "slice_simplify<16>",
-                "convert_simplify<16>",
-                "dynamic_slice_to_static<16>",
-                "dynamic_update_slice_elim<16>",
-                "concat_to_broadcast<16>",
-                "reduce_to_reshape<16>",
-                "broadcast_to_reshape<16>",
-                "gather_simplify<16>",
-                "iota_simplify<16>(1024)",
-                "broadcast_in_dim_simplify<16>(1024)",
-                "convert_concat<1>",
-                "dynamic_update_to_concat<1>",
-                "slice_of_dynamic_update<1>",
-                "slice_elementwise<1>",
-                "slice_pad<1>",
-                "dot_reshape_dot<1>",
-                "concat_const_prop<1>",
-                "concat_fuse<1>",
-                "pad_reshape_pad<1>",
-                "pad_pad<1>",
-                "concat_push_binop_add<1>",
-                "concat_push_binop_mul<1>",
-                "scatter_to_dynamic_update_slice<1>",
-                "reduce_concat<1>",
-                "slice_concat<1>",
-                "concat_slice<1>",
-                "bin_broadcast_splat_add<1>",
-                "bin_broadcast_splat_subtract<1>",
-                "bin_broadcast_splat_div<1>",
-                "bin_broadcast_splat_mul<1>",
-                "reshape_iota<16>",
-                "slice_reshape_slice<1>",
-                "dot_general_simplify<16>",
-                "transpose_simplify<16>",
-                "reshape_empty_broadcast<1>",
-                "add_pad_pad_to_concat<1>",
-                "broadcast_reshape<1>",
-                "slice_reshape_concat<1>",
-                "slice_reshape_elementwise<1>",
-                "slice_reshape_transpose<1>",
-                "slice_reshape_dot_general<1>",
-                "concat_pad<1>",
-                "reduce_pad<1>",
-                "broadcast_pad<1>",
-                "zero_product_reshape_pad<1>",
-                "mul_zero_pad<1>",
-                "div_zero_pad<1>",
-                "binop_const_reshape_pad<1>",
-                "binop_const_pad_add<1>",
-                "binop_const_pad_subtract<1>",
-                "binop_const_pad_mul<1>",
-                "binop_const_pad_div<1>",
-                "slice_reshape_pad<1>",
-                "binop_binop_pad_pad_add<1>",
-                "binop_binop_pad_pad_mul<1>",
-                "binop_pad_pad_add<1>",
-                "binop_pad_pad_subtract<1>",
-                "binop_pad_pad_mul<1>",
-                "binop_pad_pad_div<1>",
-                "binop_pad_pad_min<1>",
-                "binop_pad_pad_max<1>",
-                "unary_pad_push_convert<1>",
-                "unary_pad_push_tanh<1>",
-                "unary_pad_push_exp<1>",
-                "transpose_pad<1>",
-                "transpose_dot_reorder<1>",
-                "dot_transpose<1>",
-                "transpose_einsum<1>",
-                "einsum_transpose<1>",
-                "transpose_convolution<1>",
-                "convolution_transpose<1>",
-                "convert_convert_float<1>",
-                "concat_to_pad<1>",
-                "concat_appending_reshape<1>",
-                "reshape_iota<1>",
-                "broadcast_reduce<1>",
-                "slice_dot_general<1>",
-                "dot_reshape_pad<1>",
-                "pad_dot_general<1>(0)",
-                "dot_reshape_pad<1>",
-                "pad_dot_general<1>(1)",
-                "if_inline<1>",
-                "if_to_select<1>",
-                "dynamic_update_slice_const_prop",
-                "dynamic_gather_op_is_not_dynamic<16>",
-            ],
-            ';',
-        ) *
-        "}",
-        "transform-interpreter",
-        "enzyme-hlo-remove-transform",
-    ],
-    ",",
-)
-
-# Optimization passes which apply to an individual function
-const func_passes::String = join(
-    ["canonicalize,cse", "canonicalize", transform_passes], ","
-)
-
-const opt_passes::String = join(
-    ["inline{default-pipeline=canonicalize max-iterations=4}", func_passes], ','
-)
+function optimization_passes(; no_nan::Bool=false)
+    transform_passes_list = [
+        "patterns=compare_op_canon<16>",
+        "transpose_transpose<16>",
+        "broadcast_in_dim_op_canon<16>",
+        "convert_op_canon<16>",
+        "dynamic_broadcast_in_dim_op_not_actually_dynamic<16>",
+        "chained_dynamic_broadcast_in_dim_canonicalization<16>",
+        "dynamic_broadcast_in_dim_all_dims_non_expanding<16>",
+        "noop_reduce_op_canon<16>",
+        "empty_reduce_op_canon<16>",
+        "dynamic_reshape_op_canon<16>",
+        "get_tuple_element_op_canon<16>",
+        "real_op_canon<16>",
+        "imag_op_canon<16>",
+        "conj_complex_negate<16>",
+        "get_dimension_size_op_canon<16>",
+        "gather_op_canon<16>",
+        "reshape_op_canon<16>",
+        "merge_consecutive_reshapes<16>",
+        "transpose_is_reshape<16>",
+        "zero_extent_tensor_canon<16>",
+        "reorder_elementwise_and_shape_op<16>",
+        "cse_broadcast_in_dim<16>",
+        "cse_slice<16>",
+        "cse_transpose<16>",
+        "cse_convert<16>",
+        "cse_pad<16>",
+        "cse_dot_general<16>",
+        "cse_reshape<16>",
+        "cse_mul<16>",
+        "cse_div<16>",
+        "cse_add<16>",
+        "cse_subtract<16>",
+        "cse_min<16>",
+        "cse_max<16>",
+        "cse_neg<16>",
+        "cse_concatenate<16>",
+        "concatenate_op_canon<16>(1024)",
+        "select_op_canon<16>(1024)",
+        "add_simplify<16>",
+        "sub_simplify<16>",
+        "and_simplify<16>",
+        "max_simplify<16>",
+        "min_simplify<16>",
+        "or_simplify<16>",
+        "negate_simplify<16>",
+        "mul_simplify<16>",
+        "div_simplify<16>",
+        "rem_simplify<16>",
+        "pow_simplify<16>",
+        "sqrt_simplify<16>",
+        "cos_simplify<16>",
+        "sin_simplify<16>",
+        "noop_slice<16>",
+        "noop_reverse<16>",
+        "const_prop_through_barrier<16>",
+        "slice_slice<16>",
+        "shift_right_logical_simplify<16>",
+        "pad_simplify<16>",
+        "negative_pad_to_slice<16>",
+        "tanh_simplify<16>",
+        "exp_simplify<16>",
+        "slice_simplify<16>",
+        "convert_simplify<16>",
+        "dynamic_slice_to_static<16>",
+        "dynamic_update_slice_elim<16>",
+        "concat_to_broadcast<16>",
+        "reduce_to_reshape<16>",
+        "broadcast_to_reshape<16>",
+        "gather_simplify<16>",
+        "iota_simplify<16>(1024)",
+        "broadcast_in_dim_simplify<16>(1024)",
+        "convert_concat<1>",
+        "dynamic_update_to_concat<1>",
+        "slice_of_dynamic_update<1>",
+        "slice_elementwise<1>",
+        "slice_pad<1>",
+        "dot_reshape_dot<1>",
+        "concat_const_prop<1>",
+        "concat_fuse<1>",
+        "pad_reshape_pad<1>",
+        "pad_pad<1>",
+        "concat_push_binop_add<1>",
+        "concat_push_binop_mul<1>",
+        "scatter_to_dynamic_update_slice<1>",
+        "reduce_concat<1>",
+        "slice_concat<1>",
+        "concat_slice<1>",
+        "bin_broadcast_splat_add<1>",
+        "bin_broadcast_splat_subtract<1>",
+        "bin_broadcast_splat_div<1>",
+        "bin_broadcast_splat_mul<1>",
+        "reshape_iota<16>",
+        "slice_reshape_slice<1>",
+        "dot_general_simplify<16>",
+        "transpose_simplify<16>",
+        "reshape_empty_broadcast<1>",
+        "add_pad_pad_to_concat<1>",
+        "broadcast_reshape<1>",
+        "slice_reshape_concat<1>",
+        "slice_reshape_elementwise<1>",
+        "slice_reshape_transpose<1>",
+        "slice_reshape_dot_general<1>",
+        "concat_pad<1>",
+        "reduce_pad<1>",
+        "broadcast_pad<1>",
+        "zero_product_reshape_pad<1>",
+        "mul_zero_pad<1>",
+        "div_zero_pad<1>",
+        "binop_const_reshape_pad<1>",
+        "binop_const_pad_add<1>",
+        "binop_const_pad_subtract<1>",
+        "binop_const_pad_mul<1>",
+        "binop_const_pad_div<1>",
+        "slice_reshape_pad<1>",
+        "binop_binop_pad_pad_add<1>",
+        "binop_binop_pad_pad_mul<1>",
+        "binop_pad_pad_add<1>",
+        "binop_pad_pad_subtract<1>",
+        "binop_pad_pad_mul<1>",
+        "binop_pad_pad_div<1>",
+        "binop_pad_pad_min<1>",
+        "binop_pad_pad_max<1>",
+        "unary_pad_push_convert<1>",
+        "unary_pad_push_tanh<1>",
+        "unary_pad_push_exp<1>",
+        "transpose_pad<1>",
+        "transpose_dot_reorder<1>",
+        "dot_transpose<1>",
+        "transpose_einsum<1>",
+        "einsum_transpose<1>",
+        "transpose_convolution<1>",
+        "convolution_transpose<1>",
+        "convert_convert_float<1>",
+        "concat_to_pad<1>",
+        "concat_appending_reshape<1>",
+        "reshape_iota<1>",
+        "broadcast_reduce<1>",
+        "slice_dot_general<1>",
+        "dot_reshape_pad<1>",
+        "pad_dot_general<1>(0)",
+        "dot_reshape_pad<1>",
+        "pad_dot_general<1>(1)",
+        "if_inline<1>",
+        "if_to_select<1>",
+        "dynamic_update_slice_const_prop",
+        "dynamic_gather_op_is_not_dynamic<16>",
+        "binary_op_transpose_simplify_add",
+        "binary_op_transpose_simplify_sub",
+        "binary_op_transpose_simplify_mul",
+        "binary_op_transpose_simplify_div",
+        "binary_op_transpose_simplify_min",
+        "binary_op_transpose_simplify_max",
+        "binary_op_transpose_simplify_pow",
+        "binary_op_transpose_simplify_rem",
+        "binary_op_transpose_simplify_or",
+        "binary_op_transpose_simplify_and",
+        "binary_op_transpose_simplify_xor",
+        "replace_neg_add_with_subtract",
+    ]
+    if no_nan
+        append!(
+            transform_passes_list,
+            ["no_nan", "no_nan_self_sub_simplify", "no_nan_add_sub_simplify"],
+        )
+    end
+    transform_passes = join(
+        [
+            "enzyme-hlo-generate-td{" * join(transform_passes_list, ';') * "}",
+            "transform-interpreter",
+            "enzyme-hlo-remove-transform",
+        ],
+        ",",
+    )
+    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
+    return join(
+        ["inline{default-pipeline=canonicalize max-iterations=4}", func_passes], ','
+    )
+end
 
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
@@ -321,16 +335,22 @@ end
 const cuLaunch = Ref{UInt}(0)
 const cuFunc = Ref{UInt}(0)
 const cuModule = Ref{UInt}(0)
-        
-function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any}}(); optimize::Union{Bool,Symbol}=true)
+
+function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any}}(); optimize::Union{Bool,Symbol}=true, no_nan::Bool=false)
+    # Explicitly don't use block! to avoid creating a closure, which creates
+    # both compile-time and relocatability issues
+
+    MLIR.IR.activate!(mod)
+    MLIR.IR.activate!(MLIR.IR.body(mod))
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
-    linear_results = MLIR.IR.mmodule!(mod) do
-        MLIR.IR.block!(MLIR.IR.body(mod)) do
-            callcache!(callcache) do
-                return Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
-            end
+    linear_results = try
+        callcache!(callcache) do # TODO: don't create a closure here either.
+          Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
         end
+    finally
+        MLIR.IR.deactivate!(MLIR.IR.body(mod))
+        MLIR.IR.deactivate!(mod)
     end
 
     concrete_seen = OrderedIdDict()
@@ -345,7 +365,10 @@ function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::
     if isdefined(Reactant_jll, :ptxas_path)
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
-    kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])}"
+    kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
+
+    opt_passes = optimization_passes(; no_nan)
+
     if optimize === :all
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
         run_pass_pipeline!(
@@ -477,10 +500,10 @@ function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::
 end
 
 """
-    @code_hlo [optimize = ...] f(args...)
+    @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
 """
 macro code_hlo(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true)
+    default_options = Dict{Symbol,Any}(:optimize => true, :no_nan => false)
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
     )
@@ -489,20 +512,20 @@ macro code_hlo(args...)
 end
 
 """
-    @compile f(args...)
+    @compile [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
 """
 macro compile(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false, :no_nan => false)
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
 """
-    @jit f(args...)
+    @jit [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
 
-    Run @compile f(args..) then immediately execute it
+Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false)
+    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false, :no_nan => false)
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
     )
@@ -593,11 +616,13 @@ function codegen_flatten!(linear_args, result_stores)
     # resarg_code = Expr[]
 
     for (i, arg) in enumerate(linear_args)
-        paths = ((p for p in arg.paths if p[1] == :args)...,)
+        paths = ((p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :args)...,)
         path = if length(paths) == 1
             paths[1]
         else
-            throw("Invalid path duplication $(arg.paths) into $(paths)")
+            throw(
+                "Invalid path duplication $(Reactant.TracedUtils.get_paths(arg)) into $(paths)",
+            )
         end
 
         usbuf = Symbol(:usbuf_, i)
@@ -612,7 +637,7 @@ function codegen_flatten!(linear_args, result_stores)
         push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
 
         # TODO: unused for the time being
-        # respaths = ((p for p in arg.paths if p[1] == :result || p[1] == :resargs)...,)
+        # respaths = ((p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :result || p[1] == :resargs)...,)
 
         # resarg = false
         # for respath in respaths
@@ -667,7 +692,12 @@ function codegen_unflatten!(
 
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
-        paths = ((p for p in result.paths if p[1] == :result || p[1] == :resargs)...,)
+        paths = (
+            (
+                p for p in Reactant.TracedUtils.get_paths(result) if
+                p[1] == :result || p[1] == :resargs
+            )...,
+        )
         for path in paths
             if path[1] == :result
                 unflatcode = :result
@@ -718,7 +748,7 @@ function codegen_unflatten!(
                         end
                     end
                 else
-                    unflatcode = :($unflatcode.data = $concrete_res_name)
+                    unflatcode = :(traced_setfield!($unflatcode, :data, $concrete_res_name))
                 end
                 push!(unflatten_code, unflatcode)
             end
@@ -732,9 +762,18 @@ function codegen_unflatten!(
 
     # if some argument is mutated, change them to point to the correct concrete results
     for (result, arg_idx) in preserved_args
-        for path in result.paths
+        paths = (
+            (
+                p for p in Reactant.TracedUtils.get_paths(result) if
+                p[1] == :result || p[1] == :resargs || p[1] == :args
+            )...,
+        )
+
+        for path in paths
             arg = linear_args[arg_idx + 1]
-            argpath = only((p for p in arg.paths if p[1] == :args))
+            argpath = only((
+                p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :args
+            ))
 
             if path[1] == :result
                 res = :result
@@ -743,7 +782,7 @@ function codegen_unflatten!(
                     continue
                 end
             else
-                @assert path[1] == :resargs || path[1] == :args
+                @assert path[1] == :resargs || path[1] == :args "Expected :resargs or :args, got $(path[1])"
                 # We can optimize cases where we set the arg to itself
                 if path[2:end] == argpath[2:end]
                     continue
@@ -811,16 +850,17 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     return concretized_res_names, xla_call_code
 end
 
-function compile_xla(f, args; client=nothing, optimize=true)
+function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    return MLIR.IR.context!(ctx) do
+    MLIR.IR.activate!(ctx)
+    return try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
-            mod, f, args; optimize
+            mod, f, args; optimize, no_nan
         )
 
         if isnothing(client)
@@ -839,12 +879,14 @@ function compile_xla(f, args; client=nothing, optimize=true)
         return exec,
         linear_args, linear_results, preserved_args, seen_args, concrete_result,
         isclosure
+    finally
+        MLIR.IR.deactivate!(ctx)
     end
 end
 
-function compile(f, args; client=nothing, optimize=true, sync=false)
+function compile(f, args; client=nothing, optimize=true, sync=false, no_nan=false)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
-        f, args; client, optimize
+        f, args; client, optimize, no_nan
     )
 
     preserved_args_idx = last.(preserved_args)
@@ -884,37 +926,75 @@ function compile(f, args; client=nothing, optimize=true, sync=false)
     end
 
     fname = gensym(Symbol(Symbol(f), :_reactant))
-    expr = :(function $(fname)(args...)
-        $(
-            # if `f` is a closure, then prepend the closure into `args`
-            # the closure fields will be correctly extracted from it as the tracer has already passed through it
-            if !(closure_ty <: Nothing)
-                :(args = ($fnwrap, args...))
-            end
-        )
+
+    body = quote
         $(flatten_code...)
         $(xla_call_code)
         $(sync_call)
         $(unflatten_code...)
         return result
-    end)
+    end
 
-    body = expr.args[2]
-    return register_thunk(fname, body)
+    return register_thunk(fname, Tuple{map(Core.Typeof, args)...}, body, f, isclosure)
 end
 
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_body_cache = Dict{Symbol,Expr}()
 
-struct Thunk{tag} end
-
-@generated function (thunk::Thunk{tag})(args...) where {tag}
-    return __thunk_body_cache[tag]
+struct Thunk{FTy,tag,IsClosure,ArgTypes}
+    f::FTy
 end
 
-function register_thunk(tag, body)
+struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
+
+function Base.showerror(
+    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}
+) where {FTy,tag,ArgTypes,FoundTypes,IsClosure}
+    print(
+        io,
+        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.",
+    )
+    print(
+        io,
+        "\nYou passed in arguments with types\n\t(" *
+        join(FoundTypes.parameters, ", ") *
+        ")",
+    )
+    return print(
+        io,
+        "\nHowever the method you are calling was compiled for arguments with types\n\t(" *
+        join(ArgTypes.parameters, ", ") *
+        ")",
+    )
+end
+
+@generated function (thunk::Thunk{FTy,tag,ArgTypes,IsClosure})(
+    args...
+) where {FTy,tag,ArgTypes,IsClosure}
+    FoundTypes = Tuple{args...}
+    if ArgTypes != FoundTypes
+        return quote
+            throw(
+                $(MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}())
+            )
+        end
+    end
+    body = __thunk_body_cache[tag]
+    if IsClosure
+        return quote
+            args = (thunk.f, args...)
+            $body
+        end
+    else
+        return body
+    end
+end
+
+function register_thunk(
+    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool
+)
     __thunk_body_cache[tag] = body
-    return Thunk{tag}()
+    return Thunk{Core.Typeof(f),tag,argtys,isclosure}(f)
 end
 
 function activate_callcache!(callcache)

@@ -355,7 +355,7 @@ function condition10_condition_with_setindex(x)
     @trace if sum(x) > 0
         x[:, 1] = -1.0
     else
-        x[1, 1] = 1.0
+        @allowscalar x[1, 1] = 1.0
     end
     return x
 end
@@ -457,7 +457,7 @@ end
 
 function for_with_step(x)
     @trace for i in 10:3:22
-        x[i] = i * i
+        @allowscalar x[i] = i * i
     end
     return x
 end
@@ -539,7 +539,7 @@ function cumsum!(x)
     v = zero(eltype(x))
     @trace for i in 1:length(x)
         v += @allowscalar x[i]
-        x[i] = v
+        @allowscalar x[i] = v
     end
     return x
 end

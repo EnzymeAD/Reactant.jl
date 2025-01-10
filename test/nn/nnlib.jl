@@ -15,7 +15,7 @@ using NNlib, Reactant, Enzyme
     @testset "Activation: $act" for act in (
         identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2, relu6
     )
-        f_compile = Reactant.compile(sumabs2, (act, x_act))
+        f_compile = Reactant.compile(sumabs2, (act, x_act_ca))
 
         y_simple = sumabs2(act, x_act)
         y_compile = f_compile(act, x_act_ca)

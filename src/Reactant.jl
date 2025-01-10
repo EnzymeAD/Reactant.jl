@@ -167,14 +167,6 @@ function aos_to_soa(x::AbstractArray{<:TracedRNumber{T}}) where {T}
     return Ops.reshape(vcat(x...), size(x)...)
 end
 
-include("Ops.jl")
-include("TracedUtils.jl")
-
-include("TracedRNumber.jl")
-include("TracedRArray.jl")
-
-include("ConcreteRArray.jl")
-
 mutable struct ConcreteRNG <: Random.AbstractRNG
     seed::ConcreteRArray{UInt64,1}
     const algorithm::String
@@ -184,6 +176,14 @@ mutable struct TracedRNG <: Random.AbstractRNG
     seed::TracedRArray{UInt64,1}
     const algorithm::String
 end
+
+include("Ops.jl")
+include("TracedUtils.jl")
+
+include("TracedRNumber.jl")
+include("TracedRArray.jl")
+
+include("ConcreteRArray.jl")
 
 use_overlayed_version(iter) = any(use_overlayed_version, iter)
 
@@ -202,6 +202,9 @@ end
 # StdLib Overloads
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
+
+# Other Integrations
+include("Enzyme.jl")
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
@@ -228,12 +231,21 @@ end
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
 export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace, within_compile
 
-const registry = Ref{MLIR.IR.DialectRegistry}()
-function __init__()
+const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
+
+function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
     @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
         registry[]::MLIR.API.MlirDialectRegistry
     )::Cvoid
+end
+
+function deinitialize_dialect()
+    return registry[] = nothing
+end
+
+function __init__()
+    return initialize_dialect()
 end
 
 function set_default_backend(backend::XLA.Client)
@@ -243,5 +255,7 @@ end
 function set_default_backend(backend::String)
     return set_default_backend(XLA.backends[backend])
 end
+
+include("Precompile.jl")
 
 end # module

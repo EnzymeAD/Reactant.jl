@@ -19,14 +19,8 @@ using ..Reactant:
     unwrapped_eltype
 using Random: Random, AbstractRNG
 
-@noinline function make_seed(rng::AbstractRNG=Random.RandomDevice())
-    # XXX: We should really be able to call this here. But with our AbsInt it leads to a
-    #      segfault. So we'll just call it in the rand! method.
-    # return rand(rng, UInt64, 2)
-    seed = Array{UInt64}(undef, 2)
-    Random.rand!(rng, seed)
-    return seed
-end
+@noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =
+    Random.rand!(rng, Vector{UInt64}(undef, 2))
 
 @noinline function Random.seed!(rng::TracedRNG, seed::Number)
     if seed isa TracedRNumber
@@ -71,6 +65,9 @@ end
     rng.seed = seed
     return rng
 end
+
+Base.copy(rng::ConcreteRNG) = ConcreteRNG(copy(rng.seed), rng.algorithm)
+Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
 
 @noinline ConcreteRNG() = ConcreteRNG(ConcreteRArray(make_seed()))
 @noinline ConcreteRNG(seed::ConcreteRArray{UInt64,1}) = ConcreteRNG(seed, "DEFAULT")

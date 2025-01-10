@@ -16,6 +16,7 @@ using ..Reactant:
     OrderedIdDict,
     ReactantPrimitive,
     Ops
+using ReactantCore: MissingTracedValue
 
 materialize_traced_array(x::TracedRArray) = x
 
@@ -35,9 +36,16 @@ end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
 set_mlir_data!(x::TracedRNumber, data) = (x.mlir_data = data; return x)
+get_paths(x::TracedRNumber) = x.paths
+set_paths!(x::TracedRNumber, paths) = (x.paths = paths; return x)
 
 get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
+get_paths(x::TracedRArray) = x.paths
+set_paths!(x::TracedRArray, paths) = (x.paths = paths; return x)
+
+get_paths(x::MissingTracedValue) = x.paths
+set_paths!(x::MissingTracedValue, paths) = (x.paths = paths; return x)
 
 function set_mlir_data!(x::TracedRArray, data)
     x.mlir_data = data
@@ -115,8 +123,9 @@ function make_mlir_fn(
 
     N = length(args)
     seen_args = OrderedIdDict()
-    traced_args = ntuple(N) do i
-        return Reactant.make_tracer(
+    traced_args = Vector{Any}(undef, N)
+    for i in 1:N
+        @inbounds traced_args[i] = Reactant.make_tracer(
             seen_args,
             args[i],
             (:args, i),
@@ -166,23 +175,23 @@ function make_mlir_fn(
 
     @assert MLIR.IR._has_block()
 
-    result = MLIR.IR.block!(fnbody) do
+    # Explicitly don't use block! to avoid creating a closure, which creates
+    # both compile-time and relocatability issues
+    MLIR.IR.activate!(fnbody)
+    result = try
         for (i, arg) in enumerate(linear_args)
             if construct_function_without_args
-                arg.mlir_data = args[i].mlir_data
+                set_mlir_data!(arg, get_mlir_data(args[i]))
             else
                 raw_arg = MLIR.IR.argument(fnbody, i)
                 row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
-                arg.mlir_data = row_maj_arg
+                set_mlir_data!(arg, row_maj_arg)
             end
         end
 
-        # TODO fix it for kwargs
-        #if concretein
         Reactant.call_with_reactant(f, traced_args...)
-        #else
-        #    f(traced_args...)
-        #end
+    finally
+        MLIR.IR.deactivate!(fnbody)
     end
 
     seen_results = OrderedIdDict()
@@ -209,7 +218,8 @@ function make_mlir_fn(
 
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
-        (no_args_in_result && length(v.paths) > 0 && v.paths[1][1] == :args) && continue
+        paths = get_paths(v)
+        (no_args_in_result && length(paths) > 0 && paths[1][1] == :args) && continue
         push!(linear_results, v)
     end
 
@@ -219,22 +229,25 @@ function make_mlir_fn(
         [Ops.mlir_type(arg) for arg in linear_results]
     end
 
-    ret = MLIR.IR.block!(fnbody) do
+    MLIR.IR.activate!(fnbody)
+    ret = try
         vals = MLIR.IR.Value[]
         for res in linear_results
             col_maj = if res isa MissingTracedValue
-                broadcast_to_size(false, ()).mlir_data
+                get_mlir_data(broadcast_to_size(false, ()))
             elseif construct_function_without_args || !do_transpose
-                res.mlir_data
+                get_mlir_data(res)
             elseif do_transpose
-                transpose_val(res.mlir_data)
+                transpose_val(get_mlir_data(res))
             end
             push!(vals, col_maj)
         end
         !no_args_in_result && @assert length(vals) == length(linear_results)
 
         dialect = getfield(MLIR.Dialects, return_dialect)
-        return dialect.return_(vals)
+        dialect.return_(vals)
+    finally
+        MLIR.IR.deactivate!(fnbody)
     end
 
     name2 = name
@@ -299,12 +312,12 @@ function push_val!(ad_inputs, x, path)
     for p in path
         x = Reactant.Compiler.traced_getfield(x, p)
     end
-    x = x.mlir_data
+    x = get_mlir_data(x)
     return push!(ad_inputs, x)
 end
 
 function get_argidx(x)
-    for path in x.paths
+    for path in get_paths(x)
         if length(path) == 0
             continue
         end
@@ -316,7 +329,7 @@ function get_argidx(x)
 end
 
 function has_argidx(x)
-    for path in x.paths
+    for path in get_paths(x)
         if length(path) == 0
             continue
         end
@@ -332,15 +345,13 @@ function set!(x, path, tostore; emptypath=false)
         x = Reactant.Compiler.traced_getfield(x, p)
     end
 
-    x.mlir_data = tostore
+    set_mlir_data!(x, tostore)
 
-    if emptypath
-        x.paths = ()
-    end
+    return emptypath && set_paths!(x, ())
 end
 
 function get_residx(x)
-    for path in x.paths
+    for path in get_paths(x)
         if length(path) == 0
             continue
         end
@@ -352,7 +363,7 @@ function get_residx(x)
 end
 
 function has_residx(x)
-    for path in x.paths
+    for path in get_paths(x)
         if length(path) == 0
             continue
         end
@@ -467,12 +478,12 @@ broadcast_to_size(arg::Number, rsize) = Ops.constant(Base.fill(arg, Tuple(rsize)
 
 function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     length(rsize) == 0 && return arg
-    return broadcast_to_size_internal(TracedRArray{T,0}((), arg.mlir_data, ()), rsize)
+    return broadcast_to_size_internal(TracedRArray{T,0}((), get_mlir_data(arg), ()), rsize)
 end
 
 function broadcast_to_size(arg::AnyTracedRArray{T,0}, rsize) where {T}
     arg = materialize_traced_array(arg)
-    return broadcast_to_size(TracedRNumber{T}((), arg.mlir_data), rsize)
+    return broadcast_to_size(TracedRNumber{T}((), get_mlir_data(arg)), rsize)
 end
 
 function broadcast_to_size(arg::AnyTracedRArray, rsize)
@@ -491,21 +502,21 @@ end
 @noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
     dims = collect(Int64, 0:(length(size(x)) - 1))
 
-    if length(size(MLIR.IR.type(x.mlir_data))) != length(dims)
+    if length(size(MLIR.IR.type(get_mlir_data(x)))) != length(dims)
         @show x
         @show arg
         @show rsize
         @show rsize2
         @show dims
     end
-    @assert length(size(MLIR.IR.type(x.mlir_data))) == length(dims)
-    mlirty = MLIR.IR.type(x.mlir_data)
+    @assert length(size(MLIR.IR.type(get_mlir_data(x)))) == length(dims)
+    mlirty = MLIR.IR.type(get_mlir_data(x))
 
     return TracedRArray{T,Int(length(rsize))}(
         (),
         MLIR.IR.result(
             MLIR.Dialects.stablehlo.broadcast_in_dim(
-                x.mlir_data;
+                get_mlir_data(x);
                 result_0=MLIR.IR.TensorType([t for t in rsize], eltype(mlirty)),
                 broadcast_dimensions=MLIR.IR.DenseArrayAttribute(dims),
             ),

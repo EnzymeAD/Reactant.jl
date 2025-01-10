@@ -516,6 +516,9 @@ cc_library(
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
+        "@llvm-project//mlir:CAPILLVMObjects",    
+        "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
+        "@jax//jaxlib/triton:triton_dialect_capi_objects",
     ] + select({
     "@xla//xla/tsl:is_cuda_enabled_and_oss":[
         "@xla//xla/stream_executor/cuda:all_runtime", 
@@ -611,6 +614,48 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "LlvmJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Llvm.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/LLVMIR/LLVMOps.td",
+    deps = [
+        "@llvm-project//mlir:LLVMOpsTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "NvvmIncJLGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Nvvm.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/LLVMIR/NVVMOps.td",
+    deps = [
+        "@llvm-project//mlir:NVVMOpsTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "GpuIncJLGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Gpu.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/GPU/IR/GPUOps.td",
+    deps = [
+        "@llvm-project//mlir:GPUOpsTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
     name = "EnzymeJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
@@ -635,6 +680,35 @@ gentbl_cc_library(
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "TPUJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "TPU.jl"
+        )
+    ],
+    td_file = "@jax//jaxlib/mosaic:dialect/tpu/tpu.td",
+    deps = [
+        "@jax//jaxlib/mosaic:tpu_td_files",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "TritonJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Triton.jl"
+        )
+    ],
+    td_file = "@jax//jaxlib/triton:triton.td",
+    deps = [
+        "@llvm-project//mlir:OpBaseTdFiles",
+        "@triton//:td_files",
     ],
     tblgen = "//:mlir-jl-tblgen",
 )

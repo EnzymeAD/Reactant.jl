@@ -119,6 +119,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = map(enumerate(indices)) do (idx, i)
         i isa Colon && return 1:size(a, idx)
         i isa CartesianIndex && return Tuple(i)
+        i isa AbstractArray{<:Bool} && return findall(i)
         return i
     end
 
@@ -137,6 +138,11 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     end
 
     if use_gather_getindex
+        # TODO: This will create a dynamically sized tensor and we need to implement
+        #       `findall` for it.
+        if any(i -> unwrapped_eltype(i) <: Bool, indices)
+            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
+        end
         indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
         indices_list = generate_index_list(indices_list...)
         res = Ops.gather_getindex(a, indices_list)
@@ -166,10 +172,22 @@ function Base.getindex(a::WrappedTracedRArray, indices...)
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
 end
 
+function maybe_assert_scalar_setindexing(
+    ::TracedRArray{T,N}, ::Vararg{Union{Int,TracedRNumber{Int}},N}
+) where {T,N}
+    GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::Vararg{Int, N})")
+    return nothing
+end
+
+maybe_assert_scalar_setindexing(args...) = nothing
+
 function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
+    maybe_assert_scalar_setindexing(a, indices...)
+
     indices = map(enumerate(indices)) do (idx, i)
         i isa Colon && return 1:size(a, idx)
         i isa CartesianIndex && return Tuple(i)
+        i isa AbstractArray{<:Bool} && return findall(i)
         return i
     end
 
@@ -188,6 +206,11 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     end
 
     if use_scatter_setindex
+        # TODO: This will create a dynamically sized tensor and we need to implement
+        #       `findall` for it.
+        if any(i -> unwrapped_eltype(i) <: Bool, indices)
+            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
+        end
         indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
         indices_list = generate_index_list(indices_list...)
         res = Ops.scatter_setindex(a, indices_list, Ops.reshape(v, length(v)))
@@ -426,13 +449,22 @@ end
 
 Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 
+function first_scalar(x)
+    Reactant.@allowscalar first(x)
+end
+
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
-    ElType = if bc.f isa Type && bc.f <: ReactantPrimitive
-        Broadcast.combine_eltypes(TracedUtils.TypeCast{bc.f}(), bc.args)
+    fn = if bc.f isa Type && bc.f <: ReactantPrimitive
+        TracedUtils.TypeCast{bc.f}()
     else
-        Broadcast.combine_eltypes(bc.f, bc.args)
+        bc.f
+    end
+    ElType = Broadcast.combine_eltypes(fn, bc.args)
+    # Special case a union{} return so we can see the better error message
+    if ElType === Union{}
+        fn(map(first_scalar, bc.args)...)
     end
     @assert ElType != Any && ElType != Union{}
     sim = similar(bc, ElType)
@@ -450,6 +482,10 @@ Base.copyto!(dest::TracedRArray, bc::Broadcasted{Nothing}) = _copyto!(dest, bc) 
 function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T,N}) where {T,N}
     dest.mlir_data = src.mlir_data
     return dest
+end
+
+function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T2,N}) where {T,T2,N}
+    return copyto!(dest, Ops.convert(TracedRArray{T,N}, src))
 end
 
 function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
