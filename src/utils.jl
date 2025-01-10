@@ -172,18 +172,11 @@ function should_rewrite_call(@nospecialize(ft))
 end
 
 # by default, same as `should_rewrite_call`
-function should_rewrite_invoke(@nospecialize(ft), @nospecialize(args))
-    Core.println(Core.stderr, "[should_rewrite_invoke] ft = $ft, parameters = $(args)")
-    return should_rewrite_call(ft)
-end
+should_rewrite_invoke(@nospecialize(ft), @nospecialize(args)) = should_rewrite_call(ft)
 
-function should_rewrite_invoke(::typeof(Base.unique), @nospecialize(args))
-    Core.println(Core.stderr, "[should_rewrite_invoke] Base.unique catched!")
-    if args === Tuple{Vector{Symbol}}
-        return false
-    end
-    return true
-end
+# fixes #493
+# TODO we probably want to skip rewrite if args do not contain Reactant types
+should_rewrite_invoke(::Type{typeof(Base.unique)}, @nospecialize(::Type{Tuple{Vector{Symbol}}})) = false
 
 # Avoid recursively interpreting into methods we define explicitly
 # as overloads, which we assume should handle the entirety of the
