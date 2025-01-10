@@ -166,6 +166,8 @@ function should_rewrite_ft(@nospecialize(ft))
         ft <: typeof(Base.eltype) ||
         ft <: typeof(Base.argtail) ||
         ft <: typeof(Base.identity) ||
+        ft <: typeof(Base.print) ||
+        ft <: typeof(Base.println) ||
         ft <: typeof(Adapt.adapt_structure)
         return false
     end
