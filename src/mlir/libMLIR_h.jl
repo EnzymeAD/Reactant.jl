@@ -7157,6 +7157,24 @@ function mlirLLVMFunctionTypeGet(resultType, nArgumentTypes, argumentTypes, isVa
 end
 
 """
+    mlirLLVMFunctionTypeGetNumInputs(type)
+
+Returns the number of input types.
+"""
+function mlirLLVMFunctionTypeGetNumInputs(type)
+    @ccall mlir_c.mlirLLVMFunctionTypeGetNumInputs(type::MlirType)::intptr_t
+end
+
+"""
+    mlirLLVMFunctionTypeGetInput(type, pos)
+
+Returns the pos-th input type.
+"""
+function mlirLLVMFunctionTypeGetInput(type, pos)
+    @ccall mlir_c.mlirLLVMFunctionTypeGetInput(type::MlirType, pos::intptr_t)::MlirType
+end
+
+"""
     mlirTypeIsALLVMStructType(type)
 
 Returns `true` if the type is an LLVM dialect struct type.
