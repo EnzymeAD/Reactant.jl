@@ -293,7 +293,7 @@ function optimization_passes(; no_nan::Bool=false)
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
     return join(
-        ["inline{default-pipeline=canonicalize max-iterations=4}", func_passes], ','
+        ["inline{default-pipeline=canonicalize max-iterations=4}", "libdevice-funcs-raise", func_passes], ','
     )
 end
 

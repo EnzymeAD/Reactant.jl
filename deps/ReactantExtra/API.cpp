@@ -629,7 +629,8 @@ static mlir::StringAttr renameSymbol(llvm::StringRef oldSymName,
 static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
                                                   mlir::ModuleOp source,
                                                   mlir::ModuleOp target,
-                                                  unsigned &lastUsedID) {
+                                                  unsigned &lastUsedID,
+                                                  bool &shouldRemove) {
   using namespace llvm;
   using namespace mlir;
 
@@ -637,6 +638,13 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
 
   if (!SymbolTable::lookupSymbolIn(target, opName)) {
     return success();
+  }
+
+  if (auto func = dyn_cast<FunctionOpInterface>(op.getOperation())) {
+    if (func.isExternal()) {
+        shouldRemove = true;
+        return success();
+    }
   }
 
   StringAttr newSymName = renameSymbol(opName, lastUsedID, source, target);
@@ -658,7 +666,7 @@ extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
 
   unsigned lastUsedID = 0;
 
-  for (auto &op : *newMod.getBody()) {
+  for (auto &op : make_early_inc_range(*newMod.getBody())) {
     auto symbolOp = dyn_cast<SymbolOpInterface>(op);
     if (!symbolOp)
       continue;
@@ -669,10 +677,14 @@ extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
       entryFn = &op;
     }
 
-    if (failed(updateSymbolAndAllUses(symbolOp, newMod, prevMod, lastUsedID))) {
+    bool shouldRemove = false;
+    if (failed(updateSymbolAndAllUses(symbolOp, newMod, prevMod, lastUsedID, shouldRemove))) {
       assert(0 && "failed to update all uses");
     }
-    SymbolTable::setSymbolVisibility(&op, SymbolTable::Visibility::Private);
+    if (shouldRemove)
+        op.erase();
+    else
+        SymbolTable::setSymbolVisibility(&op, SymbolTable::Visibility::Private);
   }
   prevMod.getBody()->getOperations().splice(
       prevMod.getBody()->getOperations().end(),
