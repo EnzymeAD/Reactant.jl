@@ -95,7 +95,9 @@ function should_rewrite_ft(@nospecialize(ft))
         return false
     end
     if ft <: Core.Function
-        if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :name) && isdefined(ft.name, :name)
+        if hasfield(typeof(ft), :name) &&
+            hasfield(typeof(ft.name), :name) &&
+            isdefined(ft.name, :name)
             namestr = String(ft.name.name)
             if startswith(namestr, "##(overlay (. Reactant (inert REACTANT_METHOD_TABLE)")
                 return false
@@ -164,8 +166,6 @@ function should_rewrite_ft(@nospecialize(ft))
         ft <: typeof(Base.argtail)
         return false
     end
-
-    
 
     # Default assume all functions need to be reactant-ified
     return true

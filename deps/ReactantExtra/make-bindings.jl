@@ -28,7 +28,7 @@ for file in [
     "Gpu.jl",
     "Affine.jl",
     "TPU.jl",
-    "Triton.jl"
+    "Triton.jl",
 ]
     build_file(joinpath(src_dir, "mlir", "Dialects", file))
 end
