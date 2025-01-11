@@ -205,6 +205,7 @@ function optimization_passes(; no_nan::Bool=false)
         "reduce_concat<1>",
         "slice_concat<1>",
         "concat_slice<1>",
+        "select_op_used_within_if<1>",
         "bin_broadcast_splat_add<1>",
         "bin_broadcast_splat_subtract<1>",
         "bin_broadcast_splat_div<1>",
@@ -276,6 +277,8 @@ function optimization_passes(; no_nan::Bool=false)
         "binary_op_transpose_simplify_and",
         "binary_op_transpose_simplify_xor",
         "replace_neg_add_with_subtract",
+        "log_const_prop<1>",
+        "log_plus_one_const_prop<1>",
     ]
     if no_nan
         append!(
