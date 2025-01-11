@@ -35,6 +35,7 @@ function reclaim_fn(backend, reactant)
         CUDA.reclaim()
     end
     GC.gc(true)
+    return nothing
 end
 
 Comonicon.@main function main(; backend::String="gpu")
