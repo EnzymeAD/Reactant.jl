@@ -507,7 +507,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             if p[1] !== kernelargsym
                 continue
             end
-                        
             # Get the allocation corresponding to which arg we're doing
             alloc = allocs[p[2]][1]
 
@@ -533,11 +532,9 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                     ),
                 ),
             )
-            
         end
         argidx += 1
     end
-        
     MLIR.IR.block!(wrapbody) do
         for arg in allocs
             if arg === nothing
