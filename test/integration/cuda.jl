@@ -115,6 +115,31 @@ tuplef2(a) = @cuda threads=1 tuplef2!((5, a))
     else
         @code_hlo optimize = :before_kernel tuplef2(A)
     end
+end
+end
 
+struct MyStruct{T, B}
+    b::B
+    A::T
+end
+
+function aliased!(tup)
+    tup[1].A[] = 2
+    return nothing
+end
+aliased(s) = @cuda threads=1 aliased!((s, s))
+
+@static if !Sys.isapple()
+@testset "Aliasing arguments" begin
+    a = ConcreteRArray(fill(1))
+
+    s = MyStruct(10, A)
+    
+    if CUDA.functional()
+        @jit aliased((s, s))
+        @test all(Array(A) == 2)
+    else
+        @code_hlo optimize=:before_kernel aliased(s);
+    end
 end
 end
