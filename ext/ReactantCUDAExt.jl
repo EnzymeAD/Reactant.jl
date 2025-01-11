@@ -225,7 +225,7 @@ struct LLVMFunc{F,tt}
     entry::String
 end
 
-function Base.getproperty(f::LLVMFunc{F, tt}, sym::Symbol) where {F, tt}
+function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
     if sym === :fun
         f
     else
@@ -235,8 +235,14 @@ end
 
 # TODO in the future we may want to avoid doing a second cufunction compilation
 # for computing the thread/block count (or potentially do it ourselves).
-@noinline function CUDA.launch_configuration(f::LLVMFunc{F, tt}; shmem::Union{Integer, Base.Callable}=0, max_threads::Integer=0) where {F, tt}
-    CUDA.launch_configuration(Base.inferencebarrier(CUDA.cufunction)(f.f, Tuple{tt.parameters[2:end]...}).fun; shmem, max_threads)
+@noinline function CUDA.launch_configuration(
+    f::LLVMFunc{F,tt}; shmem::Union{Integer,Base.Callable}=0, max_threads::Integer=0
+) where {F,tt}
+    return CUDA.launch_configuration(
+        Base.inferencebarrier(CUDA.cufunction)(f.f, Tuple{tt.parameters[2:end]...}).fun;
+        shmem,
+        max_threads,
+    )
 end
 
 const GPUCompiler = CUDA.GPUCompiler
@@ -282,7 +288,12 @@ function compile(job)
     entry = GPUCompiler.JuliaContext() do ctx
         mod, meta = GPUCompiler.compile(
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
-            :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
+            :llvm,
+            job;
+            optimize=false,
+            cleanup=false,
+            validate=false,
+            libraries=false,
             # :llvm, job; optimize=false, cleanup=false, validate=true, libraries=false
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
@@ -357,19 +368,21 @@ function link(job, compiled)
 end
 
 function to_bytes(x)
-	sz = sizeof(x)
-	ref = Ref(x)
-	GC.@preserve ref begin
-		ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
-		vec = Vector{UInt8}(undef, sz)
-		for i in 1:sz
-			@inbounds vec[i] = Base.unsafe_load(ptr, i)
-		end
-		vec
-	end
+    sz = sizeof(x)
+    ref = Ref(x)
+    GC.@preserve ref begin
+        ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
+        vec = Vector{UInt8}(undef, sz)
+        for i in 1:sz
+            @inbounds vec[i] = Base.unsafe_load(ptr, i)
+        end
+        vec
+    end
 end
 
-function Reactant.make_tracer(seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...)
+function Reactant.make_tracer(
+    seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...
+)
     x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))::TracedRArray
     Reactant.make_tracer(seen, x, path, mode; kwargs...)
     return prev
@@ -388,7 +401,9 @@ function get_field_offset(T::Type, path)
             findfirst(==(field), fieldnames(current_type))
         end
         if field_idx === nothing
-            error("Field $field not found in type $current_type, fieldnames=$(fieldnames(current_type)) T=$T path=$path")
+            error(
+                "Field $field not found in type $current_type, fieldnames=$(fieldnames(current_type)) T=$T path=$path",
+            )
         end
 
         # Add the offset of this field
@@ -419,7 +434,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     rarrays = TracedRArray[]
 
     fname = func.entry
-    
+
     wrapper_tys = MLIR.IR.Type[]
     ctx = MLIR.IR.context()
     cullvm_ty = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1))
@@ -436,19 +451,23 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         end
         push!(wrapper_tys, cullvm_ty)
     end
-    
+
     sym_name = String(gensym("call_$fname"))
     mod = MLIR.IR.mmodule()
-    CConv=MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvPTX_Kernel))
+    CConv = MLIR.IR.Attribute(
+        MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvPTX_Kernel)
+    )
     voidty = MLIR.IR.Type(MLIR.API.mlirLLVMVoidTypeGet(ctx))
-    wrapftype = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false))
+    wrapftype = MLIR.IR.Type(
+        MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
+    )
     wrapfunc = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.llvm.func(;
             sym_name,
             sym_visibility=MLIR.IR.Attribute("private"),
             function_type=wrapftype,
             body=MLIR.IR.Region(),
-            CConv
+            CConv,
         )
     end
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
@@ -459,11 +478,17 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     symtab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
     gpufunc = MLIR.IR.lookup(symtab, fname)
-    MLIR.IR.attr!(gpufunc, "CConv", MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)))
-    gpu_function_type = MLIR.IR.Type(Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type"))
+    MLIR.IR.attr!(
+        gpufunc,
+        "CConv",
+        MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)),
+    )
+    gpu_function_type = MLIR.IR.Type(
+        Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type")
+    )
 
     trueidx = 1
-    allocs = Union{Tuple{MLIR.IR.Value, MLIR.IR.Type}, Nothing}[]
+    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type},Nothing}[]
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
@@ -476,18 +501,34 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
         # TODO check for only integer and explicitly non cutraced types
         MLIR.IR.block!(wrapbody) do
-            argty = MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx-1))
+            argty = MLIR.IR.Type(
+                MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
+            )
             trueidx += 1
-            c1 = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)), 1)
-            alloc = MLIR.IR.result(MLIR.Dialects.llvm.alloca(c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr), 1)
+            c1 = MLIR.IR.result(
+                MLIR.Dialects.llvm.mlir_constant(;
+                    res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                ),
+                1,
+            )
+            alloc = MLIR.IR.result(
+                MLIR.Dialects.llvm.alloca(
+                    c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
+                ),
+                1,
+            )
             push!(allocs, (alloc, argty))
 
             sz = sizeof(a)
             array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
-            cdata = MLIR.IR.result(MLIR.Dialects.llvm.mlir_constant(; res=array_ty, value=MLIR.IR.DenseElementsAttribute(to_bytes(a))), 1)
+            cdata = MLIR.IR.result(
+                MLIR.Dialects.llvm.mlir_constant(;
+                    res=array_ty, value=MLIR.IR.DenseElementsAttribute(to_bytes(a))
+                ),
+                1,
+            )
             MLIR.Dialects.llvm.store(cdata, alloc)
         end
-
     end
 
     argidx = 1
@@ -512,10 +553,19 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
             # we need to now compute the offset in bytes of the path
             julia_arg = allargs[p[2]]
-            
+
             offset = get_field_offset(typeof(julia_arg), p[3:end])
             MLIR.IR.block!(wrapbody) do
-                ptr = MLIR.IR.result(MLIR.Dialects.llvm.getelementptr(alloc, MLIR.IR.Value[], res=llvmptr, elem_type=i8, rawConstantIndices=MLIR.IR.Attribute([Int32(offset)])), 1)
+                ptr = MLIR.IR.result(
+                    MLIR.Dialects.llvm.getelementptr(
+                        alloc,
+                        MLIR.IR.Value[];
+                        res=llvmptr,
+                        elem_type=i8,
+                        rawConstantIndices=MLIR.IR.Attribute([Int32(offset)]),
+                    ),
+                    1,
+                )
                 MLIR.Dialects.llvm.store(MLIR.IR.argument(wrapbody, argidx), ptr)
             end
 
@@ -535,6 +585,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         end
         argidx += 1
     end
+
     MLIR.IR.block!(wrapbody) do
         for arg in allocs
             if arg === nothing
@@ -544,7 +595,12 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
         end
-        MLIR.Dialects.llvm.call(wrapargs, MLIR.IR.Value[]; callee=MLIR.IR.FlatSymbolRefAttribute(Base.String(fname)), op_bundle_sizes=MLIR.IR.Attribute(Int32[]))
+        MLIR.Dialects.llvm.call(
+            wrapargs,
+            MLIR.IR.Value[];
+            callee=MLIR.IR.FlatSymbolRefAttribute(Base.String(fname)),
+            op_bundle_sizes=MLIR.IR.Attribute(Int32[]),
+        )
         MLIR.Dialects.llvm.return_(nothing)
     end
 
@@ -565,7 +621,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         mlir_args;
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
-        output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases)
+        output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
     )
 
     argidx = 1
@@ -574,7 +630,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             continue
         end
         arg.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, argidx))
-        argidx+=1
+        argidx += 1
     end
 end
 
