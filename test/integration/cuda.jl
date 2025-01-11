@@ -115,7 +115,6 @@ tuplef2(a) = @cuda threads = 1 tuplef2!((5, a))
             @code_hlo optimize = :before_kernel tuplef2(A)
         end
     end
-    
     A = ConcreteRArray(fill(1))
     if CUDA.functional()
         @jit tuplef2(A)
