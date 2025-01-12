@@ -390,6 +390,7 @@ function overload_autodiff(
         [TracedUtils.transpose_val(v) for v in ad_inputs];
         outputs=outtys,
         fn=fname,
+        width,
         activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
         ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
     )
