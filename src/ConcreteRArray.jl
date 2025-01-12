@@ -1,4 +1,4 @@
-const _memory_tracker = Dict{Symbol, Dict{UInt, Int}}()
+const _memory_tracker = Dict{Symbol, Dict{UInt, Tuple{Int, Type, Tuple}}}()
 
 function ConcreteRNumber{T}(
     data::T2;
@@ -75,12 +75,16 @@ function ConcreteRArray(
         size(data)
     )
     
-    # Track memory allocation
+    # Track memory allocation with additional info
     client_sym = Symbol(client)
     if !haskey(_memory_tracker, client_sym)
-        _memory_tracker[client_sym] = Dict{UInt,Int}()
+        _memory_tracker[client_sym] = Dict{UInt, Tuple{Int, Type, Tuple}}()
     end
-    _memory_tracker[client_sym][objectid(arr)] = sizeof(T) * prod(size(data))
+    _memory_tracker[client_sym][objectid(arr)] = (
+        sizeof(T) * prod(size(data)), # size in bytes
+        T,                            # element type
+        size(data)                    # shape
+    )
     
     # Add finalizer
     finalizer(arr) do x
@@ -404,12 +408,61 @@ If a client is specified, only the memory usage on that client is returned.
 """
 function get_memory_allocated(; client=nothing)
     if isnothing(client)
-        return sum(sum(values(dict)) for dict in values(_memory_tracker))
+        return sum(sum(first(x) for x in values(dict); init=0) for dict in values(_memory_tracker); init=0)
     else
         client_sym = Symbol(client)
-        return get(_memory_tracker, client_sym, Dict{UInt,Int}()) |> values |> sum
+        dict = get(_memory_tracker, client_sym, Dict{UInt, Tuple{Int, Type, Tuple}}())
+        return sum(first(x) for x in values(dict); init=0)
     end
 end
 
 # Optional: Add a convenience function for GB units
 get_memory_allocated_gb(; client=nothing) = get_memory_allocated(; client) / 1024^3
+
+"""
+    get_largest_arrays(k::Int=5; client=nothing) -> Vector{NamedTuple}
+
+返回占用显存最多的k个数组的信息，包括其大小、形状和内存占用。
+如果指定了client，则只显示该client上的数组。
+
+返回格式为 Vector{(shape=..., size_bytes=..., size_mb=...)}
+"""
+function get_largest_arrays(k::Int=5; client=nothing)
+    # 收集所有数组信息
+    arrays_info = []
+    
+    clients_to_check = if isnothing(client)
+        keys(_memory_tracker)
+    else
+        [Symbol(client)]
+    end
+    
+    for client_sym in clients_to_check
+        client_dict = get(_memory_tracker, client_sym, Dict{UInt, Tuple{Int, Type, Tuple}}())
+        for (obj_id, (size_bytes, type, shape)) in client_dict
+            push!(arrays_info, (
+                shape = shape,
+                type = type,
+                size_bytes = size_bytes,
+                size_mb = round(size_bytes / 1024^2, digits=2),
+                client = client_sym
+            ))
+        end
+    end
+    
+    sort!(arrays_info, by=x->x.size_bytes, rev=true)
+    return first(arrays_info, k)
+end
+
+"""
+    print_largest_arrays(k::Int=5; client=nothing)
+
+打印占用显存最多的k个数组的信息。
+"""
+function print_largest_arrays(k::Int=5; client=nothing)
+    arrays = get_largest_arrays(k; client)
+    println("Top $k arrays by memory usage:")
+    for (i, arr) in enumerate(arrays)
+        println("$i. Type: $(arr.type), Shape: $(arr.shape), Size: $(arr.size_mb) MB, Client: $(arr.client)")
+    end
+end

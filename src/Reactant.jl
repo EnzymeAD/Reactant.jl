@@ -229,7 +229,8 @@ function Enzyme.make_zero(
 end
 
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
-export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace, get_memory_allocated, get_memory_allocated_gb
+export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace
+export get_memory_allocated, get_memory_allocated_gb, get_largest_arrays, print_largest_arrays
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
