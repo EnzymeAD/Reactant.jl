@@ -164,8 +164,9 @@ function vector_forward_ad(x, dx1, dx2)
 end
 
 @testset "Vector Mode AD" begin
-    x = [1.0, 3.0] |> Reactant.to_rarray
-    dx1 = [1.0, 0.0] |> Reactant.to_rarray
-    dx2 = [0.0, 1.0] |> Reactant.to_rarray
+    x = Reactant.to_rarray([1.0, 3.0])
+    dx1 = Reactant.to_rarray([1.0, 0.0])
+    dx2 = Reactant.to_rarray([0.0, 1.0])
+
     res = @jit vector_forward_ad(x, dx1, dx2)
 end
