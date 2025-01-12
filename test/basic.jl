@@ -369,28 +369,32 @@ end
         @test eltype(y) === Int
     end
 
-    @testset "Number and RArray" begin
-        a = 1.0
-        b = Reactant.to_rarray(ones(3))
-        c = Reactant.to_rarray(ones(1, 3))
-        
+    @testset "Number and RArray" for a in [randn(Float32), randn(Float64)]
+        typeof_a = typeof(a)
+        _b = randn(typeof_a, 3)
+        _c = randn(typeof_a, 1, 3)
+        b = Reactant.to_rarray(_b)
+        c = Reactant.to_rarray(_c)
+    
         # vcat test        
         y = @jit vcat(a, b)
-        @test size(y) == (4,)
-        @test eltype(y) === Float64
+        @test y == Reactant.to_rarray(vcat(a, _b))
+        @test y isa ConcreteRArray{typeof_a,1}
+    
         ## vcat test - adjoint
         y1 = @jit vcat(a, c')
-        @test size(y1) == (4, 1)
-        @test eltype(y1) === Float64
-        
+        @test y1 == Reactant.to_rarray(vcat(a, _c'))
+        @test y1 isa ConcreteRArray{typeof_a,2}
+    
         # hcat test
         z = @jit hcat(a, c)
-        @test size(z) == (1, 4)
-        @test eltype(z) === Float64
+        @test z == Reactant.to_rarray(hcat(a, _c))
+        @test z isa ConcreteRArray{typeof_a,2}
+    
         ## hcat test - adjoint
         z1 = @jit hcat(a, b')
-        @test size(z1) == (1, 4)
-        @test eltype(z1) === Float64
+        @test z1 == Reactant.to_rarray(hcat(a, _b')) # ConcreteRArray(hcat(a, _b')) does not work.
+        @test z1 isa ConcreteRArray{typeof_a,2}
     end
 end
 
