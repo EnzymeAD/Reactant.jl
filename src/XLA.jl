@@ -231,6 +231,51 @@ function client(device::Device)
     end
 end
 
+struct AllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Union{Nothing,Int64}
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Union{Nothing,Int64}
+    largest_free_block_bytes::Int64
+    pool_bytes::Union{Nothing,Int64}
+    peak_pool_bytes::Union{Nothing,Int64}
+end
+
+function allocatorstats(device::Device)
+    num_allocs = @ccall MLIR.API.mlir_c.PjrtDeviceGetNumAllocs(device.device::Ptr{Cvoid})::Int64
+    if num_allocs == typemin(Int64)
+        return nothing
+    end
+
+    bytes_in_use = @ccall MLIR.API.mlir_c.PjrtDeviceGetBytesInUse(device.device::Ptr{Cvoid})::Int64
+    peak_bytes_in_use = @ccall MLIR.API.mlir_c.PjrtDeviceGetPeakBytesInUse(device.device::Ptr{Cvoid})::Int64
+    largest_alloc_size = @ccall MLIR.API.mlir_c.PjrtDeviceGetLargestAllocSize(device.device::Ptr{Cvoid})::Int64
+    bytes_limit = @ccall MLIR.API.mlir_c.PjrtDeviceGetBytesLimit(device.device::Ptr{Cvoid})::Int64
+    bytes_reserved = @ccall MLIR.API.mlir_c.PjrtDeviceGetBytesReserved(device.device::Ptr{Cvoid})::Int64
+    peak_bytes_reserved = @ccall MLIR.API.mlir_c.PjrtDeviceGetPeakBytesReserved(device.device::Ptr{Cvoid})::Int64
+    bytes_reservable_limit = @ccall MLIR.API.mlir_c.PjrtDeviceGetBytesReservableLimit(device.device::Ptr{Cvoid})::Int64
+    largest_free_block_bytes = @ccall MLIR.API.mlir_c.PjrtDeviceGetLargestFreeBlockBytes(device.device::Ptr{Cvoid})::Int64
+    pool_bytes = @ccall MLIR.API.mlir_c.PjrtDeviceGetPoolBytes(device.device::Ptr{Cvoid})::Int64
+    peak_pool_bytes = @ccall MLIR.API.mlir_c.PjrtDeviceGetPeakPoolBytes(device.device::Ptr{Cvoid})::Int64
+
+    AllocatorStats(
+        num_allocs,
+        peak_bytes_in_use,
+        largest_alloc_size,
+        bytes_limit == typemin(Int64) ? Nothing : bytes_limit,
+        bytes_reserved,
+        peak_bytes_reserved,
+        bytes_reservable_limit == typemin(Int64) ? Nothing : bytes_reservable_limit,
+        largest_free_block_bytes,
+        pool_bytes == typemin(Int64) ? Nothing : pool_bytes,
+        peak_pool_bytes == typemin(Int64) ? Nothing : peak_pool_bytes,
+    )
+end
+
 # https://github.com/openxla/xla/blob/4bfb5c82a427151d6fe5acad8ebe12cee403036a/xla/xla_data.proto#L29
 @inline primitive_type(::Type{Bool}) = 1
 

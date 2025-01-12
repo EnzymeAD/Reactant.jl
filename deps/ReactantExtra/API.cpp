@@ -90,8 +90,8 @@
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
-#include "triton/Dialect/Triton/IR/Dialect.h"
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
+#include "triton/Dialect/Triton/IR/Dialect.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -325,6 +325,74 @@ extern "C" PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
       client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
 }
 
+extern "C" int64_t PjrtDeviceGetNumAllocs(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->num_allocs;
+}
+extern "C" int64_t PjrtDeviceGetBytesInUse(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->bytes_in_use;
+}
+extern "C" int64_t PjrtDeviceGetPeakBytesInUse(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->peak_bytes_in_use;
+}
+extern "C" int64_t PjrtDeviceGetLargestAllocSize(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->largest_alloc_size;
+}
+extern "C" int64_t PjrtDeviceGetBytesLimit(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->bytes_limit.value_or(std::numeric_limits<int64_t>::min());
+}
+extern "C" int64_t PjrtDeviceGetBytesReserved(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->bytes_reserved;
+}
+extern "C" int64_t PjrtDeviceGetPeakBytesReserved(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->peak_bytes_reserved;
+}
+extern "C" int64_t PjrtDeviceGetBytesReservableLimit(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->bytes_reservable_limit.value_or(
+      std::numeric_limits<int64_t>::min());
+}
+extern "C" int64_t PjrtDeviceGetLargestFreeBlockBytes(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->largest_free_block_bytes;
+}
+extern "C" int64_t PjrtDeviceGetPoolBytes(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->pool_bytes.value_or(std::numeric_limits<int64_t>::min());
+}
+extern "C" int64_t PjrtDeviceGetPeakPoolBytes(PjrtDevice *device) {
+  auto stats = device->GetAllocatorStats();
+  if (!stats.ok())
+    return std::numeric_limits<int64_t>::min();
+  return stats->peak_pool_bytes.value_or(std::numeric_limits<int64_t>::min());
+}
+
 extern "C" void ExecutableFree(xla::PjRtLoadedExecutable *exec) { delete exec; }
 
 extern "C" PjRtDevice *BufferToDevice(PjRtBuffer *Buffer) {
@@ -443,7 +511,7 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
     if (ReactantThrowError) {
       llvm::errs() << lmod << "\n";
       ReactantThrowError(err_str.c_str());
-      return wrap((mlir::ModuleOp)nullptr);
+      return wrap((mlir::ModuleOp) nullptr);
     }
   }
   mlir::MLIRContext &context = *unwrap(cctx);
@@ -642,8 +710,8 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
 
   if (auto func = dyn_cast<FunctionOpInterface>(op.getOperation())) {
     if (func.isExternal()) {
-        shouldRemove = true;
-        return success();
+      shouldRemove = true;
+      return success();
     }
   }
 
@@ -678,13 +746,14 @@ extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
     }
 
     bool shouldRemove = false;
-    if (failed(updateSymbolAndAllUses(symbolOp, newMod, prevMod, lastUsedID, shouldRemove))) {
+    if (failed(updateSymbolAndAllUses(symbolOp, newMod, prevMod, lastUsedID,
+                                      shouldRemove))) {
       assert(0 && "failed to update all uses");
     }
     if (shouldRemove)
-        op.erase();
+      op.erase();
     else
-        SymbolTable::setSymbolVisibility(&op, SymbolTable::Visibility::Private);
+      SymbolTable::setSymbolVisibility(&op, SymbolTable::Visibility::Private);
   }
   prevMod.getBody()->getOperations().splice(
       prevMod.getBody()->getOperations().end(),
