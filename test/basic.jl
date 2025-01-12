@@ -373,12 +373,25 @@ end
         a = 1.0
         b = Reactant.to_rarray(ones(3))
         c = Reactant.to_rarray(ones(1, 3))
-        @test size(vcat(a, b)) == (4,)
-        @test size(hcat(a, b')) == (1, 4)
-        @test size(hcat(a, c)) == (1, 4)
-        @test size(vcat(a, c')) == (4, 1)
+        
+        # vcat test        
+        y = @jit vcat(a, b)
+        @test size(y) == (4,)
+        @test eltype(y) === Float64
+        ## vcat test - adjoint
+        y1 = @jit vcat(a, c')
+        @test size(y1) == (4, 1)
+        @test eltype(y1) === Float64
+        
+        # hcat test
+        z = @jit hcat(a, c)
+        @test size(z) == (1, 4)
+        @test eltype(z) === Float64
+        ## hcat test - adjoint
+        z1 = @jit hcat(a, b')
+        @test size(z1) == (1, 4)
+        @test eltype(z1) === Float64
     end
-
 end
 
 @testset "repeat" begin
