@@ -369,31 +369,31 @@ end
         @test eltype(y) === Int
     end
 
-    @testset "Number and RArray" for a in [2.0f0, 2.0e0]
+    @testset "Number and RArray" for a in [1.0f0, 1.0e0]
         typeof_a = typeof(a)
-        _b = randn(typeof_a, 3)
-        _c = randn(typeof_a, 1, 3)
+        _b = [2.0, 3.0, 4.0] .|> typeof_a
+        _c = [2.0 3.0 4.0] .|> typeof_a
         b = Reactant.to_rarray(_b)
         c = Reactant.to_rarray(_c)
     
         # vcat test        
         y = @jit vcat(a, b)
-        @test y == Reactant.to_rarray(vcat(a, _b))
+        @test y == vcat(a, _b)
         @test y isa ConcreteRArray{typeof_a,1}
     
         ## vcat test - adjoint
         y1 = @jit vcat(a, c')
-        @test y1 == Reactant.to_rarray(vcat(a, _c'))
+        @test y1 == vcat(a, _c')
         @test y1 isa ConcreteRArray{typeof_a,2}
     
         # hcat test
         z = @jit hcat(a, c)
-        @test z == Reactant.to_rarray(hcat(a, _c))
+        @test z == hcat(a, _c)
         @test z isa ConcreteRArray{typeof_a,2}
     
         ## hcat test - adjoint
         z1 = @jit hcat(a, b')
-        @test z1 == Reactant.to_rarray(hcat(a, _b')) # ConcreteRArray(hcat(a, _b')) does not work.
+        @test z1 == hcat(a, _b')
         @test z1 isa ConcreteRArray{typeof_a,2}
     end
 end
