@@ -422,10 +422,9 @@ get_memory_allocated_gb(; client=nothing) = get_memory_allocated(; client) / 102
 """
     get_largest_arrays(k::Int=5; client=nothing) -> Vector{NamedTuple}
 
-返回占用显存最多的k个数组的信息，包括其大小、形状和内存占用。
-如果指定了client，则只显示该client上的数组。
+Return information about the k arrays occupying the most video memory, including their size, shape, and memory usage. If a client is specified, only the arrays on that client will be displayed.
 
-返回格式为 Vector{(shape=..., size_bytes=..., size_mb=...)}
+Return format: Vector{(shape=..., size_bytes=..., size_mb=...)}
 """
 function get_largest_arrays(k::Int=5; client=nothing)
     # 收集所有数组信息
@@ -457,7 +456,7 @@ end
 """
     print_largest_arrays(k::Int=5; client=nothing)
 
-打印占用显存最多的k个数组的信息。
+Print the information of the k arrays occupying the most video memory.
 """
 function print_largest_arrays(k::Int=5; client=nothing)
     arrays = get_largest_arrays(k; client)
