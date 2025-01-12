@@ -496,30 +496,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
 end
 
 @noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
-    dims = collect(Int64, 0:(length(size(x)) - 1))
-
-    if length(size(MLIR.IR.type(get_mlir_data(x)))) != length(dims)
-        @show x
-        @show arg
-        @show rsize
-        @show rsize2
-        @show dims
-    end
-    @assert length(size(MLIR.IR.type(get_mlir_data(x)))) == length(dims)
-    mlirty = MLIR.IR.type(get_mlir_data(x))
-
-    return TracedRArray{T,Int(length(rsize))}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.broadcast_in_dim(
-                get_mlir_data(x);
-                result_0=MLIR.IR.TensorType([t for t in rsize], eltype(mlirty)),
-                broadcast_dimensions=MLIR.IR.DenseArrayAttribute(dims),
-            ),
-            1,
-        ),
-        collect(rsize),
-    )
+    return Ops.broadcast_in_dim(x, collect(Int64, 1:ndims(x)), collect(Int64, rsize))
 end
 
 end

@@ -936,24 +936,24 @@ end
 end
 
 # broadcast ops
-# function broadcast_in_dim(
-#     x::TracedRArray{T,N},
-#     dims::Vector{Int};
-#     location=mlir_stacktrace(
-#         "broadcast_in_dim", @__FILE__, @__LINE__
-#     ),
-# ) where {T,N}
-#     rsize = restype = MLIR.IR.TensorType([...], mlir_type(T)) # mlir_type(TracedRArray{T,N}, size(x))
-#     res = MLIR.IR.result(
-#         stablehlo.broadcast_in_dim(
-#             x.mlir_data;
-#             result_0=restype,
-#             broadcast_dimensions=MLIR.IR.DenseArrayAttribute(dims),
-#             location,
-#         ),
-#     )
-#     return TracedRArray{T,N}((), res, size(x))
-# end
+function broadcast_in_dim(
+    x::TracedRArray{T,N},
+    dims::Vector{Int},
+    result_size::Vector{Int};
+    location=mlir_stacktrace("broadcast_in_dim", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert length(dims) == N
+
+    res = MLIR.IR.result(
+        stablehlo.broadcast_in_dim(
+            x.mlir_data;
+            result_0=MLIR.IR.TensorType(result_size, MLIR.IR.Type(T)),
+            broadcast_dimensions=MLIR.IR.DenseArrayAttribute(dims .- 1),
+            location,
+        ),
+    )
+    return TracedRArray{T,Int64(length(result_size))}((), res, Tuple(result_size))
+end
 
 @noinline function sort(
     x::TracedRArray{T,N};
