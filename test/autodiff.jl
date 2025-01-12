@@ -156,3 +156,16 @@ end
     hlo = @code_hlo optimize = false Enzyme.onehot(x)
     @test !contains("stablehlo.constant", repr(hlo))
 end
+
+fn(x) = sum(abs2, x)
+
+function vector_forward_ad(x, dx1, dx2)
+    return Enzyme.autodiff(Forward, fn, BatchDuplicated(x, (dx1, dx2)))
+end
+
+@testset "Vector Mode AD" begin
+    x = [1.0, 3.0] |> Reactant.to_rarray
+    dx1 = [1.0, 0.0] |> Reactant.to_rarray
+    dx2 = [0.0, 1.0] |> Reactant.to_rarray
+    res = @jit vector_forward_ad(x, dx1, dx2)
+end
