@@ -325,68 +325,68 @@ extern "C" PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
       client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
 }
 
-extern "C" int64_t PjrtDeviceGetNumAllocs(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetNumAllocs(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->num_allocs;
 }
-extern "C" int64_t PjrtDeviceGetBytesInUse(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetBytesInUse(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->bytes_in_use;
 }
-extern "C" int64_t PjrtDeviceGetPeakBytesInUse(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetPeakBytesInUse(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->peak_bytes_in_use;
 }
-extern "C" int64_t PjrtDeviceGetLargestAllocSize(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetLargestAllocSize(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->largest_alloc_size;
 }
-extern "C" int64_t PjrtDeviceGetBytesLimit(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetBytesLimit(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->bytes_limit.value_or(std::numeric_limits<int64_t>::min());
 }
-extern "C" int64_t PjrtDeviceGetBytesReserved(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetBytesReserved(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->bytes_reserved;
 }
-extern "C" int64_t PjrtDeviceGetPeakBytesReserved(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetPeakBytesReserved(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->peak_bytes_reserved;
 }
-extern "C" int64_t PjrtDeviceGetBytesReservableLimit(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetBytesReservableLimit(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->bytes_reservable_limit.value_or(
       std::numeric_limits<int64_t>::min());
 }
-extern "C" int64_t PjrtDeviceGetLargestFreeBlockBytes(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetLargestFreeBlockBytes(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->largest_free_block_bytes;
 }
-extern "C" int64_t PjrtDeviceGetPoolBytes(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetPoolBytes(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
   return stats->pool_bytes.value_or(std::numeric_limits<int64_t>::min());
 }
-extern "C" int64_t PjrtDeviceGetPeakPoolBytes(PjrtDevice *device) {
+extern "C" int64_t PjRtDeviceGetPeakPoolBytes(PjRtDevice *device) {
   auto stats = device->GetAllocatorStats();
   if (!stats.ok())
     return std::numeric_limits<int64_t>::min();
