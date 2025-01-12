@@ -146,3 +146,9 @@ end
     x_ra = Reactant.to_rarray(rand(Float32, 1, 1, 1, 4))
     hlo = @code_hlo sinusoidal_embedding(x_ra, 0.1, 10.0, 4)
 end
+
+# test #493
+@testset "unique(::Vector{Symbol}) (#493)" begin
+    x = [:a, :b, :a]
+    @test @jit(unique(x_ra)) == [:a, :b]
+end
