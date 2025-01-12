@@ -427,7 +427,6 @@ Return information about the k arrays occupying the most video memory, including
 Return format: Vector{(shape=..., size_bytes=..., size_mb=...)}
 """
 function get_largest_arrays(k::Int=5; client=nothing)
-    # 收集所有数组信息
     arrays_info = []
     
     clients_to_check = if isnothing(client)
