@@ -369,7 +369,7 @@ end
         @test eltype(y) === Int
     end
 
-    @testset "Number and RArray" for a in [randn(Float32), randn(Float64)]
+    @testset "Number and RArray" for a in [2.0f0, 2.0e0]
         typeof_a = typeof(a)
         _b = randn(typeof_a, 3)
         _c = randn(typeof_a, 1, 3)
