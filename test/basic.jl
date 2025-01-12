@@ -422,6 +422,39 @@ end
     # get_view_compiled = @compile get_view(x_concrete)
 end
 
+function write_with_broadcast1!(x, y)
+    x[1, :, :] .= reshape(y, 4, 3)
+    return x
+end
+function write_with_broadcast2!(x, y)
+    x[:, 1, :] .= view(y, :, 1:3)
+    return x
+end
+
+@testset "write_with_broadcast" begin
+    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
+    y_ra = Reactant.to_rarray(rand(3, 4))
+
+    res = @jit write_with_broadcast1!(x_ra, y_ra)
+
+    @test res.data === x_ra.data
+
+    res = Array(res)
+    y = Array(y_ra)
+    @test res[1, :, :] ≈ reshape(y, 4, 3)
+
+    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
+    y_ra = Reactant.to_rarray(rand(3, 4))
+
+    res = @jit write_with_broadcast2!(x_ra, y_ra)
+
+    @test res.data === x_ra.data
+
+    res = Array(res)
+    y = Array(y_ra)
+    @test res[:, 1, :] ≈ view(y, :, 1:3)
+end
+
 function masking(x)
     y = similar(x)
     y[1:2, :] .= 0
