@@ -902,17 +902,18 @@ function sem_signal(
     attributes = NamedAttribute[]
     !isnothing(device_id) && push!(operands, device_id)
     !isnothing(core_id) && push!(operands, core_id)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        if (device_id == nothing)
-            0
-        elseif 1(core_id == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, if (device_id == nothing)
+                0
+            elseif 1(core_id == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
     !isnothing(core_type) && push!(attributes, namedattribute("core_type", core_type))
 
     return create_operation(
