@@ -1,0 +1,66 @@
+name: Regenerate MLIR Bindings
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v2
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Install JuliaFormatter.jl
+        shell: julia --color=yes {0}
+        run: |
+          import Pkg
+          Pkg.add("JuliaFormatter")
+      - name: Instantiate dependencies
+        shell: julia --project=. --color=yes {0}
+        run: |
+          using Pkg
+          Pkg.instantiate()
+          Pkg.precompile()
+          using Clang
+          Clang.JLLEnvs.get_system_includes()
+        working-directory: ./deps/ReactantExtra
+        env:
+          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
+      - name: Generate MLIR Bindings
+        run: julia --project=. --color=yes make-bindings.jl
+        working-directory: ./deps/ReactantExtra
+        env:
+          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
+      - run: |
+          chmod -R u+rw ./src/mlir/Dialects/
+          chmod u+rw ./src/mlir/libMLIR_h.jl
+          git config core.fileMode false
+      - name: Format code
+        shell: julia --color=yes {0}
+        run: |
+          using JuliaFormatter
+          format("./src/mlir/Dialects/")
+          format("./src/mlir/libMLIR_h.jl")
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: Regenerate MLIR Bindings
+          title: 'Regenerate MLIR Bindings'
+          branch: regenerate-mlir-bindings
+          delete-branch: true
+          author: enzyme-ci-bot[bot] <78882869+enzyme-ci-bot[bot]@users.noreply.github.com>
+      - name: Check outputs
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"

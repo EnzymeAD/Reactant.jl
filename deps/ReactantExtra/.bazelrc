@@ -1,0 +1,37 @@
+build --announce_rc
+
+query --experimental_repo_remote_exec
+build --experimental_repo_remote_exec
+build --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
+build --cxxopt=-w --host_cxxopt=-w
+build --define=grpc_no_ares=true
+build --define=tsl_link_protobuf=true
+build --define open_source_build=true
+
+build --define framework_shared_object=true
+build --define tsl_protobuf_header_only=true
+build --define=use_fast_cpp_protos=true
+build --define=allow_oversize_protos=true
+
+build -c opt
+
+build:cuda --repo_env TF_NEED_CUDA=1
+build:cuda --repo_env TF_NVCC_CLANG=1
+build:cuda --repo_env TF_NCCL_USE_STUB=1
+build:cuda --repo_env=HERMETIC_CUDA_VERSION="12.6.2"
+build:cuda --repo_env=HERMETIC_CUDNN_VERSION="9.4.0"
+# "sm" means we emit only cubin, which is forward compatible within a GPU generation.
+# "compute" means we emit both cubin and PTX, which is larger but also forward compatible to future GPU generations.
+build:cuda --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
+build:cuda --crosstool_top="@local_config_cuda//crosstool:toolchain"
+build:cuda --@local_config_cuda//:enable_cuda
+build:cuda --@xla//xla/python:jax_cuda_pip_rpaths=true
+# Default hermetic CUDA and CUDNN versions.
+build:cuda --@local_config_cuda//cuda:include_cuda_libs=true
+build:cuda --@local_config_cuda//:cuda_compiler=nvcc
+
+build:rocm --repo_env TF_NEED_ROCM=1
+build:rocm --define=using_rocm=true
+build:rocm --define=using_rocm_hipcc=true
+build:rocm --action_env TF_ROCM_AMDGPU_TARGETS="gfx900,gfx906,gfx908,gfx90a,gfx1030"
+
