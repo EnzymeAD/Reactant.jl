@@ -202,6 +202,7 @@ end
 # StdLib Overloads
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
+include("stdlibs/Base.jl")
 
 # Other Integrations
 include("Enzyme.jl")
