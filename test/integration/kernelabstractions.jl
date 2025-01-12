@@ -14,14 +14,14 @@ using CUDA: CuArray
         tmp_sum += a[i, k] * a[k, j]
     end
 
-    output[i, j] = tmp_sum
+    return output[i, j] = tmp_sum
 end
 
 # Creating a wrapper kernel for launching with error checks
 function matmul!(output, a, backend)
     kernel! = matmul_kernel!(backend)
-    kernel!(output, a, ndrange = size(output))
-    KernelAbstractions.synchronize(backend)
+    kernel!(output, a; ndrange=size(output))
+    return KernelAbstractions.synchronize(backend)
 end
 
 @testset "KernelAbstractions Call" begin
@@ -31,4 +31,3 @@ end
     @jit matmul!(out, A, backend)
     @test all(Array(out) .≈ 100)
 end
-

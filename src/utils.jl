@@ -95,7 +95,9 @@ function should_rewrite_call(@nospecialize(ft))
         return false
     end
     if ft <: Core.Function
-        if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :name) && isdefined(ft.name, :name)
+        if hasfield(typeof(ft), :name) &&
+            hasfield(typeof(ft.name), :name) &&
+            isdefined(ft.name, :name)
             namestr = String(ft.name.name)
             if startswith(namestr, "##(overlay (. Reactant (inert REACTANT_METHOD_TABLE)")
                 return false
@@ -114,6 +116,9 @@ function should_rewrite_call(@nospecialize(ft))
             end
             if string(mod) == "CUDA"
                 if ft.name.name == Symbol("#launch_configuration")
+                    return false
+                end
+                if ft.name.name == Symbol("cudaconvert")
                     return false
                 end
             end
@@ -161,11 +166,13 @@ function should_rewrite_call(@nospecialize(ft))
         ft <: typeof(Base.getproperty) ||
         ft <: typeof(Base.vect) ||
         ft <: typeof(Base.eltype) ||
-        ft <: typeof(Base.argtail)
+        ft <: typeof(Base.argtail) ||
+        ft <: typeof(Base.identity) ||
+        ft <: typeof(Base.print) ||
+        ft <: typeof(Base.println) ||
+        ft <: typeof(Adapt.adapt_structure)
         return false
     end
-
-    
 
     # Default assume all functions need to be reactant-ified
     return true

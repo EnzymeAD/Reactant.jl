@@ -83,6 +83,9 @@ In the above example, `%indices:3` conceptually holds the following:
 %indices_2 = affine.apply #map2()[%linear_index]
 ```
 
+In other words, `%0:3 = affine.delinearize_index %x into (B, C)` produces
+`%0 = {%x / (B * C), (%x mod (B * C)) / C, %x mod C}`.
+
 The basis may either contain `N` or `N-1` elements, where `N` is the number of results.
 If there are N basis elements, the first one will not be used during computations,
 but may be used during analysis and canonicalization to eliminate terms from
@@ -98,7 +101,12 @@ That is, the example above could also have been written
 %0:3 = affine.delinearize_index %linear_index into (244, 244) : index, index
 ```
 
-Note that, due to the constraints of affine maps, all the basis elements must
+Note that, for symmetry with `getPaddedBasis()`, if `hasOuterBound` is `true`
+when one of the `OpFoldResult` builders is called but the first element of the
+basis is `nullptr`, that first element is ignored and the builder proceeds as if
+there was no outer bound.
+
+Due to the constraints of affine maps, all the basis elements must
 be strictly positive. A dynamic basis element being 0 or negative causes
 undefined behavior.
 """
@@ -382,6 +390,9 @@ That is, for indices `%idx_0` to `%idx_{N-1}` and basis elements `b_0`
 sum(i = 0 to N-1) %idx_i * product(j = i + 1 to N-1) B_j
 ```
 
+In other words, `%0 = affine.linearize_index [%z, %y, %x] by (Z, Y, X)`
+gives `%0 = %x + %y * X + %z * X * Y`, or `%0 = %x + X * (%y + Y * (%z))`.
+
 The basis may either have `N` or `N-1` elements, where `N` is the number of
 inputs to linearize_index. If `N` inputs are provided, the first one is not used
 in computation, but may be used during analysis or canonicalization as a bound
@@ -389,6 +400,10 @@ on `%idx_0`.
 
 If all `N` basis elements are provided, the linearize_index operation is said to
 \"have an outer bound\".
+
+As a convenience, and for symmetry with `getPaddedBasis()`, ifg the first
+element of a set of `OpFoldResult`s passed to the builders of this operation is
+`nullptr`, that element is ignored.
 
 If the `disjoint` property is present, this is an optimization hint that,
 for all `i`, `0 <= %idx_i < B_i` - that is, no index affects any other index,
