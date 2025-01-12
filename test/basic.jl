@@ -368,6 +368,17 @@ end
         @test y == test_typed_hvncat(x)
         @test eltype(y) === Int
     end
+
+    @testset "Number and RArray" begin
+        a = 1.0
+        b = Reactant.to_rarray(ones(3))
+        c = Reactant.to_rarray(ones(1, 3))
+        @test size(vcat(a, b)) == (4,)
+        @test size(hcat(a, b')) == (1, 4)
+        @test size(hcat(a, c)) == (1, 4)
+        @test size(vcat(a, c')) == (4, 1)
+    end
+
 end
 
 @testset "repeat" begin
