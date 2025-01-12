@@ -150,5 +150,5 @@ end
 # test #493
 @testset "unique(::Vector{Symbol}) (#493)" begin
     x = [:a, :b, :a]
-    @test @jit(unique(x_ra)) == [:a, :b]
+    @test @jit(unique(x)) == [:a, :b]
 end
