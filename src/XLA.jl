@@ -272,6 +272,7 @@ function allocatorstats(
     nullopt = typemin(Int64)
     return AllocatorStats(
         stats.num_allocs,
+        stats.bytes_in_use,
         stats.peak_bytes_in_use,
         stats.largest_alloc_size,
         stats.bytes_limit == nullopt ? nothing : stats.bytes_limit,
