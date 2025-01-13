@@ -650,6 +650,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 
     location = MLIR.IR.Location()
+    @assert length(restys) == length(aliases) 
     call = MLIR.Dialects.enzymexla.kernel_call(
         blk_operands...,
         mlir_args;
