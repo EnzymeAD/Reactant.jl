@@ -5,6 +5,20 @@ end
 
 function call_with_reactant end
 
+TOGGLE_TRACECALLS = Ref(false)
+
+function traced_call_with_reactant(f, args...)
+    # @warn "traced_call_with_reactant" f
+    if !(TOGGLE_TRACECALLS[])
+        return call_with_reactant(f, args...)
+    end
+
+    if f == ReactantCore.traced_call
+        return call_with_reactant(f, args...)
+    end
+    return call_with_reactant(ReactantCore.traced_call, f, args...)
+end
+
 function maybe_argextype(@nospecialize(x), src)
     return try
         Core.Compiler.argextype(x, src)
@@ -235,7 +249,7 @@ function certain_error()
     )
 end
 
-function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
+function rewrite_inst(inst, ir, interp, RT, guaranteed_error, allow_tracing)
     if Meta.isexpr(inst, :call)
         # Even if type unstable we do not want (or need) to replace intrinsic
         # calls or builtins with our version.
@@ -260,11 +274,12 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                 end
             end
         elseif Base.invokelatest(should_rewrite_ft, ft)
+            new_f = (!allow_tracing || ft <: typeof(ReactantCore.traced_call)) ? call_with_reactant : traced_call_with_reactant
             if RT === Union{}
                 rep = Expr(:call, call_with_reactant, MustThrowError(), inst.args...)
                 return true, rep, Union{}
             else
-                rep = Expr(:call, call_with_reactant, inst.args...)
+                rep = Expr(:call, new_f, inst.args...)
                 return true, rep, Any
             end
         end
@@ -282,6 +297,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
             min_world = Ref{UInt}(typemin(UInt))
             max_world = Ref{UInt}(typemax(UInt))
 
+            new_f = (!allow_tracing || ft <: typeof(ReactantCore.traced_call)) ? call_with_reactant : traced_call_with_reactant
             # RT = Any
 
             if !method.isva || !Base.isvarargtype(sig.parameters[end])
@@ -290,7 +306,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                         typeof(call_with_reactant),MustThrowError,sig.parameters...
                     }
                 else
-                    sig2 = Tuple{typeof(call_with_reactant),sig.parameters...}
+                    sig2 = Tuple{typeof(new_f),sig.parameters...}
                 end
             else
                 vartup = inst.args[end]
@@ -308,7 +324,9 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                     }
                 else
                     sig2 = Tuple{
-                        typeof(call_with_reactant),sig.parameters[1:(end - 1)]...,ns...
+                        typeof(new_f),
+                        sig.parameters[1:(end - 1)]...,
+                        ns...,
                     }
                 end
             end
@@ -334,7 +352,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                 )
                 return true, rep, Union{}
             else
-                rep = Expr(:invoke, mi, call_with_reactant, inst.args[2:end]...)
+                rep = Expr(:invoke, mi, new_f, inst.args[2:end]...)
                 return true, rep, Any
             end
         end
@@ -448,17 +466,17 @@ const DEBUG_INTERP = Ref(false)
 # to Any if our interpreter would change the return type of any result.
 # Also rewrite invoke (type stable call) to be :call, since otherwise apparently
 # screws up type inference after this (TODO this should be fixed).
-function rewrite_insts!(ir, interp, guaranteed_error)
+function rewrite_insts!(ir, interp, guaranteed_error, allow_tracing)
     any_changed = false
     for (i, inst) in enumerate(ir.stmts)
         # Explicitly skip any code which returns Union{} so that we throw the error
         # instead of risking a segfault
         RT = inst[:type]
         @static if VERSION < v"1.11"
-            changed, next, RT = rewrite_inst(inst[:inst], ir, interp, RT, guaranteed_error)
+            changed, next, RT = rewrite_inst(inst[:inst], ir, interp, RT, guaranteed_error, allow_tracing)
             Core.Compiler.setindex!(ir.stmts[i], next, :inst)
         else
-            changed, next, RT = rewrite_inst(inst[:stmt], ir, interp, RT, guaranteed_error)
+            changed, next, RT = rewrite_inst(inst[:stmt], ir, interp, RT, guaranteed_error, allow_tracing)
             Core.Compiler.setindex!(ir.stmts[i], next, :stmt)
         end
         if changed
@@ -571,7 +589,9 @@ function call_with_reactant_generator(
     end
 
     if !is_reactant_method(mi::Core.MethodInstance) || guaranteed_error
-        ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
+        allow_tracing = !(fn <: typeof(ReactantCore.traced_call))
+        # Core.println("$fn $(args[2:end]) ($allow_tracing)")
+        ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error, allow_tracing)
     end
 
     src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
@@ -732,10 +752,10 @@ function call_with_reactant_generator(
 
     ocres = Core.SSAValue(length(overdubbed_code))
 
-    if DEBUG_INTERP[]
-        push!(overdubbed_code, Expr(:call, safe_print, "ocres", ocres))
-        push!(overdubbed_codelocs, code_info.codelocs[1])
-    end
+    # if DEBUG_INTERP[]
+    #     push!(overdubbed_code, Expr(:call, safe_print, "ocres", ocres))
+    #     push!(overdubbed_codelocs, code_info.codelocs[1])
+    # end
 
     push!(overdubbed_code, Core.ReturnNode(ocres))
     push!(overdubbed_codelocs, code_info.codelocs[1])
