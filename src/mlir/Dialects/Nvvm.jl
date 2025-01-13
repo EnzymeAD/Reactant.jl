@@ -78,18 +78,15 @@ function barrier(
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
     !isnothing(numberOfThreads) && push!(operands, numberOfThreads)
-    push!(
-        attributes,
-        operandsegmentsizes([
-            if (barrierId == nothing)
-                0
-            elseif 1(numberOfThreads == nothing)
-                0
-            else
-                1
-            end
-        ]),
-    )
+    push!(attributes, operandsegmentsizes([
+        if (barrierId == nothing)
+            0
+        elseif 1(numberOfThreads == nothing)
+            0
+        else
+            1
+        end,
+    ]))
 
     return create_operation(
         "nvvm.barrier",
