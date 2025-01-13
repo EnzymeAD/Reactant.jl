@@ -23,6 +23,10 @@ function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 end
 
+function Base.isnan(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return !Reactant.Ops.is_finite(x) & (x != typemax(T)) & (x != typemin(T))
+end
+
 function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
     return print(io, "TracedRNumber{", T, "}(", X.paths, ")")
 end
