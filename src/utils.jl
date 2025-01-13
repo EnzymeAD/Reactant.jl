@@ -195,7 +195,11 @@ struct MustThrowError end
 @generated function applyiterate_with_reactant(
     iteratefn, applyfn, args::Vararg{Any,N}
 ) where {N}
-    @assert iteratefn == typeof(Base.iterate)
+    if iteratefn != typeof(Base.iterate)
+        return quote
+            error("Unhandled apply_iterate with iteratefn=$iteratefn")
+        end
+    end
     newargs = Vector{Expr}(undef, N)
     for i in 1:N
         @inbounds newargs[i] = :(args[$i]...)

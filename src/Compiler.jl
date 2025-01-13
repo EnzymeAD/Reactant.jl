@@ -318,26 +318,34 @@ function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     return mod
 end
 
+const context_gc_vector = Dict{MLIR.IR.Context,Vector{TracedRArray}}()
+
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
     ctx = MLIR.IR.Context(Reactant.registry[], false)
+    context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    MLIR.IR.context!(ctx) do
+    result = MLIR.IR.context!(ctx) do
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
         MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
         Text(repr(mod))
     end
+    Base.delete!(context_gc_vector, ctx)
+    return result
 end
 
 function compile_mlir(f, args; kwargs...)
     ctx = MLIR.IR.Context(Reactant.registry[], false)
+    context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    MLIR.IR.context!(ctx) do
+    results = MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
         evalinfo = compile_mlir!(mod, f, args; kwargs...)
-        return mod, evalinfo...
+        return (mod, evalinfo...)
     end
+    Base.delete!(context_gc_vector, ctx)
+    return results
 end
 
 const cuLaunch = Ref{UInt}(0)
@@ -859,10 +867,11 @@ end
 function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
+    context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     MLIR.IR.activate!(ctx)
-    return try
+    results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
@@ -888,6 +897,8 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
     finally
         MLIR.IR.deactivate!(ctx)
     end
+    Base.delete!(context_gc_vector, ctx)
+    return results
 end
 
 function compile(f, args; client=nothing, optimize=true, sync=false, no_nan=false)
