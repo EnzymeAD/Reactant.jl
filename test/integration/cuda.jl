@@ -152,3 +152,29 @@ end
         end
     end
 end
+
+using Reactant, CUDA
+
+function cmul!(a, b)
+   b[1] *= a[1]
+   return nothing
+end
+
+function mixed(a, b)
+    @cuda threads = 1 cmul!(a, b)
+    nothing
+end
+
+@static if !Sys.isapple()
+    @testset "Non-traced argument" begin
+        if CUDA.functional()
+            a = CuArray([4])
+            b = ConcreteRArray([3])
+
+            @jit mixed(a, b)
+            @test all(Array(a) == 4)
+            @test all(Array(b) == 12)
+        end
+    end
+end
+
