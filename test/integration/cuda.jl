@@ -115,4 +115,40 @@ tuplef2(a) = @cuda threads = 1 tuplef2!((5, a))
             @code_hlo optimize = :before_kernel tuplef2(A)
         end
     end
+    A = ConcreteRArray(fill(1))
+    if CUDA.functional()
+        @jit tuplef2(A)
+        @test all(Array(A) .≈ 5)
+    else
+        @code_hlo optimize = :before_kernel tuplef2(A)
+    end
+end
+
+# TODO this same code fails if we use a 0-d array...?
+# maybe weird cuda things
+function aliased!(tup)
+    x, y = tup
+    x[2][1] *= y[2][1]
+    return nothing
+end
+
+function aliased(s)
+    tup = (s, s)
+    @cuda threads = 1 aliased!(tup)
+    return nothing
+end
+
+@static if !Sys.isapple()
+    @testset "Aliasing arguments" begin
+        a = ConcreteRArray([3])
+
+        s = (10, a)
+
+        if CUDA.functional()
+            @jit aliased((s, s))
+            @test all(Array(a) == 9)
+        else
+            @code_hlo optimize = :before_kernel aliased(s)
+        end
+    end
 end

@@ -4,6 +4,7 @@
     TracedToConcrete = 3
     ArrayToConcrete = 4
     TracedSetPath = 5
+    NoStopTracedTrack = 6
 end
 
 for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, RNumber)
@@ -249,7 +250,7 @@ function traced_type(
         @inline base_typec(TV::TT) where {TT<:DataType} =
             (T <: TracedRArray ? ConcreteRArray : ConcreteRNumber){TV.parameters...}
         return base_typec(T)
-    elseif mode == TracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         return T
     else
         throw("Abstract RArray $T cannot be made concrete in mode $mode")
@@ -261,7 +262,7 @@ function traced_type(::Type{T}, seen, ::Val{mode}, track_numbers) where {T<:Trac
         throw("TracedRNG cannot be traced")
     elseif mode == TracedToConcrete
         return ConcreteRNG
-    elseif mode == TracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         return T
     else
         throw("Unsupported mode: $mode")
@@ -329,7 +330,7 @@ function make_tracer(
     track_numbers=(),
     kwargs...,
 ) where {RT}
-    if haskey(seen, prev)
+    if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
     TT = traced_type(RT, (), Val(mode), track_numbers)
@@ -460,6 +461,13 @@ function make_tracer(
         end
         return prev
     end
+    if mode == NoStopTracedTrack
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        if !haskey(seen, prev)
+            seen[prev] = prev # don't return!
+        end
+        return prev
+    end
     if mode == TracedSetPath
         if haskey(seen, prev)
             return seen[prev]
@@ -506,6 +514,13 @@ function make_tracer(
         end
         return prev
     end
+    if mode == NoStopTracedTrack
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        if !haskey(seen, prev)
+            seen[prev] = prev # don't return!
+        end
+        return prev
+    end
     if mode == TracedSetPath
         if haskey(seen, prev)
             return seen[prev]
@@ -543,6 +558,13 @@ function make_tracer(
         TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
+        end
+        return prev
+    end
+    if mode == NoStopTracedTrack
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        if !haskey(seen, prev)
+            seen[prev] = prev # don't return!
         end
         return prev
     end
