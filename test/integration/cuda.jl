@@ -124,26 +124,30 @@ tuplef2(a) = @cuda threads = 1 tuplef2!((5, a))
     end
 end
 
-struct MyStruct{T,B}
-    b::B
-    a::T
+# TODO this same code fails if we use a 0-d array...?
+# maybe weird cuda things
+function aliased!(tup)
+    x, y = tup
+    x[2][1] *= y[2][1]
+   return nothing
 end
 
-function aliased!(tup)
-    tup[1].a[] = 2
-    return nothing
+function aliased(s)
+    tup = (s, s)
+    @cuda threads = 1 aliased!(tup)
+    nothing
 end
-aliased(s) = @cuda threads = 1 aliased!((s, s))
 
 @static if !Sys.isapple()
     @testset "Aliasing arguments" begin
-        a = ConcreteRArray(fill(1))
 
-        s = MyStruct(10, a)
+        a = ConcreteRArray([3])
+
+        s = (10, a)
 
         if CUDA.functional()
             @jit aliased((s, s))
-            @test all(Array(a) == 2)
+            @test all(Array(a) == 9)
         else
             @code_hlo optimize = :before_kernel aliased(s)
         end
