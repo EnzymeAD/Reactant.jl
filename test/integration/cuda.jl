@@ -156,13 +156,13 @@ end
 using Reactant, CUDA
 
 function cmul!(a, b)
-   b[1] *= a[1]
-   return nothing
+    b[1] *= a[1]
+    return nothing
 end
 
 function mixed(a, b)
     @cuda threads = 1 cmul!(a, b)
-    nothing
+    return nothing
 end
 
 @static if !Sys.isapple()
@@ -177,4 +177,3 @@ end
         end
     end
 end
-

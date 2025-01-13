@@ -9,8 +9,8 @@ using Adapt
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
-        
-    function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T, N, A, Size}
+
+    function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T,N,A,Size}
         push!(Reactant.Compiler.context_gc_vector[MLIR.IR.context()], xs)
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
@@ -219,16 +219,28 @@ end
 
 struct ReactantKernelAdaptor end
 
-Adapt.adapt_storage(to::ReactantKernelAdaptor, p::CUDA.CuPtr) = error("Cannot convert CuPtr argument of Reactant Kernel")
-Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::DenseCuArray) = Adapt.adapt_storage(ka, Array(xs))
-Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::Array) = Adapt.adapt_storage(ka, Reactant.Ops.constant(xs))
-Adapt.adapt_structure(to::ReactantKernelAdaptor, ref::Base.RefValue) = error("Cannot convert RefValue argument of Reactant Kernel")
-Adapt.adapt_structure(to::ReactantKernelAdaptor,
-                      bc::Broadcast.Broadcasted{Style, <:Any, Type{T}}) where {Style, T} =
-    Broadcast.Broadcasted{Style}((x...) -> T(x...), Adapt.adapt(to, bc.args), bc.axes)
+function Adapt.adapt_storage(to::ReactantKernelAdaptor, p::CUDA.CuPtr)
+    return error("Cannot convert CuPtr argument of Reactant Kernel")
+end
+function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::DenseCuArray)
+    return Adapt.adapt_storage(ka, Array(xs))
+end
+function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::Array)
+    return Adapt.adapt_storage(ka, Reactant.Ops.constant(xs))
+end
+function Adapt.adapt_structure(to::ReactantKernelAdaptor, ref::Base.RefValue)
+    return error("Cannot convert RefValue argument of Reactant Kernel")
+end
+function Adapt.adapt_structure(
+    to::ReactantKernelAdaptor, bc::Broadcast.Broadcasted{Style,<:Any,Type{T}}
+) where {Style,T}
+    return Broadcast.Broadcasted{Style}(
+        (x...) -> T(x...), Adapt.adapt(to, bc.args), bc.axes
+    )
+end
 
 Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
-    adapt(ReactantKernelAdaptor(), arg)
+    return adapt(ReactantKernelAdaptor(), arg)
 end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
@@ -462,7 +474,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     seen = Reactant.OrderedIdDict()
     kernelargsym = gensym("kernelarg")
     for (i, prev) in enumerate(Any[func.f, args...])
-        Reactant.make_tracer(seen, prev, (kernelargsym,i), Reactant.NoStopTracedTrack)
+        Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
     wrapper_tys = MLIR.IR.Type[]
     for arg in values(seen)
@@ -563,7 +575,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         arg = Reactant.TracedUtils.transpose_val(arg)
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
-
 
         for p in paths
             if p[1] !== kernelargsym

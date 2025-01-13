@@ -318,7 +318,7 @@ function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     return mod
 end
 
-const context_gc_vector = Dict{MLIR.IR.Context, Vector{TracedRArray}}()
+const context_gc_vector = Dict{MLIR.IR.Context,Vector{TracedRArray}}()
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
@@ -332,7 +332,7 @@ function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true
         Text(repr(mod))
     end
     Base.delete!(context_gc_vector, ctx)
-    result
+    return result
 end
 
 function compile_mlir(f, args; kwargs...)
@@ -345,7 +345,7 @@ function compile_mlir(f, args; kwargs...)
         return (mod, evalinfo...)
     end
     Base.delete!(context_gc_vector, ctx)
-    results
+    return results
 end
 
 const cuLaunch = Ref{UInt}(0)
