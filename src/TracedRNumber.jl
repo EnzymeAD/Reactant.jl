@@ -23,8 +23,15 @@ function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 end
 
+function Base.isfinite(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return Reactant.Ops.is_finite(x)
+end
+
 function Base.isnan(x::TracedRNumber{T}) where {T<:AbstractFloat}
-    return !Reactant.Ops.is_finite(x) & (x != typemax(T)) & (x != typemin(T))
+    return !isfinite(x) & (x != typemax(T)) & (x != typemin(T))
+end
+function Base.isnan(x::TracedRNumber{<:Complex})
+    return isnan(real(x)) | isnan(imag(x))
 end
 
 function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
