@@ -195,7 +195,7 @@ struct MustThrowError end
 @generated function applyiterate_with_reactant(
     iteratefn, applyfn, args::Vararg{Any,N}
 ) where {N}
-    if iteratefn == typeof(Base.iterate)
+    if iteratefn != typeof(Base.iterate)
         return quote
             error("Unhandled apply_iterate with iteratefn=$iteratefn")
         end
