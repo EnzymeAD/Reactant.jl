@@ -260,13 +260,17 @@ struct AllocatorStats
     peak_pool_bytes::Union{Nothing,Int64}
 end
 
-function allocatorstats(device::Device=ClientGetDevice(default_backend[], default_device_idx[]))
+function allocatorstats(
+    device::Device=ClientGetDevice(default_backend[], default_device_idx[])
+)
     ref = Ref{JLAllocatorStats}()
-    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(device.device::Ptr{Cvoid}, ref::Ptr{Cvoid})::Cvoid
+    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
+        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
+    )::Cvoid
     stats = ref[]
 
     nullopt = typemin(Int64)
-    AllocatorStats(
+    return AllocatorStats(
         stats.num_allocs,
         stats.peak_bytes_in_use,
         stats.largest_alloc_size,
