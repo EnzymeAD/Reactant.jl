@@ -578,6 +578,20 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
 
+        push!(
+            aliases,
+            MLIR.IR.Attribute(
+                MLIR.API.stablehloOutputOperandAliasGet(
+                    MLIR.IR.context(),
+                    length(wrapper_tys) == 1 ? 0 : 1,
+                    length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
+                    argidx - 1,
+                    0,
+                    C_NULL,
+                ),
+            ),
+        )
+
         for p in paths
             if p[1] !== kernelargsym
                 continue
@@ -602,20 +616,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 )
                 MLIR.Dialects.llvm.store(MLIR.IR.argument(wrapbody, argidx), ptr)
             end
-
-            push!(
-                aliases,
-                MLIR.IR.Attribute(
-                    MLIR.API.stablehloOutputOperandAliasGet(
-                        MLIR.IR.context(),
-                        length(wrapper_tys) == 1 ? 0 : 1,
-                        length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
-                        argidx - 1,
-                        0,
-                        C_NULL,
-                    ),
-                ),
-            )
         end
         argidx += 1
     end

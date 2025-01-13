@@ -9,7 +9,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "1b473e8e77850ece61bb0e85b152b95cb6a70be0"
+ENZYMEXLA_COMMIT = "1d9cab766d5c35646da956a3b32aff9d61315f90"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
@@ -95,7 +95,7 @@ LLVM_TARGETS = select({
 }) + ["AArch64", "X86", "ARM"]
 
 # Uncomment these lines to use a custom LLVM commit
-LLVM_COMMIT = "9b4bf06be33f0fe6a4c487bb9244d8c0f6acab3f"
+LLVM_COMMIT = "b39c5cb6977f35ad727d86b2dd6232099734ffd3"
 LLVM_SHA256 = ""
 http_archive(
     name = "llvm-raw",
