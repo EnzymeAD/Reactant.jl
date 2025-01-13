@@ -368,6 +368,34 @@ end
         @test y == test_typed_hvncat(x)
         @test eltype(y) === Int
     end
+
+    @testset "Number and RArray" for a in [1.0f0, 1.0e0]
+        typeof_a = typeof(a)
+        _b = [2.0, 3.0, 4.0] .|> typeof_a
+        _c = [2.0 3.0 4.0] .|> typeof_a
+        b = Reactant.to_rarray(_b)
+        c = Reactant.to_rarray(_c)
+    
+        # vcat test        
+        y = @jit vcat(a, b)
+        @test y == vcat(a, _b)
+        @test y isa ConcreteRArray{typeof_a,1}
+    
+        ## vcat test - adjoint
+        y1 = @jit vcat(a, c')
+        @test y1 == vcat(a, _c')
+        @test y1 isa ConcreteRArray{typeof_a,2}
+    
+        # hcat test
+        z = @jit hcat(a, c)
+        @test z == hcat(a, _c)
+        @test z isa ConcreteRArray{typeof_a,2}
+    
+        ## hcat test - adjoint
+        z1 = @jit hcat(a, b')
+        @test z1 == hcat(a, _b')
+        @test z1 isa ConcreteRArray{typeof_a,2}
+    end
 end
 
 @testset "repeat" begin
@@ -420,6 +448,39 @@ end
 
     # get_indices_compiled = @compile get_indices(x_concrete)
     # get_view_compiled = @compile get_view(x_concrete)
+end
+
+function write_with_broadcast1!(x, y)
+    x[1, :, :] .= reshape(y, 4, 3)
+    return x
+end
+function write_with_broadcast2!(x, y)
+    x[:, 1, :] .= view(y, :, 1:3)
+    return x
+end
+
+@testset "write_with_broadcast" begin
+    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
+    y_ra = Reactant.to_rarray(rand(3, 4))
+
+    res = @jit write_with_broadcast1!(x_ra, y_ra)
+
+    @test res.data === x_ra.data
+
+    res = Array(res)
+    y = Array(y_ra)
+    @test res[1, :, :] ≈ reshape(y, 4, 3)
+
+    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
+    y_ra = Reactant.to_rarray(rand(3, 4))
+
+    res = @jit write_with_broadcast2!(x_ra, y_ra)
+
+    @test res.data === x_ra.data
+
+    res = Array(res)
+    y = Array(y_ra)
+    @test res[:, 1, :] ≈ view(y, :, 1:3)
 end
 
 function masking(x)
