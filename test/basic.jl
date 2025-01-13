@@ -1037,12 +1037,10 @@ end
     @test Reactant.@jit(isfinite.(x)) == [true, false, false, false, false]
 end
 
-broadcast_isnan(x) = isnan.(x)
-
 @testset "isnan" begin
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
 
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @show Reactant.@jit(broadcast_isnan(x))
+    @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
 end

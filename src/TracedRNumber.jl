@@ -23,6 +23,9 @@ function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 end
 
+function Base.isfinite(x::TracedRNumber{<:Complex})
+    return isfinite(real(x)) & isfinite(imag(x))
+end
 function Base.isfinite(x::TracedRNumber{T}) where {T<:AbstractFloat}
     return Reactant.Ops.is_finite(x)
 end
