@@ -129,6 +129,7 @@ for (jlop, hloop, hlocomp) in (
     (:(Base.:(>)), :compare, "GT"),
     (:(Base.:(<=)), :compare, "LE"),
     (:(Base.:(<)), :compare, "LT"),
+    (:(Base.isless), :compare, "LT"),
 )
     @eval begin
         function $(jlop)(
