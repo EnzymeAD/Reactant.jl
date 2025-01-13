@@ -129,18 +129,17 @@ end
 function aliased!(tup)
     x, y = tup
     x[2][1] *= y[2][1]
-   return nothing
+    return nothing
 end
 
 function aliased(s)
     tup = (s, s)
     @cuda threads = 1 aliased!(tup)
-    nothing
+    return nothing
 end
 
 @static if !Sys.isapple()
     @testset "Aliasing arguments" begin
-
         a = ConcreteRArray([3])
 
         s = (10, a)
