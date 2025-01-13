@@ -231,6 +231,21 @@ function client(device::Device)
     end
 end
 
+# To keep in sync with JLAllocatorStats in ReactantExtra/API.cpp
+struct JLAllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Int64
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Int64
+    largest_free_block_bytes::Int64
+    pool_bytes::Int64
+    peak_pool_bytes::Int64
+end
+
 struct AllocatorStats
     num_allocs::Int64
     bytes_in_use::Int64
@@ -245,34 +260,23 @@ struct AllocatorStats
     peak_pool_bytes::Union{Nothing,Int64}
 end
 
-function allocatorstats(device::Device)
-    num_allocs = @ccall MLIR.API.mlir_c.PjRtDeviceGetNumAllocs(device.device::Ptr{Cvoid})::Int64
-    if num_allocs == typemin(Int64)
-        return nothing
-    end
+function allocatorstats(device::Device=ClientGetDevice(default_backend[], default_device_idx[]))
+    ref = Ref{JLAllocatorStats}()
+    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(device.device::Ptr{Cvoid}, ref::Ptr{Cvoid})::Cvoid
+    stats = ref[]
 
-    bytes_in_use = @ccall MLIR.API.mlir_c.PjRtDeviceGetBytesInUse(device.device::Ptr{Cvoid})::Int64
-    peak_bytes_in_use = @ccall MLIR.API.mlir_c.PjRtDeviceGetPeakBytesInUse(device.device::Ptr{Cvoid})::Int64
-    largest_alloc_size = @ccall MLIR.API.mlir_c.PjRtDeviceGetLargestAllocSize(device.device::Ptr{Cvoid})::Int64
-    bytes_limit = @ccall MLIR.API.mlir_c.PjRtDeviceGetBytesLimit(device.device::Ptr{Cvoid})::Int64
-    bytes_reserved = @ccall MLIR.API.mlir_c.PjRtDeviceGetBytesReserved(device.device::Ptr{Cvoid})::Int64
-    peak_bytes_reserved = @ccall MLIR.API.mlir_c.PjRtDeviceGetPeakBytesReserved(device.device::Ptr{Cvoid})::Int64
-    bytes_reservable_limit = @ccall MLIR.API.mlir_c.PjRtDeviceGetBytesReservableLimit(device.device::Ptr{Cvoid})::Int64
-    largest_free_block_bytes = @ccall MLIR.API.mlir_c.PjRtDeviceGetLargestFreeBlockBytes(device.device::Ptr{Cvoid})::Int64
-    pool_bytes = @ccall MLIR.API.mlir_c.PjRtDeviceGetPoolBytes(device.device::Ptr{Cvoid})::Int64
-    peak_pool_bytes = @ccall MLIR.API.mlir_c.PjRtDeviceGetPeakPoolBytes(device.device::Ptr{Cvoid})::Int64
-
+    nullopt = typemin(Int64)
     AllocatorStats(
-        num_allocs,
-        peak_bytes_in_use,
-        largest_alloc_size,
-        bytes_limit == typemin(Int64) ? Nothing : bytes_limit,
-        bytes_reserved,
-        peak_bytes_reserved,
-        bytes_reservable_limit == typemin(Int64) ? Nothing : bytes_reservable_limit,
-        largest_free_block_bytes,
-        pool_bytes == typemin(Int64) ? Nothing : pool_bytes,
-        peak_pool_bytes == typemin(Int64) ? Nothing : peak_pool_bytes,
+        stats.num_allocs,
+        stats.peak_bytes_in_use,
+        stats.largest_alloc_size,
+        stats.bytes_limit == nullopt ? nothing : stats.bytes_limit,
+        stats.bytes_reserved,
+        stats.peak_bytes_reserved,
+        stats.bytes_reservable_limit == nullopt ? nothing : stats.bytes_reservable_limit,
+        stats.largest_free_block_bytes,
+        stats.pool_bytes == nullopt ? nothing : stats.pool_bytes,
+        stats.peak_pool_bytes == nullopt ? nothing : stats.peak_pool_bytes,
     )
 end
 
