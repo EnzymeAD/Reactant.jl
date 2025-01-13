@@ -687,4 +687,21 @@ function overloaded_stack(dims::Union{Integer,Colon}, xs)
     return cat(res...; dims)
 end
 
+# sort
+Base.sort(x::AnyTracedRArray; kwargs...) = sort!(copy(x); kwargs...)
+
+function Base.sort!(
+    x::AnyTracedRArray;
+    dims::Integer,
+    lt=isless,
+    by=identity,
+    rev::Bool=false,
+    kwargs..., # TODO: implement `order` and `alg` kwargs
+)
+    comparator = rev ? (a, b) -> !lt(by(a), by(b)) : (a, b) -> lt(by(a), by(b))
+    res = Ops.sort(materialize_traced_array(x); dimension=dims, comparator)
+    set_mlir_data!(x, get_mlir_data(res))
+    return x
+end
+
 end
