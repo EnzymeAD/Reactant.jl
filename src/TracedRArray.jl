@@ -10,6 +10,7 @@ using ..Reactant:
     ReactantPrimitive,
     WrappedTracedRArray,
     AnyTracedRArray,
+    AnyTracedRVector,
     Ops,
     MLIR,
     ancestor,
@@ -19,7 +20,7 @@ using ..Reactant:
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
 
 using ReactantCore: ReactantCore
-using GPUArraysCore: GPUArraysCore
+using GPUArraysCore: GPUArraysCore, @allowscalar
 
 ReactantCore.is_traced(::TracedRArray) = true
 
@@ -721,6 +722,36 @@ function Base.sortperm!(
     _, res = Ops.sort(materialize_traced_array(x), idxs; dimension=dims, comparator)
     set_mlir_data!(ix, get_mlir_data(res))
     return ix
+end
+
+function Base.partialsort(x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...)
+    return partialsort!(copy(x), k; kwargs...)
+end
+
+function Base.partialsort!(
+    x::AnyTracedRVector,
+    k::Union{Integer,OrdinalRange};
+    by=identity,
+    rev::Bool=false,
+    lt=isless,
+)
+    # TODO: general `lt` support
+    @assert lt === isless "Only `isless` is supported for now in `partialsort!`"
+
+    by_x = by.(x)
+    if k isa Integer
+        !rev && (k = length(x) - k + 1)
+        (; values, indices) = Ops.top_k(materialize_traced_array(by_x), k)
+        by === identity && return @allowscalar values[k]
+        return @allowscalar x[indices[k] + 1]
+    else
+        klist = collect(Int64, k)
+        !rev && (klist = length(x) .- klist .+ 1)
+        maxk = maximum(klist)
+        (; values, indices) = Ops.top_k(materialize_traced_array(by_x), maxk)
+        by === identity && return values[klist]
+        return x[indices[klist] .+ 1]
+    end
 end
 
 end
