@@ -956,19 +956,26 @@ function broadcast_in_dim(
 end
 
 @noinline function sort(
-    x::TracedRArray{T,N};
+    xs::TracedRArray...;
     comparator,
     dimension=1,
     is_stable=false,
     location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
-) where {T,N}
+)
     #C4:
-    @assert 0 < dimension <= ndims(x) "$x invalid dimension"
+    for x in xs
+        @assert 0 < dimension <= ndims(x) "$x invalid dimension"
+    end
 
-    (a, b) = (Reactant.ConcreteRNumber(T(0)), Reactant.ConcreteRNumber(T(0)))
+    sample_inputs = Vector{Reactant.ConcreteRNumber}(undef, length(xs) * 2)
+    for i in eachindex(xs)
+        T = Reactant.unwrapped_eltype(xs[i])
+        sample_inputs[2i - 1] = Reactant.ConcreteRNumber(T(0))
+        sample_inputs[2i] = Reactant.ConcreteRNumber(T(0))
+    end
     func = Reactant.TracedUtils.make_mlir_fn(
         comparator,
-        (a, b),
+        (sample_inputs...,),
         (),
         "comparator";
         no_args_in_result=true,
@@ -993,17 +1000,21 @@ end
     dimension = MLIR.IR.Attribute(dimension - 1)
     is_stable = MLIR.IR.Attribute(is_stable)
 
-    res = MLIR.IR.result(
-        stablehlo.sort(
-            [x.mlir_data];
-            result_0=[mlir_type(TracedRArray{T,N}, size(x))],
-            dimension,
-            is_stable,
-            comparator,
-            location,
-        ),
+    op = stablehlo.sort(
+        [x.mlir_data for x in xs];
+        result_0=[mlir_type(typeof(x), size(x)) for x in xs],
+        dimension,
+        is_stable,
+        comparator,
+        location,
     )
-    return TracedRArray{T,N}((), res, size(x))
+    res = [
+        TracedRArray{Reactant.unwrapped_eltype(xs[i]),ndims(xs[i])}(
+            (), MLIR.IR.result(op, i), size(xs[i])
+        ) for i in eachindex(xs)
+    ]
+    length(res) == 1 && return only(res) # Kept for backwards compatibility
+    return res
 end
 
 @noinline function top_k(
