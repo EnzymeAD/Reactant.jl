@@ -387,7 +387,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
     end
     kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
 
-    opt_passes = optimization_passes(; no_nan)
+    opt_passes = optimization_passes(; no_nan, sroa=true)
     opt_passes2 = optimization_passes(; no_nan, sroa=false)
 
     if optimize === :all
