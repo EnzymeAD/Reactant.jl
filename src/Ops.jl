@@ -1024,9 +1024,13 @@ end
     values = mlir_type(TracedRArray{T,N}, rsize)
     indices = mlir_type(TracedRArray{Int32,N}, rsize)
     op = chlo.top_k(x.mlir_data; values, indices, k, location)
+    indices = add(
+        TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
+        constant(fill(Int32(1), Tuple(rsize))),
+    ) # return the 1-indexed index
     return (;
         values=TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize),
-        indices=TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
+        indices,
     )
 end
 
