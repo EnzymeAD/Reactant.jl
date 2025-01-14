@@ -1028,10 +1028,7 @@ end
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
         constant(fill(Int32(1), Tuple(rsize))),
     ) # return the 1-indexed index
-    return (;
-        values=TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize),
-        indices,
-    )
+    return (; values=TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize), indices)
 end
 
 @noinline function iota(
