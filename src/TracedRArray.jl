@@ -704,4 +704,23 @@ function Base.sort!(
     return x
 end
 
+Base.sortperm(x::AnyTracedRArray; kwargs...) = sortperm!(similar(x, Int), x; kwargs...)
+
+function Base.sortperm!(
+    ix::AnyTracedRArray{Int,N},
+    x::AnyTracedRArray{<:Any,N};
+    dims::Integer,
+    lt=isless,
+    by=identity,
+    rev::Bool=false,
+    kwargs..., # TODO: implement `order` and `alg` kwargs
+) where {N}
+    comparator =
+        rev ? (a, b, i1, i2) -> !lt(by(a), by(b)) : (a, b, i1, i2) -> lt(by(a), by(b))
+    idxs = Ops.constant(collect(LinearIndices(x)))
+    _, res = Ops.sort(materialize_traced_array(x), idxs; dimension=dims, comparator)
+    set_mlir_data!(ix, get_mlir_data(res))
+    return ix
+end
+
 end
