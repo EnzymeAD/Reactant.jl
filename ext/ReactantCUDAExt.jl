@@ -790,6 +790,7 @@ function __init__()
     return nothing
 end
 
+@static if !Sys.isapple() && Sys.ARCH != :aarch64
 Reactant.PrecompileTools.@setup_workload begin
     Reactant.initialize_dialect()
     client = Reactant.XLA.CPUClient(; checkcount=false)
@@ -813,6 +814,7 @@ Reactant.PrecompileTools.@setup_workload begin
     client.client = C_NULL
     Reactant.deinitialize_dialect()
     Reactant.clear_oc_cache()
+end
 end
 
 end # module ReactantCUDAExt
