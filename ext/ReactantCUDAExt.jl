@@ -793,7 +793,7 @@ end
     @compile_workload begin
 	@static if precompilation_supported()
 	    function square_kernel!(x, y)
-	       i = CUADA.threadIdx().x
+	       i = CUDA.threadIdx().x
 	       x[i] *= x[i]
 	       return nothing
 	    end
