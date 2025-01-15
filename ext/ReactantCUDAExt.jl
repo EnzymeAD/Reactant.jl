@@ -444,14 +444,12 @@ function get_field_offset(T::Type, path)
         toffset = fieldoffset(current_type, field_idx)
         tcurrent_type = fieldtype(current_type, field_idx)
         offset += toffset
-        @show current_type, field_idx, toffset, offset, tcurrent_type
 
         # Update current_type to the field's type for next iteration
         current_type = tcurrent_type
 
     end
     
-    @show T, path, offset
 
     return offset
 end
@@ -559,7 +557,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 1,
             )
             push!(allocs, (alloc, argty))
-            @show string(alloc), string(argty), typeof(a)
 
             sz = sizeof(a)
             array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
@@ -666,7 +663,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
     )
-    # @show string(call), typeof(func.f), collect(map(typeof, args))
 
     argidx = 1
     for arg in values(seen)
