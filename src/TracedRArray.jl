@@ -836,14 +836,14 @@ Base.findfirst(x::AnyTracedRArray) = findfirst(identity, x)
 Base.findlast(x::AnyTracedRArray) = findlast(identity, x)
 
 function Base.findfirst(f::Function, x::AnyTracedRArray)
-    fA = f.(x)
-    (; indices) = Ops.top_k(materialize_traced_array(fA), 1)
+    fA = materialize_traced_array(vec(f.(x)))
+    (; indices) = Ops.top_k(fA, 1)
     return @allowscalar indices[1]
 end
 
 function Base.findlast(f::Function, x::AnyTracedRArray)
     fA = Ops.reverse(materialize_traced_array(vec(f.(x))); dimensions=[1])
-    (; indices) = Ops.top_k(materialize_traced_array(fA), 1)
+    (; indices) = Ops.top_k(fA, 1)
     return length(x) - @allowscalar(indices[1]) + 1
 end
 
@@ -883,7 +883,9 @@ function Base.findmin(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
         )
     end
 
-    return (Ops.negate(values), linear_indices)
+    values = Ops.negate(values)
+    ndims(x) == 1 && return @allowscalar (values[1], linear_indices[1])
+    return (values, linear_indices)
 end
 
 function Base.findmax(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothing)
@@ -910,6 +912,7 @@ function Base.findmax(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
         )
     end
 
+    ndims(x) == 1 && return @allowscalar (values[1], linear_indices[1])
     return (values, linear_indices)
 end
 
