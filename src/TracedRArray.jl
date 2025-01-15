@@ -714,13 +714,18 @@ end
 
 function Base.sort!(
     x::AnyTracedRArray;
-    dims::Integer,
+    dims::Union{Integer,Nothing}=nothing,
     lt=isless,
     by=identity,
     rev::Bool=false,
     alg=missing,
     order=missing,
 )
+    if dims === nothing
+        @assert ndims(x) == 1
+        dims = 1
+    end
+
     @assert alg === missing "Reactant doesn't support `alg` kwarg for `sort!`"
     @assert order === missing "Reactant doesn't support `order` kwarg for `sort!`"
 
@@ -740,13 +745,18 @@ end
 function Base.sortperm!(
     ix::AnyTracedRArray{Int,N},
     x::AnyTracedRArray{<:Any,N};
-    dims::Integer,
+    dims::Union{Integer,Nothing}=nothing,
     lt=isless,
     by=identity,
     rev::Bool=false,
     alg=missing,
     order=missing,
 ) where {N}
+    if dims === nothing
+        @assert ndims(x) == 1
+        dims = 1
+    end
+
     @assert alg === missing "Reactant doesn't support `alg` kwarg for `sortperm!`"
     @assert order === missing "Reactant doesn't support `order` kwarg for `sortperm!`"
 
@@ -761,6 +771,7 @@ end
 function Base.partialsort(x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...)
     values, _ = overloaded_partialsort(x, k; kwargs...)
     k = k .- minimum(k) .+ 1
+    k isa Integer && return @allowscalar(values[k])
     return view(values, k)
 end
 
@@ -769,7 +780,31 @@ function Base.partialsort!(x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; 
     kget = k .- minimum(k) .+ 1
     val = @allowscalar(values[kget])
     @allowscalar setindex!(x, val, k)
-    return val
+    k isa Integer && return val
+    return view(x, k)
+end
+
+function Base.partialsortperm(
+    x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...
+)
+    idxs = overloaded_partialsort(x, k; kwargs...)[2]
+    k = k .- minimum(k) .+ 1
+    k isa Integer && return @allowscalar(idxs[k])
+    return view(idxs, k)
+end
+
+function Base.partialsortperm!(
+    ix::AnyTracedRVector{Int},
+    x::AnyTracedRVector,
+    k::Union{Integer,OrdinalRange};
+    kwargs...,
+)
+    _, idxs = overloaded_partialsort(x, k; kwargs...)
+    kget = k .- minimum(k) .+ 1
+    val = @allowscalar(idxs[kget])
+    @allowscalar setindex!(ix, val, k)
+    k isa Integer && return val
+    return view(ix, k)
 end
 
 function overloaded_partialsort(
@@ -798,23 +833,6 @@ function overloaded_partialsort(
         indices = Ops.reverse(indices; dimensions=[1])
     end
     return values, indices
-end
-
-function Base.partialsortperm(
-    x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...
-)
-    return view(overloaded_partialsort(x, k; kwargs...)[2], k)
-end
-
-function Base.partialsortperm!(
-    ix::AnyTracedRVector{Int},
-    x::AnyTracedRVector,
-    k::Union{Integer,OrdinalRange};
-    kwargs...,
-)
-    _, idxs = overloaded_partialsort(x, k; kwargs...)
-    @allowscalar setindex!(ix, idxs[k], k)
-    return view(ix, k)
 end
 
 # arg* functions
