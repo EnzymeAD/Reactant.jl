@@ -181,10 +181,6 @@ end
 # by default, same as `should_rewrite_call`
 should_rewrite_invoke(@nospecialize(ft), @nospecialize(args)) = should_rewrite_call(ft)
 
-# fixes #493
-# TODO we probably want to skip rewrite if args do not contain Reactant types
-# should_rewrite_invoke(::Type{typeof(Base.unique)}, ::Type{Tuple{Vector{Symbol}}}) = false
-
 # Avoid recursively interpreting into methods we define explicitly
 # as overloads, which we assume should handle the entirety of the
 # translation (and if not they can use call_in_reactant).
