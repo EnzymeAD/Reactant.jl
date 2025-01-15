@@ -3,7 +3,7 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools
 
-export @trace, MissingTracedValue
+export @trace, within_compile, MissingTracedValue
 
 # Traits
 is_traced(x) = false
@@ -18,6 +18,13 @@ MissingTracedValue() = MissingTracedValue(())
 const SPECIAL_SYMBOLS = [
     :(:), :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
 ]
+
+"""
+    within_compile()
+
+Returns true if this function is executed in a Reactant compilation context, otherwise false.
+"""
+@inline within_compile() = false # behavior is overwritten in Interpreter.jl
 
 # Code generation
 """
@@ -115,6 +122,7 @@ macro trace(expr)
             return esc(trace_if_with_returns(__module__, expr))
         end
     end
+    Meta.isexpr(expr, :call) && return esc(trace_call(__module__, expr))
     Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
     Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
@@ -182,7 +190,8 @@ function trace_for(mod, expr)
     end
 
     return quote
-        if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
+        if $(within_compile)() &&
+            $(any)($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -196,7 +205,7 @@ function trace_if_with_returns(mod, expr)
         mod, expr.args[2]; store_last_line=expr.args[1], depth=1
     )
     return quote
-        if any($(is_traced), ($(all_check_vars...),))
+        if $(within_compile)() && $(any)($(is_traced), ($(all_check_vars...),))
             $(new_expr)
         else
             $(expr)
@@ -342,10 +351,22 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     )
 
     return quote
-        if any($(is_traced), ($(all_check_vars...),))
+        if $(within_compile)() && $(any)($(is_traced), ($(all_check_vars...),))
             $(reactant_code_block)
         else
             $(original_expr)
+        end
+    end
+end
+
+function trace_call(mod, expr)
+    f = expr.args[1]
+    args = expr.args[2:end]
+    return quote
+        if $(within_compile)()
+            $(traced_call)($f, $(args...))
+        else
+            $(expr)
         end
     end
 end
@@ -372,6 +393,8 @@ function traced_while(cond_fn, body_fn, args)
     end
     return args
 end
+
+traced_call(f, args...; kwargs...) = f(args...; kwargs...)
 
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     return MacroTools.postwalk(expr) do x

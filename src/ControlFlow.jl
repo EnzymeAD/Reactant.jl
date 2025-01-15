@@ -130,6 +130,75 @@ function ReactantCore.traced_while(
     end
 end
 
+function ReactantCore.traced_call(f::Function, args...)
+    seen_cache = Reactant.OrderedIdDict()
+    make_tracer(
+        seen_cache,
+        args,
+        (), # we have to insert something here, but we remove it immediately below.
+        TracedTrack;
+        toscalar=false,
+        track_numbers=(), # TODO: track_numbers?
+    )
+    linear_args = Reactant.MLIR.IR.Value[]
+    for (k, v) in seen_cache
+        v isa TracedType || continue
+        push!(linear_args, v.mlir_data)
+        # make tracer inserted `()` into the path, here we remove it:
+        v.paths = v.paths[1:end-1]
+    end
+
+    seen = Dict()
+    cache_key = []
+    make_tracer(seen, (f, args...), cache_key, TracedToTypes)
+    cache = Reactant.Compiler.callcache()
+    if haskey(cache, cache_key)
+        # cache lookup:
+        (; f_name, mlir_result_types, traced_result) = cache[cache_key]
+    else
+        f_name = String(gensym(Symbol(f)))
+        temp = Reactant.TracedUtils.make_mlir_fn(
+            f,
+            args,
+            (),
+            f_name,
+            false;
+            no_args_in_result=true,
+            do_transpose=false,
+        )
+        traced_result, ret = temp[[3, 6]]
+        mlir_result_types = [MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)]
+        cache[cache_key] = (; f_name, mlir_result_types, traced_result)
+    end
+
+    call_op = MLIR.Dialects.func.call(
+        linear_args;
+        result_0=mlir_result_types,
+        callee=MLIR.IR.FlatSymbolRefAttribute(f_name),
+    )
+
+    seen_results = Reactant.OrderedIdDict()
+    traced_result = make_tracer(
+        seen_results,
+        traced_result,
+        (), # we have to insert something here, but we remove it immediately below.
+        TracedSetPath;
+        toscalar=false,
+        track_numbers=(),
+    )
+    i = 1
+    for (k, v) in seen_results
+        v isa TracedType || continue
+        # this mutates `traced_result`, which is what we want:
+        v.mlir_data = MLIR.IR.result(call_op, i)
+        # make tracer inserted `()` into the path, here we remove it:
+        v.paths = v.paths[1:end-1]
+        i += 1
+    end
+
+    return traced_result
+end
+
 function take_region(compiled_fn)
     region = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0))

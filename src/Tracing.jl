@@ -4,7 +4,12 @@
     TracedToConcrete = 3
     ArrayToConcrete = 4
     TracedSetPath = 5
-    NoStopTracedTrack = 6
+    TracedToTypes = 6
+    NoStopTracedTrack = 7
+end
+
+struct VisitedObject
+    id::Int
 end
 
 for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, RNumber)
@@ -330,8 +335,17 @@ function make_tracer(
     track_numbers=(),
     kwargs...,
 ) where {RT}
-    if mode != NoStopTracedTrack && haskey(seen, prev)
-        return seen[prev]
+    if haskey(seen, prev)
+        if mode == TracedToTypes
+            id = seen[prev]
+            push!(path, id)
+            return
+        elseif mode != NoStopTracedTrack
+            return seen[prev]
+        end
+    elseif mode == TracedToTypes
+        push!(path, RT)
+        seen[prev] = VisitedObject(length(seen) + 1)
     end
     TT = traced_type(RT, (), Val(mode), track_numbers)
     @assert !Base.isabstracttype(RT)
@@ -339,6 +353,10 @@ function make_tracer(
     nf = fieldcount(RT)
 
     if TT === Module || TT === String
+        if mode == TracedToTypes
+            push!(path, prev)
+            return
+        end
         return prev
     end
 
@@ -348,11 +366,12 @@ function make_tracer(
         changed = false
         for i in 1:nf
             if isdefined(prev, i)
+                newpath = mode == TracedToTypes ? path : append_path(path, i)
                 xi = Base.getfield(prev, i)
                 xi2 = make_tracer(
                     seen,
                     xi,
-                    append_path(path, i),
+                    newpath,
                     mode;
                     toscalar,
                     tobatch,
@@ -373,6 +392,10 @@ function make_tracer(
     end
 
     if nf == 0
+        if mode == TracedToTypes
+            push!(path, prev)
+            return
+        end
         return prev
     end
 
@@ -380,11 +403,12 @@ function make_tracer(
     changed = false
     for i in 1:nf
         if isdefined(prev, i)
+            newpath = mode == TracedToTypes ? path : append_path(path, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
                 seen,
                 xi,
-                append_path(path, i),
+                newpath,
                 mode;
                 toscalar,
                 tobatch,
@@ -400,6 +424,9 @@ function make_tracer(
             break
         end
     end
+    if mode == TracedToTypes
+        return
+    end
     if !changed
         seen[prev] = prev
         return prev
@@ -412,6 +439,9 @@ end
 function make_tracer(
     seen, @nospecialize(prev::ConcreteRArray{T,N}), @nospecialize(path), mode; kwargs...
 ) where {T,N}
+    if mode == TracedToTypes
+        throw("Cannot have ConcreteRArray as function call argument.")
+    end
     if mode == ArrayToConcrete
         return prev
     end
@@ -428,6 +458,9 @@ function make_tracer(
 end
 
 function make_tracer(seen, prev::ConcreteRNumber{T}, path, mode; kwargs...) where {T}
+    if mode == TracedToTypes
+        throw("Cannot have ConcreteRNumber as function call argument.")
+    end
     if mode == ArrayToConcrete
         return prev
     end
@@ -453,6 +486,10 @@ function make_tracer(
 ) where {T,N}
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
+    end
+    if mode == TracedToTypes
+        push!(path, MLIR.IR.type(prev.mlir_data))
+        return
     end
     if mode == TracedTrack
         TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
@@ -507,6 +544,10 @@ function make_tracer(
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
+    if mode == TracedToTypes
+        push!(path, MLIR.IR.type(prev.mlir_data))
+        return
+    end
     if mode == TracedTrack
         TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
@@ -554,6 +595,9 @@ function make_tracer(
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
+    if mode == TracedToTypes
+        throw("Cannot have MissingTracedValue as function call argument.")
+    end
     if mode == TracedTrack
         TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
@@ -584,6 +628,10 @@ end
 function make_tracer(
     seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
 ) where {RT<:Number}
+    if mode == TracedToTypes
+        push!(path, prev)
+        return
+    end
     length(track_numbers) == 0 && return prev
     should_convert = any(Base.Fix1(<:, RT), track_numbers)
     if should_convert
@@ -613,8 +661,20 @@ function make_tracer(
     return prev
 end
 
-make_tracer(seen, prev::Type, @nospecialize(path), mode; kwargs...) = prev
-make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...) = prev
+function make_tracer(seen, prev::Type, @nospecialize(path), mode; kwargs...)
+    if mode == TracedToTypes
+        push!(path, prev)
+        return
+    end
+    return prev
+end
+function make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...)
+    if mode == TracedToTypes
+        push!(path, prev)
+        return
+    end
+    prev
+end
 
 function make_tracer(
     seen,
@@ -625,6 +685,12 @@ function make_tracer(
     tobatch=nothing,
     kwargs...,
 ) where {RT}
+    if mode == TracedToTypes
+        push!(path, Complex{RT})
+        make_tracer(seen, prev.re, path, mode; toscalar, tobatch, kwargs...)
+        make_tracer(seen, prev.im, path, mode; toscalar, tobatch, kwargs...)
+        return
+    end
     return Complex(
         make_tracer(
             seen, prev.re, append_path(path, :re), mode; toscalar, tobatch, kwargs...
@@ -639,10 +705,31 @@ function make_tracer(
     seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
 ) where {RT<:Array}
     if haskey(seen, prev)
+        if mode == TracedToTypes
+            visited = seen[prev]
+            push!(path, visited)
+            return
+        end
         return seen[prev]
     end
-    if mode == ArrayToConcrete && eltype(RT) <: ReactantPrimitive
-        return seen[prev] = ConcreteRArray(prev)
+    if eltype(RT) <: ReactantPrimitive
+        if mode == ArrayToConcrete && 
+            return seen[prev] = ConcreteRArray(prev)
+        elseif mode == TracedToTypes
+            # Original array can get mutated so we store a copy:
+            push!(path, copy(prev))
+            seen[prev] = VisitedObject(length(seen) + 1)
+            return
+        end
+    elseif mode == TracedToTypes
+        push!(path, RT)
+        for I in eachindex(prev)
+            if isassigned(prev, I)
+                pv = prev[I]
+                make_tracer(seen, pv, path, mode; track_numbers, kwargs...)
+            end
+        end
+        return
     end
     TT = traced_type(eltype(RT), (), Val(mode), track_numbers)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
@@ -668,6 +755,13 @@ end
 function make_tracer(
     seen, @nospecialize(prev::RT), @nospecialize(path), mode; kwargs...
 ) where {RT<:Tuple}
+    if mode == TracedToTypes
+        push!(path, RT)
+        for v in prev
+            make_tracer(seen, v, path, mode; kwargs...)
+        end
+        return
+    end
     return (
         (
             make_tracer(seen, v, append_path(path, i), mode; kwargs...) for
@@ -684,6 +778,20 @@ function make_tracer(
     track_numbers=(),
     kwargs...,
 ) where {A,RT}
+    if mode == TracedToTypes
+        push!(path, NamedTuple{A,RT})
+        for i in 1:length(A)
+            make_tracer(
+                seen,
+                Base.getfield(prev, i),
+                path,
+                mode;
+                track_numbers,
+                kwargs...,
+            )
+        end
+        return
+    end
     return NamedTuple{A,traced_type(RT, (), Val(mode), track_numbers)}((
         (
             make_tracer(
@@ -699,6 +807,10 @@ function make_tracer(
 end
 
 function make_tracer(seen, prev::Core.Box, @nospecialize(path), mode; kwargs...)
+    if mode == TracedToTypes
+        push!(path, Core.Box)
+        return make_tracer(seen, prev.contents, path, mode; kwargs...)
+    end
     if haskey(seen, prev)
         return seen[prev]
     end
