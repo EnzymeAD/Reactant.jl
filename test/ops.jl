@@ -689,7 +689,7 @@ end
 end
 
 @testset "sort" begin
-    basic_sort(x, dimension) = Ops.sort(x; comparator=(a, b) -> a < b, dimension)
+    basic_sort(x, dimension) = only(Ops.sort(x; comparator=(a, b) -> a < b, dimension))
     @testset for i in 1:3
         t_size = tuple(fill(10, (i,))...)
         x = randn(t_size)

@@ -1008,13 +1008,11 @@ end
         comparator,
         location,
     )
-    res = [
+    return [
         TracedRArray{Reactant.unwrapped_eltype(xs[i]),ndims(xs[i])}(
             (), MLIR.IR.result(op, i), size(xs[i])
         ) for i in eachindex(xs)
     ]
-    length(res) == 1 && return only(res) # Kept for backwards compatibility
-    return res
 end
 
 @noinline function top_k(
