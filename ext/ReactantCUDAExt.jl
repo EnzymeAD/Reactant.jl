@@ -328,7 +328,9 @@ function compile(job)
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
 
-        GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+	if !Reactant.precompiling()
+	  GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+	end
         entryname = LLVM.name(meta.entry)
 
         GPUCompiler.optimize_module!(job, mod)
@@ -793,18 +795,18 @@ Reactant.PrecompileTools.@setup_workload begin
     client = Reactant.XLA.CPUClient(; checkcount=false)
     Reactant.PrecompileTools.@compile_workload begin
 	@static if Reactant.precompilation_supported()
-	    function square_kernel!(x, y)
+	    function square_kernel!(x)
 	       i = CUDA.threadIdx().x
 	       x[i] *= x[i]
 	       return nothing
 	    end
 
-	    function square!(x, y)
-	       CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x, y)
+	    function square!(x)
+	       CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
 	       return nothing
 	    end
             y = Reactant.ConcreteRArray([2.0]; client)
-	    Reactant.compile_mlir(square!, (y,); optimize=false)
+	    Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
         end
     end
     Reactant.XLA.free_client(client)
