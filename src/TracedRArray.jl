@@ -697,6 +697,9 @@ end
 function Base.sort(x::AnyTracedRArray; alg=missing, order=missing, kwargs...)
     return sort!(copy(x); alg, order, kwargs...)
 end
+function Base.sort(x::AnyTracedRVector; alg=missing, order=missing, kwargs...)
+    return sort!(copy(x); alg, order, dims=1, kwargs...)
+end
 
 function Base.sort!(
     x::AnyTracedRArray;
@@ -718,6 +721,9 @@ end
 
 function Base.sortperm(x::AnyTracedRArray; alg=missing, order=missing, kwargs...)
     return sortperm!(similar(x, Int), x; alg, order, kwargs...)
+end
+function Base.sortperm(x::AnyTracedRVector; alg=missing, order=missing, kwargs...)
+    return sortperm!(similar(x, Int), x; alg, order, dims=1, kwargs...)
 end
 
 function Base.sortperm!(
@@ -742,44 +748,52 @@ function Base.sortperm!(
 end
 
 function Base.partialsort(x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...)
-    return partialsort!(copy(x), k; kwargs...)
+    values, _ = overloaded_partialsort(x, k; kwargs...)
+    k = k .- minimum(k) .+ 1
+    return view(values, k)
 end
 
-function Base.partialsort!(
+function Base.partialsort!(x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...)
+    values, _ = overloaded_partialsort(x, k; kwargs...)
+    kget = k .- minimum(k) .+ 1
+    val = @allowscalar(values[kget])
+    @allowscalar setindex!(x, val, k)
+    return val
+end
+
+function overloaded_partialsort(
     x::AnyTracedRVector,
     k::Union{Integer,OrdinalRange};
     by=identity,
     rev::Bool=false,
     lt=isless,
 )
-    # TODO: general `lt` support
-    @assert lt === isless "Only `isless` is supported for now in `partialsort!`"
+    if lt !== isless || by !== identity
+        comparator =
+            rev ? (a, b, i1, i2) -> !lt(by(a), by(b)) : (a, b, i1, i2) -> lt(by(a), by(b))
+        idxs = Ops.constant(collect(LinearIndices(x)))
+        sorted_x, sorted_idxs = Ops.sort(
+            materialize_traced_array(x), idxs; dimension=1, comparator
+        )
+        return sorted_x[1:maximum(k)], sorted_idxs[1:maximum(k)]
+    end
 
     # XXX: If `maxk` is beyond a threshold should we emit a sort directly?
-    by_x = by.(x)
-    if k isa Integer
-        !rev && (k = length(x) - k + 1)
-        (; values, indices) = Ops.top_k(materialize_traced_array(by_x), k)
-        res = by === identity ? @allowscalar(values[k]) : @allowscalar(x[indices[k]])
-        @allowscalar setindex!(ix, res, k)
-        return res
-    else
-        klist = collect(Int64, k)
-        !rev && (klist = length(x) .- klist .+ 1)
-        maxk = maximum(klist)
-        (; values, indices) = Ops.top_k(materialize_traced_array(by_x), maxk)
-        res = by === identity ? values[klist] : x[indices[klist]]
-        setindex!(ix, res, klist)
-        return res
+    !rev && (k = length(x) .- k .+ 1)
+    !(k isa Integer) && (k = maximum(k))
+    (; values, indices) = Ops.top_k(materialize_traced_array(x), k)
+    indices = Ops.convert(TracedRArray{Int64,1}, indices)
+    if !rev
+        values = Ops.reverse(values; dimensions=[1])
+        indices = Ops.reverse(indices; dimensions=[1])
     end
+    return values, indices
 end
 
 function Base.partialsortperm(
     x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...
 )
-    idxs = overloaded_partialsortperm(x, k; kwargs...)
-    k isa Integer && return @allowscalar idxs[k]
-    return view(idxs, k)
+    return view(overloaded_partialsort(x, k; kwargs...)[2], k)
 end
 
 function Base.partialsortperm!(
@@ -788,32 +802,9 @@ function Base.partialsortperm!(
     k::Union{Integer,OrdinalRange};
     kwargs...,
 )
-    idxs = overloaded_partialsortperm(x, k; kwargs...)
-
-    if k isa Integer
-        @allowscalar setindex!(ix, idxs[k], k)
-        return idxs
-    else
-        setindex!(ix, idxs[k], k)
-        return view(ix, k)
-    end
-end
-
-function overloaded_partialsortperm(
-    x::AnyTracedRVector,
-    k::Union{Integer,OrdinalRange};
-    by=identity,
-    rev::Bool=false,
-    lt=isless,
-)
-    # TODO: general `lt` support
-    @assert lt === isless "Only `isless` is supported for now in `partialsortperm!`"
-
-    # XXX: If `maxk` is beyond a threshold should we emit a sort directly? Or do a neg
-    !rev && (k = length(x) .- k .+ 1)
-    !(k isa Integer) && (k = maximum(k))
-    (; indices) = Ops.top_k(materialize_traced_array(by.(x)), k)
-    return Ops.convert(TracedRArray{Int64,1}, indices)
+    _, idxs = overloaded_partialsort(x, k; kwargs...)
+    @allowscalar setindex!(ix, idxs[k], k)
+    return view(ix, k)
 end
 
 function Base.argmin(x::AnyTracedRArray; kwargs...)
