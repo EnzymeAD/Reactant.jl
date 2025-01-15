@@ -89,6 +89,17 @@ function scalar_index_to_cartesian(idx::AbstractVector{T}, sz::NTuple{N,Int}) wh
     return idxs
 end
 
+function scalar_index_to_cartesian(idx::T, sz::NTuple{N,Int}) where {T <: Number, N}
+    idx = idx - 1
+    idxs = (idx % T(sz[1]),)
+    idx = idx ÷ T(sz[1])
+    for i in 2:N
+        idxs = (idxs..., idx % T(sz[i]))
+        idx = idx ÷ T(sz[i])
+    end
+    return idxs
+end
+
 function Base.getindex(
     a::TracedRArray{T,N}, indices::Union{Int,TracedRNumber{Int}}
 ) where {T,N}
@@ -807,18 +818,32 @@ function Base.partialsortperm!(
     return view(ix, k)
 end
 
+function Base.argmin(f::F, x::AnyTracedRArray) where {F}
+    idx = scalar_index_to_cartesian(argmin(f.(x)), size(x)) .+ 1
+    return @allowscalar x[idx...]
+end
+
+function Base.argmax(f::F, x::AnyTracedRArray) where {F}
+    idx = scalar_index_to_cartesian(argmax(f.(x)), size(x)) .+ 1
+    return @allowscalar x[idx...]
+end
+
 function Base.argmin(x::AnyTracedRArray; kwargs...)
     return argmax(Ops.negate(materialize_traced_array(x)); kwargs...)
 end
 
 function Base.argmax(x::AnyTracedRVector)
     (; indices) = Ops.top_k(materialize_traced_array(x), 1)
-    return @allowscalar indices[1]
+    return @allowscalar TracedRNumber{Int64}(indices[1])
 end
 
 # To avoid scalar indexing and constructing an array of tuples, we return the linear index
 # instead of the cartesian index
-function Base.argmax(x::AnyTracedRArray{T,N}; dims::Integer) where {T,N}
+function Base.argmax(
+    x::AnyTracedRArray{T,N}; dims::Union{Integer,Nothing}=nothing
+) where {T,N}
+    dims === nothing && return argmax(vec(x))
+
     strds = strides(x)
 
     if dims != N # chlo.top_k performs the operation along the last dimension
