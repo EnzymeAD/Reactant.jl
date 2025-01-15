@@ -368,6 +368,34 @@ end
         @test y == test_typed_hvncat(x)
         @test eltype(y) === Int
     end
+
+    @testset "Number and RArray" for a in [1.0f0, 1.0e0]
+        typeof_a = typeof(a)
+        _b = typeof_a.([2.0, 3.0, 4.0])
+        _c = typeof_a.([2.0 3.0 4.0])
+        b = Reactant.to_rarray(_b)
+        c = Reactant.to_rarray(_c)
+
+        # vcat test        
+        y = @jit vcat(a, b)
+        @test y == vcat(a, _b)
+        @test y isa ConcreteRArray{typeof_a,1}
+
+        ## vcat test - adjoint
+        y1 = @jit vcat(a, c')
+        @test y1 == vcat(a, _c')
+        @test y1 isa ConcreteRArray{typeof_a,2}
+
+        # hcat test
+        z = @jit hcat(a, c)
+        @test z == hcat(a, _c)
+        @test z isa ConcreteRArray{typeof_a,2}
+
+        ## hcat test - adjoint
+        z1 = @jit hcat(a, b')
+        @test z1 == hcat(a, _b')
+        @test z1 isa ConcreteRArray{typeof_a,2}
+    end
 end
 
 @testset "repeat" begin
@@ -999,4 +1027,20 @@ end
         @test res[1] isa ConcreteRNumber{Float32}
         @test res[2] isa ConcreteRNumber{Float32}
     end
+end
+
+@testset "isfinite" begin
+    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
+    @test Reactant.@jit(isfinite.(x)) == [true, false, false, false, false]
+
+    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+    @test Reactant.@jit(isfinite.(x)) == [true, false, false, false, false]
+end
+
+@testset "isnan" begin
+    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
+    @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
+
+    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+    @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
 end

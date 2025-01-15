@@ -9,6 +9,12 @@ using Adapt
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
+
+    function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T,N,A,Size}
+        push!(Reactant.Compiler.context_gc_vector[MLIR.IR.context()], xs)
+        ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
+        return new(ptr)
+    end
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
@@ -211,10 +217,34 @@ function Base.reshape(a::CuTracedArray{T,M,A}, dims::NTuple{N,Int}) where {T,N,M
     return _derived_array(a, T, dims)
 end
 
-function Adapt.adapt_storage(::CUDA.KernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
-    res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(
-        Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
+struct ReactantKernelAdaptor end
+
+function Adapt.adapt_storage(to::ReactantKernelAdaptor, p::CUDA.CuPtr)
+    return error("Cannot convert CuPtr argument of Reactant Kernel")
+end
+function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::DenseCuArray)
+    return Adapt.adapt_storage(ka, Array(xs))
+end
+function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::Array)
+    return Adapt.adapt_storage(ka, Reactant.Ops.constant(xs))
+end
+function Adapt.adapt_structure(to::ReactantKernelAdaptor, ref::Base.RefValue)
+    return error("Cannot convert RefValue argument of Reactant Kernel")
+end
+function Adapt.adapt_structure(
+    to::ReactantKernelAdaptor, bc::Broadcast.Broadcasted{Style,<:Any,Type{T}}
+) where {Style,T}
+    return Broadcast.Broadcasted{Style}(
+        (x...) -> T(x...), Adapt.adapt(to, bc.args), bc.axes
     )
+end
+
+Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+    return adapt(ReactantKernelAdaptor(), arg)
+end
+
+function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
+    res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(xs)
     return res
 end
 
@@ -383,7 +413,8 @@ end
 function Reactant.make_tracer(
     seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...
 )
-    x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))::TracedRArray
+    x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
+    x = x::TracedRArray
     Reactant.make_tracer(seen, x, path, mode; kwargs...)
     return prev
 end
@@ -441,9 +472,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     # linearize kernel arguments
     seen = Reactant.OrderedIdDict()
-    prev = Any[func.f, args...]
     kernelargsym = gensym("kernelarg")
-    Reactant.make_tracer(seen, prev, (kernelargsym,), Reactant.TracedTrack)
+    for (i, prev) in enumerate(Any[func.f, args...])
+        Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
+    end
     wrapper_tys = MLIR.IR.Type[]
     for arg in values(seen)
         if !(arg isa TracedRArray || arg isa TracedRNumber)
@@ -536,16 +568,18 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         if !(arg isa TracedRArray || arg isa TracedRNumber)
             continue
         end
-        for p in Reactant.TracedUtils.get_paths(arg)
+
+        paths = Reactant.TracedUtils.get_paths(arg)
+
+        arg = arg.mlir_data
+        arg = Reactant.TracedUtils.transpose_val(arg)
+        push!(restys, MLIR.IR.type(arg))
+        push!(mlir_args, arg)
+
+        for p in paths
             if p[1] !== kernelargsym
                 continue
             end
-
-            arg = arg.mlir_data
-            arg = Reactant.TracedUtils.transpose_val(arg)
-            push!(restys, MLIR.IR.type(arg))
-            push!(mlir_args, arg)
-
             # Get the allocation corresponding to which arg we're doing
             alloc = allocs[p[2]][1]
 
@@ -580,9 +614,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                     ),
                 ),
             )
-
-            argidx += 1
         end
+        argidx += 1
     end
 
     MLIR.IR.block!(wrapbody) do

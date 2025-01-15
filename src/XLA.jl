@@ -231,6 +231,60 @@ function client(device::Device)
     end
 end
 
+# To keep in sync with JLAllocatorStats in ReactantExtra/API.cpp
+struct JLAllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Int64
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Int64
+    largest_free_block_bytes::Int64
+    pool_bytes::Int64
+    peak_pool_bytes::Int64
+end
+
+struct AllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Union{Nothing,Int64}
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Union{Nothing,Int64}
+    largest_free_block_bytes::Int64
+    pool_bytes::Union{Nothing,Int64}
+    peak_pool_bytes::Union{Nothing,Int64}
+end
+
+function allocatorstats(
+    device::Device=ClientGetDevice(default_backend[], default_device_idx[])
+)
+    ref = Ref{JLAllocatorStats}()
+    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
+        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
+    )::Cvoid
+    stats = ref[]
+
+    nullopt = typemin(Int64)
+    return AllocatorStats(
+        stats.num_allocs,
+        stats.bytes_in_use,
+        stats.peak_bytes_in_use,
+        stats.largest_alloc_size,
+        stats.bytes_limit == nullopt ? nothing : stats.bytes_limit,
+        stats.bytes_reserved,
+        stats.peak_bytes_reserved,
+        stats.bytes_reservable_limit == nullopt ? nothing : stats.bytes_reservable_limit,
+        stats.largest_free_block_bytes,
+        stats.pool_bytes == nullopt ? nothing : stats.pool_bytes,
+        stats.peak_pool_bytes == nullopt ? nothing : stats.peak_pool_bytes,
+    )
+end
+
 # https://github.com/openxla/xla/blob/4bfb5c82a427151d6fe5acad8ebe12cee403036a/xla/xla_data.proto#L29
 @inline primitive_type(::Type{Bool}) = 1
 
