@@ -788,4 +788,26 @@ function __init__()
     return nothing
 end
 
+@setup_workload begin
+    Reactant.initialize_dialect()
+    @compile_workload begin
+	@static if precompilation_supported()
+	    function square_kernel!(x, y)
+	       i = CUADA.threadIdx().x
+	       x[i] *= x[i]
+	       return nothing
+	    end
+
+	    function square!(x, y)
+	       CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x, y)
+	       return nothing
+	    end
+            y = ConcreteRArray([2.0]; client)
+	    Reactant.compile_mlir(square!, (y,); optimize=false)
+        end
+    end
+    deinitialize_dialect()
+    clear_oc_cache()
+end
+
 end # module ReactantCUDAExt
