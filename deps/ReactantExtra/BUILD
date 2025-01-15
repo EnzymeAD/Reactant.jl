@@ -436,6 +436,7 @@ cc_library(
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
 "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
 "-Wl,-exported_symbol,_ReactantThrowError",
+"-Wl,-exported_symbol,_ReactantHandleCuResult",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",

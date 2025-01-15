@@ -357,6 +357,8 @@ end
 const cuLaunch = Ref{UInt}(0)
 const cuFunc = Ref{UInt}(0)
 const cuModule = Ref{UInt}(0)
+const cuSync = Ref{UInt}(0)
+const DEBUG_KERNEL = Ref{Bool}(false)
 
 function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false)
     # Explicitly don't use block! to avoid creating a closure, which creates
@@ -385,7 +387,14 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
     if isdefined(Reactant_jll, :ptxas_path)
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
-    kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
+    if DEBUG_KERNEL[]
+        curesulthandler = XLA.Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult")
+        @assert curesulthandler !== nothing
+        curesulthandler = Base.reinterpret(UInt, curesulthandler)
+        kern = "lower-kernel{debug=true cuResultHandlerPtr=$curesulthandler run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[]) cuStreamSynchronizePtr=$(cuSync[])},symbol-dce"
+    else
+        kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
+    end
 
     opt_passes = optimization_passes(; no_nan, sroa=true)
     opt_passes2 = optimization_passes(; no_nan, sroa=false)

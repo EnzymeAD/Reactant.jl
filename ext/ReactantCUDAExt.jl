@@ -425,6 +425,7 @@ function get_field_offset(T::Type, path)
     offset = 0
     current_type = T
 
+
     for field in path
         # Get the field index
         field_idx = if field isa Integer
@@ -440,11 +441,17 @@ function get_field_offset(T::Type, path)
         end
 
         # Add the offset of this field
-        offset += fieldoffset(current_type, field_idx)
+        toffset = fieldoffset(current_type, field_idx)
+        tcurrent_type = fieldtype(current_type, field_idx)
+        offset += toffset
+        @show current_type, field_idx, toffset, offset, tcurrent_type
 
         # Update current_type to the field's type for next iteration
-        current_type = fieldtype(current_type, field_idx)
+        current_type = tcurrent_type
+
     end
+    
+    @show T, path, offset
 
     return offset
 end
@@ -552,6 +559,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 1,
             )
             push!(allocs, (alloc, argty))
+            @show string(alloc), string(argty), typeof(a)
 
             sz = sizeof(a)
             array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
@@ -658,7 +666,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
     )
-    @show string(call), typeof(func.f), collect(map(typeof, args))
+    # @show string(call), typeof(func.f), collect(map(typeof, args))
 
     argidx = 1
     for arg in values(seen)
@@ -788,6 +796,11 @@ function __init__()
         Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
         Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
         Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+        ptr4 = Reactant.XLA.Libdl.dlsym(handle, "cuStreamSynchronize"; throw_error=false)
+        if ptr4 === nothing
+            ptr4 = C_NULL
+        end
+        Reactant.Compiler.cuSync[] = Base.reinterpret(UInt, ptr4)
     end
     return nothing
 end
