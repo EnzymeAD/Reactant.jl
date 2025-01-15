@@ -183,7 +183,7 @@ should_rewrite_invoke(@nospecialize(ft), @nospecialize(args)) = should_rewrite_c
 
 # fixes #493
 # TODO we probably want to skip rewrite if args do not contain Reactant types
-should_rewrite_invoke(::Type{typeof(Base.unique)}, ::Type{Tuple{Vector{Symbol}}}) = false
+# should_rewrite_invoke(::Type{typeof(Base.unique)}, ::Type{Tuple{Vector{Symbol}}}) = false
 
 # Avoid recursively interpreting into methods we define explicitly
 # as overloads, which we assume should handle the entirety of the
