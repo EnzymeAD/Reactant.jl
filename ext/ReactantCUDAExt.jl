@@ -790,6 +790,7 @@ end
 
 Reactant.PrecompileTools.@setup_workload begin
     Reactant.initialize_dialect()
+    client = Reactant.XLA.CPUClient(; checkcount=false)
     Reactant.PrecompileTools.@compile_workload begin
 	@static if Reactant.precompilation_supported()
 	    function square_kernel!(x, y)
@@ -806,6 +807,8 @@ Reactant.PrecompileTools.@setup_workload begin
 	    Reactant.compile_mlir(square!, (y,); optimize=false)
         end
     end
+    Reactant.XLA.free_client(client)
+    client.client = C_NULL
     Reactant.deinitialize_dialect()
     Reactant.clear_oc_cache()
 end

@@ -1,3 +1,4 @@
+using PrecompileTools
 using PrecompileTools: @setup_workload, @compile_workload
 
 function infer_sig(sig)
