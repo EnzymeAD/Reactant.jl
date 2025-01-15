@@ -89,7 +89,7 @@ function scalar_index_to_cartesian(idx::AbstractVector{T}, sz::NTuple{N,Int}) wh
     return idxs
 end
 
-function scalar_index_to_cartesian(idx::T, sz::NTuple{N,Int}) where {T <: Number, N}
+function scalar_index_to_cartesian(idx::T, sz::NTuple{N,Int}) where {T<:Number,N}
     idx = idx - 1
     idxs = (idx % T(sz[1]),)
     idx = idx ÷ T(sz[1])
@@ -793,7 +793,6 @@ function overloaded_partialsort(
     !rev && (k = length(x) .- k .+ 1)
     !(k isa Integer) && (k = maximum(k))
     (; values, indices) = Ops.top_k(materialize_traced_array(x), k)
-    indices = Ops.convert(TracedRArray{Int64,1}, indices)
     if !rev
         values = Ops.reverse(values; dimensions=[1])
         indices = Ops.reverse(indices; dimensions=[1])
@@ -818,6 +817,7 @@ function Base.partialsortperm!(
     return view(ix, k)
 end
 
+# arg* functions
 function Base.argmin(f::F, x::AnyTracedRArray) where {F}
     idx = scalar_index_to_cartesian(argmin(f.(x)), size(x)) .+ 1
     return @allowscalar x[idx...]
@@ -828,46 +828,89 @@ function Base.argmax(f::F, x::AnyTracedRArray) where {F}
     return @allowscalar x[idx...]
 end
 
-function Base.argmin(x::AnyTracedRArray; kwargs...)
-    return argmax(Ops.negate(materialize_traced_array(x)); kwargs...)
+Base.argmin(x::AnyTracedRArray; kwargs...) = findmin(identity, x; kwargs...)[2]
+Base.argmax(x::AnyTracedRArray; kwargs...) = findmax(identity, x; kwargs...)[2]
+
+# find* functions
+Base.findfirst(x::AnyTracedRArray) = findfirst(identity, x)
+Base.findlast(x::AnyTracedRArray) = findlast(identity, x)
+
+function Base.findfirst(f::Function, x::AnyTracedRArray)
+    fA = f.(x)
+    (; indices) = Ops.top_k(materialize_traced_array(fA), 1)
+    return @allowscalar indices[1]
 end
 
-function Base.argmax(x::AnyTracedRVector)
-    (; indices) = Ops.top_k(materialize_traced_array(x), 1)
-    return @allowscalar TracedRNumber{Int64}(indices[1])
+function Base.findlast(f::Function, x::AnyTracedRArray)
+    fA = Ops.reverse(materialize_traced_array(vec(f.(x))); dimensions=[1])
+    (; indices) = Ops.top_k(materialize_traced_array(fA), 1)
+    return length(x) - @allowscalar(indices[1]) + 1
 end
 
-# To avoid scalar indexing and constructing an array of tuples, we return the linear index
-# instead of the cartesian index
-function Base.argmax(
-    x::AnyTracedRArray{T,N}; dims::Union{Integer,Nothing}=nothing
-) where {T,N}
-    dims === nothing && return argmax(vec(x))
+Base.findmin(x::AnyTracedRVector) = findmin(identity, x; dims=1)
+function Base.findmin(x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothing)
+    return findmin(identity, x; dims)
+end
 
-    strds = strides(x)
+Base.findmax(x::AnyTracedRVector) = findmax(identity, x; dims=1)
+function Base.findmax(x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothing)
+    return findmax(identity, x; dims)
+end
 
-    if dims != N # chlo.top_k performs the operation along the last dimension
-        pdims = collect(Int64, 1:N)
-        pdims[dims] = N
-        pdims[N] = dims
-        pdims = Tuple(pdims)
-        x = permutedims(x, pdims)
+## To avoid scalar indexing and constructing an array of tuples, we return the linear index
+## instead of the cartesian index
+function Base.findmin(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothing)
+    if dims === nothing
+        if ndims(x) == 1
+            dims = 1
+        else
+            return findmin(f, vec(x); dims=1)
+        end
     end
-    (; indices) = Ops.top_k(materialize_traced_array(x), 1)
-    indices = Ops.convert(TracedRArray{Int64,N}, indices)
-    dims != N && (indices = permutedims(indices, invperm(pdims)))
+
+    fx = Ops.negate(materialize_traced_array(f.(x)))
+    (; values, indices) = Ops.top_k(fx, 1; dimension=dims)
 
     # Compute linear indices
-    iotas = [Ops.iota(Int64, [size(indices)...]; iota_dimension=i) for i in 1:N]
+    strds = strides(x)
+    iotas = [Ops.iota(Int64, [size(indices)...]; iota_dimension=i) for i in 1:ndims(x)]
     iotas[dims] = Ops.subtract(indices, Ops.constant(fill(Int64(1), size(indices))))
     linear_indices = Ops.constant(fill(Int64(1), size(indices)))
-    for d in 1:N
+    for d in eachindex(iotas)
         linear_indices = Ops.add(
             linear_indices,
             Ops.multiply(iotas[d], Ops.constant(fill(Int64(strds[d]), size(iotas[d])))),
         )
     end
-    return linear_indices
+
+    return (Ops.negate(values), linear_indices)
+end
+
+function Base.findmax(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothing)
+    if dims === nothing
+        if ndims(x) == 1
+            dims = 1
+        else
+            return findmax(f, vec(x); dims=1)
+        end
+    end
+
+    fx = materialize_traced_array(f.(x))
+    (; values, indices) = Ops.top_k(fx, 1; dimension=dims)
+
+    # Compute linear indices
+    strds = strides(x)
+    iotas = [Ops.iota(Int64, [size(indices)...]; iota_dimension=i) for i in 1:ndims(x)]
+    iotas[dims] = Ops.subtract(indices, Ops.constant(fill(Int64(1), size(indices))))
+    linear_indices = Ops.constant(fill(Int64(1), size(indices)))
+    for d in eachindex(iotas)
+        linear_indices = Ops.add(
+            linear_indices,
+            Ops.multiply(iotas[d], Ops.constant(fill(Int64(strds[d]), size(iotas[d])))),
+        )
+    end
+
+    return (values, linear_indices)
 end
 
 end

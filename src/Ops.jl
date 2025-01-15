@@ -1016,8 +1016,19 @@ end
 end
 
 @noinline function top_k(
-    x::TracedRArray{T,N}, k; location=mlir_stacktrace("top_k", @__FILE__, @__LINE__)
+    x::TracedRArray{T,N},
+    k;
+    dimension::Integer=N,
+    location=mlir_stacktrace("top_k", @__FILE__, @__LINE__),
 ) where {T,N}
+    @assert 1 <= dimension <= N
+    if dimension != N # chlo.top_k performs the operation along the last dimension
+        pdims = collect(Int64, 1:N)
+        pdims[dimension] = N
+        pdims[N] = dimension
+        x = permutedims(x, pdims)
+    end
+
     rsize = [size(x)[1:(end - 1)]..., k]
     values = mlir_type(TracedRArray{T,N}, rsize)
     indices = mlir_type(TracedRArray{Int32,N}, rsize)
@@ -1026,7 +1037,15 @@ end
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
         constant(fill(Int32(1), Tuple(rsize))),
     ) # return the 1-indexed index
-    return (; values=TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize), indices)
+    indices = convert(TracedRArray{Int64,N}, indices) # julia indexes with Int64 generally
+    values = TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize)
+
+    if dimension != N
+        values = permutedims(values, invperm(pdims))
+        indices = permutedims(indices, invperm(pdims))
+    end
+
+    return (; values, indices)
 end
 
 @noinline function iota(
