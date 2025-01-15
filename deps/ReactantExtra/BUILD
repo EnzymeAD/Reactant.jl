@@ -411,6 +411,7 @@ cc_library(
 "-Wl,-exported_symbol,_ClientProcessIndex",
 "-Wl,-exported_symbol,_ClientGetDevice",
 "-Wl,-exported_symbol,_ClientGetAddressableDevice",
+"-Wl,-exported_symbol,_PjRtDeviceGetAllocatorStats",
 "-Wl,-exported_symbol,_ExecutableFree",
 "-Wl,-exported_symbol,_BufferToDevice",
 "-Wl,-exported_symbol,_BufferToClient",
