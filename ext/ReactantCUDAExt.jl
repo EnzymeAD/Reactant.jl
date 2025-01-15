@@ -239,8 +239,11 @@ function Adapt.adapt_structure(
     )
 end
 
-Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
+end
+Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+    return recudaconvert(arg)
 end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
@@ -456,7 +459,7 @@ end
 
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
-    convert=Val(false),
+    convert=Val(true),
     blocks::CuDim=1,
     threads::CuDim=1,
     cooperative::Bool=false,
@@ -465,6 +468,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 ) where {F,tt}
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
+
+    if convert == Val(true)
+        args = recudaconvert.(args) 
+    end
 
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
