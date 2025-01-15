@@ -61,7 +61,7 @@ end
     initialize_dialect()
     client = XLA.CPUClient(; checkcount=false)
     @compile_workload begin
-	@static if precompilation_supported()
+        @static if precompilation_supported()
             x = ConcreteRNumber(2.0; client)
             Reactant.compile(sin, (x,); client)
 

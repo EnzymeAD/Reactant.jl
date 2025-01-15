@@ -328,9 +328,9 @@ function compile(job)
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
 
-	if !Reactant.precompiling()
-	  GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
-	end
+        if !Reactant.precompiling()
+            GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+        end
         entryname = LLVM.name(meta.entry)
 
         GPUCompiler.optimize_module!(job, mod)
@@ -791,30 +791,30 @@ function __init__()
 end
 
 @static if !Sys.isapple() && Sys.ARCH != :aarch64
-Reactant.PrecompileTools.@setup_workload begin
-    Reactant.initialize_dialect()
-    client = Reactant.XLA.CPUClient(; checkcount=false)
-    Reactant.PrecompileTools.@compile_workload begin
-	@static if Reactant.precompilation_supported()
-	    function square_kernel!(x)
-	       i = CUDA.threadIdx().x
-	       x[i] *= x[i]
-	       return nothing
-	    end
+    Reactant.PrecompileTools.@setup_workload begin
+        Reactant.initialize_dialect()
+        client = Reactant.XLA.CPUClient(; checkcount=false)
+        Reactant.PrecompileTools.@compile_workload begin
+            @static if Reactant.precompilation_supported()
+                function square_kernel!(x)
+                    i = CUDA.threadIdx().x
+                    x[i] *= x[i]
+                    return nothing
+                end
 
-	    function square!(x)
-	       CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
-	       return nothing
-	    end
-            y = Reactant.ConcreteRArray([2.0]; client)
-	    Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+                function square!(x)
+                    CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
+                    return nothing
+                end
+                y = Reactant.ConcreteRArray([2.0]; client)
+                Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+            end
         end
+        Reactant.XLA.free_client(client)
+        client.client = C_NULL
+        Reactant.deinitialize_dialect()
+        Reactant.clear_oc_cache()
     end
-    Reactant.XLA.free_client(client)
-    client.client = C_NULL
-    Reactant.deinitialize_dialect()
-    Reactant.clear_oc_cache()
-end
 end
 
 end # module ReactantCUDAExt
