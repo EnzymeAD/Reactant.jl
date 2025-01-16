@@ -607,10 +607,10 @@ end
 
         f1(x) = x[1] * x[2]
 
-        x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+        x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
         f2 = @compile f1(x_ra)
-        res2 = f2(Reactant.to_rarray((5, [3.14]); track_numbers=(Number,)))
+        res2 = f2(Reactant.to_rarray((5, [3.14]); track_numbers=Number))
         @test @allowscalar(only(res2)) ≈ 5 * 3.14
         @test res2 isa ConcreteRArray
 
