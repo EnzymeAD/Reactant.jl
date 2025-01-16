@@ -312,7 +312,7 @@ Base.@nospecializeinfer function traced_type_inner(
         return TracedRArray{T,N}
     elseif mode == TracedSetPath
         if batchmode == BatchNone
-            return T
+            return TracedRArray{T,N}
         elseif batchmode == BatchArray
             if tobatch === nothing
                 TracedRArray{T,N - 1}
