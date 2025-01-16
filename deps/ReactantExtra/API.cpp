@@ -119,6 +119,15 @@ template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
   }
 }
 
+extern "C" void ReactantHandleCuResult(uint32_t curesult) {
+  if (curesult != 0) {
+      std::string err = "Bad Cuda Result = " + std::to_string(curesult);
+      if (ReactantThrowError) {
+        ReactantThrowError(err.c_str());
+      }
+  }
+}
+
 // MLIR C-API extras
 #pragma region MLIR Extra
 extern "C" MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx,
@@ -599,7 +608,7 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   prepareRegistry(registry);
 
   mlir::registerenzymePasses();
-  regsiterenzymeXLAPasses();
+  registerenzymexlaPasses();
 
   // Register the standard passes we want.
   mlir::registerCSEPass();

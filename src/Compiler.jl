@@ -116,7 +116,7 @@ function create_result(
 end
 
 # Optimization passes via transform dialect
-function optimization_passes(; no_nan::Bool=false)
+function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
         "transpose_transpose<16>",
@@ -295,12 +295,16 @@ function optimization_passes(; no_nan::Bool=false)
         ",",
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
-    return join(
-        [
-            "inline{default-pipeline=canonicalize max-iterations=4}",
-            "libdevice-funcs-raise",
-            func_passes,
-        ],
+    passes = [
+            "inline{default-pipeline=canonicalize max-iterations=4}"
+    ]
+    if sroa
+        push!(passes,  "sroa-wrappers")
+        push!(passes,  "libdevice-funcs-raise")
+        push!(passes,  "canonicalize")
+    end
+    push!(passes, func_passes)
+    return join(passes,
         ',',
     )
 end
@@ -351,6 +355,8 @@ end
 const cuLaunch = Ref{UInt}(0)
 const cuFunc = Ref{UInt}(0)
 const cuModule = Ref{UInt}(0)
+const cuSync = Ref{UInt}(0)
+const DEBUG_KERNEL = Ref{Bool}(false)
 
 function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false)
     # Explicitly don't use block! to avoid creating a closure, which creates
@@ -379,12 +385,20 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
     if isdefined(Reactant_jll, :ptxas_path)
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
-    kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
+    if DEBUG_KERNEL[]
+        curesulthandler = XLA.Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult")
+        @assert curesulthandler !== nothing
+        curesulthandler = Base.reinterpret(UInt, curesulthandler)
+        kern = "lower-kernel{debug=true cuResultHandlerPtr=$curesulthandler run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[]) cuStreamSynchronizePtr=$(cuSync[])},symbol-dce"
+    else
+        kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
+    end
 
-    opt_passes = optimization_passes(; no_nan)
+    opt_passes = optimization_passes(; no_nan, sroa=true)
+    opt_passes2 = optimization_passes(; no_nan, sroa=false)
 
     if optimize === :all
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
         run_pass_pipeline!(
             mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
         )
@@ -395,14 +409,14 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    opt_passes,
+                    opt_passes2,
                     kern,
                 ],
                 ',',
             ),
         )
     elseif optimize === :before_kernel
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
         run_pass_pipeline!(
             mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
         )
@@ -413,13 +427,13 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    opt_passes,
+                    opt_passes2,
                 ],
                 ',',
             ),
         )
     elseif optimize === :no_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
         run_pass_pipeline!(mod, "arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
@@ -428,7 +442,7 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    opt_passes,
+                    opt_passes2,
                 ],
                 ',',
             ),
@@ -457,14 +471,14 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    opt_passes,
+                    opt_passes2,
                     kern,
                 ],
                 ',',
             ),
         )
     elseif optimize === :before_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
         run_pass_pipeline!(
             mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
         )

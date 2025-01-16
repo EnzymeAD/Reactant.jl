@@ -128,7 +128,7 @@ end
 # maybe weird cuda things
 function aliased!(tup)
     x, y = tup
-    x[2][1] *= y[2][1]
+    x[1] *= y[1]
     return nothing
 end
 
@@ -142,13 +142,11 @@ end
     @testset "Aliasing arguments" begin
         a = ConcreteRArray([3])
 
-        s = (10, a)
-
         if CUDA.functional()
-            @jit aliased((s, s))
-            @test all(Array(a) == 9)
+            @jit aliased(a)
+            @test all(Array(a) .== 9)
         else
-            @code_hlo optimize = :before_kernel aliased(s)
+            @code_hlo optimize = :before_kernel aliased(a)
         end
     end
 end
@@ -170,10 +168,9 @@ end
         if CUDA.functional()
             a = CuArray([4])
             b = ConcreteRArray([3])
-
             @jit mixed(a, b)
-            @test all(Array(a) == 4)
-            @test all(Array(b) == 12)
+            @test all(Array(a) .== 4)
+            @test all(Array(b) .== 12)
         end
     end
 end
