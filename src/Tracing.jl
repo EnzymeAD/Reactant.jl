@@ -330,21 +330,22 @@ function make_tracer(
 )
     return prev
 end
-append_path(path, i) = (path..., i)
+append_path(@nospecialize(path), i) = (path..., i)
 
 function make_tracer(
     seen,
-    @nospecialize(prev::RT),
+    @nospecialize(prev),
     @nospecialize(path),
     mode;
     toscalar=false,
     tobatch=nothing,
     track_numbers=(),
     kwargs...,
-) where {RT}
+)
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
+    RT = Core.Typeof(prev)
     TT = traced_type(RT, (), Val(mode), track_numbers)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
@@ -439,7 +440,7 @@ function make_tracer(
     return res
 end
 
-function make_tracer(seen, prev::ConcreteRNumber{T}, path, mode; kwargs...) where {T}
+function make_tracer(seen, prev::ConcreteRNumber{T}, @nospecialize(path), mode; kwargs...) where {T}
     if mode == ArrayToConcrete
         return prev
     end
@@ -594,8 +595,9 @@ function make_tracer(
 end
 
 function make_tracer(
-    seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
-) where {RT<:Number}
+    seen, @nospecialize(prev::Number), @nospecialize(path), mode; track_numbers=(), kwargs...
+)
+    RT = Core.Typeof(prev)
     length(track_numbers) == 0 && return prev
     should_convert = any(Base.Fix1(<:, RT), track_numbers)
     if should_convert
@@ -625,18 +627,18 @@ function make_tracer(
     return prev
 end
 
-make_tracer(seen, prev::Type, @nospecialize(path), mode; kwargs...) = prev
+make_tracer(seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...) = prev
 make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...) = prev
 
 function make_tracer(
     seen,
-    @nospecialize(prev::Complex{RT}),
+    @nospecialize(prev::Complex),
     @nospecialize(path),
     mode;
     toscalar=false,
     tobatch=nothing,
     kwargs...,
-) where {RT}
+)
     return Complex(
         make_tracer(
             seen, prev.re, append_path(path, :re), mode; toscalar, tobatch, kwargs...
@@ -648,8 +650,9 @@ function make_tracer(
 end
 
 function make_tracer(
-    seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
-) where {RT<:Array}
+    seen, @nospecialize(prev::Array), @nospecialize(path), mode; track_numbers=(), kwargs...
+)
+    RT = Core.Typeof(prev)
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
@@ -678,8 +681,8 @@ function make_tracer(
 end
 
 function make_tracer(
-    seen, @nospecialize(prev::RT), @nospecialize(path), mode; kwargs...
-) where {RT<:Tuple}
+    seen, @nospecialize(prev::Tuple), @nospecialize(path), mode; kwargs...
+)
     return (
         (
             make_tracer(seen, v, append_path(path, i), mode; kwargs...) for
@@ -690,12 +693,15 @@ end
 
 function make_tracer(
     seen,
-    @nospecialize(prev::NamedTuple{A,RT}),
+    @nospecialize(prev::NamedTuple),
     @nospecialize(path),
     mode;
     track_numbers=(),
     kwargs...,
-) where {A,RT}
+)
+    NT = Core.Typeof(prev)
+    A = NT.parameters[1]
+    RT = NT.parameters[2]
     return NamedTuple{A,traced_type(RT, (), Val(mode), track_numbers)}((
         (
             make_tracer(
