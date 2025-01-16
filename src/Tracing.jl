@@ -743,7 +743,7 @@ function make_tracer(
 end
 
 function make_tracer(
-    seen, @nospecialize(prev::Array), @nospecialize(path), mode; @nospecialize(track_numbers::Type), kwargs...
+    seen, @nospecialize(prev::Array), @nospecialize(path), mode; @nospecialize(track_numbers::Type=Union{}), kwargs...
 )
     RT = Core.Typeof(prev)
     if mode != NoStopTracedTrack && haskey(seen, prev)
