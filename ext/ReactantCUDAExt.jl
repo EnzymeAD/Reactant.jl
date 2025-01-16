@@ -722,13 +722,13 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     return Core.Typeof(res)(f, res.entry)
 end
 
-function Reactant.traced_type(
+Base.@nospecializeinfer function Reactant.traced_type(
     @nospecialize(A::Type{<:CuTracedArray}), seen::ST, ::Val{mode}, track_numbers
 ) where {ST,mode}
     return A
 end
 
-function Reactant.traced_type(
+Base.@nospecializeinfer function Reactant.traced_type(
     @nospecialize(A::Type{<:CUDA.CuArray}), seen::ST, ::Val{mode}, track_numbers
 ) where {ST,mode}
     T = eltype(A)

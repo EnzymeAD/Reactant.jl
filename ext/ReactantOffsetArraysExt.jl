@@ -3,7 +3,7 @@ module ReactantOffsetArraysExt
 using OffsetArrays: OffsetArray
 using Reactant: Reactant, MLIR, Ops, TracedRArray
 
-function Reactant.traced_type(
+Base.@nospecializeinfer function Reactant.traced_type(
         @nospecialize(OA::Type{<:OffsetArray}), seen::ST, ::Val{mode}, track_numbers
 ) where {ST,mode}
     N = ndims(OA)
