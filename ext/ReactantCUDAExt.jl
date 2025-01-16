@@ -746,7 +746,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
 end
 
 function Reactant.make_tracer(
-    seen, @nospecialize(prev::CUDA.CuArray), @nospecialize(path), mode; track_numbers=(), kwargs...
+    seen, @nospecialize(prev::CUDA.CuArray), @nospecialize(path), mode; @nospecialize(track_numbers::Type=Union{}), kwargs...
 )
     RT = Core.Typeof(prev)
     if haskey(seen, prev)

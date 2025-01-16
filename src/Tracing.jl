@@ -311,33 +311,98 @@ end
 
 const traced_type_cache = Dict{Tuple{TraceMode, Type}, Dict{Type, Type}}()
 
-function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
-    @nospecialize
-    T = T.parameters[1]
-    mode = mode.parameters[1]::TraceMode
-    track_numbers = track_numbers.parameters[1]
+# function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
+#     @nospecialize
+#     T = T.parameters[1]
+#     mode = mode.parameters[1]::TraceMode
+#     track_numbers = track_numbers.parameters[1]
+# 
+# 
+#     min_world = Ref{UInt}(typemin(UInt))
+#     max_world = Ref{UInt}(typemax(UInt))
+# 
+#     sig = Tuple{typeof(traced_type_inner), Type{T}, Dict{Type, Type}, TraceMode, Type{track_numbers}}
+# 
+#     lookup_result = lookup_world(
+#         sig, world, nothing, min_world, max_world
+#     )
+#     if lookup_result === nothing
+#         stub = Core.GeneratedFunctionStub(identity, Core.svec(:traced_type, :T, :mode, :track_numbers), Core.svec())
+#         return stub(world, source, method_error) 
+#     end
+#     match = lookup_result::Core.MethodMatch
+# 
+#     mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
+#                (Any, Any, Any), match.method, match.spec_types, match.sparams)::Core.MethodInstance
+#     
+#     ci = Core.Compiler.retrieve_code_info(mi, world)::Core.Compiler.CodeInfo
+# 
+#     cache = nothing
+#     cache_key = (mode, track_numbers)
+#     if haskey(traced_type_cache, cache_key)
+#         cache = traced_type_cache[cache_key]
+#     else
+#         cache = Dict{Type, Type}()
+#         traced_type_cache[cache_key] = cache
+#     end
+# 
+# 
+#     # prepare a new code info
+#     new_ci = copy(ci)
+#     empty!(new_ci.code)
+#     @static if isdefined(Core, :DebugInfo)
+#       new_ci.debuginfo = Core.DebugInfo(:none)
+#     else
+#       empty!(new_ci.codelocs)
+#       resize!(new_ci.linetable, 1)                # see note below
+#     end
+#     empty!(new_ci.ssaflags)
+#     new_ci.ssavaluetypes = 0
+#     new_ci.min_world = min_world[]
+#     new_ci.max_world = max_world[]
+#     edges = Any[mi]
+#     gensig = Tuple{typeof(traced_type_inner), Type, Dict{Type, Type}, TraceMode, Type{track_numbers}}
+#     push!(edges, ccall(:jl_method_table_for, Any, (Any,), gensig))
+#     push!(edges, gensig)
+# 
+#     new_ci.edges = edges
+#     
+#     # XXX: setting this edge does not give us proper method invalidation, see
+#     #      JuliaLang/julia#34962 which demonstrates we also need to "call" the kernel.
+#     #      invoking `code_llvm` also does the necessary codegen, as does calling the
+#     #      underlying C methods -- which GPUCompiler does, so everything Just Works.
+# 
+#     # prepare the slots
+#     new_ci.slotnames = Symbol[Symbol("#self#"), :T, :mode, :track_numbers]
+#     new_ci.slotflags = UInt8[0x00 for i = 1:4]
+# 
+#     # return the codegen world age
+#     res1 = call_with_reactant(traced_type_inner, T, cache, mode, track_numbers)
+# 
+#     res0 = Base.invoke_in_world(world, traced_type_inner, T, cache, mode, track_numbers)
+#     res = Base.invokelatest(traced_type_inner, T, cache, mode, track_numbers)
+#     push!(new_ci.code, Core.Compiler.ReturnNode(res))
+#     push!(new_ci.ssaflags, 0x00)   # Julia's native compilation pipeline (and its verifier) expects `ssaflags` to be the same length as `code`
+#     @static if isdefined(Core, :DebugInfo)
+#     else
+#       push!(new_ci.codelocs, 1)   # see note below
+#     end
+#     new_ci.ssavaluetypes += 1
+# 
+#     # NOTE: we keep the first entry of the original linetable, and use it for location info
+#     #       on the call to check_cache. we can't not have a codeloc (using 0 causes
+#     #       corruption of the back trace), and reusing the target function's info
+#     #       has as advantage that we see the name of the kernel in the backtraces.
+# 
+#     return new_ci
+# end
+# 
+# @eval Base.@assume_effects :removable :foldable :nothrow @inline function traced_type_old(T::Type, mode::Val, track_numbers::Type)
+#     $(Expr(:meta, :generated_only))
+#     $(Expr(:meta, :generated, traced_type_generator))
+# end
 
-
-    min_world = Ref{UInt}(typemin(UInt))
-    max_world = Ref{UInt}(typemax(UInt))
-
-    sig = Tuple{typeof(traced_type_inner), Type{T}, Dict{Type, Type}, TraceMode, Type{track_numbers}}
-
-    lookup_result = lookup_world(
-        sig, world, nothing, min_world, max_world
-    )
-    if lookup_result === nothing
-        @show sig
-        stub = Core.GeneratedFunctionStub(identity, Core.svec(:traced_type, :T, :mode, :track_numbers), Core.svec())
-        return stub(world, source, method_error) 
-    end
-    match = lookup_result::Core.MethodMatch
-
-    mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
-               (Any, Any, Any), match.method, match.spec_types, match.sparams)::Core.MethodInstance
-    
-    ci = Core.Compiler.retrieve_code_info(mi, world)::Core.Compiler.CodeInfo
-
+Base.@assume_effects :total @inline function traced_type(T::Type, ::Val{mode}, track_numbers::Type) where mode
     cache = nothing
     cache_key = (mode, track_numbers)
     if haskey(traced_type_cache, cache_key)
@@ -346,58 +411,7 @@ function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type)
         cache = Dict{Type, Type}()
         traced_type_cache[cache_key] = cache
     end
-
-
-    # prepare a new code info
-    new_ci = copy(ci)
-    empty!(new_ci.code)
-    @static if isdefined(Core, :DebugInfo)
-      new_ci.debuginfo = Core.DebugInfo(:none)
-    else
-      empty!(new_ci.codelocs)
-      resize!(new_ci.linetable, 1)                # see note below
-    end
-    empty!(new_ci.ssaflags)
-    new_ci.ssavaluetypes = 0
-    new_ci.min_world = min_world[]
-    new_ci.max_world = max_world[]
-    edges = Any[mi]
-    gensig = Tuple{typeof(traced_type_inner), Type, Dict{Type, Type}, TraceMode, Type{track_numbers}}
-    push!(edges, ccall(:jl_method_table_for, Any, (Any,), gensig))
-    push!(edges, gensig)
-
-    new_ci.edges = edges
-    
-    # XXX: setting this edge does not give us proper method invalidation, see
-    #      JuliaLang/julia#34962 which demonstrates we also need to "call" the kernel.
-    #      invoking `code_llvm` also does the necessary codegen, as does calling the
-    #      underlying C methods -- which GPUCompiler does, so everything Just Works.
-
-    # prepare the slots
-    new_ci.slotnames = Symbol[Symbol("#self#"), :T, :mode, :track_numbers]
-    new_ci.slotflags = UInt8[0x00 for i = 1:4]
-
-    # return the codegen world age
-    res = Base.invokelatest(traced_type_inner, T, cache, mode, track_numbers)
-    push!(new_ci.code, Core.Compiler.ReturnNode(res))
-    push!(new_ci.ssaflags, 0x00)   # Julia's native compilation pipeline (and its verifier) expects `ssaflags` to be the same length as `code`
-    @static if isdefined(Core, :DebugInfo)
-    else
-      push!(new_ci.codelocs, 1)   # see note below
-    end
-    new_ci.ssavaluetypes += 1
-
-    # NOTE: we keep the first entry of the original linetable, and use it for location info
-    #       on the call to check_cache. we can't not have a codeloc (using 0 causes
-    #       corruption of the back trace), and reusing the target function's info
-    #       has as advantage that we see the name of the kernel in the backtraces.
-
-    return new_ci
-end
-
-@eval Base.@assume_effects :removable :foldable :nothrow @inline function traced_type(T::Type, mode::Val, track_numbers::Type)
-    $(Expr(:meta, :generated_only))
-    $(Expr(:meta, :generated, traced_type_generator))
+    res1 = traced_type_inner(T, cache, mode, track_numbers)
 end
 
 abstract type TracedTypeException <: Exception end
