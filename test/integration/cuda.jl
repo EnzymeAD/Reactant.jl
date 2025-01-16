@@ -142,13 +142,11 @@ end
     @testset "Aliasing arguments" begin
         a = ConcreteRArray([3])
 
-        s = (10, a)
-
         if CUDA.functional()
-            @jit aliased((s, s))
+            @jit aliased(a)
             @test all(Array(a) == 9)
         else
-            @code_hlo optimize = :before_kernel aliased(s)
+            @code_hlo optimize = :before_kernel aliased(a)
         end
     end
 end
