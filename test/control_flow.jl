@@ -219,14 +219,14 @@ end
 
 @testset "condition6: bareif relu" begin
     x = 2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition6_bareif_relu(x_ra))
     res = condition6_bareif_relu(x)
     @test res_ra ≈ res
 
     x = -2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition6_bareif_relu(x_ra))
     res = condition6_bareif_relu(x)
@@ -246,21 +246,21 @@ end
 
 @testset "condition7: bare elseif" begin
     x = 2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition7_bare_elseif(x_ra))
     res = condition7_bare_elseif(x)
     @test res_ra ≈ res
 
     x = -2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition7_bare_elseif(x_ra))
     res = condition7_bare_elseif(x)
     @test res_ra ≈ res
 
     x = 0.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition7_bare_elseif(x_ra))
     res = condition7_bare_elseif(x)

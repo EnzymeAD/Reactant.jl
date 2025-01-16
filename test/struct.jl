@@ -22,6 +22,12 @@ mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N
     inds::Vector{Symbol}
 end
 
+Base.@nospecializeinfer function Reactant.traced_type_inner(@nospecialize(A::Type{<:MockTensor}), seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type))
+    T2 = Reactant.traced_type_inner(A.parameters[3], seen, mode, track_numbers)
+    MT = MockTensor{eltype(T2), ndims(A), T2}
+    return MT
+end
+
 function MutableMockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}}
     return MutableMockTensor{T,N,A}(data, inds)
 end

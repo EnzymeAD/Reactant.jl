@@ -722,37 +722,40 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     return Core.Typeof(res)(f, res.entry)
 end
 
-function Reactant.traced_type(
-    ::Type{A}, seen::ST, ::Val{mode}, track_numbers
-) where {A<:CuTracedArray,ST,mode}
+Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @nospecialize(A::Type{<:CuTracedArray}), seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type)
+)
     return A
 end
 
-function Reactant.traced_type(
-    ::Type{A}, seen::ST, ::Val{mode}, track_numbers
-) where {T,N,A<:CUDA.CuArray{T,N},ST,mode}
+Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @nospecialize(A::Type{<:CUDA.CuArray}), seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type)
+)
+    T = eltype(A)
+    N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         return Reactant.ConcreteRArray{T,N}
     else
-        TT = Reactant.traced_type(T, seen, Val(mode), track_numbers)
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers)
         if TT === T
             return A
         else
-            return Array{traced_type(T, seen, Val(mode), track_numbers),N}
+            return Array{Reactant.traced_type_inner(T, seen, mode, track_numbers),N}
         end
     end
 end
 
 function Reactant.make_tracer(
-    seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
-) where {RT<:CUDA.CuArray}
+    seen, @nospecialize(prev::CUDA.CuArray), @nospecialize(path), mode; @nospecialize(track_numbers::Type=Union{}), kwargs...
+)
+    RT = Core.Typeof(prev)
     if haskey(seen, prev)
         return seen[prev]
     end
     if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
         return seen[prev] = Reactant.ConcreteRArray(Array(prev))
     end
-    TT = Reactant.traced_type(eltype(RT), (), Val(mode), track_numbers)
+    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers)
     if TT === eltype(RT)
         return prev
     end
