@@ -88,9 +88,9 @@ end
 end
 
 @testset "Bool attributes" begin
-    x_ra = Reactant.to_rarray(false; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(false; track_numbers=Number)
     @test @jit(iszero(x_ra)) == true
-    x_ra = Reactant.to_rarray(true; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(true; track_numbers=Number)
     @test @jit(iszero(x_ra)) == false
 end
 

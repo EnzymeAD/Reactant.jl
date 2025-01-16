@@ -723,13 +723,13 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(A::Type{<:CuTracedArray}), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
+    @nospecialize(A::Type{<:CuTracedArray}), seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type)
 )
     return A
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(A::Type{<:CUDA.CuArray}), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
+    @nospecialize(A::Type{<:CUDA.CuArray}), seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type)
 )
     T = eltype(A)
     N = ndims(A)

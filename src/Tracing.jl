@@ -361,7 +361,13 @@ function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type)
     new_ci.ssavaluetypes = 0
     new_ci.min_world = min_world[]
     new_ci.max_world = max_world[]
-    new_ci.edges = Core.MethodInstance[mi]
+    edges = Any[mi]
+    gensig = Tuple{typeof(traced_type_inner), Type, Dict{Type, Type}, TraceMode, Type{track_numbers}}
+    push!(edges, ccall(:jl_method_table_for, Any, (Any,), gensig))
+    push!(edges, gensig)
+
+    new_ci.edges = edges
+    
     # XXX: setting this edge does not give us proper method invalidation, see
     #      JuliaLang/julia#34962 which demonstrates we also need to "call" the kernel.
     #      invoking `code_llvm` also does the necessary codegen, as does calling the
@@ -372,7 +378,7 @@ function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type)
     new_ci.slotflags = UInt8[0x00 for i = 1:4]
 
     # return the codegen world age
-    res = traced_type_inner(T, cache, mode, track_numbers)
+    res = Base.invokelatest(traced_type_inner, T, cache, mode, track_numbers)
     push!(new_ci.code, Core.Compiler.ReturnNode(res))
     push!(new_ci.ssaflags, 0x00)   # Julia's native compilation pipeline (and its verifier) expects `ssaflags` to be the same length as `code`
     @static if isdefined(Core, :DebugInfo)
