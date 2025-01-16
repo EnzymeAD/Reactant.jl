@@ -2056,26 +2056,35 @@ end
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
 
-    fname = Reactant.TracedUtils.get_attribute_by_name(comp_func, "sym_name")
-    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
-
-    batch_inputs = [x.mlir_data for x in args]
     out_tys = [
         MLIR.IR.TensorType((B, size(r)...), MLIR.IR.Type(Reactant.unwrapped_eltype(r))) for
         r in result
     ]
+    return batch(args, out_tys, Int64[B]; fn=comp_func)
+end
+
+@noinline function batch(
+    inputs::Vector{<:Union{<:TracedRArray,<:MLIR.IR.Value}},
+    output_types::Vector{<:MLIR.IR.Type},
+    batch_shape::Vector{Int64};
+    fn,
+    location=mlir_stacktrace("batch", @__FILE__, @__LINE__),
+)
+    fname = Reactant.TracedUtils.get_attribute_by_name(fn, "sym_name")
+    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
 
     op = MLIR.Dialects.enzyme.batch(
-        batch_inputs;
-        outputs=out_tys,
+        [i isa TracedRArray ? i.mlir_data : i for i in inputs];
+        outputs=output_types,
         fn=fname,
-        batch_shape=MLIR.IR.DenseArrayAttribute(Int64[B]),
+        batch_shape=MLIR.IR.DenseArrayAttribute(batch_shape),
+        location,
     )
 
     return [
-        TracedRArray{Reactant.unwrapped_eltype(r),ndims(r) + 1}(
-            (), MLIR.IR.result(op, i), (B, size(r)...)
-        ) for (i, r) in enumerate(result)
+        TracedRArray{MLIR.IR.julia_type(eltype(out_type)),ndims(out_type)}(
+            (), MLIR.IR.result(op, i), size(out_type)
+        ) for (i, out_type) in enumerate(output_types)
     ]
 end
 

@@ -339,7 +339,11 @@ function set!(x, path, tostore; emptypath=false)
         x = Reactant.Compiler.traced_getfield(x, p)
     end
 
-    set_mlir_data!(x, tostore)
+    if tostore isa TracedRArray
+        set_mlir_data!(x, tostore.mlir_data)
+    else
+        set_mlir_data!(x, tostore)
+    end
 
     return emptypath && set_paths!(x, ())
 end
@@ -392,15 +396,10 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     OutShape = isempty(seen_args) ? nothing : first(input_shapes)
     @assert !isnothing(OutShape)
 
-    in_tys2 = [Ops.mlir_type(invmap[arg]) for arg in linear_args]
-
     out_tys2 = [
         MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
         arg in linear_results
     ]
-
-    fname = get_attribute_by_name(func2, "sym_name")
-    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
 
     batch_inputs = MLIR.IR.Value[]
 
@@ -416,30 +415,25 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         end
     end
 
-    res = MLIR.Dialects.enzyme.batch(
-        batch_inputs;
-        outputs=out_tys2,
-        fn=fname,
-        batch_shape=MLIR.IR.DenseArrayAttribute([Int64(i) for i in OutShape]),
-    )
+    res = Ops.batch(batch_inputs, out_tys2, collect(Int64, OutShape); fn=func2)
 
     residx = 1
 
     for a in linear_results
         if TracedUtils.has_residx(a)
             path = TracedUtils.get_residx(a)
-            TracedUtils.set!(result, path[2:end], MLIR.IR.result(res, residx))
+            TracedUtils.set!(result, path[2:end], res[residx])
             residx += 1
         else
             idx, path = TracedUtils.get_argidx(a)
             if idx == 1 && fnwrap
-                TracedUtils.set!(f, path[3:end], MLIR.IR.result(res, residx))
+                TracedUtils.set!(f, path[3:end], res[residx])
                 residx += 1
             else
                 if fnwrap
                     idx -= 1
                 end
-                TracedUtils.set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
+                TracedUtils.set!(args[idx], path[3:end], res[residx])
                 residx += 1
             end
         end
