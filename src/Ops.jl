@@ -1967,4 +1967,116 @@ end
     return corrected_traced_results
 end
 
+@noinline function batch(
+    f,
+    args::Vector{<:TracedRArray},
+    batch_dims::Vector{Union{Int,Nothing}},
+    result_dims::Union{Vector{Int},Nothing}=nothing,
+)
+    @assert length(batch_dims) == length(args)
+
+    batch_sizes = [dim === nothing ? 1 : size(x, dim) for (x, dim) in zip(args, batch_dims)]
+    filter!(x -> x != 1, batch_sizes)
+    @assert allequal(batch_sizes) "batching dimensions must be equal"
+    B = length(batch_sizes) == 0 ? 1 : first(batch_sizes)
+
+    args = map(zip(args, batch_dims)) do (arg, dim)
+        if dim === nothing
+            return broadcast_in_dim(arg, collect(1:ndims(arg)) .+ 1, Int64[B, size(arg)...])
+        end
+        order = collect(1:ndims(arg))
+        order[dim] = 1
+        order[1] = dim
+        return permutedims(arg, order)
+    end
+    results = batch(f, args)
+    result_dims === nothing && (result_dims = ones(Int64, length(results)))
+    @assert length(results) == length(result_dims)
+    return map(zip(results, result_dims)) do (result, dim)
+        order = collect(1:ndims(result))
+        order[dim] = 1
+        order[1] = dim
+        return permutedims(result, order)
+    end
+end
+
+@noinline function batch(f, args::Vector{<:TracedRArray})
+    batch_sizes = [size(x, 1) for x in args]
+    @assert allequal(batch_sizes) "batching dimensions must be equal"
+    B = first(batch_sizes)
+
+    in_tys = [
+        MLIR.IR.TensorType(size(arg)[2:end], MLIR.IR.Type(Reactant.unwrapped_eltype(arg)))
+        for arg in args
+    ]
+
+    sym_visibility = MLIR.IR.Attribute("private")
+
+    mod = MLIR.IR.mmodule()
+    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
+        return MLIR.Dialects.func.func_(;
+            sym_name=string(f) * "_batch_tmp",
+            function_type=MLIR.IR.FunctionType(in_tys, []),
+            body=MLIR.IR.Region(),
+            sym_visibility,
+        )
+    end
+    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in args])
+    push!(MLIR.IR.region(func, 1), fnbody)
+
+    linear_args = [
+        TracedRArray{Reactant.unwrapped_eltype(arg),ndims(arg) - 1}(
+            (), nothing, size(arg)[2:end]
+        ) for arg in args
+    ]
+
+    MLIR.IR.activate!(fnbody)
+    result = try
+        for (i, arg) in enumerate(linear_args)
+            raw_arg = MLIR.IR.argument(fnbody, i)
+            Reactant.TracedUtils.set_mlir_data!(arg, raw_arg)
+        end
+        res = Reactant.call_with_reactant(f, linear_args...)
+        (res isa TracedRArray || res isa TracedRNumber) && (res = [res])
+        MLIR.Dialects.func.return_([r.mlir_data for r in res])
+        res
+    finally
+        MLIR.IR.deactivate!(fnbody)
+    end
+
+    comp_func = MLIR.IR.block!(MLIR.IR.body(mod)) do
+        return MLIR.Dialects.func.func_(;
+            sym_name=string(f) * "_batch",
+            function_type=MLIR.IR.FunctionType(in_tys, [mlir_type(r) for r in result]),
+            body=MLIR.IR.Region(),
+            sym_visibility,
+        )
+    end
+    MLIR.API.mlirRegionTakeBody(MLIR.IR.region(comp_func, 1), MLIR.IR.region(func, 1))
+    MLIR.API.mlirOperationDestroy(func.operation)
+    func.operation = MLIR.API.MlirOperation(C_NULL)
+
+    fname = Reactant.TracedUtils.get_attribute_by_name(comp_func, "sym_name")
+    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+
+    batch_inputs = [x.mlir_data for x in args]
+    out_tys = [
+        MLIR.IR.TensorType((B, size(r)...), MLIR.IR.Type(Reactant.unwrapped_eltype(r))) for
+        r in result
+    ]
+
+    op = MLIR.Dialects.enzyme.batch(
+        batch_inputs;
+        outputs=out_tys,
+        fn=fname,
+        batch_shape=MLIR.IR.DenseArrayAttribute(Int64[B]),
+    )
+
+    return [
+        TracedRArray{Reactant.unwrapped_eltype(r),ndims(r) + 1}(
+            (), MLIR.IR.result(op, i), (B, size(r)...)
+        ) for (i, r) in enumerate(result)
+    ]
+end
+
 end # module Ops
