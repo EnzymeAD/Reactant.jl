@@ -758,7 +758,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(A::Type{<:CuTracedArray}),
     seen,
     mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(args::Vararg)
 )
     return A
 end
@@ -767,18 +767,18 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(A::Type{<:CUDA.CuArray}),
     seen,
     mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(args::Vararg)
 )
     T = eltype(A)
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         return Reactant.ConcreteRArray{T,N}
     else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers)
+        TT = Reactant.traced_type_inner(T, seen, mode, args...)
         if TT === T
             return A
         else
-            return Array{Reactant.traced_type_inner(T, seen, mode, track_numbers),N}
+            return Array{Reactant.traced_type_inner(T, seen, mode, args...),N}
         end
     end
 end
