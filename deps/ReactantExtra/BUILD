@@ -437,6 +437,9 @@ cc_library(
 "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
 "-Wl,-exported_symbol,_ReactantThrowError",
 "-Wl,-exported_symbol,_ReactantHandleCuResult",
+"-Wl,-exported_symbol,_CreateProfilerSession",
+"-Wl,-exported_symbol,_ProfilerSessionCollectData",
+"-Wl,-exported_symbol,_ProfilerSessionDelete",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -506,9 +509,24 @@ cc_library(
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/ffi:call_frame",
         "@com_google_protobuf//:protobuf",
-	"@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
+
+        "@tsl//tsl/profiler/lib:profiler_session_impl",
+        "@tsl//tsl/profiler/lib:profiler_factory_impl",
+        "@tsl//tsl/profiler/lib:profiler_controller",
+        "@xla//xla/tsl/profiler/rpc/client:capture_profile",
+        "@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
         "@xla//xla/tsl/profiler/backends/cpu:traceme_recorder_impl",
         "@xla//xla/tsl/profiler/utils:time_utils_impl",
+        "@tsl//tsl/profiler/protobuf:profiler_options_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:profile_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:xplane_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:trace_events_proto_cc_impl",
+
+        "@xla//xla/backends/profiler/cpu:host_tracer",
+        "@xla//xla/backends/profiler/cpu:host_tracer_impl",
+        "@xla//xla/backends/profiler/cpu:metadata_collector",
+        "@xla//xla/backends/profiler/cpu:metadata_utils",
+
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
@@ -529,10 +547,14 @@ cc_library(
         "@xla//xla/service/gpu:nvptx_compiler",
         "@xla//xla/service/gpu:gpu_transfer_manager",
         "@xla//xla/stream_executor:kernel", 
+        "@xla//xla/backends/profiler/gpu:device_tracer",
+        "@xla//xla/backends/profiler/gpu:device_tracer_impl",
     ],
     "//conditions:default": [],
     }) + if_rocm([
         "@xla//xla/service/gpu:amdgpu_compiler",
+        "@xla//xla/backends/profiler/gpu:device_tracer",
+        "@xla//xla/backends/profiler/gpu:device_tracer_impl",
     ]),
 )
 

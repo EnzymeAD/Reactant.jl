@@ -52,6 +52,9 @@
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/status_casters.h"
 
+#include "tsl/profiler/lib/profiler_session.h"
+#include "xla/tsl/profiler/rpc/client/capture_profile.h"
+
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -121,10 +124,10 @@ template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
 
 extern "C" void ReactantHandleCuResult(uint32_t curesult) {
   if (curesult != 0) {
-      std::string err = "Bad Cuda Result = " + std::to_string(curesult);
-      if (ReactantThrowError) {
-        ReactantThrowError(err.c_str());
-      }
+    std::string err = "Bad Cuda Result = " + std::to_string(curesult);
+    if (ReactantThrowError) {
+      ReactantThrowError(err.c_str());
+    }
   }
 }
 
@@ -208,6 +211,31 @@ extern "C" MLIR_CAPI_EXPORTED MlirAttribute
 enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
   return wrap(mlir::enzyme::ActivityAttr::get(unwrap(ctx),
                                               (mlir::enzyme::Activity)val));
+}
+
+// Create profiler session and start profiling
+extern "C" tsl::ProfilerSession *
+CreateProfilerSession(uint32_t device_tracer_level,
+                      uint32_t host_tracer_level) {
+  tensorflow::ProfileOptions options = tsl::ProfilerSession::DefaultOptions();
+  options.set_device_tracer_level(device_tracer_level);
+  options.set_host_tracer_level(host_tracer_level);
+  auto sess = tsl::ProfilerSession::Create(options);
+  return sess.release();
+}
+
+extern "C" void ProfilerSessionCollectData(tsl::ProfilerSession *session,
+                                           const char *path) {
+  tensorflow::profiler::XSpace xspace;
+  auto status = session->CollectData(&xspace);
+  if (!status.ok())
+    ReactantThrowError("cannot collect data for profiler");
+  tsl::profiler::ExportToTensorBoard(xspace, path,
+                                     /*also_export_trace_json*/ true);
+}
+
+extern "C" void ProfilerSessionDelete(tsl::ProfilerSession *session) {
+  delete session;
 }
 
 extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
