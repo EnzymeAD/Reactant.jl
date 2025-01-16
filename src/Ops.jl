@@ -1967,107 +1967,25 @@ end
     return corrected_traced_results
 end
 
-@noinline function batch(
-    f,
-    args::Vector{<:TracedRArray},
-    batch_dims::Vector{<:Union{Int64,Nothing}},
-    result_dims::Union{Vector{Int64},Nothing}=nothing,
-)
-    @assert length(batch_dims) == length(args)
+"""
+    batch(
+        inputs::Vector{<:Union{<:TracedRArray,<:MLIR.IR.Value}},
+        output_types::Vector{<:MLIR.IR.Type},
+        batch_shape::Vector{Int64};
+        fn,
+        location=mlir_stacktrace("batch", @__FILE__, @__LINE__),
+    )
 
-    batch_sizes = [dim === nothing ? 1 : size(x, dim) for (x, dim) in zip(args, batch_dims)]
-    filter!(x -> x != 1, batch_sizes)
-    @assert allequal(batch_sizes) "batching dimensions must be equal"
-    B = length(batch_sizes) == 0 ? 1 : first(batch_sizes)
+Generates a Reactant.MLIR.Dialects.enzyme.batch operation. It is recommended to use
+`Ops.batch(f, args, batch_dims, result_dims)` or `Ops.elem_apply(f, args...)` instead
+of calling this directly.
 
-    args = map(zip(args, batch_dims)) do (arg, dim)
-        if dim === nothing
-            return broadcast_in_dim(arg, collect(1:ndims(arg)) .+ 1, Int64[B, size(arg)...])
-        end
-        if size(arg, dim) == 1 && size(arg, dim) != B
-            new_dims = collect(Int64, size(arg))
-            new_dims[dim] = B
-            arg = broadcast_in_dim(arg, collect(1:ndims(arg)), new_dims)
-        end
-        order = collect(1:ndims(arg))
-        order[dim] = 1
-        order[1] = dim
-        return permutedims(arg, order)
-    end
-    results = batch(f, args)
-    result_dims === nothing && (result_dims = ones(Int64, length(results)))
-    @assert length(results) == length(result_dims)
-    return map(zip(results, result_dims)) do (result, dim)
-        order = collect(1:ndims(result))
-        order[dim] = 1
-        order[1] = dim
-        return permutedims(result, order)
-    end
-end
+!!! warning
 
-@noinline function batch(f, args::Vector{<:TracedRArray})
-    batch_sizes = [size(x, 1) for x in args]
-    @assert allequal(batch_sizes) "batching dimensions must be equal"
-    B = first(batch_sizes)
-
-    in_tys = [
-        MLIR.IR.TensorType(size(arg)[2:end], MLIR.IR.Type(Reactant.unwrapped_eltype(arg)))
-        for arg in args
-    ]
-
-    sym_visibility = MLIR.IR.Attribute("private")
-
-    mod = MLIR.IR.mmodule()
-    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
-            sym_name=string(f) * "_batch_tmp",
-            function_type=MLIR.IR.FunctionType(in_tys, []),
-            body=MLIR.IR.Region(),
-            sym_visibility,
-        )
-    end
-    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in args])
-    push!(MLIR.IR.region(func, 1), fnbody)
-
-    linear_args = [
-        TracedRArray{Reactant.unwrapped_eltype(arg),ndims(arg) - 1}(
-            (), nothing, size(arg)[2:end]
-        ) for arg in args
-    ]
-
-    MLIR.IR.activate!(fnbody)
-    result = try
-        for (i, arg) in enumerate(linear_args)
-            raw_arg = MLIR.IR.argument(fnbody, i)
-            Reactant.TracedUtils.set_mlir_data!(arg, raw_arg)
-        end
-        res = Reactant.call_with_reactant(f, linear_args...)
-        (res isa TracedRArray || res isa TracedRNumber) && (res = [res])
-        MLIR.Dialects.func.return_([r.mlir_data for r in res])
-        res
-    finally
-        MLIR.IR.deactivate!(fnbody)
-    end
-
-    comp_func = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
-            sym_name=string(f) * "_batch",
-            function_type=MLIR.IR.FunctionType(in_tys, [mlir_type(r) for r in result]),
-            body=MLIR.IR.Region(),
-            sym_visibility,
-        )
-    end
-    MLIR.API.mlirRegionTakeBody(MLIR.IR.region(comp_func, 1), MLIR.IR.region(func, 1))
-    MLIR.API.mlirOperationDestroy(func.operation)
-    func.operation = MLIR.API.MlirOperation(C_NULL)
-
-    out_tys = [
-        MLIR.IR.TensorType((B, size(r)...), MLIR.IR.Type(Reactant.unwrapped_eltype(r))) for
-        r in result
-    ]
-    return batch(args, out_tys, Int64[B]; fn=comp_func)
-end
-
+    This function batches the inputs based on the starting dimensions of the inputs. This
+    aligns with the default ordering in Python frameworks like JAX and PyTorch, but is
+    opposite to the default ordering in Julia.
+"""
 @noinline function batch(
     inputs::Vector{<:Union{<:TracedRArray,<:MLIR.IR.Value}},
     output_types::Vector{<:MLIR.IR.Type},
@@ -2092,6 +2010,43 @@ end
     ]
 end
 
+# This function assumes that the last dimension of each element is the batch dimension by
+# default. This is the standard Julia ordering for batching. We permutedims the ordering to
+# make sure the first dimension is the batch dimension when calling `batch_internal` below.
+@noinline function batch(f, args...; batch_dims=nothing, result_dims=nothing)
+    # @assert length(batch_dims) == length(args)
+
+    # batch_sizes = [dim === nothing ? 1 : size(x, dim) for (x, dim) in zip(args, batch_dims)]
+    # filter!(x -> x != 1, batch_sizes)
+    # @assert allequal(batch_sizes) "batching dimensions must be equal"
+    # B = length(batch_sizes) == 0 ? 1 : first(batch_sizes)
+
+    # args = map(zip(args, batch_dims)) do (arg, dim)
+    #     if dim === nothing
+    #         return broadcast_in_dim(arg, collect(1:ndims(arg)) .+ 1, Int64[B, size(arg)...])
+    #     end
+    #     if size(arg, dim) == 1 && size(arg, dim) != B
+    #         new_dims = collect(Int64, size(arg))
+    #         new_dims[dim] = B
+    #         arg = broadcast_in_dim(arg, collect(1:ndims(arg)), new_dims)
+    #     end
+    #     order = collect(1:ndims(arg))
+    #     order[dim] = 1
+    #     order[1] = dim
+    #     return permutedims(arg, order)
+    # end
+    # results = batch(f, args)
+    # result_dims === nothing && (result_dims = ones(Int64, length(results)))
+    # @assert length(results) == length(result_dims)
+    # return map(zip(results, result_dims)) do (result, dim)
+    #     order = collect(1:ndims(result))
+    #     order[dim] = 1
+    #     order[1] = dim
+    #     return permutedims(result, order)
+    # end
+    return error(1)
+end
+
 """
     elem_apply(f, args...)
 
@@ -2099,28 +2054,56 @@ This is equivalent to `f.(args...)` but generates optimized code using
 Reactant.MLIR.Dialects.enzyme.batch.
 """
 @noinline function elem_apply(f, args::Vararg)
-    if all(iszero ∘ ndims, args)
-        scalar_args = map(args) do arg
-            return Reactant.TracedUtils.promote_to(
-                TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg
-            )
+    return batch_internal(f, args...; batchmode=Reactant.BatchScalar)
+end
+
+@noinline function elem_apply(
+    ::Type{T}, x::TracedRArray{T}
+) where {T<:Reactant.ReactantPrimitive}
+    return x
+end
+
+@noinline function elem_apply(
+    ::Type{T}, x::TracedRArray
+) where {T<:Reactant.ReactantPrimitive}
+    # Special Path to prevent going down a despecialized path
+    return elem_apply(Reactant.TracedUtils.TypeCast{T}(), x)
+end
+
+@noinline function batch_internal(f, args::Vararg; batchmode=Reactant.BatchArray)
+    @assert batchmode != Reactant.BatchNone
+
+    if batchmode == Reactant.BatchScalar
+        if all(iszero ∘ ndims, args)
+            scalar_args = map(args) do arg
+                return Reactant.TracedUtils.promote_to(
+                    TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg
+                )
+            end
+            return f(scalar_args...)
         end
-        return f(scalar_args...)
     end
 
     fnwrap, func2, _, result, seen_args, _, linear_args, _, linear_results = Reactant.TracedUtils.make_mlir_fn(
         f,
         args,
         (),
-        string(f) * "_broadcast_scalar",
+        string(f) * (batchmode == Reactant.BatchArray ? "_batch" : "_broadcast_scalar"),
         false;
-        batchmode=Reactant.BatchScalar,
-        no_args_in_result=true,
+        batchmode,
+        no_args_in_result=batchmode == Reactant.BatchScalar,
+        do_transpose=false,
     )
 
-    input_shapes = [size(k) for k in keys(seen_args) if k isa Reactant.TracedType]
-    @assert allequal(input_shapes) "input shapes are $(input_shapes)"
-    OutShape = first(input_shapes)
+    if batchmode == Reactant.BatchArray
+        batch_sizes = [size(k, 1) for k in keys(seen_args) if k isa Reactant.TracedType]
+        @assert allequal(batch_sizes) "batching dimensions must be equal"
+        B = first(batch_sizes)
+    else
+        input_shapes = [size(k) for k in keys(seen_args) if k isa Reactant.TracedType]
+        @assert allequal(input_shapes) "input shapes are $(input_shapes)"
+        output_shape = first(input_shapes)
+    end
 
     batch_inputs = MLIR.IR.Value[]
     for a in linear_args
@@ -2136,10 +2119,12 @@ Reactant.MLIR.Dialects.enzyme.batch.
     res = batch(
         batch_inputs,
         [
-            MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
-            arg in linear_results
+            MLIR.IR.TensorType(
+                batchmode == Reactant.BatchArray ? (B, size(arg)...) : output_shape,
+                MLIR.IR.Type(Reactant.unwrapped_eltype(arg)),
+            ) for arg in linear_results
         ],
-        collect(Int64, OutShape);
+        batchmode == Reactant.BatchArray ? Int64[B] : collect(Int64, output_shape);
         fn=func2,
     )
 
@@ -2164,26 +2149,16 @@ Reactant.MLIR.Dialects.enzyme.batch.
 
     seen_results = Reactant.OrderedIdDict()
     traced2_result = Reactant.make_tracer(
-        seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
+        seen_results,
+        result,
+        (),
+        Reactant.TracedSetPath;
+        tobatch=batchmode == Reactant.BatchArray ? output_shape : (B,),
+        batchmode,
     )
     func2.operation = MLIR.API.MlirOperation(C_NULL)
 
     return traced2_result
-end
-
-@noinline elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:Reactant.ReactantPrimitive} =
-    x
-
-struct TypeCast{T<:Reactant.ReactantPrimitive} <: Function end
-
-@noinline (f::TypeCast{T})(x::TracedRNumber) where {T} =
-    Reactant.TracedUtils.promote_to(TracedRNumber{T}, x)
-
-@noinline function elem_apply(
-    ::Type{T}, x::TracedRArray
-) where {T<:Reactant.ReactantPrimitive}
-    # Special Path to prevent going down a despecialized path
-    return elem_apply(TypeCast{T}(), x)
 end
 
 end # module Ops

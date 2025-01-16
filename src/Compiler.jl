@@ -795,7 +795,7 @@ function codegen_unflatten!(
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                length(p) > 0 && (p[1] == :result || p[1] == :resargs)
+                length(p) ≥ 1 && (p[1] == :result || p[1] == :resargs)
             )...,
         )
         for path in paths
@@ -865,7 +865,7 @@ function codegen_unflatten!(
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                length(p) > 0 && (p[1] == :result || p[1] == :resargs || p[1] == :args)
+                length(p) ≥ 1 && (p[1] == :result || p[1] == :resargs || p[1] == :args)
             )...,
         )
 

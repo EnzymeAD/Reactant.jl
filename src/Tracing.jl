@@ -713,14 +713,23 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = if batchmode == BatchScalar
-            TracedRNumber{T}((path,), nothing)
-        elseif batchmode == BatchArray
-            error("Not implemented")
-        elseif tobatch !== nothing
-            error("This should not happen...")
-        else
+        res = if batchmode == BatchNone
+            @assert tobatch === nothing
             TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
+        elseif batchmode == BatchScalar
+            if tobatch === nothing
+                TracedRNumber{T}((path,), nothing)
+            else
+                error("BatchScalar + tobatch for TracedRArray doesn't make sense")
+            end
+        else
+            if tobatch === nothing
+                TracedRArray{T,N - 1}((path,), nothing, size(prev)[2:end])
+            else
+                TracedRArray{T,N + length(tobatch)}(
+                    (path,), prev.mlir_data, (tobatch..., size(prev)...)
+                )
+            end
         end
         seen[prev] = res
         return res
@@ -768,14 +777,17 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = if batchmode == BatchScalar
-            TracedRNumber{T}((path,), nothing)
-        elseif batchmode == BatchArray
-            error("Cannot BatchArray on a scalar")
-        elseif tobatch !== nothing
-            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
-        else
+        res = if batchmode == BatchNone
+            @assert tobatch === nothing
             TracedRNumber{T}((path,), prev.mlir_data)
+        elseif batchmode == BatchScalar
+            if tobatch === nothing
+                TracedRNumber{T}((path,), nothing)
+            else
+                TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+            end
+        else
+            error("Cannot BatchArray on a scalar")
         end
         seen[prev] = res
         return res
