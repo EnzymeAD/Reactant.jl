@@ -14,7 +14,8 @@ end
 @testset "loggamma" begin
     @test SpecialFunctions.loggamma(0.5) ≈
         @jit(SpecialFunctions.loggamma(ConcreteRNumber(0.5)))
-    @test SpecialFunctions.loggamma(2) ≈ @jit(SpecialFunctions.loggamma(ConcreteRNumber(2)))
+    @test abs(SpecialFunctions.loggamma(2)) < 1e-10
+    @test abs(@jit(SpecialFunctions.loggamma(ConcreteRNumber(2)))) < 1e-10
 end
 
 @testset "digamma" begin
