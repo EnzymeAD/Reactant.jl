@@ -139,6 +139,8 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
         "transpose_is_reshape<16>",
         "zero_extent_tensor_canon<16>",
         "reorder_elementwise_and_shape_op<16>",
+        "chlo_inf_const_prop<16>",
+        "gamma_const_prop<16>",
         "cse_broadcast_in_dim<16>",
         "cse_slice<16>",
         "cse_transpose<16>",
