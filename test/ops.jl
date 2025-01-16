@@ -689,7 +689,7 @@ end
 end
 
 @testset "sort" begin
-    basic_sort(x, dimension) = Ops.sort(x; comparator=(a, b) -> a < b, dimension)
+    basic_sort(x, dimension) = only(Ops.sort(x; comparator=(a, b) -> a < b, dimension))
     @testset for i in 1:3
         t_size = tuple(fill(10, (i,))...)
         x = randn(t_size)
@@ -916,7 +916,14 @@ end
 
 @testset "top_k" begin
     x = ConcreteRArray([1, 2, 3, 4])
-    @test (; values=[4, 3], indices=[3, 2]) == @jit Ops.top_k(x, 2)
+    @test (; values=[4, 3], indices=[4, 3]) == @jit Ops.top_k(x, 2)
+
+    x = ConcreteRArray([NaN, 123, 456, 789, 121])
+    res = @jit Ops.top_k(x, 2)
+    true_res = (; values=[NaN, 789], indices=[1, 4])
+    @test res.indices == true_res.indices
+    @test @allowscalar isnan(res.values[1])
+    @test @allowscalar res.values[2] == 789
 end
 
 @testset "zeta" begin

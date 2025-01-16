@@ -129,6 +129,7 @@ for (jlop, hloop, hlocomp) in (
     (:(Base.:(>)), :compare, "GT"),
     (:(Base.:(<=)), :compare, "LE"),
     (:(Base.:(<)), :compare, "LT"),
+    (:(Base.isless), :compare, "LT"),
 )
     @eval begin
         function $(jlop)(
@@ -246,8 +247,21 @@ Base.conj(x::TracedRNumber{<:Complex}) = Ops.conj(x)
 Base.real(x::TracedRNumber) = x
 Base.real(x::TracedRNumber{<:Complex}) = Ops.real(x)
 
+Base.isreal(::TracedRNumber) = false
+Base.isreal(::TracedRNumber{<:Real}) = true
+
 Base.imag(x::TracedRNumber) = zero(x)
 Base.imag(x::TracedRNumber{<:Complex}) = Ops.imag(x)
+
+Base.iseven(x::TracedRNumber) = iseven(real(x))
+function Base.iseven(x::TracedRNumber{<:Real})
+    return iszero(
+        rem(
+            TracedUtils.promote_to(TracedRNumber{Int}, x),
+            TracedUtils.promote_to(TracedRNumber{Int}, 2),
+        ),
+    )
+end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
     @eval Base.clamp(x::TracedRNumber, min::$(minT), max::$(maxT)) = Ops.clamp(min, x, max)

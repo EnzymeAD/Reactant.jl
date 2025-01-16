@@ -28,6 +28,8 @@ function Base.rtoldefault(::Type{ConcreteRNumber{T}}) where {T}
     return ConcreteRNumber(Base.rtoldefault(T))
 end
 
+Base.strides(x::ConcreteRArray) = Base.size_to_strides(1, size(x)...)
+
 # Ensure the device and client are the same as the input
 function Base.float(x::ConcreteRNumber{T}) where {T}
     client = XLA.client(x.data)

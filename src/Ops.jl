@@ -956,19 +956,26 @@ function broadcast_in_dim(
 end
 
 @noinline function sort(
-    x::TracedRArray{T,N};
+    xs::TracedRArray...;
     comparator,
     dimension=1,
     is_stable=false,
     location=mlir_stacktrace("sort", @__FILE__, @__LINE__),
-) where {T,N}
+)
     #C4:
-    @assert 0 < dimension <= ndims(x) "$x invalid dimension"
+    for x in xs
+        @assert 0 < dimension <= ndims(x) "$x invalid dimension"
+    end
 
-    (a, b) = (Reactant.ConcreteRNumber(T(0)), Reactant.ConcreteRNumber(T(0)))
+    sample_inputs = Vector{Reactant.ConcreteRNumber}(undef, length(xs) * 2)
+    for i in eachindex(xs)
+        T = Reactant.unwrapped_eltype(xs[i])
+        sample_inputs[2i - 1] = Reactant.ConcreteRNumber(T(0))
+        sample_inputs[2i] = Reactant.ConcreteRNumber(T(0))
+    end
     func = Reactant.TracedUtils.make_mlir_fn(
         comparator,
-        (a, b),
+        (sample_inputs...,),
         (),
         "comparator";
         no_args_in_result=true,
@@ -993,30 +1000,52 @@ end
     dimension = MLIR.IR.Attribute(dimension - 1)
     is_stable = MLIR.IR.Attribute(is_stable)
 
-    res = MLIR.IR.result(
-        stablehlo.sort(
-            [x.mlir_data];
-            result_0=[mlir_type(TracedRArray{T,N}, size(x))],
-            dimension,
-            is_stable,
-            comparator,
-            location,
-        ),
+    op = stablehlo.sort(
+        [x.mlir_data for x in xs];
+        result_0=[mlir_type(typeof(x), size(x)) for x in xs],
+        dimension,
+        is_stable,
+        comparator,
+        location,
     )
-    return TracedRArray{T,N}((), res, size(x))
+    return [
+        TracedRArray{Reactant.unwrapped_eltype(xs[i]),ndims(xs[i])}(
+            (), MLIR.IR.result(op, i), size(xs[i])
+        ) for i in eachindex(xs)
+    ]
 end
 
 @noinline function top_k(
-    x::TracedRArray{T,N}, k; location=mlir_stacktrace("top_k", @__FILE__, @__LINE__)
+    x::TracedRArray{T,N},
+    k;
+    dimension::Integer=N,
+    location=mlir_stacktrace("top_k", @__FILE__, @__LINE__),
 ) where {T,N}
+    @assert 1 <= dimension <= N
+    if dimension != N # chlo.top_k performs the operation along the last dimension
+        pdims = collect(Int64, 1:N)
+        pdims[dimension] = N
+        pdims[N] = dimension
+        x = permutedims(x, pdims)
+    end
+
     rsize = [size(x)[1:(end - 1)]..., k]
     values = mlir_type(TracedRArray{T,N}, rsize)
     indices = mlir_type(TracedRArray{Int32,N}, rsize)
     op = chlo.top_k(x.mlir_data; values, indices, k, location)
-    return (;
-        values=TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize),
-        indices=TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
-    )
+    indices = add(
+        TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
+        constant(fill(Int32(1), Tuple(rsize))),
+    ) # return the 1-indexed index
+    indices = convert(TracedRArray{Int64,N}, indices) # julia indexes with Int64 generally
+    values = TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize)
+
+    if dimension != N
+        values = permutedims(values, invperm(pdims))
+        indices = permutedims(indices, invperm(pdims))
+    end
+
+    return (; values, indices)
 end
 
 @noinline function iota(
