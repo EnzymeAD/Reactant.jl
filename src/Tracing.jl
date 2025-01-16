@@ -7,84 +7,6 @@
     NoStopTracedTrack = 6
 end
 
-for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, RNumber)
-    @eval Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:$T}), seen, mode, track_numbers)
-        return T
-    end
-end
-
-Base.@nospecializeinfer function traced_type(
-    @nospecialize(T::Type{<:Union{AbstractFloat,Integer}}), seen, mode::Val{Mode}, track_numbers
-)
-    if Mode == ArrayToConcrete && any(Base.Fix1(<:, T), track_numbers)
-        return ConcreteRNumber{T}
-    end
-    return T
-end
-
-Base.@nospecializeinfer function traced_type(
-    @nospecialize(C::Type{<:Complex}), seen::ST, mode::Val{Mode}, track_numbers::TN
-) where {ST,Mode,TN}
-    if !(C isa UnionAll)
-        return Complex{traced_type(C.parameters[1], seen, mode, track_numbers)}
-    else
-        return C
-    end
-end
-
-Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:Function}), seen, mode, track_numbers)
-    # functions are directly returned
-    if sizeof(T) == 0
-        return T
-    end
-
-    # in closures, enclosured variables need to be traced
-    N = fieldcount(T)
-    changed = false
-    traced_fieldtypes = ntuple(Val(N)) do i
-        next = traced_type(fieldtype(T, i), seen, mode, track_numbers)
-        changed |= next != fieldtype(T, i)
-        next
-    end
-
-    if !changed
-        return T
-    end
-
-    # closure are struct types with the types of enclosured vars as type parameters
-    return Core.apply_type(T.name.wrapper, traced_fieldtypes...)
-end
-
-@inline is_concrete_tuple(x::T2) where {T2} =
-    (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
-
-Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:Tuple}), seen, mode, track_numbers)
-    if !Base.isconcretetype(T) || !is_concrete_tuple(T) || T isa UnionAll
-        throw(AssertionError("Type $T is not concrete type or concrete tuple"))
-    elseif is_concrete_tuple(T) && any(T2 isa Core.TypeofVararg for T2 in T.parameters)
-        # Tuple{((T2 isa Core.TypeofVararg ? Any : T2) for T2 in T.parameters)...}
-        throw(AssertionError("Type tuple of vararg $T is not supported"))
-    end
-    TT = [
-        traced_type(T.parameters[i], seen, mode, track_numbers) for
-        i in 1:length(T.parameters)
-    ]
-    return Tuple{TT...}
-end
-
-Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:NamedTuple}), seen, mode, track_numbers)
-    N = T.parameters[1]
-    V = T.parameters[2]
-    return NamedTuple{N,traced_type(V, seen, mode, track_numbers)}
-end
-
-Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:AbstractDict}), seen, mode, track_numbers)
-    dictty = T.name.wrapper
-    K = T.parameters[1]
-    V = T.parameters[2]
-    return dictty{K,traced_type(V, seen, mode, track_numbers)}
-end
-
 @inline getmap(::Val{T}) where {T} = nothing
 @inline getmap(::Val{T}, a, b, args...) where {T} = getmap(Val(T), args...)
 @inline getmap(::Val{T}, ::Val{T}, ::Val{T2}, args...) where {T,T2} = T2
@@ -203,6 +125,84 @@ Base.@nospecializeinfer function traced_type(@nospecialize(T::Type), seen, mode,
     throw(NoFieldMatchError(T, TT2))
 end
 
+for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, AbstractFloat, Integer, RNumber)
+    @eval Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:$T}), seen, mode, track_numbers)
+        return T
+    end
+end
+
+Base.@nospecializeinfer function traced_type(
+    @nospecialize(T::Type{<:ReactantPrimitive}), seen, mode::Val{Mode}, track_numbers
+)
+    if Mode == ArrayToConcrete && any(Base.Fix1(<:, T), track_numbers)
+        return ConcreteRNumber{T}
+    end
+    return T
+end
+
+Base.@nospecializeinfer function traced_type(
+    @nospecialize(C::Type{<:Complex}), seen::ST, mode::Val{Mode}, track_numbers::TN
+) where {ST,Mode,TN}
+    if !(C isa UnionAll)
+        return Complex{traced_type(C.parameters[1], seen, mode, track_numbers)}
+    else
+        return C
+    end
+end
+
+Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:Function}), seen, mode, track_numbers)
+    # functions are directly returned
+    if sizeof(T) == 0
+        return T
+    end
+
+    # in closures, enclosured variables need to be traced
+    N = fieldcount(T)
+    changed = false
+    traced_fieldtypes = ntuple(Val(N)) do i
+        next = traced_type(fieldtype(T, i), seen, mode, track_numbers)
+        changed |= next != fieldtype(T, i)
+        next
+    end
+
+    if !changed
+        return T
+    end
+
+    # closure are struct types with the types of enclosured vars as type parameters
+    return Core.apply_type(T.name.wrapper, traced_fieldtypes...)
+end
+
+@inline is_concrete_tuple(x::T2) where {T2} =
+    (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
+
+Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:Tuple}), seen, mode, track_numbers)
+    if !Base.isconcretetype(T) || !is_concrete_tuple(T) || T isa UnionAll
+        throw(AssertionError("Type $T is not concrete type or concrete tuple"))
+    elseif is_concrete_tuple(T) && any(T2 isa Core.TypeofVararg for T2 in T.parameters)
+        # Tuple{((T2 isa Core.TypeofVararg ? Any : T2) for T2 in T.parameters)...}
+        throw(AssertionError("Type tuple of vararg $T is not supported"))
+    end
+    TT = [
+        traced_type(T.parameters[i], seen, mode, track_numbers) for
+        i in 1:length(T.parameters)
+    ]
+    return Tuple{TT...}
+end
+
+Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:NamedTuple}), seen, mode, track_numbers)
+    N = T.parameters[1]
+    V = T.parameters[2]
+    return NamedTuple{N,traced_type(V, seen, mode, track_numbers)}
+end
+
+Base.@nospecializeinfer function traced_type(@nospecialize(T::Type{<:AbstractDict}), seen, mode, track_numbers)
+    dictty = T.name.wrapper
+    K = T.parameters[1]
+    V = T.parameters[2]
+    return dictty{K,traced_type(V, seen, mode, track_numbers)}
+end
+
 Base.@nospecializeinfer function traced_type(
     @nospecialize(T0::Type{<:ConcreteRNumber}), seen, ::Val{mode}, track_numbers
 ) where {mode}
@@ -289,9 +289,6 @@ end
 
 for P in (Ptr, Core.LLVMPtr, Base.RefValue)
     @eval Base.@nospecializeinfer function traced_type(@nospecialize(PT::Type{<:$P}), seen, mode, track_numbers)
-        if PT isa UnionAll
-            return PT
-        end
         T = eltype(PT)
         return $P{traced_type(T, seen, mode, track_numbers)}
     end
