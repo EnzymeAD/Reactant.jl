@@ -9,7 +9,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
 )
     N = ndims(OA)
     T = OffsetArrays.parenttype(OA)
-    T2 = Reactant.traced_type_inner(T, seen, Val(mode), track_numbers)
+    T2 = Reactant.traced_type_inner(T, seen, mode, track_numbers)
     return OffsetArray{eltype(T2),N,T2}
 end
 
