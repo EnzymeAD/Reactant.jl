@@ -549,7 +549,7 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
 
     res = TracedUtils.promote_to(
         TracedRArray{unwrapped_eltype(dest),ndims(dest)},
-        TracedUtils.elem_apply(bc.f, args...),
+        Ops.elem_apply(bc.f, args...),
     )
     TracedUtils.set_mlir_data!(dest, res.mlir_data)
     return dest
@@ -563,8 +563,8 @@ function _copyto!(dest::AbstractArray{<:TracedRNumber}, bc::Broadcasted)
 
     args = (TracedUtils.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
-    res = TracedUtils.elem_apply(bc.f, args...)
-    for I in 1:length(dest)
+    res = Ops.elem_apply(bc.f, args...)
+    for I in eachindex(dest)
         dest[I] = Reactant.@allowscalar res[I]
     end
     return dest

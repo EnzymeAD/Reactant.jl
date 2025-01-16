@@ -7,9 +7,13 @@
     NoStopTracedTrack = 6
 end
 
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
-)
+@enum BatchMode begin
+    BatchNone = 1
+    BatchScalar = 2
+    BatchArray = 3
+end
+
+Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
     if T === Any
         return T
     end
@@ -575,9 +579,7 @@ function make_tracer(
     @nospecialize(prev),
     @nospecialize(path),
     mode;
-    toscalar=false,
-    tobatch=nothing,
-    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(track_numbers::Type=Union{}),
     kwargs...,
 )
     if mode != NoStopTracedTrack && haskey(seen, prev)
@@ -601,14 +603,7 @@ function make_tracer(
             if isdefined(prev, i)
                 xi = Base.getfield(prev, i)
                 xi2 = make_tracer(
-                    seen,
-                    xi,
-                    append_path(path, i),
-                    mode;
-                    toscalar,
-                    tobatch,
-                    track_numbers,
-                    kwargs...,
+                    seen, xi, append_path(path, i), mode; track_numbers, kwargs...
                 )
                 if xi !== xi2
                     changed = true
@@ -633,14 +628,7 @@ function make_tracer(
         if isdefined(prev, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
-                seen,
-                xi,
-                append_path(path, i),
-                mode;
-                toscalar,
-                tobatch,
-                track_numbers,
-                kwargs...,
+                seen, xi, append_path(path, i), mode; track_numbers, kwargs...
             )
             if xi !== xi2
                 changed = true
@@ -700,7 +688,7 @@ function make_tracer(
     @nospecialize(prev::TracedRArray{T,N}),
     @nospecialize(path),
     mode;
-    toscalar=false,
+    batchmode=BatchNone,
     tobatch=nothing,
     kwargs...,
 ) where {T,N}
@@ -725,8 +713,10 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = if toscalar
+        res = if batchmode == BatchScalar
             TracedRNumber{T}((path,), nothing)
+        elseif batchmode == BatchArray
+            error("Not implemented")
         elseif tobatch !== nothing
             error("This should not happen...")
         else
@@ -754,7 +744,7 @@ function make_tracer(
     @nospecialize(path),
     mode;
     tobatch=nothing,
-    toscalar=false,
+    batchmode=BatchNone,
     kwargs...,
 ) where {T}
     if mode == ConcreteToTraced
@@ -778,8 +768,10 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = if toscalar
+        res = if batchmode == BatchScalar
             TracedRNumber{T}((path,), nothing)
+        elseif batchmode == BatchArray
+            error("Cannot BatchArray on a scalar")
         elseif tobatch !== nothing
             TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
         else
@@ -874,21 +866,11 @@ make_tracer(seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs..
 make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...) = prev
 
 function make_tracer(
-    seen,
-    @nospecialize(prev::Complex),
-    @nospecialize(path),
-    mode;
-    toscalar=false,
-    tobatch=nothing,
-    kwargs...,
+    seen, @nospecialize(prev::Complex), @nospecialize(path), mode; kwargs...
 )
     return Complex(
-        make_tracer(
-            seen, prev.re, append_path(path, :re), mode; toscalar, tobatch, kwargs...
-        ),
-        make_tracer(
-            seen, prev.im, append_path(path, :im), mode; toscalar, tobatch, kwargs...
-        ),
+        make_tracer(seen, prev.re, append_path(path, :re), mode; kwargs...),
+        make_tracer(seen, prev.im, append_path(path, :im), mode; kwargs...),
     )
 end
 

@@ -107,7 +107,7 @@ function make_mlir_fn(
     kwargs,
     name="main",
     concretein=true;
-    toscalar=false,
+    batchmode=Reactant.BatchNone,
     return_dialect=:func,
     do_transpose=true,
     no_args_in_result=false,
@@ -121,7 +121,7 @@ function make_mlir_fn(
                 kwargs,
                 name,
                 concretein;
-                toscalar,
+                batchmode,
                 return_dialect,
                 do_transpose,
                 no_args_in_result,
@@ -138,7 +138,7 @@ function make_mlir_fn(
             args[i],
             (:args, i),
             concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
-            toscalar,
+            batchmode
         )
     end
 
@@ -148,11 +148,12 @@ function make_mlir_fn(
         push!(linear_args, v)
     end
 
-    in_tys = if toscalar
+    in_tys = if batchmode == Reactant.BatchScalar
         [
-            MLIR.IR.TensorType((), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
-            arg in linear_args
+            MLIR.IR.TensorType((), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for arg in linear_args
         ]
+    elseif batchmode == Reactant.BatchArray
+        error("Not implemented")
     elseif do_transpose
         [transpose_ty(Ops.mlir_type(arg)) for arg in linear_args]
     else
@@ -283,19 +284,6 @@ function __take_region(compiled_fn)
     return region
 end
 
-elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
-
-struct TypeCast{T<:ReactantPrimitive} <: Function end
-
-function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
-    return TracedUtils.promote_to(TracedRNumber{T}, x)
-end
-
-function elem_apply(::Type{T}, x::TracedRArray) where {T<:ReactantPrimitive}
-    # Special Path to prevent going down a despecialized path
-    return elem_apply(TypeCast{T}(), x)
-end
-
 function promote_to end
 
 function get_attribute_by_name(operation, name)
@@ -370,83 +358,6 @@ function has_residx(x)
         end
     end
     return false
-end
-
-function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
-    if all(iszero ∘ ndims, args)
-        scalar_args = map(args) do arg
-            return promote_to(TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg)
-        end
-        return f(scalar_args...)
-    end
-
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
-        f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
-    )
-
-    invmap = IdDict()
-    for (k, v) in seen_args
-        invmap[v] = k
-    end
-
-    keys_seen = [k for k in keys(seen_args) if k isa Reactant.TracedType]
-    input_shapes = size.(keys_seen)
-    # by the time we reach here all args must have same size
-    @assert allequal(input_shapes) "input shapes are $(input_shapes)"
-    OutShape = isempty(seen_args) ? nothing : first(input_shapes)
-    @assert !isnothing(OutShape)
-
-    out_tys2 = [
-        MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
-        arg in linear_results
-    ]
-
-    batch_inputs = MLIR.IR.Value[]
-
-    for a in linear_args
-        idx, path = TracedUtils.get_argidx(a)
-        if idx == 1 && fnwrap
-            push_val!(batch_inputs, f, path[3:end])
-        else
-            if fnwrap
-                idx -= 1
-            end
-            push_val!(batch_inputs, args[idx], path[3:end])
-        end
-    end
-
-    res = Ops.batch(batch_inputs, out_tys2, collect(Int64, OutShape); fn=func2)
-
-    residx = 1
-
-    for a in linear_results
-        if TracedUtils.has_residx(a)
-            path = TracedUtils.get_residx(a)
-            TracedUtils.set!(result, path[2:end], res[residx])
-            residx += 1
-        else
-            idx, path = TracedUtils.get_argidx(a)
-            if idx == 1 && fnwrap
-                TracedUtils.set!(f, path[3:end], res[residx])
-                residx += 1
-            else
-                if fnwrap
-                    idx -= 1
-                end
-                TracedUtils.set!(args[idx], path[3:end], res[residx])
-                residx += 1
-            end
-        end
-    end
-
-    seen_results = OrderedIdDict()
-    traced2_result = Reactant.make_tracer(
-        seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
-    )
-
-    func2.operation = MLIR.API.MlirOperation(C_NULL)
-
-    return traced2_result
 end
 
 function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
