@@ -1,5 +1,6 @@
 module ReactantOffsetArraysExt
 
+using OffsetArrays
 using OffsetArrays: OffsetArray
 using Reactant: Reactant, MLIR, Ops, TracedRArray
 
