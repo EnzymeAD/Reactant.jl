@@ -43,6 +43,7 @@ jobs:
           # - 'nightly'
         os:
           - ubuntu-20.04
+          - ubuntu-24.04-arm64
           - macOS-latest
         test_group:
           - core
@@ -89,9 +90,10 @@ jobs:
           #   version: '1.10'
           #   test_group: integration
         exclude:
-          # these are run on Buildkite
-          - os: ubuntu-20.04
+          - os: ubuntu-20.04 # this is x86_64, exclude foreign architecture
             arch: aarch64
+          - os: ubuntu-24.04-arm64 # this is aarch64, exclude foreign architecture
+            arch: x64
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
