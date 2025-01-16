@@ -267,6 +267,7 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
         "if_to_select<1>",
         "dynamic_update_slice_const_prop",
         "dynamic_gather_op_is_not_dynamic<16>",
+        "divide_sqrt_to_multiply_rsqrt<16>",
         "binary_op_transpose_simplify_add",
         "binary_op_transpose_simplify_sub",
         "binary_op_transpose_simplify_mul",
