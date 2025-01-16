@@ -95,7 +95,7 @@ using Test
                 (Val{:x}, Val{:x}, Val{:x}),
             ]
                 tracedty = traced_type(
-                    origty, Val(ConcreteToTraced), ()
+                    origty, Val(ConcreteToTraced), Union{}
                 )
                 @test tracedty == targetty
 
@@ -112,13 +112,13 @@ using Test
                 TracedRArray{Float64,3},
             ]
                 @test_throws Union{ErrorException,String} traced_type(
-                    type, Val(ConcreteToTraced), ()
+                      type, Val(ConcreteToTraced), Union{}
                 )
             end
         end
         @testset "traced_type exceptions" begin
             @test_throws TracedTypeError Reactant.traced_type(
-                Real, Val(Reactant.ArrayToConcrete), ()
+                  Real, Val(Reactant.ArrayToConcrete), Union{}
             )
 
             struct Node
@@ -126,14 +126,14 @@ using Test
                 y::Union{Nothing,Node}
             end
             @test_throws NoFieldMatchError traced_type(
-                Node, Val(ArrayToConcrete), ()
+                   Node, Val(ArrayToConcrete), Union{}
             )
         end
     end
 
     @testset "specialized dispatches" begin
         @test @inferred Union{Float64,ConcreteRArray{Float64}} Reactant.to_rarray(
-            1.0; track_numbers=(Number,)
+            1.0; track_numbers=Number
         ) isa ConcreteRNumber
         @test @inferred Reactant.to_rarray(1.0) isa Float64
         @test @inferred Reactant.to_rarray(rand(3)) isa ConcreteRArray
@@ -141,7 +141,7 @@ using Test
         x_ra = Reactant.to_rarray(rand(3))
         @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRArray
 
-        x_ra = Reactant.to_rarray(1.0; track_numbers=(Number,))
+        x_ra = Reactant.to_rarray(1.0; track_numbers=Number)
         @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRNumber
     end
 end

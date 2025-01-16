@@ -153,7 +153,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Function}), seen, mode::TraceMode, @nospecialize(track_numbers))
+Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Function}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
     # functions are directly returned
     if sizeof(T) == 0
         return T
@@ -309,24 +309,28 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(VT::Type{<:Val}
     throw("Val type $(Val{T}) cannot be traced")
 end
 
-const traced_type_cache = Dict{Tuple{TraceMode, Type}, Dict{Type, Type}}
+const traced_type_cache = Dict{Tuple{TraceMode, Type}, Dict{Type, Type}}()
 
-function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Val), @nospecialize(track_numbers::Type))
+function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
     @nospecialize
     T = T.parameters[1]
-    mode = mode.parameters[1]
+    mode = mode.parameters[1]::TraceMode
     track_numbers = track_numbers.parameters[1]
 
 
     min_world = Ref{UInt}(typemin(UInt))
     max_world = Ref{UInt}(typemax(UInt))
 
-    sig = Tuple{typeof(traced_type_inner), Type{T}, Dict{Type, Type}, TraceMode, track_numbers}
+    sig = Tuple{typeof(traced_type_inner), Type{T}, Dict{Type, Type}, TraceMode, Type{track_numbers}}
 
     lookup_result = lookup_world(
         sig, world, nothing, min_world, max_world
     )
-    @assert lookup_result !== nothing
+    if lookup_result === nothing
+        @show sig
+        stub = Core.GeneratedFunctionStub(identity, Core.svec(:traced_type, :T, :mode, :track_numbers), Core.svec())
+        return stub(world, source, method_error) 
+    end
     match = lookup_result::Core.MethodMatch
 
     mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
@@ -430,7 +434,7 @@ function make_tracer(
     mode;
     toscalar=false,
     tobatch=nothing,
-    @nospecialize(track_numbers::Type),
+    @nospecialize(track_numbers::Type=Union{}),
     kwargs...,
 )
     if mode != NoStopTracedTrack && haskey(seen, prev)
@@ -686,12 +690,10 @@ function make_tracer(
 end
 
 function make_tracer(
-    seen, @nospecialize(prev::Number), @nospecialize(path), mode; @nospecialize(track_numbers::Type), kwargs...
+    seen, @nospecialize(prev::Number), @nospecialize(path), mode; @nospecialize(track_numbers::Type=Union{}), kwargs...
 )
     RT = Core.Typeof(prev)
-    length(track_numbers) == 0 && return prev
-    should_convert = RT <: track_numbers
-    if should_convert
+    if RT <: track_numbers
         if mode == ArrayToConcrete
             return ConcreteRNumber(prev)
         else
@@ -787,7 +789,7 @@ function make_tracer(
     @nospecialize(prev::NamedTuple),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type),
+    @nospecialize(track_numbers::Type=Union{}),
     kwargs...,
 )
     NT = Core.Typeof(prev)
@@ -822,8 +824,8 @@ function make_tracer(seen, prev::Core.Box, @nospecialize(path), mode; kwargs...)
     return res
 end
 
-@inline function to_rarray(@nospecialize(x); track_numbers::Union{Bool,Tuple}=())
-    track_numbers isa Bool && (track_numbers = track_numbers ? (Number,) : ())
+@inline function to_rarray(@nospecialize(x); track_numbers::Union{Bool,Type}=false)
+    track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
     return to_rarray_internal(x, track_numbers)
 end
 

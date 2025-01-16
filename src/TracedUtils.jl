@@ -131,7 +131,7 @@ function make_mlir_fn(
             (:args, i),
             concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
             toscalar,
-            track_numbers=construct_function_without_args ? (Number,) : (),
+            track_numbers=construct_function_without_args ? Number : Union{},
         )
     end
 
@@ -201,7 +201,7 @@ function make_mlir_fn(
         result,
         (:result,),
         concretein ? Reactant.TracedTrack : Reactant.TracedSetPath;
-        track_numbers=construct_function_without_args ? (Number,) : (),
+        track_numbers=construct_function_without_args ? Number : Union{},
     )
 
     # marks buffers to be donated
