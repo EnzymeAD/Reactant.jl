@@ -219,14 +219,14 @@ end
 
 @testset "condition6: bareif relu" begin
     x = 2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition6_bareif_relu(x_ra))
     res = condition6_bareif_relu(x)
     @test res_ra ≈ res
 
     x = -2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition6_bareif_relu(x_ra))
     res = condition6_bareif_relu(x)
