@@ -744,8 +744,9 @@ function Reactant.traced_type(
 end
 
 function Reactant.make_tracer(
-    seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
-) where {RT<:CUDA.CuArray}
+    seen, @nospecialize(prev::CUDA.CuArray), @nospecialize(path), mode; track_numbers=(), kwargs...
+)
+    RT = Core.Typeof(prev)
     if haskey(seen, prev)
         return seen[prev]
     end
