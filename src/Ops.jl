@@ -2013,29 +2013,87 @@ end
 # This function assumes that the last dimension of each element is the batch dimension by
 # default. This is the standard Julia ordering for batching. We permutedims the ordering to
 # make sure the first dimension is the batch dimension when calling `batch_internal` below.
+# XXX: Mutation inside a batched function is not supported yet (need to set the results
+#      correctly)
 @noinline function batch(f, args...; batch_dims=nothing, result_dims=nothing)
-    # @assert length(batch_dims) == length(args)
+    N = length(args)
+    seen_args = Reactant.OrderedIdDict()
+    traced_args = Vector{Any}(undef, N)
+    for i in 1:N
+        @inbounds traced_args[i] = Reactant.make_tracer(
+            seen_args, args[i], (:batchargs, i), Reactant.NoStopTracedTrack
+        )
+    end
+    linear_args = [v for v in values(seen_args) if v isa Reactant.TracedType]
 
-    # batch_sizes = [dim === nothing ? 1 : size(x, dim) for (x, dim) in zip(args, batch_dims)]
-    # filter!(x -> x != 1, batch_sizes)
-    # @assert allequal(batch_sizes) "batching dimensions must be equal"
-    # B = length(batch_sizes) == 0 ? 1 : first(batch_sizes)
+    batching_dims = Union{Int64,Nothing}[]
+    batch_sizes = Int64[]
+    arg_paths = Tuple[]
+    for (i, arg) in enumerate(linear_args)
+        if batch_dims === nothing # assume last dimension is batch dimension
+            push!(batching_dims, ndims(arg))
+        else
+            paths = Reactant.TracedUtils.get_paths(arg)
+            path = paths[findfirst(p -> p[1] == :batchargs, paths)][3:end]
+            push!(arg_paths, path)
+            bdim = batch_dims[i]
+            for p in path
+                bdim = Reactant.Compiler.traced_getfield(bdim, p)
+            end
+            if bdim === nothing # Input is not batched
+                push!(batching_dims, nothing)
+            else
+                @assert bdim isa Integer "batching dimension must be an integer or nothing"
+                push!(batching_dims, bdim)
+            end
+        end
+        batching_dims[i] !== nothing && push!(batch_sizes, size(arg, batching_dims[i]))
+    end
 
-    # args = map(zip(args, batch_dims)) do (arg, dim)
-    #     if dim === nothing
-    #         return broadcast_in_dim(arg, collect(1:ndims(arg)) .+ 1, Int64[B, size(arg)...])
-    #     end
-    #     if size(arg, dim) == 1 && size(arg, dim) != B
-    #         new_dims = collect(Int64, size(arg))
-    #         new_dims[dim] = B
-    #         arg = broadcast_in_dim(arg, collect(1:ndims(arg)), new_dims)
-    #     end
-    #     order = collect(1:ndims(arg))
-    #     order[dim] = 1
-    #     order[1] = dim
-    #     return permutedims(arg, order)
+    batch_sizes_no_ones = filter(x -> x != 1, batch_sizes)
+    @assert allequal(batch_sizes) "batching dimensions must be equal"
+    B = length(batch_sizes_no_ones) == 0 ? 1 : first(batch_sizes_no_ones)
+
+    corrected_linear_args = map(zip(linear_args, batching_dims)) do (arg, dim)
+        if dim === nothing # repeat the input along dim=0
+            return broadcast_in_dim(arg, collect(1:ndims(arg)) .+ 1, Int64[B, size(arg)...])
+        end
+        if size(arg, dim) == 1 && size(arg, dim) != B # If batch_dim is 1, then expand that dim
+            new_dims = collect(Int64, size(arg))
+            new_dims[dim] = B
+            arg = broadcast_in_dim(arg, collect(1:ndims(arg)), new_dims)
+        end
+        order = collect(Int64, 1:ndims(arg))
+        order[dim] = 1
+        order[1] = dim
+        return permutedims(arg, order) # Ensure batch dim is moved to the first position
+    end
+
+    # argidx = 1
+    # for (i, arg) in enumerate(corrected_linear_args)
+    #     Reactant.TracedUtils.set!(args[argidx], arg_paths[i], arg)
+    #     argidx += 1
     # end
-    # results = batch(f, args)
+
+    # @show linear_args
+    # @show corrected_linear_args
+
+    # traced_args = Vector{Any}(undef, N)
+    # seen_args = Reactant.OrderedIdDict()
+    # for i in 1:N
+    #     @inbounds traced_args[i] = Reactant.make_tracer(
+    #         seen_args, args[i], (), Reactant.TracedSetPath
+    #     )
+    # end
+
+    # @show corrected_linear_args
+    # @show args
+    # @show traced_args
+
+    # @show traced_args[1].x
+    # @show traced_args[2].x[1]
+
+    results = batch_internal(f, traced_args...)
     # result_dims === nothing && (result_dims = ones(Int64, length(results)))
     # @assert length(results) == length(result_dims)
     # return map(zip(results, result_dims)) do (result, dim)
@@ -2044,6 +2102,9 @@ end
     #     order[1] = dim
     #     return permutedims(result, order)
     # end
+
+    # TODO: Restore the args here?
+
     return error(1)
 end
 
@@ -2147,9 +2208,8 @@ end
         end
     end
 
-    seen_results = Reactant.OrderedIdDict()
     traced2_result = Reactant.make_tracer(
-        seen_results,
+        Reactant.OrderedIdDict(),
         result,
         (),
         Reactant.TracedSetPath;
