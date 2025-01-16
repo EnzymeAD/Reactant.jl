@@ -723,14 +723,16 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 function Reactant.traced_type(
-    ::Type{A}, seen::ST, ::Val{mode}, track_numbers
-) where {A<:CuTracedArray,ST,mode}
+    @nospecialize(A::Type{<:CuTracedArray}), seen::ST, ::Val{mode}, track_numbers
+) where {ST,mode}
     return A
 end
 
 function Reactant.traced_type(
-    ::Type{A}, seen::ST, ::Val{mode}, track_numbers
-) where {T,N,A<:CUDA.CuArray{T,N},ST,mode}
+    @nospecialize(A::Type{<:CUDA.CuArray}), seen::ST, ::Val{mode}, track_numbers
+) where {ST,mode}
+    T = eltype(A)
+    N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         return Reactant.ConcreteRArray{T,N}
     else
