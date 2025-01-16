@@ -148,6 +148,12 @@ for jlop in (
     end
 end
 
+for jlop in (:(Base.isnan), :(Base.isfinite)),
+    T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
+
+    @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
+end
+
 for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
     @eval begin
         function Base.isapprox(x::$(T), y::Number; kwargs...)
