@@ -905,7 +905,7 @@ end
     @testset for i in 1:length(x)
         @test @jit(getindex_linear_scalar(x_ra, i)) ≈ getindex_linear_scalar(x, i)
         @test @jit(
-            getindex_linear_scalar(x_ra, Reactant.to_rarray(i; track_numbers=(Number,)))
+            getindex_linear_scalar(x_ra, Reactant.to_rarray(i; track_numbers=Number))
         ) ≈ getindex_linear_scalar(x, i)
     end
 
@@ -1014,7 +1014,7 @@ end
     end
 
     x = 0.235f0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
         @test @jit(fn.(x_ra)) ≈ fn.(x)
