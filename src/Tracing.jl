@@ -128,6 +128,10 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type), seen,
     throw(NoFieldMatchError(T, TT2))
 end
 
+Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{Union{}}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+    return T
+end
+
 for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, AbstractFloat, Integer, RNumber)
     @eval Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:$T}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
         return T
