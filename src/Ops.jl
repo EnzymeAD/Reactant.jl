@@ -1970,8 +1970,8 @@ end
 @noinline function batch(
     f,
     args::Vector{<:TracedRArray},
-    batch_dims::Vector{Union{Int,Nothing}},
-    result_dims::Union{Vector{Int},Nothing}=nothing,
+    batch_dims::Vector{<:Union{Int64,Nothing}},
+    result_dims::Union{Vector{Int64},Nothing}=nothing,
 )
     @assert length(batch_dims) == length(args)
 
@@ -1983,6 +1983,11 @@ end
     args = map(zip(args, batch_dims)) do (arg, dim)
         if dim === nothing
             return broadcast_in_dim(arg, collect(1:ndims(arg)) .+ 1, Int64[B, size(arg)...])
+        end
+        if size(arg, dim) == 1 && size(arg, dim) != B
+            new_dims = collect(Int64, size(arg))
+            new_dims[dim] = B
+            arg = broadcast_in_dim(arg, collect(1:ndims(arg)), new_dims)
         end
         order = collect(1:ndims(arg))
         order[dim] = 1
@@ -2070,13 +2075,12 @@ end
     fn,
     location=mlir_stacktrace("batch", @__FILE__, @__LINE__),
 )
-    fname = Reactant.TracedUtils.get_attribute_by_name(fn, "sym_name")
-    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
-
     op = MLIR.Dialects.enzyme.batch(
         [i isa TracedRArray ? i.mlir_data : i for i in inputs];
         outputs=output_types,
-        fn=fname,
+        fn=MLIR.IR.FlatSymbolRefAttribute(
+            String(Reactant.TracedUtils.get_attribute_by_name(fn, "sym_name"))
+        ),
         batch_shape=MLIR.IR.DenseArrayAttribute(batch_shape),
         location,
     )
@@ -2086,6 +2090,100 @@ end
             (), MLIR.IR.result(op, i), size(out_type)
         ) for (i, out_type) in enumerate(output_types)
     ]
+end
+
+"""
+    elem_apply(f, args...)
+
+This is equivalent to `f.(args...)` but generates optimized code using
+Reactant.MLIR.Dialects.enzyme.batch.
+"""
+@noinline function elem_apply(f, args::Vararg)
+    if all(iszero ∘ ndims, args)
+        scalar_args = map(args) do arg
+            return Reactant.TracedUtils.promote_to(
+                TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg
+            )
+        end
+        return f(scalar_args...)
+    end
+
+    fnwrap, func2, _, result, seen_args, _, linear_args, _, linear_results = Reactant.TracedUtils.make_mlir_fn(
+        f,
+        args,
+        (),
+        string(f) * "_broadcast_scalar",
+        false;
+        batchmode=Reactant.BatchScalar,
+        no_args_in_result=true,
+    )
+
+    input_shapes = [size(k) for k in keys(seen_args) if k isa Reactant.TracedType]
+    @assert allequal(input_shapes) "input shapes are $(input_shapes)"
+    OutShape = first(input_shapes)
+
+    batch_inputs = MLIR.IR.Value[]
+    for a in linear_args
+        idx, path = Reactant.TracedUtils.get_argidx(a)
+        if idx == 1 && fnwrap
+            Reactant.TracedUtils.push_val!(batch_inputs, f, path[3:end])
+        else
+            fnwrap && (idx -= 1)
+            Reactant.TracedUtils.push_val!(batch_inputs, args[idx], path[3:end])
+        end
+    end
+
+    res = batch(
+        batch_inputs,
+        [
+            MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
+            arg in linear_results
+        ],
+        collect(Int64, OutShape);
+        fn=func2,
+    )
+
+    residx = 1
+    for a in linear_results
+        if Reactant.TracedUtils.has_residx(a)
+            path = Reactant.TracedUtils.get_residx(a)
+            Reactant.TracedUtils.set!(result, path[2:end], res[residx])
+            residx += 1
+        else
+            idx, path = Reactant.TracedUtils.get_argidx(a)
+            if idx == 1 && fnwrap
+                Reactant.TracedUtils.set!(f, path[3:end], res[residx])
+                residx += 1
+            else
+                fnwrap && (idx -= 1)
+                Reactant.TracedUtils.set!(args[idx], path[3:end], res[residx])
+                residx += 1
+            end
+        end
+    end
+
+    seen_results = Reactant.OrderedIdDict()
+    traced2_result = Reactant.make_tracer(
+        seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
+    )
+    func2.operation = MLIR.API.MlirOperation(C_NULL)
+
+    return traced2_result
+end
+
+@noinline elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:Reactant.ReactantPrimitive} =
+    x
+
+struct TypeCast{T<:Reactant.ReactantPrimitive} <: Function end
+
+@noinline (f::TypeCast{T})(x::TracedRNumber) where {T} =
+    Reactant.TracedUtils.promote_to(TracedRNumber{T}, x)
+
+@noinline function elem_apply(
+    ::Type{T}, x::TracedRArray
+) where {T<:Reactant.ReactantPrimitive}
+    # Special Path to prevent going down a despecialized path
+    return elem_apply(TypeCast{T}(), x)
 end
 
 end # module Ops
