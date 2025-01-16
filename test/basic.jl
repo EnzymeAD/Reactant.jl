@@ -585,10 +585,10 @@ end
 
         f1(x) = x[1] * x[2]
 
-        x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+        x_ra = Reactant.to_rarray(x; track_numbers=Number)
         f2 = @compile f1(x_ra)
-        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=(Number,))) ≈ 5 * 5.2
-        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=(Number,))) isa ConcreteRNumber
+        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) ≈ 5 * 5.2
+        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) isa ConcreteRNumber
 
         x_ra = Reactant.to_rarray(x)
         f3 = @compile f1(x_ra)
@@ -596,10 +596,10 @@ end
         @test !(f3(Reactant.to_rarray((5, 5.2))) isa ConcreteRNumber)
         @test f3(Reactant.to_rarray((5, 5.2))) isa Number
 
-        x_ra = Reactant.to_rarray(x; track_numbers=(Int,))
+        x_ra = Reactant.to_rarray(x; track_numbers=Int)
         f4 = @compile f1(x_ra)
-        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=(Int,))) ≈ 5 * 3.14
-        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=(Int,))) isa ConcreteRNumber
+        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) ≈ 5 * 3.14
+        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) isa ConcreteRNumber
     end
 
     @testset "Mixed" begin
