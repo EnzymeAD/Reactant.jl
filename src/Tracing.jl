@@ -318,6 +318,18 @@ function Base.showerror(io::IO, err::NoFieldMatchError)
     )
 end
 
+function make_tracer(
+    seen,
+    @nospecialize(prev::Union{Base.ExceptionStack, Core.MethodInstance}),
+    @nospecialize(path),
+    mode;
+    toscalar=false,
+    tobatch=nothing,
+    track_numbers=(),
+    kwargs...,
+)
+    return prev
+end
 append_path(path, i) = (path..., i)
 
 function make_tracer(
@@ -590,7 +602,7 @@ function make_tracer(
         if mode == ArrayToConcrete
             return ConcreteRNumber(prev)
         else
-            if mode == TracedTrack
+            if mode == TracedTrack || mode == NoStopTracedTrack
                 res = TracedRNumber{RT}(
                     (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
                 )
@@ -638,7 +650,7 @@ end
 function make_tracer(
     seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
 ) where {RT<:Array}
-    if haskey(seen, prev)
+    if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
     if mode == ArrayToConcrete && eltype(RT) <: ReactantPrimitive
@@ -699,7 +711,7 @@ function make_tracer(
 end
 
 function make_tracer(seen, prev::Core.Box, @nospecialize(path), mode; kwargs...)
-    if haskey(seen, prev)
+    if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
     prev2 = prev.contents

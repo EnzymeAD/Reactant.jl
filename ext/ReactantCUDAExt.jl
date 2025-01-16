@@ -239,8 +239,11 @@ function Adapt.adapt_structure(
     )
 end
 
-Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
+end
+Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+    return recudaconvert(arg)
 end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
@@ -425,6 +428,7 @@ function get_field_offset(T::Type, path)
     offset = 0
     current_type = T
 
+
     for field in path
         # Get the field index
         field_idx = if field isa Integer
@@ -440,18 +444,22 @@ function get_field_offset(T::Type, path)
         end
 
         # Add the offset of this field
-        offset += fieldoffset(current_type, field_idx)
+        toffset = fieldoffset(current_type, field_idx)
+        tcurrent_type = fieldtype(current_type, field_idx)
+        offset += toffset
 
         # Update current_type to the field's type for next iteration
-        current_type = fieldtype(current_type, field_idx)
+        current_type = tcurrent_type
+
     end
+    
 
     return offset
 end
 
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
-    convert=Val(false),
+    convert=Val(true),
     blocks::CuDim=1,
     threads::CuDim=1,
     cooperative::Bool=false,
@@ -460,6 +468,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 ) where {F,tt}
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
+
+    if convert == Val(true)
+        args = recudaconvert.(args) 
+    end
 
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
@@ -578,6 +590,20 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
 
+        push!(
+            aliases,
+            MLIR.IR.Attribute(
+                MLIR.API.stablehloOutputOperandAliasGet(
+                    MLIR.IR.context(),
+                    length(wrapper_tys) == 1 ? 0 : 1,
+                    length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
+                    argidx - 1,
+                    0,
+                    C_NULL,
+                ),
+            ),
+        )
+
         for p in paths
             if p[1] !== kernelargsym
                 continue
@@ -602,20 +628,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 )
                 MLIR.Dialects.llvm.store(MLIR.IR.argument(wrapbody, argidx), ptr)
             end
-
-            push!(
-                aliases,
-                MLIR.IR.Attribute(
-                    MLIR.API.stablehloOutputOperandAliasGet(
-                        MLIR.IR.context(),
-                        length(wrapper_tys) == 1 ? 0 : 1,
-                        length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
-                        argidx - 1,
-                        0,
-                        C_NULL,
-                    ),
-                ),
-            )
         end
         argidx += 1
     end
@@ -650,6 +662,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 
     location = MLIR.IR.Location()
+    @assert length(restys) == length(aliases) 
     call = MLIR.Dialects.enzymexla.kernel_call(
         blk_operands...,
         mlir_args;
@@ -786,6 +799,11 @@ function __init__()
         Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
         Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
         Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+        ptr4 = Reactant.XLA.Libdl.dlsym(handle, "cuStreamSynchronize"; throw_error=false)
+        if ptr4 === nothing
+            ptr4 = C_NULL
+        end
+        Reactant.Compiler.cuSync[] = Base.reinterpret(UInt, ptr4)
     end
     return nothing
 end
