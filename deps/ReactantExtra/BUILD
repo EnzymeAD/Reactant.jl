@@ -514,9 +514,13 @@ cc_library(
         "@tsl//tsl/profiler/lib:profiler_factory_impl",
         "@tsl//tsl/profiler/lib:profiler_controller",
         "@xla//xla/tsl/profiler/rpc/client:capture_profile",
+        "@xla//xla/tsl/profiler/rpc/client:profiler_client",
         "@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
         "@xla//xla/tsl/profiler/backends/cpu:traceme_recorder_impl",
         "@xla//xla/tsl/profiler/utils:time_utils_impl",
+        "@tsl//tsl/profiler/protobuf:profiler_service_monitor_result_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:profiler_service_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:profiler_analysis_proto_cc_impl",
         "@tsl//tsl/profiler/protobuf:profiler_options_proto_cc_impl",
         "@tsl//tsl/profiler/protobuf:profile_proto_cc_impl",
         "@tsl//tsl/profiler/protobuf:xplane_proto_cc_impl",
@@ -548,13 +552,11 @@ cc_library(
         "@xla//xla/service/gpu:gpu_transfer_manager",
         "@xla//xla/stream_executor:kernel", 
         "@xla//xla/backends/profiler/gpu:device_tracer",
-        "@xla//xla/backends/profiler/gpu:device_tracer_impl",
     ],
     "//conditions:default": [],
     }) + if_rocm([
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/backends/profiler/gpu:device_tracer",
-        "@xla//xla/backends/profiler/gpu:device_tracer_impl",
     ]),
 )
 
