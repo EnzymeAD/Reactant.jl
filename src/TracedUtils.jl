@@ -150,10 +150,9 @@ function make_mlir_fn(
 
     in_tys = if batchmode == Reactant.BatchScalar
         [
-            MLIR.IR.TensorType((), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for arg in linear_args
+            MLIR.IR.TensorType((), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
+            arg in linear_args
         ]
-    elseif batchmode == Reactant.BatchArray
-        error("Not implemented")
     elseif do_transpose
         [transpose_ty(Ops.mlir_type(arg)) for arg in linear_args]
     else
@@ -398,5 +397,9 @@ end
 @noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
     return Ops.broadcast_in_dim(x, collect(Int64, 1:ndims(x)), collect(Int64, rsize))
 end
+
+struct TypeCast{T<:Reactant.ReactantPrimitive} <: Function end
+
+@noinline (f::TypeCast{T})(x::TracedRNumber) where {T} = promote_to(TracedRNumber{T}, x)
 
 end
