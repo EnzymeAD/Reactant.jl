@@ -151,7 +151,10 @@ function should_rewrite_call(@nospecialize(ft))
     if ft <: Type{<:TracedRArray} ||
         ft <: Type{<:TracedRNumber} ||
         ft === Type{MLIR.IR.Location} ||
-        ft === Type{MLIR.IR.Block}
+        ft === Type{MLIR.IR.Block} ||
+        # TODO: perhaps problematic calls in `traced_call`
+        # should be moved to TracedUtils.jl:
+        ft <: typeof(Reactant.ReactantCore.traced_call)
         return false
     end
 

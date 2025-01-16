@@ -223,7 +223,11 @@ function make_mlir_fn(
         push!(linear_results, v)
     end
 
-    out_tys = [transpose_ty(Ops.mlir_type(arg)) for arg in linear_results]
+    out_tys = if do_transpose
+        [transpose_ty(Ops.mlir_type(arg)) for arg in linear_results]
+    else
+        [Ops.mlir_type(arg) for arg in linear_results]
+    end
 
     MLIR.IR.activate!(fnbody)
     ret = try
