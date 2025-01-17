@@ -60,6 +60,15 @@ function set_mlir_data!(
     return x
 end
 
+function get_ancestor_indices(
+    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, indices...
+) where {T,N,M}
+    cartesian_indices = CartesianIndex.(indices...)
+    linear_indices = LinearIndices(size(x))[cartesian_indices]
+    parent_cartesian_indices = CartesianIndices(size(parent(x)))[linear_indices]
+    return (parent_cartesian_indices,)
+end
+
 function set_mlir_data!(
     x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}, data
 ) where {T,N,perm,iperm}

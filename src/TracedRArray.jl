@@ -115,7 +115,9 @@ end
 
 function Base.getindex(a::TracedRArray{T,N}, indices) where {T,N}
     if !(indices isa TracedRArray)
-        indices = TracedUtils.promote_to(TracedRArray{Int,1}, collect(indices))
+        indices = collect(indices)
+        eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
+        indices = TracedUtils.promote_to(TracedRArray{Int,1}, indices)
     end
     return Ops.gather_getindex(a, scalar_index_to_cartesian(indices, size(a)))
 end
