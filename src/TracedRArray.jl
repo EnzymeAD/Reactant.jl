@@ -172,7 +172,9 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     )
 
     x = TracedRArray{T,N}((), res, Tuple(length.(indices)))
-    ddims = findall(Base.Fix2(isa, Integer), indices)
+    ddims = findall(indices) do idx
+        return idx isa Integer || idx isa TracedRNumber{<:Integer}
+    end
     isempty(ddims) || return materialize_traced_array(dropdims(x; dims=Tuple(ddims)))
     return x
 end
