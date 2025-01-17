@@ -210,9 +210,6 @@ Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict{K}}) where K = K
 Base.@nospecializeinfer @inline dict_value(::Type{<:AbstractDict}) = nothing
 Base.@nospecializeinfer @inline dict_value(::Type{<:(AbstractDict{K,V} where K)}) where V = V
 
-@nospecialize(TV::UnionAll)) = UnionAll(TV.var, base_typet(TV.body))
-Base.@nospecializeinfer @inline base_typet(@nospecialize(TV::DataType)) = TracedRArray{TV.parameters...}
-
 Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:AbstractDict}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
     V = dict_value(T)
     if V === nothing
