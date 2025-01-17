@@ -425,17 +425,17 @@ function Base.mapreducedim!(
     return R
 end
 
-function Base.fill!(A::TracedRArray{T,N}, x) where {T,N}
+function Base.fill!(A::AnyTracedRArray{T,N}, x) where {T,N}
     bcast = TracedUtils.broadcast_to_size(T(x), size(A))
-    A.mlir_data = bcast.mlir_data
+    set_mlir_data!(A, get_mlir_data(bcast))
     return A
 end
 
-function Base.fill!(A::TracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
+function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
     bcast = TracedUtils.broadcast_to_size(
         TracedUtils.promote_to(TracedRNumber{T}, x), size(A)
     )
-    A.mlir_data = bcast.mlir_data
+    set_mlir_data!(A, get_mlir_data(bcast))
     return A
 end
 
