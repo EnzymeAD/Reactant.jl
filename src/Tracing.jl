@@ -205,6 +205,9 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Named
 end
 
 Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:AbstractDict}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+    if T isa UnionAll
+        @show T
+    end
     dictty = T.name.wrapper
     K = T.parameters[1]
     V = T.parameters[2]
