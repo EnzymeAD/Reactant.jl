@@ -29,6 +29,7 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: "1.10"
+      - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-downgrade-compat@v1
         with:
           skip: "ReactantCore"
@@ -42,7 +43,6 @@ jobs:
               push!(dev_pks, Pkg.PackageSpec(; path))
           end
           Pkg.develop(dev_pks)
-          Pkg.instantiate()
           Pkg.test(; coverage="user")
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
