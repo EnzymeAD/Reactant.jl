@@ -1046,8 +1046,8 @@ end
 end
 
 @testset "isnan/isfinite" begin
-    @test isnan(Reactant.to_rarray(NaN; track_numbers=(Number,)))
-    @test !isnan(Reactant.to_rarray(0.0; track_numbers=(Number,)))
-    @test isfinite(Reactant.to_rarray(0.0; track_numbers=(Number,)))
-    @test !isfinite(Reactant.to_rarray(Inf; track_numbers=(Number,)))
+    @test isnan(Reactant.to_rarray(NaN; track_numbers=Number))
+    @test !isnan(Reactant.to_rarray(0.0; track_numbers=Number))
+    @test isfinite(Reactant.to_rarray(0.0; track_numbers=Number))
+    @test !isfinite(Reactant.to_rarray(Inf; track_numbers=Number))
 end
