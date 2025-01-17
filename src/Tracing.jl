@@ -7,7 +7,9 @@
     NoStopTracedTrack = 6
 end
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
+)
     if T === Any
         return T
     end
@@ -128,14 +130,32 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type), seen,
     throw(NoFieldMatchError(T, TT2))
 end
 
-for T in (DataType, Module, Nothing, Symbol, AbstractChar, AbstractString, AbstractFloat, Integer, RNumber)
-    @eval Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:$T}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+for T in (
+    DataType,
+    Module,
+    Nothing,
+    Symbol,
+    AbstractChar,
+    AbstractString,
+    AbstractFloat,
+    Integer,
+    RNumber,
+)
+    @eval Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(T::Type{<:$T}),
+        seen,
+        mode::TraceMode,
+        @nospecialize(track_numbers::Type)
+    )
         return T
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ReactantPrimitive}), seen, @nospecialize(mode::TraceMode), @nospecialize(track_numbers::Type)
+    @nospecialize(T::Type{<:ReactantPrimitive}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type)
 )
     if Mode == ArrayToConcrete && T <: track_numbers
         return ConcreteRNumber{T}
@@ -144,7 +164,10 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(C::Type{<:Complex}), seen, @nospecialize(mode::TraceMode), @nospecialize(track_numbers::Type)
+    @nospecialize(C::Type{<:Complex}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type)
 )
     if !(C isa UnionAll)
         return Complex{traced_type_inner(C.parameters[1], seen, mode, track_numbers)}
@@ -153,7 +176,12 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Function}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:Function}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+)
     # functions are directly returned
     if sizeof(T) == 0
         return T
@@ -180,7 +208,12 @@ end
 @inline is_concrete_tuple(x::T2) where {T2} =
     (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Tuple}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:Tuple}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+)
     if !Base.isconcretetype(T) || !is_concrete_tuple(T) || T isa UnionAll
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
     elseif is_concrete_tuple(T) && any(T2 isa Core.TypeofVararg for T2 in T.parameters)
@@ -194,13 +227,23 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Tuple
     return Tuple{TT...}
 end
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:NamedTuple}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:NamedTuple}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+)
     N = T.parameters[1]
     V = T.parameters[2]
     return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers)}
 end
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:AbstractDict}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:AbstractDict}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+)
     dictty = T.name.wrapper
     K = T.parameters[1]
     V = T.parameters[2]
@@ -208,7 +251,10 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Abstr
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T0::Type{<:ConcreteRNumber}), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
+    @nospecialize(T0::Type{<:ConcreteRNumber}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
 )
     T = T0.parameters[1]
     if mode == ConcreteToTraced
@@ -219,15 +265,22 @@ Base.@nospecializeinfer function traced_type_inner(
         throw("Abstract RNumber cannot be made concrete")
     end
 end
-        
-Base.@nospecializeinfer @inline base_typet(@nospecialize(TV::UnionAll)) = UnionAll(TV.var, base_typet(TV.body))
-Base.@nospecializeinfer @inline base_typet(@nospecialize(TV::DataType)) = TracedRArray{TV.parameters...}
-        
-Base.@nospecializeinfer @inline base_typec(@nospecialize(TV::UnionAll)) = UnionAll(TV.var, base_typec(TV.body))
-Base.@nospecializeinfer @inline base_typec(@nospecialize(TV::DataType)) = (TV <: TracedRArray ? ConcreteRArray : ConcreteRNumber){TV.parameters...}
+
+Base.@nospecializeinfer @inline base_typet(@nospecialize(TV::UnionAll)) =
+    UnionAll(TV.var, base_typet(TV.body))
+Base.@nospecializeinfer @inline base_typet(@nospecialize(TV::DataType)) =
+    TracedRArray{TV.parameters...}
+
+Base.@nospecializeinfer @inline base_typec(@nospecialize(TV::UnionAll)) =
+    UnionAll(TV.var, base_typec(TV.body))
+Base.@nospecializeinfer @inline base_typec(@nospecialize(TV::DataType)) =
+    (TV <: TracedRArray ? ConcreteRArray : ConcreteRNumber){TV.parameters...}
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ConcreteRArray}), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
+    @nospecialize(T::Type{<:ConcreteRArray}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
 )
     if mode == ConcreteToTraced
         return base_typet(T)
@@ -238,7 +291,12 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:ConcreteRNG}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:ConcreteRNG}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+)
     if mode == ConcreteToTraced
         return TracedRNG
     elseif mode == TracedToConcrete
@@ -249,7 +307,10 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Concr
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:TracedType}), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
+    @nospecialize(T::Type{<:TracedType}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
 )
     T <: MissingTracedValue && error("TODO")
     if mode == ConcreteToTraced
@@ -263,7 +324,12 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:TracedRNG}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:TracedRNG}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+)
     if mode == ConcreteToTraced
         throw("TracedRNG cannot be traced")
     elseif mode == TracedToConcrete
@@ -275,12 +341,20 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Trace
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:XLAArray}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:XLAArray}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+)
     throw("XLA $T array cannot be traced")
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(A::Type{<:Array}), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
+    @nospecialize(A::Type{<:Array}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
 )
     T = eltype(A)
     N = ndims(A)
@@ -292,13 +366,23 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 for P in (Ptr, Core.LLVMPtr, Base.RefValue)
-    @eval Base.@nospecializeinfer function traced_type_inner(@nospecialize(PT::Type{<:$P}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
+    @eval Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(PT::Type{<:$P}),
+        seen,
+        mode::TraceMode,
+        @nospecialize(track_numbers::Type)
+    )
         T = eltype(PT)
         return $P{traced_type_inner(T, seen, mode, track_numbers)}
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(@nospecialize(VT::Type{<:Val}), seen, @nospecialize(mode::TraceMode), @nospecialize(track_numbers::Type))
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(VT::Type{<:Val}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type)
+)
     if VT isa UnionAll
         return VT
     end
@@ -309,7 +393,7 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(VT::Type{<:Val}
     throw("Val type $(Val{T}) cannot be traced")
 end
 
-const traced_type_cache = Dict{Tuple{TraceMode, Type}, Dict{Type, Type}}()
+const traced_type_cache = Dict{Tuple{TraceMode,Type},Dict{Type,Type}}()
 
 # function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
 #     @nospecialize
@@ -402,16 +486,18 @@ const traced_type_cache = Dict{Tuple{TraceMode, Type}, Dict{Type, Type}}()
 #     $(Expr(:meta, :generated, traced_type_generator))
 # end
 
-Base.@assume_effects :total @inline function traced_type(T::Type, ::Val{mode}, track_numbers::Type) where mode
+Base.@assume_effects :total @inline function traced_type(
+    T::Type, ::Val{mode}, track_numbers::Type
+) where {mode}
     cache = nothing
     cache_key = (mode, track_numbers)
     if haskey(traced_type_cache, cache_key)
         cache = traced_type_cache[cache_key]
     else
-        cache = Dict{Type, Type}()
+        cache = Dict{Type,Type}()
         traced_type_cache[cache_key] = cache
     end
-    res1 = traced_type_inner(T, cache, mode, track_numbers)
+    return res1 = traced_type_inner(T, cache, mode, track_numbers)
 end
 
 abstract type TracedTypeException <: Exception end
@@ -438,7 +524,7 @@ end
 
 function make_tracer(
     seen,
-    @nospecialize(prev::Union{Base.ExceptionStack, Core.MethodInstance}),
+    @nospecialize(prev::Union{Base.ExceptionStack,Core.MethodInstance}),
     @nospecialize(path),
     mode;
     kwargs...,
@@ -454,7 +540,7 @@ function make_tracer(
     mode;
     toscalar=false,
     tobatch=nothing,
-    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(track_numbers::Type = Union{}),
     kwargs...,
 )
     if mode != NoStopTracedTrack && haskey(seen, prev)
@@ -555,7 +641,9 @@ function make_tracer(
     return res
 end
 
-function make_tracer(seen, prev::ConcreteRNumber{T}, @nospecialize(path), mode; kwargs...) where {T}
+function make_tracer(
+    seen, prev::ConcreteRNumber{T}, @nospecialize(path), mode; kwargs...
+) where {T}
     if mode == ArrayToConcrete
         return prev
     end
@@ -710,7 +798,12 @@ function make_tracer(
 end
 
 function make_tracer(
-    seen, @nospecialize(prev::Number), @nospecialize(path), mode; @nospecialize(track_numbers::Type=Union{}), kwargs...
+    seen,
+    @nospecialize(prev::Number),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
 )
     RT = Core.Typeof(prev)
     if RT <: track_numbers
@@ -763,7 +856,12 @@ function make_tracer(
 end
 
 function make_tracer(
-    seen, @nospecialize(prev::Array), @nospecialize(path), mode; @nospecialize(track_numbers::Type=Union{}), kwargs...
+    seen,
+    @nospecialize(prev::Array),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
 )
     RT = Core.Typeof(prev)
     if mode != NoStopTracedTrack && haskey(seen, prev)
@@ -793,9 +891,7 @@ function make_tracer(
     return newa
 end
 
-function make_tracer(
-    seen, @nospecialize(prev::Tuple), @nospecialize(path), mode; kwargs...
-)
+function make_tracer(seen, @nospecialize(prev::Tuple), @nospecialize(path), mode; kwargs...)
     return (
         (
             make_tracer(seen, v, append_path(path, i), mode; kwargs...) for
@@ -809,7 +905,7 @@ function make_tracer(
     @nospecialize(prev::NamedTuple),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(track_numbers::Type = Union{}),
     kwargs...,
 )
     NT = Core.Typeof(prev)
@@ -853,15 +949,23 @@ end
     return make_tracer(OrderedIdDict(), x, (), Reactant.ArrayToConcrete; track_numbers)
 end
 
-function to_rarray_internal(@nospecialize(::TracedRArray), @nospecialize(track_numbers::Type))
+function to_rarray_internal(
+    @nospecialize(::TracedRArray), @nospecialize(track_numbers::Type)
+)
     return error("Cannot convert TracedRArray to ConcreteRArray")
 end
-@inline to_rarray_internal(@nospecialize(x::ConcreteRArray), @nospecialize(track_numbers::Type)) = x
-@inline function to_rarray_internal(@nospecialize(x::Array{<:ReactantPrimitive}), @nospecialize(track_numbers::Type))
+@inline to_rarray_internal(
+    @nospecialize(x::ConcreteRArray), @nospecialize(track_numbers::Type)
+) = x
+@inline function to_rarray_internal(
+    @nospecialize(x::Array{<:ReactantPrimitive}), @nospecialize(track_numbers::Type)
+)
     return ConcreteRArray(x)
 end
 
-@inline to_rarray_internal(@nospecialize(x::ConcreteRNumber), @nospecialize(track_numbers::Type)) = x
+@inline to_rarray_internal(
+    @nospecialize(x::ConcreteRNumber), @nospecialize(track_numbers::Type)
+) = x
 @inline function to_rarray_internal(
     @nospecialize(x::ReactantPrimitive), @nospecialize(track_numbers::Type)
 )

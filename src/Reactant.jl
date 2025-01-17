@@ -24,22 +24,37 @@ else
 end
 
 @static if isdefined(Core, :BFloat16)
-    const ReactantComplexFloat = Union{Complex{Float16},Complex{Core.BFloat16},Complex{Float32},Complex{Float64}}
+    const ReactantComplexFloat = Union{
+        Complex{Float16},Complex{Core.BFloat16},Complex{Float32},Complex{Float64}
+    }
 else
     const ReactantComplexFloat = Union{Complex{Float16},Complex{Float32},Complex{Float64}}
 end
 
 const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
 
-const ReactantComplexInt = Union{Complex{Int8},Complex{UInt8},Complex{Int16},Complex{UInt16},Complex{Int32},Complex{UInt32},Complex{Int64},Complex{UInt64},Complex{Int128},Complex{UInt128}}
+const ReactantComplexInt = Union{
+    Complex{Int8},
+    Complex{UInt8},
+    Complex{Int16},
+    Complex{UInt16},
+    Complex{Int32},
+    Complex{UInt32},
+    Complex{Int64},
+    Complex{UInt64},
+    Complex{Int128},
+    Complex{UInt128},
+}
 
 const ReactantFloatInt = Union{
     Base.uniontypes(ReactantInt)...,Base.uniontypes(ReactantFloat)...
 }
 
 const ReactantPrimitive = Union{
-    Bool,Base.uniontypes(ReactantFloatInt)...,
-    Base.uniontypes(ReactantComplexInt)...,Base.uniontypes(ReactantComplexFloat)...
+    Bool,
+    Base.uniontypes(ReactantFloatInt)...,
+    Base.uniontypes(ReactantComplexInt)...,
+    Base.uniontypes(ReactantComplexFloat)...,
 }
 
 abstract type RNumber{T<:ReactantPrimitive} <: Number end

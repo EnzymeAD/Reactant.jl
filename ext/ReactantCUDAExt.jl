@@ -428,7 +428,6 @@ function get_field_offset(T::Type, path)
     offset = 0
     current_type = T
 
-
     for field in path
         # Get the field index
         field_idx = if field isa Integer
@@ -450,9 +449,7 @@ function get_field_offset(T::Type, path)
 
         # Update current_type to the field's type for next iteration
         current_type = tcurrent_type
-
     end
-    
 
     return offset
 end
@@ -470,7 +467,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     threaddim = CUDA.CuDim3(threads)
 
     if convert == Val(true)
-        args = recudaconvert.(args) 
+        args = recudaconvert.(args)
     end
 
     mlir_args = MLIR.IR.Value[]
@@ -662,7 +659,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 
     location = MLIR.IR.Location()
-    @assert length(restys) == length(aliases) 
+    @assert length(restys) == length(aliases)
     call = MLIR.Dialects.enzymexla.kernel_call(
         blk_operands...,
         mlir_args;
@@ -723,13 +720,19 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(A::Type{<:CuTracedArray}), seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type)
+    @nospecialize(A::Type{<:CuTracedArray}),
+    seen,
+    mode::Reactant.TraceMode,
+    @nospecialize(track_numbers::Type)
 )
     return A
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(A::Type{<:CUDA.CuArray}), seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type)
+    @nospecialize(A::Type{<:CUDA.CuArray}),
+    seen,
+    mode::Reactant.TraceMode,
+    @nospecialize(track_numbers::Type)
 )
     T = eltype(A)
     N = ndims(A)
@@ -746,7 +749,12 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
 end
 
 function Reactant.make_tracer(
-    seen, @nospecialize(prev::CUDA.CuArray), @nospecialize(path), mode; @nospecialize(track_numbers::Type=Union{}), kwargs...
+    seen,
+    @nospecialize(prev::CUDA.CuArray),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
 )
     RT = Core.Typeof(prev)
     if haskey(seen, prev)
