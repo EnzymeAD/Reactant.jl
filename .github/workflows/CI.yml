@@ -43,7 +43,7 @@ jobs:
           # - 'nightly'
         os:
           - ubuntu-20.04
-          - ubuntu-24.04-arm64
+          - ubuntu-24.04-arm
           - macOS-latest
         test_group:
           - core
@@ -92,7 +92,7 @@ jobs:
         exclude:
           - os: ubuntu-20.04 # this is x86_64, exclude foreign architecture
             arch: aarch64
-          - os: ubuntu-24.04-arm64 # this is aarch64, exclude foreign architecture
+          - os: ubuntu-24.04-arm # this is aarch64, exclude foreign architecture
             arch: x64
     steps:
       - uses: actions/checkout@v4
