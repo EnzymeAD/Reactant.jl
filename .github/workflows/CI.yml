@@ -143,24 +143,22 @@ jobs:
         with:
           version: '1'
       - uses: julia-actions/cache@v2
-      - run: |
+      - name: Instantiate docs environment
+        run: |
           julia --color=yes --project=docs -e '
             using Pkg
-            Pkg.develop([
-              PackageSpec(path=pwd()),
-              PackageSpec("Reactant_jll"),
-              PackageSpec(path="lib/ReactantCore")
-            ])
             Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - run: |
+      - name: Run doctests
+        run: |
           julia --color=yes --project=docs -e '
             using Documenter: DocMeta, doctest
             using Reactant
             DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
             doctest(Reactant)'
-      - run: julia --color=yes --project=docs docs/make.jl
+      - name: Build documentation
+        run: julia --color=yes --project=docs docs/make.jl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
