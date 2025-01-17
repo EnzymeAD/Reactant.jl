@@ -158,13 +158,14 @@ function trace_for(mod, expr)
         external_syms...,
     )
 
-    cond_val(s) = :(@isdefined($s) ? $s : Reactant.MissingTracedValue())
+    cond_val(s) = :(@isdefined($s) ? $s : nothing)
 
+    while_defined = gensym(:while_defined)
     locals = Expr[
-        [Expr(:(=), s, cond_val(s)) for s in external_syms]...,
-        :(args = $(args_init)),
+        [Expr(:(=), s, cond_val(s)) for s in external_syms]..., :(args = $(args_init))
     ]
 
+    var_syms = all_syms.args[(begin + 1):end]
     reactant_code_block = quote
         let $(locals...)
             cond_fn =
@@ -177,11 +178,15 @@ function trace_for(mod, expr)
                 end
             body_fn =
                 $(all_syms) -> begin
+                    local isdefined_before = isnothing.(Any[$(var_syms...)])
                     local step_ = $step
                     local start_ = $start
                     local $induction = start_ + $counter * step_
                     $body
-                    ($counter + 1, $(all_syms.args[(begin + 1):end]...))
+                    local results_ = Any[
+                        s for (d, s) in zip(isdefined_before, Any[$(var_syms...)]) if !d
+                    ]
+                    ($counter + 1, results_...)
                 end
 
             $(ReactantCore).traced_while(cond_fn, body_fn, args)
