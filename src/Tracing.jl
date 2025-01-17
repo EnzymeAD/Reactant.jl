@@ -44,6 +44,9 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type), seen,
 
     # if abstract it must be by reference
     if Base.isabstracttype(T)
+        if !(T isa UnionAll) && length(T.parameters) == 0
+            return T
+        end
         throw(TracedTypeError("Unhandled abstract type $T"))
     end
 

@@ -16,6 +16,7 @@ using Test
         @testset "mode = ConcreteToTraced" begin
             @testset "$origty" for (origty, targetty, targettynum) in [
                 (Any, Any, Any),
+                (Real, Real, Real),
                 (Module, Module, Module),
                 (DataType, DataType, DataType),
                 # (Union{}, Union{}), # fails
@@ -125,10 +126,6 @@ using Test
             end
         end
         @testset "traced_type exceptions" begin
-            @test_throws TracedTypeError Reactant.traced_type(
-                  Real, Val(Reactant.ArrayToConcrete), Union{}
-            )
-
             struct Node
                 x::Vector{Float64}
                 y::Union{Nothing,Node}

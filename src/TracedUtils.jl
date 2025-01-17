@@ -68,7 +68,8 @@ function set_mlir_data!(
 end
 
 function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
-    setindex!(x, TracedRArray{T}(data), axes(x)...)
+    ancestor_indices = TracedUtils.get_ancestor_indices(x, axes(x)...)
+    setindex!(Reactant.ancestor(x), TracedRArray{T}(data), ancestor_indices...)
     return x
 end
 

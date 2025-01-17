@@ -263,12 +263,6 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     return v
 end
 
-function Base.setindex!(a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
-    ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
-    setindex!(ancestor(a), v, ancestor_indices...)
-    return a
-end
-
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(Base.getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
@@ -431,17 +425,17 @@ function Base.mapreducedim!(
     return R
 end
 
-function Base.fill!(A::TracedRArray{T,N}, x) where {T,N}
+function Base.fill!(A::AnyTracedRArray{T,N}, x) where {T,N}
     bcast = TracedUtils.broadcast_to_size(T(x), size(A))
-    A.mlir_data = bcast.mlir_data
+    set_mlir_data!(A, get_mlir_data(bcast))
     return A
 end
 
-function Base.fill!(A::TracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
+function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
     bcast = TracedUtils.broadcast_to_size(
         TracedUtils.promote_to(TracedRNumber{T}, x), size(A)
     )
-    A.mlir_data = bcast.mlir_data
+    set_mlir_data!(A, get_mlir_data(bcast))
     return A
 end
 
