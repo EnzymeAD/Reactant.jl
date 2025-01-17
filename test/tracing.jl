@@ -149,7 +149,13 @@ using Test
                 )
                 @test tracedty == targetty
 
-                tracedty2 = traced_type(origty, Val(ConcreteToTraced), ReactantPrimitive)
+                tracedty2 = traced_type(
+                    origty,
+                    Val(ConcreteToTraced),
+                    ReactantPrimitive,
+                    Reactant.BatchNone,
+                    nothing,
+                )
                 @test tracedty2 == targetty
             end
 
