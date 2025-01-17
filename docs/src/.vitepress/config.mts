@@ -70,6 +70,11 @@ export default defineConfig({
               { text: "Func", link: "/api/func" },
               { text: "StableHLO", link: "/api/stablehlo" },
               { text: "VHLO", link: "/api/vhlo" },
+              { text: "GPU", link: "/api/gpu" },
+              { text: "LLVM", link: "/api/llvm" },
+              { text: "NVVM", link: "/api/nvvm" },
+              { text: "TPU", link: "/api/tpu" },
+              { text: "Triton", link: "/api/triton" },
             ],
           },
           {
@@ -123,6 +128,11 @@ export default defineConfig({
               { text: "Func", link: "/api/func" },
               { text: "StableHLO", link: "/api/stablehlo" },
               { text: "VHLO", link: "/api/vhlo" },
+              { text: "GPU", link: "/api/gpu" },
+              { text: "LLVM", link: "/api/llvm" },
+              { text: "NVVM", link: "/api/nvvm" },
+              { text: "TPU", link: "/api/tpu" },
+              { text: "Triton", link: "/api/triton" },
             ],
           },
           {
