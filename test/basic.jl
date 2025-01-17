@@ -1064,3 +1064,9 @@ end
     @test ndims(@jit(fn2(x_ra, idx_ra))) == 2
     @test ndims(@jit(fn3(x_ra, idx_ra))) == 1
 end
+
+@testset "reshaped subarray indexing" begin
+    fn(x) = view(x, 1:2) .+ 1
+    x_ra = Reactant.to_rarray(rand(3, 4, 3))
+    @test @jit(fn(x_ra)) == fn(Array(x_ra))
+end
