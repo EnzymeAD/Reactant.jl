@@ -1,6 +1,3 @@
-pushfirst!(LOAD_PATH, joinpath(@__DIR__, ".."))
-pushfirst!(LOAD_PATH, joinpath(@__DIR__, "../lib/ReactantCore/"))
-
 using Reactant, ReactantCore
 using Documenter, DocumenterVitepress
 
