@@ -27,6 +27,18 @@ http_archive(
     url = "https://github.com/bazelbuild/rules_python/releases/download/0.34.0/rules_python-0.34.0.tar.gz",
 )
 
+http_archive(
+    name = "com_google_protobuf",
+    integrity = "sha256-PTKUDpdcStm4umlkDnj1UnB1uuM8ookCdb8muFPAliw=",
+    strip_prefix = "protobuf-29.1",
+    urls = [
+      "https://github.com/protocolbuffers/protobuf/archive/v29.1.tar.gz",
+    ],
+    patch_cmds = ["""
+	sed -i.bak0 "s/name = \\\"protoc\\\",/name = \\\"protoc\\\",features=\\[\\\"fully_static_link\\\"\\],/g" BUILD.bazel
+    """]
+)
+
 # Hedron's Compile Commands Extractor for Bazel
 # https://github.com/hedronvision/bazel-compile-commands-extractor
 http_archive(
