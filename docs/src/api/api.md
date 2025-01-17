@@ -27,6 +27,12 @@ Reactant.@jit
 <br>
 ```
 
+## Profile XLA
+
+```@docs
+Reactant.with_profiler
+```
+
 # Internal Functionality
 
 !!! danger "Private"
