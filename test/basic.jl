@@ -1044,3 +1044,10 @@ end
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
     @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
 end
+
+@testset "isnan/isfinite" begin
+    @test isnan(Reactant.to_rarray(NaN; track_numbers=(Number,)))
+    @test !isnan(Reactant.to_rarray(0.0; track_numbers=(Number,)))
+    @test isfinite(Reactant.to_rarray(0.0; track_numbers=(Number,)))
+    @test !isfinite(Reactant.to_rarray(Inf; track_numbers=(Number,)))
+end
