@@ -9,8 +9,6 @@ using Functors: @leaf
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
 
-using Functors: @leaf
-
 export @allowscalar # re-exported from GPUArraysCore
 
 # auxiliary types and functions

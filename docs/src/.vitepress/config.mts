@@ -56,8 +56,12 @@ export default defineConfig({
       {
         text: "Tutorials",
         items: [
-          {text: "Overview", link: "/tutorials/"},
+          { text: "Overview", link: "/tutorials/" },
           {text: "Profiling", link: "/tutorials/profiling"},
+          {
+            text: "Batching Functions with `Reactant.Ops.batch`",
+            link: "/tutorials/batching"
+          },
         ],
       },
       {
@@ -112,6 +116,10 @@ export default defineConfig({
         items: [
           { text: "Overview", link: "/tutorials/" },
           { text: "Profiling", link: "/tutorials/profiling" },
+          {
+            text: "Batching Functions with `Reactant.Ops.batch`",
+            link: "/tutorials/batching",
+          },
         ],
       },
       "/api/": {

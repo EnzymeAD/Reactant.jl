@@ -24,8 +24,11 @@ examples = [
 pages = [
     "Reactant.jl" => "index.md",
     "Introduction" => ["Getting Started" => "introduction/index.md"],
-    "Tutorials" =>
-        ["Overview" => "tutorials/index.md", "Profiling" => "tutorials/profiling.md"],
+    "Tutorials" => [
+        "Overview" => "tutorials/index.md",
+        "Profiling" => "tutorials/profiling.md",
+        "Batching Functions with `Reactant.Ops.batch`" => "tutorials/batching.md",
+    ],
     "API Reference" => [
         "Reactant API" => "api/api.md",
         "Ops" => "api/ops.md",
@@ -38,6 +41,11 @@ pages = [
             "Func" => "api/func.md",
             "StableHLO" => "api/stablehlo.md",
             "VHLO" => "api/vhlo.md",
+            "GPU" => "api/gpu.md",
+            "LLVM" => "api/llvm.md",
+            "NVVM" => "api/nvvm.md",
+            "TPU" => "api/tpu.md",
+            "Triton" => "api/triton.md",
         ],
         "MLIR API" => "api/mlirc.md",
         "XLA" => "api/xla.md",
