@@ -2013,8 +2013,24 @@ end
 # This function assumes that the last dimension of each element is the batch dimension by
 # default. This is the standard Julia ordering for batching. We permutedims the ordering to
 # make sure the first dimension is the batch dimension when calling `batch_internal` below.
-# XXX: Mutation inside a batched function is not supported yet (need to set the results
-#      correctly)
+"""
+    batch(f, args...; batch_dims=nothing, result_dims=nothing)
+
+Map `f` over the arguments `args` along the batch dimensions `batch_dims` and return the results with the corresponding batch dimensions specified by `result_dims`. (For users
+familiar with `jax`, this operation corresponds to `jax.vmap`.)
+
+If `batch_dims` is `nothing`, we assume that the last dimension of each leaf of `args` is the batch dimension. If `result_dims` is `nothing`, we assume that the last dimension of each leaf of the returned values is the batch dimension.
+
+To avoid batching a specific leaf, pass `nothing` for the corresponding `batch_dims`.
+
+## Examples
+
+For usage examples, see the [Batching Functions with `Reactant.Ops.batch`](@ref batching-tutorial) tutorial.
+
+!!! danger
+
+    Mutation inside a batched function is not supported yet and will lead to unexpected results.
+"""
 @noinline function batch(f, args...; batch_dims=nothing, result_dims=nothing)
     batch_sizes = Int64[]
     batching_dims = if batch_dims === nothing
@@ -2060,6 +2076,8 @@ end
     end
 
     return fmap(results, result_dims) do result, dim
+        @assert dim !== nothing "Result batch dimension cannot be `nothing`"
+
         order = collect(Int64, 1:ndims(result))
         order[dim] = 1
         order[1] = dim
