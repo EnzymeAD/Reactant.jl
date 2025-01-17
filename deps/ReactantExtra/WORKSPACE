@@ -1,5 +1,17 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+http_archive(
+    name = "com_google_protobuf",
+    integrity = "sha256-PTKUDpdcStm4umlkDnj1UnB1uuM8ookCdb8muFPAliw=",
+    strip_prefix = "protobuf-29.1",
+    urls = [
+      "https://github.com/protocolbuffers/protobuf/archive/v29.1.tar.gz",
+    ],
+    patch_cmds = ["""
+	sed -i.bak0 "s/name = \\\"protoc\\\",/name = \\\"protoc\\\",features=\\[\\\"fully_static_link\\\"\\],/g" BUILD.bazel
+    """]
+)
+
 NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 NSYNC_SHA256 = ""
 http_archive(
@@ -25,18 +37,6 @@ http_archive(
     sha256 = "778aaeab3e6cfd56d681c89f5c10d7ad6bf8d2f1a72de9de55b23081b2d31618",
     strip_prefix = "rules_python-0.34.0",
     url = "https://github.com/bazelbuild/rules_python/releases/download/0.34.0/rules_python-0.34.0.tar.gz",
-)
-
-http_archive(
-    name = "com_google_protobuf",
-    integrity = "sha256-PTKUDpdcStm4umlkDnj1UnB1uuM8ookCdb8muFPAliw=",
-    strip_prefix = "protobuf-29.1",
-    urls = [
-      "https://github.com/protocolbuffers/protobuf/archive/v29.1.tar.gz",
-    ],
-    patch_cmds = ["""
-	sed -i.bak0 "s/name = \\\"protoc\\\",/name = \\\"protoc\\\",features=\\[\\\"fully_static_link\\\"\\],/g" BUILD.bazel
-    """]
 )
 
 # Hedron's Compile Commands Extractor for Bazel
