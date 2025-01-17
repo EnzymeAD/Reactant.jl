@@ -204,14 +204,27 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Named
     return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers)}
 end
 
+
+Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
+Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict{K}}) where K = K
+Base.@nospecializeinfer @inline dict_value(::Type{<:AbstractDict}) = nothing
+Base.@nospecializeinfer @inline dict_value(::Type{<:(AbstractDict{K,V} where K)}) where V = V
+
+@nospecialize(TV::UnionAll)) = UnionAll(TV.var, base_typet(TV.body))
+Base.@nospecializeinfer @inline base_typet(@nospecialize(TV::DataType)) = TracedRArray{TV.parameters...}
+
 Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:AbstractDict}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
-    if T isa UnionAll
-        @show T
+    V = dict_value(T)
+    if V === nothing
+        return T
+    else
+        K = dict_key(T)
+        if K !== nothing
+            return dictty{K,traced_type_inner(V, seen, mode, track_numbers)}
+        else
+            return (dictty{KT,traced_type_inner(V, seen, mode, track_numbers)} where KT)
+        end
     end
-    dictty = T.name.wrapper
-    K = T.parameters[1]
-    V = T.parameters[2]
-    return dictty{K,traced_type_inner(V, seen, mode, track_numbers)}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
