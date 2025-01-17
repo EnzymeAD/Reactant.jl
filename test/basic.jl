@@ -1051,3 +1051,16 @@ end
     @test isfinite(Reactant.to_rarray(0.0; track_numbers=Number))
     @test !isfinite(Reactant.to_rarray(Inf; track_numbers=Number))
 end
+
+@testset "inconsistent indexing" begin
+    x_ra = Reactant.to_rarray(rand(3, 4, 3))
+    idx_ra = Reactant.to_rarray(1; track_numbers=Number)
+
+    fn1(x) = x[:, :, 1]
+    fn2(x, idx) = x[:, :, idx]
+    fn3(x, idx) = x[idx, :, 1]
+
+    @test ndims(@jit(fn1(x_ra))) == 2
+    @test ndims(@jit(fn2(x_ra, idx_ra))) == 2
+    @test ndims(@jit(fn3(x_ra, idx_ra))) == 1
+end
