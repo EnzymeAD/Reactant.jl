@@ -482,18 +482,18 @@ function dot_scaled(
     ]
     !isnothing(lhs_scale) && push!(operands, lhs_scale)
     !isnothing(rhs_scale) && push!(operands, rhs_scale)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        if (lhs_scale == nothing)
-            0
-        elseif 1(rhs_scale == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, if (lhs_scale == nothing)
+                0
+            elseif 1(rhs_scale == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
 
     return create_operation(
         "tt.dot_scaled",
@@ -785,12 +785,17 @@ tensor. The input and indices tensors must have the same number of
 dimension, and each dimension of the indices tensor that is not the gather
 dimension cannot be greater than the corresponding dimension in the input
 tensor.
+
+The `efficient_layout` attribute is set when the compiler has determined an
+optimized layout for the operation, indicating that it should not be
+changed.
 """
 function gather(
     src::Value,
     indices::Value;
     result=nothing::Union{Nothing,IR.Type},
     axis,
+    efficient_layout=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -799,6 +804,8 @@ function gather(
     successors = Block[]
     attributes = NamedAttribute[namedattribute("axis", axis),]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(efficient_layout) &&
+        push!(attributes, namedattribute("efficient_layout", efficient_layout))
 
     return create_operation(
         "tt.gather",
@@ -949,16 +956,16 @@ function load(
     attributes = NamedAttribute[]
     !isnothing(mask) && push!(operands, mask)
     !isnothing(other) && push!(operands, other)
-    push!(attributes, operandsegmentsizes([
-        1,
-        if (mask == nothing)
+    push!(
+        attributes,
+        operandsegmentsizes([1, if (mask == nothing)
             0
         elseif 1(other == nothing)
             0
         else
             1
-        end,
-    ]))
+        end]),
+    )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(boundaryCheck) &&
         push!(attributes, namedattribute("boundaryCheck", boundaryCheck))
