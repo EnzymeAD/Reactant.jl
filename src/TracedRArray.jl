@@ -263,6 +263,12 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     return v
 end
 
+function Base.setindex!(a::AnyTracedRArray{T,N}, v, indices::Vararg{Int,N}) where {T,N}
+    ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
+    setindex!(ancestor(a), v, ancestor_indices...)
+    return a
+end
+
 function Base.setindex!(a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
     ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
     setindex!(ancestor(a), v, ancestor_indices...)
