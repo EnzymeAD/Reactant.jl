@@ -216,6 +216,11 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Abstr
         return T
     else
         K = dict_key(T)
+        dictty = if T isa UnionAll
+            T.body.name.wrapper
+        else
+            T.name.wrapper
+        end
         if K !== nothing
             return dictty{K,traced_type_inner(V, seen, mode, track_numbers)}
         else
