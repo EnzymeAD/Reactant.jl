@@ -216,15 +216,19 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Abstr
         return T
     else
         K = dict_key(T)
+        V2 = traced_type_inner(V, seen, mode, track_numbers)
+        if V == V2
+            return T
+        end
         dictty = if T isa UnionAll
             T.body.name.wrapper
         else
             T.name.wrapper
         end
         if K !== nothing
-            return dictty{K,traced_type_inner(V, seen, mode, track_numbers)}
+            return dictty{K,V2}
         else
-            return (dictty{KT,traced_type_inner(V, seen, mode, track_numbers)} where KT)
+            return (dictty{KT,V2} where KT)
         end
     end
 end

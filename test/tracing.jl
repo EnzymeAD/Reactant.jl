@@ -99,6 +99,8 @@ using Test
                 (Dict{Int}, Dict{Int}, Dict{Int}),
                 (Dict, Dict, Dict),
                 ((Dict{A, ConcreteRArray{Float64,0}} where A), (Dict{A, TracedRArray{Float64,0}} where A), (Dict{A, TracedRArray{Float64,0}} where A)),
+
+                (Base.Pairs{Symbol, Union{}}, Base.Pairs{Symbol, Union{}}, Base.Pairs{Symbol, Union{}})
             ]
                 tracedty = traced_type(
                     origty, Val(ConcreteToTraced), Union{}
