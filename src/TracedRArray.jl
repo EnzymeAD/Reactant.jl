@@ -65,6 +65,9 @@ function Base.getindex(
 end
 
 Base.getindex(a::TracedRArray{T,0}) where {T} = TracedRNumber{T}((), a.mlir_data)
+function Base.getindex(a::TracedRArray{T,0}, ::CartesianIndex{0}) where {T}
+    return TracedRNumber{T}((), a.mlir_data)
+end
 
 function generate_index_list(i1, is...)
     list = reshape(i1, :, 1) .- 1
@@ -123,7 +126,11 @@ function Base.getindex(a::TracedRArray{T,N}, indices::CartesianIndex{N}) where {
     indices =
         materialize_traced_array(
             reshape(
-                TracedUtils.promote_to(TracedRArray{Int,1}, vcat(Tuple(indices)...)), 1, N
+                TracedUtils.promote_to(
+                    TracedRArray{Int,1}, collect(Int64, vcat(Tuple(indices)...))
+                ),
+                1,
+                N,
             ),
         ) .- 1
     return Ops.gather_getindex(a, indices)[1]
@@ -157,10 +164,19 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
-        indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
+        idxs = map(indices) do i
+            i isa Number && return fill(i, 1)
+            return i
+        end
+        indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), idxs)
         indices_list = generate_index_list(indices_list...)
         res = Ops.gather_getindex(a, indices_list)
-        return Ops.reshape(res, length.(indices)...)
+        res = Ops.reshape(res, length.(idxs)...)
+        ddims = findall(indices) do idx
+            return idx isa Integer || idx isa TracedRNumber{<:Integer}
+        end
+        isempty(ddims) || return materialize_traced_array(dropdims(res; dims=Tuple(ddims)))
+        return res
     end
 
     start_indices = map(indices) do i
@@ -307,6 +323,11 @@ Base.imag(A::AnyTracedRArray{<:Complex}) = Ops.imag(materialize_traced_array(A))
 TracedUtils.promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N} = TracedRArray{T,N}(rhs)
 function TracedUtils.promote_to(::TracedRArray{T,N}, rhs) where {T,N}
     return TracedUtils.promote_to(TracedRArray{T,N}, rhs)
+end
+function TracedUtils.promote_to(
+    ::Type{TracedRArray{T,0}}, rhs::TracedRNumber{T2}
+) where {T,T2}
+    return TracedRArray{T,0}((), Ops.convert(TracedRNumber{T}, rhs).mlir_data, ())
 end
 
 for (jlop, hloop, hlocomp, merge) in
