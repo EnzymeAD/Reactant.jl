@@ -263,12 +263,6 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     return v
 end
 
-@reactant_overlay @noinline function Base.setindex!(a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
-    ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
-    setindex!(ancestor(a), v, ancestor_indices...)
-    return a
-end
-
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(Base.getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
