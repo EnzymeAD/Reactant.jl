@@ -204,11 +204,33 @@ Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:Named
     return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers)}
 end
 
+
+Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
+Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict{K}}) where K = K
+Base.@nospecializeinfer @inline dict_value(::Type{<:AbstractDict}) = nothing
+Base.@nospecializeinfer @inline dict_value(::Type{<:(AbstractDict{K,V} where K)}) where V = V
+
 Base.@nospecializeinfer function traced_type_inner(@nospecialize(T::Type{<:AbstractDict}), seen, mode::TraceMode, @nospecialize(track_numbers::Type))
-    dictty = T.name.wrapper
-    K = T.parameters[1]
-    V = T.parameters[2]
-    return dictty{K,traced_type_inner(V, seen, mode, track_numbers)}
+    V = dict_value(T)
+    if V === nothing
+        return T
+    else
+        K = dict_key(T)
+        V2 = traced_type_inner(V, seen, mode, track_numbers)
+        if V == V2
+            return T
+        end
+        dictty = if T isa UnionAll
+            T.body.name.wrapper
+        else
+            T.name.wrapper
+        end
+        if K !== nothing
+            return dictty{K,V2}
+        else
+            return (dictty{KT,V2} where KT)
+        end
+    end
 end
 
 Base.@nospecializeinfer function traced_type_inner(

@@ -93,6 +93,14 @@ using Test
                 (Val{0}, Val{0}, Val{0}),
                 (Val{0.5}, Val{0.5}, Val{0.5}),
                 (Val{:x}, Val{:x}, Val{:x}),
+
+
+                (Dict{Int, ConcreteRArray{Float64,0}}, Dict{Int, TracedRArray{Float64,0}}, Dict{Int, TracedRArray{Float64, 0}}),
+                (Dict{Int}, Dict{Int}, Dict{Int}),
+                (Dict, Dict, Dict),
+                ((Dict{A, ConcreteRArray{Float64,0}} where A), (Dict{A, TracedRArray{Float64,0}} where A), (Dict{A, TracedRArray{Float64,0}} where A)),
+
+                (Base.Pairs{Symbol, Union{}}, Base.Pairs{Symbol, Union{}}, Base.Pairs{Symbol, Union{}})
             ]
                 tracedty = traced_type(
                     origty, Val(ConcreteToTraced), Union{}
