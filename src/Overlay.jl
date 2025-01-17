@@ -13,7 +13,7 @@ end
 
 @reactant_overlay @noinline function Base.setindex!(a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
     ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
-    setindex!(ancestor(a), v, ancestor_indices...)
+    call_with_reactant(setindex!, ancestor(a), v, ancestor_indices...)
     return a
 end
 
