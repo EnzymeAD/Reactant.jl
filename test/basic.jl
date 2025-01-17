@@ -34,19 +34,18 @@ end
 end
 
 sinexp(x) = sin(exp(x))
-sinexpbc(x) = sinexp.(x)
 
 @testset "Broadcast combined" begin
     x = rand(2, 10)
 
-    r_res = sinexpbc(x)
+    r_res = sinexp.(x)
 
     a = Reactant.ConcreteRArray(x)
 
-    c_res = @allowscalar sinexpbc(a)
+    c_res = @allowscalar sinexp.(a)
     @test c_res ≈ r_res
 
-    @test @jit(sinexpbc(a)) ≈ r_res
+    @test @jit(sinexp.(a)) ≈ r_res
 end
 
 sumexp(x) = sum(exp, x)
@@ -82,13 +81,11 @@ end
     @test f_res ≈ r_res
 end
 
-bcast_cos(x) = cos.(x)
-
 @testset "Basic cos" begin
     x = rand(3, 2)
     c = Reactant.ConcreteRArray(x)
 
-    @test @jit(bcast_cos(c)) ≈ cos.(x)
+    @test @jit(cos.(c)) ≈ cos.(x)
 end
 
 f_var(args...) = sum(args)
@@ -376,7 +373,7 @@ end
         b = Reactant.to_rarray(_b)
         c = Reactant.to_rarray(_c)
 
-        # vcat test        
+        # vcat test
         y = @jit vcat(a, b)
         @test y == vcat(a, _b)
         @test y isa ConcreteRArray{typeof_a,1}
