@@ -1129,7 +1129,7 @@ end
 # TODO PjRtLoadedExecutable
 
 # PjRtCompiler
-function PjRtCopiler(x::PjRtCompiler)
+function PjRtCompiler(x::PjRtClient)
     return PjRtCompiler(@ccall libxla.ifrt_pjrt_compiler_ctor(x::Ptr{Cvoid})::Ptr{Cvoid})
 end
 
