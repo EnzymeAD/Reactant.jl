@@ -298,18 +298,14 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
         ",",
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
-    passes = [
-            "inline{default-pipeline=canonicalize max-iterations=4}"
-    ]
+    passes = ["inline{default-pipeline=canonicalize max-iterations=4}"]
     if sroa
-        push!(passes,  "sroa-wrappers")
-        push!(passes,  "libdevice-funcs-raise")
-        push!(passes,  "canonicalize")
+        push!(passes, "sroa-wrappers")
+        push!(passes, "libdevice-funcs-raise")
+        push!(passes, "canonicalize")
     end
     push!(passes, func_passes)
-    return join(passes,
-        ',',
-    )
+    return join(passes, ',')
 end
 
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
@@ -389,7 +385,9 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
     if DEBUG_KERNEL[]
-        curesulthandler = XLA.Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult")
+        curesulthandler = XLA.Libdl.dlsym(
+            Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
+        )
         @assert curesulthandler !== nothing
         curesulthandler = Base.reinterpret(UInt, curesulthandler)
         kern = "lower-kernel{debug=true cuResultHandlerPtr=$curesulthandler run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[]) cuStreamSynchronizePtr=$(cuSync[])},symbol-dce"

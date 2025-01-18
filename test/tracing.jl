@@ -57,33 +57,65 @@ using Test
                 (Complex{UInt128}, Complex{UInt128}, TracedRNumber{Complex{UInt128}}),
 
                 # RArray types
-                (ConcreteRArray{Float64,0}, TracedRArray{Float64,0}, TracedRArray{Float64, 0}),
-                (ConcreteRArray{Float64,1}, TracedRArray{Float64,1}, TracedRArray{Float64, 1}),
-                (ConcreteRArray{Float64,2}, TracedRArray{Float64,2}, TracedRArray{Float64, 2}),
-                (ConcreteRArray{Float64,3}, TracedRArray{Float64,3}, TracedRArray{Float64, 3}),
+                (
+                    ConcreteRArray{Float64,0},
+                    TracedRArray{Float64,0},
+                    TracedRArray{Float64,0},
+                ),
+                (
+                    ConcreteRArray{Float64,1},
+                    TracedRArray{Float64,1},
+                    TracedRArray{Float64,1},
+                ),
+                (
+                    ConcreteRArray{Float64,2},
+                    TracedRArray{Float64,2},
+                    TracedRArray{Float64,2},
+                ),
+                (
+                    ConcreteRArray{Float64,3},
+                    TracedRArray{Float64,3},
+                    TracedRArray{Float64,3},
+                ),
 
                 # Array types
-                (Array{Float64,1}, Array{Float64,1}, Array{TracedRNumber{Float64}, 1}),
-                (Array{ConcreteRArray{Float64,2},1}, Array{TracedRArray{Float64,2},1}, Array{TracedRArray{Float64,2}, 1}),
+                (Array{Float64,1}, Array{Float64,1}, Array{TracedRNumber{Float64},1}),
+                (
+                    Array{ConcreteRArray{Float64,2},1},
+                    Array{TracedRArray{Float64,2},1},
+                    Array{TracedRArray{Float64,2},1},
+                ),
 
                 # Union types
-                (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing, TracedRNumber{Int}}),
+                (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRNumber{Int}}),
                 (
                     Union{Nothing,ConcreteRArray{Float64,1}},
                     Union{Nothing,TracedRArray{Float64,1}},
-                    Union{Nothing, TracedRArray{Float64, 1}}
+                    Union{Nothing,TracedRArray{Float64,1}},
                 ),
 
                 # Ptr types
                 (Ptr{Float64}, Ptr{Float64}, Ptr{TracedRNumber{Float64}}),
-                (Ptr{ConcreteRArray{Float64,1}}, Ptr{TracedRArray{Float64,1}}, Ptr{TracedRArray{Float64,1}}),
-                (Core.LLVMPtr{Float64}, Core.LLVMPtr{Float64}, Core.LLVMPtr{TracedRNumber{Float64}}),
+                (
+                    Ptr{ConcreteRArray{Float64,1}},
+                    Ptr{TracedRArray{Float64,1}},
+                    Ptr{TracedRArray{Float64,1}},
+                ),
+                (
+                    Core.LLVMPtr{Float64},
+                    Core.LLVMPtr{Float64},
+                    Core.LLVMPtr{TracedRNumber{Float64}},
+                ),
                 (
                     Core.LLVMPtr{ConcreteRArray{Float64,1}},
                     Core.LLVMPtr{TracedRArray{Float64,1}},
-                    Core.LLVMPtr{TracedRArray{Float64,1}}
+                    Core.LLVMPtr{TracedRArray{Float64,1}},
                 ),
-                (Base.RefValue{Float64}, Base.RefValue{Float64}, Base.RefValue{TracedRNumber{Float64}}),
+                (
+                    Base.RefValue{Float64},
+                    Base.RefValue{Float64},
+                    Base.RefValue{TracedRNumber{Float64}},
+                ),
                 (
                     Base.RefValue{ConcreteRArray{Float64,1}},
                     Base.RefValue{TracedRArray{Float64,1}},
@@ -94,23 +126,28 @@ using Test
                 (Val{0}, Val{0}, Val{0}),
                 (Val{0.5}, Val{0.5}, Val{0.5}),
                 (Val{:x}, Val{:x}, Val{:x}),
-
-
-                (Dict{Int, ConcreteRArray{Float64,0}}, Dict{Int, TracedRArray{Float64,0}}, Dict{Int, TracedRArray{Float64, 0}}),
+                (
+                    Dict{Int,ConcreteRArray{Float64,0}},
+                    Dict{Int,TracedRArray{Float64,0}},
+                    Dict{Int,TracedRArray{Float64,0}},
+                ),
                 (Dict{Int}, Dict{Int}, Dict{Int}),
                 (Dict, Dict, Dict),
-                ((Dict{A, ConcreteRArray{Float64,0}} where A), (Dict{A, TracedRArray{Float64,0}} where A), (Dict{A, TracedRArray{Float64,0}} where A)),
-
-                (Base.Pairs{Symbol, Union{}}, Base.Pairs{Symbol, Union{}}, Base.Pairs{Symbol, Union{}})
+                (
+                    (Dict{A,ConcreteRArray{Float64,0}} where {A}),
+                    (Dict{A,TracedRArray{Float64,0}} where {A}),
+                    (Dict{A,TracedRArray{Float64,0}} where {A}),
+                ),
+                (
+                    Base.Pairs{Symbol,Union{}},
+                    Base.Pairs{Symbol,Union{}},
+                    Base.Pairs{Symbol,Union{}},
+                ),
             ]
-                tracedty = traced_type(
-                    origty, Val(ConcreteToTraced), Union{}
-                )
+                tracedty = traced_type(origty, Val(ConcreteToTraced), Union{})
                 @test tracedty == targetty
 
-                tracedty2 = traced_type(
-                    origty, Val(ConcreteToTraced), ReactantPrimitive
-                )
+                tracedty2 = traced_type(origty, Val(ConcreteToTraced), ReactantPrimitive)
                 @test tracedty2 == targetty
             end
 
@@ -121,7 +158,7 @@ using Test
                 TracedRArray{Float64,3},
             ]
                 @test_throws Union{ErrorException,String} traced_type(
-                      type, Val(ConcreteToTraced), Union{}
+                    type, Val(ConcreteToTraced), Union{}
                 )
             end
         end
@@ -130,9 +167,7 @@ using Test
                 x::Vector{Float64}
                 y::Union{Nothing,Node}
             end
-            @test_throws NoFieldMatchError traced_type(
-                   Node, Val(ArrayToConcrete), Union{}
-            )
+            @test_throws NoFieldMatchError traced_type(Node, Val(ArrayToConcrete), Union{})
         end
     end
 
