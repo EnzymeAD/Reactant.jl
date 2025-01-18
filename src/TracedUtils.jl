@@ -341,24 +341,24 @@ function set!(x, path, tostore; emptypath=false)
     return emptypath && set_paths!(x, ())
 end
 
-function get_residx(x, path_start=:result)
+function get_residx(x)
     for path in get_paths(x)
         if length(path) == 0
             continue
         end
-        if path[1] == path_start
+        if path[1] == :result
             return path
         end
     end
     throw(AssertionError("No path found $x"))
 end
 
-function has_residx(x, path_start=:result)
+function has_residx(x)
     for path in get_paths(x)
         if length(path) == 0
             continue
         end
-        if path[1] == path_start
+        if path[1] == :result
             return true
         end
     end

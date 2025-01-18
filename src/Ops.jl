@@ -1620,7 +1620,10 @@ end
 @noinline function if_condition(
     cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args...
 ) where {TFn,FFn}
-    # TODO: (probably) mutation isn't handled correctly inside conditionals
+    true_fn_names = (gensym(:true_fn_args), gensym(:true_result), gensym(:true_fn_resargs))
+    false_fn_names = (
+        gensym(:false_fn_args), gensym(:false_result), gensym(:false_fn_resargs)
+    )
 
     # Make all the args traced or concrete
     N = length(args)
@@ -1632,14 +1635,14 @@ end
         @inbounds tb_traced_args[i] = Reactant.make_tracer(
             tb_seen_args,
             args[i],
-            (:tb_args, i),
+            (true_fn_names[1], i),
             Reactant.TracedSetPath;
             track_numbers=Number,
         )
         @inbounds fb_traced_args[i] = Reactant.make_tracer(
             fb_seen_args,
             args[i],
-            (:fb_args, i),
+            (false_fn_names[1], i),
             Reactant.TracedSetPath;
             track_numbers=Number,
         )
@@ -1684,10 +1687,19 @@ end
     traced_true_results = Reactant.make_tracer(
         seen_true_results,
         tb_result,
-        (:tb_result,),
+        (true_fn_names[2],),
         Reactant.TracedTrack;
         track_numbers=Number,
     )
+    for i in 1:length(tb_linear_args)
+        Reactant.make_tracer(
+            seen_true_results,
+            tb_linear_args[i],
+            (true_fn_names[3], i),
+            Reactant.NoStopTracedTrack;
+            track_numbers=Number,
+        )
+    end
 
     tb_linear_results = Reactant.TracedType[
         v for v in values(seen_true_results) if v isa Reactant.TracedType
@@ -1722,67 +1734,85 @@ end
     traced_false_results = Reactant.make_tracer(
         seen_false_results,
         fb_result,
-        (:fb_result,),
+        (false_fn_names[2],),
         Reactant.TracedTrack;
         track_numbers=Number,
     )
+    for i in 1:length(fb_linear_args)
+        Reactant.make_tracer(
+            seen_false_results,
+            fb_linear_args[i],
+            (false_fn_names[3], i),
+            Reactant.NoStopTracedTrack;
+            track_numbers=Number,
+        )
+    end
 
     fb_linear_results = Reactant.TracedType[
         v for v in values(seen_false_results) if v isa Reactant.TracedType
     ]
 
-    tb_results_dict = Reactant.OrderedIdDict()
+    tb_results_dict = Dict{Tuple,Reactant.TracedType}()
     for tr in tb_linear_results
-        paths = Reactant.TracedUtils.get_paths(tr)
-        for path in paths
-            length(path) == 0 && continue
-            if path[1] == :tb_result
-                if haskey(tb_results_dict, tr)
-                    push!(tb_results_dict[tr], path[2:end])
-                else
-                    tb_results_dict[tr] = Tuple[path[2:end]]
-                end
+        for path in Reactant.TracedUtils.get_paths(tr)
+            if length(path) > 0 &&
+                (path[1] == true_fn_names[2] || path[1] == true_fn_names[3])
+                tb_results_dict[path] = tr
             end
         end
     end
 
-    fb_results_dict = Reactant.OrderedIdDict()
+    fb_results_dict = Dict{Tuple,Reactant.TracedType}()
     for fr in fb_linear_results
-        paths = Reactant.TracedUtils.get_paths(fr)
-        for path in paths
-            length(path) == 0 && continue
-            if path[1] == :fb_result
-                if haskey(fb_results_dict, fr)
-                    push!(fb_results_dict[fr], path[2:end])
-                else
-                    fb_results_dict[fr] = Tuple[path[2:end]]
-                end
+        for path in Reactant.TracedUtils.get_paths(fr)
+            if length(path) > 0 &&
+                (path[1] == false_fn_names[2] || path[1] == false_fn_names[3])
+                fb_results_dict[path] = fr
             end
         end
     end
+
+    all_paths = []
+    for (path, tr) in tb_results_dict
+        if path[1] == true_fn_names[2]
+            push!(all_paths, (:result, path[2:end]...))
+        elseif path[1] == true_fn_names[3]
+            push!(all_paths, (:resarg, path[2:end]...))
+        end
+    end
+    for (path, fr) in fb_results_dict
+        if path[1] == false_fn_names[2]
+            push!(all_paths, (:result, path[2:end]...))
+        elseif path[1] == false_fn_names[3]
+            push!(all_paths, (:resarg, path[2:end]...))
+        end
+    end
+    all_paths = sort!(unique!(all_paths))
+    tb_paths = [
+        if path[1] == :result
+            (true_fn_names[2], path[2:end]...)
+        else
+            (true_fn_names[3], path[2:end]...)
+        end for path in all_paths
+    ]
+    fb_paths = [
+        if path[1] == :result
+            (false_fn_names[2], path[2:end]...)
+        else
+            (false_fn_names[3], path[2:end]...)
+        end for path in all_paths
+    ]
 
     # finalize the true branch by adding the missing values
     MLIR.IR.activate!(true_fn_body)
     tb_corrected_linear_results = Reactant.TracedType[]
     try
-        for (tr, _) in tb_results_dict
-            push!(tb_corrected_linear_results, tr)
-        end
-        for (fr, paths) in fb_results_dict
-            haskey(tb_results_dict, fr) && continue
-            # fr isa MissingTracedValue && continue
-            found_path = false
-            for path in paths
-                for (_, tr_paths) in tb_results_dict
-                    path_idx = findfirst(isequal(path), tr_paths)
-                    if path_idx !== nothing
-                        found_path = true
-                        break
-                    end
-                end
-                found_path && break
+        for (i, path) in enumerate(tb_paths)
+            if haskey(tb_results_dict, tb_paths[i])
+                push!(tb_corrected_linear_results, tb_results_dict[tb_paths[i]])
+            else
+                push!(tb_corrected_linear_results, zero(fb_results_dict[fb_paths[i]]))
             end
-            !found_path && push!(tb_corrected_linear_results, zero(fr))
         end
     finally
         MLIR.IR.deactivate!(true_fn_body)
@@ -1792,41 +1822,12 @@ end
     MLIR.IR.activate!(false_fn_body)
     fb_corrected_linear_results = Reactant.TracedType[]
     try
-        for (tr, paths) in tb_results_dict
-            if haskey(fb_results_dict, tr)
-                push!(fb_corrected_linear_results, tr)
+        for (i, path) in enumerate(fb_paths)
+            if haskey(fb_results_dict, fb_paths[i])
+                push!(fb_corrected_linear_results, fb_results_dict[fb_paths[i]])
             else
-                # tr isa MissingTracedValue && continue
-                found_path = false
-                res = nothing
-                for path in paths
-                    for (fr, fr_paths) in fb_results_dict
-                        path_idx = findfirst(isequal(path), fr_paths)
-                        if path_idx !== nothing
-                            found_path = true
-                            res = fr
-                            break
-                        end
-                    end
-                    found_path && break
-                end
-                if !found_path
-                    push!(fb_corrected_linear_results, zero(tr))
-                else
-                    push!(fb_corrected_linear_results, res)
-                end
+                push!(fb_corrected_linear_results, zero(tb_results_dict[tb_paths[i]]))
             end
-        end
-        for (fr, _) in fb_results_dict
-            haskey(tb_results_dict, fr) && continue
-            already_found = false
-            for fr_already in fb_corrected_linear_results
-                if fr_already === fr
-                    already_found = true
-                    break
-                end
-            end
-            !already_found && push!(fb_corrected_linear_results, fr)
         end
     finally
         MLIR.IR.deactivate!(false_fn_body)
@@ -1834,6 +1835,7 @@ end
 
     # All MissingTracedValues must be replaced with zeroes
     @assert length(tb_corrected_linear_results) == length(fb_corrected_linear_results)
+
     result_types = MLIR.IR.Type[]
     for (i, (tr, fr)) in
         enumerate(zip(tb_corrected_linear_results, fb_corrected_linear_results))
@@ -1859,7 +1861,11 @@ end
             end
             tr
         else
-            @assert typeof(tr) == typeof(fr)
+            if typeof(tr) != typeof(fr)
+                @show tr.mlir_data
+                @show fr.mlir_data
+                @assert typeof(tr) == typeof(fr) "$(typeof(tr)) vs $(typeof(fr))"
+            end
             tr
         end
         push!(result_types, mlir_type(res))
@@ -1944,22 +1950,16 @@ end
         end
     end
 
-    residx = 1
-    for (tr, fr) in zip(tb_corrected_linear_results, fb_corrected_linear_results)
-        tr isa MissingTracedValue && fr isa MissingTracedValue && continue
-        res = tr isa MissingTracedValue ? fr : tr
-        has_tb_residx = Reactant.TracedUtils.has_residx(res, :tb_result)
-        has_fb_residx = Reactant.TracedUtils.has_residx(res, :fb_result)
-        !(has_tb_residx || has_fb_residx) && continue
-        path = if has_tb_residx
-            Reactant.TracedUtils.get_residx(res, :tb_result)
+    for (residx, path) in enumerate(all_paths)
+        if path[1] == :result
+            Reactant.TracedUtils.set!(
+                corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
+            )
         else
-            Reactant.TracedUtils.get_residx(res, :fb_result)
+            Reactant.TracedUtils.set!(
+                args, path[2:end], MLIR.IR.result(if_compiled, residx)
+            )
         end
-        Reactant.TracedUtils.set!(
-            corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
-        )
-        residx += 1
     end
 
     return corrected_traced_results

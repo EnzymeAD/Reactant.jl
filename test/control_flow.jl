@@ -367,8 +367,8 @@ end
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
     @test @allowscalar(res_ra[1, 1]) == -1.0
     @test @allowscalar(res_ra[2, 1]) == -1.0
-    @test @allowscalar(x_ra[1, 1]) == -1.0 broken = true
-    @test @allowscalar(x_ra[2, 1]) == -1.0 broken = true
+    @test @allowscalar(x_ra[1, 1]) == -1.0
+    @test @allowscalar(x_ra[2, 1]) == -1.0
 
     x = -rand(2, 10)
     x[2, 1] = 0.0
@@ -377,7 +377,7 @@ end
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
     @test @allowscalar(res_ra[1, 1]) == 1.0
     @test @allowscalar(res_ra[2, 1]) == 0.0
-    @test @allowscalar(x_ra[1, 1]) == 1.0 broken = true
+    @test @allowscalar(x_ra[1, 1]) == 1.0
     @test @allowscalar(x_ra[2, 1]) == 0.0
 end
 
@@ -458,9 +458,9 @@ end
 function condition_with_structure(x)
     y = x .+ 1
     @trace if sum(y) > 0
-        z = (; a = y, b = (y .- 1, y))
+        z = (; a=y, b=(y .- 1, y))
     else
-        z = (; a = -y, b = (y, y .+ 1))
+        z = (; a=-y, b=(y, y .+ 1))
     end
     return z
 end
@@ -469,7 +469,20 @@ end
     x = rand(2, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(condition_with_structure(x_ra)) ≈ condition_with_structure(x)
+    res_ra = @jit condition_with_structure(x_ra)
+    res = condition_with_structure(x)
+    @test res_ra.a ≈ res.a
+    @test res_ra.b[1] ≈ res.b[1]
+    @test res_ra.b[2] ≈ res.b[2]
+
+    x = -rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit condition_with_structure(x_ra)
+    res = condition_with_structure(x)
+    @test res_ra.a ≈ res.a
+    @test res_ra.b[1] ≈ res.b[1]
+    @test res_ra.b[2] ≈ res.b[2]
 end
 
 function for_with_step(x)
