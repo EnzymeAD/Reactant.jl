@@ -133,7 +133,7 @@ include("Tracing.jl")
 include("Compiler.jl")
 
 include("PjRt.jl")
-include("IFRT.jl")
+include("IFRT/IFRT.jl")
 
 include("Overlay.jl")
 
