@@ -78,15 +78,18 @@ function barrier(
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
     !isnothing(numberOfThreads) && push!(operands, numberOfThreads)
-    push!(attributes, operandsegmentsizes([
-        if (barrierId == nothing)
-            0
-        elseif 1(numberOfThreads == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            if (barrierId == nothing)
+                0
+            elseif 1(numberOfThreads == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
 
     return create_operation(
         "nvvm.barrier",
@@ -2442,8 +2445,8 @@ combinations are possible for certain layouts according to the table below.
 | f16      | .m8n8k4   | row/col | row/col | 2x f16x2 | 2x f16x2 | 4x f16x2 or 8xf32 |
 |          | .m16n8k8  | row     | col     | 2x f16x2 | 1x f16x2 | 2x f16x2 or 4 f32 |
 |          | .m16n8k16 | row     | col     | 4x f16x2 | 2x f16x2 | 2x f16x2 or 4 f32 |
-| bf16     | .m16n8k8  | row     | col     | 2x f16x2 | 1x f16x2 | 2x f16x2 or 4 f32 |
-|          | .m16n8k16 | row     | col     | 4x f16x2 | 2x f16x2 | 2x f16x2 or 4 f32 |
+| bf16     | .m16n8k8  | row     | col     | 2x i32   | 1x i32   | 4x f32            |
+|          | .m16n8k16 | row     | col     | 4x i32   | 2x i32   | 4x f32            |
 | tf32     | .m16n8k4  | row     | col     | 2x i32   | 1x i32   | 4x f32            |
 |          | .m16n8k8  | row     | col     | 4x i32   | 2x i32   | 2x f16x2 or 4 f32 |
 | u8/s8    | .m8n8k16  | row     | col     | 1x i32   | 1x i32   | 2x i32            |
