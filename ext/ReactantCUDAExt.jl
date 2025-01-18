@@ -385,7 +385,6 @@ function compile(job)
         end
         LLVM.strip_debuginfo!(mod)
         modstr = string(mod)
-        
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
 
