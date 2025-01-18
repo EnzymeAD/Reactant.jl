@@ -9,6 +9,7 @@ CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
+Functors = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
 GPUArraysCore = "46192b85-c4d5-4398-a991-12ede77f4527"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -32,8 +33,8 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 YaoBlocks = "418bc28f-b43b-5e0b-a6e7-61bbc1a2c1df"
 
-[sources.ReactantCore]
-path = "lib/ReactantCore"
+[sources]
+ReactantCore = {path = "lib/ReactantCore"}
 
 [extensions]
 ReactantAbstractFFTsExt = "AbstractFFTs"
@@ -56,6 +57,7 @@ CUDA = "5.5"
 Downloads = "1.6"
 Enzyme = "0.13.28"
 EnzymeCore = "0.8.8"
+Functors = "0.5"
 GPUArraysCore = "0.1.6, 0.2"
 LinearAlgebra = "1.10"
 NNlib = "0.9.26"

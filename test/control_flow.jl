@@ -455,6 +455,23 @@ end
         condition12_compile_test(x, y, z)
 end
 
+function condition_with_structure(x)
+    y = x .+ 1
+    @trace if sum(y) > 0
+        z = (; a = y, b = (y .- 1, y))
+    else
+        z = (; a = -y, b = (y, y .+ 1))
+    end
+    return z
+end
+
+@testset "condition with structure" begin
+    x = rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(condition_with_structure(x_ra)) ≈ condition_with_structure(x)
+end
+
 function for_with_step(x)
     @trace for i in 10:3:22
         @allowscalar x[i] = i * i

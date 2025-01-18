@@ -4,6 +4,7 @@ using ReactantCore: ReactantCore, @trace, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
+using Functors: @leaf
 
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
@@ -84,6 +85,8 @@ include("Interpreter.jl")
 
 include("utils.jl")
 
+@leaf MissingTracedValue
+
 mutable struct TracedRNumber{T} <: RNumber{T}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
@@ -97,6 +100,8 @@ mutable struct TracedRNumber{T} <: RNumber{T}
         return new{T}(paths, mlir_data)
     end
 end
+
+@leaf TracedRNumber
 
 mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     paths::Tuple
@@ -113,6 +118,8 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         return new{T,N}(paths, mlir_data, shape)
     end
 end
+
+@leaf TracedRArray
 
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
@@ -149,10 +156,14 @@ mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
 end
 
+@leaf ConcreteRNumber
+
 mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     data::XLA.AsyncBuffer
     shape::NTuple{N,Int}
 end
+
+@leaf ConcreteRArray
 
 Adapt.parent_type(::Type{ConcreteRArray{T,N}}) where {T,N} = ConcreteRArray{T,N}
 

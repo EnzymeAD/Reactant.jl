@@ -109,8 +109,6 @@ function make_mlir_fn(
     concretein=true;
     toscalar=false,
     return_dialect=:func,
-    no_args_in_result::Bool=false,
-    construct_function_without_args::Bool=false,
     do_transpose=true,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
@@ -124,8 +122,6 @@ function make_mlir_fn(
                 concretein;
                 toscalar,
                 return_dialect,
-                no_args_in_result,
-                construct_function_without_args,
                 do_transpose,
             )[2:end]...,
         )
@@ -141,7 +137,6 @@ function make_mlir_fn(
             (:args, i),
             concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
             toscalar,
-            track_numbers=construct_function_without_args ? Number : Union{},
         )
     end
 
@@ -176,11 +171,7 @@ function make_mlir_fn(
         )
     end
 
-    if construct_function_without_args
-        fnbody = MLIR.IR.Block()
-    else
-        fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
-    end
+    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
 
     @assert MLIR.IR._has_block()
@@ -190,13 +181,9 @@ function make_mlir_fn(
     MLIR.IR.activate!(fnbody)
     result = try
         for (i, arg) in enumerate(linear_args)
-            if construct_function_without_args
-                set_mlir_data!(arg, get_mlir_data(args[i]))
-            else
-                raw_arg = MLIR.IR.argument(fnbody, i)
-                row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
-                set_mlir_data!(arg, row_maj_arg)
-            end
+            raw_arg = MLIR.IR.argument(fnbody, i)
+            row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
+            set_mlir_data!(arg, row_maj_arg)
         end
 
         Reactant.call_with_reactant(f, traced_args...)
@@ -210,8 +197,7 @@ function make_mlir_fn(
         seen_results,
         result,
         (:result,),
-        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath;
-        track_numbers=construct_function_without_args ? Number : Union{},
+        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath,
     )
 
     # marks buffers to be donated
@@ -225,11 +211,8 @@ function make_mlir_fn(
     end
 
     linear_results = Reactant.TracedType[]
-
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
-        paths = get_paths(v)
-        (no_args_in_result && length(paths) > 0 && paths[1][1] == :args) && continue
         push!(linear_results, v)
     end
 
@@ -241,14 +224,14 @@ function make_mlir_fn(
         for res in linear_results
             col_maj = if res isa MissingTracedValue
                 get_mlir_data(broadcast_to_size(false, ()))
-            elseif construct_function_without_args || !do_transpose
+            elseif !do_transpose
                 get_mlir_data(res)
             elseif do_transpose
                 transpose_val(get_mlir_data(res))
             end
             push!(vals, col_maj)
         end
-        !no_args_in_result && @assert length(vals) == length(linear_results)
+        @assert length(vals) == length(linear_results)
 
         dialect = getfield(MLIR.Dialects, return_dialect)
         dialect.return_(vals)
@@ -256,23 +239,9 @@ function make_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    name2 = name
-
-    tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
-    for i in 0:10000
-        name2 = if i == 0
-            name
-        else
-            name * string(i)
-        end
-        if MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, name2))
-            break
-        end
-    end
-
     func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
-            sym_name=name2,
+            sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
             sym_visibility,
@@ -293,6 +262,22 @@ function make_mlir_fn(
         in_tys,
         linear_results,
     )
+end
+
+function __lookup_unique_name_in_module(mod, name)
+    new_name = name
+    tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
+    for i in 0:10000
+        new_name = i == 0 ? name : name * "_" * string(i)
+        MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) && return new_name
+    end
+    error("Could not find unique name for $name")
+end
+
+function __take_region(compiled_fn)
+    region = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0))
+    return region
 end
 
 elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
@@ -356,24 +341,24 @@ function set!(x, path, tostore; emptypath=false)
     return emptypath && set_paths!(x, ())
 end
 
-function get_residx(x)
+function get_residx(x, path_start=:result)
     for path in get_paths(x)
         if length(path) == 0
             continue
         end
-        if path[1] == :result
+        if path[1] == path_start
             return path
         end
     end
     throw(AssertionError("No path found $x"))
 end
 
-function has_residx(x)
+function has_residx(x, path_start=:result)
     for path in get_paths(x)
         if length(path) == 0
             continue
         end
-        if path[1] == :result
+        if path[1] == path_start
             return true
         end
     end
@@ -466,9 +451,6 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     return traced2_result
 end
-
-new_traced_value(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), nothing, size(A))
-new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
 
 function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
     return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)

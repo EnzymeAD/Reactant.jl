@@ -12,6 +12,7 @@ using ..Reactant:
     RNumber,
     MissingTracedValue,
     unwrapped_eltype
+using Functors: fmap
 
 function mlir_type(x::Union{RNumber,RArray})
     return MLIR.IR.TensorType(size(x), MLIR.IR.Type(unwrapped_eltype(x)))
@@ -1584,7 +1585,6 @@ end
         (),
         string(gensym("cond_fn")),
         false;
-        no_args_in_result=true,
         return_dialect=:stablehlo,
         do_transpose=false,
     )
@@ -1595,13 +1595,12 @@ end
         (),
         string(gensym("body_fn")),
         false;
-        no_args_in_result=true,
         return_dialect=:stablehlo,
         do_transpose=false,
     )
 
-    cond_reg = __take_region(cond_fn_compiled)
-    body_reg = __take_region(body_fn_compiled)
+    cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
+    body_reg = Reactant.TracedUtils.__take_region(body_fn_compiled)
 
     MLIR.IR.rmfromparent!(cond_fn_compiled)
     MLIR.IR.rmfromparent!(body_fn_compiled)
@@ -1618,10 +1617,352 @@ end
     end
 end
 
-@noinline function __take_region(compiled_fn)
-    region = MLIR.IR.Region()
-    MLIR.API.mlirRegionTakeBody(region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0))
-    return region
+@noinline function if_condition(
+    cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args...
+) where {TFn,FFn}
+    # TODO: (probably) mutation isn't handled correctly inside conditionals
+
+    # Make all the args traced or concrete
+    N = length(args)
+    tb_seen_args = Reactant.OrderedIdDict()
+    fb_seen_args = Reactant.OrderedIdDict()
+    tb_traced_args = Vector{Any}(undef, N)
+    fb_traced_args = Vector{Any}(undef, N)
+    for i in 1:N
+        @inbounds tb_traced_args[i] = Reactant.make_tracer(
+            tb_seen_args,
+            args[i],
+            (:tb_args, i),
+            Reactant.TracedSetPath;
+            track_numbers=Number,
+        )
+        @inbounds fb_traced_args[i] = Reactant.make_tracer(
+            fb_seen_args,
+            args[i],
+            (:fb_args, i),
+            Reactant.TracedSetPath;
+            track_numbers=Number,
+        )
+    end
+
+    tb_linear_args = Reactant.TracedType[
+        v for v in values(tb_seen_args) if v isa Reactant.TracedType
+    ]
+    fb_linear_args = Reactant.TracedType[
+        v for v in values(fb_seen_args) if v isa Reactant.TracedType
+    ]
+
+    input_types = [mlir_type(arg) for arg in tb_linear_args]
+    sym_visibility = MLIR.IR.Attribute("private")
+
+    # compile the true branch without any returns first
+    true_fn_mod = MLIR.IR.mmodule()
+    true_func_tmp = MLIR.IR.block!(MLIR.IR.body(true_fn_mod)) do
+        return MLIR.Dialects.func.func_(;
+            sym_name=string(true_fn) * "_tb_tmp",
+            function_type=MLIR.IR.FunctionType(input_types, []),
+            body=MLIR.IR.Region(),
+            sym_visibility,
+        )
+    end
+    true_fn_body = MLIR.IR.Block()
+    push!(MLIR.IR.region(true_func_tmp, 1), true_fn_body)
+
+    MLIR.IR.activate!(true_fn_body)
+    tb_result = try
+        for (i, arg) in enumerate(tb_linear_args)
+            Reactant.TracedUtils.set_mlir_data!(
+                arg, Reactant.TracedUtils.get_mlir_data(tb_traced_args[i])
+            )
+        end
+        Reactant.call_with_reactant(true_fn, tb_traced_args...)
+    finally
+        MLIR.IR.deactivate!(true_fn_body)
+    end
+
+    seen_true_results = Reactant.OrderedIdDict()
+    traced_true_results = Reactant.make_tracer(
+        seen_true_results,
+        tb_result,
+        (:tb_result,),
+        Reactant.TracedTrack;
+        track_numbers=Number,
+    )
+
+    tb_linear_results = Reactant.TracedType[
+        v for v in values(seen_true_results) if v isa Reactant.TracedType
+    ]
+
+    # compile the false branch without any returns similar to the true branch
+    false_fn_mod = MLIR.IR.mmodule()
+    false_func_tmp = MLIR.IR.block!(MLIR.IR.body(false_fn_mod)) do
+        return MLIR.Dialects.func.func_(;
+            sym_name=string(false_fn) * "_fb_tmp",
+            function_type=MLIR.IR.FunctionType(input_types, []),
+            body=MLIR.IR.Region(),
+            sym_visibility,
+        )
+    end
+    false_fn_body = MLIR.IR.Block()
+    push!(MLIR.IR.region(false_func_tmp, 1), false_fn_body)
+
+    MLIR.IR.activate!(false_fn_body)
+    fb_result = try
+        for (i, arg) in enumerate(fb_linear_args)
+            Reactant.TracedUtils.set_mlir_data!(
+                arg, Reactant.TracedUtils.get_mlir_data(fb_traced_args[i])
+            )
+        end
+        Reactant.call_with_reactant(false_fn, fb_traced_args...)
+    finally
+        MLIR.IR.deactivate!(false_fn_body)
+    end
+
+    seen_false_results = Reactant.OrderedIdDict()
+    traced_false_results = Reactant.make_tracer(
+        seen_false_results,
+        fb_result,
+        (:fb_result,),
+        Reactant.TracedTrack;
+        track_numbers=Number,
+    )
+
+    fb_linear_results = Reactant.TracedType[
+        v for v in values(seen_false_results) if v isa Reactant.TracedType
+    ]
+
+    tb_results_dict = Reactant.OrderedIdDict()
+    for tr in tb_linear_results
+        paths = Reactant.TracedUtils.get_paths(tr)
+        for path in paths
+            length(path) == 0 && continue
+            if path[1] == :tb_result
+                if haskey(tb_results_dict, tr)
+                    push!(tb_results_dict[tr], path[2:end])
+                else
+                    tb_results_dict[tr] = Tuple[path[2:end]]
+                end
+            end
+        end
+    end
+
+    fb_results_dict = Reactant.OrderedIdDict()
+    for fr in fb_linear_results
+        paths = Reactant.TracedUtils.get_paths(fr)
+        for path in paths
+            length(path) == 0 && continue
+            if path[1] == :fb_result
+                if haskey(fb_results_dict, fr)
+                    push!(fb_results_dict[fr], path[2:end])
+                else
+                    fb_results_dict[fr] = Tuple[path[2:end]]
+                end
+            end
+        end
+    end
+
+    # finalize the true branch by adding the missing values
+    MLIR.IR.activate!(true_fn_body)
+    tb_corrected_linear_results = Reactant.TracedType[]
+    try
+        for (tr, _) in tb_results_dict
+            push!(tb_corrected_linear_results, tr)
+        end
+        for (fr, paths) in fb_results_dict
+            haskey(tb_results_dict, fr) && continue
+            # fr isa MissingTracedValue && continue
+            found_path = false
+            for path in paths
+                for (_, tr_paths) in tb_results_dict
+                    path_idx = findfirst(isequal(path), tr_paths)
+                    if path_idx !== nothing
+                        found_path = true
+                        break
+                    end
+                end
+                found_path && break
+            end
+            !found_path && push!(tb_corrected_linear_results, zero(fr))
+        end
+    finally
+        MLIR.IR.deactivate!(true_fn_body)
+    end
+
+    # finalize the false branch by adding the missing values
+    MLIR.IR.activate!(false_fn_body)
+    fb_corrected_linear_results = Reactant.TracedType[]
+    try
+        for (tr, paths) in tb_results_dict
+            if haskey(fb_results_dict, tr)
+                push!(fb_corrected_linear_results, tr)
+            else
+                # tr isa MissingTracedValue && continue
+                found_path = false
+                res = nothing
+                for path in paths
+                    for (fr, fr_paths) in fb_results_dict
+                        path_idx = findfirst(isequal(path), fr_paths)
+                        if path_idx !== nothing
+                            found_path = true
+                            res = fr
+                            break
+                        end
+                    end
+                    found_path && break
+                end
+                if !found_path
+                    push!(fb_corrected_linear_results, zero(tr))
+                else
+                    push!(fb_corrected_linear_results, res)
+                end
+            end
+        end
+        for (fr, _) in fb_results_dict
+            haskey(tb_results_dict, fr) && continue
+            already_found = false
+            for fr_already in fb_corrected_linear_results
+                if fr_already === fr
+                    already_found = true
+                    break
+                end
+            end
+            !already_found && push!(fb_corrected_linear_results, fr)
+        end
+    finally
+        MLIR.IR.deactivate!(false_fn_body)
+    end
+
+    # All MissingTracedValues must be replaced with zeroes
+    @assert length(tb_corrected_linear_results) == length(fb_corrected_linear_results)
+    result_types = MLIR.IR.Type[]
+    for (i, (tr, fr)) in
+        enumerate(zip(tb_corrected_linear_results, fb_corrected_linear_results))
+        if tr isa MissingTracedValue && fr isa MissingTracedValue
+            continue # Don't insert into IR
+        end
+        res = if tr isa MissingTracedValue
+            @assert !(fr isa MissingTracedValue)
+            MLIR.IR.activate!(true_fn_body)
+            try
+                tb_corrected_linear_results[i] = zero(fr)
+            finally
+                MLIR.IR.deactivate!(true_fn_body)
+            end
+            fr
+        elseif fr isa MissingTracedValue
+            @assert !(tr isa MissingTracedValue)
+            MLIR.IR.activate!(false_fn_body)
+            try
+                fb_corrected_linear_results[i] = zero(tr)
+            finally
+                MLIR.IR.deactivate!(false_fn_body)
+            end
+            tr
+        else
+            @assert typeof(tr) == typeof(fr)
+            tr
+        end
+        push!(result_types, mlir_type(res))
+    end
+
+    MLIR.IR.activate!(true_fn_body)
+    try
+        vals = MLIR.IR.Value[
+            Reactant.TracedUtils.get_mlir_data(res) for
+            res in tb_corrected_linear_results if !(res isa MissingTracedValue)
+        ]
+        MLIR.Dialects.stablehlo.return_(vals)
+    finally
+        MLIR.IR.deactivate!(true_fn_body)
+    end
+
+    MLIR.IR.activate!(false_fn_body)
+    try
+        vals = MLIR.IR.Value[
+            Reactant.TracedUtils.get_mlir_data(res) for
+            res in fb_corrected_linear_results if !(res isa MissingTracedValue)
+        ]
+        MLIR.Dialects.stablehlo.return_(vals)
+    finally
+        MLIR.IR.deactivate!(false_fn_body)
+    end
+
+    # With the corrected results, we can compile the true and false branches
+    tb_out_types = [mlir_type(tr) for tr in tb_corrected_linear_results]
+
+    true_fn_compiled = MLIR.IR.block!(MLIR.IR.body(true_fn_mod)) do
+        return MLIR.Dialects.func.func_(;
+            sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
+                true_fn_mod, string(true_fn) * "_tb"
+            ),
+            function_type=MLIR.IR.FunctionType(input_types, tb_out_types),
+            body=MLIR.IR.Region(),
+            sym_visibility,
+        )
+    end
+    MLIR.API.mlirRegionTakeBody(
+        MLIR.IR.region(true_fn_compiled, 1), MLIR.IR.region(true_func_tmp, 1)
+    )
+    MLIR.API.mlirOperationDestroy(true_func_tmp.operation)
+    true_func_tmp.operation = MLIR.API.MlirOperation(C_NULL)
+
+    fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
+
+    false_fn_compiled = MLIR.IR.block!(MLIR.IR.body(false_fn_mod)) do
+        return MLIR.Dialects.func.func_(;
+            sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
+                false_fn_mod, string(false_fn) * "_fb"
+            ),
+            function_type=MLIR.IR.FunctionType(input_types, fb_out_types),
+            body=MLIR.IR.Region(),
+            sym_visibility,
+        )
+    end
+    MLIR.API.mlirRegionTakeBody(
+        MLIR.IR.region(false_fn_compiled, 1), MLIR.IR.region(false_func_tmp, 1)
+    )
+    MLIR.API.mlirOperationDestroy(false_func_tmp.operation)
+    false_func_tmp.operation = MLIR.API.MlirOperation(C_NULL)
+
+    tb_region = Reactant.TracedUtils.__take_region(true_fn_compiled)
+    fb_region = Reactant.TracedUtils.__take_region(false_fn_compiled)
+
+    MLIR.IR.rmfromparent!(true_fn_compiled)
+    MLIR.IR.rmfromparent!(false_fn_compiled)
+
+    if_compiled = MLIR.Dialects.stablehlo.if_(
+        cond.mlir_data; true_branch=tb_region, false_branch=fb_region, result_0=result_types
+    )
+
+    corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr
+        if fr isa MissingTracedValue && tr isa MissingTracedValue
+            error("Both false and true branches are missing")
+        elseif fr isa MissingTracedValue
+            return tr
+        else
+            return fr
+        end
+    end
+
+    residx = 1
+    for (tr, fr) in zip(tb_corrected_linear_results, fb_corrected_linear_results)
+        tr isa MissingTracedValue && fr isa MissingTracedValue && continue
+        res = tr isa MissingTracedValue ? fr : tr
+        has_tb_residx = Reactant.TracedUtils.has_residx(res, :tb_result)
+        has_fb_residx = Reactant.TracedUtils.has_residx(res, :fb_result)
+        !(has_tb_residx || has_fb_residx) && continue
+        path = if has_tb_residx
+            Reactant.TracedUtils.get_residx(res, :tb_result)
+        else
+            Reactant.TracedUtils.get_residx(res, :fb_result)
+        end
+        Reactant.TracedUtils.set!(
+            corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
+        )
+        residx += 1
+    end
+
+    return corrected_traced_results
 end
 
 end # module Ops
