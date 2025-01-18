@@ -20,10 +20,11 @@ extern "C" const Sharding* ifrt_array_sharding(Array* array)
     return &(array->sharding());
 }
 
-extern "C" xla::PjRtLayout* ifrt_array_layout(Array* array)
-{
-    return MyValueOrThrow(array->layout()).release();
-}
+// TODO now it returns a `shared_ptr<PjRtLayout>`
+// extern "C" xla::PjRtLayout* ifrt_array_layout(Array* array)
+// {
+//     return MyValueOrThrow(array->layout()).release();
+// }
 
 // TODO xla::Array::DisassembleIntoSingleDeviceArrays
 // TODO xla::Array::FullyReplicatedShard
