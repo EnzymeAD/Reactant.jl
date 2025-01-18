@@ -1566,7 +1566,7 @@ end
     traced_args = Vector{Any}(undef, N)
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, args[i], (:args, i), Reactant.NoStopTracedTrack; track_numbers=Number
+            seen_args, args[i], (), Reactant.NoStopTracedTrack; track_numbers=Number
         )
     end
 

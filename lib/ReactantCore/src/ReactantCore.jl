@@ -378,12 +378,7 @@ function traced_if(cond, true_fn, false_fn, args)
     return cond ? true_fn(args) : false_fn(args)
 end
 
-function traced_while(cond_fn, body_fn, args)
-    while cond_fn(args...)
-        args = body_fn(args...)
-    end
-    return args
-end
+function traced_while end # defined inside Reactant.jl
 
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     return MacroTools.postwalk(expr) do x

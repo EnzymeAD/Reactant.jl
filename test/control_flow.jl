@@ -580,3 +580,19 @@ end
 
     @test @jit(for_inner_scope(x_ra)) ≈ for_inner_scope(x)
 end
+
+function for_with_named_tuple(x)
+    st = (; x)
+    res = x
+    @trace for i in 1:10
+        res .= res .+ st.x
+    end
+    return res
+end
+
+@testset "for: named tuple" begin
+    x = randn(Float64, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x)
+end
