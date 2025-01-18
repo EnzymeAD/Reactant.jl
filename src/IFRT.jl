@@ -23,6 +23,8 @@ struct Value <: AbstractValue
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Value) = x.ptr
+
 abstract type AbstractTuple <: AbstractValue end
 struct Tuple <: AbstractTuple
     ptr::Ptr{Cvoid}
@@ -31,6 +33,8 @@ struct Tuple <: AbstractTuple
         return new(x)
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Tuple) = x.ptr
 
 abstract type AbstractMemory end
 struct Memory <: AbstractMemory
@@ -41,6 +45,8 @@ struct Memory <: AbstractMemory
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Memory) = x.ptr
+
 abstract type AbstractDevice end
 struct Device <: AbstractDevice
     ptr::Ptr{Cvoid}
@@ -49,6 +55,8 @@ struct Device <: AbstractDevice
         return new(x)
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Device) = x.ptr
 
 abstract type AbstractSharding <: AbstractSerializable end
 struct Sharding <: AbstractSharding
@@ -59,6 +67,8 @@ struct Sharding <: AbstractSharding
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Sharding) = x.ptr
+
 abstract type AbstractArray end
 struct Array <: AbstractArray
     ptr::Ptr{Cvoid}
@@ -67,6 +77,8 @@ struct Array <: AbstractArray
         return new(x)
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Array) = x.ptr
 
 abstract type AbstractTopology end
 struct Topology <: AbstractTopology
@@ -77,6 +89,8 @@ struct Topology <: AbstractTopology
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Topology) = x.ptr
+
 abstract type AbstractClient end
 struct Client <: AbstractClient
     ptr::Ptr{Cvoid}
@@ -85,6 +99,8 @@ struct Client <: AbstractClient
         return new(x)
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Client) = x.ptr
 
 abstract type AbstractHostCallback end
 struct HostCallback <: AbstractHostCallback
@@ -95,6 +111,8 @@ struct HostCallback <: AbstractHostCallback
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::HostCallback) = x.ptr
+
 abstract type AbstractLoadedHostCallback end
 struct LoadedHostCallback <: AbstractLoadedHostCallback
     ptr::Ptr{Cvoid}
@@ -103,6 +121,8 @@ struct LoadedHostCallback <: AbstractLoadedHostCallback
         return new(x)
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::LoadedHostCallback) = x.ptr
 
 abstract type AbstractExecutable end
 struct Executable <: AbstractExecutable
@@ -113,6 +133,8 @@ struct Executable <: AbstractExecutable
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Executable) = x.ptr
+
 abstract type AbstractLoadedExecutable end
 struct LoadedExecutable <: AbstractLoadedExecutable
     ptr::Ptr{Cvoid}
@@ -121,6 +143,8 @@ struct LoadedExecutable <: AbstractLoadedExecutable
         return new(x)
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::LoadedExecutable) = x.ptr
 
 abstract type AbstractCompiler end
 struct Compiler <: AbstractCompiler
@@ -131,6 +155,8 @@ struct Compiler <: AbstractCompiler
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Compiler) = x.ptr
+
 abstract type AbstractProgram <: AbstractSerializable end
 struct Program <: AbstractProgram
     ptr::Ptr{Cvoid}
@@ -139,6 +165,8 @@ struct Program <: AbstractProgram
         return new(x)
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Program) = x.ptr
 
 # Concrete classes
 mutable struct DType
@@ -153,6 +181,8 @@ mutable struct DType
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::DType) = x.ptr
+
 mutable struct Shape
     ptr::Ptr{Cvoid}
     function Shape(x::Ptr{Cvoid})
@@ -164,6 +194,8 @@ mutable struct Shape
         return y
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Shape) = x.ptr
 
 mutable struct DynamicShape
     ptr::Ptr{Cvoid}
@@ -177,6 +209,8 @@ mutable struct DynamicShape
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::DynamicShape) = x.ptr
+
 mutable struct Index
     ptr::Ptr{Cvoid}
     function Index(x::Ptr{Cvoid})
@@ -188,6 +222,8 @@ mutable struct Index
         return y
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Index) = x.ptr
 
 mutable struct IndexDomain
     ptr::Ptr{Cvoid}
@@ -201,6 +237,8 @@ mutable struct IndexDomain
     end
 end
 
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::IndexDomain) = x.ptr
+
 mutable struct MemoryKind
     ptr::Ptr{Cvoid}
     function MemoryKind(x::Ptr{Cvoid})
@@ -212,6 +250,8 @@ mutable struct MemoryKind
         return y
     end
 end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::MemoryKind) = x.ptr
 
 # Enums
 @cenum DTypeKind::Int32 begin
@@ -864,22 +904,145 @@ function Base.convert(::Type{Type}, x::DTypeKind)
 end
 
 # IFRT-PjRt backend
-@cbinding PjRtTuple <: AbstractTuple finalizer = libxla.ifrt_pjrt_tuple_free
-@cbinding PjRtMemory <: AbstractMemory finalizer = libxla.ifrt_pjrt_memory_free
-@cbinding PjRtDevice <: AbstractDevice finalizer = libxla.ifrt_pjrt_device_free
-@cbinding PjRtArray <: AbstractArray finalizer = libxla.ifrt_pjrt_array_free
-@cbinding PjRtTopology <: AbstractTopology finalizer = libxla.ifrt_pjrt_topology_free
-@cbinding PjRtClient <: AbstractClient finalizer = libxla.ifrt_pjrt_client_free
-@cbinding(
-    PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallback,
-    finalizer = libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free,
-)
-@cbinding PjRtExecutable <: AbstractExecutable finalizer = libxla.ifrt_pjrt_executable_free
-@cbinding(
-    PjRtLoadedExecutable <: AbstractLoadedExecutable,
-    finalizer = libxla.ifrt_pjrt_loadedexecutable_free,
-)
-@cbinding PjRtCompiler <: AbstractCompiler finalizer = libxla.ifrt_pjrt_compiler_free
+struct PjRtTuple <: AbstractTuple
+    ptr::Ptr{Cvoid}
+    function PjRtTuple(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtTuple)
+    @ccall libxla.ifrt_pjrt_tuple_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtTuple) = x.ptr
+
+struct PjRtMemory <: AbstractMemory
+    ptr::Ptr{Cvoid}
+    function PjRtMemory(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtMemory)
+    @ccall libxla.ifrt_pjrt_memory_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtMemory) = x.ptr
+
+struct PjRtDevice <: AbstractDevice
+    ptr::Ptr{Cvoid}
+    function PjRtDevice(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtDevice)
+    @ccall libxla.ifrt_pjrt_device_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtDevice) = x.ptr
+
+struct PjRtArray <: AbstractArray
+    ptr::Ptr{Cvoid}
+    function PjRtArray(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtArray)
+    @ccall libxla.ifrt_pjrt_array_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtArray) = x.ptr
+
+struct PjRtTopology <: AbstractTopology
+    ptr::Ptr{Cvoid}
+    function PjRtTopology(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtTopology)
+    @ccall libxla.ifrt_pjrt_topology_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtTopology) = x.ptr
+
+struct PjRtClient <: AbstractClient
+    ptr::Ptr{Cvoid}
+    function PjRtClient(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtClient)
+    @ccall libxla.ifrt_pjrt_client_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtClient) = x.ptr
+
+struct PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallback
+    ptr::Ptr{Cvoid}
+    function PjRtHostSendAndRecvLoadedHostCallback(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtHostSendAndRecvLoadedHostCallback)
+    @ccall libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtHostSendAndRecvLoadedHostCallback) = x.ptr
+
+struct PjRtExecutable <: AbstractExecutable
+    ptr::Ptr{Cvoid}
+    function PjRtExecutable(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtExecutable)
+    @ccall libxla.ifrt_pjrt_executable_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtExecutable) = x.ptr
+
+struct PjRtLoadedExecutable <: AbstractLoadedExecutable
+    ptr::Ptr{Cvoid}
+    function PjRtLoadedExecutable(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtLoadedExecutable)
+    @ccall libxla.ifrt_pjrt_loadedexecutable_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtLoadedExecutable) = x.ptr
+
+struct PjRtCompiler <: AbstractCompiler
+    ptr::Ptr{Cvoid}
+    function PjRtCompiler(x)
+        @assert x != C_NULL
+        return new(x)
+    end
+end
+
+function free(x::PjRtCompiler)
+    @ccall libxla.ifrt_pjrt_compiler_free(x::Ptr{Cvoid})::Cvoid
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtCompiler) = x.ptr
 
 # TODO for PjRt-IFRT backend, implement `ifrt_to_primitive_type` and `ifrt_to_dtype`
 
