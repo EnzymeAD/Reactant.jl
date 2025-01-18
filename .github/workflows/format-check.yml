@@ -1,10 +1,17 @@
 name: Format Suggestions
+
 on:
   push:
     branches:
       - main
     tags: '*'
+    paths:
+      - '.github/workflows/format-check.yml'
+      - '**/*.jl'
   pull_request:
+    paths:
+      - '.github/workflows/format-check.yml'
+      - '**/*.jl'
 
 concurrency:
   # Skip intermediate builds: always.

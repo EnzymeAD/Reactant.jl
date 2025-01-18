@@ -1,11 +1,28 @@
 name: CI
+
 on:
   pull_request:
+    paths:
+      - '.github/workflows/CI.yml'
+      - 'deps/**'
+      - 'ext/**'
+      - 'lib/**'
+      - 'src/**'
+      - 'test/**'
+      - 'Project.toml'
   push:
     branches:
       - main
       - release-*
     tags: '*'
+    paths:
+      - '.github/workflows/CI.yml'
+      - 'deps/**'
+      - 'ext/**'
+      - 'lib/**'
+      - 'src/**'
+      - 'test/**'
+      - 'Project.toml'
 
 concurrency:
   # Skip intermediate builds: always.
@@ -134,31 +151,3 @@ jobs:
         if: steps.run_tests.outcome == 'success'
         with:
           files: lcov.info
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: '1'
-      - uses: julia-actions/cache@v2
-      - name: Instantiate docs environment
-        run: |
-          julia --color=yes --project=docs -e '
-            using Pkg
-            Pkg.instantiate()'
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - name: Run doctests
-        run: |
-          julia --color=yes --project=docs -e '
-            using Documenter: DocMeta, doctest
-            using Reactant
-            DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
-            doctest(Reactant)'
-      - name: Build documentation
-        run: julia --color=yes --project=docs docs/make.jl
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
