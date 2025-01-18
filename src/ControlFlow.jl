@@ -74,65 +74,8 @@ function ReactantCore.traced_if(
     end
 end
 
-function ReactantCore.traced_while(
-    cond_fn::CFn, body_fn::BFn, args
-) where {CFn<:Function,BFn<:Function}
-    # TODO: detect and prevent mutation within the condition
-
-    # We promote all incoming args (is there a better way to do this?)
-    traced_args = [
-        if v isa Number && !(v isa TracedType)
-            Reactant.TracedUtils.promote_to(TracedRNumber{typeof(v)}, v)
-        else
-            v
-        end for v in args
-    ]
-
-    (_, cond_fn_compiled, cond_fn_results, _, _, _, _, in_tys, cond_fn_linear_results) = Reactant.TracedUtils.make_mlir_fn(
-        cond_fn,
-        traced_args,
-        (),
-        string(gensym("cond_fn")),
-        false;
-        no_args_in_result=true,
-        return_dialect=:stablehlo,
-        do_transpose=false,
-    )
-
-    (_, body_fn_compiled, body_fn_results, _, _, _, _, _, body_fn_linear_results) = Reactant.TracedUtils.make_mlir_fn(
-        body_fn,
-        traced_args,
-        (),
-        string(gensym("body_fn")),
-        false;
-        no_args_in_result=true,
-        return_dialect=:stablehlo,
-        do_transpose=false,
-    )
-
-    cond_reg = take_region(cond_fn_compiled)
-    body_reg = take_region(body_fn_compiled)
-
-    MLIR.IR.rmfromparent!(cond_fn_compiled)
-    MLIR.IR.rmfromparent!(body_fn_compiled)
-
-    result_0 = in_tys
-
-    operands = MLIR.IR.Value[v.mlir_data for v in traced_args if v isa TracedType]
-
-    while_compiled = MLIR.Dialects.stablehlo.while_(
-        operands; result_0, cond=cond_reg, body=body_reg
-    )
-
-    residx = 1
-    for res in traced_args
-        if res isa TracedType
-            res.mlir_data = MLIR.IR.result(while_compiled, residx)
-            residx += 1
-        end
-    end
-
-    return traced_args
+function ReactantCore.traced_while(cond_fn::CFn, body_fn::BFn, args) where {CFn,BFn}
+    return Ops.while_loop(cond_fn, body_fn, args...)
 end
 
 function take_region(compiled_fn)

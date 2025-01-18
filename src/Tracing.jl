@@ -171,6 +171,8 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     if Mode == ArrayToConcrete && T <: track_numbers
         return ConcreteRNumber{T}
+    elseif mode == NoStopTracedTrack && T <: track_numbers
+        return TracedRNumber{T}
     end
     return T
 end

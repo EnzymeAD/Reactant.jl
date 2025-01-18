@@ -1557,4 +1557,71 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
     )
 end
 
+@noinline function while_loop(cond_fn::CFn, body_fn::BFn, args...) where {CFn,BFn}
+    # TODO: detect and prevent mutation within the condition
+
+    # Make all the args traced or concrete
+    N = length(args)
+    seen_args = Reactant.OrderedIdDict()
+    traced_args = Vector{Any}(undef, N)
+    for i in 1:N
+        @inbounds traced_args[i] = Reactant.make_tracer(
+            seen_args, args[i], (:args, i), Reactant.NoStopTracedTrack; track_numbers=Number
+        )
+    end
+
+    linear_args = Reactant.TracedType[]
+    for (k, v) in seen_args
+        v isa Reactant.TracedType || continue
+        push!(linear_args, v)
+    end
+
+    input_types = [mlir_type(arg) for arg in linear_args]
+
+    (_, cond_fn_compiled, _, _, _, _, _, _, _) = Reactant.TracedUtils.make_mlir_fn(
+        cond_fn,
+        traced_args,
+        (),
+        string(gensym("cond_fn")),
+        false;
+        no_args_in_result=true,
+        return_dialect=:stablehlo,
+        do_transpose=false,
+    )
+
+    (_, body_fn_compiled, _, _, _, _, _, _, _) = Reactant.TracedUtils.make_mlir_fn(
+        body_fn,
+        traced_args,
+        (),
+        string(gensym("body_fn")),
+        false;
+        no_args_in_result=true,
+        return_dialect=:stablehlo,
+        do_transpose=false,
+    )
+
+    cond_reg = __take_region(cond_fn_compiled)
+    body_reg = __take_region(body_fn_compiled)
+
+    MLIR.IR.rmfromparent!(cond_fn_compiled)
+    MLIR.IR.rmfromparent!(body_fn_compiled)
+
+    while_op = MLIR.Dialects.stablehlo.while_(
+        MLIR.IR.Value[Reactant.TracedUtils.get_mlir_data(arg) for arg in linear_args];
+        result_0=input_types,
+        cond=cond_reg,
+        body=body_reg,
+    )
+
+    return map(enumerate(linear_args)) do (i, arg)
+        Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
+    end
+end
+
+@noinline function __take_region(compiled_fn)
+    region = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0))
+    return region
+end
+
 end # module Ops
