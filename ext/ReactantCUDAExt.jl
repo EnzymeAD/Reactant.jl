@@ -369,11 +369,23 @@ function compile(job)
             end
         end
 
-        # GPUCompiler.check_ir(job, mod)
-
+        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
+        unique!(errors)
+        filter!(errors) do err
+            (kind, bt, meta) = err
+            if meta !== nothing
+                if kind == GPUCompiler.UNKNOWN_FUNCTION && startswith(meta, "__nv")
+                    return false
+                end
+            end
+            return true
+        end
+        if !isempty(errors)
+            throw(GPUCompiler.InvalidIRError(job, errors))
+        end
         LLVM.strip_debuginfo!(mod)
         modstr = string(mod)
-
+        
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
 
