@@ -118,16 +118,21 @@ function ReactantCore.traced_while(
 
     result_0 = in_tys
 
-    operands = MLIR.IR.Value[v.mlir_data for v in traced_args]
+    operands = MLIR.IR.Value[v.mlir_data for v in traced_args if v isa TracedType]
 
     while_compiled = MLIR.Dialects.stablehlo.while_(
         operands; result_0, cond=cond_reg, body=body_reg
     )
 
-    return map(enumerate(traced_args)) do (i, res)
-        res.mlir_data = MLIR.IR.result(while_compiled, i)
-        return res
+    residx = 1
+    for res in traced_args
+        if res isa TracedType
+            res.mlir_data = MLIR.IR.result(while_compiled, residx)
+            residx += 1
+        end
     end
+
+    return traced_args
 end
 
 function take_region(compiled_fn)
