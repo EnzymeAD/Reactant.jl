@@ -41,7 +41,7 @@ jobs:
         env:
           JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
       - name: Make generated files writable
-          run: |
+        run: |
           chmod -R u+rw ./src/mlir/Dialects/
           chmod u+rw ./src/mlir/libMLIR_h.jl
           git config core.fileMode false
