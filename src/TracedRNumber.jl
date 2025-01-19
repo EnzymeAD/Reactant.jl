@@ -122,6 +122,12 @@ function Base.div(
     return Ops.divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
 
+function Base.:/(
+    @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
+) where {T<:Integer}
+    return float(lhs) / float(rhs)
+end
+
 for (jlop, hloop, hlocomp) in (
     (:(Base.:(==)), :compare, "EQ"),
     (:(Base.:(!=)), :compare, "NE"),
