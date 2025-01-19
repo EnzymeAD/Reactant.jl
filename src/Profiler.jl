@@ -141,5 +141,4 @@ mutable struct ProfileServer
         return finalizer(free_profiler, new(exec))
     end
 end
-    
 end # module Profiler
