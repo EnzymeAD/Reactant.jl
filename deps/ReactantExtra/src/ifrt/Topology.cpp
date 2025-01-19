@@ -10,8 +10,7 @@ extern "C" const char* ifrt_topology_platform_name(Topology* topology)
     return convert(Type<const char*>(), topology->platform_name());
 }
 
-extern "C" const char*
-ifrt_topology_platform_version(Topology* topology)
+extern "C" const char* ifrt_topology_platform_version(Topology* topology)
 {
     return convert(Type<const char*>(), topology->platform_version());
 }
@@ -22,8 +21,7 @@ extern "C" uint64_t ifrt_topology_platform_id(Topology* topology)
     return topology->platform_id();
 }
 
-extern "C" std::tuple<size_t, const xla::PjRtDeviceDescription**>
-ifrt_topology_device_descriptions(Topology* topology)
+extern "C" std::tuple<size_t, const xla::PjRtDeviceDescription**> ifrt_topology_device_descriptions(Topology* topology)
 {
     auto descriptions = topology->DeviceDescriptions();
     auto descriptions_ptr = new const xla::PjRtDeviceDescription*[descriptions.size()];
