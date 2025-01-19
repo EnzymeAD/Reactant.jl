@@ -45,7 +45,7 @@ function with_profiler(
 
     if create_perfetto_link
         traces_path = joinpath(trace_output_dir, "plugins", "profile")
-        date = maximum(sort!(readdir(traces_path)))
+        date = maximum(readdir(traces_path))
         traces_path = joinpath(traces_path, date)
 
         filename = first(f for f in readdir(traces_path) if endswith(f, ".trace.json.gz"))
