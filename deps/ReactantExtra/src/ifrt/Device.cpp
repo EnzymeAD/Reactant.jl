@@ -1,9 +1,21 @@
 #include "src/type_conversion.hpp"
 #include "src/error_handling.hpp"
 #include "xla/python/ifrt/device.h"
+#include "xla/python/ifrt/device_list.h"
 
 using namespace xla::ifrt;
 using namespace reactant;
+
+auto reactant::convert(Type<span<xla::ifrt::Device*>>, xla::ifrt::DeviceList* dev_list) -> span<xla::ifrt::Device*>
+{
+    return convert(Type<span<xla::ifrt::Device*>>(), dev_list->devices());
+}
+
+auto reactant::convert(Type<xla::ifrt::DeviceList*>, span<xla::ifrt::Device*> dev_list) -> xla::ifrt::DeviceList*
+{
+    auto tmp = span<xla::ifrt::Device* const>(dev_list.size, dev_list.ptr);
+    return xla::ifrt::BasicDeviceList::Create(convert(Type<absl::Span<xla::ifrt::Device* const>>(), tmp)).release();
+}
 
 extern "C" Client* ifrt_device_client(Device* device)
 {
