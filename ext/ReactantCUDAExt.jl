@@ -526,6 +526,13 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
     push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
+    for i in 1:length(wrapper_tys)
+        @ccall MLIR.API.mlir_c.ReactantFuncSetArgAttr(
+                  wrapfunc::MLIR.API.MlirOperation, (i-1)::Csize_t,
+                  "llvm.noalias"::MLIR.API.MlirStringRef,
+                  MLIR.IR.UnitAttribute()::MLIR.API.MlirAttribute
+                 )::Cvoid
+    end
 
     wrapargs = MLIR.IR.Value[]
     argidx = 1
