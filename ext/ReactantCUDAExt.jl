@@ -41,6 +41,19 @@ function Base.unsafe_convert(
     return x.ptr
 end
 
+# TODO: arrays as allocated by the CUDA APIs are 256-byte aligned. we should keep track of
+#       this information, because it enables optimizations like Load Store Vectorization
+#       (cfr. shared memory and its wider-than-datatype alignment)
+
+@generated function alignment(::CuTracedArray{T}) where {T}
+    if Base.isbitsunion(T)
+        _, sz, al = Base.uniontype_layout(T)
+        al
+    else
+        Base.datatype_alignment(T)
+    end
+end
+
 ## indexing intrinsics
 
 CUDA.@device_function @inline function arrayref(
@@ -55,7 +68,8 @@ CUDA.@device_function @inline function arrayref(
 end
 
 @inline function arrayref_bits(A::CuTracedArray{T}, index::Integer) where {T}
-    return unsafe_load(pointer(A), index)
+    align = alignment(A)
+    return unsafe_load(pointer(A), index, Val(align))
 end
 
 @inline @generated function arrayref_union(
@@ -100,7 +114,8 @@ CUDA.@device_function @inline function arrayset(
 end
 
 @inline function arrayset_bits(A::CuTracedArray{T}, x::T, index::Integer) where {T}
-    return unsafe_store!(pointer(A), x, index)
+    align = alignment(A)
+    return unsafe_store!(pointer(A), x, index, Val(align))
 end
 
 @inline @generated function arrayset_union(
@@ -113,9 +128,10 @@ end
         selector_ptr = typetagdata(A, index)
         unsafe_store!(selector_ptr, $(UInt8(sel - 1)))
 
+        align = alignment(A)
         data_ptr = pointer(A, index)
 
-        unsafe_store!(reinterpret(Core.LLVMPtr{$x,AS}, data_ptr), x, 1)
+        unsafe_store!(reinterpret(Core.LLVMPtr{$x,AS}, data_ptr), x, 1, Val(align))
         return nothing
     end
 end
@@ -124,7 +140,8 @@ CUDA.@device_function @inline function const_arrayref(
     A::CuTracedArray{T}, index::Integer
 ) where {T}
     @boundscheck checkbounds(A, index)
-    return unsafe_cached_load(pointer(A), index)
+    align = alignment(A)
+    return unsafe_cached_load(pointer(A), index, Val(align))
 end
 
 ## indexing
