@@ -50,7 +50,10 @@ extern "C" Memory* ifrt_device_default_memory(Device* device)
     return MyValueOrThrow(device->DefaultMemory());
 }
 
-// TODO ifrt_device_memories
+extern "C" span<Memory*> ifrt_device_memories(Device* device)
+{
+    return convert(Type<span<Memory*>>(), device->Memories());
+}
 
 extern "C" bool ifrt_device_is_addressable(Device* device)
 {
