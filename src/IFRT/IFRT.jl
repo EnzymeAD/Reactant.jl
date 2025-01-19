@@ -182,9 +182,14 @@ end
 end
 
 @cenum ArrayCopySemantics::Int32 begin
-    ArrayCopySemanticsAlwaysCopy = 0
-    ArrayCopySemanticsReuseInput = 1
-    ArrayCopySemanticsDonateInput = 2
+    AlwaysCopy = 0
+    ReuseInput = 1
+    DonateInput = 2
+end
+
+@cenum SingleDeviceShardSemantics::Int32 begin
+    AddressableShards = 0
+    AllShards
 end
 
 # Value
