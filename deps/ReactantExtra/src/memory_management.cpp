@@ -9,8 +9,10 @@ extern "C" void reactant_release_shared(void* ptr) {
     captured_shared_ptr.erase(ptr);
 }
 
-extern "C" void reactant_capture_shared(std::shared_ptr<void>& ptr) {
+template<>
+void* reactant::capture_shared(std::shared_ptr<void> ptr) {
     captured_shared_ptr[ptr.get()] = ptr;
+    return ptr.get();
 }
 
 // `map::contains` was introduced in C++20
