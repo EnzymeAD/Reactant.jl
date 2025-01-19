@@ -21,6 +21,7 @@ extern "C" uint64_t ifrt_topology_platform_id(Topology* topology)
     return topology->platform_id();
 }
 
+// TODO change it for `span`
 extern "C" std::tuple<size_t, const xla::PjRtDeviceDescription**> ifrt_topology_device_descriptions(Topology* topology)
 {
     auto descriptions = topology->DeviceDescriptions();
