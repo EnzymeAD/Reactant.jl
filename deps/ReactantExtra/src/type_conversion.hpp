@@ -16,12 +16,15 @@ struct Type { };
 
 template <typename T>
 struct span {
-    size_t size;
+    size_t _size;
     T* ptr;
 
-    span(size_t size, T* ptr) : size(size), ptr(ptr) {}
+    span(size_t size, T* ptr) : _size(size), ptr(ptr) {}
 
     T& operator[](size_t i) { return ptr[i]; }
+
+    bool empty() const { return _size == 0; }
+    size_t size() const { return _size; }
 };
 
 template <typename T>
@@ -109,18 +112,18 @@ auto convert(Type<span<T>>, absl::Span<U> _span) -> span<T>
 template <typename T>
 auto convert(Type<absl::Span<T>>, span<T> span) -> absl::Span<T>
 {
-    return absl::Span<T>(span.ptr, span.size);
+    return absl::Span<T>(span.ptr, span.size());
 }
 
 template <typename T>
 auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<T*> span) -> absl::Span<tsl::RCReference<T>>
 {
-    auto values_ptr = new tsl::RCReference<T>[span.size];
-    for (int i = 0; i < span.size; i++) {
+    auto values_ptr = new tsl::RCReference<T>[span.size()];
+    for (int i = 0; i < span.size(); i++) {
         values_ptr[i] = tsl::RCReference<T>();
         values_ptr[i].reset(span[i]);
     }
-    return absl::Span<tsl::RCReference<T>>(values_ptr, span.size);
+    return absl::Span<tsl::RCReference<T>>(values_ptr, span.size());
 }
 
 template <typename T>
