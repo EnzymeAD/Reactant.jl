@@ -1082,3 +1082,10 @@ end
 
     @test @jit(sum(x_ra)) == sum(x)
 end
+
+@testset "/ on integers" begin
+    @test @jit(/(ConcreteRNumber(2), ConcreteRNumber(4))) ≈ 0.5
+    @test @jit(/(ConcreteRNumber(2), 4)) ≈ 0.5
+    @test @jit(/(2, ConcreteRNumber(4))) ≈ 0.5
+    @test @jit(/(2, ConcreteRNumber(Int32(4)))) ≈ 0.5
+end
