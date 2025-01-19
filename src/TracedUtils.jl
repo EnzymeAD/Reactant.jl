@@ -110,6 +110,7 @@ function make_mlir_fn(
     toscalar=false,
     return_dialect=:func,
     do_transpose=true,
+    no_args_in_result=false,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         return (
@@ -123,6 +124,7 @@ function make_mlir_fn(
                 toscalar,
                 return_dialect,
                 do_transpose,
+                no_args_in_result,
             )[2:end]...,
         )
     end
@@ -213,6 +215,7 @@ function make_mlir_fn(
     linear_results = Reactant.TracedType[]
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
+        (no_args_in_result && has_argidx(v)) && continue
         push!(linear_results, v)
     end
 
@@ -231,7 +234,7 @@ function make_mlir_fn(
             end
             push!(vals, col_maj)
         end
-        @assert length(vals) == length(linear_results)
+        !no_args_in_result && @assert length(vals) == length(linear_results)
 
         dialect = getfield(MLIR.Dialects, return_dialect)
         dialect.return_(vals)

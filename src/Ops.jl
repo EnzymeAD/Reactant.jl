@@ -1586,6 +1586,7 @@ end
         string(gensym("cond_fn")),
         false;
         return_dialect=:stablehlo,
+        no_args_in_result=true,
         do_transpose=false,
     )
 
@@ -1596,6 +1597,7 @@ end
         string(gensym("body_fn")),
         false;
         return_dialect=:stablehlo,
+        no_args_in_result=true,
         do_transpose=false,
     )
 
