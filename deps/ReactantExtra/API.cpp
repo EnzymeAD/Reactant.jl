@@ -453,8 +453,8 @@ extern "C" int32_t ReactantCudaDriverGetVersion() {
     return data;
 }
 #else
-extern "C" void ReactantCudaDriverGetVersion(int32_t * data) {
-    *data = 0;
+extern "C" int32_t ReactantCudaDriverGetVersion() {
+    return 0;
 }
 #endif
 

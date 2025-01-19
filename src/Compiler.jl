@@ -356,6 +356,9 @@ const cuFunc = Ref{UInt}(0)
 const cuModule = Ref{UInt}(0)
 const cuSync = Ref{UInt}(0)
 const cubinChip = Ref{String}("sm_60")
+const cubinFormat = Ref{String}("bin")
+const cuindexBitWidth = Ref{Int}(32)
+const cuOptLevel = Ref{Int}(2)
 # Wgatever the relevant highest version from our LLVM is within NVPTX.td
 # Or more specifically looking at clang/lib/Driver/ToolChains/Cuda.cpp:684
 #  We see relevant ptx version is CUDA 12.6 -> 85
@@ -434,9 +437,9 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
         )
         @assert curesulthandler !== nothing
         curesulthandler = Base.reinterpret(UInt, curesulthandler)
-        kern = "lower-kernel{debug=true cuResultHandlerPtr=$curesulthandler cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[]) cuStreamSynchronizePtr=$(cuSync[])},symbol-dce"
+        kern = "lower-kernel{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[]) cuStreamSynchronizePtr=$(cuSync[])},symbol-dce"
     else
-        kern = "lower-kernel{cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
+        kern = "lower-kernel{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
     end
 
     opt_passes = optimization_passes(; no_nan, sroa=true)
