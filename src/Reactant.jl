@@ -249,6 +249,8 @@ include("Tracing.jl")
 include("Compiler.jl")
 include("Profiler.jl")
 
+const with_profiler = Profiler.with_profiler
+
 include("Overlay.jl")
 
 function Enzyme.make_zero(

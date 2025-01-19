@@ -30,7 +30,7 @@ Reactant.@jit
 ## Profile XLA
 
 ```@docs
-Reactant.with_profiler
+Reactant.Profiler.with_profiler
 ```
 
 # Internal Functionality
