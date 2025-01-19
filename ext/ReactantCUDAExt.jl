@@ -827,6 +827,10 @@ function __init__()
         end
         Reactant.Compiler.cuSync[] = Base.reinterpret(UInt, ptr4)
     end
+    if CUDA.functional()
+        target = CUDA._compiler_config(CUDA.device()).target
+        Reactant.Compiler.cubinChip[] = "sm_$(target.cap.major)$(target.cap.minor)"
+    end
     return nothing
 end
 

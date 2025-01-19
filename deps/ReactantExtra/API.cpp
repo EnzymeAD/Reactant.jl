@@ -53,6 +53,7 @@
 #include "xla/pjrt/status_casters.h"
 
 #include "tsl/profiler/lib/profiler_session.h"
+#include "xla/tsl/profiler/rpc/profiler_server.h"
 #include "xla/tsl/profiler/rpc/client/capture_profile.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
@@ -236,6 +237,15 @@ extern "C" void ProfilerSessionCollectData(tsl::ProfilerSession *session,
 
 extern "C" void ProfilerSessionDelete(tsl::ProfilerSession *session) {
   delete session;
+}
+
+extern "C" void* ProfilerServerStart(int32_t port) {
+  auto server = new tsl::profiler::ProfilerServer();
+  server->StartProfilerServer(port);
+  return server;
+}
+extern "C" void* ProfilerServerStop(tsl::profiler::ProfilerServer* server) {
+  delete server;
 }
 
 extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
@@ -433,6 +443,19 @@ std::vector<int64_t> row_major(int64_t dim) {
   return minor_to_major;
 }
 static void noop() {}
+
+#ifdef REACTANT_CUDA
+#include "third_party/gpus/cuda/include/cuda.h"
+extern "C" int32_t ReactantCudaDriverGetVersion() {
+    int32_t data;
+    ReactantHandleCuResult(cuDriverGetVersion(&data));
+    return data;
+}
+#else
+extern "C" void ReactantCudaDriverGetVersion(int32_t * data) {
+    *data = 0;
+}
+#endif
 
 extern "C" void *UnsafeBufferPointer(PjRtBuffer *buffer) {
   auto unsafe = MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));

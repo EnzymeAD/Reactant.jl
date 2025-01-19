@@ -387,7 +387,12 @@ cc_library(
         "-Werror=return-type",
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation"
+    ] + select({
+    "@xla//xla/tsl:is_cuda_enabled_and_oss":[
+        "-DREACTANT_CUDA=1",
     ],
+    "//conditions:default": [],
+    }),
     alwayslink = True,
     linkstatic = True,
     linkopts = select({
@@ -440,6 +445,9 @@ cc_library(
 "-Wl,-exported_symbol,_CreateProfilerSession",
 "-Wl,-exported_symbol,_ProfilerSessionCollectData",
 "-Wl,-exported_symbol,_ProfilerSessionDelete",
+"-Wl,-exported_symbol,_ProfilerServerStart",
+"-Wl,-exported_symbol,_ProfilerServerStop",
+"-Wl,-exported_symbol,_ReactantCudaDriverGetVersion"
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -513,6 +521,7 @@ cc_library(
         "@tsl//tsl/profiler/lib:profiler_session_impl",
         "@tsl//tsl/profiler/lib:profiler_factory_impl",
         "@tsl//tsl/profiler/lib:profiler_controller",
+        "@xla//xla/tsl/profiler/rpc:profiler_server_impl",
         "@xla//xla/tsl/profiler/rpc/client:capture_profile",
         "@xla//xla/tsl/profiler/rpc/client:profiler_client",
         "@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
