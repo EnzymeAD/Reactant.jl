@@ -3,6 +3,8 @@
 #include "absl/base/nullability.h"
 #include "absl/types/span.h"
 #include "xla/tsl/concurrency/ref_count.h"
+#include "xla/python/ifrt/device.h"
+#include "xla/python/ifrt/device_list.h"
 #include <type_traits>
 #include <optional>
 #include <vector>
@@ -135,5 +137,9 @@ auto convert(Type<std::optional<T>>, T value) -> std::optional<T>
 {
     return value;
 }
+
+// special case for DeviceList
+auto convert(Type<span<xla::ifrt::Device*>>, xla::ifrt::DeviceList* dev_list) -> span<xla::ifrt::Device*>;
+auto convert(Type<xla::ifrt::DeviceList*>, span<xla::ifrt::Device*> dev_list) -> xla::ifrt::DeviceList*;
 
 } // namespace reactant
