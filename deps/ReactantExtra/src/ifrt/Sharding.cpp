@@ -5,13 +5,18 @@
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/index_domain.h"
+#include "xla/python/ifrt/device.h"
+#include "xla/python/ifrt/device_list.h"
 #include <optional>
 #include <tuple>
 
 using namespace xla::ifrt;
 using namespace reactant;
 
-// TODO ifrt_sharding_devices
+extern "C" span<Device*> ifrt_sharding_devices(Sharding* sharding)
+{
+    return convert(Type<span<Device*>>(), sharding->devices().get());
+}
 
 extern "C" MemoryKind* ifrt_sharding_memory_kind(Sharding* sharding)
 {
@@ -43,13 +48,20 @@ extern "C" bool ifrt_sharding_has_same_partitioning(Sharding* sharding1, Shardin
     return sharding1->HasSamePartitioning(*sharding2);
 }
 
-// TODO add `devices` argument
-extern "C" Sharding* ifrt_sharding_with_device_assignment(Sharding* sharding, MemoryKind* c_memory_kind)
+extern "C" Sharding* ifrt_sharding_with_device_assignment(Sharding* sharding, span<Device*> c_devices, MemoryKind* c_memory_kind)
 {
+    std::optional<tsl::RCReference<DeviceList>> devices;
+    if (!c_devices.empty()) {
+        tsl::RCReference<DeviceList> device_list;
+        device_list.reset(convert(Type<DeviceList*>(), c_devices));
+        devices = device_list;
+    }
+    
     std::optional<MemoryKind> memory_kind = std::nullopt;
     if (c_memory_kind != nullptr)
         memory_kind = *c_memory_kind;
-    return MyValueOrThrow(sharding->WithDeviceAssignment(std::nullopt, memory_kind)).release();
+    
+    return MyValueOrThrow(sharding->WithDeviceAssignment(devices, memory_kind)).release();
 }
 
 extern "C" span<std::tuple<Shape*, Sharding*>> ifrt_sharding_disassemble_shape(Sharding* sharding, Shape* shape, SingleDeviceShardSemantics shard_semantics)
@@ -100,7 +112,7 @@ extern "C" const char* ifrt_sharding_debug_string(Sharding* sharding)
 // SingleDeviceSharding
 extern "C" SingleDeviceSharding* ifrt_single_device_sharding_ctor(Device* device, MemoryKind* memory_kind)
 {
-    return SingleDeviceSharding(SingleDeviceSharding::Create(device, *memory_kind)).release();
+    return SingleDeviceSharding::Create(device, *memory_kind).release();
 }
 
 // TODO OpaqueSharding
