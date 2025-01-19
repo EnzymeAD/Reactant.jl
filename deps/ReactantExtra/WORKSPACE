@@ -135,7 +135,9 @@ http_archive(
     patches = ["@enzyme_ad//:patches/jax.patch"],
 )
 
-load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
+# load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
+XLA_COMMIT = "b21aaff307d353ea3f79b62a75f82a9af1e161aa"
+XLA_SHA256 = ""
 
 http_archive(
     name = "xla",
