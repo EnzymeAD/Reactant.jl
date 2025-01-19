@@ -22,246 +22,103 @@ function backend end
 
 # TODO remove this? `Serializable` doesn't have any method
 abstract type AbstractSerializable end
+abstract type AbstractValue end
+abstract type AbstractTuple <: AbstractValue end
+abstract type AbstractMemory end
+abstract type AbstractDevice end
+abstract type AbstractSharding <: AbstractSerializable end
+abstract type AbstractArray end
+abstract type AbstractTopology end
+abstract type AbstractClient end
+abstract type AbstractHostCallback end
+abstract type AbstractLoadedHostCallback end
+abstract type AbstractExecutable end
+abstract type AbstractLoadedExecutable end
+abstract type AbstractCompiler end
+abstract type AbstractProgram <: AbstractSerializable end
 
 # Base virtual classes
-abstract type AbstractValue end
-struct Value <: AbstractValue
-    ptr::Ptr{Cvoid}
-    function Value(x)
-        @assert x != C_NULL
-        return new(x)
+for (abstyp, contype) in [
+    (:AbstractValue, :Value),
+    (:AbstractSharding, :Sharding),
+    # (:AbstractHostCallback, :HostCallback),
+    # (:AbstractLoadedHostCallback, :LoadedHostCallback),
+    # (:AbstractProgram, :Program),
+]
+    @eval begin
+        struct $contype <: $abstyp
+            ptr::Ptr{Cvoid}
+            function $contype(x)
+                @assert x != C_NULL
+                return new(x)
+            end
+        end
+
+        Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$contype) = x.ptr
     end
 end
 
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Value) = x.ptr
+# Base virtual classes with IFRT backend implementations
+# WARN we redefine `Tuple` so you need to use `Core.Tuple` to access the original `Tuple`
+for (abstyp, contype) in [
+    (:AbstractTuple, :Tuple),
+    (:AbstractMemory, :Memory),
+    (:AbstractDevice, :Device),
+    (:AbstractArray, :Array),
+    (:AbstractTopology, :Topology),
+    (:AbstractClient, :Client),
+    # (:AbstractHostCallback, :HostCallback),
+    # (:AbstractLoadedHostCallback, :LoadedHostCallback),
+    (:AbstractExecutable, :Executable),
+    (:AbstractLoadedExecutable, :LoadedExecutable),
+    (:AbstractCompiler, :Compiler),
+    # (:AbstractProgram, :Program),
+]
+    @eval begin
+        struct $contype <: $abstyp
+            backend::Backend
+            ptr::Ptr{Cvoid}
+            function $contype(backend, x)
+                @assert x != C_NULL
+                return new(backend, x)
+            end
+        end
 
-abstract type AbstractTuple <: AbstractValue end
-struct Tuple <: AbstractTuple
-    ptr::Ptr{Cvoid}
-    function Tuple(x)
-        @assert x != C_NULL
-        return new(x)
+        Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$contype) = x.ptr
+        backend(x::$contype) = x.backend
+        free(x::$contype) = free(backend(x), x)
+        function free(b::Backend, x::$contype)
+            @warn("No free method for $contype with backend $b")
+            return nothing
+        end
     end
 end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Tuple) = x.ptr
-
-abstract type AbstractMemory end
-struct Memory <: AbstractMemory
-    ptr::Ptr{Cvoid}
-    function Memory(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Memory) = x.ptr
-
-abstract type AbstractDevice end
-struct Device <: AbstractDevice
-    ptr::Ptr{Cvoid}
-    function Device(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Device) = x.ptr
-
-abstract type AbstractSharding <: AbstractSerializable end
-struct Sharding <: AbstractSharding
-    ptr::Ptr{Cvoid}
-    function Sharding(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Sharding) = x.ptr
-
-abstract type AbstractArray end
-struct Array <: AbstractArray
-    ptr::Ptr{Cvoid}
-    function Array(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Array) = x.ptr
-
-abstract type AbstractTopology end
-struct Topology <: AbstractTopology
-    ptr::Ptr{Cvoid}
-    function Topology(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Topology) = x.ptr
-
-abstract type AbstractClient end
-struct Client <: AbstractClient
-    ptr::Ptr{Cvoid}
-    function Client(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Client) = x.ptr
-
-abstract type AbstractHostCallback end
-struct HostCallback <: AbstractHostCallback
-    ptr::Ptr{Cvoid}
-    function HostCallback(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::HostCallback) = x.ptr
-
-abstract type AbstractLoadedHostCallback end
-struct LoadedHostCallback <: AbstractLoadedHostCallback
-    ptr::Ptr{Cvoid}
-    function LoadedHostCallback(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::LoadedHostCallback) = x.ptr
-
-abstract type AbstractExecutable end
-struct Executable <: AbstractExecutable
-    ptr::Ptr{Cvoid}
-    function Executable(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Executable) = x.ptr
-
-abstract type AbstractLoadedExecutable end
-struct LoadedExecutable <: AbstractLoadedExecutable
-    ptr::Ptr{Cvoid}
-    function LoadedExecutable(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::LoadedExecutable) = x.ptr
-
-abstract type AbstractCompiler end
-struct Compiler <: AbstractCompiler
-    ptr::Ptr{Cvoid}
-    function Compiler(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Compiler) = x.ptr
-
-abstract type AbstractProgram <: AbstractSerializable end
-struct Program <: AbstractProgram
-    ptr::Ptr{Cvoid}
-    function Program(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Program) = x.ptr
 
 # Concrete classes
-mutable struct DType
-    ptr::Ptr{Cvoid}
-    function DType(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_dtype_free(z::Ptr{Cvoid})::Cvoid
+for (typ, dtor) in [
+    (:DType, :(libxla.ifrt_dtype_free)),
+    (:Shape, :(libxla.ifrt_shape_free)),
+    (:DynamicShape, :(libxla.ifrt_dynamic_shape_free)),
+    (:Index, :(libxla.ifrt_index_free)),
+    (:IndexDomain, :(libxla.ifrt_indexdomain_free)),
+    (:MemoryKind, :(libxla.ifrt_memorykind_free)),
+]
+    @eval begin
+        mutable struct $typ
+            ptr::Ptr{Cvoid}
+            function $typ(x::Ptr{Cvoid})
+                @assert x != C_NULL
+                y = new(x)
+                finalizer(y) do z
+                    @ccall $dtor(z::Ptr{Cvoid})::Cvoid
+                end
+                return y
+            end
         end
-        return y
+
+        Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
     end
 end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::DType) = x.ptr
-
-mutable struct Shape
-    ptr::Ptr{Cvoid}
-    function Shape(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_shape_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Shape) = x.ptr
-
-mutable struct DynamicShape
-    ptr::Ptr{Cvoid}
-    function DynamicShape(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_dynamic_shape_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::DynamicShape) = x.ptr
-
-mutable struct Index
-    ptr::Ptr{Cvoid}
-    function Index(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_index_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::Index) = x.ptr
-
-mutable struct IndexDomain
-    ptr::Ptr{Cvoid}
-    function IndexDomain(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_indexdomain_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::IndexDomain) = x.ptr
-
-mutable struct MemoryKind
-    ptr::Ptr{Cvoid}
-    function MemoryKind(x::Ptr{Cvoid})
-        @assert x != C_NULL
-        y = new(x)
-        finalizer(y) do z
-            @ccall libxla.ifrt_memorykind_free(z::Ptr{Cvoid})::Cvoid
-        end
-        return y
-    end
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::MemoryKind) = x.ptr
 
 # Enums
 @cenum DTypeKind::Int32 begin
