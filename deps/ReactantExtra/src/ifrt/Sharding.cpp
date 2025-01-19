@@ -96,3 +96,16 @@ extern "C" const char* ifrt_sharding_debug_string(Sharding* sharding)
 {
     return convert(Type<const char*>(), sharding->DebugString());
 }
+
+// SingleDeviceSharding
+extern "C" SingleDeviceSharding* ifrt_single_device_sharding_ctor(Device* device, MemoryKind* memory_kind)
+{
+    return SingleDeviceSharding(SingleDeviceSharding::Create(device, *memory_kind)).release();
+}
+
+// TODO OpaqueSharding
+// TODO ConcreteSharding
+// TODO ConcreteEvenSharding
+// TODO ShardingParamsSharding
+
+// TODO DeserializeShardingOptions
