@@ -187,9 +187,10 @@ end
 end
 
 # Value
-function client(x::AbstractValue)
-    return Client(@ccall libxla.ifrt_value_client(x::Ptr{Cvoid})::Ptr{Cvoid})
-end
+# TODO no way to get the backend from a `Value` ptr?
+# function client(x::AbstractValue)
+#     return Client(@ccall libxla.ifrt_value_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+# end
 
 function ready_future(x::AbstractValue)
     return XLA.Future(@ccall libxla.ifrt_value_ready(x::Ptr{Cvoid})::Cvoid)
@@ -208,6 +209,7 @@ function debug_string(x::AbstractValue)
 end
 
 # Tuple
+Tuple(x::Client) = Tuple(backend(x), x)
 Base.length(x::AbstractTuple) = @ccall libxla.ifrt_tuple_arity(x::Ptr{Cvoid})::Int
 
 # TODO `Unpack`?
@@ -222,6 +224,7 @@ function kind(x::Memory)
 end
 
 # TODO check ownership of passing vector
+# TODO redo this
 function devices(x::Memory)
     (; len, ptr) = @ccall libxla.ifrt_memory_devices(x::Ptr{Cvoid})::Cspan
     return Base.unsafe_wrap(Base.Vector, reinterpret(Ptr{Device}, ptr), len; own=false)
@@ -236,6 +239,9 @@ function debug_string(x::Memory)
         @ccall libxla.ifrt_memory_debug_string(x::Ptr{Cvoid})::Cstring
     )
 end
+
+# this method is only implemented in `PjRtMemory`
+client(x::Memory) = client(backend(x), x)
 
 # Device
 function client(x::AbstractDevice)
@@ -257,7 +263,9 @@ function debug_string(x::AbstractDevice)
 end
 
 function default_memory(x::AbstractDevice)
-    return Memory(@ccall libxla.ifrt_device_default_memory(x::Ptr{Cvoid})::Ptr{Cvoid})
+    return Memory(
+        backend(x), @ccall libxla.ifrt_device_default_memory(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
 end
 
 function isaddressable(x::AbstractDevice)
@@ -339,6 +347,7 @@ function platformid(x::AbstractClient)
     return @ccall libxla.ifrt_client_platform_id(x::Ptr{Cvoid})::UInt64
 end
 
+# TODO redo this
 function devices(x::AbstractClient; addressable::Bool=false)
     (; len, ptr) = if addressable
         @ccall libxla.ifrt_client_addressable_devices(x::Ptr{Cvoid})::Cspan
@@ -355,6 +364,7 @@ end
 # NOTE potentially deprecated
 function lookup_device(x::AbstractClient, id::Int; addressable::Bool=false)
     return Device(
+        backend(x),
         if addressable
             @ccall libxla.ifrt_client_lookup_addressable_device(
                 x::Ptr{Cvoid}, id::Int
@@ -367,7 +377,9 @@ end
 
 # NOTE potentially deprecated
 function default_compiler(x::AbstractClient)
-    return Compiler(@ccall libxla.ifrt_client_default_compiler(x::Ptr{Cvoid})::Ptr{Cvoid})
+    return Compiler(
+        backend(x), @ccall libxla.ifrt_client_default_compiler(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
 end
 
 # TODO ifrt_client_topology_for_devices, ifrt_client_default_layout_for_device
