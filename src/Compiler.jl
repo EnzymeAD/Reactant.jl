@@ -363,40 +363,40 @@ const cubinChip = Ref{String}("sm_60")
 #                                      11.8 -> 78
 function cubinFeatures()
     ver = @ccall MLIR.API.mlir_c.ReactantCudaDriverGetVersion()::UInt32
-	# No cuda available
-	if ver == 0
-		return "+ptx86"
-	end
+    # No cuda available
+    if ver == 0
+        return "+ptx86"
+    end
     major, ver = divrem(ver, 1000)
     minor, patch = divrem(ver, 10)
     version = VersionNumber(major, minor, patch)
     # From https://github.com/llvm/llvm-project/blob/106c483a102e1328f11e2b1d9398f4ad2826b59f/clang/lib/Driver/ToolChains/Cuda.cpp#L685
-   	cuver_map = Dict([
-	(126, 85),
-    (125, 85),
-    (124, 84),
-    (123, 83),
-    (122, 82),
-    (121, 81),
-    (120, 80),
-    (118, 78),
-    (117, 77),
-    (116, 76),
-    (115, 75),
-    (114, 74),
-    (113, 73),
-    (112, 72),
-    (111, 71),
-    (110, 70),
-    (102, 65),
-    (101, 64),
-    (100, 63),
-    (92, 61),
-    (91, 61),
-    (90, 60)
-	]) 
-	ptx = cuver_map[major * 10 + minor]
-	return "+ptx$ptx"
+    cuver_map = Dict([
+        (126, 85),
+        (125, 85),
+        (124, 84),
+        (123, 83),
+        (122, 82),
+        (121, 81),
+        (120, 80),
+        (118, 78),
+        (117, 77),
+        (116, 76),
+        (115, 75),
+        (114, 74),
+        (113, 73),
+        (112, 72),
+        (111, 71),
+        (110, 70),
+        (102, 65),
+        (101, 64),
+        (100, 63),
+        (92, 61),
+        (91, 61),
+        (90, 60),
+    ])
+    ptx = cuver_map[major * 10 + minor]
+    return "+ptx$ptx"
 end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
