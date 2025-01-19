@@ -751,6 +751,14 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
   return success();
 }
 
+extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos, MlirStringRef name,
+                        MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
+      .setArgAttr(pos, unwrap(name), unwrap(attr));
+}
+
+extern "C" void ReactantFuncSetArgAttr9 AddLinkInModule(MlirModule prevModC, MlirModule newModC,
+
 extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
                                       const char *entryfn) {
   auto prevMod = cast<ModuleOp>(*unwrap(prevModC));

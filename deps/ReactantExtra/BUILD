@@ -447,6 +447,7 @@ cc_library(
 "-Wl,-exported_symbol,_ProfilerSessionDelete",
 "-Wl,-exported_symbol,_ProfilerServerStart",
 "-Wl,-exported_symbol,_ProfilerServerStop",
+"-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
 "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion"
     ]}),
     deps = [
