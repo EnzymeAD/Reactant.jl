@@ -246,7 +246,7 @@ client(x::Memory) = client(backend(x), x)
 
 # Device
 function client(x::AbstractDevice)
-    return Client(@ccall libxla.ifrt_device_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+    return Client(backend(x), @ccall libxla.ifrt_device_client(x::Ptr{Cvoid})::Ptr{Cvoid})
 end
 
 function id(x::AbstractDevice)
@@ -394,7 +394,9 @@ end
 
 # LoadedHostCallback
 function client(x::AbstractLoadedHostCallback)
-    return Client(@ccall libxla.ifrt_loadedhostcallback_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+    return Client(
+        backend(x), @ccall libxla.ifrt_loadedhostcallback_client(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
 end
 
 function serialize(x::AbstractLoadedHostCallback)
@@ -432,7 +434,9 @@ end
 
 # LoadedExecutable
 function client(x::AbstractLoadedExecutable)
-    return Client(@ccall libxla.ifrt_loadedexecutable_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+    return Client(
+        backend(x), @ccall libxla.ifrt_loadedexecutable_client(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
 end
 
 function name(x::AbstractLoadedExecutable)
@@ -476,6 +480,7 @@ end
 # Compiler
 function compile(compiler::AbstractCompiler, program::AbstractProgram)
     return LoadedExecutable(
+        backend(compiler),
         @ccall libxla.ifrt_compiler_compile(
             compiler::Ptr{Cvoid}, program::Ptr{Cvoid}
         )::Ptr{Cvoid}
@@ -485,7 +490,9 @@ end
 function compile(
     compiler::AbstractCompiler, program::AbstractProgram, topology::AbstractTopology
 )
+    @assert backend(compiler) === backend(topology)
     return Executable(
+        backend(compiler),
         @ccall libxla.ifrt_compiler_compile_with_topology(
             compiler::Ptr{Cvoid}, program::Ptr{Cvoid}, topology::Ptr{Cvoid}
         )::Ptr{Cvoid}
@@ -494,6 +501,7 @@ end
 
 function deserialize(compiler::AbstractCompiler, serialized::String)
     return LoadedExecutable(
+        backend(compiler),
         @ccall libxla.ifrt_compiler_deserialize_loadedexecutable(
             compiler::Ptr{Cvoid}, serialized::Cstring
         )::Ptr{Cvoid}
