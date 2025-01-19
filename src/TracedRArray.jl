@@ -365,6 +365,11 @@ function Base.mapreduce(
         else
             init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
         end
+
+        if typeof(init) != op_in_T
+            op_in_T = typeof(init)
+            A = typeof(init).(A)
+        end
     end
 
     init = [TracedUtils.broadcast_to_size(init, ()).mlir_data]
