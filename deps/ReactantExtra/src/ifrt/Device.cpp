@@ -22,8 +22,7 @@ extern "C" Client* ifrt_device_client(Device* device)
     return device->client();
 }
 
-// DeviceId is a struct with a single int32_t field --> check out
-// xla/pjrt/pjrt_common.h
+// DeviceId is a struct with a single int32_t field --> check out "xla/pjrt/pjrt_common.h"
 extern "C" DeviceId ifrt_device_id(Device* device)
 {
     return device->Id();
