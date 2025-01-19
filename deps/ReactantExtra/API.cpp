@@ -35,6 +35,7 @@
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
 #include "llvm/Support/TargetSelect.h"
+#include "mlir/CAPI/Support.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
@@ -756,8 +757,6 @@ extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos, MlirStrin
   llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
       .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
-
-extern "C" void ReactantFuncSetArgAttr9 AddLinkInModule(MlirModule prevModC, MlirModule newModC,
 
 extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
                                       const char *entryfn) {
