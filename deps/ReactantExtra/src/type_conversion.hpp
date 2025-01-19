@@ -46,7 +46,7 @@ auto convert(Type<const char*>, T text) -> const char* {
     return cstr;
 }
 
-template <typename T>
+template <typename T, typename = std::is_fundamental<T>>
 auto convert(Type<span<T>>, std::vector<T> vec) -> span<T>
 {
     T* ptr = new T[vec.size()];
@@ -54,6 +54,16 @@ auto convert(Type<span<T>>, std::vector<T> vec) -> span<T>
         ptr[i] = vec[i];
     }
     return span<T> { vec.size(), ptr };
+}
+
+template <typename T, typename = std::conjunction<std::negation<std::is_fundamental<T>>, std::is_copy_constructible<T>>>
+auto convert(Type<span<T*>>, std::vector<T> vec) -> span<T*>
+{
+    T** ptr = new T*[vec.size()];
+    for (int i = 0; i < vec.size(); i++) {
+        ptr[i] = new T(vec[i]);
+    }
+    return span<T*> { vec.size(), ptr };
 }
 
 template <typename T>
