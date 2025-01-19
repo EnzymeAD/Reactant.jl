@@ -9,7 +9,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "5025af783046331bc6354f1ee60fdec99fd431b8"
+ENZYMEXLA_COMMIT = "4d276779410f2fb0abe1e2ec65ec40bc2dd52365"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
@@ -135,7 +135,9 @@ http_archive(
     patches = ["@enzyme_ad//:patches/jax.patch"],
 )
 
-load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
+# load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
+XLA_COMMIT = "b21aaff307d353ea3f79b62a75f82a9af1e161aa"
+XLA_SHA256 = ""
 
 http_archive(
     name = "xla",

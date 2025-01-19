@@ -128,4 +128,17 @@ function serve_to_perfetto(path_to_trace_file)
     end
 end
 
+@inline function free_profiler(exec)
+    @ccall MLIR.API.mlir_c.ProfilerServerStop(exec.exec::Ptr{Cvoid})::Cvoid
+end
+
+mutable struct ProfileServer
+    exec::Ptr{Cvoid}
+
+    function ProfileServer(port)
+        exec = @ccall Reactant.MLIR.API.mlir_c.ProfilerServerStart(port::Int32)::Ptr{Cvoid}
+        @assert exec != C_NULL
+        return finalizer(free_profiler, new(exec))
+    end
+end
 end # module Profiler
