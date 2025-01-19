@@ -7,6 +7,7 @@ const libxla = Reactant_jll.libReactantExtra
 import ..Reactant: @cbinding
 import ..PjRt
 import ..XLA
+import ..MLIR
 
 const Cspan = @NamedTuple{len::Csize_t, ptr::Ptr{Cvoid}}
 

@@ -1,177 +1,52 @@
 # IFRT-PjRt backend
 struct PjRtBackend <: Backend end
 
-struct PjRtTuple <: AbstractTuple
-    ptr::Ptr{Cvoid}
-    function PjRtTuple(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtTuple)
-    @ccall libxla.ifrt_pjrt_tuple_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtTuple) = x.ptr
-
-struct PjRtMemory <: AbstractMemory
-    ptr::Ptr{Cvoid}
-    function PjRtMemory(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtMemory)
-    @ccall libxla.ifrt_pjrt_memory_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtMemory) = x.ptr
-
-struct PjRtDevice <: AbstractDevice
-    ptr::Ptr{Cvoid}
-    function PjRtDevice(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtDevice)
-    @ccall libxla.ifrt_pjrt_device_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtDevice) = x.ptr
-
-struct PjRtArray <: AbstractArray
-    ptr::Ptr{Cvoid}
-    function PjRtArray(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtArray)
-    @ccall libxla.ifrt_pjrt_array_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtArray) = x.ptr
-
-struct PjRtTopology <: AbstractTopology
-    ptr::Ptr{Cvoid}
-    function PjRtTopology(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtTopology)
-    @ccall libxla.ifrt_pjrt_topology_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtTopology) = x.ptr
-
-struct PjRtClient <: AbstractClient
-    ptr::Ptr{Cvoid}
-    function PjRtClient(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtClient)
-    @ccall libxla.ifrt_pjrt_client_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtClient) = x.ptr
-
-struct PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallback
-    ptr::Ptr{Cvoid}
-    function PjRtHostSendAndRecvLoadedHostCallback(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtHostSendAndRecvLoadedHostCallback)
-    @ccall libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtHostSendAndRecvLoadedHostCallback) = x.ptr
-
-struct PjRtExecutable <: AbstractExecutable
-    ptr::Ptr{Cvoid}
-    function PjRtExecutable(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtExecutable)
-    @ccall libxla.ifrt_pjrt_executable_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtExecutable) = x.ptr
-
-struct PjRtLoadedExecutable <: AbstractLoadedExecutable
-    ptr::Ptr{Cvoid}
-    function PjRtLoadedExecutable(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtLoadedExecutable)
-    @ccall libxla.ifrt_pjrt_loadedexecutable_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtLoadedExecutable) = x.ptr
-
-struct PjRtCompiler <: AbstractCompiler
-    ptr::Ptr{Cvoid}
-    function PjRtCompiler(x)
-        @assert x != C_NULL
-        return new(x)
-    end
-end
-
-function free(x::PjRtCompiler)
-    @ccall libxla.ifrt_pjrt_compiler_free(x::Ptr{Cvoid})::Cvoid
-end
-
-Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::PjRtCompiler) = x.ptr
-
 # TODO for PjRt-IFRT backend, implement `ifrt_to_primitive_type` and `ifrt_to_dtype`
 
-function PjRtTuple(client::PjRtClient, values::Vector{Value})
-    return PjRtTuple(
+# PjRtTuple
+function Tuple(::PjRtBackend, client::Client)
+    return Tuple(
+        PjRtBackend(),
         @ccall libxla.ifrt_pjrt_tuple_ctor(
             client::Ptr{Cvoid}, values::Vector{Ptr{Cvoid}}, length(values)::Int
         )::Ptr{Cvoid}
     )
 end
 
-function PjRtMemory(client::PjRtClient, mem_space::PjRt.MemorySpace)
-    return PjRtMemory(
+function free(::PjRtBackend, x::Tuple)
+    @ccall libxla.ifrt_pjrt_tuple_free(x::Ptr{Cvoid})::Cvoid
+end
+
+# PjRtMemory
+function Memory(client::Client, mem_space::PjRt.MemorySpace)
+    @assert backend(client) === PjRtBackend()
+    return Memory(
+        PjRtBackend(),
         @ccall libxla.ifrt_pjrt_memory_ctor(
             client::Ptr{Cvoid}, mem_space::Ptr{Cvoid}
         )::Ptr{Cvoid}
     )
 end
 
-function client(x::PjRtMemory)
-    return PjRtClient(@ccall libxla.ifrt_pjrt_memory_client(x::Ptr{Cvoid})::Ptr{Cvoid})
+function free(::PjRtBackend, x::Memory)
+    @ccall libxla.ifrt_pjrt_memory_free(x::Ptr{Cvoid})::Cvoid
 end
 
-function memory_space(x::PjRtMemory)
+function client(::PjRtBackend, x::Memory)
+    return Client(
+        PjRtBackend(), @ccall libxla.ifrt_pjrt_memory_client(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
+end
+
+function memory_space(::PjRtBackend, x::Memory)
     return PjRt.MemorySpace(@ccall libxla.ifrt_pjrt_memory_space(x::Ptr{Cvoid})::Ptr{Cvoid})
 end
 
 # PjRtDevice
 # TODO add `attributes` argument
 # TODO refactor `XLA.Device` to `PjRt.Device` when the move is done
-function PjRtDevice(
-    client::PjRtClient,
+function Device(
+    client::Client,
     device_id::Int32,
     kind::String,
     to_string::String,
@@ -179,7 +54,9 @@ function PjRtDevice(
     pid::Int,
     pjrt_device::XLA.Device,
 )
-    return PjRtDevice(
+    @assert backend(client) === PjRtBackend()
+    return Device(
+        PjRtBackend(),
         @ccall libxla.ifrt_pjrt_device_ctor(
             client::Ptr{Cvoid},
             device_id::Int32,
@@ -192,40 +69,109 @@ function PjRtDevice(
     )
 end
 
+function free(::PjRtBackend, x::Device)
+    @ccall libxla.ifrt_pjrt_device_free(x::Ptr{Cvoid})::Cvoid
+end
+
 # TODO refactor `XLA.Device` to `PjRt.Device` when the move is done
-function XLA.Device(x::PjRtDevice)
+function XLA.Device(x::Device)
+    @assert backend(x) === PjRtBackend()
     return PjRt.Device(
         @ccall libxla.ifrt_pjrt_device_pjrt_device(x::Ptr{Cvoid})::Ptr{Cvoid}
     )
 end
 
-# TODO PjRtArray
-# TODO PjRtTopology
-
-function PjRtClient(x::XLA.Client)
-    return PjRtClient(@ccall libxla.ifrt_pjrt_client_ctor(x::Ptr{Cvoid})::Ptr{Cvoid})
+# PjRtArray
+function free(::PjRtBackend, x::Array)
+    @ccall libxla.ifrt_pjrt_array_free(x::Ptr{Cvoid})::Cvoid
 end
-
-# TODO PjRtHostSendAndRecvLoadedHostCallback
-
-# PjRtExecutable
-function PjRtExecutable(executable::PjRt.Executable, compile_options::PjRt.CompileOptions)
-    return PjRtExecutable(
-        @ccall libxla.ifrt_pjrt_executable_ctor(
-            executable::Ptr{Cvoid}, compile_options::Ptr{Cvoid}
+# PjRtTopology
+function Topology(topology::PjRt.TopologyDescription)
+    return Topology(
+        PjRtBackend(),
+        @ccall libxla.ifrt_pjrt_topology_ctor(
+            client::Ptr{Cvoid}, topology::Ptr{Cvoid}
         )::Ptr{Cvoid}
     )
 end
 
-function PjRt.Executable(x::PjRtExecutable)
+function free(::PjRtBackend, x::Topology)
+    @ccall libxla.ifrt_pjrt_topology_free(x::Ptr{Cvoid})::Cvoid
+end
+
+function PjRt.TopologyDescription(x::Topology)
+    @assert backend(x) === PjRtBackend()
+    return PjRt.TopologyDescription(
+        @ccall libxla.ifrt_pjrt_topology_pjrt_topology(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
+end
+
+# PjRtClient
+function Client(x::XLA.Client)
+    return Client(
+        PjRtBackend(), @ccall libxla.ifrt_pjrt_client_ctor(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
+end
+
+function free(::PjRtBackend, x::Client)
+    @ccall libxla.ifrt_pjrt_client_free(x::Ptr{Cvoid})::Cvoid
+end
+
+# struct PjRtHostSendAndRecvLoadedHostCallback <: AbstractLoadedHostCallback
+#     ptr::Ptr{Cvoid}
+#     function PjRtHostSendAndRecvLoadedHostCallback(x)
+#         @assert x != C_NULL
+#         return new(x)
+#     end
+# end
+
+# function free(::PjRtBackend, x::HostSendAndRecvLoadedHostCallback)
+#     @ccall libxla.ifrt_pjrt_hostsendandrecv_loadhostcallback_free(x::Ptr{Cvoid})::Cvoid
+# end
+
+# PjRtExecutable
+function Executable(executable::PjRt.Executable)
+    return Executable(
+        PjRtBackend(),
+        @ccall libxla.ifrt_pjrt_executable_ctor(executable::Ptr{Cvoid})::Ptr{Cvoid}
+    )
+end
+
+function free(::PjRtBackend, x::Executable)
+    @ccall libxla.ifrt_pjrt_executable_free(x::Ptr{Cvoid})::Cvoid
+end
+
+function PjRt.Executable(x::Executable)
+    @assert backend(x) === PjRtBackend()
     return PjRt.Executable(
         @ccall libxla.ifrt_pjrt_executable_pjrt_executable(x::Ptr{Cvoid})::Ptr{Cvoid}
     )
 end
 
-# TODO PjRtLoadedExecutable
+# PjRtLoadedExecutable
+function LoadedExecutable(
+    client::Client, mlir_mod::MLIR.IR.Module, comp_options::PjRt.CompileOptions
+)
+    @assert backend(client) === PjRtBackend()
+    return LoadedExecutable(
+        PjRtBackend(),
+        @ccall libxla.ifrt_pjrt_loadedexecutable_ctor(
+            client::Ptr{Cvoid}, mlir_mod::Ptr{Cvoid}, comp_options::Ptr{Cvoid}
+        )::Ptr{Cvoid}
+    )
+end
+
+function free(::PjRtBackend, x::LoadedExecutable)
+    @ccall libxla.ifrt_pjrt_loadedexecutable_free(x::Ptr{Cvoid})::Cvoid
+end
 
 # PjRtCompiler
-function PjRtCompiler(x::PjRtClient)
-    return PjRtCompiler(@ccall libxla.ifrt_pjrt_compiler_ctor(x::Ptr{Cvoid})::Ptr{Cvoid})
+function Compiler(::PjRtBackend, x::Client)
+    return Compiler(
+        PjRtBackend(), @ccall libxla.ifrt_pjrt_compiler_ctor(x::Ptr{Cvoid})::Ptr{Cvoid}
+    )
+end
+
+function free(::PjRtBackend, x::Compiler)
+    @ccall libxla.ifrt_pjrt_compiler_free(x::Ptr{Cvoid})::Cvoid
 end
