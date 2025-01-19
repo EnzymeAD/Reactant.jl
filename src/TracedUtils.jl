@@ -112,6 +112,7 @@ function make_mlir_fn(
     no_args_in_result::Bool=false,
     construct_function_without_args::Bool=false,
     do_transpose=true,
+    within_autodiff=false,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         return (
@@ -198,8 +199,11 @@ function make_mlir_fn(
                 set_mlir_data!(arg, row_maj_arg)
             end
         end
-
-        Reactant.call_with_reactant(f, traced_args...)
+        if within_autodiff
+            Reactant.call_with_reactant_within_autodiff(f, traced_args...)
+        else
+            Reactant.call_with_reactant(f, traced_args...)
+        end
     finally
         MLIR.IR.deactivate!(fnbody)
     end

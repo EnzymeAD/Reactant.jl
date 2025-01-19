@@ -44,6 +44,18 @@ function set_reactant_abi(
     if f === Reactant.call_with_reactant
         arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
+    elseif !(interp.within_autodiff_rewrite) && f === overload_autodiff
+        interp′ = Enzyme.Compiler.Interpreter.EnzymeInterpreter(
+            interp; within_autodiff_rewrite=true
+        )
+        return Base.@invoke abstract_call_known(
+            interp′::Enzyme.Compiler.Interpreter.EnzymeInterpreter,
+            f,
+            arginfo,
+            si,
+            sv,
+            max_methods,
+        )
     end
 
     return Base.@invoke abstract_call_known(
@@ -59,7 +71,9 @@ end
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE
     struct ReactantCacheToken end
 
-    function ReactantInterpreter(; world::UInt=Base.get_world_counter())
+    function ReactantInterpreter(;
+        world::UInt=Base.get_world_counter(), within_autodiff=false
+    )
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             ReactantCacheToken(),
             REACTANT_METHOD_TABLE,
@@ -68,6 +82,7 @@ end
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
+            within_autodiff,  #=within_autodiff_rewrite=#
             set_reactant_abi,
         )
     end
@@ -75,7 +90,9 @@ else
     const REACTANT_CACHE = Enzyme.GPUCompiler.CodeCache()
 
     function ReactantInterpreter(;
-        world::UInt=Base.get_world_counter(), code_cache=REACTANT_CACHE
+        world::UInt=Base.get_world_counter(),
+        code_cache=REACTANT_CACHE,
+        within_autodiff=false,
     )
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             REACTANT_CACHE,
@@ -85,6 +102,7 @@ else
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
+            within_autodiff,  #=within_autodiff_rewrite=#
             set_reactant_abi,
         )
     end
@@ -237,7 +255,7 @@ function overload_autodiff(
     primargs = ((v.val for v in args)...,)
 
     fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = TracedUtils.make_mlir_fn(
-        primf, primargs, (), string(f) * "_autodiff", false
+        primf, primargs, (), string(f) * "_autodiff", false; within_autodiff=true
     )
 
     activity = Int32[]
