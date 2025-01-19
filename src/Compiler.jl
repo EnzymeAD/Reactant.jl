@@ -689,7 +689,12 @@ function codegen_flatten!(linear_args, result_stores)
     # resarg_code = Expr[]
 
     for (i, arg) in enumerate(linear_args)
-        paths = ((p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :args)...,)
+        paths = (
+            (
+                p for
+                p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
+            )...,
+        )
         path = if length(paths) == 1
             paths[1]
         else
@@ -768,7 +773,7 @@ function codegen_unflatten!(
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                p[1] == :result || p[1] == :resargs
+                length(p) > 0 && (p[1] == :result || p[1] == :resargs)
             )...,
         )
         for path in paths
@@ -838,14 +843,15 @@ function codegen_unflatten!(
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                p[1] == :result || p[1] == :resargs || p[1] == :args
+                length(p) > 0 && (p[1] == :result || p[1] == :resargs || p[1] == :args)
             )...,
         )
 
         for path in paths
             arg = linear_args[arg_idx + 1]
             argpath = only((
-                p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :args
+                p for
+                p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
             ))
 
             if path[1] == :result

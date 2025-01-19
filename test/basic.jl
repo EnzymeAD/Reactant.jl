@@ -1070,3 +1070,15 @@ end
     x_ra = Reactant.to_rarray(rand(3, 4, 3))
     @test @jit(fn(x_ra)) == fn(Array(x_ra))
 end
+
+@testset "reduce integers" begin
+    x = rand(Bool, 100)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(sum(x_ra)) == sum(x)
+
+    x = rand(Int16, 100)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(sum(x_ra)) == sum(x)
+end

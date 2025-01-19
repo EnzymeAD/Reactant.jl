@@ -367,8 +367,8 @@ end
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
     @test @allowscalar(res_ra[1, 1]) == -1.0
     @test @allowscalar(res_ra[2, 1]) == -1.0
-    @test @allowscalar(x_ra[1, 1]) == -1.0 broken = true
-    @test @allowscalar(x_ra[2, 1]) == -1.0 broken = true
+    @test @allowscalar(x_ra[1, 1]) == -1.0
+    @test @allowscalar(x_ra[2, 1]) == -1.0
 
     x = -rand(2, 10)
     x[2, 1] = 0.0
@@ -377,7 +377,7 @@ end
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
     @test @allowscalar(res_ra[1, 1]) == 1.0
     @test @allowscalar(res_ra[2, 1]) == 0.0
-    @test @allowscalar(x_ra[1, 1]) == 1.0 broken = true
+    @test @allowscalar(x_ra[1, 1]) == 1.0
     @test @allowscalar(x_ra[2, 1]) == 0.0
 end
 
@@ -453,6 +453,36 @@ end
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
         condition12_compile_test(x, y, z)
+end
+
+function condition_with_structure(x)
+    y = x .+ 1
+    @trace if sum(y) > 0
+        z = (; a=y, b=(y .- 1, y))
+    else
+        z = (; a=-y, b=(y, y .+ 1))
+    end
+    return z
+end
+
+@testset "condition with structure" begin
+    x = rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit condition_with_structure(x_ra)
+    res = condition_with_structure(x)
+    @test res_ra.a ≈ res.a
+    @test res_ra.b[1] ≈ res.b[1]
+    @test res_ra.b[2] ≈ res.b[2]
+
+    x = -rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit condition_with_structure(x_ra)
+    res = condition_with_structure(x)
+    @test res_ra.a ≈ res.a
+    @test res_ra.b[1] ≈ res.b[1]
+    @test res_ra.b[2] ≈ res.b[2]
 end
 
 function for_with_step(x)
@@ -579,4 +609,20 @@ end
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(for_inner_scope(x_ra)) ≈ for_inner_scope(x)
+end
+
+function for_with_named_tuple(x)
+    st = (; x)
+    res = x
+    @trace for i in 1:10
+        res .= res .+ st.x
+    end
+    return res
+end
+
+@testset "for: named tuple" begin
+    x = randn(Float64, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x)
 end
