@@ -71,7 +71,7 @@ function GPUClient(
 )
     allowed_devices = try
         if haskey(ENV, "CUDA_VISIBLE_DEVICES")
-            return unique!(parse.(Cint, strip.((split(ENV["CUDA_VISIBLE_DEVICES"])))))
+            unique!(parse.(Cint, strip.((split(ENV["CUDA_VISIBLE_DEVICES"])))))
         else
             # XXX: Is there a better way to get the number of GPUs?
             #      There is `cuDeviceGetCount` from libcuda, but not sure how to use it here
