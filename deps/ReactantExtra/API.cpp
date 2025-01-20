@@ -249,12 +249,13 @@ extern "C" void ProfilerActivityEnd(int64_t id) {
   tsl::profiler::TraceMe::ActivityEnd(id);
 }
 
-extern "C" void *ProfilerServerStart(int32_t port) {
+extern "C" tsl::profiler::ProfilerServer *ProfilerServerStart(int32_t port) {
   auto server = new tsl::profiler::ProfilerServer();
   server->StartProfilerServer(port);
   return server;
 }
-extern "C" void *ProfilerServerStop(tsl::profiler::ProfilerServer *server) {
+
+extern "C" void ProfilerServerStop(tsl::profiler::ProfilerServer *server) {
   delete server;
 }
 
