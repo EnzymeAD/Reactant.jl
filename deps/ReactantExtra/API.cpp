@@ -9,6 +9,7 @@
 #include "Enzyme/MLIR/Dialect/Ops.h"
 #include "Enzyme/MLIR/Implementations/CoreDialectsAutoDiffImplementations.h"
 #include "Enzyme/MLIR/Passes/Passes.h"
+#include "mlir/CAPI/Support.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -35,7 +36,6 @@
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
 #include "llvm/Support/TargetSelect.h"
-#include "mlir/CAPI/Support.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
@@ -54,8 +54,9 @@
 #include "xla/pjrt/status_casters.h"
 
 #include "tsl/profiler/lib/profiler_session.h"
-#include "xla/tsl/profiler/rpc/profiler_server.h"
+#include "tsl/profiler/lib/traceme.h"
 #include "xla/tsl/profiler/rpc/client/capture_profile.h"
+#include "xla/tsl/profiler/rpc/profiler_server.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -240,12 +241,20 @@ extern "C" void ProfilerSessionDelete(tsl::ProfilerSession *session) {
   delete session;
 }
 
-extern "C" void* ProfilerServerStart(int32_t port) {
+extern "C" int64_t ProfilerActivityStart(const char *name, int level) {
+  return tsl::profiler::TraceMe::ActivityStart(name, level);
+}
+
+extern "C" void ProfilerActivityEnd(int64_t id) {
+  tsl::profiler::TraceMe::ActivityEnd(id);
+}
+
+extern "C" void *ProfilerServerStart(int32_t port) {
   auto server = new tsl::profiler::ProfilerServer();
   server->StartProfilerServer(port);
   return server;
 }
-extern "C" void* ProfilerServerStop(tsl::profiler::ProfilerServer* server) {
+extern "C" void *ProfilerServerStop(tsl::profiler::ProfilerServer *server) {
   delete server;
 }
 
@@ -448,14 +457,12 @@ static void noop() {}
 #ifdef REACTANT_CUDA
 #include "third_party/gpus/cuda/include/cuda.h"
 extern "C" int32_t ReactantCudaDriverGetVersion() {
-    int32_t data;
-    ReactantHandleCuResult(cuDriverGetVersion(&data));
-    return data;
+  int32_t data;
+  ReactantHandleCuResult(cuDriverGetVersion(&data));
+  return data;
 }
 #else
-extern "C" int32_t ReactantCudaDriverGetVersion() {
-    return 0;
-}
+extern "C" int32_t ReactantCudaDriverGetVersion() { return 0; }
 #endif
 
 extern "C" void *UnsafeBufferPointer(PjRtBuffer *buffer) {
@@ -752,8 +759,8 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
   return success();
 }
 
-extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos, MlirStringRef name,
-                        MlirAttribute attr) {
+extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
+                                       MlirStringRef name, MlirAttribute attr) {
   llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
       .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
