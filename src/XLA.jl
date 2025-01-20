@@ -164,10 +164,12 @@ function __init__()
         XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
             Float64, ENV["XLA_REACTANT_GPU_MEM_FRACTION"]
         )
+        @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[]
     end
 
     if haskey(ENV, "XLA_REACTANT_GPU_PREALLOCATE")
         XLA_REACTANT_GPU_PREALLOCATE[] = parse(Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"])
+        @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[]
     end
 
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
