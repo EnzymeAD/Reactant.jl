@@ -4,7 +4,7 @@ import ...MLIR
 
 function LLVMclopts(opts...)
     args = ["", opts...]
-    @ccall MLIR.API.mlir_c.LLVMParseCommandLineOptions(length(args)::Cint, args::Ptr{Cstring}, C_NULL::Ptr{Cvoid})::Cvoid
+    @ccall MLIR.API.mlir_c.ReactantLLVMParseCommandLineOptions(length(args)::Cint, args::Ptr{Cstring}, C_NULL::Ptr{Cvoid})::Cvoid
 end
 
 mutable struct Client
