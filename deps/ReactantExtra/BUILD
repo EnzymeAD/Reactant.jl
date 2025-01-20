@@ -435,6 +435,7 @@ cc_library(
 "-Wl,-exported_symbol,_RegisterDialects",
 "-Wl,-exported_symbol,_InitializeRegistryAndPasses",
 "-Wl,-exported_symbol,_ifrt_*",
+"-Wl,-exported_symbol,_reactant_*",
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
 "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
