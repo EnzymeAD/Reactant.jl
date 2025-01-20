@@ -111,6 +111,7 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: "Overview", link: "/tutorials/" },
+          { text: "Profiling", link: "/tutorials/profiling" },
         ],
       },
       "/api/": {
