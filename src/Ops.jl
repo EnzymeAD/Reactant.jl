@@ -2118,7 +2118,7 @@ end
                     TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg
                 )
             end
-            return f(scalar_args...)
+            return Reactant.call_with_reactant(f, scalar_args...)
         end
     end
 
