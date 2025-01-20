@@ -29,6 +29,9 @@ end
 Running this function should create a folder called `plugins` in the folder provided to `Reactant.with_profiler` which will
 contain the trace files. The traces can then be visualized in different ways.
 
+!!! note
+    For more insights about the current state of Reactant, it is possible to fetch device information about allocations using the [`Reactant.XLA.allocatorstats`](@ref) function.
+
 ## Perfetto UI
 
 ![The perfetto interface](images/perfetto.png)
