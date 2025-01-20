@@ -26,8 +26,6 @@ function with_profiler(
     trace_host=true,
     create_perfetto_link=false,
 )
-    # TODO: we should be able to inject traces from Julia to fill in the blank spots in the trace.
-
     device_tracer_level = UInt32(trace_device ? 1 : 0)
     host_tracer_level = UInt32(trace_host ? 2 : 0)
     profiler = @ccall Reactant.MLIR.API.mlir_c.CreateProfilerSession(
@@ -55,7 +53,53 @@ function with_profiler(
     return results
 end
 
-export with_profiler
+# https://github.com/google/tsl/blob/ffeadbc9111309a845ab07df3ff41d59cb005afb/tsl/profiler/lib/traceme.h#L49-L53
+const TRACE_ME_LEVEL_CRITICAL = Cint(1)
+const TRACE_ME_LEVEL_INFO = Cint(2)
+const TRACE_ME_LEVEL_VERBOSE = Cint(3)
+
+"""
+    annotate(f, name, [level=TRACE_ME_LEVEL_CRITICAL])
+
+Generate an annotation in the current trace.
+"""
+function annotate(f, name, level=TRACE_ME_LEVEL_CRITICAL)
+    id = @ccall Reactant.MLIR.API.mlir_c.ProfilerActivityStart(
+        name::Cstring, level::Cint
+    )::Int64
+    try
+        f()
+    finally
+        @ccall Reactant.MLIR.API.mlir_c.ProfilerActivityEnd(id::Int64)::Cvoid
+    end
+end
+
+"""
+    @annotate [name] function foo(a, b, c)
+        ...
+    end
+
+The created function will generate an annotation in the captured XLA profiles.
+"""
+macro annotate(name, func_def=nothing)
+    noname = isnothing(func_def)
+    func_def = something(func_def, name)
+
+    if !Meta.isexpr(func_def, :function)
+        error("not a function definition: $func_def")
+    end
+
+    name = noname ? string(func_def.args[1].args[1]) : name
+    code = func_def.args[2]
+
+    code = quote
+        annotate(() -> $(esc(code)), $(esc(name)))
+    end
+
+    return Expr(:function, esc(func_def.args[1]), code)
+end
+
+export with_profiler, annotate, @annotate
 
 function serve_to_perfetto(path_to_trace_file)
     port_hint = 9001
@@ -141,4 +185,5 @@ mutable struct ProfileServer
         return finalizer(free_profiler, new(exec))
     end
 end
+
 end # module Profiler

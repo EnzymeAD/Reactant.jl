@@ -82,6 +82,9 @@ end
 include("mlir/MLIR.jl")
 include("XLA.jl")
 include("Interpreter.jl")
+include("Profiler.jl")
+
+const with_profiler = Profiler.with_profiler
 
 include("utils.jl")
 
@@ -247,9 +250,6 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 include("ControlFlow.jl")
 include("Tracing.jl")
 include("Compiler.jl")
-include("Profiler.jl")
-
-const with_profiler = Profiler.with_profiler
 
 include("Overlay.jl")
 

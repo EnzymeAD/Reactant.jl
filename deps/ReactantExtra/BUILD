@@ -447,6 +447,8 @@ cc_library(
 "-Wl,-exported_symbol,_ProfilerSessionDelete",
 "-Wl,-exported_symbol,_ProfilerServerStart",
 "-Wl,-exported_symbol,_ProfilerServerStop",
+"-Wl,-exported_symbol,_ProfilerActivityStart",
+"-Wl,-exported_symbol,_ProfilerActivityEnd",
 "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
 "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion"
     ]}),
@@ -522,6 +524,7 @@ cc_library(
         "@tsl//tsl/profiler/lib:profiler_session_impl",
         "@tsl//tsl/profiler/lib:profiler_factory_impl",
         "@tsl//tsl/profiler/lib:profiler_controller",
+        "@tsl//tsl/profiler/lib:traceme",
         "@xla//xla/tsl/profiler/rpc:profiler_server_impl",
         "@xla//xla/tsl/profiler/rpc/client:capture_profile",
         "@xla//xla/tsl/profiler/rpc/client:profiler_client",
