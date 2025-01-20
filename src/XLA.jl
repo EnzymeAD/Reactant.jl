@@ -2,6 +2,9 @@ module XLA
 
 import ...MLIR
 
+const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
+const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
+
 function LLVMclopts(opts...)
     args = ["", opts...]
     @ccall MLIR.API.mlir_c.ReactantLLVMParseCommandLineOptions(
@@ -70,11 +73,13 @@ function GPUClient(node_id=0, num_nodes=1, platform="gpu")
     client = ccall(
         f,
         Ptr{Cvoid},
-        (Cint, Cint, Ptr{Cvoid}, Cint, Cstring, Ptr{Cstring}),
+        (Cint, Cint, Ptr{Cvoid}, Cint, Cdouble, Bool, Cstring, Ptr{Cstring}),
         node_id,
         num_nodes,
         C_NULL,
         0,
+        XLA_REACTANT_GPU_MEM_FRACTION[],
+        XLA_REACTANT_GPU_PREALLOCATE[],
         platform,
         refstr,
     )
@@ -153,6 +158,16 @@ function __init__()
                 println(stdout, e)
             end
         end
+    end
+
+    if haskey(ENV, "XLA_REACTANT_GPU_MEM_FRACTION")
+        XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
+            Float64, ENV["XLA_REACTANT_GPU_MEM_FRACTION"]
+        )
+    end
+
+    if haskey(ENV, "XLA_REACTANT_GPU_PREALLOCATE")
+        XLA_REACTANT_GPU_PREALLOCATE[] = parse(Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"])
     end
 
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
