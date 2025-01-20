@@ -91,36 +91,7 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-function make_mlir_fn(
-    f,
-    args,
-    kwargs,
-    name="main",
-    concretein=true;
-    toscalar=false,
-    return_dialect=:func,
-    no_args_in_result::Bool=false,
-    construct_function_without_args::Bool=false,
-    do_transpose=true,
-)
-    if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
-        return (
-            true,
-            make_mlir_fn(
-                Reactant.apply,
-                (f, args...),
-                kwargs,
-                name,
-                concretein;
-                toscalar,
-                return_dialect,
-                no_args_in_result,
-                construct_function_without_args,
-                do_transpose,
-            )[2:end]...,
-        )
-    end
-
+function prepare_args(args, concretein, construct_function_without_args, toscalar)
     N = length(args)
     seen_args = OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
@@ -141,6 +112,12 @@ function make_mlir_fn(
         push!(linear_args, v)
     end
 
+    return seen_args, traced_args, linear_args
+end
+
+function placeholder_func(
+    name, linear_args, toscalar, do_transpose, concretein, construct_function_without_args
+)
     in_tys = if toscalar
         [
             MLIR.IR.TensorType((), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
@@ -175,25 +152,19 @@ function make_mlir_fn(
 
     @assert MLIR.IR._has_block()
 
-    # Explicitly don't use block! to avoid creating a closure, which creates
-    # both compile-time and relocatability issues
-    MLIR.IR.activate!(fnbody)
-    result = try
-        for (i, arg) in enumerate(linear_args)
-            if construct_function_without_args
-                set_mlir_data!(arg, get_mlir_data(args[i]))
-            else
-                raw_arg = MLIR.IR.argument(fnbody, i)
-                row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
-                set_mlir_data!(arg, row_maj_arg)
-            end
-        end
+    return mod, func, fnbody, in_tys, sym_visibility
+end
 
-        Reactant.call_with_reactant(f, traced_args...)
-    finally
-        MLIR.IR.deactivate!(fnbody)
-    end
-
+# args, concretein, construct_function_without_args, toscalar
+function prepare_results(
+    result,
+    traced_args,
+    concretein,
+    construct_function_without_args,
+    no_args_in_result,
+    do_transpose,
+)
+    N = length(traced_args)
     seen_results = OrderedIdDict()
 
     traced_result = Reactant.make_tracer(
@@ -229,8 +200,19 @@ function make_mlir_fn(
         [Ops.mlir_type(arg) for arg in linear_results]
     end
 
+    return seen_results, traced_result, linear_results, out_tys
+end
+
+function create_return!(
+    fnbody,
+    linear_results,
+    construct_function_without_args,
+    no_args_in_result,
+    do_transpose,
+    return_dialect,
+)
     MLIR.IR.activate!(fnbody)
-    ret = try
+    try
         vals = MLIR.IR.Value[]
         for res in linear_results
             col_maj = if res isa MissingTracedValue
@@ -249,7 +231,9 @@ function make_mlir_fn(
     finally
         MLIR.IR.deactivate!(fnbody)
     end
+end
 
+function find_unique_name(name, mod)
     name2 = name
 
     tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
@@ -263,22 +247,115 @@ function make_mlir_fn(
             break
         end
     end
+    return name2
+end
 
-    func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
+"""
+Copy `temp_func` into a new function operation and destroy `temp_func`.
+"""
+function final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
+    name = find_unique_name(name, mod)
+    final_func = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
-            sym_name=name2,
+            sym_name=name,
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
             sym_visibility,
         )
     end
-    MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
+    MLIR.API.mlirRegionTakeBody(MLIR.IR.region(final_func, 1), MLIR.IR.region(temp_func, 1))
 
-    MLIR.API.mlirOperationDestroy(func.operation)
-    func.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(temp_func.operation)
+    temp_func.operation = MLIR.API.MlirOperation(C_NULL)
+    return final_func
+end
+
+function make_mlir_fn(
+    f,
+    args,
+    kwargs,
+    name="main",
+    concretein=true;
+    toscalar=false,
+    return_dialect=:func,
+    no_args_in_result::Bool=false,
+    construct_function_without_args::Bool=false,
+    do_transpose=true,
+)
+    if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
+        return (
+            true,
+            make_mlir_fn(
+                Reactant.apply,
+                (f, args...),
+                kwargs,
+                name,
+                concretein;
+                toscalar,
+                return_dialect,
+                no_args_in_result,
+                construct_function_without_args,
+                do_transpose,
+            )[2:end]...,
+        )
+    end
+
+    N = length(args)
+    seen_args, traced_args, linear_args = prepare_args(
+        args, concretein, construct_function_without_args, toscalar
+    )
+
+    mod, temp_func, fnbody, in_tys, sym_visibility = placeholder_func(
+        name,
+        linear_args,
+        toscalar,
+        do_transpose,
+        concretein,
+        construct_function_without_args,
+    )
+
+    # Explicitly don't use block! to avoid creating a closure, which creates
+    # both compile-time and relocatability issues
+    MLIR.IR.activate!(fnbody)
+    result = try
+        for (i, arg) in enumerate(linear_args)
+            if construct_function_without_args
+                set_mlir_data!(arg, get_mlir_data(args[i]))
+            else
+                raw_arg = MLIR.IR.argument(fnbody, i)
+                row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
+                set_mlir_data!(arg, row_maj_arg)
+            end
+        end
+
+        Reactant.call_with_reactant(f, traced_args...)
+    finally
+        MLIR.IR.deactivate!(fnbody)
+    end
+
+    _, traced_result, linear_results, out_tys = prepare_results(
+        result,
+        traced_args,
+        concretein,
+        construct_function_without_args,
+        no_args_in_result,
+        do_transpose,
+    )
+
+    ret = create_return!(
+        fnbody,
+        linear_results,
+        construct_function_without_args,
+        no_args_in_result,
+        do_transpose,
+        return_dialect,
+    )
+
+    final_func = final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
+
     return (
         false,
-        func2,
+        final_func,
         traced_result,
         result,
         seen_args,
