@@ -2,6 +2,11 @@ module XLA
 
 import ...MLIR
 
+function LLVMclopts(opts...)
+    args = ["", opts...]
+    @ccall MLIR.API.mlir_c.LLVMParseCommandLineOptions(length(args)::Cint, args::Ptr{Cstring}, C_NULL::Ptr{Cvoid})::Cvoid
+end
+
 mutable struct Client
     client::Ptr{Cvoid}
 
@@ -50,6 +55,7 @@ function CPUClient(asynchronous=false, node_id=0, num_nodes=1; checkcount=true)
     end
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
     client = ccall(f, Ptr{Cvoid}, (UInt, Cint, Cint), asynchronous, node_id, num_nodes)
+    LLVMclopts("-nvptx-fma-level=1")
     #client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
     return Client(client)
 end
@@ -73,6 +79,7 @@ function GPUClient(node_id=0, num_nodes=1, platform="gpu")
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
+    LLVMclopts("-nvptx-fma-level=1")
     return Client(client)
 end
 
@@ -83,6 +90,7 @@ function TPUClient(tpu_path::String)
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
+    LLVMclopts("-nvptx-fma-level=1")
     return Client(client)
 end
 

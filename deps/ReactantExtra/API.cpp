@@ -446,6 +446,12 @@ std::vector<int64_t> col_major(int64_t dim) {
   return minor_to_major;
 }
 
+extern "C" void ReactantLLVMParseCommandLineOptions(int argc, const char *const *argv,
+                                 const char *Overview) {
+    llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(Overview),
+                                    &llvm::nulls());
+}
+
 std::vector<int64_t> row_major(int64_t dim) {
   std::vector<int64_t> minor_to_major;
   for (int i = 0; i < dim; i++) {
