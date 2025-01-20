@@ -246,6 +246,24 @@ struct JLAllocatorStats
     peak_pool_bytes::Int64
 end
 
+"""
+  AllocatorStats()
+
+Contains the following fields:
+  - `num_allocs`
+  - `bytes_in_use`
+  - `peak_bytes_in_use`
+  - `largest_alloc_size`
+  - `bytes_limit`
+  - `bytes_reserved`
+  - `peak_bytes_reserved`
+  - `bytes_reservable_limit`
+  - `largest_free_block_bytes`
+  - `pool_bytes`
+  - `peak_pool_bytes`
+
+It should be constructed using the [`allocatorstats`](@ref) function.
+"""
 struct AllocatorStats
     num_allocs::Int64
     bytes_in_use::Int64
@@ -260,6 +278,14 @@ struct AllocatorStats
     peak_pool_bytes::Union{Nothing,Int64}
 end
 
+"""
+  allocatorstats([device])
+
+Return an [`AllocatorStats`](@ref) instance with information about the device specific allocator.
+
+!!! warning
+    This method is currently not implemented for the CPU device.
+"""
 function allocatorstats(
     device::Device=ClientGetDevice(default_backend[], default_device_idx[])
 )
