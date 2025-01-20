@@ -53,7 +53,13 @@ export default defineConfig({
       { text: "Home", link: "/" },
       { text: "Getting Started", link: "/introduction" },
       { text: "Benchmarks", link: "https://enzymead.github.io/Reactant.jl/benchmarks/" },
-      { text: "Tutorials", link: "/tutorials/" },
+      {
+        text: "Tutorials",
+        items: [
+          {text: "Overview", link: "/tutorials/"},
+          {text: "Profiling", link: "/tutorials/profiling"},
+        ],
+      },
       {
         text: "API",
         items: [
