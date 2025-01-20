@@ -399,10 +399,10 @@ function cubinFeatures()
         (90, 60),
     ])
     mver = major * 10 + minor
-    ptx = cuver_map[mver]
     if mver > 126
         return 86
     end
+    ptx = cuver_map[mver]
     return "+ptx$ptx"
 end
 
