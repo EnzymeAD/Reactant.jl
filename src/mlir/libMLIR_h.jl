@@ -6903,6 +6903,140 @@ function mlirGetDialectHandle__emitc__()
     @ccall mlir_c.mlirGetDialectHandle__emitc__()::MlirDialectHandle
 end
 
+@cenum MlirEmitCCmpPredicate::UInt64 begin
+    MLIR_EMITC_CMP_PREDICATE_EQ = 0x0000000000000000
+    MLIR_EMITC_CMP_PREDICATE_NE = 0x0000000000000001
+    MLIR_EMITC_CMP_PREDICATE_LT = 0x0000000000000002
+    MLIR_EMITC_CMP_PREDICATE_LE = 0x0000000000000003
+    MLIR_EMITC_CMP_PREDICATE_GT = 0x0000000000000004
+    MLIR_EMITC_CMP_PREDICATE_GE = 0x0000000000000005
+    MLIR_EMITC_CMP_PREDICATE_THREE_WAY = 0x0000000000000006
+end
+
+function mlirTypeIsAEmitCArrayType(type)
+    @ccall mlir_c.mlirTypeIsAEmitCArrayType(type::MlirType)::Bool
+end
+
+function mlirEmitCArrayTypeGetTypeID()
+    @ccall mlir_c.mlirEmitCArrayTypeGetTypeID()::MlirTypeID
+end
+
+function mlirEmitCArrayTypeGet(nDims, shape, elementType)
+    @ccall mlir_c.mlirEmitCArrayTypeGet(
+        nDims::intptr_t, shape::Ptr{Int64}, elementType::MlirType
+    )::MlirType
+end
+
+function mlirTypeIsAEmitCLValueType(type)
+    @ccall mlir_c.mlirTypeIsAEmitCLValueType(type::MlirType)::Bool
+end
+
+function mlirEmitCLValueTypeGetTypeID()
+    @ccall mlir_c.mlirEmitCLValueTypeGetTypeID()::MlirTypeID
+end
+
+function mlirEmitCLValueTypeGet(valueType)
+    @ccall mlir_c.mlirEmitCLValueTypeGet(valueType::MlirType)::MlirType
+end
+
+function mlirTypeIsAEmitCOpaqueType(type)
+    @ccall mlir_c.mlirTypeIsAEmitCOpaqueType(type::MlirType)::Bool
+end
+
+function mlirEmitCOpaqueTypeGetTypeID()
+    @ccall mlir_c.mlirEmitCOpaqueTypeGetTypeID()::MlirTypeID
+end
+
+function mlirEmitCOpaqueTypeGet(ctx, value)
+    @ccall mlir_c.mlirEmitCOpaqueTypeGet(ctx::MlirContext, value::MlirStringRef)::MlirType
+end
+
+function mlirTypeIsAEmitCPointerType(type)
+    @ccall mlir_c.mlirTypeIsAEmitCPointerType(type::MlirType)::Bool
+end
+
+function mlirEmitCPointerTypeGetTypeID()
+    @ccall mlir_c.mlirEmitCPointerTypeGetTypeID()::MlirTypeID
+end
+
+function mlirEmitCPointerTypeGet(pointee)
+    @ccall mlir_c.mlirEmitCPointerTypeGet(pointee::MlirType)::MlirType
+end
+
+function mlirTypeIsAEmitCPtrDiffTType(type)
+    @ccall mlir_c.mlirTypeIsAEmitCPtrDiffTType(type::MlirType)::Bool
+end
+
+function mlirEmitCPtrDiffTTypeGetTypeID()
+    @ccall mlir_c.mlirEmitCPtrDiffTTypeGetTypeID()::MlirTypeID
+end
+
+function mlirEmitCPtrDiffTTypeGet(ctx)
+    @ccall mlir_c.mlirEmitCPtrDiffTTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTypeIsAEmitCSignedSizeTType(type)
+    @ccall mlir_c.mlirTypeIsAEmitCSignedSizeTType(type::MlirType)::Bool
+end
+
+function mlirEmitCSignedSizeTTypeGetTypeID()
+    @ccall mlir_c.mlirEmitCSignedSizeTTypeGetTypeID()::MlirTypeID
+end
+
+function mlirEmitCSignedSizeTTypeGet(ctx)
+    @ccall mlir_c.mlirEmitCSignedSizeTTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTypeIsAEmitCSizeTType(type)
+    @ccall mlir_c.mlirTypeIsAEmitCSizeTType(type::MlirType)::Bool
+end
+
+function mlirEmitCSizeTTypeGetTypeID()
+    @ccall mlir_c.mlirEmitCSizeTTypeGetTypeID()::MlirTypeID
+end
+
+function mlirEmitCSizeTTypeGet(ctx)
+    @ccall mlir_c.mlirEmitCSizeTTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirAttributeIsAEmitCCmpPredicate(attr)
+    @ccall mlir_c.mlirAttributeIsAEmitCCmpPredicate(attr::MlirAttribute)::Bool
+end
+
+function mlirEmitCCmpPredicateAttrGet(ctx, val)
+    @ccall mlir_c.mlirEmitCCmpPredicateAttrGet(
+        ctx::MlirContext, val::MlirEmitCCmpPredicate
+    )::MlirAttribute
+end
+
+function mlirEmitCCmpPredicateAttrGetValue(attr)
+    @ccall mlir_c.mlirEmitCCmpPredicateAttrGetValue(
+        attr::MlirAttribute
+    )::MlirEmitCCmpPredicate
+end
+
+function mlirEmitCCmpPredicateAttrGetTypeID()
+    @ccall mlir_c.mlirEmitCCmpPredicateAttrGetTypeID()::MlirTypeID
+end
+
+function mlirAttributeIsAEmitCOpaque(attr)
+    @ccall mlir_c.mlirAttributeIsAEmitCOpaque(attr::MlirAttribute)::Bool
+end
+
+function mlirEmitCOpaqueAttrGet(ctx, value)
+    @ccall mlir_c.mlirEmitCOpaqueAttrGet(
+        ctx::MlirContext, value::MlirStringRef
+    )::MlirAttribute
+end
+
+function mlirEmitCOpaqueAttrGetValue(attr)
+    @ccall mlir_c.mlirEmitCOpaqueAttrGetValue(attr::MlirAttribute)::MlirStringRef
+end
+
+function mlirEmitCOpaqueAttrGetTypeID()
+    @ccall mlir_c.mlirEmitCOpaqueAttrGetTypeID()::MlirTypeID
+end
+
 function mlirGetDialectHandle__func__()
     @ccall mlir_c.mlirGetDialectHandle__func__()::MlirDialectHandle
 end
