@@ -400,11 +400,10 @@ function compile(job)
         if !isempty(errors)
             throw(GPUCompiler.InvalidIRError(job, errors))
         end
-        LLVM.strip_debuginfo!(mod)
+        # LLVM.strip_debuginfo!(mod)
         modstr = string(mod)
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
-
         mmod = MLIR.IR.Module(
             @ccall MLIR.API.mlir_c.ConvertLLVMStrToMLIR(
                 modstr::Cstring, MLIR.IR.context()::MLIR.API.MlirContext
