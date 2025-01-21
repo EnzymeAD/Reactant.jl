@@ -71,7 +71,11 @@ function GPUClient(
 )
     allowed_devices = try
         if haskey(ENV, "CUDA_VISIBLE_DEVICES")
-            unique!(parse.(Cint, strip.((split(ENV["CUDA_VISIBLE_DEVICES"])))))
+            # we can't pass in the device numbers directly, we just need to pass the count
+            count = length(
+                unique!(parse.(Cint, strip.(split(ENV["CUDA_VISIBLE_DEVICES"], ","))))
+            )
+            collect(Cint, 0:(count - 1))
         else
             # XXX: Is there a better way to get the number of GPUs?
             #      There is `cuDeviceGetCount` from libcuda, but not sure how to use it here
@@ -85,14 +89,13 @@ function GPUClient(
             collect(Cint, 0:(count - 1))
         end
     catch
-        Cint[]
+        Cint[0]
     end
 
-    num_allowed_devices === nothing &&
-        (num_allowed_devices = Cint(length(allowed_devices)) - 1)
-    @assert length(allowed_devices) > num_allowed_devices
+    num_allowed_devices === nothing && (num_allowed_devices = Cint(length(allowed_devices)))
+    @assert length(allowed_devices) ≥ num_allowed_devices
 
-    @debug "Allowed GPUs: $(allowed_devices[1:num_allowed_devices])"
+    @debug "Allowed GPUs: $(allowed_devices[1:(num_allowed_devices)])"
 
     GC.@preserve allowed_devices begin
         f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
