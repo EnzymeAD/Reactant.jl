@@ -16,6 +16,12 @@ function square!(x, y)
     return nothing
 end
 
+# GPUCompiler throws "Not implemented" errors on aarch64 before
+# <https://github.com/JuliaLang/julia/pull/57077> for some tests.
+const skip_tests =
+    Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch" &&
+    VERSION <= v"1.11.2"
+
 @static if !Sys.isapple()
     @testset "Square Kernel" begin
         oA = collect(1:1:64)
@@ -26,7 +32,9 @@ end
             @test all(Array(A) .≈ (oA .* oA .* 100))
             @test all(Array(B) .≈ (oA .* 100))
         else
-            @code_hlo optimize = :before_kernel square!(A, B)
+            @static if !skip_tests
+                @code_hlo optimize = :before_kernel square!(A, B)
+            end
         end
     end
 end
@@ -53,7 +61,9 @@ end
             @test all(Array(A) .≈ oA .* sin.(oA .* 100))
             @test all(Array(B) .≈ (oA .* 100))
         else
-            @code_hlo optimize = :before_kernel sin!(A, B)
+            @static if !skip_tests
+                @code_hlo optimize = :before_kernel sin!(A, B)
+            end
         end
     end
 end
@@ -79,7 +89,9 @@ end
             @jit smul!(A)
             @test all(Array(A) .≈ oA .* 15)
         else
-            @code_hlo optimize = :before_kernel smul!(A)
+            @static if !skip_tests
+                @code_hlo optimize = :before_kernel smul!(A)
+            end
         end
     end
 end
@@ -104,7 +116,9 @@ tuplef2(a) = @cuda threads = 1 tuplef2!((5, a))
             @jit tuplef(A)
             @test all(Array(A) .≈ 3)
         else
-            @code_hlo optimize = :before_kernel tuplef(A)
+            @static if !skip_tests
+                @code_hlo optimize = :before_kernel tuplef(A)
+            end
         end
 
         A = ConcreteRArray(fill(1))
@@ -120,7 +134,9 @@ tuplef2(a) = @cuda threads = 1 tuplef2!((5, a))
         @jit tuplef2(A)
         @test all(Array(A) .≈ 5)
     else
-        @code_hlo optimize = :before_kernel tuplef2(A)
+        @static if !skip_tests
+            @code_hlo optimize = :before_kernel tuplef2(A)
+        end
     end
 end
 
