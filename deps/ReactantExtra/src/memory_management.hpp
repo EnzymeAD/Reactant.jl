@@ -23,4 +23,14 @@ inline void destruct_or_release_if_shared(T* ptr) {
     else
         delete ptr;
 }
+
+template<typename T>
+std::shared_ptr<T> get_or_insert_shared(T* ptr) {
+    if (!reactant_contains_shared(ptr))
+        reactant::capture_shared(std::shared_ptr<T>(ptr));
+    return std::reinterpret_pointer_cast<T>(get_shared(ptr));
+}
+
+std::shared_ptr<void> get_shared(void* ptr);
+
 }
