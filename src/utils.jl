@@ -476,24 +476,6 @@ function temp1(f, args...)
     toscalar = false
     do_transpose = false
 
-    # code from `traced_call`
-    seen_cache = Reactant.OrderedIdDict()
-    make_tracer(
-        seen_cache,
-        args,
-        (), # we have to insert something here, but we remove it immediately below.
-        TracedTrack;
-        toscalar,
-        track_numbers=(), # TODO: track_numbers?
-    )
-    linear_args = Reactant.MLIR.IR.Value[]
-    for (k, v) in seen_cache
-        v isa TracedType || continue
-        push!(linear_args, v.mlir_data)
-        # make tracer inserted `()` into the path, here we remove it:
-        v.paths = v.paths[1:(end - 1)]
-    end
-
     seen = Dict()
     cache_key = []
     make_tracer(seen, (f, args...), cache_key, TracedToTypes)
@@ -508,10 +490,15 @@ function temp1(f, args...)
     # code from `make_mlir_fn`
     name = String(nameof(f))
     N = length(args)
-
-    seen_args, traced_args, linear_args = TracedUtils.prepare_args(
+    
+    _, traced_args, linear_args = TracedUtils.prepare_args(
         args, concretein, construct_function_without_args, toscalar
     )
+    
+    mlir_caller_args = Reactant.MLIR.IR.Value[]
+    for arg in linear_args
+        push!(mlir_caller_args, arg.mlir_data)
+    end
 
     mod, temp_func, fnbody, in_tys, sym_visibility = TracedUtils.placeholder_func(
         name,
@@ -525,19 +512,46 @@ function temp1(f, args...)
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
     MLIR.IR.activate!(fnbody)
-    return mod, temp_func, in_tys, fnbody, sym_visibility, traced_args, linear_args, name
+    
+    mlir_callee_args = Reactant.MLIR.IR.Value[]
+    for (i, arg) in enumerate(linear_args)
+        if construct_function_without_args
+            TracedUtils.set_mlir_data!(arg, TracedUtils.get_mlir_data(args[i]))
+            push!(mlir_callee_args, TracedUtils.get_mlir_data(args[i]))
+        else
+            raw_arg = MLIR.IR.argument(fnbody, i)
+            row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
+            TracedUtils.set_mlir_data!(arg, row_maj_arg)
+            push!(mlir_callee_args, row_maj_arg)
+        end
+    end
+    Core.println("##############################")
+    Core.println("CALLER ARGS: $mlir_caller_args")
+    Core.println("CALLEE ARGS: $mlir_callee_args")
+    Core.println("##############################")
+    return mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, linear_args, name
 end
 
+@inline get_traced_args_from_temp1((mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, linear_args, name)) = traced_args
+@inline call_splatted(f, args) = f(args...)
+
 function temp2(
-    result, (mod, temp_func, in_tys, fnbody, sym_visibility, traced_args, linear_args, name)
+    result, (mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, linear_args, name)
 )
     MLIR.IR.deactivate!(fnbody)
     concretein = false
     construct_function_without_args = false
-    no_args_in_result = false
+    no_args_in_result = true
     do_transpose = false
     return_dialect = :func
-
+    
+    mlir_args = Reactant.MLIR.IR.Value[]
+    for arg in linear_args
+        push!(mlir_args, arg.mlir_data)
+    end
+    
+    Core.println("BEFORE prepare_results")
+    Core.println(result)
     _, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
         result,
         traced_args,
@@ -546,7 +560,10 @@ function temp2(
         no_args_in_result,
         do_transpose,
     )
-
+    Core.println("AFTER prepare_results")
+    Core.println(traced_result)
+    Core.println("#################")
+    
     ret = TracedUtils.create_return!(
         fnbody,
         linear_results,
@@ -555,21 +572,11 @@ function temp2(
         do_transpose,
         return_dialect,
     )
-
-    final_func = TracedUtils.final_func!(
-        temp_func, mod, name, in_tys, out_tys, sym_visibility
-    )
-
-    # code from `traced_call`
-    mlir_args = Reactant.MLIR.IR.Value[]
-    for arg in linear_args
-        push!(mlir_args, arg.mlir_data)
-    end
-
+    
     call_op = MLIR.Dialects.func.call(
-        mlir_args; result_0=out_tys, callee=MLIR.IR.FlatSymbolRefAttribute(name)
+        mlir_caller_args; result_0=out_tys, callee=MLIR.IR.FlatSymbolRefAttribute(name)
     )
-
+    
     seen_results = Reactant.OrderedIdDict()
     traced_result = make_tracer(
         seen_results,
@@ -588,6 +595,11 @@ function temp2(
         v.paths = v.paths[1:(end - 1)]
         i += 1
     end
+
+    final_func = TracedUtils.final_func!(
+        temp_func, mod, name, in_tys, out_tys, sym_visibility
+    )
+
     return traced_result
 end
 
@@ -853,10 +865,18 @@ function call_with_reactant_generator(
         push!(overdubbed_code, Expr(:call, temp1, fn_args...))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         temp1_output = Core.SSAValue(length(overdubbed_code))
+        
+        push!(overdubbed_code, Expr(:call, get_traced_args_from_temp1, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        traced_args = Core.SSAValue(length(overdubbed_code))
+        
+        push!(overdubbed_code, Expr(:call, call_splatted, oc, traced_args))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+    else
+        push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
+        push!(overdubbed_codelocs, code_info.codelocs[1])        
     end
-
-    push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
-    push!(overdubbed_codelocs, code_info.codelocs[1])
+    
     ocres = Core.SSAValue(length(overdubbed_code))
 
     if TRACE_CALLS[]
