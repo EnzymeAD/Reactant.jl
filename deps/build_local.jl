@@ -80,16 +80,12 @@ end
 
 @info "Building JLL with backend $(build_backend)"
 
-bazel_cmd = try
-    run(Cmd(`bazelisk --version`))
+bazel_cmd = if !isnothing(Sys.which("bazelisk"))
     "bazelisk"
-catch
-    try
-        run(Cmd(`bazel --version`))
-        "bazel"
-    catch
-        error("Could not find `bazel` or `bazelisk` in PATH!")
-    end
+elseif !isnothing(Sys.which("bazel"))
+    "bazel"
+else
+    error("Could not find `bazel` or `bazelisk` in PATH!")
 end
 
 @info "Building JLL with $(bazel_cmd)"
