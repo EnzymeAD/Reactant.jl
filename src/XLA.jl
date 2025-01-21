@@ -88,8 +88,9 @@ function GPUClient(
         Cint[]
     end
 
-    num_allowed_devices === nothing && (num_allowed_devices = Cint(length(allowed_devices)))
-    @assert length(allowed_devices) ≥ num_allowed_devices
+    num_allowed_devices === nothing &&
+        (num_allowed_devices = Cint(length(allowed_devices)) - 1)
+    @assert length(allowed_devices) > num_allowed_devices
 
     @debug "Allowed GPUs: $(allowed_devices[1:num_allowed_devices])"
 
