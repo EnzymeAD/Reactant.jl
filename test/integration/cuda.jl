@@ -19,8 +19,8 @@ end
 # GPUCompiler throws "Not implemented" errors on aarch64 before
 # <https://github.com/JuliaLang/julia/pull/57077> for some tests.
 const skip_tests =
-    Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch" &&
-    VERSION <= v"1.11.2"
+    Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch64" &&
+    VERSION <= v"1.11.3"
 
 @static if !Sys.isapple()
     @testset "Square Kernel" begin
@@ -126,7 +126,9 @@ tuplef2(a) = @cuda threads = 1 tuplef2!((5, a))
             @jit tuplef2(A)
             @test all(Array(A) .≈ 5)
         else
-            @code_hlo optimize = :before_kernel tuplef2(A)
+            @static if !skip_tests
+                @code_hlo optimize = :before_kernel tuplef2(A)
+            end
         end
     end
     A = ConcreteRArray(fill(1))
@@ -162,7 +164,9 @@ end
             @jit aliased(a)
             @test all(Array(a) .== 9)
         else
-            @code_hlo optimize = :before_kernel aliased(a)
+            @static if !skip_tests
+                @code_hlo optimize = :before_kernel aliased(a)
+            end
         end
     end
 end
