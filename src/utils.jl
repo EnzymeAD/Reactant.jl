@@ -441,7 +441,8 @@ function safe_print(name, x)
     return ccall(:jl_, Cvoid, (Any,), name * " " * string(x))
 end
 
-const DEBUG_INTERP = Ref(false)
+const DEBUG_INTERP = Ref(true)
+const TRACE_CALLS = Ref(false)
 
 # Rewrite type unstable calls to recurse into call_with_reactant to ensure
 # they continue to use our interpreter. Reset the derived return type
@@ -467,6 +468,127 @@ function rewrite_insts!(ir, interp, guaranteed_error)
         end
     end
     return ir, any_changed
+end
+
+function temp1(f, args...)
+    concretein = false
+    construct_function_without_args = false
+    toscalar = false
+    do_transpose = false
+
+    # code from `traced_call`
+    seen_cache = Reactant.OrderedIdDict()
+    make_tracer(
+        seen_cache,
+        args,
+        (), # we have to insert something here, but we remove it immediately below.
+        TracedTrack;
+        toscalar,
+        track_numbers=(), # TODO: track_numbers?
+    )
+    linear_args = Reactant.MLIR.IR.Value[]
+    for (k, v) in seen_cache
+        v isa TracedType || continue
+        push!(linear_args, v.mlir_data)
+        # make tracer inserted `()` into the path, here we remove it:
+        v.paths = v.paths[1:(end - 1)]
+    end
+
+    seen = Dict()
+    cache_key = []
+    make_tracer(seen, (f, args...), cache_key, TracedToTypes)
+    cache = Reactant.Compiler.callcache()
+
+    # if haskey(cache, cache_key)
+    #     # cache lookup:
+    #     (; f_name, mlir_result_types, traced_result) = cache[cache_key]
+    # else
+    # end
+
+    # code from `make_mlir_fn`
+    name = String(nameof(f))
+    N = length(args)
+
+    seen_args, traced_args, linear_args = TracedUtils.prepare_args(
+        args, concretein, construct_function_without_args, toscalar
+    )
+
+    mod, temp_func, fnbody, in_tys, sym_visibility = TracedUtils.placeholder_func(
+        name,
+        linear_args,
+        toscalar,
+        do_transpose,
+        concretein,
+        construct_function_without_args,
+    )
+
+    # Explicitly don't use block! to avoid creating a closure, which creates
+    # both compile-time and relocatability issues
+    MLIR.IR.activate!(fnbody)
+    return mod, temp_func, in_tys, fnbody, sym_visibility, traced_args, linear_args, name
+end
+
+function temp2(
+    result, (mod, temp_func, in_tys, fnbody, sym_visibility, traced_args, linear_args, name)
+)
+    MLIR.IR.deactivate!(fnbody)
+    concretein = false
+    construct_function_without_args = false
+    no_args_in_result = false
+    do_transpose = false
+    return_dialect = :func
+
+    _, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
+        result,
+        traced_args,
+        concretein,
+        construct_function_without_args,
+        no_args_in_result,
+        do_transpose,
+    )
+
+    ret = TracedUtils.create_return!(
+        fnbody,
+        linear_results,
+        construct_function_without_args,
+        no_args_in_result,
+        do_transpose,
+        return_dialect,
+    )
+
+    final_func = TracedUtils.final_func!(
+        temp_func, mod, name, in_tys, out_tys, sym_visibility
+    )
+
+    # code from `traced_call`
+    mlir_args = Reactant.MLIR.IR.Value[]
+    for arg in linear_args
+        push!(mlir_args, arg.mlir_data)
+    end
+
+    call_op = MLIR.Dialects.func.call(
+        mlir_args; result_0=out_tys, callee=MLIR.IR.FlatSymbolRefAttribute(name)
+    )
+
+    seen_results = Reactant.OrderedIdDict()
+    traced_result = make_tracer(
+        seen_results,
+        traced_result,
+        (), # we have to insert something here, but we remove it immediately below.
+        TracedSetPath;
+        toscalar=false,
+        track_numbers=(),
+    )
+    i = 1
+    for (k, v) in seen_results
+        v isa TracedType || continue
+        # this mutates `traced_result`, which is what we want:
+        v.mlir_data = MLIR.IR.result(call_op, i)
+        # make tracer inserted `()` into the path, here we remove it:
+        v.paths = v.paths[1:(end - 1)]
+        i += 1
+    end
+    return traced_result
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -727,10 +849,21 @@ function call_with_reactant_generator(
         Core.SSAValue(length(overdubbed_code))
     end
 
+    if TRACE_CALLS[]
+        push!(overdubbed_code, Expr(:call, temp1, fn_args...))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        temp1_output = Core.SSAValue(length(overdubbed_code))
+    end
+
     push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
     push!(overdubbed_codelocs, code_info.codelocs[1])
-
     ocres = Core.SSAValue(length(overdubbed_code))
+
+    if TRACE_CALLS[]
+        push!(overdubbed_code, Expr(:call, temp2, ocres, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        # temp2_output = Core.SSAValue(length(overdubbed_code))
+    end
 
     if DEBUG_INTERP[]
         push!(overdubbed_code, Expr(:call, safe_print, "ocres", ocres))
