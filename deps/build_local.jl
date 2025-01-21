@@ -80,10 +80,20 @@ end
 
 @info "Building JLL with backend $(build_backend)"
 
+bazel_cmd = if !isnothing(Sys.which("bazelisk"))
+    "bazelisk"
+elseif !isnothing(Sys.which("bazel"))
+    "bazel"
+else
+    error("Could not find `bazel` or `bazelisk` in PATH!")
+end
+
+@info "Building JLL with $(bazel_cmd)"
+
 if isempty(arg)
     run(
         Cmd(
-            `bazel build -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
+            `$(bazel_cmd) build -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
             --repo_env HERMETIC_PYTHON_VERSION="3.10"
             --check_visibility=false --verbose_failures :libReactantExtra.so`;
             dir=source_dir,
@@ -92,7 +102,7 @@ if isempty(arg)
 else
     run(
         Cmd(
-            `bazel build $(arg) -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
+            `$(bazel_cmd) build $(arg) -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
             --repo_env=GCC_HOST_COMPILER_PATH=/usr/bin/gcc
             --repo_env=CC=/home/wmoses/llvms/llvm16-r/clang+llvm-16.0.2-x86_64-linux-gnu-ubuntu-22.04/bin/clang
             --repo_env HERMETIC_PYTHON_VERSION="3.10"

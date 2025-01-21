@@ -275,11 +275,15 @@ extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
 extern "C" PjRtClient *MakeGPUClient(int node_id, int num_nodes,
                                      int *allowed_devices,
                                      int num_allowed_devices,
+                                     double memory_fraction,
+                                     bool preallocate,
                                      const char *platform_name,
                                      const char **error) {
   GpuClientOptions options;
   // options.kv_store = "etcd";
   // options.allocator_config =
+  options.allocator_config.preallocate = preallocate;
+  options.allocator_config.memory_fraction = memory_fraction;
   options.node_id = node_id;
   options.num_nodes = num_nodes;
   options.allowed_devices =
