@@ -20,6 +20,10 @@ extern "C" bool reactant_contains_shared(void* ptr) {
     return captured_shared_ptr.find(ptr) != captured_shared_ptr.end();
 }
 
+std::shared_ptr<void> reactant::get_shared(void* ptr) {
+    return captured_shared_ptr[ptr];
+}
+
 extern "C" void reactant_generic_llvm_rtti_root_dtor(llvm::RTTIRoot* root) {
     reactant::destruct_or_release_if_shared(root);
 }
