@@ -66,54 +66,22 @@ function CPUClient(asynchronous=false, node_id=0, num_nodes=1; checkcount=true)
     return Client(client)
 end
 
-function GPUClient(
-    node_id=0, num_nodes=1, platform="gpu"; num_allowed_devices::Union{Cint,Nothing}=nothing
-)
-    allowed_devices = try
-        if haskey(ENV, "CUDA_VISIBLE_DEVICES")
-            # we can't pass in the device numbers directly, we just need to pass the count
-            count = length(
-                unique!(parse.(Cint, strip.(split(ENV["CUDA_VISIBLE_DEVICES"], ","))))
-            )
-            collect(Cint, 0:(count - 1))
-        else
-            # XXX: Is there a better way to get the number of GPUs?
-            #      There is `cuDeviceGetCount` from libcuda, but not sure how to use it here
-            count = parse(
-                Cint,
-                read(
-                    pipeline(`nvidia-smi --query-gpu=name --format=csv,noheader`, `wc -l`),
-                    String,
-                ),
-            )
-            collect(Cint, 0:(count - 1))
-        end
-    catch
-        Cint[0]
-    end
-
-    num_allowed_devices === nothing && (num_allowed_devices = Cint(length(allowed_devices)))
-    @assert length(allowed_devices) ≥ num_allowed_devices
-
-    @debug "Allowed GPUs: $(allowed_devices[1:(num_allowed_devices)])"
-
-    GC.@preserve allowed_devices begin
-        f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
-        refstr = Ref{Cstring}()
-        client = ccall(
-            f,
-            Ptr{Cvoid},
-            (Cint, Cint, Ptr{Cvoid}, Cint, Cdouble, Bool, Cstring, Ptr{Cstring}),
-            node_id,
-            num_nodes,
-            allowed_devices,
-            num_allowed_devices,
-            XLA_REACTANT_GPU_MEM_FRACTION[],
-            XLA_REACTANT_GPU_PREALLOCATE[],
-            platform,
-            refstr,
-        )
-    end
+function GPUClient(node_id=0, num_nodes=1, platform="gpu")
+    f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
+    refstr = Ref{Cstring}()
+    client = ccall(
+        f,
+        Ptr{Cvoid},
+        (Cint, Cint, Ptr{Cvoid}, Cint, Cdouble, Bool, Cstring, Ptr{Cstring}),
+        node_id,
+        num_nodes,
+        C_NULL,
+        0,
+        XLA_REACTANT_GPU_MEM_FRACTION[],
+        XLA_REACTANT_GPU_PREALLOCATE[],
+        platform,
+        refstr,
+    )
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
