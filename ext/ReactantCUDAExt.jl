@@ -770,7 +770,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
 )
     T = eltype(A)
     N = ndims(A)
-    if mode == Reactant.ArrayToConcrete && Reactant.is_reactant_primitive(T)
+    if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         return Reactant.ConcreteRArray{T,N}
     else
         TT = Reactant.traced_type_inner(T, seen, mode, track_numbers)
@@ -794,7 +794,7 @@ function Reactant.make_tracer(
     if haskey(seen, prev)
         return seen[prev]
     end
-    if mode == Reactant.ArrayToConcrete && Reactant.is_reactant_primitive(eltype(RT))
+    if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
         return seen[prev] = Reactant.ConcreteRArray(Array(prev))
     end
     TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers)
