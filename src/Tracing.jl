@@ -84,7 +84,7 @@ Base.@nospecializeinfer function traced_type_inner(
 
     subParms = []
     for (i, SST) in enumerate(T.parameters)
-        if wrapped_carray && i == 1 && SST isa Type && is_reactant_primitive(SST)
+        if wrapped_carray && i == 1 && SST isa Type && SST <: ReactantPrimitive
             TrT = traced_type_inner(ConcreteRNumber{SST}, seen, mode, track_numbers)
             push!(subParms, TrT)
         elseif wrapped_tracedarray && i == 1 && SST isa Type && SST <: TracedRNumber
@@ -161,17 +161,15 @@ for T in (
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:Number}),
+    @nospecialize(T::Type{<:ReactantPrimitive}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type)
 )
-    if is_reactant_primitive(T)
-        if Mode == ArrayToConcrete && T <: track_numbers
-            return ConcreteRNumber{T}
-        elseif (mode == NoStopTracedTrack || mode == TracedTrack) && T <: track_numbers
-            return TracedRNumber{T}
-        end
+    if Mode == ArrayToConcrete && T <: track_numbers
+        return ConcreteRNumber{T}
+    elseif (mode == NoStopTracedTrack || mode == TracedTrack) && T <: track_numbers
+        return TracedRNumber{T}
     end
     return T
 end
@@ -394,7 +392,7 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     T = eltype(A)
     N = ndims(A)
-    if mode == ArrayToConcrete && is_reactant_primitive(T)
+    if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
         return ConcreteRArray{T,N}
     else
         return Array{traced_type_inner(T, seen, mode, track_numbers),N}
@@ -903,7 +901,7 @@ function make_tracer(
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
-    if mode == ArrayToConcrete && is_reactant_primitive(eltype(RT))
+    if mode == ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
         return seen[prev] = ConcreteRArray(prev)
     end
     TT = traced_type(eltype(RT), Val(mode), track_numbers)
@@ -994,21 +992,17 @@ end
     @nospecialize(x::ConcreteRArray), @nospecialize(track_numbers::Type)
 ) = x
 @inline function to_rarray_internal(
-    @nospecialize(x::Array{T}), @nospecialize(track_numbers::Type)
-) where {T}
-    is_reactant_primitive(T) && return ConcreteRArray(x)
-    return @invoke to_rarray_internal(x::Any, track_numbers::Type)
+    @nospecialize(x::Array{<:ReactantPrimitive}), @nospecialize(track_numbers::Type)
+)
+    return ConcreteRArray(x)
 end
 
 @inline to_rarray_internal(
     @nospecialize(x::ConcreteRNumber), @nospecialize(track_numbers::Type)
 ) = x
 @inline function to_rarray_internal(
-    @nospecialize(x::Number), @nospecialize(track_numbers::Type)
+    @nospecialize(x::ReactantPrimitive), @nospecialize(track_numbers::Type)
 )
-    if is_reactant_primitive(typeof(x))
-        typeof(x) <: track_numbers && return ConcreteRNumber(x)
-        return x
-    end
-    return @invoke to_rarray_internal(x::Any, track_numbers::Type)
+    typeof(x) <: track_numbers && return ConcreteRNumber(x)
+    return x
 end

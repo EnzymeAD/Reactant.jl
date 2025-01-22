@@ -18,55 +18,9 @@ using Enzyme
 
 struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
-@static if isdefined(Core, :BFloat16)
-    const ReactantFloat = Union{Float16,Core.BFloat16,Float32,Float64}
-else
-    const ReactantFloat = Union{Float16,Float32,Float64}
-end
+include("PrimitiveTypes.jl")
 
-@static if isdefined(Core, :BFloat16)
-    const ReactantComplexFloat = Union{
-        Complex{Float16},Complex{Core.BFloat16},Complex{Float32},Complex{Float64}
-    }
-else
-    const ReactantComplexFloat = Union{Complex{Float16},Complex{Float32},Complex{Float64}}
-end
-
-const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
-
-const ReactantComplexInt = Union{
-    Complex{Int8},
-    Complex{UInt8},
-    Complex{Int16},
-    Complex{UInt16},
-    Complex{Int32},
-    Complex{UInt32},
-    Complex{Int64},
-    Complex{UInt64},
-    Complex{Int128},
-    Complex{UInt128},
-}
-
-const ReactantFloatInt = Union{
-    Base.uniontypes(ReactantInt)...,Base.uniontypes(ReactantFloat)...
-}
-
-const ReactantPrimitive = Union{
-    Bool,
-    Base.uniontypes(ReactantFloatInt)...,
-    Base.uniontypes(ReactantComplexInt)...,
-    Base.uniontypes(ReactantComplexFloat)...,
-}
-
-"""
-    is_reactant_primitive(::Type{T})
-
-Returns `true` if `T` is a primitive type supported by Reactant.
-"""
-is_reactant_primitive(::Type{<:ReactantPrimitive}) = true
-is_reactant_primitive(::Type) = false
-
-abstract type RNumber{T} <: Number end
+abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
 abstract type RArray{T,N} <: AbstractArray{T,N} end
 
@@ -105,7 +59,6 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     function TracedRNumber{T}(
         paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
     ) where {T}
-        @assert is_reactant_primitive(T) "$(T) is not a primitive type supported by Reactant."
         if !isnothing(mlir_data)
             @assert size(MLIR.IR.type(mlir_data)) == ()
         end
@@ -123,7 +76,6 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     function TracedRArray{T,N}(
         paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
     ) where {T,N}
-        @assert is_reactant_primitive(T) "$(T) is not a primitive type supported by Reactant."
         shape = Tuple(shape)
         if !isnothing(mlir_data)
             @assert size(MLIR.IR.type(mlir_data)) == shape "Expected: $(shape), got: $(size(MLIR.IR.type(mlir_data)))"
@@ -167,11 +119,6 @@ Adapt.parent_type(::Type{XLAArray{T,N}}) where {T,N} = XLAArray{T,N}
 
 mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
-
-    function ConcreteRNumber{T}(data::XLA.AsyncBuffer) where {T}
-        @assert is_reactant_primitive(T) "$(T) is not a primitive type supported by Reactant."
-        return new{T}(data)
-    end
 end
 
 @leaf ConcreteRNumber
@@ -179,11 +126,6 @@ end
 mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     data::XLA.AsyncBuffer
     shape::NTuple{N,Int}
-
-    function ConcreteRArray{T,N}(data::XLA.AsyncBuffer, shape::NTuple{N,Int}) where {T,N}
-        @assert is_reactant_primitive(T) "$(T) is not a primitive type supported by Reactant."
-        return new{T,N}(data, shape)
-    end
 end
 
 @leaf ConcreteRArray
