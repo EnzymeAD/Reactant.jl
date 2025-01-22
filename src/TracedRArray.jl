@@ -7,7 +7,6 @@ using ..Reactant:
     Reactant,
     TracedRArray,
     TracedRNumber,
-    ReactantPrimitive,
     WrappedTracedRArray,
     AnyTracedRArray,
     AnyTracedRVector,
@@ -16,7 +15,8 @@ using ..Reactant:
     ancestor,
     allowscalar,
     aos_to_soa,
-    unwrapped_eltype
+    unwrapped_eltype,
+    is_reactant_primitive
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
 
 using ReactantCore: ReactantCore
@@ -477,14 +477,16 @@ end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
-) where {T<:ReactantPrimitive,N}
+) where {T,N}
+    @assert is_reactant_primitive(T) "$(T) is not a primitive type supported by Reactant."
     @assert N isa Int
     return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
 end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
-) where {T<:ReactantPrimitive,N}
+) where {T,N}
+    @assert is_reactant_primitive(T) "$(T) is not a primitive type supported by Reactant."
     @assert N isa Int
     return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
 end
@@ -504,7 +506,7 @@ end
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
-    fn = if bc.f isa Type && bc.f <: ReactantPrimitive
+    fn = if bc.f isa Type && is_reactant_primitive(bc.f)
         TracedUtils.TypeCast{bc.f}()
     else
         bc.f

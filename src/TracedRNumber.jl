@@ -1,14 +1,7 @@
 module TracedRNumberOverrides
 
 using ..Reactant:
-    Reactant,
-    TracedRNumber,
-    TracedRArray,
-    ReactantPrimitive,
-    TracedUtils,
-    Ops,
-    MLIR,
-    unwrapped_eltype
+    Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
 using ReactantCore
 
 ReactantCore.is_traced(::TracedRNumber) = true

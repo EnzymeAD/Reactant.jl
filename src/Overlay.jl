@@ -53,7 +53,7 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dims::Dims
         ) where {T}
-            if T <: ReactantPrimitive
+            if is_reactant_primitive(T)
                 return TracedRandom.$(overload_randfun)(rng, T, dims)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
@@ -70,7 +70,7 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...
         ) where {T}
-            if T <: ReactantPrimitive
+            if is_reactant_primitive(T)
                 return TracedRandom.$(overload_randfun)(rng, T, dim1, dims...)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
@@ -82,7 +82,7 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}=Float64
         ) where {T}
-            if T <: ReactantPrimitive
+            if is_reactant_primitive(T)
                 return TracedRandom.$(overload_randfun)(rng, T)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
