@@ -123,6 +123,12 @@ macro trace(expr)
         end
     end
     Meta.isexpr(expr, :call) && return esc(trace_call(__module__, expr))
+    if Meta.isexpr(expr, :(.), 2) && Meta.isexpr(expr.args[2], :tuple)
+        fname = :($(Base.Broadcast.BroadcastFunction)($(expr.args[1])))
+        args = only(expr.args[2:end]).args
+        call = Expr(:call, fname, args...)
+        return esc(trace_call(__module__, call))
+    end
     Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
     Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
@@ -359,14 +365,29 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     end
 end
 
-function trace_call(mod, expr)
-    f = expr.args[1]
-    args = expr.args[2:end]
+function correct_maybe_bcast_call(fname)
+    startswith(string(fname), '.') || return false, fname, fname
+    return true, Symbol(string(fname)[2:end]), fname
+end
+
+function trace_call(mod, call)
+    bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
+    f = if bcast
+        quote
+            if isdefined(mod, $(Meta.quot(fname_full)))
+                $(fname_full)
+            else
+                Base.Broadcast.BroadcastFunction($(fname))
+            end
+        end
+    else
+        :($(fname))
+    end
     return quote
         if $(within_compile)()
-            $(traced_call)($f, $(args...))
+            $(traced_call)($f, $(call.args[2:end]...))
         else
-            $(expr)
+            $(call)
         end
     end
 end

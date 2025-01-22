@@ -19,6 +19,8 @@ import ..Reactant:
     ancestor,
     TracedType
 
+import ..ReactantCore: correct_maybe_bcast_call
+
 @inline function traced_getfield(@nospecialize(obj), field)
     return Base.getfield(obj, field)
 end
@@ -602,10 +604,6 @@ function compile_call_expr(mod, compiler, options, args...)
     (; compiled=compiled_symbol, args=args_symbol)
 end
 
-function correct_maybe_bcast_call(fname)
-    startswith(string(fname), '.') || return false, fname, fname
-    return true, Symbol(string(fname)[2:end]), fname
-end
 
 """
     codegen_flatten!
