@@ -14,8 +14,8 @@ using ..Reactant:
     AnyTracedRArray,
     MissingTracedValue,
     OrderedIdDict,
-    ReactantPrimitive,
-    Ops
+    Ops,
+    is_reactant_primitive
 using ReactantCore: MissingTracedValue
 
 materialize_traced_array(x::TracedRArray) = x
@@ -283,15 +283,21 @@ function __take_region(compiled_fn)
     return region
 end
 
-elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
+elem_apply(::Type{T}, x::TracedRArray{T}) where {T} = x
 
-struct TypeCast{T<:ReactantPrimitive} <: Function end
+struct TypeCast{T} <: Function
+    function TypeCast{T}() where {T}
+        @assert is_reactant_primitive(T) "$(T) is not a primitive type supported by Reactant."
+        return new{T}()
+    end
+end
 
 function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
     return TracedUtils.promote_to(TracedRNumber{T}, x)
 end
 
-function elem_apply(::Type{T}, x::TracedRArray) where {T<:ReactantPrimitive}
+function elem_apply(::Type{T}, x::TracedRArray) where {T}
+    @assert is_reactant_primitive(T) "$(T) is not a primitive type supported by Reactant."
     # Special Path to prevent going down a despecialized path
     return elem_apply(TypeCast{T}(), x)
 end
