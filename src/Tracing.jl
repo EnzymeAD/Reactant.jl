@@ -359,8 +359,14 @@ Base.@nospecializeinfer function traced_type_inner(
             else
                 return TracedRArray{T,length(tobatch)}
             end
+        elseif batchmode == BatchArray
+            if tobatch === nothing
+                error("For scalars with batchmode=BatchArray, tobatch must be specified")
+            else
+                TracedRArray{T,length(tobatch)}
+            end
         else
-            error("Cannot BatchArray on a scalar")
+            error("Unknown batchmode $batchmode")
         end
     else
         throw("$(TracedRNumber{T}) cannot be made concrete in mode $mode")
@@ -817,8 +823,14 @@ function make_tracer(
             else
                 TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
             end
+        elseif batchmode == BatchArray
+            if tobatch === nothing
+                error("For scalars with batchmode=BatchArray, tobatch must be specified")
+            else
+                TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+            end
         else
-            error("Cannot BatchArray on a scalar")
+            error("Unknown batchmode $batchmode")
         end
         seen[prev] = res
         return res
