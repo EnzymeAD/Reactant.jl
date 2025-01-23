@@ -353,7 +353,6 @@ function compile(job)
         end
         entryname = LLVM.name(meta.entry)
 
-        GPUCompiler.optimize_module!(job, mod)
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
         LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
