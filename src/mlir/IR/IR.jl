@@ -1,5 +1,6 @@
 module IR
 
+using ..Reactant
 using ..API
 
 # do not export `Type`, as it is already defined in Core

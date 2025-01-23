@@ -531,7 +531,7 @@ Base.@assume_effects :total @inline function traced_type(
         cache = Dict{Type,Type}()
         traced_type_cache[cache_key] = cache
     end
-    return res1 = traced_type_inner(T, cache, mode, track_numbers)
+    return traced_type_inner(T, cache, mode, track_numbers)
 end
 
 abstract type TracedTypeException <: Exception end
@@ -996,6 +996,14 @@ end
 )
     return ConcreteRArray(x)
 end
+@inline function to_rarray_internal(
+    @nospecialize(x::Array{T}), @nospecialize(track_numbers::Type)
+) where {T<:Number}
+    if reactant_primitive(T) !== nothing
+        return ConcreteRArray(to_reactant_primitive.(x))
+    end
+    return @invoke to_rarray_internal(x::Any, track_numbers::Type)
+end
 
 @inline to_rarray_internal(
     @nospecialize(x::ConcreteRNumber), @nospecialize(track_numbers::Type)
@@ -1005,4 +1013,12 @@ end
 )
     typeof(x) <: track_numbers && return ConcreteRNumber(x)
     return x
+end
+@inline function to_rarray_internal(
+    @nospecialize(x::Number), @nospecialize(track_numbers::Type)
+)
+    if reactant_primitive(typeof(x)) !== nothing
+        return ConcreteRArray(to_reactant_primitive(x))
+    end
+    return @invoke to_rarray_internal(x::Any, track_numbers::Type)
 end

@@ -1,5 +1,6 @@
 module XLA
 
+import ..Reactant
 import ...MLIR
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
@@ -355,6 +356,12 @@ end
 
 @inline primitive_type(::Type{Float16}) = 10
 @inline primitive_type(::Type{Float32}) = 11
+
+@inline primitive_type(::Type{Reactant.F8E5M2}) = 19
+@inline primitive_type(::Type{Reactant.F8E4M3FN}) = 20
+@inline primitive_type(::Type{Reactant.F8E4M3B11FNUZ}) = 23
+@inline primitive_type(::Type{Reactant.F8E5M2FNUZ}) = 24
+@inline primitive_type(::Type{Reactant.F8E4M3FNUZ}) = 25
 
 @static if isdefined(Core, :BFloat16)
     @inline primitive_type(::Type{Core.BFloat16}) = 16

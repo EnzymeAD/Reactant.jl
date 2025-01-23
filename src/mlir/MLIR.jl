@@ -1,5 +1,7 @@
 module MLIR
 
+using ..Reactant
+
 module API
     using CEnum
     using Preferences
