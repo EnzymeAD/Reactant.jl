@@ -16,7 +16,7 @@ using ..Reactant:
     OrderedIdDict,
     ReactantPrimitive,
     Ops
-using ReactantCore: MissingTracedValue
+using ReactantCore: MissingTracedValue, is_traced
 
 materialize_traced_array(x::TracedRArray) = x
 
@@ -63,10 +63,30 @@ end
 function get_ancestor_indices(
     x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, indices...
 ) where {T,N,M}
-    cartesian_indices = CartesianIndex.(indices...)
-    linear_indices = LinearIndices(size(x))[cartesian_indices]
-    parent_cartesian_indices = CartesianIndices(size(parent(x)))[linear_indices]
-    return (parent_cartesian_indices,)
+    @assert length(indices) == N "Expected $N indices, got $(length(indices))"
+    if any(is_traced, indices)
+        # XXX: scalars are not supported
+        final_size = Vector{Int64}(undef, N)
+        for (i, idx) in enumerate(indices)
+            @assert ndims(idx) == 1 "Unsupported feature. Please file an issue."
+            final_size[i] = length(idx)
+        end
+        @show Base.strides(x)
+        linear_indices = mapreduce(+, enumerate(indices)) do (i, idx)
+            Base.stride(x, i) .* (Ops.broadcast_in_dim(idx, Int64[i], final_size) .- 1) .+ 1
+        end
+        parent_linear_indices_all = collect(LinearIndices(size(parent(x))))
+        parent_linear_indices = TracedUtils.promote_to(
+            TracedRArray{Int64,ndims(parent_linear_indices_all)}, parent_linear_indices_all
+        )[linear_indices]
+        return (parent_linear_indices,)
+    else
+        # Have this as a separate code-path since we can generate non-dynamic indexing
+        cartesian_indices = CartesianIndex.(Iterators.product(indices...))
+        linear_indices = LinearIndices(size(x))[cartesian_indices]
+        parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
+        return (parent_linear_indices,)
+    end
 end
 
 function set_mlir_data!(

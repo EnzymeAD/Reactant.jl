@@ -26,6 +26,8 @@ ReactantCore.is_traced(::TracedRArray) = true
 
 Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
 
+Base.IndexStyle(::Type{<:TracedRArray}) = Base.IndexLinear()
+
 function Base.convert(::Type{TracedRArray}, x::AnyTracedRArray)
     return Base.convert(TracedRArray{unwrapped_eltype(x),ndims(x)}, x)
 end
@@ -125,9 +127,14 @@ function Base.getindex(a::TracedRArray{T,N}, indices) where {T,N}
     if !(indices isa TracedRArray)
         indices = collect(indices)
         eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
-        indices = TracedUtils.promote_to(TracedRArray{Int,1}, indices)
+        indices = TracedUtils.promote_to(TracedRArray{Int,ndims(indices)}, indices)
     end
-    return Ops.gather_getindex(a, scalar_index_to_cartesian(indices, size(a)))
+    return materialize_traced_array(
+        reshape(
+            Ops.gather_getindex(a, scalar_index_to_cartesian(vec(indices), size(a))),
+            size(indices),
+        ),
+    )
 end
 
 Base.getindex(a::TracedRArray{T,N}, ::Colon) where {T,N} = materialize_traced_array(vec(a))
