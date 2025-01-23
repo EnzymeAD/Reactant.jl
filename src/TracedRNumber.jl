@@ -12,7 +12,7 @@ Base.zero(::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{T
 Base.one(::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{T}, one(T))
 Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
 
-function Base.eps(::Type{TracedRNumber{T}}) where {T}
+function Base.eps(::Type{<:TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 end
 
@@ -36,24 +36,26 @@ end
 
 Base.only(A::TracedRNumber{T}) where {T} = A
 
-function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRNumber{S}}) where {T,S}
+function Base.promote_rule(
+    ::Type{<:TracedRNumber{T}}, ::Type{<:TracedRNumber{S}}
+) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
 
 # Bool has special promotion rules in Base
-function Base.promote_rule(::Type{Bool}, ::Type{TracedRNumber{T}}) where {T}
+function Base.promote_rule(::Type{Bool}, ::Type{<:TracedRNumber{T}}) where {T}
     return TracedRNumber{T}
 end
 
-function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{Bool}) where {T}
+function Base.promote_rule(::Type{<:TracedRNumber{T}}, ::Type{Bool}) where {T}
     return TracedRNumber{T}
 end
 
-function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
+function Base.promote_rule(::Type{T}, ::Type{<:TracedRNumber{S}}) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
 
-function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{S}) where {T,S}
+function Base.promote_rule(::Type{<:TracedRNumber{T}}, ::Type{S}) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
 
@@ -67,7 +69,7 @@ function TracedRNumber{T}(x::Number) where {T}
     return TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(T)}, x)
 end
 
-function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
+function TracedUtils.promote_to(::Type{<:TracedRNumber{T}}, rhs) where {T}
     if rhs isa TracedRNumber
         rhs isa TracedRNumber{T} && return rhs
         return Ops.convert(TracedRNumber{T}, rhs)

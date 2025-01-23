@@ -196,7 +196,7 @@ Type(::Core.Type{Float64}; context::Context=context()) = Type(API.mlirF64TypeGet
 
 Creates a f8e5m2 type in the given context. The type is owned by the context.
 """
-function Type(::Core.Type{Reactant.F8E5M2}; context::Context=context())
+function Type(::Core.Type{<:Reactant.F8E5M2}; context::Context=context())
     return Type(API.mlirFloat8E5M2TypeGet(context))
 end
 
@@ -205,7 +205,7 @@ end
 
 Creates a f8e4m3fn type in the given context. The type is owned by the context.
 """
-function Type(::Core.Type{Reactant.F8E4M3FN}; context::Context=context())
+function Type(::Core.Type{<:Reactant.F8E4M3FN}; context::Context=context())
     return Type(API.mlirFloat8E4M3FNTypeGet(context))
 end
 
@@ -214,7 +214,7 @@ end
 
 Creates a f8e4m3b11fnuz type in the given context. The type is owned by the context.
 """
-function Type(::Core.Type{Reactant.F8E4M3B11FNUZ}; context::Context=context())
+function Type(::Core.Type{<:Reactant.F8E4M3B11FNUZ}; context::Context=context())
     return Type(API.mlirFloat8E4M3B11FNUZTypeGet(context))
 end
 
@@ -223,7 +223,7 @@ end
 
 Creates a f8e5m2fnuz type in the given context. The type is owned by the context.
 """
-function Type(::Core.Type{Reactant.F8E5M2FNUZ}; context::Context=context())
+function Type(::Core.Type{<:Reactant.F8E5M2FNUZ}; context::Context=context())
     return Type(API.mlirFloat8E5M2FNUZTypeGet(context))
 end
 
@@ -232,7 +232,7 @@ end
 
 Creates a f8e4m3fnuz type in the given context. The type is owned by the context.
 """
-function Type(::Core.Type{Reactant.F8E4M3FNUZ}; context::Context=context())
+function Type(::Core.Type{<:Reactant.F8E4M3FNUZ}; context::Context=context())
     return Type(API.mlirFloat8E4M3FNTypeGet(context))
 end
 
