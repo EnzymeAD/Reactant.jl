@@ -27,7 +27,7 @@ ReactantCore.is_traced(::TracedRArray) = true
 Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
 
 function Base.convert(::Type{TracedRArray}, x::AbstractArray)
-    Base.convert(TracedRArray{eltype(x), ndims(x)})
+    return Base.convert(TracedRArray{eltype(x),ndims(x)})
 end
 
 function Base.convert(::Type{TracedRArray{T,N}}, x::AbstractArray) where {T,N}
