@@ -26,6 +26,14 @@ ReactantCore.is_traced(::TracedRArray) = true
 
 Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
 
+function Base.convert(::Type{TracedRArray}, x::AnyTracedRArray)
+    return Base.convert(TracedRArray{unwrapped_eltype(x),ndims(x)}, x)
+end
+
+function Base.convert(::Type{TracedRArray}, x::AbstractArray)
+    return Base.convert(TracedRArray{eltype(x),ndims(x)}, x)
+end
+
 function Base.convert(::Type{TracedRArray{T,N}}, x::AbstractArray) where {T,N}
     @assert ndims(x) == N
     if x isa TracedRArray
