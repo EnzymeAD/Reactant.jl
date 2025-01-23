@@ -1,29 +1,32 @@
 # These only exist for the purpose of lowering. Since `ReactantPrimitive` is a fixed set of
 # types, users can use these to convert their types to the primitive types supported by
 # Reactant.
-struct F8E5M2{T} <: AbstractFloat
-    val::T
-end
+for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
+    @eval begin
+        primitive type $(T) <: AbstractFloat 8 end
 
-struct F8E4M3FN{T} <: AbstractFloat
-    val::T
-end
+        Base.promote_rule(::Type{$(T)}, ::Type{Float16}) = Float16
+        Base.promote_rule(::Type{Float16}, ::Type{$(T)}) = Float16
 
-struct F8E4M3B11FNUZ{T} <: AbstractFloat
-    val::T
-end
+        Base.promote_rule(::Type{$(T)}, ::Type{Float32}) = Float32
+        Base.promote_rule(::Type{Float32}, ::Type{$(T)}) = Float32
 
-struct F8E5M2FNUZ{T} <: AbstractFloat
-    val::T
-end
+        Base.promote_rule(::Type{$(T)}, ::Type{Float64}) = Float64
+        Base.promote_rule(::Type{Float64}, ::Type{$(T)}) = Float64
 
-struct F8E4M3FNUZ{T} <: AbstractFloat
-    val::T
-end
+        Base.promote_rule(::Type{$(T)}, ::Type{<:Integer}) = $(T)
+        Base.promote_rule(::Type{<:Integer}, ::Type{$(T)}) = $(T)
 
-# TODO: Quantized types
+        @static if isdefined(Core, :BFloat16)
+            Base.promote_rule(::Type{$(T)}, ::Type{Core.BFloat16}) = Core.BFloat16
+            Base.promote_rule(::Type{Core.BFloat16}, ::Type{$(T)}) = Core.BFloat16
+        end
+    end
+end
 
 const ReactantFloat8 = Union{F8E5M2,F8E4M3FN,F8E4M3B11FNUZ,F8E5M2FNUZ,F8E4M3FNUZ}
+
+# TODO: Quantized types
 
 @static if isdefined(Core, :BFloat16)
     const ReactantFloat = Union{
@@ -37,18 +40,7 @@ const ReactantComplexFloat = Union{[Complex{T} for T in Base.uniontypes(Reactant
 
 const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
 
-const ReactantComplexInt = Union{
-    Complex{Int8},
-    Complex{UInt8},
-    Complex{Int16},
-    Complex{UInt16},
-    Complex{Int32},
-    Complex{UInt32},
-    Complex{Int64},
-    Complex{UInt64},
-    Complex{Int128},
-    Complex{UInt128},
-}
+const ReactantComplexInt = Union{[Complex{T} for T in Base.uniontypes(ReactantInt)]...}
 
 const ReactantFloatInt = Union{
     Base.uniontypes(ReactantInt)...,Base.uniontypes(ReactantFloat)...
@@ -61,14 +53,10 @@ const ReactantPrimitive = Union{
     Base.uniontypes(ReactantComplexFloat)...,
 }
 
-"""
-    to_reactant_primitive(val)
-
-Constructs a Reactant primitive from the given value. Returns the Reactant primitive and a
-function that can be used to convert the value back to the original type.
-"""
-to_reactant_primitive(::T) where {T} = nothing, nothing
+to_reactant_primitive(v::T) where {T} = reinterpret(reactant_primitive(T), v)
+reactant_primitive(::Type{T}) where {T} = nothing
 
 for T in Base.uniontypes(ReactantPrimitive)
-    @eval to_reactant_primitive(val::$T) = val, identity
+    @eval to_reactant_primitive(val::$T) = val
+    @eval reactant_primitive(::Type{$T}) = $T
 end
