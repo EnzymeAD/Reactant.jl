@@ -58,7 +58,6 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/GCC_VERSION/x86_64-linux-musl",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/GCC_VERSION/backward",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include",
-        "/opt/x86_64-linux-musl/include/x86_64-alpine-linux-musl/c++/v1",
         "/opt/x86_64-linux-musl/bin/../include/x86_64-unknown-linux-musl/c++/v1",
         "/opt/x86_64-linux-musl/bin/../include/c++/v1",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/sys-root/usr/include",
@@ -158,7 +157,6 @@ cc_toolchain_config(
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
-	"/opt/x86_64-linux-musl/include/x86_64-alpine-linux-musl/c++/v1",
     ],
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
@@ -269,7 +267,6 @@ cc_toolchain_config(
         "/usr/include",
         "/usr/include/c++/11",
         "/usr/include/x86_64-linux-gnu/c++/11",
-        "/opt/x86_64-linux-musl/include/x86_64-alpine-linux-musl/c++/v1",
     ],
     dbg_compile_flags = ["-g",
         "-I/usr/include/c++/11",
