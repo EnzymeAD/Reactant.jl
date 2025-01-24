@@ -392,8 +392,8 @@ function Base.mapreduce(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location(), MLIR.IR.Location()])
 
     args = (
-        TracedRNumber{op_in_T}((), MLIR.IR.argument(fnbody, 1)),
-        TracedRNumber{op_in_T}((), MLIR.IR.argument(fnbody, 2)),
+        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 1)),
+        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 2)),
     )
 
     resty = MLIR.IR.block!(fnbody) do

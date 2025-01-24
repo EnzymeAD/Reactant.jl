@@ -5,25 +5,37 @@
 # Reactant.
 for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
     @eval begin
-        struct $(T){inT} <: AbstractFloat
-            val::inT
-        end
+        primitive type $(T) <: AbstractFloat 8 end
 
-        Base.promote_rule(::Type{<:$(T)}, ::Type{Float16}) = Float16
-        Base.promote_rule(::Type{Float16}, ::Type{<:$(T)}) = Float16
+        Base.promote_rule(::Type{$(T)}, ::Type{Float16}) = Float16
+        Base.promote_rule(::Type{Float16}, ::Type{$(T)}) = Float16
 
-        Base.promote_rule(::Type{<:$(T)}, ::Type{Float32}) = Float32
-        Base.promote_rule(::Type{Float32}, ::Type{<:$(T)}) = Float32
+        Base.promote_rule(::Type{$(T)}, ::Type{Float32}) = Float32
+        Base.promote_rule(::Type{Float32}, ::Type{$(T)}) = Float32
 
-        Base.promote_rule(::Type{<:$(T)}, ::Type{Float64}) = Float64
-        Base.promote_rule(::Type{Float64}, ::Type{<:$(T)}) = Float64
+        Base.promote_rule(::Type{$(T)}, ::Type{Float64}) = Float64
+        Base.promote_rule(::Type{Float64}, ::Type{$(T)}) = Float64
 
-        Base.promote_rule(::Type{<:$(T){inT}}, ::Type{<:Integer}) where {inT} = $(T){inT}
-        Base.promote_rule(::Type{<:Integer}, ::Type{<:$(T){inT}}) where {inT} = $(T){inT}
+        Base.promote_rule(::Type{$(T)}, ::Type{<:Integer}) = $(T)
+        Base.promote_rule(::Type{<:Integer}, ::Type{$(T)}) = $(T)
 
         @static if isdefined(Core, :BFloat16)
-            Base.promote_rule(::Type{<:$(T)}, ::Type{Core.BFloat16}) = Core.BFloat16
-            Base.promote_rule(::Type{Core.BFloat16}, ::Type{<:$(T)}) = Core.BFloat16
+            Base.promote_rule(::Type{$(T)}, ::Type{Core.BFloat16}) = Core.BFloat16
+            Base.promote_rule(::Type{Core.BFloat16}, ::Type{$(T)}) = Core.BFloat16
+        end
+
+        # For type conversion we roundtrip via MLIR
+        (::Type{inT})(x::$(T)) where {inT <: Number} = convert(inT, x)
+        (::Type{$(T)})(x::inT) where {inT <: Number} = convert($(T), x)
+
+        function Base.convert(::Type{inT}, x::$(T)) where {inT <: Number}
+            @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
+            return Ops.convert(TracedRNumber{inT}, Ops.constant(x))
+        end
+
+        function Base.convert(::Type{$(T)}, x::inT) where {inT <: Number}
+            @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
+            return Ops.convert(TracedRNumber{$(T)}, Ops.constant(x))
         end
     end
 end
@@ -57,10 +69,10 @@ const ReactantPrimitive = Union{
     Base.uniontypes(ReactantComplexFloat)...,
 }
 
-to_reactant_primitive(v::T) where {T} = reactant_primitive(T)(v)
-reactant_primitive(::Type{T}) where {T} = nothing
+@inline to_reactant_primitive(v::T) where {T} = reinterpret(reactant_primitive(T), v)
+@inline reactant_primitive(::Type{T}) where {T} = nothing
 
 for T in Base.uniontypes(ReactantPrimitive)
-    @eval to_reactant_primitive(val::$T) = val
-    @eval reactant_primitive(::Type{$T}) = $T
+    @eval @inline to_reactant_primitive(val::$(T)) = val
+    @eval @inline reactant_primitive(::Type{$(T)}) = $(T)
 end

@@ -233,7 +233,7 @@ end
 Creates a f8e4m3fnuz type in the given context. The type is owned by the context.
 """
 function Type(::Core.Type{<:Reactant.F8E4M3FNUZ}; context::Context=context())
-    return Type(API.mlirFloat8E4M3FNTypeGet(context))
+    return Type(API.mlirFloat8E4M3FNUZTypeGet(context))
 end
 
 """

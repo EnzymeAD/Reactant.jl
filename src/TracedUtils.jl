@@ -310,13 +310,13 @@ end
 
 elem_apply(::Type{T}, x::TracedRArray{T}) where {T} = x
 
-struct TypeCast{T <: Reactant.ReactantPrimitive} <: Function end
+struct TypeCast{T<:Reactant.ReactantPrimitive} <: Function end
 
 function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
     return promote_to(TracedRNumber{T}, x)
 end
 
-function elem_apply(::Type{T}, x::TracedRArray) where {T <: Reactant.ReactantPrimitive}
+function elem_apply(::Type{T}, x::TracedRArray) where {T<:Reactant.ReactantPrimitive}
     return elem_apply(TypeCast{T}(), x)
 end
 

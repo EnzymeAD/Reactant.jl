@@ -76,25 +76,6 @@ end
     return TracedRArray{T,N}((), res, size(x))
 end
 
-## This is somewhat a hack because I can't seem to find the corresponding mlir
-## DenseElementsAttribute functions (also our optimizations will run a pass converting this
-## to a single operation)
-for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
-    @eval @noinline function constant(
-        x::DenseArray{<:Reactant.$(T),N};
-        location=mlir_stacktrace("constant", @__FILE__, @__LINE__),
-    ) where {N}
-        value = MLIR.IR.DenseElementsAttribute(
-            map(Float16 ∘ Base.Fix2(getproperty, :val), x)
-        )
-        output = mlir_type(TracedRArray{Float16,N}, size(x))
-        res = MLIR.IR.result(stablehlo.constant(; output, value, location))
-        return convert(
-            TracedRArray{eltype(x),N}, TracedRArray{Float16,N}((), res, size(x)); location
-        )
-    end
-end
-
 @noinline function constant(
     x::T; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T<:Number}
