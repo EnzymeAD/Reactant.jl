@@ -46,9 +46,9 @@ extern "C" const char* ifrt_loadedexecutable_serialize(LoadedExecutable* executa
     return convert(Type<const char*>(), MyValueOrThrow(executable->Serialize()));
 }
 
-extern "C" Future<> ifrt_loadedexecutable_get_ready_future(LoadedExecutable* executable)
+extern "C" Future<>* ifrt_loadedexecutable_get_ready_future(LoadedExecutable* executable)
 {
-    return executable->GetReadyFuture();
+    return new Future<>(executable->GetReadyFuture());
 }
 
 extern "C" int ifrt_loadedexecutable_num_devices(LoadedExecutable* executable)
