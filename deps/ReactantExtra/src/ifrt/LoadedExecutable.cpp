@@ -104,14 +104,22 @@ extern "C" span<xla::HloModule*> ifrt_loadedexecutable_hlo_modules(LoadedExecuta
 // TODO xla::LoadedExecutable::GetOutputMemoryKinds
 // TODO xla::LoadedExecutable::GetCostAnalysis
 
-// extern "C" LoadedExecutable::ExecuteResult*
-// ifrt_loadedexecutable_execute(LoadedExecutable* executable,
-// Array** args, size_t args_size, Array** results, size_t
-// results_size, Future<*>** futures, size_t futures_size) {
-//     std::vector<Array*> arguments(args, args + args_size);
-//     std::vector<Array*> result(results, results + results_size);
-//     std::vector<Future<*>*> future(futures, futures + futures_size);
-//     return MyValueOrThrow(executable->Execute(arguments, result, future));
+// extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(LoadedExecutable* executable, span<Array*> c_args, const ExecuteOptions& options, span<Device*> c_devices) {
+//     std::optional<tsl::RCReference<DeviceList>> devices;
+//     if (!c_devices.empty())
+//         devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices)
+
+//     // TODO original C++ method asks for tsl::RCReference<Array> for input, should we capture them like `shared_ptr`?
+
+//     auto exec_res = MyValueOrThrow(executable->Execute(args, options, ));
+
+//     Future<>* status = nullptr;
+//     if (options.fill_status)
+//         status = new Future<>(exec_res.status);
+
+//     auto results = convert(Type<span<Array*>>(), exec_res.outputs);
+
+//     return std::make_tuple(status, results);
 // }
 
 extern "C" Future<>* ifrt_loadedexecutable_delete(LoadedExecutable* executable)
