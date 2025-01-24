@@ -1,6 +1,6 @@
 #include <memory>
 #include <type_traits>
-#include <tsl/concurrency/ref_count.h>
+#include "xla/tsl/concurrency/ref_count.h"
 
 extern "C" void reactant_release_shared(void* ptr);
 extern "C" bool reactant_contains_shared(void* ptr);
