@@ -277,6 +277,9 @@ end
 function Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N}
     return TracedUtils.broadcast_to_size(x, dims)
 end
+function Base.fill(x::TracedRNumber, ::Tuple{})
+    return TracedUtils.broadcast_to_size(x, ())
+end
 
 function Base.float(x::TracedRNumber{T}) where {T}
     return TracedUtils.promote_to(TracedRNumber{float(T)}, x)

@@ -24,18 +24,20 @@ for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
             Base.promote_rule(::Type{Core.BFloat16}, ::Type{$(T)}) = Core.BFloat16
         end
 
-        # For type conversion we roundtrip via MLIR
-        (::Type{inT})(x::$(T)) where {inT <: Number} = convert(inT, x)
-        (::Type{$(T)})(x::inT) where {inT <: Number} = convert($(T), x)
+        # For type conversion we simply rely on XLA
+        (::Type{inT})(x::$(T)) where {inT<:Number} = convert(inT, x)
+        (::Type{$(T)})(x::inT) where {inT<:Number} = convert($(T), x)
 
-        function Base.convert(::Type{inT}, x::$(T)) where {inT <: Number}
+        function Base.convert(::Type{inT}, x::$(T)) where {inT<:Number}
             @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
-            return Ops.convert(TracedRNumber{inT}, Ops.constant(x))
+            x isa TracedRNumber || (x = Ops.constant(x))
+            return Ops.convert(TracedRNumber{inT}, x)
         end
 
-        function Base.convert(::Type{$(T)}, x::inT) where {inT <: Number}
+        function Base.convert(::Type{$(T)}, x::inT) where {inT<:Number}
             @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
-            return Ops.convert(TracedRNumber{$(T)}, Ops.constant(x))
+            x isa TracedRNumber || (x = Ops.constant(x))
+            return Ops.convert(TracedRNumber{unwrapped_eltype($(T))}, x)
         end
     end
 end
