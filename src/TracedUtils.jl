@@ -65,20 +65,28 @@ function get_ancestor_indices(
 ) where {T,N,M}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     if any(is_traced, indices)
-        # XXX: scalars are not supported
         final_size = Vector{Int64}(undef, N)
+        ddims = Int64[]
         for (i, idx) in enumerate(indices)
-            @assert ndims(idx) == 1 "Unsupported feature. Please file an issue."
+            @assert ndims(idx) == 1 || ndims(idx) == 0 "Unsupported feature. Please file an issue."
+            ndims(idx) == 0 && push!(ddims, i)
             final_size[i] = length(idx)
         end
-        @show Base.strides(x)
         linear_indices = mapreduce(+, enumerate(indices)) do (i, idx)
-            Base.stride(x, i) .* (Ops.broadcast_in_dim(idx, Int64[i], final_size) .- 1) .+ 1
+            bcasted_idxs = Ops.broadcast_in_dim(
+                idx, ndims(idx) == 0 ? Int64[] : Int64[i], final_size
+            )
+            Base.stride(x, i) .* (bcasted_idxs .- 1) .+ 1
         end
         parent_linear_indices_all = collect(LinearIndices(size(parent(x))))
         parent_linear_indices = TracedUtils.promote_to(
             TracedRArray{Int64,ndims(parent_linear_indices_all)}, parent_linear_indices_all
         )[linear_indices]
+        isempty(ddims) || (
+            parent_linear_indices = materialize_traced_array(
+                dropdims(parent_linear_indices; dims=Tuple(ddims))
+            )
+        )
         return (parent_linear_indices,)
     else
         # Have this as a separate code-path since we can generate non-dynamic indexing
