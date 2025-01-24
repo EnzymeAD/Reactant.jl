@@ -369,9 +369,7 @@ end
 
 function LinearAlgebra.kron!(C::AnyTracedRVector, A::AnyTracedRVector, B::AnyTracedRVector)
     LinearAlgebra.kron!(
-        reshape(C, length(A), length(B)),
-        reshape(A, length(A), 1),
-        reshape(B, 1, length(B))
+        reshape(C, length(B), length(A)), reshape(A, 1, length(A)), reshape(B, length(B), 1)
     )
     return C
 end
@@ -380,10 +378,10 @@ function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTr
     A = materialize_traced_array(A)
     B = materialize_traced_array(B)
 
-    final_shape = Int64[size(A, 1), size(B, 1), size(A, 2), size(B, 2)]
+    final_shape = Int64[size(B, 1), size(A, 1), size(B, 2), size(A, 2)]
 
-    A = Ops.broadcast_in_dim(A, Int64[1, 3], final_shape)
-    B = Ops.broadcast_in_dim(B, Int64[2, 4], final_shape)
+    A = Ops.broadcast_in_dim(A, Int64[2, 4], final_shape)
+    B = Ops.broadcast_in_dim(B, Int64[1, 3], final_shape)
 
     C_tmp = Ops.reshape(Ops.multiply(A, B), size(C)...)
     set_mlir_data!(C, get_mlir_data(C_tmp))
@@ -397,7 +395,7 @@ function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRVector, B::AnyTr
 end
 
 function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTracedRVector)
-    LinearAlgebra._kron!(C, A, reshape(B, 1, length(B)))
+    LinearAlgebra._kron!(C, A, reshape(B, length(B), 1))
     return C
 end
 
