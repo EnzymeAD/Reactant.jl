@@ -63,6 +63,7 @@ extern "C" int64_t ifrt_loadedexecutable_byte_size(LoadedExecutable* executable)
 
 // TODO xla::GetCompiledMemoryStats
 
+// TODO translate std::tuple to reactant::span
 // extern "C" std::tuple<size_t, OpSharding*> ifrt_loadedexecutable_parameter_shardings(LoadedExecutable* executable)
 // {
 //     auto shardings = executable->GetParameterShardings();
@@ -128,5 +129,3 @@ extern "C" span<Device*> ifrt_loadedexecutable_addressable_devices(LoadedExecuta
     auto devices = executable->addressable_devices();
     return convert(Type<span<Device*>>(), devices);
 }
-
-// TODO auxiliary functions for xla::LoadedExecutable::ExecuteResult
