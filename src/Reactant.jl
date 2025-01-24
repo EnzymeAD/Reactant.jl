@@ -137,7 +137,7 @@ const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
@@ -153,12 +153,12 @@ unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
-function aos_to_soa(x::AbstractArray{<:ConcreteRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{ConcreteRNumber{T}}) where {T}
     x_c = ConcreteRArray(zeros(T, size(x)))
     x_c .= x
     return x_c
 end
-function aos_to_soa(x::AbstractArray{<:TracedRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{TracedRNumber{T}}) where {T}
     for i in eachindex(x)
         if !isassigned(x, i)
             x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
