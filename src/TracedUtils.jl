@@ -76,8 +76,9 @@ function get_ancestor_indices(
             bcasted_idxs = Ops.broadcast_in_dim(
                 idx, ndims(idx) == 0 ? Int64[] : Int64[i], final_size
             )
-            Base.stride(x, i) .* (bcasted_idxs .- 1) .+ 1
+            Base.stride(x, i) .* (bcasted_idxs .- 1)
         end
+        linear_indices = linear_indices .+ 1
         parent_linear_indices_all = collect(LinearIndices(size(parent(x))))
         parent_linear_indices = TracedUtils.promote_to(
             TracedRArray{Int64,ndims(parent_linear_indices_all)}, parent_linear_indices_all

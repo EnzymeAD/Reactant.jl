@@ -202,3 +202,29 @@ end
         @test @jit(fn(x_ra)) ≈ fn(x)
     end
 end
+
+function broadcast_reshaped_array(x, idx1, idx2)
+    y = reshape(x, 20, 2)
+    return y[idx1, idx2] .+ 1
+end
+
+function broadcast_reshaped_array(x, idx1, idx2::Number)
+    y = reshape(x, 20, 2)
+    return y[idx1, idx2] .+ 1
+end
+
+@testset "Broadcast reshaped array" begin
+    x_ra = Reactant.to_rarray(rand(5, 4, 2))
+    idx1_ra = Reactant.to_rarray(rand(1:20, 4))
+    idx2_ra = Reactant.to_rarray([2, 1])
+
+    @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra), Array(idx2_ra)) ≈
+        @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx2_ra)) ≈
+        @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Array(idx2_ra)))
+
+    idx3 = ConcreteRNumber(2)
+
+    @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra), Int64(idx3)) ≈
+        @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx3)) ≈
+        @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Int64(idx3)))
+end
