@@ -228,3 +228,9 @@ end
         @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx3)) ≈
         @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Int64(idx3)))
 end
+
+@testset "reshaped subarray indexing" begin
+    fn(x) = view(x, 1:2) .+ 1
+    x_ra = Reactant.to_rarray(rand(3, 4, 3))
+    @test @jit(fn(x_ra)) == fn(Array(x_ra))
+end
