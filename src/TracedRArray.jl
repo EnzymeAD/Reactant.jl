@@ -154,12 +154,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::CartesianIndex{N}) where {
 end
 
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
-    indices = map(enumerate(indices)) do (idx, i)
-        i isa Colon && return 1:size(a, idx)
-        i isa CartesianIndex && return Tuple(i)
-        i isa AbstractArray{<:Bool} && return findall(i)
-        return i
-    end
+    indices = TracedUtils.normalize_indices(a, indices...)
 
     use_gather_getindex = false
     for idxs in indices
@@ -168,7 +163,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
             use_gather_getindex = true
             break
         end
-        contiguous = all(isone, diff(idxs))
+        contiguous = all(isone, diff(vec(idxs)))
         if typeof(contiguous) <: Bool && !contiguous
             use_gather_getindex = true
             break
@@ -181,19 +176,11 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
-        idxs = map(indices) do i
-            i isa Number && return fill(i, 1)
-            return i
-        end
-        indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), idxs)
-        indices_list = generate_index_list(indices_list...)
-        res = Ops.gather_getindex(a, indices_list)
-        res = Ops.reshape(res, length.(idxs)...)
-        ddims = findall(indices) do idx
-            return idx isa Integer || idx isa TracedRNumber{<:Integer}
-        end
-        isempty(ddims) || return materialize_traced_array(dropdims(res; dims=Tuple(ddims)))
-        return res
+        indices, integer_indices, result_size, _ = TracedUtils.traced_indices(indices...)
+        res = Ops.gather_getindex(a, generate_index_list(indices...))
+        isempty(integer_indices) ||
+            (res = materialize_traced_array(dropdims(res; dims=integer_indices)))
+        return Ops.reshape(res, result_size)
     end
 
     start_indices = map(indices) do i
@@ -233,12 +220,7 @@ maybe_assert_scalar_setindexing(args...) = nothing
 function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
     maybe_assert_scalar_setindexing(a, indices...)
 
-    indices = map(enumerate(indices)) do (idx, i)
-        i isa Colon && return 1:size(a, idx)
-        i isa CartesianIndex && return Tuple(i)
-        i isa AbstractArray{<:Bool} && return findall(i)
-        return i
-    end
+    indices = TracedUtils.normalize_indices(a, indices...)
 
     use_scatter_setindex = false
     for idxs in indices
