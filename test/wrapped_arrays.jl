@@ -213,6 +213,11 @@ function broadcast_reshaped_array(x, idx1, idx2::Number)
     return y[idx1, idx2] .+ 1
 end
 
+function broadcast_reshaped_array(x, idx1)
+    y = reshape(x, 20, 2)
+    return y[idx1, :] .+ 1
+end
+
 @testset "Broadcast reshaped array" begin
     x_ra = Reactant.to_rarray(rand(5, 4, 2))
     idx1_ra = Reactant.to_rarray(rand(1:20, 4))
@@ -227,6 +232,10 @@ end
     @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra), Int64(idx3)) ≈
         @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx3)) ≈
         @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Int64(idx3)))
+
+    @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra)) ≈
+        @jit(broadcast_reshaped_array(x_ra, idx1_ra)) ≈
+        @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra)))
 end
 
 @testset "reshaped subarray indexing" begin

@@ -176,27 +176,11 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
-        idxs = map(indices) do i
-            i isa Number && return fill(i, 1)
-            return i
-        end
-        ddims = Tuple(
-            findall(indices) do idx
-                return idx isa Integer || idx isa TracedRNumber{<:Integer}
-            end,
-        )
-        indices_list = generate_index_list(
-            map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}) ∘ vec, idxs)...
-        )
-        res = Ops.gather_getindex(a, indices_list)
-        isempty(ddims) || (res = materialize_traced_array(dropdims(res; dims=ddims)))
-        actual_size = mapreduce(vcat, enumerate(idxs)) do (i, idx)
-            i ∈ ddims && return Int64[]
-            return Int64[size(idx)...]
-        end
-        res = Ops.reshape(res, actual_size)
-        isempty(ddims) || return materialize_traced_array(dropdims(res; dims=Tuple(ddims)))
-        return res
+        indices, integer_indices, result_size, _ = TracedUtils.traced_indices(indices...)
+        res = Ops.gather_getindex(a, generate_index_list(indices...))
+        isempty(integer_indices) ||
+            (res = materialize_traced_array(dropdims(res; dims=integer_indices)))
+        return Ops.reshape(res, result_size)
     end
 
     start_indices = map(indices) do i

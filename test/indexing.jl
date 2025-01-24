@@ -221,3 +221,15 @@ end
     @test ndims(@jit(fn2(x_ra, idx_ra))) == 2
     @test ndims(@jit(fn3(x_ra, idx_ra))) == 1
 end
+
+@testset "High-Dimensional Array Indexing" begin
+    x_ra = Reactant.to_rarray(rand(5, 4, 3))
+    idx1_ra = Reactant.to_rarray(rand(1:5, 2, 2, 3))
+    idx2_ra = Reactant.to_rarray(rand(1:4, 2, 2, 3))
+    idx3 = rand(1:3, 2, 2, 3)
+
+    fn(x, idx1, idx2, idx3) = x[idx1, idx2, idx3]
+
+    @test @jit(fn(x_ra, idx1_ra, idx2_ra, idx3)) ≈
+        fn(Array(x_ra), Array(idx1_ra), Array(idx2_ra), idx3)
+end

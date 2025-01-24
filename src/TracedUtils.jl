@@ -66,29 +66,24 @@ function get_ancestor_indices(
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = normalize_indices(x, indices...)
     if any(is_traced, indices)
-        final_size = Vector{Int64}(undef, N)
-        ddims = Int64[]
-        for (i, idx) in enumerate(indices)
-            @assert ndims(idx) == 1 || ndims(idx) == 0 "Unsupported feature. Please file an issue."
-            ndims(idx) == 0 && push!(ddims, i)
-            final_size[i] = length(idx)
-        end
+        indices, integer_indices, result_size, flattened_size = traced_indices(indices...)
         linear_indices = mapreduce(+, enumerate(indices)) do (i, idx)
             bcasted_idxs = Ops.broadcast_in_dim(
-                idx, ndims(idx) == 0 ? Int64[] : Int64[i], final_size
+                idx, ndims(idx) == 0 ? Int64[] : Int64[i], flattened_size
             )
             Base.stride(x, i) .* (bcasted_idxs .- 1)
         end
         linear_indices = linear_indices .+ 1
         parent_linear_indices_all = collect(LinearIndices(size(parent(x))))
-        parent_linear_indices = TracedUtils.promote_to(
+        parent_linear_indices = promote_to(
             TracedRArray{Int64,ndims(parent_linear_indices_all)}, parent_linear_indices_all
         )[linear_indices]
-        isempty(ddims) || (
+        isempty(integer_indices) || (
             parent_linear_indices = materialize_traced_array(
-                dropdims(parent_linear_indices; dims=Tuple(ddims))
+                dropdims(parent_linear_indices; dims=integer_indices)
             )
         )
+        parent_linear_indices = Ops.reshape(parent_linear_indices, result_size)
         return (parent_linear_indices,)
     else
         # Have this as a separate code-path since we can generate non-dynamic indexing
@@ -107,7 +102,7 @@ function set_mlir_data!(
 end
 
 function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
-    ancestor_indices = TracedUtils.get_ancestor_indices(x, axes(x)...)
+    ancestor_indices = get_ancestor_indices(x, axes(x)...)
     setindex!(Reactant.ancestor(x), TracedRArray{T}(data), ancestor_indices...)
     return x
 end
@@ -318,7 +313,7 @@ elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
 struct TypeCast{T<:ReactantPrimitive} <: Function end
 
 function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
-    return TracedUtils.promote_to(TracedRNumber{T}, x)
+    return promote_to(TracedRNumber{T}, x)
 end
 
 function elem_apply(::Type{T}, x::TracedRArray) where {T<:ReactantPrimitive}
@@ -435,7 +430,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     batch_inputs = MLIR.IR.Value[]
 
     for a in linear_args
-        idx, path = TracedUtils.get_argidx(a)
+        idx, path = get_argidx(a)
         if idx == 1 && fnwrap
             push_val!(batch_inputs, f, path[3:end])
         else
@@ -456,20 +451,20 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     residx = 1
 
     for a in linear_results
-        if TracedUtils.has_residx(a)
-            path = TracedUtils.get_residx(a)
-            TracedUtils.set!(result, path[2:end], MLIR.IR.result(res, residx))
+        if has_residx(a)
+            path = get_residx(a)
+            set!(result, path[2:end], MLIR.IR.result(res, residx))
             residx += 1
         else
-            idx, path = TracedUtils.get_argidx(a)
+            idx, path = get_argidx(a)
             if idx == 1 && fnwrap
-                TracedUtils.set!(f, path[3:end], MLIR.IR.result(res, residx))
+                set!(f, path[3:end], MLIR.IR.result(res, residx))
                 residx += 1
             else
                 if fnwrap
                     idx -= 1
                 end
-                TracedUtils.set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
+                set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
                 residx += 1
             end
         end
@@ -526,11 +521,28 @@ end
 
 function normalize_indices(a::AbstractArray, indices...)
     return map(enumerate(indices)) do (i, idx)
-        idx isa Colon && return 1:size(a, i)
+        idx isa Colon && return collect(Int64, 1:size(a, i))
         idx isa CartesianIndex && return Tuple(idx)
         idx isa AbstractArray{Bool} && return findall(idx)
         return idx
     end
+end
+
+function traced_indices(indices...)
+    integer_indices = Int64[]
+    result_size = Int64[]
+    flattened_size = Int64[length(idx) for idx in indices]
+    new_indices = map(enumerate(indices)) do (i, idx)
+        if idx isa Number
+            push!(integer_indices, i)
+            idx isa TracedRNumber && return idx
+            return promote_to(TracedRNumber{Int}, idx)
+        end
+        append!(result_size, [size(idx)...])
+        idx isa TracedRArray && return materialize_traced_array(vec(idx))
+        return promote_to(TracedRArray{Int,1}, vec(idx))
+    end
+    return new_indices, Tuple(integer_indices), result_size, flattened_size
 end
 
 end
