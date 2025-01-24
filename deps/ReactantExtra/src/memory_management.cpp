@@ -2,7 +2,7 @@
 #include <memory>
 #include "src/memory_management.hpp"
 #include "llvm/Support/ExtensibleRTTI.h"
-#include "tsl/concurrency/ref_count.h"
+#include "xla/tsl/concurrency/ref_count.h"
 
 std::map<void*, std::shared_ptr<void>> captured_shared_ptr;
 std::map<void*, tsl::RCReference<void>> captured_rcreference;
