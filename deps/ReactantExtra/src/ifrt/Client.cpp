@@ -40,10 +40,10 @@ extern "C" span<Array*> ifrt_client_copy_arrays(Client* client, span<Array*> c_a
 
 // TODO RemapArrays (need to implement RemapPlan)
 
-extern "C" Future<> ifrt_client_get_ready_future(Client* client, span<Value*> c_values)
+extern "C" Future<>* ifrt_client_get_ready_future(Client* client, span<Value*> c_values)
 {
     auto values = convert(Type<absl::Span<tsl::RCReference<Value>>>(), c_values);
-    return client->GetReadyFuture(values);
+    return new Future<>(client->GetReadyFuture(values));
 }
 
 extern "C" Tuple* ifrt_client_make_tuple(Client* client, span<Value*> c_values)

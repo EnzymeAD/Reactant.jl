@@ -29,10 +29,10 @@ extern "C" const Sharding* ifrt_array_sharding(Array* array)
 // TODO xla::Array::DisassembleIntoSingleDeviceArrays
 // TODO xla::Array::FullyReplicatedShard
 
-extern "C" Future<> ifrt_array_copy_to_host_buffer(Array* array, void* data, const int64_t* byte_strides, int semantics)
+extern "C" Future<>* ifrt_array_copy_to_host_buffer(Array* array, void* data, const int64_t* byte_strides, int semantics)
 {
-    return array->CopyToHostBuffer(
+    return new Future<>(array->CopyToHostBuffer(
         data,
         absl::Span<const int64_t>(byte_strides, array->shape().num_elements()),
-        ArrayCopySemantics(semantics));
+        ArrayCopySemantics(semantics)));
 }
