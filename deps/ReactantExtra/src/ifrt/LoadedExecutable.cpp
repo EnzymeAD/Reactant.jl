@@ -1,12 +1,28 @@
 #include "src/type_conversion.hpp"
 #include "src/error_handling.hpp"
 #include "xla/python/ifrt/executable.h"
+#include "absl/container/flat_hash_set.h"
 
 using namespace xla::ifrt;
 using namespace reactant;
 
-// TODO translate std::tuple to reactant::span
+// ExecuteOptions
+// on call, default `launch_id` to 0, `fill_status` to false
+// TODO add support for `custom_options` (need `AttributeMap`)
+extern "C" ExecuteOptions* ifrt_executeoptions_ctor(int32_t launch_id, span<int> c_non_donatable_input_indices, bool fill_status)
+{
+    absl::flat_hash_set<int> non_donatable_input_indices; // TODO conversion
+    std::optional<AttributeMap> custom_options = std::nullopt;
 
+    return new ExecuteOptions(launch_id, non_donatable_input_indices, fill_status, custom_options);
+}
+
+extern "C" void ifrt_executeoptions_dtor(ExecuteOptions* exec_opts)
+{
+    delete exec_opts;
+}
+
+// LoadedExecutable
 extern "C" Client* ifrt_loadedexecutable_client(LoadedExecutable* executable)
 {
     return executable->client();
