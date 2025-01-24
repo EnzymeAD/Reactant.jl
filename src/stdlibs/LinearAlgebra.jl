@@ -6,6 +6,7 @@ using ..Reactant:
     AnyTracedRArray,
     AnyTracedRMatrix,
     AnyTracedRVector,
+    AnyTracedRVecOrMat,
     unwrapped_eltype,
     Ops,
     MLIR
@@ -345,6 +346,59 @@ function LinearAlgebra.ldiv!(
     #    B[i, j] = dd[i] \ A[i, j]
     #end
     return B
+end
+
+# Kronecker Product
+function LinearAlgebra.kron(
+    x::AnyTracedRVecOrMat{T1}, y::AnyTracedRVecOrMat{T2}
+) where {T1,T2}
+    x = materialize_traced_array(x)
+    y = materialize_traced_array(y)
+    z = similar(x, Base.promote_op(*, T1, T2), LinearAlgebra._kronsize(x, y))
+    LinearAlgebra.kron!(z, x, y)
+    return z
+end
+
+function LinearAlgebra.kron(x::AnyTracedRVector{T1}, y::AnyTracedRVector{T2}) where {T1,T2}
+    x = materialize_traced_array(x)
+    y = materialize_traced_array(y)
+    z = similar(x, Base.promote_op(*, T1, T2), length(x) * length(y))
+    LinearAlgebra.kron!(z, x, y)
+    return z
+end
+
+function LinearAlgebra.kron!(C::AnyTracedRVector, A::AnyTracedRVector, B::AnyTracedRVector)
+    LinearAlgebra.kron!(
+        reshape(C, length(A), length(B)),
+        reshape(A, length(A), 1),
+        reshape(B, 1, length(B))
+    )
+    return C
+end
+
+function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTracedRMatrix)
+    A = materialize_traced_array(A)
+    B = materialize_traced_array(B)
+
+    final_shape = Int64[size(A, 1), size(B, 1), size(A, 2), size(B, 2)]
+
+    A = Ops.broadcast_in_dim(A, Int64[1, 3], final_shape)
+    B = Ops.broadcast_in_dim(B, Int64[2, 4], final_shape)
+
+    C_tmp = Ops.reshape(Ops.multiply(A, B), size(C)...)
+    set_mlir_data!(C, get_mlir_data(C_tmp))
+
+    return C
+end
+
+function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRVector, B::AnyTracedRMatrix)
+    LinearAlgebra._kron!(C, reshape(A, length(A), 1), B)
+    return C
+end
+
+function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTracedRVector)
+    LinearAlgebra._kron!(C, A, reshape(B, 1, length(B)))
+    return C
 end
 
 end
