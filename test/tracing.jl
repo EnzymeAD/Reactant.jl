@@ -144,10 +144,18 @@ using Test
                     Base.Pairs{Symbol,Union{}},
                 ),
             ]
-                tracedty = traced_type(origty, Val(ConcreteToTraced), Union{})
+                tracedty = traced_type(
+                    origty, Val(ConcreteToTraced), Union{}, Reactant.BatchNone, nothing
+                )
                 @test tracedty == targetty
 
-                tracedty2 = traced_type(origty, Val(ConcreteToTraced), ReactantPrimitive)
+                tracedty2 = traced_type(
+                    origty,
+                    Val(ConcreteToTraced),
+                    ReactantPrimitive,
+                    Reactant.BatchNone,
+                    nothing,
+                )
                 @test tracedty2 == targetty
             end
 
@@ -158,7 +166,7 @@ using Test
                 TracedRArray{Float64,3},
             ]
                 @test_throws Union{ErrorException,String} traced_type(
-                    type, Val(ConcreteToTraced), Union{}
+                    type, Val(ConcreteToTraced), Union{}, Reactant.BatchNone, nothing
                 )
             end
         end
@@ -167,7 +175,9 @@ using Test
                 x::Vector{Float64}
                 y::Union{Nothing,Node}
             end
-            @test_throws NoFieldMatchError traced_type(Node, Val(ArrayToConcrete), Union{})
+            @test_throws NoFieldMatchError traced_type(
+                Node, Val(ArrayToConcrete), Union{}, Reactant.BatchNone, nothing
+            )
         end
     end
 

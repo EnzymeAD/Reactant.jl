@@ -7,8 +7,14 @@
     NoStopTracedTrack = 6
 end
 
+@enum BatchMode begin
+    BatchNone = 1
+    BatchScalar = 2
+    BatchArray = 3
+end
+
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
+    @nospecialize(T::Type), seen, mode::TraceMode, @nospecialize(args::Vararg)
 )
     if T === Any
         return T
@@ -39,8 +45,8 @@ Base.@nospecializeinfer function traced_type_inner(
 
     if T isa Union
         return Union{
-            traced_type_inner(T.a, seen, mode, track_numbers),
-            traced_type_inner(T.b, seen, mode, track_numbers),
+            traced_type_inner(T.a, seen, mode, args...),
+            traced_type_inner(T.b, seen, mode, args...),
         }
     end
 
@@ -67,7 +73,7 @@ Base.@nospecializeinfer function traced_type_inner(
     subTys = Type[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
-        subTT = traced_type_inner(subT, seen2, mode, track_numbers)
+        subTT = traced_type_inner(subT, seen2, mode, args...)
         changed |= subT != subTT
         push!(subTys, subTT)
     end
@@ -85,17 +91,17 @@ Base.@nospecializeinfer function traced_type_inner(
     subParms = []
     for (i, SST) in enumerate(T.parameters)
         if wrapped_carray && i == 1 && SST isa Type && SST <: ReactantPrimitive
-            TrT = traced_type_inner(ConcreteRNumber{SST}, seen, mode, track_numbers)
+            TrT = traced_type_inner(ConcreteRNumber{SST}, seen, mode, args...)
             push!(subParms, TrT)
         elseif wrapped_tracedarray &&
             i == 1 &&
             SST isa Type &&
             SST <: TracedRNumber{<:ReactantPrimitive}
-            TrT = traced_type_inner(unwrapped_eltype(SST), seen, mode, track_numbers)
+            TrT = traced_type_inner(unwrapped_eltype(SST), seen, mode, args...)
             push!(subParms, TrT)
         else
             if SST isa Type
-                TrT = traced_type_inner(SST, seen, mode, track_numbers)
+                TrT = traced_type_inner(SST, seen, mode, args...)
                 push!(subParms, TrT)
             else
                 push!(subParms, SST)
@@ -115,7 +121,7 @@ Base.@nospecializeinfer function traced_type_inner(
         for f in 1:fieldcount(T)
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
-            subTT = traced_type_inner(subT, seen3, mode, track_numbers)
+            subTT = traced_type_inner(subT, seen3, mode, args...)
             if subT2 != subTT
                 legal = false
                 break
@@ -134,10 +140,7 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{Union{}}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(T::Type{Union{}}), seen, mode::TraceMode, @nospecialize(args::Vararg)
 )
     return T
 end
@@ -154,10 +157,7 @@ for T in (
     RNumber,
 )
     @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(T::Type{<:$T}),
-        seen,
-        mode::TraceMode,
-        @nospecialize(track_numbers::Type)
+        @nospecialize(T::Type{<:$T}), seen, mode::TraceMode, @nospecialize(args::Vararg)
     )
         return T
     end
@@ -167,7 +167,8 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{<:ReactantPrimitive}),
     seen,
     @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type)
+    @nospecialize(track_numbers::Type),
+    @nospecialize(args::Vararg)
 )
     if Mode == ArrayToConcrete && T <: track_numbers
         return ConcreteRNumber{T}
@@ -181,20 +182,17 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(C::Type{<:Complex}),
     seen,
     @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type)
+    @nospecialize(args::Vararg)
 )
     if !(C isa UnionAll)
-        return Complex{traced_type_inner(C.parameters[1], seen, mode, track_numbers)}
+        return Complex{traced_type_inner(C.parameters[1], seen, mode, args...)}
     else
         return C
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:Function}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(T::Type{<:Function}), seen, mode::TraceMode, @nospecialize(args::Vararg)
 )
     # functions are directly returned
     if sizeof(T) == 0
@@ -206,7 +204,7 @@ Base.@nospecializeinfer function traced_type_inner(
     changed = false
     traced_fieldtypes = Type[]
     for i in 1:N
-        next = traced_type_inner(fieldtype(T, i), seen, mode, track_numbers)
+        next = traced_type_inner(fieldtype(T, i), seen, mode, args...)
         changed |= next != fieldtype(T, i)
         push!(traced_fieldtypes, next)
     end
@@ -223,10 +221,7 @@ end
     (x <: Tuple) && !(x === Tuple) && !(x isa UnionAll)
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:Tuple}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(T::Type{<:Tuple}), seen, mode::TraceMode, @nospecialize(args::Vararg)
 )
     if !Base.isconcretetype(T) || !is_concrete_tuple(T) || T isa UnionAll
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
@@ -235,21 +230,18 @@ Base.@nospecializeinfer function traced_type_inner(
         throw(AssertionError("Type tuple of vararg $T is not supported"))
     end
     TT = [
-        traced_type_inner(T.parameters[i], seen, mode, track_numbers) for
+        traced_type_inner(T.parameters[i], seen, mode, args...) for
         i in 1:length(T.parameters)
     ]
     return Tuple{TT...}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:NamedTuple}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(T::Type{<:NamedTuple}), seen, mode::TraceMode, @nospecialize(args::Vararg)
 )
     N = T.parameters[1]
     V = T.parameters[2]
-    return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers)}
+    return NamedTuple{N,traced_type_inner(V, seen, mode, args...)}
 end
 
 Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
@@ -263,14 +255,14 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{<:AbstractDict}),
     seen,
     mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(args::Vararg)
 )
     V = dict_value(T)
     if V === nothing
         return T
     else
         K = dict_key(T)
-        V2 = traced_type_inner(V, seen, mode, track_numbers)
+        V2 = traced_type_inner(V, seen, mode, args...)
         if V == V2
             return T
         end
@@ -291,38 +283,27 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T0::Type{<:ConcreteRNumber}),
     seen,
     mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(args::Vararg)
 )
-    T = T0.parameters[1]
     if mode == ConcreteToTraced
-        return TracedRNumber{T}
+        return TracedRNumber{T0.parameters[1]}
     elseif mode == TracedToConcrete
-        return ConcreteRNumber{T}
+        return T0
     else
         throw("Abstract RNumber cannot be made concrete")
     end
 end
 
-Base.@nospecializeinfer @inline base_typet(@nospecialize(TV::UnionAll)) =
-    UnionAll(TV.var, base_typet(TV.body))
-Base.@nospecializeinfer @inline base_typet(@nospecialize(TV::DataType)) =
-    TracedRArray{TV.parameters...}
-
-Base.@nospecializeinfer @inline base_typec(@nospecialize(TV::UnionAll)) =
-    UnionAll(TV.var, base_typec(TV.body))
-Base.@nospecializeinfer @inline base_typec(@nospecialize(TV::DataType)) =
-    (TV <: TracedRArray ? ConcreteRArray : ConcreteRNumber){TV.parameters...}
-
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ConcreteRArray}),
+    @nospecialize(CA::Type{<:ConcreteRArray}),
     seen,
     mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(args::Vararg)
 )
     if mode == ConcreteToTraced
-        return base_typet(T)
+        return TracedRArray{CA.parameters[1],CA.parameters[2]}
     elseif mode == TracedToConcrete
-        return T
+        return CA
     else
         throw("Abstract RArray cannot be made concrete")
     end
@@ -332,7 +313,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{<:ConcreteRNG}),
     seen,
     mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(args::Vararg)
 )
     if mode == ConcreteToTraced
         return TracedRNG
@@ -344,28 +325,89 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:TracedType}),
+    ::Type{<:MissingTracedValue},
     seen,
     mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(track_numbers),
+    @nospecialize(batchmode),
+    @nospecialize(tobatch)
 )
-    T <: MissingTracedValue && error("TODO")
+    return error("This should not happen...")
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    TR::Type{<:TracedRNumber},
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers),
+    @nospecialize(batchmode),
+    @nospecialize(tobatch)
+)
+    T = TR.parameters[1]
     if mode == ConcreteToTraced
-        throw("TracedRArray $T cannot be traced")
+        throw("TracedRArray $(TracedRArray{T,N}) cannot be traced")
     elseif mode == TracedToConcrete
-        return base_typec(T)
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
-        return T
+        return ConcreteRNumber{T}
+    elseif mode == TracedTrack || mode == NoStopTracedTrack
+        return TracedRNumber{T}
+    elseif mode == TracedSetPath
+        if batchmode == BatchNone
+            return TracedRNumber{T}
+        elseif batchmode == BatchScalar
+            if tobatch === nothing
+                return TracedRNumber{T}
+            else
+                return TracedRArray{T,length(tobatch)}
+            end
+        elseif batchmode == BatchArray
+            if tobatch === nothing
+                error("For scalars with batchmode=BatchArray, tobatch must be specified")
+            else
+                TracedRArray{T,length(tobatch)}
+            end
+        else
+            error("Unknown batchmode $batchmode")
+        end
     else
-        throw("Abstract RArray $T cannot be made concrete in mode $mode")
+        throw("$(TracedRNumber{T}) cannot be made concrete in mode $mode")
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:TracedRNG}),
+    TR::Type{<:TracedRArray},
     seen,
     mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(track_numbers),
+    @nospecialize(batchmode),
+    @nospecialize(tobatch)
+)
+    T = TR.parameters[1]
+    N = TR.parameters[2]
+    if mode == ConcreteToTraced
+        throw("TracedRArray $(TracedRArray{T,N}) cannot be traced")
+    elseif mode == TracedToConcrete
+        return ConcreteRArray{T,N}
+    elseif mode == TracedTrack || mode == NoStopTracedTrack
+        return TracedRArray{T,N}
+    elseif mode == TracedSetPath
+        if batchmode == BatchNone
+            return TracedRArray{T,N}
+        elseif batchmode == BatchArray
+            if tobatch === nothing
+                TracedRArray{T,N - 1}
+            else
+                TracedRArray{T,N + length(tobatch)}
+            end
+        else
+            error("Not implemented")
+        end
+    else
+        throw("Abstract RArray $(TracedRArray{T,N}) cannot be made concrete in mode $mode")
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:TracedRNG}), seen, mode::TraceMode, @nospecialize(args::Vararg)
 )
     if mode == ConcreteToTraced
         throw("TracedRNG cannot be traced")
@@ -379,38 +421,29 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:XLAArray}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(T::Type{<:XLAArray}), seen, mode::TraceMode, @nospecialize(args::Vararg)
 )
     throw("XLA $T array cannot be traced")
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(A::Type{<:Array}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(A::Type{<:Array}), seen, mode::TraceMode, @nospecialize(args::Vararg)
 )
     T = eltype(A)
     N = ndims(A)
     if mode == ArrayToConcrete && T <: ReactantPrimitive
         return ConcreteRArray{T,N}
     else
-        return Array{traced_type_inner(T, seen, mode, track_numbers),N}
+        return Array{traced_type_inner(T, seen, mode, args...),N}
     end
 end
 
 for P in (Ptr, Core.LLVMPtr, Base.RefValue)
     @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(PT::Type{<:$P}),
-        seen,
-        mode::TraceMode,
-        @nospecialize(track_numbers::Type)
+        @nospecialize(PT::Type{<:$P}), seen, mode::TraceMode, @nospecialize(args::Vararg)
     )
         T = eltype(PT)
-        return $P{traced_type_inner(T, seen, mode, track_numbers)}
+        return $P{traced_type_inner(T, seen, mode, args...)}
     end
 end
 
@@ -418,19 +451,19 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(VT::Type{<:Val}),
     seen,
     @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type)
+    @nospecialize(args::Vararg)
 )
     if VT isa UnionAll
         return VT
     end
     T = VT.parameters[1]
-    if traced_type_inner(typeof(T), seen, mode, track_numbers) == typeof(T)
+    if traced_type_inner(typeof(T), seen, mode, args...) == typeof(T)
         return Val{T}
     end
     throw("Val type $(Val{T}) cannot be traced")
 end
 
-const traced_type_cache = Dict{Tuple{TraceMode,Type},Dict{Type,Type}}()
+const traced_type_cache = Dict{Tuple{TraceMode,Type,Any,Any},Dict{Type,Type}}()
 
 # function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
 #     @nospecialize
@@ -524,17 +557,17 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type},Dict{Type,Type}}()
 # end
 
 Base.@assume_effects :total @inline function traced_type(
-    T::Type, ::Val{mode}, track_numbers::Type
+    T::Type, ::Val{mode}, track_numbers::Type, batchmode, tobatch
 ) where {mode}
     cache = nothing
-    cache_key = (mode, track_numbers)
+    cache_key = (mode, track_numbers, batchmode, tobatch)
     if haskey(traced_type_cache, cache_key)
         cache = traced_type_cache[cache_key]
     else
         cache = Dict{Type,Type}()
         traced_type_cache[cache_key] = cache
     end
-    return res1 = traced_type_inner(T, cache, mode, track_numbers)
+    return traced_type_inner(T, cache, mode, track_numbers, batchmode, tobatch)
 end
 
 abstract type TracedTypeException <: Exception end
@@ -575,16 +608,16 @@ function make_tracer(
     @nospecialize(prev),
     @nospecialize(path),
     mode;
-    toscalar=false,
-    tobatch=nothing,
     @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(batchmode = BatchNone),
+    @nospecialize(tobatch = nothing),
     kwargs...,
 )
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
     RT = Core.Typeof(prev)
-    TT = traced_type(RT, Val(mode), track_numbers)
+    TT = traced_type(RT, Val(mode), track_numbers, batchmode, tobatch)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
@@ -605,9 +638,8 @@ function make_tracer(
                     xi,
                     append_path(path, i),
                     mode;
-                    toscalar,
-                    tobatch,
                     track_numbers,
+                    batchmode,
                     kwargs...,
                 )
                 if xi !== xi2
@@ -633,14 +665,7 @@ function make_tracer(
         if isdefined(prev, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
-                seen,
-                xi,
-                append_path(path, i),
-                mode;
-                toscalar,
-                tobatch,
-                track_numbers,
-                kwargs...,
+                seen, xi, append_path(path, i), mode; track_numbers, kwargs...
             )
             if xi !== xi2
                 changed = true
@@ -700,7 +725,7 @@ function make_tracer(
     @nospecialize(prev::TracedRArray{T,N}),
     @nospecialize(path),
     mode;
-    toscalar=false,
+    batchmode=BatchNone,
     tobatch=nothing,
     kwargs...,
 ) where {T,N}
@@ -725,12 +750,23 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = if toscalar
-            TracedRNumber{T}((path,), nothing)
-        elseif tobatch !== nothing
-            error("This should not happen...")
-        else
+        res = if batchmode == BatchNone
+            @assert tobatch === nothing
             TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
+        elseif batchmode == BatchScalar
+            if tobatch === nothing
+                TracedRNumber{T}((path,), nothing)
+            else
+                error("BatchScalar + tobatch for TracedRArray doesn't make sense")
+            end
+        else
+            if tobatch === nothing
+                TracedRArray{T,N - 1}((path,), nothing, size(prev)[2:end])
+            else
+                TracedRArray{T,N + length(tobatch)}(
+                    (path,), prev.mlir_data, (tobatch..., size(prev)...)
+                )
+            end
         end
         seen[prev] = res
         return res
@@ -754,7 +790,7 @@ function make_tracer(
     @nospecialize(path),
     mode;
     tobatch=nothing,
-    toscalar=false,
+    batchmode=BatchNone,
     kwargs...,
 ) where {T}
     if mode == ConcreteToTraced
@@ -778,12 +814,23 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]
         end
-        res = if toscalar
-            TracedRNumber{T}((path,), nothing)
-        elseif tobatch !== nothing
-            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
-        else
+        res = if batchmode == BatchNone
+            @assert tobatch === nothing
             TracedRNumber{T}((path,), prev.mlir_data)
+        elseif batchmode == BatchScalar
+            if tobatch === nothing
+                TracedRNumber{T}((path,), nothing)
+            else
+                TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+            end
+        elseif batchmode == BatchArray
+            if tobatch === nothing
+                error("For scalars with batchmode=BatchArray, tobatch must be specified")
+            else
+                TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+            end
+        else
+            error("Unknown batchmode $batchmode")
         end
         seen[prev] = res
         return res
@@ -874,21 +921,11 @@ make_tracer(seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs..
 make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...) = prev
 
 function make_tracer(
-    seen,
-    @nospecialize(prev::Complex),
-    @nospecialize(path),
-    mode;
-    toscalar=false,
-    tobatch=nothing,
-    kwargs...,
+    seen, @nospecialize(prev::Complex), @nospecialize(path), mode; kwargs...
 )
     return Complex(
-        make_tracer(
-            seen, prev.re, append_path(path, :re), mode; toscalar, tobatch, kwargs...
-        ),
-        make_tracer(
-            seen, prev.im, append_path(path, :im), mode; toscalar, tobatch, kwargs...
-        ),
+        make_tracer(seen, prev.re, append_path(path, :re), mode; kwargs...),
+        make_tracer(seen, prev.im, append_path(path, :im), mode; kwargs...),
     )
 end
 
@@ -898,6 +935,8 @@ function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(batchmode = BatchNone),
+    @nospecialize(tobatch = nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -907,14 +946,23 @@ function make_tracer(
     if mode == ArrayToConcrete && eltype(RT) <: ReactantPrimitive
         return seen[prev] = ConcreteRArray(prev)
     end
-    TT = traced_type(eltype(RT), Val(mode), track_numbers)
+    TT = traced_type(eltype(RT), Val(mode), track_numbers, batchmode, tobatch)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
     seen[prev] = newa
     same = true
     for I in eachindex(prev)
         if isassigned(prev, I)
             pv = prev[I]
-            nv = make_tracer(seen, pv, append_path(path, I), mode; track_numbers, kwargs...)
+            nv = make_tracer(
+                seen,
+                pv,
+                append_path(path, I),
+                mode;
+                track_numbers,
+                batchmode,
+                tobatch,
+                kwargs...,
+            )
             if pv !== nv
                 same = false
             end
@@ -943,12 +991,14 @@ function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(batchmode = BatchNone),
+    @nospecialize(tobatch = nothing),
     kwargs...,
 )
     NT = Core.Typeof(prev)
     A = NT.parameters[1]
     RT = NT.parameters[2]
-    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers)}((
+    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, batchmode, tobatch)}((
         (
             make_tracer(
                 seen,
@@ -956,6 +1006,8 @@ function make_tracer(
                 append_path(path, i),
                 mode;
                 track_numbers,
+                batchmode,
+                tobatch,
                 kwargs...,
             ) for i in 1:length(A)
         )...,
