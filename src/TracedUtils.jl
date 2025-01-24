@@ -16,7 +16,7 @@ using ..Reactant:
     OrderedIdDict,
     ReactantPrimitive,
     Ops
-using ReactantCore: MissingTracedValue
+using ReactantCore: MissingTracedValue, is_traced
 
 materialize_traced_array(x::TracedRArray) = x
 
@@ -63,10 +63,39 @@ end
 function get_ancestor_indices(
     x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, indices...
 ) where {T,N,M}
-    cartesian_indices = CartesianIndex.(indices...)
-    linear_indices = LinearIndices(size(x))[cartesian_indices]
-    parent_cartesian_indices = CartesianIndices(size(parent(x)))[linear_indices]
-    return (parent_cartesian_indices,)
+    @assert length(indices) == N "Expected $N indices, got $(length(indices))"
+    if any(is_traced, indices)
+        final_size = Vector{Int64}(undef, N)
+        ddims = Int64[]
+        for (i, idx) in enumerate(indices)
+            @assert ndims(idx) == 1 || ndims(idx) == 0 "Unsupported feature. Please file an issue."
+            ndims(idx) == 0 && push!(ddims, i)
+            final_size[i] = length(idx)
+        end
+        linear_indices = mapreduce(+, enumerate(indices)) do (i, idx)
+            bcasted_idxs = Ops.broadcast_in_dim(
+                idx, ndims(idx) == 0 ? Int64[] : Int64[i], final_size
+            )
+            Base.stride(x, i) .* (bcasted_idxs .- 1)
+        end
+        linear_indices = linear_indices .+ 1
+        parent_linear_indices_all = collect(LinearIndices(size(parent(x))))
+        parent_linear_indices = TracedUtils.promote_to(
+            TracedRArray{Int64,ndims(parent_linear_indices_all)}, parent_linear_indices_all
+        )[linear_indices]
+        isempty(ddims) || (
+            parent_linear_indices = materialize_traced_array(
+                dropdims(parent_linear_indices; dims=Tuple(ddims))
+            )
+        )
+        return (parent_linear_indices,)
+    else
+        # Have this as a separate code-path since we can generate non-dynamic indexing
+        cartesian_indices = CartesianIndex.(Iterators.product(indices...))
+        linear_indices = LinearIndices(size(x))[cartesian_indices]
+        parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
+        return (parent_linear_indices,)
+    end
 end
 
 function set_mlir_data!(
