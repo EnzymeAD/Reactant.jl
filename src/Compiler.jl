@@ -988,8 +988,10 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
                 devices_list = [
                     XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray
                 ]
-                @assert allequal(devices_list) "All arguments must be on the same device"
-                device = first(devices_list)
+                if !isempty(devices_list)
+                    @assert allequal(devices_list) "All arguments must be on the same device: $(devices_list)"
+                    device = first(devices_list)
+                end
             end
         end
 

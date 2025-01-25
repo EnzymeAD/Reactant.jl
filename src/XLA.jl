@@ -242,7 +242,7 @@ function DeviceToClientDeviceOrdinal(device::Device)
     for i in 1:naddressable_devices
         (ClientGetAddressableDevice(pjrtclient, i - 1) == device) && return (i - 1)
     end
-    error("Device $(device) is not an addressable device")
+    return error("Device $(device) is not an addressable device")
 end
 
 mutable struct AsyncBuffer
@@ -546,9 +546,12 @@ function Compile(
     GC.@preserve client mod begin
         executable = LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
-                client.client::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule,
-                device_ordinal::Cint, num_replicas::Cint, num_partitions::Cint,
-                use_shardy_partitioner::Bool
+                client.client::Ptr{Cvoid},
+                mod.module_::MLIR.API.MlirModule,
+                device_ordinal::Cint,
+                num_replicas::Cint,
+                num_partitions::Cint,
+                use_shardy_partitioner::Bool,
             )::Ptr{Cvoid}
         )
     end
