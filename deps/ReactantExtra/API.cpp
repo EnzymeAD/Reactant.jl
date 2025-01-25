@@ -582,14 +582,22 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
 
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
-                                                    MlirModule cmod) {
+                                                    MlirModule cmod,
+                                                    int device_ordinal,
+                                                    int num_replicas,
+                                                    int num_partitions,
+                                                    bool use_shardy_partitioner) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
   CompileOptions options;
-  // options.argument_layouts;
-  // options.executable_build_options.set_device_ordinal();
-  // options.executable_build_options.set_result_layout();
+
+  if (device_ordinal >= 0) {
+    options.executable_build_options.set_device_ordinal(device_ordinal);
+  }
+  options.executable_build_options.set_num_replicas(num_replicas);
+  options.executable_build_options.set_num_partitions(num_partitions);
+  options.executable_build_options.set_use_shardy_partitioner(use_shardy_partitioner);
 
   auto addressable_devices = client->addressable_devices();
   if (!addressable_devices.empty()) {

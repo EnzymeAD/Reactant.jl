@@ -614,7 +614,13 @@ end
     @compile [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
 """
 macro compile(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false, :no_nan => false)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true,
+        :sync => false,
+        :no_nan => false,
+        :client => nothing,
+        :device => nothing,
+    )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
@@ -624,7 +630,13 @@ end
 Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false, :no_nan => false)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true,
+        :sync => false,
+        :no_nan => false,
+        :client => nothing,
+        :device => nothing,
+    )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
     )
@@ -955,7 +967,7 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     return concretized_res_names, xla_call_code
 end
 
-function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
+function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, device=nothing)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
@@ -969,22 +981,57 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
             mod, f, args; optimize, no_nan
         )
 
-        if isnothing(client)
+        # Resolve client and device
+        device_ordinal = -1
+        if device === nothing
             if length(linear_args) > 0
-                for (k, _) in Iterators.filter(((_, v),) -> v isa TracedRArray, seen_args)
-                    client = XLA.client(k.data)
-                end
-            end
-            if isnothing(client)
-                client = XLA.default_backend[]
+                devices_list = [
+                    XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray
+                ]
+                @assert allequal(devices_list) "All arguments must be on the same device"
+                device = first(devices_list)
             end
         end
 
+        if client === nothing
+            if device !== nothing
+                client = XLA.client(device)
+            else
+                client = XLA.default_backend[]
+                device = XLA.ClientGetDevice(client, XLA.default_device_idx[])
+                device_ordinal = XLA.default_device_idx[]
+            end
+        else
+            if device !== nothing
+                @assert client == XLA.client(device)
+            else
+                device = XLA.ClientGetDevice(client, XLA.default_device_idx[])
+                device_ordinal = XLA.default_device_idx[]
+            end
+        end
+
+        if device_ordinal < 0
+            device_ordinal = XLA.DeviceToClientDeviceOrdinal(device)
+        end
+
         # compile MLIR module to XLA executable
-        exec = XLA.Compile(client, mod)
-        return exec,
-        linear_args, linear_results, preserved_args, seen_args, concrete_result,
-        isclosure
+        exec = XLA.Compile(
+            client,
+            mod;
+            device_ordinal,
+            num_replicas=1,
+            num_partitions=1,
+            use_shardy_partitioner=false,
+        )
+        return (
+            exec,
+            linear_args,
+            linear_results,
+            preserved_args,
+            seen_args,
+            concrete_result,
+            isclosure,
+        )
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -992,9 +1039,9 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
     return results
 end
 
-function compile(f, args; client=nothing, optimize=true, sync=false, no_nan=false)
+function compile(f, args; sync=false, kwargs...)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
-        f, args; client, optimize, no_nan
+        f, args; kwargs...
     )
 
     preserved_args_idx = last.(preserved_args)

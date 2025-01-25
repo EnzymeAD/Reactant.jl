@@ -236,6 +236,15 @@ function Base.show(io::IO, ::MIME"text/plain", device::Device)
     return nothing
 end
 
+function DeviceToClientDeviceOrdinal(device::Device)
+    pjrtclient = client(device)
+    naddressable_devices = ClientNumAddressableDevices(pjrtclient)
+    for i in 1:naddressable_devices
+        (ClientGetAddressableDevice(pjrtclient, i - 1) == device) && return (i - 1)
+    end
+    error("Device $(device) is not an addressable device")
+end
+
 mutable struct AsyncBuffer
     buffer::Buffer
     future::Union{Future,Nothing}
@@ -526,11 +535,20 @@ end
     end
 end
 
-function Compile(client::Client, mod::MLIR.IR.Module)
+function Compile(
+    client::Client,
+    mod::MLIR.IR.Module;
+    device_ordinal::Int=-1,
+    num_replicas::Int=1,
+    num_partitions::Int=1,
+    use_shardy_partitioner::Bool=false,
+)
     GC.@preserve client mod begin
         executable = LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
-                client.client::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule
+                client.client::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule,
+                device_ordinal::Cint, num_replicas::Cint, num_partitions::Cint,
+                use_shardy_partitioner::Bool
             )::Ptr{Cvoid}
         )
     end
