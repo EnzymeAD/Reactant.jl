@@ -473,7 +473,7 @@ extern "C" int32_t ReactantCudaDriverGetVersion() {
   return data;
 }
 extern "C" int32_t ReactantHermeticCudaGetVersion() {
-  return HERMETIC_CUDA_VERSION;
+  return CUDA_VERSION;
 }
 #else
 extern "C" int32_t ReactantCudaDriverGetVersion() { return 0; }
