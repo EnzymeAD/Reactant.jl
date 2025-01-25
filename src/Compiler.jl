@@ -390,6 +390,8 @@ function cubinFeatures()
     if ver == 0
         return "+ptx86"
     end
+    ver2 = @ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32
+    ver = min(ver, ver2)
     major, ver = divrem(ver, 1000)
     minor, patch = divrem(ver, 10)
     version = VersionNumber(major, minor, patch)
