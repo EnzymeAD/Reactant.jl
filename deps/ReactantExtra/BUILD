@@ -44,7 +44,7 @@ cc_toolchain(
 
 cc_toolchain_config(
     name = "ygg_target_toolchain_config",
-    cpu = "{{BAZEL_CPU}}",
+    cpu = "k8",
     compiler = "compiler",
     toolchain_identifier = "ygg_target_toolchain",
     target_system_name = "{{BB_TARGET}}",
