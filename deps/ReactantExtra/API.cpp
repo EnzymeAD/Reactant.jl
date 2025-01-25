@@ -388,6 +388,10 @@ extern "C" PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
       client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
 }
 
+extern "C" char *ClientGetPlatformName(PjRtClient *client) {
+  return cstr_from_string(client->platform_name());
+}
+
 // To keep in sync with JLAllocatorStats in src/XLA.jl
 struct JLAllocatorStats {
   int64_t num_allocs;

@@ -564,6 +564,22 @@ function ClientGetAddressableDevice(client::Client, idx)
     end
 end
 
+function ClientGetPlatformName(client::Client)
+    GC.@preserve client begin
+        return @ccall MLIR.API.mlir_c.ClientGetPlatformName(
+            client.client::Ptr{Cvoid}
+        )::Cstring
+    end
+end
+
+function DeviceGetProcessIndex(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.DeviceGetProcessIndex(
+            device.device::Ptr{Cvoid}
+        )::Cint
+    end
+end
+
 function is_ready(future::Future)
     GC.@preserve future begin
         return (@ccall MLIR.API.mlir_c.FutureIsReady(future.future::Ptr{Cvoid})::UInt8) != 0
