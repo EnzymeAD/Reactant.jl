@@ -297,11 +297,12 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # rounded to `Inf` (e.g. when `Ti==UInt128 && Tf==Float32`).
             @eval begin
                 function Base.trunc(::Type{$Ti},x::TracedRNumber{$Tf})
-                    if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
+                    # TODO throw error within traced
+                    # if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
                         return Base.unsafe_trunc($Ti,x)
-                    else
-                        throw(Base.InexactError(:trunc, $Ti, x))
-                    end
+                    # else
+                    #     throw(Base.InexactError(:trunc, $Ti, x))
+                    # end
                 end
             end
         else
@@ -311,11 +312,12 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # these types, but not for `Float16` or larger integer types.
             @eval begin
                 function Base.trunc(::Type{$Ti},x::TracedRNumber{$Tf})
-                    if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
+                    # TODO throw error within traced
+                    # if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
                         return Base.unsafe_trunc($Ti,x)
-                    else
-                        throw(Base.InexactError(:trunc, $Ti, x))
-                    end
+                    # else
+                    #     throw(Base.InexactError(:trunc, $Ti, x))
+                    # end
                 end
             end
         end
