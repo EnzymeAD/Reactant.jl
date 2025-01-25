@@ -861,3 +861,10 @@ end
     @test @jit(/(2, ConcreteRNumber(4))) ≈ 0.5
     @test @jit(/(2, ConcreteRNumber(Int32(4)))) ≈ 0.5
 end
+
+@testset "Broadcasting with Range" begin
+    x = ConcreteRArray(rand(10))
+    fn(x) = x .+ (1:length(x))
+
+    @test @jit(fn(x)) ≈ fn(Array(x))
+end
