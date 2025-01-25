@@ -291,6 +291,41 @@ Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = tr
 Base.floor(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.floor(x))
 Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.ceil(x))
 
+for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
+    for Tf in (Float16, Float32, Float64)
+        if Ti <: Unsigned || sizeof(Ti) < sizeof(Tf)
+            # Here `Tf(typemin(Ti))-1` is exact, so we can compare the lower-bound
+            # directly. `Tf(typemax(Ti))+1` is either always exactly representable, or
+            # rounded to `Inf` (e.g. when `Ti==UInt128 && Tf==Float32`).
+            @eval begin
+                function Base.trunc(::Type{$Ti},x::TracedRNumber{$Tf})
+                    if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
+                        return Base.unsafe_trunc($Ti,x)
+                    else
+                        throw(Base.InexactError(:trunc, $Ti, x))
+                    end
+                end
+            end
+        else
+            # Here `eps(Tf(typemin(Ti))) > 1`, so the only value which can be truncated to
+            # `Tf(typemin(Ti)` is itself. Similarly, `Tf(typemax(Ti))` is inexact and will
+            # be rounded up. This assumes that `Tf(typemin(Ti)) > -Inf`, which is true for
+            # these types, but not for `Float16` or larger integer types.
+            @eval begin
+                function Base.trunc(::Type{$Ti},x::TracedRNumber{$Tf})
+                    if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
+                        return Base.unsafe_trunc($Ti,x)
+                    else
+                        throw(Base.InexactError(:trunc, $Ti, x))
+                    end
+                end
+            end
+        end
+    end
+end
+
+Base.unsafe_trunc(T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}) = Ops.convert(T, x)
+
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
 function Base.typed_vcat(::Type{T}, x::TracedRNumber...) where {T}
