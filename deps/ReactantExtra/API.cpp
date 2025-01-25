@@ -9,6 +9,7 @@
 #include "Enzyme/MLIR/Dialect/Ops.h"
 #include "Enzyme/MLIR/Implementations/CoreDialectsAutoDiffImplementations.h"
 #include "Enzyme/MLIR/Passes/Passes.h"
+
 #include "mlir/CAPI/Support.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -472,8 +473,12 @@ extern "C" int32_t ReactantCudaDriverGetVersion() {
   ReactantHandleCuResult(cuDriverGetVersion(&data));
   return data;
 }
+extern "C" int32_t ReactantHermeticCudaGetVersion() {
+  return CUDA_VERSION;
+}
 #else
 extern "C" int32_t ReactantCudaDriverGetVersion() { return 0; }
+extern "C" int32_t ReactantHermeticCudaGetVersion() { return 0; }
 #endif
 
 extern "C" void *UnsafeBufferPointer(PjRtBuffer *buffer) {

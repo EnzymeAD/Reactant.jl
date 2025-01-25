@@ -301,8 +301,10 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
     if no_nan
         append!(
             transform_passes_list,
-            ["no_nan", "no_nan_self_sub_simplify", "no_nan_add_sub_simplify"],
+            ["no_nan", "no_nan_self_sub_simplify", "no_nan_add_sub_simplify(1)"],
         )
+    else
+        push!(transform_passes_list, "no_nan_add_sub_simplify(0)")
     end
     transform_passes = join(
         [
@@ -385,6 +387,8 @@ function cubinFeatures()
     if ver == 0
         return "+ptx86"
     end
+    ver2 = @ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32
+    ver = min(ver, ver2)
     major, ver = divrem(ver, 1000)
     minor, patch = divrem(ver, 10)
     version = VersionNumber(major, minor, patch)
