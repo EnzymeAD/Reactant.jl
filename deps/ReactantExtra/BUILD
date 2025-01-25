@@ -60,7 +60,10 @@ cc_toolchain_config(
         "/opt/{{BB_TARGET}}/{{BB_TARGET}}/include/c++/{{GCC_VERSION}}",
         "/opt/{{BB_TARGET}}/{{BB_TARGET}}/include/c++/{{GCC_VERSION}}/{{BB_TARGET}}",
         "/opt/{{BB_TARGET}}/{{BB_TARGET}}/include/c++/{{GCC_VERSION}}/backward",
-        "/opt/{{BB_TARGET}}/{{BB_TARGET}}/include/c++/{{GCC_VERSION}}/parallel"
+        "/opt/{{BB_TARGET}}/{{BB_TARGET}}/include/c++/{{GCC_VERSION}}/parallel",
+        "/opt/x86_64-linux-musl/lib/clang/16/include",
+        "/opt/x86_64-linux-musl/lib/clang/17/include",
+        "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
     tool_paths = {
         "ar": "/opt/bin/{{BB_FULL_TARGET}}/ar",
