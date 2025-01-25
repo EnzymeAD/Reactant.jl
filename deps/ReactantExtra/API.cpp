@@ -9,6 +9,7 @@
 #include "Enzyme/MLIR/Dialect/Ops.h"
 #include "Enzyme/MLIR/Implementations/CoreDialectsAutoDiffImplementations.h"
 #include "Enzyme/MLIR/Passes/Passes.h"
+
 #include "mlir/CAPI/Support.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
