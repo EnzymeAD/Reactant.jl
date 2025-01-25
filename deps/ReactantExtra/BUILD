@@ -477,11 +477,11 @@ cc_library(
         "@llvm-project//mlir:SCFDialect",
         "@llvm-project//mlir:TransformDialect",
         "@llvm-project//mlir:Transforms",
-        
+
         "@llvm-project//mlir:LLVMIRToLLVMTranslation",
         "@llvm-project//mlir:LLVMIRToNVVMTranslation",
         "@llvm-project//mlir:LLVMIRTransforms",
-        
+
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:AArch64AsmParser",
@@ -497,7 +497,7 @@ cc_library(
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
-        
+
         "@xla//xla:xla_proto_cc",
         "@xla//xla:xla_proto_cc_impl",
 
@@ -508,10 +508,10 @@ cc_library(
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
         "@xla//xla/stream_executor/tpu:tpu_executor",
         "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
-        
+
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
-       
+
 	"@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
 
@@ -554,17 +554,17 @@ cc_library(
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
-        "@llvm-project//mlir:CAPILLVMObjects",    
+        "@llvm-project//mlir:CAPILLVMObjects",
         "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
         "@jax//jaxlib/triton:triton_dialect_capi_objects",
     ] + select({
     "@xla//xla/tsl:is_cuda_enabled_and_oss":[
-        "@xla//xla/stream_executor/cuda:all_runtime", 
+        "@xla//xla/stream_executor/cuda:all_runtime",
         "@xla//xla/service/gpu/model:hlo_op_profiles",
         "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
         "@xla//xla/service/gpu:nvptx_compiler",
         "@xla//xla/service/gpu:gpu_transfer_manager",
-        "@xla//xla/stream_executor:kernel", 
+        "@xla//xla/stream_executor:kernel",
         "@xla//xla/backends/profiler/gpu:device_tracer",
     ],
     "//conditions:default": [],

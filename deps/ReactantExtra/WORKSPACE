@@ -101,8 +101,8 @@ LLVM_TARGETS = select({
 #     strip_prefix = "llvm-project-" + LLVM_COMMIT,
 #     urls = ["https://github.com/llvm/llvm-project/archive/{commit}.tar.gz".format(commit = LLVM_COMMIT)],
 # )
-# 
-# 
+#
+#
 # load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 # maybe(
 #     http_archive,
@@ -114,7 +114,7 @@ LLVM_TARGETS = select({
 #         "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.0.7.zip",
 #     ],
 # )
-# 
+#
 # maybe(
 #     http_archive,
 #     name = "llvm_zstd",
@@ -149,7 +149,7 @@ http_archive(
 
 load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
 python_init_rules()
- 
+
 load("@xla//third_party/py:python_init_repositories.bzl", "python_init_repositories")
 python_init_repositories(
     requirements = {
@@ -160,22 +160,22 @@ python_init_repositories(
         "3.13": "//build:requirements_lock_3_13.txt",
     },
 )
- 
+
 load("@xla//third_party/py:python_init_toolchains.bzl", "python_init_toolchains")
 python_init_toolchains()
-# 
+#
 # load("@xla//third_party/py:python_init_pip.bzl", "python_init_pip")
 # python_init_pip()
-# 
+#
 # load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
 # python_init_rules()
-# 
+#
 # load("@rules_python//python:repositories.bzl", "py_repositories")
-# 
+#
 # py_repositories()
-# 
+#
 # load("@rules_python//python/pip_install:repositories.bzl", "pip_install_dependencies")
-# 
+#
 # pip_install_dependencies()
 
 http_archive(
