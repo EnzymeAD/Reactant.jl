@@ -572,14 +572,6 @@ function ClientGetPlatformName(client::Client)
     end
 end
 
-function DeviceGetProcessIndex(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.DeviceGetProcessIndex(
-            device.device::Ptr{Cvoid}
-        )::Cint
-    end
-end
-
 function is_ready(future::Future)
     GC.@preserve future begin
         return (@ccall MLIR.API.mlir_c.FutureIsReady(future.future::Ptr{Cvoid})::UInt8) != 0
