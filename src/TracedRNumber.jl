@@ -287,7 +287,11 @@ Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
 Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
 Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
 
-Base.unsafe_trunc(T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}) = Ops.convert(TracedRNumber{T}, x)
+function Base.unsafe_trunc(
+    T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}
+)
+    return Ops.convert(TracedRNumber{T}, x)
+end
 
 for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     for Tf in (Float16, Float32, Float64)
@@ -296,10 +300,10 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # directly. `Tf(typemax(Ti))+1` is either always exactly representable, or
             # rounded to `Inf` (e.g. when `Ti==UInt128 && Tf==Float32`).
             @eval begin
-                function Base.trunc(::Type{$Ti},x::TracedRNumber{$Tf})
+                function Base.trunc(::Type{$Ti}, x::TracedRNumber{$Tf})
                     # TODO throw error within traced
                     # if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
-                        return Base.unsafe_trunc($Ti,x)
+                    return Base.unsafe_trunc($Ti, x)
                     # else
                     #     throw(Base.InexactError(:trunc, $Ti, x))
                     # end
@@ -311,10 +315,10 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # be rounded up. This assumes that `Tf(typemin(Ti)) > -Inf`, which is true for
             # these types, but not for `Float16` or larger integer types.
             @eval begin
-                function Base.trunc(::Type{$Ti},x::TracedRNumber{$Tf})
+                function Base.trunc(::Type{$Ti}, x::TracedRNumber{$Tf})
                     # TODO throw error within traced
                     # if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
-                        return Base.unsafe_trunc($Ti,x)
+                    return Base.unsafe_trunc($Ti, x)
                     # else
                     #     throw(Base.InexactError(:trunc, $Ti, x))
                     # end
@@ -324,9 +328,15 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
     end
 end
 
-Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.round(x))
-Base.floor(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.floor(x))
-Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.ceil(x))
+function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
+    return trunc(T, Base.round(x))
+end
+function Base.floor(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
+    return trunc(T, Base.floor(x))
+end
+function Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
+    return trunc(T, Base.ceil(x))
+end
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
