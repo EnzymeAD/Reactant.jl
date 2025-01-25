@@ -22,6 +22,11 @@ mutable struct Client
     end
 end
 
+function Base.show(io::IO, ::MIME"text/plain", client::Client)
+    print(io, "Client($(client.client), platform_name=$(ClientGetPlatformName(client)))")
+    return nothing
+end
+
 @inline function free_client(client::Client)
     @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
 end
@@ -222,6 +227,13 @@ end
 
 struct Device
     device::Ptr{Cvoid}
+end
+
+function Base.show(io::IO, ::MIME"text/plain", device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    print(io, "Device($(device.device), platform_name=$(platform_name))")
+    return nothing
 end
 
 mutable struct AsyncBuffer
@@ -566,10 +578,11 @@ end
 
 function ClientGetPlatformName(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientGetPlatformName(
+        str = @ccall MLIR.API.mlir_c.ClientGetPlatformName(
             client.client::Ptr{Cvoid}
         )::Cstring
     end
+    return unsafe_string(str)
 end
 
 function is_ready(future::Future)
