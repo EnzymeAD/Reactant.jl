@@ -590,7 +590,8 @@ end
 @testset "$op" for op in [:round, :ceil, :floor]
     for x in (rand(Float32, (3, 3)), rand(Float64))
         @eval @test @jit($op.(ConcreteRNumber.($x))) == $op.($x)
-        @eval @test @jit($op.(Int, ConcreteRNumber.($x))) == $op.(Int, $x)
+        int_$op(x) = $op(Int, x)
+        @eval @test @jit($int_$op.(ConcreteRNumber.($x))) == int_$op.($x)
     end
 end
 
