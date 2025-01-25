@@ -115,31 +115,24 @@ gcc_host_compiler_path = parsed_args["gcc_host_compiler_path"]
 cc = parsed_args["cc"]
 hermetic_python_version = parsed_args["hermetic_python_version"]
 
-bazel_build_options = "-c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])"
+build_cmd_list = [bazel_cmd, "build"]
+!isempty(arg) && push!(build_cmd_list, arg)
+append!(build_cmd_list, ["-c", "$(build_kind)"])
+push!(build_cmd_list, "--action_env=JULIA=$(Base.julia_cmd().exec[1])")
 if parsed_args["xnn_disable_avx512fp16"]
-    bazel_build_options *= " --define=xnn_enable_avx512fp16=false"
+    push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
 end
 if parsed_args["xnn_disable_avxvnniint8"]
-    bazel_build_options *= " --define=xnn_enable_avxvnniint8=false"
+    push!(build_cmd_list, "--define=xnn_enable_avxvnniint8=false")
 end
-bazel_build_options *= " --repo_env HERMETIC_PYTHON_VERSION=\"$(hermetic_python_version)\""
-bazel_build_options *= " --repo_env=GCC_HOST_COMPILER_PATH=$(gcc_host_compiler_path)"
-bazel_build_options *= " --repo_env=CC=$(cc)"
-bazel_build_options *= " --check_visibility=false --verbose_failures :libReactantExtra.so"
+push!(build_cmd_list, "--repo_env=HERMETIC_PYTHON_VERSION=$(hermetic_python_version)")
+push!(build_cmd_list, "--repo_env=GCC_HOST_COMPILER_PATH=$(gcc_host_compiler_path)")
+push!(build_cmd_list, "--repo_env=CC=$(cc)")
+push!(build_cmd_list, "--check_visibility=false")
+push!(build_cmd_list, "--verbose_failures")
+push!(build_cmd_list, ":libReactantExtra.so")
 
-if isempty(arg)
-    run(Cmd(`$(bazel_cmd) build $(bazel_build_options)`; dir=source_dir))
-else
-    run(Cmd(`$(bazel_cmd) build $(arg) $(bazel_build_options)`; dir=source_dir))
-end
-
-run(Cmd(`rm -f libReactantExtra.dylib`; dir=joinpath(source_dir, "bazel-bin")))
-run(
-    Cmd(
-        `ln -s libReactantExtra.so libReactantExtra.dylib`;
-        dir=joinpath(source_dir, "bazel-bin"),
-    ),
-)
+run(Cmd(Cmd(build_cmd_list); dir=source_dir))
 
 # Discover built libraries
 built_libs = filter(readdir(joinpath(source_dir, "bazel-bin"))) do file

@@ -37,7 +37,7 @@ function devices(client::XLA.Client = XLA.default_backend[])
     elseif platform_name == "tpu"
         TPUDevice
     else
-        error("Unsupported platform $platform_name")
+        error("Unsupported platform: $(platform_name)")
     end
     return [dev(i - 1, client) for i in 1:XLA.ClientNumDevices(client)]
 end
