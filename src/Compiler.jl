@@ -301,7 +301,12 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
     if no_nan
         append!(
             transform_passes_list,
-            ["no_nan", "no_nan_self_sub_simplify", "no_nan_add_sub_simplify"],
+            ["no_nan", "no_nan_self_sub_simplify", "no_nan_add_sub_simplify(true)"],
+        )
+    else
+        push!(
+            transform_passes_list,
+            "no_nan_add_sub_simplify(false)",
         )
     end
     transform_passes = join(
