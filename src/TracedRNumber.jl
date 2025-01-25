@@ -287,9 +287,7 @@ Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
 Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
 Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
 
-Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.round(x))
-Base.floor(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.floor(x))
-Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.ceil(x))
+Base.unsafe_trunc(T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}) = Ops.convert(T, x)
 
 for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     for Tf in (Float16, Float32, Float64)
@@ -324,7 +322,9 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
     end
 end
 
-Base.unsafe_trunc(T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}) = Ops.convert(T, x)
+Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.round(x))
+Base.floor(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.floor(x))
+Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer} = trunc(T,Base.ceil(x))
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
