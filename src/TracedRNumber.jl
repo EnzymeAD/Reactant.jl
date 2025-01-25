@@ -287,7 +287,7 @@ Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
 Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
 Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
 
-Base.unsafe_trunc(T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}) = Ops.convert(T, x)
+Base.unsafe_trunc(T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}) = Ops.convert(TracedRNumber{T}, x)
 
 for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     for Tf in (Float16, Float32, Float64)
