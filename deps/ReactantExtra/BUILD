@@ -795,6 +795,21 @@ gentbl_cc_library(
     tblgen = "//:mlir-jl-tblgen",
 )
 
+gentbl_cc_library(
+    name = "ShardyJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Shardy.jl"
+        )
+    ],
+    td_file = "@shardy//shardy/dialect/sdy/ir:ops.td",
+    deps = [
+        "@shardy//shardy/dialect/sdy/ir:sdy_td_files",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    includes = ["external/shardy"],
+)
+
 genrule(
     name = "libMLIR_h.jl",
     tags = [
