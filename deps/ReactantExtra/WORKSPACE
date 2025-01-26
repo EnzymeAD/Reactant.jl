@@ -186,6 +186,13 @@ http_archive(
 )
 
 http_archive(
+    name = "shardy",
+    sha256 = "",
+    urls = ["https://github.com/openxla/shardy/archive/main.tar.gz"],
+    strip_prefix = "shardy-main/",
+)
+
+http_archive(
     name = "build_bazel_rules_apple",
     sha256 = "34c41bfb59cdaea29ac2df5a2fa79e5add609c71bb303b2ebb10985f93fa20e7",
     url = "https://github.com/bazelbuild/rules_apple/releases/download/3.1.1/rules_apple.3.1.1.tar.gz",
