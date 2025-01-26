@@ -317,9 +317,11 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
     passes = ["inline{default-pipeline=canonicalize max-iterations=4}"]
     if sroa
+        push!(passes, "propagate-constant-bounds")
         push!(passes, "sroa-wrappers")
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
+        push!(passes, "remove-duplicate-func-def")
     end
     push!(passes, func_passes)
     return join(passes, ',')
