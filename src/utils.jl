@@ -1,5 +1,5 @@
 
-function apply(f, args...; kwargs...)
+function apply(f::F, args...; kwargs...) where {F}
     return f(args...; kwargs...)
 end
 

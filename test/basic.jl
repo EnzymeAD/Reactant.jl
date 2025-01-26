@@ -588,8 +588,13 @@ end
 end
 
 @testset "$op" for op in [:round, :ceil, :floor]
+    intop = Symbol("int_$op")
     for x in (rand(Float32, (3, 3)), rand(Float64))
-        @eval @test @jit($op.(ConcreteRNumber.($x))) == $op.($x)
+        @eval begin
+            @test @jit($op.(ConcreteRNumber.($x))) == $op.($x)
+            $intop(x) = $op(Int, x)
+            @test @jit($intop.(ConcreteRNumber.($x))) == $intop.($x)
+        end
     end
 end
 
