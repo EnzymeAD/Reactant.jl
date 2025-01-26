@@ -298,6 +298,8 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
         "replace_neg_add_with_subtract",
         "log_const_prop<1>",
         "log_plus_one_const_prop<1>",
+        "while_deadresult<1>",
+        "while_simplify<1>",
     ]
     if no_nan
         append!(
