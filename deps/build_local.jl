@@ -142,6 +142,11 @@ end
 lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))
 isfile(lib_path) || error("Could not find library $lib_path in build directory")
 
+if build_backend == "cuda"
+    if !Base.Filesystem.ispath(joinpath(source_dir, "cuda_nvcc"))
+        Base.Filesystem.symlink(joinpath(source_dir, "bazel-bin", "libReactantExtra.so.runfiles", "cuda_nvcc"), joinpath(source_dir, "cuda_nvcc"))
+    end
+end
 # Tell ReactantExtra_jll to load our library instead of the default artifact one
 set_preferences!(
     joinpath(dirname(@__DIR__), "LocalPreferences.toml"),
