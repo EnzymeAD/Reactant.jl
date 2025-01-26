@@ -37,6 +37,7 @@
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
 #include "llvm/Support/TargetSelect.h"
+#include "shardy/dialect/sdy/ir/dialect.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
@@ -700,6 +701,8 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::registerLLVMDialectImport(registry);
   mlir::registerNVVMDialectImport(registry);
   mlir::LLVM::registerInlinerInterface(registry);
+
+  mlir::sdy::registerAllDialects(registry);
 
   /*
     registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
