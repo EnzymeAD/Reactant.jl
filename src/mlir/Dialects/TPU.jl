@@ -402,6 +402,25 @@ function erase_memref_layout(operand::Value; result::IR.Type, location=Location(
     )
 end
 
+function fptosi(input::Value; output::IR.Type, rounding_mode, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("rounding_mode", rounding_mode),]
+
+    return create_operation(
+        "tpu.fptosi",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function gather(source::Value; output::IR.Type, indices, dimension, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[source,]
