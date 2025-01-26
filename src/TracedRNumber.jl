@@ -1,14 +1,7 @@
 module TracedRNumberOverrides
 
 using ..Reactant:
-    Reactant,
-    TracedRNumber,
-    TracedRArray,
-    ReactantPrimitive,
-    TracedUtils,
-    Ops,
-    MLIR,
-    unwrapped_eltype
+    Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
 using ReactantCore
 
 ReactantCore.is_traced(::TracedRNumber) = true
@@ -281,6 +274,9 @@ end
 
 function Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N}
     return TracedUtils.broadcast_to_size(x, dims)
+end
+function Base.fill(x::TracedRNumber, ::Tuple{})
+    return TracedUtils.broadcast_to_size(x, ())
 end
 
 function Base.float(x::TracedRNumber{T}) where {T}

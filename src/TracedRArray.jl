@@ -7,7 +7,6 @@ using ..Reactant:
     Reactant,
     TracedRArray,
     TracedRNumber,
-    ReactantPrimitive,
     WrappedTracedRArray,
     AnyTracedRArray,
     AnyTracedRVector,
@@ -393,8 +392,8 @@ function Base.mapreduce(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location(), MLIR.IR.Location()])
 
     args = (
-        TracedRNumber{op_in_T}((), MLIR.IR.argument(fnbody, 1)),
-        TracedRNumber{op_in_T}((), MLIR.IR.argument(fnbody, 2)),
+        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 1)),
+        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 2)),
     )
 
     resty = MLIR.IR.block!(fnbody) do
@@ -477,14 +476,14 @@ end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
-) where {T<:ReactantPrimitive,N}
+) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
     return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
 end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
-) where {T<:ReactantPrimitive,N}
+) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
     return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
 end
@@ -504,7 +503,7 @@ end
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
-    fn = if bc.f isa Type && bc.f <: ReactantPrimitive
+    fn = if bc.f isa Type && bc.f <: Reactant.ReactantPrimitive
         TracedUtils.TypeCast{bc.f}()
     else
         bc.f

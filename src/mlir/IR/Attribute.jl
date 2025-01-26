@@ -608,7 +608,7 @@ function DenseElementsAttribute(values::AbstractArray{Float16})
     )
 end
 
-function DenseElementsAttribute(values::AbstractArray{<:Complex})
+function DenseElementsAttribute(values::AbstractArray)
     shaped_type = TensorType(size(values), Type(eltype(values)))
     return Attribute(
         API.mlirDenseElementsAttrRawBufferGet(

@@ -58,6 +58,9 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Control Flow" include("control_flow.jl")
         @safetestset "Sorting" include("sorting.jl")
         @safetestset "Indexing" include("indexing.jl")
+        if !Sys.isapple()
+            @safetestset "Custom Number Types" include("custom_number_types.jl")
+        end
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"

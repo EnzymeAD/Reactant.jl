@@ -79,6 +79,7 @@ end
 @noinline function constant(
     x::T; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T<:Number}
+    x isa TracedRNumber && return x
     res = constant(fill(x); location)
     return TracedRNumber{T}((), res.mlir_data)
 end

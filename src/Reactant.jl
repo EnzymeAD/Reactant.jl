@@ -18,45 +18,7 @@ using Enzyme
 
 struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
-@static if isdefined(Core, :BFloat16)
-    const ReactantFloat = Union{Float16,Core.BFloat16,Float32,Float64}
-else
-    const ReactantFloat = Union{Float16,Float32,Float64}
-end
-
-@static if isdefined(Core, :BFloat16)
-    const ReactantComplexFloat = Union{
-        Complex{Float16},Complex{Core.BFloat16},Complex{Float32},Complex{Float64}
-    }
-else
-    const ReactantComplexFloat = Union{Complex{Float16},Complex{Float32},Complex{Float64}}
-end
-
-const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
-
-const ReactantComplexInt = Union{
-    Complex{Int8},
-    Complex{UInt8},
-    Complex{Int16},
-    Complex{UInt16},
-    Complex{Int32},
-    Complex{UInt32},
-    Complex{Int64},
-    Complex{UInt64},
-    Complex{Int128},
-    Complex{UInt128},
-}
-
-const ReactantFloatInt = Union{
-    Base.uniontypes(ReactantInt)...,Base.uniontypes(ReactantFloat)...
-}
-
-const ReactantPrimitive = Union{
-    Bool,
-    Base.uniontypes(ReactantFloatInt)...,
-    Base.uniontypes(ReactantComplexInt)...,
-    Base.uniontypes(ReactantComplexFloat)...,
-}
+include("PrimitiveTypes.jl")
 
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
@@ -175,7 +137,7 @@ const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
@@ -191,12 +153,12 @@ unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
-function aos_to_soa(x::AbstractArray{<:ConcreteRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{ConcreteRNumber{T}}) where {T}
     x_c = ConcreteRArray(zeros(T, size(x)))
     x_c .= x
     return x_c
 end
-function aos_to_soa(x::AbstractArray{<:TracedRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{TracedRNumber{T}}) where {T}
     for i in eachindex(x)
         if !isassigned(x, i)
             x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)

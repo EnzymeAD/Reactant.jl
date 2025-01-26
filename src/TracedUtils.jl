@@ -308,16 +308,15 @@ function __take_region(compiled_fn)
     return region
 end
 
-elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
+elem_apply(::Type{T}, x::TracedRArray{T}) where {T} = x
 
-struct TypeCast{T<:ReactantPrimitive} <: Function end
+struct TypeCast{T<:Reactant.ReactantPrimitive} <: Function end
 
 function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
     return promote_to(TracedRNumber{T}, x)
 end
 
-function elem_apply(::Type{T}, x::TracedRArray) where {T<:ReactantPrimitive}
-    # Special Path to prevent going down a despecialized path
+function elem_apply(::Type{T}, x::TracedRArray) where {T<:Reactant.ReactantPrimitive}
     return elem_apply(TypeCast{T}(), x)
 end
 
