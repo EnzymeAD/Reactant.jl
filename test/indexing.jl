@@ -233,3 +233,47 @@ end
     @test @jit(fn(x_ra, idx1_ra, idx2_ra, idx3)) ≈
         fn(Array(x_ra), Array(idx1_ra), Array(idx2_ra), idx3)
 end
+
+function issue_617(outf, fr, pr, I)
+    tmp = fr .* reshape(pr, size(fr))
+    outv = @view outf[I]
+    vtmp = vec(tmp)
+    outv .= vtmp
+    return outf
+end
+
+@testset "issue #617" begin
+    N, M = 4, 6
+
+    f = rand(ComplexF64, N, N)
+    p = rand(ComplexF64, N * N)
+    I = 1:(N^2)
+    out = rand(ComplexF64, M, M)
+
+    fr = Reactant.to_rarray(f)
+    pr = Reactant.to_rarray(p)
+    outr = Reactant.to_rarray(out)
+    Ir = Reactant.to_rarray(I)
+
+    @test @jit(issue_617(outr, fr, pr, Ir)) ≈ issue_617(out, f, p, I)
+end
+
+function scalar_setindex(x, idx, val)
+    @allowscalar x[idx] = val
+    return x
+end
+
+@testset "scalar setindex" begin
+    x = zeros(4, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(scalar_setindex(x_ra, 1, 1)) ≈ scalar_setindex(x, 1, 1)
+    @test @allowscalar x_ra[1] == 1
+
+    x = zeros(4, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(scalar_setindex(x_ra, ConcreteRNumber(1), 1)) ≈ scalar_setindex(x, 1, 1)
+    @test @allowscalar x_ra[1] == 1
+end
+

@@ -1479,10 +1479,12 @@ instead.
 @noinline function scatter_setindex(
     dest::TracedRArray{T,N},
     scatter_indices::TracedRArray{Int64,2},
-    updates::TracedRArray{T,1},
-) where {T,N}
+    updates::TracedRArray{T2,1},
+) where {T,N,T2}
     @assert length(updates) == size(scatter_indices, 1)
     @assert size(scatter_indices, 2) == N
+
+    updates = convert(TracedRArray{T,1}, updates)
 
     update_computation = MLIR.IR.Region()
     block = MLIR.IR.Block(
