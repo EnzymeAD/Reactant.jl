@@ -428,8 +428,18 @@ function link(job, compiled)
     return compiled
 end
 
+function abi_sizeof(@nospecialize(x))
+    return sizeof(typeof(x))
+end
+function abi_sizeof(@nospecialize(x::CuTracedArray))
+    return sizeof(Ptr)
+end
+function abi_sizeof(@nospecialize(x::CUDA.CuDeviceArray))
+    return sizeof(Ptr)
+end
+
 function to_bytes(x)
-    sz = sizeof(x)
+    sz = abi_sizeof(x)
     ref = Ref(x)
     GC.@preserve ref begin
         ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
@@ -596,7 +606,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             )
             push!(allocs, (alloc, argty))
 
-            sz = sizeof(a)
+            sz = abi_sizeof(a)
             array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
             cdata = MLIR.IR.result(
                 MLIR.Dialects.llvm.mlir_constant(;
