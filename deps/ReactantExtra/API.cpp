@@ -715,8 +715,6 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::registerNVVMDialectImport(registry);
   mlir::LLVM::registerInlinerInterface(registry);
 
-  mlir::sdy::registerAllDialects(registry);
-
   /*
     registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
       LLVM::LLVMFunctionType::attachInterface<MemRefInsider>(*ctx);
