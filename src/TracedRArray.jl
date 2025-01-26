@@ -216,6 +216,61 @@ end
 
 maybe_assert_scalar_setindexing(args...) = nothing
 
+function Base.setindex!(
+    a::TracedRArray{T,N}, v, indices::Union{Int,TracedRNumber{Int}}
+) where {T,N}
+    GPUArraysCore.assertscalar(
+        "setindex!(::TracedRArray, v, ::Union{Int, TracedRNumber{Int}})"
+    )
+    if indices isa Int
+        indices = TracedUtils.promote_to(TracedRNumber{Int}, indices)
+    end
+    indices = scalar_index_to_cartesian(
+        TracedUtils.broadcast_to_size(indices, (1,)), size(a)
+    )
+    v = v isa Number ? v : vec(v)
+    res = Ops.scatter_setindex(a, indices, TracedUtils.broadcast_to_size(v, (1,)))
+    set_mlir_data!(a, get_mlir_data(res))
+    return a
+end
+
+function Base.setindex!(a::TracedRArray{T,N}, v, indices) where {T,N}
+    if !(indices isa TracedRArray)
+        indices = collect(indices)
+        eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
+        indices = TracedUtils.promote_to(TracedRArray{Int,ndims(indices)}, indices)
+    end
+    v = v isa Number ? v : vec(v)
+    v = materialize_traced_array(TracedUtils.broadcast_to_size(v, size(a)))
+    res = Ops.scatter_setindex(a, scalar_index_to_cartesian(vec(indices), size(a)), v)
+    set_mlir_data!(a, get_mlir_data(res))
+    return a
+end
+
+function Base.setindex!(a::TracedRArray{T,N}, v, ::Colon) where {T,N}
+    v = TracedUtils.broadcast_to_size(v, size(a))
+    set_mlir_data!(a, get_mlir_data(v))
+    return a
+end
+
+function Base.setindex!(a::TracedRArray{T,N}, v, indices::CartesianIndex{N}) where {T,N}
+    GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::CartesianIndex{N})")
+    indices =
+        materialize_traced_array(
+            reshape(
+                TracedUtils.promote_to(
+                    TracedRArray{Int,1}, collect(Int64, vcat(Tuple(indices)...))
+                ),
+                1,
+                N,
+            ),
+        ) .- 1
+    v = v isa Number ? v : vec(v)
+    res = Ops.scatter_setindex(a, indices, TracedUtils.broadcast_to_size(v, (1,)))
+    set_mlir_data!(a, get_mlir_data(res))
+    return a
+end
+
 function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
     maybe_assert_scalar_setindexing(a, indices...)
 
