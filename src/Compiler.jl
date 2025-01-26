@@ -321,7 +321,7 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
         push!(passes, "sroa-wrappers")
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
-        # push!(passes, "remove-duplicate-func-def")
+        push!(passes, "remove-duplicate-func-def")
     end
     push!(passes, func_passes)
     return join(passes, ',')
