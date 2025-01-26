@@ -43,6 +43,7 @@ end
 
 include("mlir/MLIR.jl")
 include("XLA.jl")
+include("Devices.jl")
 include("Interpreter.jl")
 include("Profiler.jl")
 

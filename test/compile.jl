@@ -124,8 +124,8 @@ end
     @test occursin("subtract", repr(hlo))
     @test occursin("add", repr(hlo))
     hlo = @code_hlo no_nan = true fn(x_ra, y_ra)
-    @test_broken !occursin("subtract", repr(hlo))
-    @test_broken !occursin("add", repr(hlo))
+    @test !occursin("subtract", repr(hlo))
+    @test !occursin("add", repr(hlo))
 end
 
 # While a bit specific, the following is used to check for a bug in `should_rewrite_call`

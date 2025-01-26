@@ -22,6 +22,13 @@ mutable struct Client
     end
 end
 
+Base.:(==)(a::Client, b::Client) = a.client == b.client
+
+function Base.show(io::IO, ::MIME"text/plain", client::Client)
+    print(io, "Client($(client.client), platform_name=$(ClientGetPlatformName(client)))")
+    return nothing
+end
+
 @inline function free_client(client::Client)
     @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
 end
@@ -67,8 +74,6 @@ function CPUClient(asynchronous=false, node_id=0, num_nodes=1; checkcount=true)
 end
 
 function GPUClient(node_id=0, num_nodes=1, platform="gpu")
-    #allowed_devices = [-1]
-    # GC.@preserve allowed_devices begin
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
     refstr = Ref{Cstring}()
     client = ccall(
@@ -224,6 +229,22 @@ end
 
 struct Device
     device::Ptr{Cvoid}
+end
+
+function Base.show(io::IO, ::MIME"text/plain", device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    print(io, "Device($(device.device), platform_name=$(platform_name))")
+    return nothing
+end
+
+function DeviceToClientDeviceOrdinal(device::Device)
+    pjrtclient = client(device)
+    naddressable_devices = ClientNumAddressableDevices(pjrtclient)
+    for i in 1:naddressable_devices
+        (ClientGetAddressableDevice(pjrtclient, i - 1) == device) && return (i - 1)
+    end
+    return error("Device $(device) is not an addressable device")
 end
 
 mutable struct AsyncBuffer
@@ -516,11 +537,23 @@ end
     end
 end
 
-function Compile(client::Client, mod::MLIR.IR.Module)
+function Compile(
+    client::Client,
+    mod::MLIR.IR.Module;
+    device_ordinal::Int=-1,
+    num_replicas::Int=1,
+    num_partitions::Int=1,
+    use_shardy_partitioner::Bool=false,
+)
     GC.@preserve client mod begin
         executable = LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
-                client.client::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule
+                client.client::Ptr{Cvoid},
+                mod.module_::MLIR.API.MlirModule,
+                device_ordinal::Cint,
+                num_replicas::Cint,
+                num_partitions::Cint,
+                use_shardy_partitioner::Bool,
             )::Ptr{Cvoid}
         )
     end
@@ -564,6 +597,15 @@ function ClientGetAddressableDevice(client::Client, idx)
             )::Ptr{Cvoid}
         )
     end
+end
+
+function ClientGetPlatformName(client::Client)
+    GC.@preserve client begin
+        str = @ccall MLIR.API.mlir_c.ClientGetPlatformName(
+            client.client::Ptr{Cvoid}
+        )::Cstring
+    end
+    return unsafe_string(str)
 end
 
 function is_ready(future::Future)

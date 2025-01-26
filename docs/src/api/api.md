@@ -33,3 +33,10 @@ Reactant.Profiler.with_profiler
 Reactant.Profiler.annotate
 Reactant.Profiler.@annotate
 ```
+
+## Devices
+
+```@docs
+Reactant.devices
+Reactant.addressable_devices
+```
