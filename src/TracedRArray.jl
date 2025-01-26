@@ -234,15 +234,36 @@ function Base.setindex!(
     return a
 end
 
+# Avoid ambiguity
+function Base.setindex!(
+    a::TracedRArray{T,1}, v, indices::Union{Int,TracedRNumber{Int}}
+) where {T}
+    GPUArraysCore.assertscalar(
+        "setindex!(::TracedRArray, v, ::Union{Int, TracedRNumber{Int}})"
+    )
+    if indices isa Int
+        indices = TracedUtils.promote_to(TracedRNumber{Int}, indices)
+    end
+    indices = scalar_index_to_cartesian(
+        TracedUtils.broadcast_to_size(indices, (1,)), size(a)
+    )
+    v = v isa Number ? v : vec(v)
+    res = Ops.scatter_setindex(a, indices, TracedUtils.broadcast_to_size(v, (1,)))
+    set_mlir_data!(a, get_mlir_data(res))
+    return a
+end
+
 function Base.setindex!(a::TracedRArray{T,N}, v, indices) where {T,N}
     if !(indices isa TracedRArray)
         indices = collect(indices)
         eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
         indices = TracedUtils.promote_to(TracedRArray{Int,ndims(indices)}, indices)
     end
-    v = v isa Number ? v : vec(v)
-    v = materialize_traced_array(TracedUtils.broadcast_to_size(v, size(a)))
-    res = Ops.scatter_setindex(a, scalar_index_to_cartesian(vec(indices), size(a)), v)
+    res = Ops.scatter_setindex(
+        a,
+        scalar_index_to_cartesian(vec(indices), size(a)),
+        materialize_traced_array(vec(v)),
+    )
     set_mlir_data!(a, get_mlir_data(res))
     return a
 end
@@ -299,7 +320,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
         indices_list = generate_index_list(indices_list...)
         res = Ops.scatter_setindex(a, indices_list, Ops.reshape(v, length(v)))
-        a.mlir_data = res.mlir_data
+        set_mlir_data!(a, get_mlir_data(res))
         return v
     end
 
@@ -330,7 +351,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         ),
         1,
     )
-    a.mlir_data = res
+    set_mlir_data!(a, res)
     return v
 end
 
