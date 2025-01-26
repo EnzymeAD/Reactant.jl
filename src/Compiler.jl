@@ -1005,7 +1005,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
             end
         else
             if device !== nothing
-                @assert client == XLA.client(device)
+                @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
             else
                 device = XLA.ClientGetDevice(client, XLA.default_device_idx[])
                 device_ordinal = XLA.default_device_idx[]

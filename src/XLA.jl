@@ -22,6 +22,8 @@ mutable struct Client
     end
 end
 
+Base.:(==)(a::Client, b::Client) = a.client == b.client
+
 function Base.show(io::IO, ::MIME"text/plain", client::Client)
     print(io, "Client($(client.client), platform_name=$(ClientGetPlatformName(client)))")
     return nothing
