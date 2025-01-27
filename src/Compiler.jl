@@ -432,7 +432,7 @@ function cubinFeatures()
 end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
-const DEBUG_LLVMIR = Ref{Bool}(false)
+const DUMP_LLVMIR = Ref{Bool}(false)
 
 function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false)
     # Explicitly don't use block! to avoid creating a closure, which creates

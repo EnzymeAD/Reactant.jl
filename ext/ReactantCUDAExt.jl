@@ -353,7 +353,7 @@ function compile(job)
         end
         entryname = LLVM.name(meta.entry)
 
-        if Reactant.DUMP_LLVMIR[]
+        if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl immediate IR\n", string(mod))
         end
         opt_level = 2
