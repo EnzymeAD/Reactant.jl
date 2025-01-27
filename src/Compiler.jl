@@ -319,7 +319,7 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
     if sroa
         push!(passes, "propagate-constant-bounds")
         if DUMP_LLVMIR[]
-            push!(passes, "sroa-wrappers{dump_prellvm=true, dump_postllvm=true}")
+            push!(passes, "sroa-wrappers{dump_prellvm=true dump_postllvm=true}")
         else
             push!(passes, "sroa-wrappers")
         end
