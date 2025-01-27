@@ -8,60 +8,71 @@ using ..Reactant:
     Reactant,
     TracedRArray,
     TracedRNumber,
+    ConcreteRNG,
     TracedRNG,
     AnyTracedRArray,
     Reactant,
     TracedUtils,
     Ops,
-    ConcreteRArray
+    ConcreteRArray,
+    ConcreteRNumber,
+    unwrapped_eltype
 using Random: Random, AbstractRNG
 
-@noinline function make_seed(rng::AbstractRNG=Random.RandomDevice())
-    # XXX: We should really be able to call this here. But with our AbsInt it leads to a
-    #      segfault. So we'll just call it in the rand! method.
-    # return rand(rng, UInt64, 2)
-    seed = Array{UInt64}(undef, 2)
-    Random.rand!(rng, seed)
-    return seed
-end
+@noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =
+    Random.rand!(rng, Vector{UInt64}(undef, 2))
 
-function Random.seed!(rng::TracedRNG, seed::Number)
+@noinline function Random.seed!(rng::TracedRNG, seed::Number)
     if seed isa TracedRNumber
         error("Passing in `TracedRNumber` as a seed is not supported. Please pass in a \
                `TracedRArray` of the appropriate size instead.")
     end
 
     seed = reinterpret(UInt64, Random.hash_seed(seed))
-    seed = if Reactant.within_reactant_interpreter()
-        TracedUtils.promote_to(TracedRArray{UInt64,1}, seed[1:length(rng.seed)])
-    else
-        ConcreteRArray(seed[1:length(rng.seed)])
-    end
-    return Random.seed!(rng, seed)
+    return Random.seed!(
+        rng, TracedUtils.promote_to(TracedRArray{UInt64,1}, seed[1:length(rng.seed)])
+    )
 end
 
-function Random.seed!(rng::TracedRNG, seed::AbstractArray{<:Integer,1})
+@noinline function Random.seed!(rng::TracedRNG, seed::AbstractVector{<:Integer})
     return Random.seed!(rng, UInt64.(seed))
 end
 
-function Random.seed!(rng::TracedRNG, seed::AbstractArray{UInt64,1})
+@noinline function Random.seed!(rng::TracedRNG, seed::AbstractVector{UInt64})
     return Random.seed!(rng, TracedUtils.promote_to(TracedRArray{UInt64,1}, seed))
 end
 
-function Random.seed!(
-    rng::TracedRNG, seed::Union{ConcreteRArray{UInt64,1},TracedRArray{UInt64,1}}
-)
+@noinline function Random.seed!(rng::TracedRNG, seed::TracedRArray{UInt64,1})
     rng.seed = seed
     return rng
 end
 
-@noinline TracedRNG() = TracedRNG(ConcreteRArray(make_seed()))
-@noinline TracedRNG(seed::ConcreteRArray{UInt64,1}) = TracedRNG(seed, "DEFAULT")
-
-@noinline function default_rng()
-    Reactant.within_reactant_interpreter() || return TracedRNG()
-    return TracedRNG(TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed()), "DEFAULT")
+@noinline function Random.seed!(rng::ConcreteRNG, seed::Number)
+    seed isa ConcreteRNumber && (seed = unwrapped_eltype(seed)(seed))
+    seed = reinterpret(UInt64, Random.hash_seed(seed))
+    return Random.seed!(rng, ConcreteRArray(seed))
 end
+
+@noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractVector{<:Integer})
+    return Random.seed!(rng, seed)
+end
+
+@noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractVector{UInt64})
+    return Random.seed!(rng, ConcreteRArray(seed))
+end
+
+@noinline function Random.seed!(rng::ConcreteRNG, seed::ConcreteRArray{UInt64,1})
+    rng.seed = seed
+    return rng
+end
+
+Base.copy(rng::ConcreteRNG) = ConcreteRNG(copy(rng.seed), rng.algorithm)
+Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
+
+@noinline ConcreteRNG() = ConcreteRNG(ConcreteRArray(make_seed()))
+@noinline ConcreteRNG(seed::ConcreteRArray{UInt64,1}) = ConcreteRNG(seed, "DEFAULT")
+
+@noinline default_rng() = ConcreteRNG()
 
 @noinline rng_algorithm(rng::TracedRNG) = rng.algorithm
 @noinline rng_algorithm(::AbstractRNG) = "DEFAULT"

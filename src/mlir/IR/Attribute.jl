@@ -608,7 +608,7 @@ function DenseElementsAttribute(values::AbstractArray{Float16})
     )
 end
 
-function DenseElementsAttribute(values::AbstractArray{<:Complex})
+function DenseElementsAttribute(values::AbstractArray)
     shaped_type = TensorType(size(values), Type(eltype(values)))
     return Attribute(
         API.mlirDenseElementsAttrRawBufferGet(
@@ -706,6 +706,9 @@ function DenseArrayAttribute end
 )
 @llvmversioned min = v"16" DenseArrayAttribute(
     values::AbstractArray{Int8}; context::Context=context()
+) = Attribute(API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values)))
+@llvmversioned min = v"16" DenseArrayAttribute(
+    values::AbstractArray{UInt8}; context::Context=context()
 ) = Attribute(API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values)))
 @llvmversioned min = v"16" DenseArrayAttribute(
     values::AbstractArray{Int16}; context::Context=context()

@@ -1,6 +1,3 @@
-pushfirst!(LOAD_PATH, joinpath(@__DIR__, ".."))
-pushfirst!(LOAD_PATH, joinpath(@__DIR__, "../lib/ReactantCore/"))
-
 using Reactant, ReactantCore
 using Documenter, DocumenterVitepress
 
@@ -27,7 +24,8 @@ examples = [
 pages = [
     "Reactant.jl" => "index.md",
     "Introduction" => ["Getting Started" => "introduction/index.md"],
-    "Tutorials" => ["Overview" => "tutorials/index.md"],
+    "Tutorials" =>
+        ["Overview" => "tutorials/index.md", "Profiling" => "tutorials/profiling.md"],
     "API Reference" => [
         "Reactant API" => "api/api.md",
         "Ops" => "api/ops.md",

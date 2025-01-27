@@ -4,6 +4,7 @@ using ReactantCore: ReactantCore, @trace, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
+using Functors: @leaf
 
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
@@ -17,42 +18,7 @@ using Enzyme
 
 struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
-@static if isdefined(Core, :BFloat16)
-    const ReactantPrimitive = Union{
-        Bool,
-        Int8,
-        UInt8,
-        Int16,
-        UInt16,
-        Int32,
-        UInt32,
-        Int64,
-        UInt64,
-        Float16,
-        Core.BFloat16,
-        Float32,
-        Float64,
-        Complex{Float32},
-        Complex{Float64},
-    }
-else
-    const ReactantPrimitive = Union{
-        Bool,
-        Int8,
-        UInt8,
-        Int16,
-        UInt16,
-        Int32,
-        UInt32,
-        Int64,
-        UInt64,
-        Float16,
-        Float32,
-        Float64,
-        Complex{Float32},
-        Complex{Float64},
-    }
-end
+include("PrimitiveTypes.jl")
 
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
@@ -77,9 +43,15 @@ end
 
 include("mlir/MLIR.jl")
 include("XLA.jl")
+include("Devices.jl")
 include("Interpreter.jl")
+include("Profiler.jl")
+
+const with_profiler = Profiler.with_profiler
 
 include("utils.jl")
+
+@leaf MissingTracedValue
 
 mutable struct TracedRNumber{T} <: RNumber{T}
     paths::Tuple
@@ -94,6 +66,8 @@ mutable struct TracedRNumber{T} <: RNumber{T}
         return new{T}(paths, mlir_data)
     end
 end
+
+@leaf TracedRNumber
 
 mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     paths::Tuple
@@ -110,6 +84,8 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         return new{T,N}(paths, mlir_data, shape)
     end
 end
+
+@leaf TracedRArray
 
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
@@ -146,10 +122,14 @@ mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
 end
 
+@leaf ConcreteRNumber
+
 mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     data::XLA.AsyncBuffer
     shape::NTuple{N,Int}
 end
+
+@leaf ConcreteRArray
 
 Adapt.parent_type(::Type{ConcreteRArray{T,N}}) where {T,N} = ConcreteRArray{T,N}
 
@@ -158,7 +138,7 @@ const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
@@ -174,18 +154,28 @@ unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
-function aos_to_soa(x::AbstractArray{<:ConcreteRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{ConcreteRNumber{T}}) where {T}
     x_c = ConcreteRArray(zeros(T, size(x)))
     x_c .= x
     return x_c
 end
-function aos_to_soa(x::AbstractArray{<:TracedRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{TracedRNumber{T}}) where {T}
     for i in eachindex(x)
         if !isassigned(x, i)
             x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
         end
     end
     return Ops.reshape(vcat(x...), size(x)...)
+end
+
+mutable struct ConcreteRNG <: Random.AbstractRNG
+    seed::ConcreteRArray{UInt64,1}
+    const algorithm::String
+end
+
+mutable struct TracedRNG <: Random.AbstractRNG
+    seed::TracedRArray{UInt64,1}
+    const algorithm::String
 end
 
 include("Ops.jl")
@@ -195,11 +185,6 @@ include("TracedRNumber.jl")
 include("TracedRArray.jl")
 
 include("ConcreteRArray.jl")
-
-mutable struct TracedRNG <: Random.AbstractRNG
-    seed::Union{ConcreteRArray{UInt64,1},TracedRArray{UInt64,1}}
-    const algorithm::String
-end
 
 use_overlayed_version(iter) = any(use_overlayed_version, iter)
 
@@ -218,6 +203,10 @@ end
 # StdLib Overloads
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
+include("stdlibs/Base.jl")
+
+# Other Integrations
+include("Enzyme.jl")
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
@@ -229,7 +218,7 @@ include("Overlay.jl")
 
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
-)::RT where {copy_if_inactive,RT<:RArray}
+)::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -244,12 +233,21 @@ end
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
 export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace
 
-const registry = Ref{MLIR.IR.DialectRegistry}()
-function __init__()
+const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
+
+function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
     @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
         registry[]::MLIR.API.MlirDialectRegistry
     )::Cvoid
+end
+
+function deinitialize_dialect()
+    return registry[] = nothing
+end
+
+function __init__()
+    return initialize_dialect()
 end
 
 function set_default_backend(backend::XLA.Client)
@@ -259,5 +257,7 @@ end
 function set_default_backend(backend::String)
     return set_default_backend(XLA.backends[backend])
 end
+
+include("Precompile.jl")
 
 end # module

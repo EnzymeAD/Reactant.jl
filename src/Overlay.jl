@@ -3,20 +3,19 @@
 #       correctly. Once that (https://github.com/timholy/Revise.jl/issues/646) is resolved
 #       we should move all the reactant_overrides to relevant files.
 
-# Helper Function to determine if we are inside the ReactantInterpreter
-"""
-    within_reactant_interpreter()
-
-Returns `true` if we are currently inside the ReactantInterpreter.
-"""
-@noinline within_reactant_interpreter() = false
-@reactant_overlay @noinline within_reactant_interpreter() = true
-
 # Compiling within a compile should return simply the original function
 @reactant_overlay function Compiler.compile(
     f, args; client=nothing, optimize=true, sync=false
 )
     return f
+end
+
+@reactant_overlay @noinline function Base.setindex!(
+    a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}
+) where {T,N}
+    ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
+    (Base.inferencebarrier(setindex!))(Reactant.ancestor(a), v, ancestor_indices...)
+    return a
 end
 
 # Enzyme.jl overlays
@@ -37,6 +36,12 @@ end
     return call_with_reactant(TracedRandom.default_rng)
 end
 
+@reactant_overlay @noinline function TracedRandom.default_rng()
+    return TracedRNG(
+        TracedUtils.promote_to(TracedRArray{UInt64,1}, TracedRandom.make_seed()), "DEFAULT"
+    )
+end
+
 ## Only problematic edge case here is the direct `<randfun!>(rng, A::AbstractArray)` call
 ## We can't directly overlay that call without breaking the semantics of inplace update
 for randfun in (:rand, :randn, :randexp)
@@ -51,13 +56,9 @@ for randfun in (:rand, :randn, :randexp)
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T, dims)
             end
-            return error(
-                "Reactant doesn't support sampling of $(T) with the current interpreter."
-            )
-            # XXX: The following will lead to illegal instruction
-            # @warn "Reactant doesn't support sampling of $(T) with the current \
-            #        interpreter. Falling back to native interpreter." maxlog = 1
-            # return Random.$(randfun)(rng, T, dims)
+            @warn "Reactant doesn't support sampling of $(T) with the current \
+                   interpreter. Falling back to native interpreter." maxlog = 1
+            return Base.inferencebarrier(Random.$(randfun))(rng, T, dims)
         end
 
         @reactant_overlay @noinline function Random.$(randfun)(
@@ -72,13 +73,9 @@ for randfun in (:rand, :randn, :randexp)
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T, dim1, dims...)
             end
-            return error(
-                "Reactant doesn't support sampling of $(T) with the current interpreter."
-            )
-            # XXX: The following will lead to illegal instruction
-            # @warn "Reactant doesn't support sampling of $(T) with the current \
-            #        interpreter. Falling back to native interpreter." maxlog = 1
-            # return Random.$(randfun)(rng, T, dim1, dims...)
+            @warn "Reactant doesn't support sampling of $(T) with the current \
+                   interpreter. Falling back to native interpreter." maxlog = 1
+            return Base.inferencebarrier(Random.$(randfun))(rng, T, dim1, dims...)
         end
 
         # scalars
@@ -88,13 +85,9 @@ for randfun in (:rand, :randn, :randexp)
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T)
             end
-            return error(
-                "Reactant doesn't support sampling of $(T) with the current interpreter."
-            )
-            # XXX: The following will lead to illegal instruction
-            # @warn "Reactant doesn't support sampling of $(T) with the current \
-            #        interpreter. Falling back to native interpreter." maxlog = 1
-            # return Random.$(randfun)(rng, T)
+            @warn "Reactant doesn't support sampling of $(T) with the current \
+                   interpreter. Falling back to native interpreter." maxlog = 1
+            return Base.inferencebarrier(Random.$(randfun))(rng, T)
         end
 
         # inplace
@@ -103,21 +96,11 @@ for randfun in (:rand, :randn, :randexp)
         )
             return TracedRandom.$(overload_randfun!)(rng, A)
         end
-
-        # XXX: Uncomment once AbsInt issues with recursive calls are resolved
-        # @reactant_overlay @noinline function Random.$(randfun!)(
-        #     rng::AbstractRNG, A::AbstractArray
-        # )
-        #     @warn "Directly writing to an array using Random.jl functions inside \
-        #            ReactantInterpreter will generate a constant array in the IR. Use with \
-        #            caution." maxlog = 1
-        #     return Random.$(randfun!)(rng, A)
-        # end
     end
 end
 
 # LinearAlgebra.jl overloads
-## `_mul!` goes through too many layers of abstractions and we aren't able to overload
+## `mul!` goes through too many layers of abstractions and we aren't able to overload
 ## without specializing on every possible combination of types
 for (cT, aT, bT) in (
     (:AbstractVector, :AbstractMatrix, :AbstractVector),
@@ -128,10 +111,17 @@ for (cT, aT, bT) in (
             C::$cT, A::$aT, B::$bT, α::Number, β::Number
         )
             A, B = aos_to_soa(A), aos_to_soa(B)
-            if use_overlayed_version((C, A, B))
-                TracedLinearAlgebra.overloaded_mul!(C, A, B, α, β)
+            C2 = aos_to_soa(C)
+            if use_overlayed_version((C2, A, B))
+                TracedLinearAlgebra.overloaded_mul!(C2, A, B, α, β)
+                if C2 !== C
+                    C .= C2
+                end
             else
-                LinearAlgebra.mul!(C, A, B, α, β)
+                # Inference barrier is required when calling function recursively within overload
+                # This is required since otherwise type inference will think this is a recursive edge
+                # rather than a call to the base method
+                Base.inferencebarrier(LinearAlgebra.mul!)(C, A, B, α, β)
             end
             return C
         end
@@ -149,6 +139,23 @@ end
     if use_overlayed_version(iter)
         return TracedRArrayOverrides.overloaded_stack(dims, iter)
     else
-        return Base._stack(dims, Base.IteratorSize(iter), iter)
+        iter2 = collect(iter)
+        if any(use_overlayed_version, iter2)
+            return TracedRArrayOverrides.overloaded_stack(dims, iter2)
+        else
+            # Inference barrier is required when calling function recursively within overload
+            # This is required since otherwise type inference will think this is a recursive edge
+            # rather than a call to the base method
+            return Base.inferencebarrier(Base._stack)(dims, iter2)
+        end
+    end
+end
+
+## fixes #493
+@reactant_overlay @noinline function Base._unique_dims(A::AbstractArray, dims::Colon)
+    if use_overlayed_version(A)
+        error("Reactant doesn't have a `Base._unique_dims` with the current interpreter.")
+    else
+        Base.inferencebarrier(Base._unique_dims)(A, dims)
     end
 end

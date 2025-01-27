@@ -9,6 +9,12 @@ using Adapt
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
+
+    function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T,N,A,Size}
+        push!(Reactant.Compiler.context_gc_vector[MLIR.IR.context()], xs)
+        ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
+        return new(ptr)
+    end
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
@@ -35,6 +41,19 @@ function Base.unsafe_convert(
     return x.ptr
 end
 
+# TODO: arrays as allocated by the CUDA APIs are 256-byte aligned. we should keep track of
+#       this information, because it enables optimizations like Load Store Vectorization
+#       (cfr. shared memory and its wider-than-datatype alignment)
+
+@generated function alignment(::CuTracedArray{T}) where {T}
+    if Base.isbitsunion(T)
+        _, sz, al = Base.uniontype_layout(T)
+        al
+    else
+        Base.datatype_alignment(T)
+    end
+end
+
 ## indexing intrinsics
 
 CUDA.@device_function @inline function arrayref(
@@ -49,7 +68,8 @@ CUDA.@device_function @inline function arrayref(
 end
 
 @inline function arrayref_bits(A::CuTracedArray{T}, index::Integer) where {T}
-    return unsafe_load(pointer(A), index)
+    align = alignment(A)
+    return unsafe_load(pointer(A), index, Val(align))
 end
 
 @inline @generated function arrayref_union(
@@ -94,7 +114,8 @@ CUDA.@device_function @inline function arrayset(
 end
 
 @inline function arrayset_bits(A::CuTracedArray{T}, x::T, index::Integer) where {T}
-    return unsafe_store!(pointer(A), x, index)
+    align = alignment(A)
+    return unsafe_store!(pointer(A), x, index, Val(align))
 end
 
 @inline @generated function arrayset_union(
@@ -107,9 +128,10 @@ end
         selector_ptr = typetagdata(A, index)
         unsafe_store!(selector_ptr, $(UInt8(sel - 1)))
 
+        align = alignment(A)
         data_ptr = pointer(A, index)
 
-        unsafe_store!(reinterpret(Core.LLVMPtr{$x,AS}, data_ptr), x, 1)
+        unsafe_store!(reinterpret(Core.LLVMPtr{$x,AS}, data_ptr), x, 1, Val(align))
         return nothing
     end
 end
@@ -118,7 +140,8 @@ CUDA.@device_function @inline function const_arrayref(
     A::CuTracedArray{T}, index::Integer
 ) where {T}
     @boundscheck checkbounds(A, index)
-    return unsafe_cached_load(pointer(A), index)
+    align = alignment(A)
+    return unsafe_cached_load(pointer(A), index, Val(align))
 end
 
 ## indexing
@@ -211,10 +234,37 @@ function Base.reshape(a::CuTracedArray{T,M,A}, dims::NTuple{N,Int}) where {T,N,M
     return _derived_array(a, T, dims)
 end
 
-function Adapt.adapt_storage(::CUDA.KernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
-    res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(
-        Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
+struct ReactantKernelAdaptor end
+
+function Adapt.adapt_storage(to::ReactantKernelAdaptor, p::CUDA.CuPtr)
+    return error("Cannot convert CuPtr argument of Reactant Kernel")
+end
+function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::DenseCuArray)
+    return Adapt.adapt_storage(ka, Array(xs))
+end
+function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::Array)
+    return Adapt.adapt_storage(ka, Reactant.Ops.constant(xs))
+end
+function Adapt.adapt_structure(to::ReactantKernelAdaptor, ref::Base.RefValue)
+    return error("Cannot convert RefValue argument of Reactant Kernel")
+end
+function Adapt.adapt_structure(
+    to::ReactantKernelAdaptor, bc::Broadcast.Broadcasted{Style,<:Any,Type{T}}
+) where {Style,T}
+    return Broadcast.Broadcasted{Style}(
+        (x...) -> T(x...), Adapt.adapt(to, bc.args), bc.axes
     )
+end
+
+function recudaconvert(arg)
+    return adapt(ReactantKernelAdaptor(), arg)
+end
+Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+    return recudaconvert(arg)
+end
+
+function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
+    res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(xs)
     return res
 end
 
@@ -223,6 +273,26 @@ end
 struct LLVMFunc{F,tt}
     f::Union{F,Nothing}
     entry::String
+end
+
+function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
+    if sym === :fun
+        f
+    else
+        Base.getfield(f, sym)
+    end
+end
+
+# TODO in the future we may want to avoid doing a second cufunction compilation
+# for computing the thread/block count (or potentially do it ourselves).
+@noinline function CUDA.launch_configuration(
+    f::LLVMFunc{F,tt}; shmem::Union{Integer,Base.Callable}=0, max_threads::Integer=0
+) where {F,tt}
+    return CUDA.launch_configuration(
+        Base.inferencebarrier(CUDA.cufunction)(f.f, Tuple{tt.parameters[2:end]...}).fun;
+        shmem,
+        max_threads,
+    )
 end
 
 const GPUCompiler = CUDA.GPUCompiler
@@ -267,12 +337,22 @@ function compile(job)
     # TODO: on 1.9, this actually creates a context. cache those.
     entry = GPUCompiler.JuliaContext() do ctx
         mod, meta = GPUCompiler.compile(
-            :llvm, job; optimize=false, cleanup=false, validate=false
+            # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
+            :llvm,
+            job;
+            optimize=false,
+            cleanup=false,
+            validate=false,
+            libraries=false,
+            # :llvm, job; optimize=false, cleanup=false, validate=true, libraries=false
+            # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
 
+        if !Reactant.precompiling()
+            GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+        end
         entryname = LLVM.name(meta.entry)
 
-        GPUCompiler.optimize_module!(job, mod)
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
         LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
@@ -305,17 +385,30 @@ function compile(job)
             end
         end
 
-        LLVM.strip_debuginfo!(mod)
+        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
+        unique!(errors)
+        filter!(errors) do err
+            (kind, bt, meta) = err
+            if meta !== nothing
+                if kind == GPUCompiler.UNKNOWN_FUNCTION && startswith(meta, "__nv")
+                    return false
+                end
+            end
+            return true
+        end
+        if !isempty(errors)
+            throw(GPUCompiler.InvalidIRError(job, errors))
+        end
+        # LLVM.strip_debuginfo!(mod)
         modstr = string(mod)
-
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
-
         mmod = MLIR.IR.Module(
             @ccall MLIR.API.mlir_c.ConvertLLVMStrToMLIR(
                 modstr::Cstring, MLIR.IR.context()::MLIR.API.MlirContext
             )::MLIR.API.MlirModule
         )
+        @assert mmod != C_NULL
 
         linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
             MLIR.IR.mmodule()::MLIR.API.MlirModule,
@@ -323,7 +416,6 @@ function compile(job)
             entryname::Cstring,
         )::MLIR.API.MlirOperation
 
-        entry = MLIR.IR.Operation(linkRes)
         String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
 
@@ -336,9 +428,71 @@ function link(job, compiled)
     return compiled
 end
 
+function abi_sizeof(@nospecialize(x))
+    return sizeof(typeof(x))
+end
+function abi_sizeof(@nospecialize(x::CuTracedArray))
+    return sizeof(Ptr)
+end
+function abi_sizeof(@nospecialize(x::CUDA.CuDeviceArray))
+    return sizeof(Ptr)
+end
+
+function to_bytes(x)
+    sz = abi_sizeof(x)
+    ref = Ref(x)
+    GC.@preserve ref begin
+        ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
+        vec = Vector{UInt8}(undef, sz)
+        for i in 1:sz
+            @inbounds vec[i] = Base.unsafe_load(ptr, i)
+        end
+        vec
+    end
+end
+
+function Reactant.make_tracer(
+    seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...
+)
+    x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
+    x = x::TracedRArray
+    Reactant.make_tracer(seen, x, path, mode; kwargs...)
+    return prev
+end
+
+function get_field_offset(T::Type, path)
+    offset = 0
+    current_type = T
+
+    for field in path
+        # Get the field index
+        field_idx = if field isa Integer
+            field
+        else
+            @assert field isa Symbol
+            findfirst(==(field), fieldnames(current_type))
+        end
+        if field_idx === nothing
+            error(
+                "Field $field not found in type $current_type, fieldnames=$(fieldnames(current_type)) T=$T path=$path",
+            )
+        end
+
+        # Add the offset of this field
+        toffset = fieldoffset(current_type, field_idx)
+        tcurrent_type = fieldtype(current_type, field_idx)
+        offset += toffset
+
+        # Update current_type to the field's type for next iteration
+        current_type = tcurrent_type
+    end
+
+    return offset
+end
+
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
-    convert=Val(false),
+    convert=Val(true),
     blocks::CuDim=1,
     threads::CuDim=1,
     cooperative::Bool=false,
@@ -348,71 +502,223 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
 
+    if convert == Val(true)
+        args = recudaconvert.(args)
+    end
+
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
     aliases = MLIR.IR.Attribute[]
     rarrays = TracedRArray[]
-    for (i, a) in enumerate(args)
-        @assert a isa CuTracedArray
-        ta =
-            Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, a.ptr))::TracedRArray
-        push!(rarrays, ta)
-        arg = ta.mlir_data
+
+    fname = func.entry
+
+    wrapper_tys = MLIR.IR.Type[]
+    ctx = MLIR.IR.context()
+    cullvm_ty = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1))
+
+    # linearize kernel arguments
+    seen = Reactant.OrderedIdDict()
+    kernelargsym = gensym("kernelarg")
+    for (i, prev) in enumerate(Any[func.f, args...])
+        Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
+    end
+    wrapper_tys = MLIR.IR.Type[]
+    for arg in values(seen)
+        if !(arg isa TracedRArray || arg isa TracedRNumber)
+            continue
+        end
+        push!(wrapper_tys, cullvm_ty)
+    end
+
+    sym_name = String(gensym("call_$fname"))
+    mod = MLIR.IR.mmodule()
+    CConv = MLIR.IR.Attribute(
+        MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvPTX_Kernel)
+    )
+    voidty = MLIR.IR.Type(MLIR.API.mlirLLVMVoidTypeGet(ctx))
+    wrapftype = MLIR.IR.Type(
+        MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
+    )
+    wrapfunc = MLIR.IR.block!(MLIR.IR.body(mod)) do
+        return MLIR.Dialects.llvm.func(;
+            sym_name,
+            sym_visibility=MLIR.IR.Attribute("private"),
+            function_type=wrapftype,
+            body=MLIR.IR.Region(),
+            CConv,
+        )
+    end
+    wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
+    push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
+    for i in 1:length(wrapper_tys)
+        @ccall MLIR.API.mlir_c.ReactantFuncSetArgAttr(
+            wrapfunc::MLIR.API.MlirOperation,
+            (i - 1)::Csize_t,
+            "llvm.noalias"::MLIR.API.MlirStringRef,
+            MLIR.IR.UnitAttribute()::MLIR.API.MlirAttribute,
+        )::Cvoid
+    end
+
+    wrapargs = MLIR.IR.Value[]
+    argidx = 1
+
+    symtab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
+    gpufunc = MLIR.IR.lookup(symtab, fname)
+    MLIR.IR.attr!(
+        gpufunc,
+        "CConv",
+        MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)),
+    )
+    gpu_function_type = MLIR.IR.Type(
+        Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type")
+    )
+
+    trueidx = 1
+    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type},Nothing}[]
+
+    llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
+    i8 = MLIR.IR.Type(UInt8)
+    allargs = [func.f, args...]
+    for a in allargs
+        if sizeof(a) == 0
+            push!(allocs, nothing)
+            continue
+        end
+
+        # TODO check for only integer and explicitly non cutraced types
+        MLIR.IR.block!(wrapbody) do
+            argty = MLIR.IR.Type(
+                MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
+            )
+            trueidx += 1
+            c1 = MLIR.IR.result(
+                MLIR.Dialects.llvm.mlir_constant(;
+                    res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                ),
+                1,
+            )
+            alloc = MLIR.IR.result(
+                MLIR.Dialects.llvm.alloca(
+                    c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
+                ),
+                1,
+            )
+            push!(allocs, (alloc, argty))
+
+            sz = abi_sizeof(a)
+            array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
+            cdata = MLIR.IR.result(
+                MLIR.Dialects.llvm.mlir_constant(;
+                    res=array_ty, value=MLIR.IR.DenseElementsAttribute(to_bytes(a))
+                ),
+                1,
+            )
+            MLIR.Dialects.llvm.store(cdata, alloc)
+        end
+    end
+
+    argidx = 1
+    for arg in values(seen)
+        if !(arg isa TracedRArray || arg isa TracedRNumber)
+            continue
+        end
+
+        paths = Reactant.TracedUtils.get_paths(arg)
+
+        arg = arg.mlir_data
         arg = Reactant.TracedUtils.transpose_val(arg)
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
+
         push!(
             aliases,
             MLIR.IR.Attribute(
                 MLIR.API.stablehloOutputOperandAliasGet(
                     MLIR.IR.context(),
-                    length(args) == 1 ? 0 : 1,
-                    length(args) == 1 ? C_NULL : Ref{Int64}(i - 1),
-                    i - 1,
+                    length(wrapper_tys) == 1 ? 0 : 1,
+                    length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
+                    argidx - 1,
                     0,
                     C_NULL,
                 ),
             ),
         )
+
+        for p in paths
+            if p[1] !== kernelargsym
+                continue
+            end
+            # Get the allocation corresponding to which arg we're doing
+            alloc = allocs[p[2]][1]
+
+            # we need to now compute the offset in bytes of the path
+            julia_arg = allargs[p[2]]
+
+            offset = get_field_offset(typeof(julia_arg), p[3:end])
+            MLIR.IR.block!(wrapbody) do
+                ptr = MLIR.IR.result(
+                    MLIR.Dialects.llvm.getelementptr(
+                        alloc,
+                        MLIR.IR.Value[];
+                        res=llvmptr,
+                        elem_type=i8,
+                        rawConstantIndices=MLIR.IR.Attribute([Int32(offset)]),
+                    ),
+                    1,
+                )
+                MLIR.Dialects.llvm.store(MLIR.IR.argument(wrapbody, argidx), ptr)
+            end
+        end
+        argidx += 1
+    end
+
+    MLIR.IR.block!(wrapbody) do
+        for arg in allocs
+            if arg === nothing
+                continue
+            end
+            alloc, argty = arg
+            argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
+            push!(wrapargs, argres)
+        end
+        MLIR.Dialects.llvm.call(
+            wrapargs,
+            MLIR.IR.Value[];
+            callee=MLIR.IR.FlatSymbolRefAttribute(Base.String(fname)),
+            op_bundle_sizes=MLIR.IR.Attribute(Int32[]),
+        )
+        MLIR.Dialects.llvm.return_(nothing)
     end
 
     output_operand_aliases = MLIR.IR.Attribute(aliases)
 
-    fname = func.entry
-
-    operands = MLIR.IR.Value[]
+    blk_operands = MLIR.IR.Value[]
     for idx in
         (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
         push!(
-            operands,
+            blk_operands,
             Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, idx).mlir_data,
         )
     end
-    for arg in mlir_args
-        push!(operands, arg)
-    end
-    owned_regions = MLIR.IR.Region[]
-    successors = MLIR.IR.Block[]
-    attributes = MLIR.IR.NamedAttribute[
-        MLIR.IR.NamedAttribute("fn", MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))),
-        MLIR.IR.NamedAttribute(
-            "output_operand_aliases", MLIR.IR.Attribute(output_operand_aliases)
-        ),
-    ]
 
     location = MLIR.IR.Location()
-    call = MLIR.IR.create_operation(
-        "enzymexla.kernel_call",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=restys,
-        result_inference=false,
+    @assert length(restys) == length(aliases)
+    call = MLIR.Dialects.enzymexla.kernel_call(
+        blk_operands...,
+        mlir_args;
+        result_0=restys,
+        fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
+        output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
     )
-    for (i, res) in enumerate(rarrays)
-        res.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, i))
+
+    argidx = 1
+    for arg in values(seen)
+        if !(arg isa TracedRArray || arg isa TracedRNumber)
+            continue
+        end
+        arg.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, argidx))
+        argidx += 1
     end
 end
 
@@ -454,11 +760,81 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         )
         CUDA.GPUCompiler.cached_compilation(cache, source, config, compile, link)
     end
-    return res
+    return Core.Typeof(res)(f, res.entry)
+end
+
+Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @nospecialize(A::Type{<:CuTracedArray}),
+    seen,
+    mode::Reactant.TraceMode,
+    @nospecialize(track_numbers::Type)
+)
+    return A
+end
+
+Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @nospecialize(A::Type{<:CUDA.CuArray}),
+    seen,
+    mode::Reactant.TraceMode,
+    @nospecialize(track_numbers::Type)
+)
+    T = eltype(A)
+    N = ndims(A)
+    if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
+        return Reactant.ConcreteRArray{T,N}
+    else
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers)
+        if TT === T
+            return A
+        else
+            return Array{Reactant.traced_type_inner(T, seen, mode, track_numbers),N}
+        end
+    end
+end
+
+function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::CUDA.CuArray),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
+)
+    RT = Core.Typeof(prev)
+    if haskey(seen, prev)
+        return seen[prev]
+    end
+    if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
+        return seen[prev] = Reactant.ConcreteRArray(Array(prev))
+    end
+    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers)
+    if TT === eltype(RT)
+        return prev
+    end
+    newa = Array{TT,ndims(RT)}(undef, size(prev))
+    seen[prev] = newa
+    same = true
+    for I in eachindex(prev)
+        if isassigned(prev, I)
+            pv = prev[I]
+            nv = Reactant.make_tracer(
+                seen, pv, append_path(path, I), mode; track_numbers, kwargs...
+            )
+            if pv !== nv
+                same = false
+            end
+            @inbounds newa[I] = nv
+        end
+    end
+    if same
+        seen[prev] = prev
+        return prev
+    end
+    return newa
 end
 
 function __init__()
-    if CUDA.CUDA_Driver_jll.libcuda !== nothing
+    if isdefined(CUDA.CUDA_Driver_jll, :libcuda) && CUDA.CUDA_Driver_jll.libcuda !== nothing
         handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
         if handle === nothing
             handle = C_NULL
@@ -478,8 +854,44 @@ function __init__()
         Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
         Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
         Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+        ptr4 = Reactant.XLA.Libdl.dlsym(handle, "cuStreamSynchronize"; throw_error=false)
+        if ptr4 === nothing
+            ptr4 = C_NULL
+        end
+        Reactant.Compiler.cuSync[] = Base.reinterpret(UInt, ptr4)
+    end
+    if CUDA.functional()
+        target = CUDA._compiler_config(CUDA.device()).target
+        Reactant.Compiler.cubinChip[] = "sm_$(target.cap.major)$(target.cap.minor)"
     end
     return nothing
+end
+
+@static if !Sys.isapple() && Sys.ARCH != :aarch64
+    Reactant.PrecompileTools.@setup_workload begin
+        Reactant.initialize_dialect()
+        client = Reactant.XLA.CPUClient(; checkcount=false)
+        Reactant.PrecompileTools.@compile_workload begin
+            @static if Reactant.precompilation_supported()
+                function square_kernel!(x)
+                    i = CUDA.threadIdx().x
+                    x[i] *= x[i]
+                    return nothing
+                end
+
+                function square!(x)
+                    CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
+                    return nothing
+                end
+                y = Reactant.ConcreteRArray([2.0]; client)
+                Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+            end
+        end
+        Reactant.XLA.free_client(client)
+        client.client = C_NULL
+        Reactant.deinitialize_dialect()
+        Reactant.clear_oc_cache()
+    end
 end
 
 end # module ReactantCUDAExt

@@ -1,11 +1,28 @@
 name: CI
+
 on:
   pull_request:
+    paths:
+      - '.github/workflows/CI.yml'
+      - 'deps/**'
+      - 'ext/**'
+      - 'lib/**'
+      - 'src/**'
+      - 'test/**'
+      - 'Project.toml'
   push:
     branches:
       - main
       - release-*
     tags: '*'
+    paths:
+      - '.github/workflows/CI.yml'
+      - 'deps/**'
+      - 'ext/**'
+      - 'lib/**'
+      - 'src/**'
+      - 'test/**'
+      - 'Project.toml'
 
 concurrency:
   # Skip intermediate builds: always.
@@ -26,6 +43,7 @@ jobs:
           # - 'nightly'
         os:
           - ubuntu-20.04
+          - ubuntu-24.04-arm
           - macOS-latest
         test_group:
           - core
@@ -72,9 +90,10 @@ jobs:
           #   version: '1.10'
           #   test_group: integration
         exclude:
-          # these are run on Buildkite
-          - os: ubuntu-20.04
+          - os: ubuntu-20.04 # this is x86_64, exclude foreign architecture
             arch: aarch64
+          - os: ubuntu-24.04-arm # this is aarch64, exclude foreign architecture
+            arch: x64
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -121,7 +140,6 @@ jobs:
               push!(dev_pks, Pkg.PackageSpec(; path))
           end
           Pkg.develop(dev_pks)
-          Pkg.instantiate()
           Pkg.test(; coverage="user")
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
@@ -134,33 +152,3 @@ jobs:
         if: steps.run_tests.outcome == 'success'
         with:
           files: lcov.info
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: '1'
-      - uses: julia-actions/cache@v2
-      - run: |
-          julia --color=yes --project=docs -e '
-            using Pkg
-            Pkg.develop([
-              PackageSpec(path=pwd()),
-              PackageSpec("Reactant_jll"),
-              PackageSpec(path="lib/ReactantCore")
-            ])
-            Pkg.instantiate()'
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - run: |
-          julia --color=yes --project=docs -e '
-            using Documenter: DocMeta, doctest
-            using Reactant
-            DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
-            doctest(Reactant)'
-      - run: julia --color=yes --project=docs docs/make.jl
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}

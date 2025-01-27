@@ -176,16 +176,22 @@ end
     mean_fn2(x) = mean(x; dims=1)
     mean_fn3(x) = mean(x; dims=(1, 2))
     mean_fn4(x) = mean(x; dims=(1, 3))
+    mean_f1abs2(x) = mean(abs2, x)
+    mean_f2abs2(x) = mean(abs2, x; dims=1)
 
     mean_fn1_compiled = @compile mean_fn1(x_ca)
     mean_fn2_compiled = @compile mean_fn2(x_ca)
     mean_fn3_compiled = @compile mean_fn3(x_ca)
     mean_fn4_compiled = @compile mean_fn4(x_ca)
+    mean_f1abs2_compiled = @compile mean_f1abs2(x_ca)
+    mean_f2abs2_compiled = @compile mean_f2abs2(x_ca)
 
     @test mean_fn1(x) ≈ mean_fn1_compiled(x_ca)
     @test mean_fn2(x) ≈ mean_fn2_compiled(x_ca)
     @test mean_fn3(x) ≈ mean_fn3_compiled(x_ca)
     @test mean_fn4(x) ≈ mean_fn4_compiled(x_ca)
+    @test mean_f1abs2(x) ≈ mean_f1abs2_compiled(x_ca)
+    @test mean_f2abs2(x) ≈ mean_f2abs2_compiled(x_ca)
 
     # XXX: @jit doesn't work with `;`
     # @test @jit(var(x_ca)) ≈ var(x)
@@ -362,6 +368,34 @@ end
         @test y == test_typed_hvncat(x)
         @test eltype(y) === Int
     end
+
+    @testset "Number and RArray" for a in [1.0f0, 1.0e0]
+        typeof_a = typeof(a)
+        _b = typeof_a.([2.0, 3.0, 4.0])
+        _c = typeof_a.([2.0 3.0 4.0])
+        b = Reactant.to_rarray(_b)
+        c = Reactant.to_rarray(_c)
+
+        # vcat test        
+        y = @jit vcat(a, b)
+        @test y == vcat(a, _b)
+        @test y isa ConcreteRArray{typeof_a,1}
+
+        ## vcat test - adjoint
+        y1 = @jit vcat(a, c')
+        @test y1 == vcat(a, _c')
+        @test y1 isa ConcreteRArray{typeof_a,2}
+
+        # hcat test
+        z = @jit hcat(a, c)
+        @test z == hcat(a, _c)
+        @test z isa ConcreteRArray{typeof_a,2}
+
+        ## hcat test - adjoint
+        z1 = @jit hcat(a, b')
+        @test z1 == hcat(a, _b')
+        @test z1 isa ConcreteRArray{typeof_a,2}
+    end
 end
 
 @testset "repeat" begin
@@ -385,92 +419,37 @@ end
     end
 end
 
-function update_on_copy(x)
-    y = x[1:2, 2:4, :]
-    y[1:1, 1:1, :] = ones(1, 1, 3)
-    return y
+function write_with_broadcast1!(x, y)
+    x[1, :, :] .= reshape(y, 4, 3)
+    return x
 end
-
-@testset "view / setindex" begin
-    x = rand(2, 4, 3)
-    y = copy(x)
-    x_concrete = Reactant.to_rarray(x)
-    y_concrete = Reactant.to_rarray(y)
-
-    y1 = update_on_copy(x)
-    y2 = @jit update_on_copy(x_concrete)
-    @test x == y
-    @test x_concrete == y_concrete
-    @test y1 == y2
-
-    # function update_inplace(x)
-    #     y = view(x, 1:2, 1:2, :)
-    #     y[1, 1, :] .= 1
-    #     return y
-    # end
-
-    # get_indices(x) = x[1:2, 1:2, :]
-    # get_view(x) = view(x, 1:2, 1:2, :)
-
-    # get_indices_compiled = @compile get_indices(x_concrete)
-    # get_view_compiled = @compile get_view(x_concrete)
-end
-
-function masking(x)
-    y = similar(x)
-    y[1:2, :] .= 0
-    y[3:4, :] .= 1
-    return y
-end
-
-function masking!(x)
-    x[1:2, :] .= 0
-    x[3:4, :] .= 1
+function write_with_broadcast2!(x, y)
+    x[:, 1, :] .= view(y, :, 1:3)
     return x
 end
 
-@testset "setindex! with views" begin
-    x = rand(4, 4) .+ 2.0
-    x_ra = Reactant.to_rarray(x)
+@testset "write_with_broadcast" begin
+    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
+    y_ra = Reactant.to_rarray(rand(3, 4))
 
-    y = masking(x)
-    y_ra = @jit(masking(x_ra))
-    @test y ≈ y_ra
+    res = @jit write_with_broadcast1!(x_ra, y_ra)
 
-    x_ra_array = Array(x_ra)
-    @test !(any(iszero, x_ra_array[1, :]))
-    @test !(any(iszero, x_ra_array[2, :]))
-    @test !(any(isone, x_ra_array[3, :]))
-    @test !(any(isone, x_ra_array[4, :]))
+    @test res.data === x_ra.data
 
-    y_ra = @jit(masking!(x_ra))
-    @test y ≈ y_ra
+    res = Array(res)
+    y = Array(y_ra)
+    @test res[1, :, :] ≈ reshape(y, 4, 3)
 
-    x_ra_array = Array(x_ra)
-    @test @allowscalar all(iszero, x_ra_array[1, :])
-    @test @allowscalar all(iszero, x_ra_array[2, :])
-    @test @allowscalar all(isone, x_ra_array[3, :])
-    @test @allowscalar all(isone, x_ra_array[4, :])
-end
+    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
+    y_ra = Reactant.to_rarray(rand(3, 4))
 
-function non_contiguous_setindex!(x)
-    x[[1, 3, 2], [1, 2, 3, 4]] .= 1.0
-    return x
-end
+    res = @jit write_with_broadcast2!(x_ra, y_ra)
 
-@testset "non-contiguous setindex!" begin
-    x = rand(6, 6)
-    x_ra = Reactant.to_rarray(x)
+    @test res.data === x_ra.data
 
-    y = @jit(non_contiguous_setindex!(x_ra))
-    y = Array(y)
-    x_ra = Array(x_ra)
-    @test all(isone, y[1:3, 1:4])
-    @test all(isone, x_ra[1:3, 1:4])
-    @test !all(isone, y[4:end, :])
-    @test !all(isone, x_ra[4:end, :])
-    @test !all(isone, y[:, 5:end])
-    @test !all(isone, x_ra[:, 5:end])
+    res = Array(res)
+    y = Array(y_ra)
+    @test res[:, 1, :] ≈ view(y, :, 1:3)
 end
 
 tuple_byref(x) = (; a=(; b=x))
@@ -518,10 +497,10 @@ end
 
         f1(x) = x[1] * x[2]
 
-        x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+        x_ra = Reactant.to_rarray(x; track_numbers=Number)
         f2 = @compile f1(x_ra)
-        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=(Number,))) ≈ 5 * 5.2
-        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=(Number,))) isa ConcreteRNumber
+        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) ≈ 5 * 5.2
+        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) isa ConcreteRNumber
 
         x_ra = Reactant.to_rarray(x)
         f3 = @compile f1(x_ra)
@@ -529,10 +508,10 @@ end
         @test !(f3(Reactant.to_rarray((5, 5.2))) isa ConcreteRNumber)
         @test f3(Reactant.to_rarray((5, 5.2))) isa Number
 
-        x_ra = Reactant.to_rarray(x; track_numbers=(Int,))
+        x_ra = Reactant.to_rarray(x; track_numbers=Int)
         f4 = @compile f1(x_ra)
-        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=(Int,))) ≈ 5 * 3.14
-        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=(Int,))) isa ConcreteRNumber
+        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) ≈ 5 * 3.14
+        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) isa ConcreteRNumber
     end
 
     @testset "Mixed" begin
@@ -540,10 +519,10 @@ end
 
         f1(x) = x[1] * x[2]
 
-        x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+        x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
         f2 = @compile f1(x_ra)
-        res2 = f2(Reactant.to_rarray((5, [3.14]); track_numbers=(Number,)))
+        res2 = f2(Reactant.to_rarray((5, [3.14]); track_numbers=Number))
         @test @allowscalar(only(res2)) ≈ 5 * 3.14
         @test res2 isa ConcreteRArray
 
@@ -608,17 +587,15 @@ end
     end
 end
 
-@testset "dynamic indexing" begin
-    x = randn(5, 3)
-    x_ra = Reactant.to_rarray(x)
-
-    idx = [1, 2, 3]
-    idx_ra = Reactant.to_rarray(idx)
-
-    fn(x, idx) = @allowscalar x[idx, :]
-
-    y = @jit(fn(x_ra, idx_ra))
-    @test y ≈ x[idx, :]
+@testset "$op" for op in [:round, :ceil, :floor]
+    intop = Symbol("int_$op")
+    for x in (rand(Float32, (3, 3)), rand(Float64))
+        @eval begin
+            @test @jit($op.(ConcreteRNumber.($x))) == $op.($x)
+            $intop(x) = $op(Int, x)
+            @test @jit($intop.(ConcreteRNumber.($x))) == $intop.($x)
+        end
+    end
 end
 
 @testset "aos_to_soa" begin
@@ -749,102 +726,6 @@ end
     @test res[2] isa ConcreteRNumber{Float64}
 end
 
-@testset "non-contiguous indexing" begin
-    x = rand(4, 4, 3)
-    x_ra = Reactant.to_rarray(x)
-
-    non_contiguous_indexing1(x) = x[[1, 3, 2], :, :]
-    non_contiguous_indexing2(x) = x[:, [1, 2, 1, 3], [1, 3]]
-
-    @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x)
-    @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x)
-
-    x = rand(4, 2)
-    x_ra = Reactant.to_rarray(x)
-
-    non_contiguous_indexing3(x) = x[[1, 3, 2], :]
-    non_contiguous_indexing4(x) = x[:, [1, 2, 2]]
-
-    @test @jit(non_contiguous_indexing3(x_ra)) ≈ non_contiguous_indexing3(x)
-    @test @jit(non_contiguous_indexing4(x_ra)) ≈ non_contiguous_indexing4(x)
-
-    x = rand(4, 4, 3)
-    x_ra = Reactant.to_rarray(x)
-
-    non_contiguous_indexing1!(x) = x[[1, 3, 2], :, :] .= 2
-    non_contiguous_indexing2!(x) = x[:, [1, 2, 1, 3], [1, 3]] .= 2
-
-    @jit(non_contiguous_indexing1!(x_ra))
-    non_contiguous_indexing1!(x)
-    @test x_ra ≈ x
-
-    x = rand(4, 4, 3)
-    x_ra = Reactant.to_rarray(x)
-
-    @jit(non_contiguous_indexing2!(x_ra))
-    non_contiguous_indexing2!(x)
-    @test x_ra ≈ x
-
-    x = rand(4, 2)
-    x_ra = Reactant.to_rarray(x)
-
-    non_contiguous_indexing3!(x) = x[[1, 3, 2], :] .= 2
-    non_contiguous_indexing4!(x) = x[:, [1, 2, 2]] .= 2
-
-    @jit(non_contiguous_indexing3!(x_ra))
-    non_contiguous_indexing3!(x)
-    @test x_ra ≈ x
-
-    x = rand(4, 2)
-    x_ra = Reactant.to_rarray(x)
-
-    @jit(non_contiguous_indexing4!(x_ra))
-    non_contiguous_indexing4!(x)
-    @test x_ra ≈ x
-end
-
-@testset "indexing with traced arrays" begin
-    x = rand(4, 4, 3)
-    idx1 = [1, 3, 2]
-    idx3 = [1, 2, 1, 3]
-
-    x_ra = Reactant.to_rarray(x)
-    idx1_ra = Reactant.to_rarray(idx1)
-    idx3_ra = Reactant.to_rarray(idx3)
-
-    getindex1(x, idx1) = x[idx1, :, :]
-    getindex2(x, idx1) = x[:, idx1, :]
-    getindex3(x, idx3) = x[:, :, idx3]
-    getindex4(x, idx1, idx3) = x[idx1, :, idx3]
-
-    @test @jit(getindex1(x_ra, idx1_ra)) ≈ getindex1(x, idx1)
-    @test @jit(getindex2(x_ra, idx1_ra)) ≈ getindex2(x, idx1)
-    @test @jit(getindex3(x_ra, idx3_ra)) ≈ getindex3(x, idx3)
-    @test @jit(getindex4(x_ra, idx1_ra, idx3_ra)) ≈ getindex4(x, idx1, idx3)
-end
-
-@testset "linear indexing" begin
-    x = rand(4, 4, 3)
-    x_ra = Reactant.to_rarray(x)
-
-    getindex_linear_scalar(x, idx) = @allowscalar x[idx]
-
-    @testset for i in 1:length(x)
-        @test @jit(getindex_linear_scalar(x_ra, i)) ≈ getindex_linear_scalar(x, i)
-        @test @jit(
-            getindex_linear_scalar(x_ra, Reactant.to_rarray(i; track_numbers=(Number,)))
-        ) ≈ getindex_linear_scalar(x, i)
-    end
-
-    idx = rand(1:length(x), 8)
-    idx_ra = Reactant.to_rarray(idx)
-
-    getindex_linear_vector(x, idx) = x[idx]
-
-    @test @jit(getindex_linear_vector(x_ra, idx_ra)) ≈ getindex_linear_vector(x, idx)
-    @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, idx)
-end
-
 @testset "stack" begin
     x = rand(4, 4)
     y = rand(4, 4)
@@ -866,4 +747,129 @@ end
     @test @jit(s2(x)) isa Any
     @test @jit(s3(x, y)) isa Any
     @test @jit(s4(x, y)) isa Any
+end
+
+@testset "unstable stack" begin
+    x = rand(4, 4)
+    y = rand(4, 4)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    function s1(x)
+        xs = []
+        push!(xs, x)
+        push!(xs, x)
+        return stack(xs)
+    end
+    function s2(x)
+        xs = []
+        push!(xs, x)
+        push!(xs, x)
+        return stack(xs; dims=2)
+    end
+    function s3(x, y)
+        xs = []
+        push!(xs, x)
+        push!(xs, y)
+        return stack(xs; dims=2)
+    end
+    function s4(x, y)
+        xs = []
+        push!(xs, x)
+        push!(xs, y)
+        push!(xs, x)
+        return stack(xs; dims=2)
+    end
+
+    @test @jit(s1(x_ra)) ≈ s1(x)
+    @test @jit(s2(x_ra)) ≈ s2(x)
+    @test @jit(s3(x_ra, y_ra)) ≈ s3(x, y)
+    @test @jit(s4(x_ra, y_ra)) ≈ s4(x, y)
+
+    # Test that we don't hit illegal instruction; `x` is intentionally not a traced array
+    @test @jit(s1(x)) isa Any
+    @test @jit(s2(x)) isa Any
+    @test @jit(s3(x, y)) isa Any
+    @test @jit(s4(x, y)) isa Any
+end
+
+@testset "duplicate args (#226)" begin
+    first_arg(x, y) = x
+    x_ra = Reactant.to_rarray(rand(2, 2))
+    res = @jit first_arg(x_ra, x_ra)
+    @test res ≈ x_ra
+end
+
+@testset "Common Trig Functions" begin
+    x = rand(Float32, 4, 16)
+    x_ra = Reactant.to_rarray(x)
+
+    @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
+        @test @jit(fn.(x_ra)) ≈ fn.(x)
+        @test @jit(fn.(x_ra)) isa ConcreteRArray{Float32,2}
+    end
+
+    x = 0.235f0
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
+
+    @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
+        @test @jit(fn.(x_ra)) ≈ fn.(x)
+        @test @jit(fn.(x_ra)) isa ConcreteRNumber{Float32}
+    end
+    @testset for fn in (sincospi, sincos)
+        res = @jit fn(x_ra)
+        @test res[1] ≈ fn(x)[1]
+        @test res[2] ≈ fn(x)[2]
+        @test res[1] isa ConcreteRNumber{Float32}
+        @test res[2] isa ConcreteRNumber{Float32}
+    end
+end
+
+@testset "isfinite" begin
+    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
+    @test Reactant.@jit(isfinite.(x)) == [true, false, false, false, false]
+
+    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+    @test Reactant.@jit(isfinite.(x)) == [true, false, false, false, false]
+end
+
+@testset "isnan" begin
+    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
+    @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
+
+    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+    @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
+end
+
+@testset "isnan/isfinite" begin
+    @test isnan(Reactant.to_rarray(NaN; track_numbers=Number))
+    @test !isnan(Reactant.to_rarray(0.0; track_numbers=Number))
+    @test isfinite(Reactant.to_rarray(0.0; track_numbers=Number))
+    @test !isfinite(Reactant.to_rarray(Inf; track_numbers=Number))
+end
+
+@testset "reduce integers" begin
+    x = rand(Bool, 100)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(sum(x_ra)) == sum(x)
+
+    x = rand(Int16, 100)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(sum(x_ra)) == sum(x)
+end
+
+@testset "/ on integers" begin
+    @test @jit(/(ConcreteRNumber(2), ConcreteRNumber(4))) ≈ 0.5
+    @test @jit(/(ConcreteRNumber(2), 4)) ≈ 0.5
+    @test @jit(/(2, ConcreteRNumber(4))) ≈ 0.5
+    @test @jit(/(2, ConcreteRNumber(Int32(4)))) ≈ 0.5
+end
+
+@testset "Broadcasting with Range" begin
+    x = ConcreteRArray(rand(10))
+    fn(x) = x .+ (1:length(x))
+
+    @test @jit(fn(x)) ≈ fn(Array(x))
 end

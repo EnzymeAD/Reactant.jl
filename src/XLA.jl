@@ -1,17 +1,36 @@
 module XLA
 
+import ..Reactant
 import ...MLIR
+
+const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
+const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
+
+function LLVMclopts(opts...)
+    args = ["", opts...]
+    @ccall MLIR.API.mlir_c.ReactantLLVMParseCommandLineOptions(
+        length(args)::Cint, args::Ptr{Cstring}, C_NULL::Ptr{Cvoid}
+    )::Cvoid
+end
 
 mutable struct Client
     client::Ptr{Cvoid}
 
     function Client(client::Ptr{Cvoid})
+        @assert client != C_NULL
         return new(client)
-        #@assert client != C_NULL
-        #finalizer(new(client)) do client
-        #    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
-        #end
     end
+end
+
+Base.:(==)(a::Client, b::Client) = a.client == b.client
+
+function Base.show(io::IO, ::MIME"text/plain", client::Client)
+    print(io, "Client($(client.client), platform_name=$(ClientGetPlatformName(client)))")
+    return nothing
+end
+
+@inline function free_client(client::Client)
+    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
 end
 
 function to_row_major(x::Array{T,N}) where {T,N}
@@ -42,36 +61,38 @@ SetLogLevel(x) = @ccall MLIR.API.mlir_c.SetLogLevel(x::Cint)::Cvoid
 
 const cpuclientcount = Ref(0)
 # TODO synchronization when async is not working because `future` in `ConcreteRArray` is always `nothing`
-function CPUClient(asynchronous=false, node_id=0, num_nodes=1)
-    global cpuclientcount
-    @assert cpuclientcount[] == 0
-    cpuclientcount[] += 1
-
+function CPUClient(asynchronous=false, node_id=0, num_nodes=1; checkcount=true)
+    if checkcount
+        @assert cpuclientcount[] == 0
+        cpuclientcount[] += 1
+    end
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
     client = ccall(f, Ptr{Cvoid}, (UInt, Cint, Cint), asynchronous, node_id, num_nodes)
+    LLVMclopts("-nvptx-fma-level=1")
     #client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
     return Client(client)
 end
 
 function GPUClient(node_id=0, num_nodes=1, platform="gpu")
-    #allowed_devices = [-1]
-    # GC.@preserve allowed_devices begin
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
     refstr = Ref{Cstring}()
     client = ccall(
         f,
         Ptr{Cvoid},
-        (Cint, Cint, Ptr{Cvoid}, Cint, Cstring, Ptr{Cstring}),
+        (Cint, Cint, Ptr{Cvoid}, Cint, Cdouble, Bool, Cstring, Ptr{Cstring}),
         node_id,
         num_nodes,
         C_NULL,
         0,
+        XLA_REACTANT_GPU_MEM_FRACTION[],
+        XLA_REACTANT_GPU_PREALLOCATE[],
         platform,
         refstr,
     )
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
+    LLVMclopts("-nvptx-fma-level=1")
     return Client(client)
 end
 
@@ -82,6 +103,7 @@ function TPUClient(tpu_path::String)
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
+    LLVMclopts("-nvptx-fma-level=1")
     return Client(client)
 end
 
@@ -112,6 +134,18 @@ function __init__()
     cpu = CPUClient()
     backends["cpu"] = cpu
     default_backend[] = cpu
+
+    if haskey(ENV, "XLA_REACTANT_GPU_MEM_FRACTION")
+        XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
+            Float64, ENV["XLA_REACTANT_GPU_MEM_FRACTION"]
+        )
+        @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[]
+    end
+
+    if haskey(ENV, "XLA_REACTANT_GPU_PREALLOCATE")
+        XLA_REACTANT_GPU_PREALLOCATE[] = parse(Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"])
+        @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[]
+    end
 
     @static if !Sys.isapple()
         if isfile("/usr/lib/libtpu.so")
@@ -197,6 +231,22 @@ struct Device
     device::Ptr{Cvoid}
 end
 
+function Base.show(io::IO, ::MIME"text/plain", device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    print(io, "Device($(device.device), platform_name=$(platform_name))")
+    return nothing
+end
+
+function DeviceToClientDeviceOrdinal(device::Device)
+    pjrtclient = client(device)
+    naddressable_devices = ClientNumAddressableDevices(pjrtclient)
+    for i in 1:naddressable_devices
+        (ClientGetAddressableDevice(pjrtclient, i - 1) == device) && return (i - 1)
+    end
+    return error("Device $(device) is not an addressable device")
+end
+
 mutable struct AsyncBuffer
     buffer::Buffer
     future::Union{Future,Nothing}
@@ -230,6 +280,86 @@ function client(device::Device)
     end
 end
 
+# To keep in sync with JLAllocatorStats in ReactantExtra/API.cpp
+struct JLAllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Int64
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Int64
+    largest_free_block_bytes::Int64
+    pool_bytes::Int64
+    peak_pool_bytes::Int64
+end
+
+"""
+  AllocatorStats()
+
+Contains the following fields:
+  - `num_allocs`
+  - `bytes_in_use`
+  - `peak_bytes_in_use`
+  - `largest_alloc_size`
+  - `bytes_limit`
+  - `bytes_reserved`
+  - `peak_bytes_reserved`
+  - `bytes_reservable_limit`
+  - `largest_free_block_bytes`
+  - `pool_bytes`
+  - `peak_pool_bytes`
+
+It should be constructed using the [`allocatorstats`](@ref) function.
+"""
+struct AllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Union{Nothing,Int64}
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Union{Nothing,Int64}
+    largest_free_block_bytes::Int64
+    pool_bytes::Union{Nothing,Int64}
+    peak_pool_bytes::Union{Nothing,Int64}
+end
+
+"""
+  allocatorstats([device])
+
+Return an [`AllocatorStats`](@ref) instance with information about the device specific allocator.
+
+!!! warning
+    This method is currently not implemented for the CPU device.
+"""
+function allocatorstats(
+    device::Device=ClientGetDevice(default_backend[], default_device_idx[])
+)
+    ref = Ref{JLAllocatorStats}()
+    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
+        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
+    )::Cvoid
+    stats = ref[]
+
+    nullopt = typemin(Int64)
+    return AllocatorStats(
+        stats.num_allocs,
+        stats.bytes_in_use,
+        stats.peak_bytes_in_use,
+        stats.largest_alloc_size,
+        stats.bytes_limit == nullopt ? nothing : stats.bytes_limit,
+        stats.bytes_reserved,
+        stats.peak_bytes_reserved,
+        stats.bytes_reservable_limit == nullopt ? nothing : stats.bytes_reservable_limit,
+        stats.largest_free_block_bytes,
+        stats.pool_bytes == nullopt ? nothing : stats.pool_bytes,
+        stats.peak_pool_bytes == nullopt ? nothing : stats.peak_pool_bytes,
+    )
+end
+
 # https://github.com/openxla/xla/blob/4bfb5c82a427151d6fe5acad8ebe12cee403036a/xla/xla_data.proto#L29
 @inline primitive_type(::Type{Bool}) = 1
 
@@ -247,6 +377,12 @@ end
 
 @inline primitive_type(::Type{Float16}) = 10
 @inline primitive_type(::Type{Float32}) = 11
+
+@inline primitive_type(::Type{Reactant.F8E5M2}) = 19
+@inline primitive_type(::Type{Reactant.F8E4M3FN}) = 20
+@inline primitive_type(::Type{Reactant.F8E4M3B11FNUZ}) = 23
+@inline primitive_type(::Type{Reactant.F8E5M2FNUZ}) = 24
+@inline primitive_type(::Type{Reactant.F8E4M3FNUZ}) = 25
 
 @static if isdefined(Core, :BFloat16)
     @inline primitive_type(::Type{Core.BFloat16}) = 16
@@ -401,11 +537,23 @@ end
     end
 end
 
-function Compile(client::Client, mod::MLIR.IR.Module)
+function Compile(
+    client::Client,
+    mod::MLIR.IR.Module;
+    device_ordinal::Int=-1,
+    num_replicas::Int=1,
+    num_partitions::Int=1,
+    use_shardy_partitioner::Bool=false,
+)
     GC.@preserve client mod begin
         executable = LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
-                client.client::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule
+                client.client::Ptr{Cvoid},
+                mod.module_::MLIR.API.MlirModule,
+                device_ordinal::Cint,
+                num_replicas::Cint,
+                num_partitions::Cint,
+                use_shardy_partitioner::Bool,
             )::Ptr{Cvoid}
         )
     end
@@ -449,6 +597,15 @@ function ClientGetAddressableDevice(client::Client, idx)
             )::Ptr{Cvoid}
         )
     end
+end
+
+function ClientGetPlatformName(client::Client)
+    GC.@preserve client begin
+        str = @ccall MLIR.API.mlir_c.ClientGetPlatformName(
+            client.client::Ptr{Cvoid}
+        )::Cstring
+    end
+    return unsafe_string(str)
 end
 
 function is_ready(future::Future)

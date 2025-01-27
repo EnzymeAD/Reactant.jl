@@ -53,7 +53,13 @@ export default defineConfig({
       { text: "Home", link: "/" },
       { text: "Getting Started", link: "/introduction" },
       { text: "Benchmarks", link: "https://enzymead.github.io/Reactant.jl/benchmarks/" },
-      { text: "Tutorials", link: "/tutorials/" },
+      {
+        text: "Tutorials",
+        items: [
+          {text: "Overview", link: "/tutorials/"},
+          {text: "Profiling", link: "/tutorials/profiling"},
+        ],
+      },
       {
         text: "API",
         items: [
@@ -70,6 +76,11 @@ export default defineConfig({
               { text: "Func", link: "/api/func" },
               { text: "StableHLO", link: "/api/stablehlo" },
               { text: "VHLO", link: "/api/vhlo" },
+              { text: "GPU", link: "/api/gpu" },
+              { text: "LLVM", link: "/api/llvm" },
+              { text: "NVVM", link: "/api/nvvm" },
+              { text: "TPU", link: "/api/tpu" },
+              { text: "Triton", link: "/api/triton" },
             ],
           },
           {
@@ -100,6 +111,7 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: "Overview", link: "/tutorials/" },
+          { text: "Profiling", link: "/tutorials/profiling" },
         ],
       },
       "/api/": {
@@ -123,6 +135,11 @@ export default defineConfig({
               { text: "Func", link: "/api/func" },
               { text: "StableHLO", link: "/api/stablehlo" },
               { text: "VHLO", link: "/api/vhlo" },
+              { text: "GPU", link: "/api/gpu" },
+              { text: "LLVM", link: "/api/llvm" },
+              { text: "NVVM", link: "/api/nvvm" },
+              { text: "TPU", link: "/api/tpu" },
+              { text: "Triton", link: "/api/triton" },
             ],
           },
           {

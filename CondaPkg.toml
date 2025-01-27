@@ -1,2 +1,2 @@
-[deps]
-jax = ""
+[pip.deps]
+jax = ">=0.4"

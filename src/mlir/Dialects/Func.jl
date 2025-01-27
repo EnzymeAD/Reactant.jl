@@ -173,7 +173,7 @@ that contains the operation.
 # Example
 
 ```mlir
-func.func @foo() : (i32, f8) {
+func.func @foo() -> (i32, f8) {
   ...
   return %0, %1 : i32, f8
 }

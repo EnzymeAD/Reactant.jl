@@ -88,9 +88,9 @@ end
 end
 
 @testset "Bool attributes" begin
-    x_ra = Reactant.to_rarray(false; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(false; track_numbers=Number)
     @test @jit(iszero(x_ra)) == true
-    x_ra = Reactant.to_rarray(true; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(true; track_numbers=Number)
     @test @jit(iszero(x_ra)) == false
 end
 
@@ -100,4 +100,55 @@ end
 
     @test @allowscalar(x_ra[1]) ≈ x[1]
     @test @allowscalar(x_ra[1:1]) ≈ x[1:1]
+end
+
+@testset "no_nan passes" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 4, 16))
+    y_ra = Reactant.to_rarray(rand(Float32, 4, 16))
+
+    fn(x) = x .- x
+
+    hlo = @code_hlo fn(x_ra)
+    @test occursin("subtract", repr(hlo))
+    @test !occursin("constant", repr(hlo))
+    hlo = @code_hlo no_nan = true fn(x_ra)
+    @test !occursin("subtract", repr(hlo))
+    @test occursin("constant", repr(hlo))
+
+    fn(x, y) = begin
+        c = x .+ y
+        return c .- y
+    end
+
+    hlo = @code_hlo fn(x_ra, y_ra)
+    @test occursin("subtract", repr(hlo))
+    @test occursin("add", repr(hlo))
+    hlo = @code_hlo no_nan = true fn(x_ra, y_ra)
+    @test !occursin("subtract", repr(hlo))
+    @test !occursin("add", repr(hlo))
+end
+
+# While a bit specific, the following is used to check for a bug in `should_rewrite_call`
+function sinusoidal_embedding(
+    x::AbstractArray{T,4}, min_freq, max_freq, embedding_dims::Int
+) where {T}
+    if size(x)[1:3] != (1, 1, 1)
+        throw(DimensionMismatch("Input shape must be (1, 1, 1, batch)"))
+    end
+
+    lower, upper = log(T(min_freq)), log(T(max_freq))
+    n = embedding_dims ÷ 2
+    x_ = 2 .* x .* exp.(reshape(range(lower, upper; length=n), 1, 1, n, 1))
+    return cat(sinpi.(x_), cospi.(x_); dims=Val(3))
+end
+
+@testset "sinusoidal_embedding" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 1, 1, 1, 4))
+    hlo = @code_hlo sinusoidal_embedding(x_ra, 0.1, 10.0, 4)
+end
+
+# test #493
+@testset "unique(::Vector{Symbol}) (#493)" begin
+    x = [:a, :b, :a]
+    @test @jit(unique(x)) == [:a, :b]
 end

@@ -6,6 +6,8 @@ using ..Reactant:
     AnyTracedRArray,
     AnyTracedRMatrix,
     AnyTracedRVector,
+    AnyTracedRVecOrMat,
+    unwrapped_eltype,
     Ops,
     MLIR
 
@@ -190,12 +192,12 @@ function overloaded_mul!(
 end
 
 function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,2}),
+    @nospecialize(C::TracedRArray{T,2} where {T}),
     @nospecialize(A::AnyTracedRMatrix),
     @nospecialize(B::AnyTracedRMatrix),
     α::Number=true,
     β::Number=false,
-) where {T}
+)
     if size(C) != (size(A, 1), size(B, 2))
         throw(
             DimensionMismatch(
@@ -207,6 +209,7 @@ function overloaded_mul!(
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
     end
 
+    T = unwrapped_eltype(C)
     tmp = Ops.dot_general(
         T.(materialize_traced_array(A)),
         T.(materialize_traced_array(B));
@@ -315,6 +318,85 @@ function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
         indices[i, 2] = idx2 + i - 2
     end
     return indices
+end
+
+function LinearAlgebra.ldiv!(
+    B::Union{
+        AbstractArray{<:TracedRNumber{T},1},
+        AbstractArray{<:TracedRNumber{T},2},
+        AnyTracedRArray{T,1},
+        AnyTracedRArray{T,2},
+    },
+    D::Diagonal,
+    A::AbstractVecOrMat,
+) where {T}
+    LinearAlgebra.require_one_based_indexing(A, B)
+    dd = D.diag
+    d = length(dd)
+    m, n = size(A, 1), size(A, 2)
+    m′, n′ = size(B, 1), size(B, 2)
+    m == d || throw(DimensionMismatch("right hand side has $m rows but D is $d by $d"))
+    (m, n) == (m′, n′) ||
+        throw(DimensionMismatch("expect output to be $m by $n, but got $m′ by $n′"))
+    B .= dd .\ A
+    # OG implementation below, we don't currently support the conditional throw exception
+    #j = findfirst(iszero, D.diag)
+    #isnothing(j) || throw(SingularException(j))
+    #@inbounds for j = 1:n, i = 1:m
+    #    B[i, j] = dd[i] \ A[i, j]
+    #end
+    return B
+end
+
+# Kronecker Product
+function LinearAlgebra.kron(
+    x::AnyTracedRVecOrMat{T1}, y::AnyTracedRVecOrMat{T2}
+) where {T1,T2}
+    x = materialize_traced_array(x)
+    y = materialize_traced_array(y)
+    z = similar(x, Base.promote_op(*, T1, T2), LinearAlgebra._kronsize(x, y))
+    LinearAlgebra.kron!(z, x, y)
+    return z
+end
+
+function LinearAlgebra.kron(x::AnyTracedRVector{T1}, y::AnyTracedRVector{T2}) where {T1,T2}
+    x = materialize_traced_array(x)
+    y = materialize_traced_array(y)
+    z = similar(x, Base.promote_op(*, T1, T2), length(x) * length(y))
+    LinearAlgebra.kron!(z, x, y)
+    return z
+end
+
+function LinearAlgebra.kron!(C::AnyTracedRVector, A::AnyTracedRVector, B::AnyTracedRVector)
+    LinearAlgebra.kron!(
+        reshape(C, length(B), length(A)), reshape(A, 1, length(A)), reshape(B, length(B), 1)
+    )
+    return C
+end
+
+function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTracedRMatrix)
+    A = materialize_traced_array(A)
+    B = materialize_traced_array(B)
+
+    final_shape = Int64[size(B, 1), size(A, 1), size(B, 2), size(A, 2)]
+
+    A = Ops.broadcast_in_dim(A, Int64[2, 4], final_shape)
+    B = Ops.broadcast_in_dim(B, Int64[1, 3], final_shape)
+
+    C_tmp = Ops.reshape(Ops.multiply(A, B), size(C)...)
+    set_mlir_data!(C, get_mlir_data(C_tmp))
+
+    return C
+end
+
+function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRVector, B::AnyTracedRMatrix)
+    LinearAlgebra._kron!(C, reshape(A, length(A), 1), B)
+    return C
+end
+
+function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTracedRVector)
+    LinearAlgebra._kron!(C, A, reshape(B, length(B), 1))
+    return C
 end
 
 end

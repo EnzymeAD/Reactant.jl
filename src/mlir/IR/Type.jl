@@ -192,6 +192,51 @@ Creates a f64 type in the given context. The type is owned by the context.
 Type(::Core.Type{Float64}; context::Context=context()) = Type(API.mlirF64TypeGet(context))
 
 """
+    Type(::Core.Type{Reactant.F8E5M2}; context=context())
+
+Creates a f8e5m2 type in the given context. The type is owned by the context.
+"""
+function Type(::Core.Type{<:Reactant.F8E5M2}; context::Context=context())
+    return Type(API.mlirFloat8E5M2TypeGet(context))
+end
+
+"""
+    Type(::Core.Type{Reactant.F8E4M3FN}; context=context())
+
+Creates a f8e4m3fn type in the given context. The type is owned by the context.
+"""
+function Type(::Core.Type{<:Reactant.F8E4M3FN}; context::Context=context())
+    return Type(API.mlirFloat8E4M3FNTypeGet(context))
+end
+
+"""
+    Type(::Core.Type{Reactant.F8E4M3B11FNUZ}; context=context())
+
+Creates a f8e4m3b11fnuz type in the given context. The type is owned by the context.
+"""
+function Type(::Core.Type{<:Reactant.F8E4M3B11FNUZ}; context::Context=context())
+    return Type(API.mlirFloat8E4M3B11FNUZTypeGet(context))
+end
+
+"""
+    Type(::Core.Type{Reactant.F8E5M2FNUZ}; context=context())
+
+Creates a f8e5m2fnuz type in the given context. The type is owned by the context.
+"""
+function Type(::Core.Type{<:Reactant.F8E5M2FNUZ}; context::Context=context())
+    return Type(API.mlirFloat8E5M2FNUZTypeGet(context))
+end
+
+"""
+    Type(::Core.Type{Reactant.F8E4M3FNUZ}; context=context())
+
+Creates a f8e4m3fnuz type in the given context. The type is owned by the context.
+"""
+function Type(::Core.Type{<:Reactant.F8E4M3FNUZ}; context::Context=context())
+    return Type(API.mlirFloat8E4M3FNUZTypeGet(context))
+end
+
+"""
     isf8e5m2(type)
 
 Checks whether the given type is an f8E5M2 type.
@@ -204,6 +249,27 @@ isf8e5m2(type::Type) = API.mlirTypeIsAFloat8E5M2(type)
 Checks whether the given type is an f8E4M3FN type.
 """
 isf8e4m3fn(type::Type) = API.mlirTypeIsAFloat8E4M3FN(type)
+
+"""
+    isf8e4m3b11fnuz(type)
+
+Checks whether the given type is an f8E4M3B11FNUZ type.
+"""
+isf8e4m3b11fnuz(type::Type) = API.mlirTypeIsAFloat8E4M3B11FNUZ(type)
+
+"""
+    isf8e5m2fnuz(type)
+
+Checks whether the given type is an f8E5M2FNUZ type.
+"""
+isf8e5m2fnuz(type::Type) = API.mlirTypeIsAFloat8E5M2FNUZ(type)
+
+"""
+    isf8e4m3fnuz(type)
+
+Checks whether the given type is an f8E4M3FNUZ type.
+"""
+isf8e4m3fnuz(type::Type) = API.mlirTypeIsAFloat8E4M3FNUZ(type)
 
 """
     isbf16(type)
@@ -738,6 +804,16 @@ function julia_type(type::Type)
         Float32
     elseif isf64(type)
         Float64
+    elseif isf8e5m2(type)
+        Reactant.F8E5M2
+    elseif isf8e4m3fn(type)
+        Reactant.F8E4M3FN
+    elseif isf8e4m3b11fnuz(type)
+        Reactant.F8E4M3B11FNUZ
+    elseif isf8e5m2fnuz(type)
+        Reactant.F8E5M2FNUZ
+    elseif isf8e4m3fnuz(type)
+        Reactant.F8E4M3FNUZ
     elseif isnone(type)
         Nothing
     elseif iscomplex(type)
