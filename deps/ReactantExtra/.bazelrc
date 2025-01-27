@@ -34,4 +34,3 @@ build:rocm --repo_env TF_NEED_ROCM=1
 build:rocm --define=using_rocm=true
 build:rocm --define=using_rocm_hipcc=true
 build:rocm --action_env TF_ROCM_AMDGPU_TARGETS="gfx900,gfx906,gfx908,gfx90a,gfx1030"
-
