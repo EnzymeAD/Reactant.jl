@@ -763,6 +763,25 @@ function prng_set_seed_32(seeds::Vector{Value}; location=Location())
     )
 end
 
+function pack_vmsk(low::Value, high::Value; output::IR.Type, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[low, high]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.pack_vmsk",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function pack_subelements(
     sources::Vector{Value}; output::IR.Type, positions, pack_format, location=Location()
 )
@@ -821,6 +840,26 @@ function reinterpret_cast(input::Value; result::IR.Type, location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function relayout(input::Value; output=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(output) && push!(op_ty_results, output)
+
+    return create_operation(
+        "tpu.relayout",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
