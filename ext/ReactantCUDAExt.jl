@@ -399,7 +399,7 @@ function compile(job)
             end
             return true
         end
-        if Reactant.DUMP_LLVMIR[]
+        if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl postopt IR\n", string(mod))
         end
         if !isempty(errors)
