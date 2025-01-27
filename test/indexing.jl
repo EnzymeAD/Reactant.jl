@@ -276,4 +276,3 @@ end
     @test @jit(scalar_setindex(x_ra, ConcreteRNumber(1), 1)) ≈ scalar_setindex(x, 1, 1)
     @test @allowscalar x_ra[1] == 1
 end
-
