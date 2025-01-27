@@ -596,28 +596,36 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
                                                     MlirModule cmod,
-                                                    int *global_ordinals,
-                                                    int num_global_ordinals) {
+                                                    int device_ordinal,
+                                                    int num_partitions,
+                                                    bool use_shardy_partitioner,
+                                                    int *global_ordinals) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
   CompileOptions options;
 
   // https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L601
-  int device_count = client->addressable_device_count();
+  if (device_ordinal >= 0) {
+    options.executable_build_options.set_device_ordinal(device_ordinal);
+  }
+
+  int device_count = client->device_count();
 
   options.executable_build_options.set_num_replicas(device_count);
-  options.executable_build_options.set_num_partitions(1);
+  options.executable_build_options.set_num_partitions(num_partitions);
+  options.executable_build_options.set_use_shardy_partitioner(
+      use_shardy_partitioner);
 
   xla::DeviceAssignment device_assignment(device_count, 1);
-  for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
+  for (int64_t device_id = 0; device_id < client->device_count(); ++device_id) {
     int ordinal = global_ordinals[device_id];
     if (ordinal < 0) {
       continue;
     }
     device_assignment(ordinal, 0) = device_id;
   }
-  options.executable_build_options.set_device_assignment(device_assignment);
+  compile_options.executable_build_options.set_device_assignment(device_assignment);
 
   auto addressable_devices = client->addressable_devices();
   if (!addressable_devices.empty()) {

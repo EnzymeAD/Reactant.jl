@@ -262,13 +262,25 @@ mutable struct Buffer
     end
 end
 
-function DeviceToClientDeviceOrdinal(device::Device)
+struct Device
+    device::Ptr{Cvoid}
+end
+
+function device_ordinal(client::Client, device::Device)
+    return client.global_ordinals[DeviceGetLocalDeviceId(device) + 1]
+end
+
+function DeviceToString(device::Device)
     pjrtclient = client(device)
-    naddressable_devices = ClientNumAddressableDevices(pjrtclient)
-    for i in 1:naddressable_devices
-        (ClientGetAddressableDevice(pjrtclient, i - 1) == device) && return (i - 1)
-    end
-    return error("Device $(device) is not an addressable device")
+    platform_name = ClientGetPlatformName(pjrtclient)
+    return "$(uppercase(platform_name)):$(device_ordinal(pjrtclient, device))"
+end
+
+function Base.show(io::IO, ::MIME"text/plain", device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    print(io, "Device($(device.device), platform_name=$(platform_name))")
+    return nothing
 end
 
 mutable struct AsyncBuffer

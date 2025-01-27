@@ -1013,6 +1013,13 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
                     XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray
                 ]
                 if !isempty(devices_list)
+                    if !allequal(devices_list)
+                        msg = "Expected all arguments to be on the same device, got:\n"
+                        for (i, device) in enumerate(devices_list)
+                            msg *= "    Device $(i): $(XLA.DeviceToString(device))\n"
+                        end
+                        throw(ArgumentError(msg))
+                    end
                     @assert allequal(devices_list) "All arguments must be on the same device: $(devices_list)"
                     device = first(devices_list)
                 end
@@ -1024,6 +1031,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
                 client = XLA.client(device)
             else
                 client = XLA.default_backend[]
+                device = XLA.ClientGetDevice(client, XLA.default_device_idx[])
             end
         else
             if device !== nothing
