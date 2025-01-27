@@ -697,7 +697,7 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   prepareRegistry(registry);
 
   mlir::registerenzymePasses();
-  registerenzymexlaPasses();
+  enzyme::registerenzymexlaPasses();
 
   // Register the standard passes we want.
   mlir::registerCSEPass();
