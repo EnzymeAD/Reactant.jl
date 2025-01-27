@@ -353,6 +353,9 @@ function compile(job)
         end
         entryname = LLVM.name(meta.entry)
 
+        if Reactant.DUMP_LLVMIR[]
+            println("cuda.jl immediate IR\n", string(mod))
+        end
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
         LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
@@ -395,6 +398,9 @@ function compile(job)
                 end
             end
             return true
+        end
+        if Reactant.DUMP_LLVMIR[]
+            println("cuda.jl postopt IR\n", string(mod))
         end
         if !isempty(errors)
             throw(GPUCompiler.InvalidIRError(job, errors))
