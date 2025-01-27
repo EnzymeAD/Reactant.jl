@@ -530,6 +530,18 @@ extern "C" void BufferToHost(PjRtBuffer *buffer, void *data) {
 
 extern "C" void FreeClient(PjRtClient *client) { delete client; }
 
+extern "C" int64_t PjRtDeviceGetLocalDeviceId(PjRtDevice *device) {
+  return device->local_device_id().value();
+}
+
+extern "C" int64_t PjRtDeviceGetGlobalDeviceId(PjRtDevice *device) {
+  return device->global_device_id().value();
+}
+
+extern "C" int64_t PjRtDeviceGetLocalHardwareId(PjRtDevice *device) {
+  return device->local_hardware_id().value();
+}
+
 #include "xla/service/custom_call_target_registry.h"
 extern "C" void RegisterCustomCallTarget(const char *name, void *address,
                                          const char *platform) {
@@ -588,13 +600,27 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int device_ordinal,
 
   CompileOptions options;
 
+  // https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L601
   if (device_ordinal >= 0) {
     options.executable_build_options.set_device_ordinal(device_ordinal);
   }
-  options.executable_build_options.set_num_replicas(num_replicas);
+
+  int device_count = client->device_count();
+
+  options.executable_build_options.set_num_replicas(device_count);
   options.executable_build_options.set_num_partitions(num_partitions);
   options.executable_build_options.set_use_shardy_partitioner(
       use_shardy_partitioner);
+
+  xla::DeviceAssignment device_assignment(device_count, 1);
+  for (int64_t device_id = 0; device_id < client->device_count(); ++device_id) {
+    int ordinal = global_ordinals[device_id];
+    if (ordinal < 0) {
+      continue;
+    }
+    device_assignment(ordinal, 0) = device_id;
+  }
+  compile_options.executable_build_options.set_device_assignment(device_assignment);
 
   auto addressable_devices = client->addressable_devices();
   if (!addressable_devices.empty()) {

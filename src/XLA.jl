@@ -15,10 +15,25 @@ end
 
 mutable struct Client
     client::Ptr{Cvoid}
+    global_ordinals::Vector{Int64}
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        return new(client)
+
+        global_ordinals = Int64[]
+        client = new(client, global_ordinals)
+
+        # https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L127
+        devices = [ClientGetDevice(client, i - 1) for i in 1:ClientNumDevices(client)]
+        sort!(devices; lt=(a, b) -> DeviceGetLocalDeviceId(a) < DeviceGetLocalDeviceId(b))
+
+        resize!(global_ordinals, length(devices))
+        global_ordinals .= -1
+        for (i, device) in enumerate(devices)
+            global_ordinals[DeviceGetLocalDeviceId(device) + 1] = i - 1
+        end
+
+        return client
     end
 end
 
@@ -231,20 +246,21 @@ struct Device
     device::Ptr{Cvoid}
 end
 
+function device_ordinal(client::Client, device::Device)
+    return client.global_ordinals[DeviceGetLocalDeviceId(device) + 1]
+end
+
+function DeviceToString(device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    return "$(uppercase(platform_name)):$(device_ordinal(pjrtclient, device))"
+end
+
 function Base.show(io::IO, ::MIME"text/plain", device::Device)
     pjrtclient = client(device)
     platform_name = ClientGetPlatformName(pjrtclient)
     print(io, "Device($(device.device), platform_name=$(platform_name))")
     return nothing
-end
-
-function DeviceToClientDeviceOrdinal(device::Device)
-    pjrtclient = client(device)
-    naddressable_devices = ClientNumAddressableDevices(pjrtclient)
-    for i in 1:naddressable_devices
-        (ClientGetAddressableDevice(pjrtclient, i - 1) == device) && return (i - 1)
-    end
-    return error("Device $(device) is not an addressable device")
 end
 
 mutable struct AsyncBuffer
@@ -554,6 +570,7 @@ function Compile(
                 num_replicas::Cint,
                 num_partitions::Cint,
                 use_shardy_partitioner::Bool,
+                global_ordinals::Ptr{Cint},
             )::Ptr{Cvoid}
         )
     end
@@ -606,6 +623,14 @@ function ClientGetPlatformName(client::Client)
         )::Cstring
     end
     return unsafe_string(str)
+end
+
+function DeviceGetLocalDeviceId(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
+            device.device::Ptr{Cvoid}
+        )::Cint
+    end
 end
 
 function is_ready(future::Future)
