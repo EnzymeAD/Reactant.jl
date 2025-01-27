@@ -8,10 +8,10 @@ extern "C" void reactant_release_rcreference(void* ptr);
 extern "C" bool reactant_contains_rcreference(void* ptr);
 
 namespace xla {
-    namespace ifrt {
-        class Array;
-    }
-}
+namespace ifrt {
+class Array;
+} // namespace ifrt
+} // namespace xla
 
 namespace reactant {
 template <typename T, typename G = std::remove_cv_t<T>>
