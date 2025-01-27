@@ -954,7 +954,7 @@ Generate Julia code to call the XLA executable.
 - `donated_args_mask`: A list of `UInt8`s representing whether the argument is donated.
 - `nresults`: The number of results to expect.
 """
-function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
+function codegen_xla_call(exec, device, flatten_names, donated_args_mask, nresults)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
     concretized_res_names = Symbol[Symbol(:concrete_res_, i) for i in 1:nresults]
@@ -969,6 +969,7 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
             GC.@preserve $(flatten_names...) begin
                 linearized_results = XLA.ExecutableCall(
                     $exec,
+                    $(device),
                     ($(flatten_buffer_refs...),),
                     $(Tuple(donated_args_mask)),
                     Val($nresults),
@@ -1044,8 +1045,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
 
         # compile MLIR module to XLA executable
         exec = XLA.Compile(
-            client,
-            mod
+            client, mod; device_ordinal=Int64(XLA.device_ordinal(client, device))
         )
         (
             exec,
@@ -1055,6 +1055,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
             seen_args,
             concrete_result,
             isclosure,
+            device
         )
     finally
         MLIR.IR.deactivate!(ctx)
@@ -1064,7 +1065,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
 end
 
 function compile(f, args; sync=false, kwargs...)
-    exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
+    exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, device = compile_xla(
         f, args; kwargs...
     )
 
@@ -1082,7 +1083,7 @@ function compile(f, args; sync=false, kwargs...)
     flatten_arg_names, flatten_code = codegen_flatten!(linear_args, result_stores)
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        exec, flatten_arg_names, donated_args_mask, length(linear_results)
+        exec, device, flatten_arg_names, donated_args_mask, length(linear_results)
     )
 
     unflatten_code = codegen_unflatten!(
