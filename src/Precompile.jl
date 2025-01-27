@@ -60,7 +60,7 @@ end
 @setup_workload begin
     initialize_dialect()
     client = XLA.CPUClient(; checkcount=false)
-    device = XLA.ClientGetDevice(client, 0)
+    device = XLA.ClientGetAddressableDevice(client, 0)
     @compile_workload begin
         @static if precompilation_supported()
             x = ConcreteRNumber(2.0; client, device)

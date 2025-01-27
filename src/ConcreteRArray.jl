@@ -67,7 +67,7 @@ function ConcreteRArray(
     idx::Int=XLA.default_device_idx[],
     device::Union{Nothing,XLA.Device}=nothing,
 ) where {T,N}
-    device = device === nothing ? XLA.ClientGetDevice(client, idx) : device
+    device = device === nothing ? XLA.ClientGetAddressableDevice(client, idx) : device
     return ConcreteRArray{T,N}(
         XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing), size(data)
     )
