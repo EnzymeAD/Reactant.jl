@@ -365,7 +365,7 @@ cc_library(
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
-        "@xla//xla/stream_executor:device_description.pb.cc",
+        # "@xla//xla/stream_executor:device_description.pb.cc",
         "@xla//xla/service:hlo.pb.cc",
         #  # "@tsl//tsl/protobuf:dnn.pb.cc",
         #"@tsl//tsl/protobuf:histogram.pb.cc",
@@ -497,6 +497,8 @@ cc_library(
         
         "@xla//xla:xla_proto_cc",
         "@xla//xla:xla_proto_cc_impl",
+        "@xla//xla/stream_executor:device_description_proto_cc_impl",
+        "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
 
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
