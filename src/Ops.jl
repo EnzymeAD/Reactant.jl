@@ -333,6 +333,50 @@ end
     return TracedRArray{T,N}((), res, size(x))
 end
 
+# for (typ, apicall) in (
+#     (Bool, :mlirDenseElementsAttrBoolSplatGet),
+#     (UInt8, :mlirDenseElementsAttrUInt8SplatGet),
+#     (Int8, :mlirDenseElementsAttrInt8SplatGet),
+#     (UInt32, :mlirDenseElementsAttrUInt32SplatGet),
+#     (Int32, :mlirDenseElementsAttrInt32SplatGet),
+#     (UInt64, :mlirDenseElementsAttrUInt64SplatGet),
+#     (Int64, :mlirDenseElementsAttrInt64SplatGet),
+#     (Float32, :mlirDenseElementsAttrFloatSplatGet),
+#     (Float64, :mlirDenseElementsAttrDoubleSplatGet),
+#     )
+#     @eval begin
+#         @noinline function Base.fill(
+#             number::$typ,
+#             shape::Vector{Int};
+#             location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+#         )
+#             value = $(:(MLIR.API.$apicall))(MLIR.IR.TensorType([1, 2], IR.Type(Int)), number)
+#             # output = mlir_type(TracedRArray{$typ,length(shape)}, shape)
+#             # res = MLIR.IR.result(stablehlo.constant(; output, value, location))
+#             # return TracedRArray{$typ,length(shape)}((), res, shape)
+#             # return value
+#         end
+
+
+#     end
+# end
+
+@noinline function fill(
+    number::Int,
+    shape::Vector{Int};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+)
+    out_ty = MLIR.IR.VectorType(length(shape), shape, MLIR.IR.Type(Int))
+    splatattr = MLIR.API.mlirDenseElementsAttrInt64SplatGet(MLIR.IR.VectorType(length(shape), shape, MLIR.IR.Type(Int)), number)
+    cst_op = stablehlo.constant(; output=out_ty, value=splatattr, location=location)
+    cst = MLIR.IR.result(cst_op)
+    ta = TracedRArray{Int, length(shape)}((), cst, shape)
+    @warn cst_op
+    @warn ta
+    return ta
+end
+
+
 @noinline function transpose(
     x::TracedRArray{T,N},
     permutation;
