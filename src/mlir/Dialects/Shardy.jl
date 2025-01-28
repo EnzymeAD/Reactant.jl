@@ -1,27 +1,30 @@
 module sdy
 using ...IR
-import ...IR:
-    NamedAttribute,
-    Value,
-    Location,
-    Block,
-    Region,
-    Attribute,
-    create_operation,
-    context,
-    IndexType
+import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
+using EnumX
+
+
+"""
+`PropagationDirection`
+propagation direction enum
+"""
+@enumx PropagationDirection NONE=0 FORWARD=1 BACKWARD=2 BOTH=3 
+
+IR.Attribute(e::PropagationDirection.T) = Int(e)
+
 
 """
 `all_gather`
 
 Gathers chunks of a tensor along axes specified in `gathering_axes`.
 
-The `gathering_axes` is a list of lists of axes. Each inner list specifies
-the axes along which a separate gather should be performed. The outer list
-is over the dimensions of the tensor. It will be applied to the sharding of
-the operand (`tensor`) to obtain the sharding of the result (`out_sharding`).
+The `gathering_axes` is a list of lists of axes. The outer list is over the
+dimensions of the tensor. Each inner list specifies the axes along which a
+separate gather should be performed on the respective dimension. It will be
+applied to the sharding of the operand (`tensor`) to obtain the sharding of
+the result (`out_sharding`).
 
 Note that `out_sharding` is not used to determine the sharding of the
 result. Instead, the sharding of the result is determined by the sharding of
@@ -35,7 +38,7 @@ inferred sharding.
 ```
 
 **Constraints:**
-- Elements in `gatheringAxes` must satisfy the constraints listed in
+- Elements in `gathering_axes` must satisfy the constraints listed in
   `AxisRefListAttr`.
 - `out_sharding` must satisfy the constraints listed in
   `TensorShardingAttr`.
@@ -43,32 +46,67 @@ inferred sharding.
 - Both operand and result shardings should be bound to the same `MeshAttr`.
 - Applying `gathering_axes` to the operand sharding gets `out_sharding`.
 """
-function all_gather(
-    tensor::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    gathering_axes,
-    out_sharding,
-    location=Location(),
-)
+function all_gather(tensor::Value; result::Union{Nothing, IR.Type}=nothing, gathering_axes::Any, out_sharding::Any, location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[tensor,]
+    operands = Value[tensor, ]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[
-        namedattribute("gathering_axes", gathering_axes),
-        namedattribute("out_sharding", out_sharding),
-    ]
+    attributes = NamedAttribute[namedattribute("gathering_axes", gathering_axes), namedattribute("out_sharding", out_sharding), ]
     !isnothing(result) && push!(op_ty_results, result)
+    
+    create_operation(
+        "sdy.all_gather", location;
+        operands, owned_regions, successors, attributes,
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results)
+    )
+end
 
-    return create_operation(
-        "sdy.all_gather",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+"""
+`all_slice`
+
+Slices chunks of a tensor along axes specified in `slicing_axes`. There is
+an algebric duality between `sdy.all_slice` and `sdy.all_gather`.
+
+The `slicing_axes` is a list of lists of axes. The outer list is over the
+dimensions of the tensor. Each inner list specifies the axes along which a
+slice should be performed on the respective dimension. It will be applied to
+the sharding of the operand (`tensor`) to obtain the sharding of the result
+(`out_sharding`).
+
+Note that `out_sharding` is not used to determine the sharding of the
+result. Instead, the sharding of the result is determined by the sharding of
+the operand and the `slicing_axes`, and `out_sharding` must match this
+inferred sharding.
+
+# Example
+```mlir
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\"}, {}, {}\\]>]>} : tensor<8x8xf32>
+%2 = sdy.all_slice [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 to_sharding=<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\]> : tensor<8x8xf32>
+```
+
+**Constraints:**
+- Elements in `slicing_axes` must satisfy the constraints listed in
+  `AxisRefListAttr`.
+- `out_sharding` must satisfy the constraints listed in
+  `TensorShardingAttr`.
+- The operand must have a sharding.
+- Both operand and result shardings should be bound to the same `MeshAttr`.
+- Applying `slicing_axes` to the operand sharding gets `out_sharding`.
+"""
+function all_slice(tensor::Value; result::Union{Nothing, IR.Type}=nothing, slicing_axes::Any, out_sharding::Any, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[tensor, ]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("slicing_axes", slicing_axes), namedattribute("out_sharding", out_sharding), ]
+    !isnothing(result) && push!(op_ty_results, result)
+    
+    create_operation(
+        "sdy.all_slice", location;
+        operands, owned_regions, successors, attributes,
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results)
     )
 end
 
@@ -91,23 +129,19 @@ is done between constants (or constant expressions).
 %output = sdy.constant dense<[[0.0, 1.0], [2.0, 3.0]]> : tensor<2x2xf32>
 ```
 """
-function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Location())
+function constant(; output::Union{Nothing, IR.Type}=nothing, value::IR.DenseElements, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[namedattribute("value", value), ]
     !isnothing(output) && push!(op_ty_results, output)
-
-    return create_operation(
-        "sdy.constant",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+    
+    create_operation(
+        "sdy.constant", location;
+        operands, owned_regions, successors, attributes,
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results)
     )
 end
 
@@ -136,7 +170,7 @@ This while op has n data flow edges, the i-th data flow edges is between
 sources `x_i`, `return_value_i` and targets `y_i`, `pred_arg_i`,
 `body_arg_i`.
 
-An `sdy.data_flow_edge` takes as input the root target of an edge (can be
+An `sdy.data_flow_edge` takes as input the owner of an edge (can be
 any of the targets, but preferably an op result rather than a block
 argument), which shouldn\'t have any other uses. This op isn\'t pure because
 it can take an input that originally didn\'t have any uses.
@@ -163,33 +197,24 @@ We don\'t allow the input of a `sdy.data_flow_edge` to be defined by an
 unregistered `sdy.sharding` attribute.
 
 NOTE: it\'s NOT the responsibility of the `sdy.data_flow_edge` to link
-between sources and targets, it\'s simply attached to the root target of the
-edge. The op that this edge is bound to (while in the example above) is
+between sources and targets, it\'s simply attached to the owner of the edge.
+The op that this edge is bound to (while in the example above) is
 responsible for providing this information.
 """
-function data_flow_edge(
-    input::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    sharding=nothing,
-    location=Location(),
-)
+function data_flow_edge(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding::Union{Any, Nothing}=nothing, location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[input,]
+    operands = Value[input, ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(sharding) && push!(attributes, namedattribute("sharding", sharding))
-
-    return create_operation(
-        "sdy.data_flow_edge",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+    
+    create_operation(
+        "sdy.data_flow_edge", location;
+        operands, owned_regions, successors, attributes,
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results)
     )
 end
 
@@ -211,34 +236,18 @@ the body on any free axes - those not in the manual_axes list.
 - The global and local shapes of the op regions arguments/results must match.
 - No manual axes are split.
 """
-function manual_computation(
-    tensors::Vector{Value};
-    results::Vector{IR.Type},
-    in_shardings,
-    out_shardings,
-    manual_axes,
-    body::Region,
-    location=Location(),
-)
-    op_ty_results = IR.Type[results...,]
-    operands = Value[tensors...,]
-    owned_regions = Region[body,]
+function manual_computation(tensors::Vector{Value}; results::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, in_shardings::Any, out_shardings::Any, manual_axes::Any, body::Region, location=Location())
+    op_ty_results = IR.Type[results..., ]
+    operands = Value[tensors..., ]
+    owned_regions = Region[body, ]
     successors = Block[]
-    attributes = NamedAttribute[
-        namedattribute("in_shardings", in_shardings),
-        namedattribute("out_shardings", out_shardings),
-        namedattribute("manual_axes", manual_axes),
-    ]
-
-    return create_operation(
-        "sdy.manual_computation",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
+    attributes = NamedAttribute[namedattribute("in_shardings", in_shardings), namedattribute("out_shardings", out_shardings), namedattribute("manual_axes", manual_axes), ]
+    
+    create_operation(
+        "sdy.manual_computation", location;
+        operands, owned_regions, successors, attributes,
         results=op_ty_results,
-        result_inference=false,
+        result_inference=false
     )
 end
 
@@ -250,24 +259,18 @@ of devices (except for meshes with a single device_id).
 The mesh is a `Symbol` operation that appears in the module\'s
 `SymbolTable` and can be referenced by its `name`.
 """
-function mesh(; sym_name, mesh, location=Location())
+function mesh(; sym_name::String, mesh::Any, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name), namedattribute("mesh", mesh)
-    ]
-
-    return create_operation(
-        "sdy.mesh",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
+    attributes = NamedAttribute[namedattribute("sym_name", sym_name), namedattribute("mesh", mesh), ]
+    
+    create_operation(
+        "sdy.mesh", location;
+        operands, owned_regions, successors, attributes,
         results=op_ty_results,
-        result_inference=false,
+        result_inference=false
     )
 end
 
@@ -293,34 +296,20 @@ the same as the type of the operands and results type of the op.
 } : (tensor<16x32xf32>) -> tensor<16x32xf32>
 ```
 """
-function named_computation(
-    operands::Vector{Value};
-    result_0::Vector{IR.Type},
-    name,
-    in_shardings=nothing,
-    out_shardings=nothing,
-    body::Region,
-    location=Location(),
-)
-    op_ty_results = IR.Type[result_0...,]
-    operands = Value[operands...,]
-    owned_regions = Region[body,]
+function named_computation(operands::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, name::String, in_shardings::Union{Any, Nothing}=nothing, out_shardings::Union{Any, Nothing}=nothing, body::Region, location=Location())
+    op_ty_results = IR.Type[result..., ]
+    operands = Value[operands..., ]
+    owned_regions = Region[body, ]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("name", name),]
-    !isnothing(in_shardings) &&
-        push!(attributes, namedattribute("in_shardings", in_shardings))
-    !isnothing(out_shardings) &&
-        push!(attributes, namedattribute("out_shardings", out_shardings))
-
-    return create_operation(
-        "sdy.named_computation",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
+    attributes = NamedAttribute[namedattribute("name", name), ]
+    !isnothing(in_shardings) && push!(attributes, namedattribute("in_shardings", in_shardings))
+    !isnothing(out_shardings) && push!(attributes, namedattribute("out_shardings", out_shardings))
+    
+    create_operation(
+        "sdy.named_computation", location;
+        operands, owned_regions, successors, attributes,
         results=op_ty_results,
-        result_inference=false,
+        result_inference=false
     )
 end
 
@@ -339,28 +328,19 @@ of the barrier op and its operand.
 - `NONE` means no sharding can propagate through this op.
 - Cannot specify `BOTH`, as this op would be redundant.
 """
-function propagation_barrier(
-    input::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    allowed_direction,
-    location=Location(),
-)
+function propagation_barrier(input::Value; result::Union{Nothing, IR.Type}=nothing, allowed_direction::PropagationDirection.T, location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[input,]
+    operands = Value[input, ]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("allowed_direction", allowed_direction),]
+    attributes = NamedAttribute[namedattribute("allowed_direction", allowed_direction), ]
     !isnothing(result) && push!(op_ty_results, result)
-
-    return create_operation(
-        "sdy.propagation_barrier",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+    
+    create_operation(
+        "sdy.propagation_barrier", location;
+        operands, owned_regions, successors, attributes,
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results)
     )
 end
 
@@ -382,44 +362,35 @@ lifespan is:
   // TODO(b/331680067). Add a canonicalization pattern to remove redundant
   // reshard ops.
 """
-function reshard(
-    input::Value; result=nothing::Union{Nothing,IR.Type}, sharding, location=Location()
-)
+function reshard(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding::Any, location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[input,]
+    operands = Value[input, ]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sharding", sharding),]
+    attributes = NamedAttribute[namedattribute("sharding", sharding), ]
     !isnothing(result) && push!(op_ty_results, result)
-
-    return create_operation(
-        "sdy.reshard",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+    
+    create_operation(
+        "sdy.reshard", location;
+        operands, owned_regions, successors, attributes,
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results)
     )
 end
 
+
 function return_(results::Vector{Value}; location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[results...,]
+    operands = Value[results..., ]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-
-    return create_operation(
-        "sdy.return",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
+    
+    create_operation(
+        "sdy.return", location;
+        operands, owned_regions, successors, attributes,
         results=op_ty_results,
-        result_inference=false,
+        result_inference=false
     )
 end
 
@@ -441,25 +412,19 @@ This op can either:
   tensor might have a different sharding (if the input tensor has no other
   uses then the behavior is the same as the no uses case).
 """
-function sharding_constraint(
-    input::Value; result=nothing::Union{Nothing,IR.Type}, sharding, location=Location()
-)
+function sharding_constraint(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding::Any, location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[input,]
+    operands = Value[input, ]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sharding", sharding),]
+    attributes = NamedAttribute[namedattribute("sharding", sharding), ]
     !isnothing(result) && push!(op_ty_results, result)
-
-    return create_operation(
-        "sdy.sharding_constraint",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+    
+    create_operation(
+        "sdy.sharding_constraint", location;
+        operands, owned_regions, successors, attributes,
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results)
     )
 end
 
@@ -474,22 +439,18 @@ argument group ID and returns no result, but instead modifies the internal
 sharding group representation to add the input tensor to the group with the
 given ID.
 """
-function sharding_group(input::Value; group_id, location=Location())
+function sharding_group(input::Value; group_id::UInt64, location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[input,]
+    operands = Value[input, ]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("group_id", group_id),]
-
-    return create_operation(
-        "sdy.sharding_group",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+    attributes = NamedAttribute[namedattribute("group_id", group_id), ]
+    
+    create_operation(
+        "sdy.sharding_group", location;
+        operands, owned_regions, successors, attributes,
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results)
     )
 end
 
