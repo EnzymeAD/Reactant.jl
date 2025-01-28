@@ -373,9 +373,8 @@ Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
-# TODO is there a way to create an unitialized `tensor`? does it show an advantage? maybe `fill`?
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return Ops.constant(zeros(unwrapped_eltype(T), dims))
+    return Ops.fill(zero(unwrapped_eltype(T)), dims)
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
