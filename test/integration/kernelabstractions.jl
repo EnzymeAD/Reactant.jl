@@ -21,10 +21,23 @@ function matmul!(output, a)
     return KernelAbstractions.synchronize(backend)
 end
 
-@testset "KernelAbstractions Call" begin
-    A = Reactant.to_rarray(ones(100, 100))
-    out = Reactant.to_rarray(ones(100, 100))
-    @test all(Array(@jit(matmul!(out, A))) .≈ 100) broken = true
+# https://github.com/EnzymeAD/Reactant.jl/issues/614
+const skip_non_cuda_tests = true
+
+@static if !Sys.isapple()
+    @testset "KernelAbstractions Matmul" begin
+        A = Reactant.to_rarray(ones(100, 100))
+        out = Reactant.to_rarray(ones(100, 100))
+        if CUDA.functional()
+            @test all(Array(@jit(matmul!(out, A))) .≈ 100) broken = true
+        else
+            @static if skip_non_cuda_tests
+                @test false broken = true
+            else
+                @code_hlo optimize = :before_kernel matmul!(out, A)
+            end
+        end
+    end
 end
 
 # simple square kernel
@@ -41,7 +54,17 @@ function square(x)
     return y
 end
 
-@testset "Squaring Kernel" begin
-    x = Reactant.to_rarray(collect(1:1:64) ./ 64)
-    @test all(Array(@jit(square(x))) .≈ Array(x) .* Array(x))
+@static if !Sys.isapple()
+    @testset "KernelAbstractions Square" begin
+        x = Reactant.to_rarray(collect(1:1:64) ./ 64)
+        if CUDA.functional()
+            @test all(Array(@jit(square(x))) .≈ Array(x) .* Array(x))
+        else
+            @static if skip_non_cuda_tests
+                @test false broken = true
+            else
+                @code_hlo optimize = :before_kernel square(x)
+            end
+        end
+    end
 end
