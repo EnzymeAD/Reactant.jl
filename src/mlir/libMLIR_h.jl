@@ -611,6 +611,24 @@ function mlirLocationFileLineColGet(context, filename, line, col)
 end
 
 """
+    mlirLocationFileLineColRangeGet(context, filename, start_line, start_col, end_line, end_col)
+
+Creates an File/Line/Column range location owned by the given context.
+"""
+function mlirLocationFileLineColRangeGet(
+    context, filename, start_line, start_col, end_line, end_col
+)
+    @ccall mlir_c.mlirLocationFileLineColRangeGet(
+        context::MlirContext,
+        filename::MlirStringRef,
+        start_line::Cuint,
+        start_col::Cuint,
+        end_line::Cuint,
+        end_col::Cuint,
+    )::MlirLocation
+end
+
+"""
     mlirLocationCallSiteGet(callee, caller)
 
 Creates a call site location with a callee and a caller.
@@ -6237,14 +6255,6 @@ function mlirRegisterConversionConvertGPUToSPIRV()
     @ccall mlir_c.mlirRegisterConversionConvertGPUToSPIRV()::Cvoid
 end
 
-function mlirCreateConversionConvertGpuLaunchFuncToVulkanLaunchFunc()
-    @ccall mlir_c.mlirCreateConversionConvertGpuLaunchFuncToVulkanLaunchFunc()::MlirPass
-end
-
-function mlirRegisterConversionConvertGpuLaunchFuncToVulkanLaunchFunc()
-    @ccall mlir_c.mlirRegisterConversionConvertGpuLaunchFuncToVulkanLaunchFunc()::Cvoid
-end
-
 function mlirCreateConversionConvertGpuOpsToLLVMSPVOps()
     @ccall mlir_c.mlirCreateConversionConvertGpuOpsToLLVMSPVOps()::MlirPass
 end
@@ -6291,6 +6301,14 @@ end
 
 function mlirRegisterConversionConvertLinalgToStandard()
     @ccall mlir_c.mlirRegisterConversionConvertLinalgToStandard()::Cvoid
+end
+
+function mlirCreateConversionConvertMathToEmitC()
+    @ccall mlir_c.mlirCreateConversionConvertMathToEmitC()::MlirPass
+end
+
+function mlirRegisterConversionConvertMathToEmitC()
+    @ccall mlir_c.mlirRegisterConversionConvertMathToEmitC()::Cvoid
 end
 
 function mlirCreateConversionConvertMathToFuncs()
@@ -6515,14 +6533,6 @@ end
 
 function mlirRegisterConversionConvertVectorToXeGPU()
     @ccall mlir_c.mlirRegisterConversionConvertVectorToXeGPU()::Cvoid
-end
-
-function mlirCreateConversionConvertVulkanLaunchFuncToVulkanCallsPass()
-    @ccall mlir_c.mlirCreateConversionConvertVulkanLaunchFuncToVulkanCallsPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertVulkanLaunchFuncToVulkanCallsPass()
-    @ccall mlir_c.mlirRegisterConversionConvertVulkanLaunchFuncToVulkanCallsPass()::Cvoid
 end
 
 function mlirCreateConversionFinalizeMemRefToLLVMConversionPass()
@@ -10857,6 +10867,48 @@ function stablehloTypeExtensionsGetBoundsElem(attr, pos)
     @ccall mlir_c.stablehloTypeExtensionsGetBoundsElem(
         attr::MlirAttribute, pos::intptr_t
     )::Int64
+end
+
+function stablehloResultAccuracyModeAttrGet(ctx, value)
+    @ccall mlir_c.stablehloResultAccuracyModeAttrGet(
+        ctx::MlirContext, value::MlirStringRef
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAResultAccuracyModeAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAResultAccuracyModeAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloResultAccuracyModeAttrGetValue(attr)
+    @ccall mlir_c.stablehloResultAccuracyModeAttrGetValue(
+        attr::MlirAttribute
+    )::MlirStringRef
+end
+
+function stablehloResultAccuracyAttrGet(ctx, atol, rtol, ulps, value)
+    @ccall mlir_c.stablehloResultAccuracyAttrGet(
+        ctx::MlirContext, atol::Cdouble, rtol::Cdouble, ulps::Int64, value::MlirStringRef
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAResultAccuracyAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAResultAccuracyAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloResultAccuracyAttrGetAtol(attr)
+    @ccall mlir_c.stablehloResultAccuracyAttrGetAtol(attr::MlirAttribute)::Cdouble
+end
+
+function stablehloResultAccuracyAttrGetRtol(attr)
+    @ccall mlir_c.stablehloResultAccuracyAttrGetRtol(attr::MlirAttribute)::Cdouble
+end
+
+function stablehloResultAccuracyAttrGetUlps(attr)
+    @ccall mlir_c.stablehloResultAccuracyAttrGetUlps(attr::MlirAttribute)::Int64
+end
+
+function stablehloResultAccuracyAttrGetMode(attr)
+    @ccall mlir_c.stablehloResultAccuracyAttrGetMode(attr::MlirAttribute)::MlirAttribute
 end
 
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1
