@@ -1452,6 +1452,27 @@ function exponential_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function exponential_v2(
+    operand::Value; result::IR.Type, result_accuracy, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.exponential_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function exponential_minus_one_v1(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]

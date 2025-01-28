@@ -1994,7 +1994,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#exponential
 ```
 """
 function exponential(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -2002,6 +2005,8 @@ function exponential(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.exponential",
