@@ -1,7 +1,8 @@
 module ReactantCUDAExt
 
 using CUDA
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
+using Reactant:
+    Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
 using KernelAbstractions: KernelAbstractions
 using Libdl
