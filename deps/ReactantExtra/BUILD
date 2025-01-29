@@ -362,6 +362,7 @@ cc_library(
     ) + [
 	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
 	"@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
+	"@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
@@ -437,6 +438,7 @@ cc_library(
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
 "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
+"-Wl,-exported_symbol,_RegisterEnzymeXLACPUHandler",
 "-Wl,-exported_symbol,_ReactantThrowError",
 "-Wl,-exported_symbol,_ReactantHandleCuResult",
 "-Wl,-exported_symbol,_CreateProfilerSession",

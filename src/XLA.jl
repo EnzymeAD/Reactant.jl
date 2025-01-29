@@ -178,6 +178,7 @@ function __init__()
         end
     end
 
+    @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
     # This wasn't properly exported on macos, we'll remove the try once macOS JLL
