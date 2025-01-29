@@ -449,7 +449,7 @@ cc_library(
 "-Wl,-exported_symbol,_ProfilerActivityEnd",
 "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
 "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
-"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions"
+"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
 "-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
 "-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
 "-Wl,-exported_symbol,_PjRtDeviceGetLocalHardwareId",
