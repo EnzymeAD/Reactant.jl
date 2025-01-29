@@ -650,8 +650,6 @@ extern "C" uint8_t FutureIsReady(FutureType *Future) {
 
 extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 
-// `ExecuteSharded` lets run on a specific device. `Execute` will be needed when we
-// do auto sharding and rely on XLA to do SPMD.
 extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
                                   PjRtBuffer **op_args, PjRtDevice *device,
                                   uint8_t *is_arg_donatable, int num_results,
@@ -696,6 +694,70 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
   // Release the results into the output array.
   for (size_t i = 0; i < num_results; i++) {
     op_results[i] = results[i].release();
+  }
+}
+
+extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_devices, int num_args,
+                           PjRtBuffer **op_args, uint8_t *is_arg_donatable,
+                           int num_results, PjRtBuffer **op_results,
+                           uint8_t *futures, FutureType **future_results) {
+  // Ensure argument_handles is structured as num_devices x num_args
+  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_devices);
+
+  // Distribute arguments across devices
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    argument_handles[device_idx].reserve(num_args);
+    for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
+      // Assuming op_args is a flat array of size num_devices * num_args
+      // where arguments for each device are contiguous
+      argument_handles[device_idx].push_back(op_args[device_idx * num_args + arg_idx]);
+    }
+  }
+
+  ExecuteOptions options;
+
+  for (size_t i = 0; i < num_args; i++) {
+    if (!is_arg_donatable[i])
+      options.non_donatable_input_indices.insert((int)i);
+  }
+  options.untuple_result = true;
+
+  std::optional<std::vector<FutureType>> returned_futures;
+  auto results = MyValueOrThrow(
+      exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
+                        argument_handles),
+                    options, returned_futures));
+
+  assert(results.size() == num_devices);
+
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    if (results[device_idx].size() != num_results) {
+      llvm::errs() << " results[" << device_idx << "].size()=" << results[device_idx].size()
+                   << " num_results=" << num_results << "\n";
+    }
+    assert(results[device_idx].size() == num_results);
+  }
+
+  // Handle returned futures
+  if (returned_futures) {
+    *futures = true;
+    assert(returned_futures->size() == num_devices * num_results);
+    for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+      for (int result_idx = 0; result_idx < num_results; ++result_idx) {
+        int flat_index = device_idx * num_results + result_idx;
+        future_results[flat_index] = new FutureType((*returned_futures)[flat_index]);
+      }
+    }
+  } else {
+    *futures = false;
+  }
+
+  // Copy results into the output buffers
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    for (int result_idx = 0; result_idx < num_results; ++result_idx) {
+      int flat_index = device_idx * num_results + result_idx;
+      op_results[flat_index] = results[device_idx][result_idx].release();
+    }
   }
 }
 

@@ -1082,6 +1082,9 @@ function compile(f, args; sync=false, kwargs...)
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(linear_args, result_stores)
 
+    # TODO: If we wan't we can omit `device` here and infer it from runtime arguments.
+    #       Currently we expect a compiled function to be called with arguments on the
+    #       same device as the compiled function.
     concretized_res_names, xla_call_code = codegen_xla_call(
         exec, device, flatten_arg_names, donated_args_mask, length(linear_results)
     )
