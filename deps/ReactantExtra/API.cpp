@@ -596,7 +596,6 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
                                                     MlirModule cmod,
-                                                    int device_ordinal,
                                                     int *global_ordinals,
                                                     int num_global_ordinals) {
   auto program =
@@ -605,10 +604,6 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
   CompileOptions options;
 
   // https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L601
-  if (device_ordinal >= 0) {
-    options.executable_build_options.set_device_ordinal(device_ordinal);
-  }
-
   int device_count = client->addressable_device_count();
 
   options.executable_build_options.set_num_replicas(device_count);

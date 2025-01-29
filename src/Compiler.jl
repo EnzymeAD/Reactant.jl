@@ -629,11 +629,7 @@ end
 """
 macro compile(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :device => nothing,
+        :optimize => true, :sync => false, :no_nan => false, :client => nothing
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -982,7 +978,7 @@ function codegen_xla_call(exec, device, flatten_names, donated_args_mask, nresul
     return concretized_res_names, xla_call_code
 end
 
-function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, device=nothing)
+function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
@@ -1008,22 +1004,19 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
         )
 
         # Resolve client and device
-        if device === nothing
-            if length(linear_args) > 0
-                devices_list = [
-                    XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray
-                ]
-                if !isempty(devices_list)
-                    if !allequal(devices_list)
-                        msg = "Expected all arguments to be on the same device, got:\n"
-                        for (i, device) in enumerate(devices_list)
-                            msg *= "    Device $(i): $(XLA.DeviceToString(device))\n"
-                        end
-                        throw(ArgumentError(msg))
+        device = nothing
+        if length(linear_args) > 0
+            devices_list = [XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray]
+            if !isempty(devices_list)
+                if !allequal(devices_list)
+                    msg = "Expected all arguments to be on the same device, got:\n"
+                    for (i, device) in enumerate(devices_list)
+                        msg *= "    Device $(i): $(XLA.DeviceToString(device))\n"
                     end
-                    @assert allequal(devices_list) "All arguments must be on the same device: $(devices_list)"
-                    device = first(devices_list)
+                    throw(ArgumentError(msg))
                 end
+                @assert allequal(devices_list) "All arguments must be on the same device: $(devices_list)"
+                device = first(devices_list)
             end
         end
 
@@ -1044,10 +1037,9 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
 
 
         # compile MLIR module to XLA executable
-        exec = XLA.Compile(
-            client, mod; device_ordinal=Int64(XLA.device_ordinal(client, device))
-        )
-        (
+        exec = XLA.Compile(client, mod)
+
+        return (
             exec,
             linear_args,
             linear_results,
@@ -1055,7 +1047,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
             seen_args,
             concrete_result,
             isclosure,
-            device
+            device,
         )
     finally
         MLIR.IR.deactivate!(ctx)

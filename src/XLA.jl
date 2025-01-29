@@ -530,7 +530,11 @@ end
         )
     end
 
-    args_type = N > 0 ? (Ptr{Cvoid}, Ptr{Cvoid}, NTuple{N,Ptr{Cvoid}}, NTuple{N,UInt8}) : (Ptr{Cvoid}, Ptr{Cvoid})
+    args_type = if N > 0
+        (Ptr{Cvoid}, Ptr{Cvoid}, NTuple{N,Ptr{Cvoid}}, NTuple{N,UInt8})
+    else
+        (Ptr{Cvoid}, Ptr{Cvoid})
+    end
     args = N > 0 ? (:inputs, :donated_args) : ()
     return quote
         Base.@_inline_meta
@@ -587,14 +591,13 @@ end
     end
 end
 
-function Compile(client::Client, mod::MLIR.IR.Module; device_ordinal::Int=-1)
+function Compile(client::Client, mod::MLIR.IR.Module)
     max_local_id = length(client.global_ordinals)
     GC.@preserve client mod begin
         executable = LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
                 client.client::Ptr{Cvoid},
                 mod.module_::MLIR.API.MlirModule,
-                device_ordinal::Cint,
                 client.global_ordinals::Ptr{Cint},
                 max_local_id::Cint,
             )::Ptr{Cvoid}
