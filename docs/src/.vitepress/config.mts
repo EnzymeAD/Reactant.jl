@@ -81,6 +81,7 @@ export default defineConfig({
               { text: "NVVM", link: "/api/nvvm" },
               { text: "TPU", link: "/api/tpu" },
               { text: "Triton", link: "/api/triton" },
+              { text: "Shardy", link: "/api/shardy" },
             ],
           },
           {
@@ -140,6 +141,7 @@ export default defineConfig({
               { text: "NVVM", link: "/api/nvvm" },
               { text: "TPU", link: "/api/tpu" },
               { text: "Triton", link: "/api/triton" },
+              { text: "Shardy", link: "/api/shardy" },
             ],
           },
           {
