@@ -429,7 +429,9 @@ end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
 
-function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu")
+function compile_mlir!(
+    mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu"
+)
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
@@ -607,7 +609,9 @@ end
     @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
 """
 macro code_hlo(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :no_nan => false, :backend => "gpu")
+    default_options = Dict{Symbol,Any}(
+        :optimize => true, :no_nan => false, :backend => "gpu"
+    )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
     )
