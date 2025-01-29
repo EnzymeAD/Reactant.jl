@@ -988,7 +988,6 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
     elseif backend == "CPU"
         backend = "cpu"
     end
-    @show backend
 
     MLIR.IR.activate!(ctx)
     results = try
