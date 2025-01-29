@@ -831,6 +831,7 @@ genrule(
         "@llvm-project//mlir:AsyncPassIncGen_filegroup",
         "@llvm-project//mlir:GPUPassIncGen_filegroup",
         "@stablehlo//:stablehlo/integrations/c/StablehloAttributes.h",
+        "@shardy//shardy/integrations/c:attributes.h",
         "//:Project.toml",
         "//:Manifest.toml",
         "//:wrap.toml",
@@ -838,5 +839,5 @@ genrule(
         "//:make.jl"
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$@\"",
+    cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$@\"",
 )
