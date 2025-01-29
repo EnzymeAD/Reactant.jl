@@ -1,7 +1,7 @@
 module ReactantCUDAExt
 
 using CUDA
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
+using Reactant: Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
 using KernelAbstractions: KernelAbstractions
 using Libdl
@@ -9,6 +9,7 @@ using Libdl
 using Adapt
 
 KernelAbstractions.get_backend(::AnyTracedRArray) = CUDABackend()
+KernelAbstractions.get_backend(::AnyConcreteRArray) = CUDABackend()
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
