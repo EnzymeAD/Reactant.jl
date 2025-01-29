@@ -360,8 +360,9 @@ cc_library(
         ],
 
     ) + [
-	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
-	"@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
+        "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
+        "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
@@ -448,7 +449,13 @@ cc_library(
 "-Wl,-exported_symbol,_ProfilerActivityEnd",
 "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
 "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
-"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions"
+"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
+"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
+"-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
+"-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
+"-Wl,-exported_symbol,_PjRtDeviceGetLocalHardwareId",
+"-Wl,-exported_symbol,_XLAExecuteSharded",
+"-Wl,-exported_symbol,_ClientGetPlatformName",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -566,9 +573,9 @@ cc_library(
             "@xla//xla/service/gpu:gpu_transfer_manager",
             "@xla//xla/stream_executor:kernel",
             "@xla//xla/backends/profiler/gpu:device_tracer",
+            "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         ],
         "//conditions:default": [
-            "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         ],
     }) + if_rocm([
         "@xla//xla/service/gpu:amdgpu_compiler",
