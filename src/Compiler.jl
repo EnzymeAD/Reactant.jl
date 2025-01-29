@@ -641,11 +641,7 @@ Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :device => nothing,
+        :optimize => true, :sync => false, :no_nan => false, :client => nothing
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
