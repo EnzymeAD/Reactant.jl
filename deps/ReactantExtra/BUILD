@@ -542,6 +542,8 @@ cc_library(
         "@xla//xla/backends/profiler/cpu:host_tracer_impl",
         "@xla//xla/backends/profiler/cpu:metadata_collector",
         "@xla//xla/backends/profiler/cpu:metadata_utils",
+        "@xla//xla/backends/profiler/tpu:tpu_tracer",
+        "@xla//xla/python:profiler_utils",
 
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",

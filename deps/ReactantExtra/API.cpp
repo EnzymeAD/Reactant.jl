@@ -33,11 +33,11 @@
 #include "mlir/InitAllPasses.h"
 #include "mlir/Pass/PassRegistry.h"
 #include "mlir/Transforms/Passes.h"
+#include "shardy/dialect/sdy/ir/dialect.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
 #include "llvm/Support/TargetSelect.h"
-#include "shardy/dialect/sdy/ir/dialect.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
@@ -59,6 +59,7 @@
 #include "tsl/profiler/lib/traceme.h"
 #include "xla/tsl/profiler/rpc/client/capture_profile.h"
 #include "xla/tsl/profiler/rpc/profiler_server.h"
+#include "xla/python/profiler_utils.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -274,13 +275,10 @@ extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
 }
 
 // xla/python/xla.cc 390
-extern "C" PjRtClient *MakeGPUClient(int node_id, int num_nodes,
-                                     int *allowed_devices,
-                                     int num_allowed_devices,
-                                     double memory_fraction,
-                                     bool preallocate,
-                                     const char *platform_name,
-                                     const char **error) {
+extern "C" PjRtClient *
+MakeGPUClient(int node_id, int num_nodes, int *allowed_devices,
+              int num_allowed_devices, double memory_fraction, bool preallocate,
+              const char *platform_name, const char **error) {
   GpuClientOptions options;
   // options.kv_store = "etcd";
   // options.allocator_config =
@@ -359,11 +357,11 @@ extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
       LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
   if (pluginLoad == nullptr)
     return nullptr;
-
   auto tpu_status = InitializePjrtPlugin("tpu", error);
   if (tpu_status)
     return nullptr;
 
+  RegisterProfiler(pluginLoad);
   return GetCApiClient("TPU");
 }
 
@@ -456,9 +454,10 @@ std::vector<int64_t> col_major(int64_t dim) {
   return minor_to_major;
 }
 
-extern "C" void ReactantLLVMParseCommandLineOptions(int argc, const char *const *argv,
-                                 const char *Overview) {
-    llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(Overview),
+extern "C" void ReactantLLVMParseCommandLineOptions(int argc,
+                                                    const char *const *argv,
+                                                    const char *Overview) {
+  llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(Overview),
                                     &llvm::nulls());
 }
 
@@ -478,9 +477,7 @@ extern "C" int32_t ReactantCudaDriverGetVersion() {
   ReactantHandleCuResult(cuDriverGetVersion(&data));
   return data;
 }
-extern "C" int32_t ReactantHermeticCudaGetVersion() {
-  return CUDA_VERSION;
-}
+extern "C" int32_t ReactantHermeticCudaGetVersion() { return CUDA_VERSION; }
 #else
 extern "C" int32_t ReactantCudaDriverGetVersion() { return 0; }
 extern "C" int32_t ReactantHermeticCudaGetVersion() { return 0; }
@@ -582,12 +579,10 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
 }
 
 /* Note that this */
-extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
-                                                    MlirModule cmod,
-                                                    int device_ordinal,
-                                                    int num_replicas,
-                                                    int num_partitions,
-                                                    bool use_shardy_partitioner) {
+extern "C" xla::PjRtLoadedExecutable *
+ClientCompile(PjRtClient *client, MlirModule cmod, int device_ordinal,
+              int num_replicas, int num_partitions,
+              bool use_shardy_partitioner) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
@@ -598,7 +593,8 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
   }
   options.executable_build_options.set_num_replicas(num_replicas);
   options.executable_build_options.set_num_partitions(num_partitions);
-  options.executable_build_options.set_use_shardy_partitioner(use_shardy_partitioner);
+  options.executable_build_options.set_use_shardy_partitioner(
+      use_shardy_partitioner);
 
   auto addressable_devices = client->addressable_devices();
   if (!addressable_devices.empty()) {
