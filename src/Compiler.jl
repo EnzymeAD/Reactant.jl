@@ -979,10 +979,16 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     if client !== nothing
-        backend = XLA.ClientGetPlatformName(backend)
+        backend = XLA.ClientGetPlatformName(client)
     else
         backend = XLA.ClientGetPlatformName(XLA.default_backend[])
     end
+    if backend == "CUDA"
+        backend = "GPU"
+    elseif backend == "CPU"
+        backend = "cpu"
+    end
+    @show backend
 
     MLIR.IR.activate!(ctx)
     results = try
@@ -1036,7 +1042,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
             num_partitions=1,
             use_shardy_partitioner=false,
         )
-        return (
+        (
             exec,
             linear_args,
             linear_results,
