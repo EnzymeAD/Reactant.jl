@@ -591,36 +591,30 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
 }
 
 /* Note that this */
-extern "C" xla::PjRtLoadedExecutable *
-ClientCompile(PjRtClient *client, MlirModule cmod, int device_ordinal,
-              int num_replicas, int num_partitions,
-              bool use_shardy_partitioner) {
+extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
+                                                    MlirModule cmod,
+                                                    int *global_ordinals,
+                                                    int num_global_ordinals) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
   CompileOptions options;
 
   // https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L601
-  if (device_ordinal >= 0) {
-    options.executable_build_options.set_device_ordinal(device_ordinal);
-  }
-
-  int device_count = client->device_count();
+  int device_count = client->addressable_device_count();
 
   options.executable_build_options.set_num_replicas(device_count);
-  options.executable_build_options.set_num_partitions(num_partitions);
-  options.executable_build_options.set_use_shardy_partitioner(
-      use_shardy_partitioner);
+  options.executable_build_options.set_num_partitions(1);
 
   xla::DeviceAssignment device_assignment(device_count, 1);
-  for (int64_t device_id = 0; device_id < client->device_count(); ++device_id) {
+  for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
     int ordinal = global_ordinals[device_id];
     if (ordinal < 0) {
       continue;
     }
     device_assignment(ordinal, 0) = device_id;
   }
-  compile_options.executable_build_options.set_device_assignment(device_assignment);
+  options.executable_build_options.set_device_assignment(device_assignment);
 
   auto addressable_devices = client->addressable_devices();
   if (!addressable_devices.empty()) {
@@ -631,8 +625,7 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int device_ordinal,
     assert(device_ordinal < addressable_devices.size());
     auto stats = addressable_devices[device_ordinal]->GetAllocatorStats();
     if (stats.ok() && stats->bytes_limit) {
-      options.executable_build_options.set_device_memory_size(
-          *stats->bytes_limit);
+      options.executable_build_options.set_device_memory_size(*stats->bytes_limit);
     }
   }
   auto exec =
@@ -649,12 +642,69 @@ extern "C" uint8_t FutureIsReady(FutureType *Future) {
 
 extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 
-extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
+extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
+                                  PjRtBuffer **op_args, PjRtDevice *device,
+                                  uint8_t *is_arg_donatable, int num_results,
+                                  PjRtBuffer **op_results, uint8_t *futures,
+                                  FutureType **future_results) {
+  // Create a vector of PjRtBuffer* from the input array.
+  std::vector<PjRtBuffer *> argument_handles(op_args, op_args + num_args);
+
+  // Set up execution options.
+  ExecuteOptions options;
+  for (size_t i = 0; i < num_args; i++) {
+    if (!is_arg_donatable[i]) {
+      options.non_donatable_input_indices.insert(static_cast<int>(i));
+    }
+  }
+  options.untuple_result = true;
+
+  // Optional future to hold asynchronous execution results.
+  std::optional<PjRtFuture<>> returned_future;
+
+  auto results = MyValueOrThrow(
+      exec->ExecuteSharded(argument_handles,
+          device, options, returned_future, /*fill_future=*/true));
+
+  // Validate the number of results.
+  if (results.size() != num_results) {
+    llvm::errs() << "Error: results.size()=" << results.size()
+                 << " does not match num_results=" << num_results << "\n";
+    std::abort(); // Terminate if the number of results is incorrect.
+  }
+
+  // Handle futures if they are returned.
+  if (returned_future.has_value()) {
+    *futures = true;
+    for (size_t i = 0; i < num_results; i++) {
+      future_results[i] = new FutureType(*returned_future);
+    }
+  } else {
+    *futures = false;
+  }
+
+  // Release the results into the output array.
+  for (size_t i = 0; i < num_results; i++) {
+    op_results[i] = results[i].release();
+  }
+}
+
+extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_devices, int num_args,
                            PjRtBuffer **op_args, uint8_t *is_arg_donatable,
                            int num_results, PjRtBuffer **op_results,
                            uint8_t *futures, FutureType **future_results) {
-  std::vector<std::vector<PjRtBuffer *>> argument_handles;
-  argument_handles.emplace_back(op_args, op_args + num_args);
+  // Ensure argument_handles is structured as num_devices x num_args
+  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_devices);
+
+  // Distribute arguments across devices
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    argument_handles[device_idx].reserve(num_args);
+    for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
+      // Assuming op_args is a flat array of size num_devices * num_args
+      // where arguments for each device are contiguous
+      argument_handles[device_idx].push_back(op_args[device_idx * num_args + arg_idx]);
+    }
+  }
 
   ExecuteOptions options;
 
@@ -663,31 +713,43 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
       options.non_donatable_input_indices.insert((int)i);
   }
   options.untuple_result = true;
+
   std::optional<std::vector<FutureType>> returned_futures;
   auto results = MyValueOrThrow(
       exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
                         argument_handles),
                     options, returned_futures));
 
-  assert(results.size() == 1);
+  assert(results.size() == num_devices);
 
-  if (results[0].size() != num_results) {
-    llvm::errs() << " results.size()=" << results.size()
-                 << " num_results=" << num_results << "\n";
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    if (results[device_idx].size() != num_results) {
+      llvm::errs() << " results[" << device_idx << "].size()=" << results[device_idx].size()
+                   << " num_results=" << num_results << "\n";
+    }
+    assert(results[device_idx].size() == num_results);
   }
-  assert(results[0].size() == num_results);
+
+  // Handle returned futures
   if (returned_futures) {
     *futures = true;
-    assert(returned_futures->size() == num_results);
-    for (size_t i = 0; i < num_results; i++) {
-      future_results[i] = new FutureType((*returned_futures)[i]);
+    assert(returned_futures->size() == num_devices * num_results);
+    for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+      for (int result_idx = 0; result_idx < num_results; ++result_idx) {
+        int flat_index = device_idx * num_results + result_idx;
+        future_results[flat_index] = new FutureType((*returned_futures)[flat_index]);
+      }
     }
   } else {
     *futures = false;
   }
 
-  for (size_t i = 0; i < num_results; i++) {
-    op_results[i] = results[0][i].release();
+  // Copy results into the output buffers
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    for (int result_idx = 0; result_idx < num_results; ++result_idx) {
+      int flat_index = device_idx * num_results + result_idx;
+      op_results[flat_index] = results[device_idx][result_idx].release();
+    }
   }
 }
 
