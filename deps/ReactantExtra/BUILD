@@ -450,6 +450,7 @@ cc_library(
 "-Wl,-exported_symbol,_ProfilerActivityEnd",
 "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
 "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
+"-Wl,-exported_symbol,_ClientGetPlatformName",
 "-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions"
     ]}),
     deps = [
