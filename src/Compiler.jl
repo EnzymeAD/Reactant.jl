@@ -429,7 +429,7 @@ end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
 
-function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false)
+function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu")
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
@@ -456,7 +456,10 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
     if isdefined(Reactant_jll, :ptxas_path)
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
-    if DEBUG_KERNEL[]
+
+    if backend == "cpu"
+        kern = "lower-kernel{openmp=false backend=cpu},symbol-dce"
+    elseif DEBUG_KERNEL[]
         curesulthandler = XLA.Libdl.dlsym(
             Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
         )
@@ -604,7 +607,7 @@ end
     @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
 """
 macro code_hlo(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :no_nan => false)
+    default_options = Dict{Symbol,Any}(:optimize => true, :no_nan => false, :backend => "gpu")
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
     )
@@ -975,12 +978,18 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
+    if client !== nothing
+        backend = XLA.ClientGetPlatformName(backend)
+    else
+        backend = XLA.ClientGetPlatformName(XLA.default_backend[])
+    end
+
     MLIR.IR.activate!(ctx)
     results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
-            mod, f, args; optimize, no_nan
+            mod, f, args; optimize, no_nan, backend
         )
 
         # Resolve client and device
