@@ -368,6 +368,12 @@ function compile_mlir(f, args; kwargs...)
     results = MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
         evalinfo = compile_mlir!(mod, f, args; kwargs...)
+
+        # Attach a name, and partitioning attributes to the module
+        # XXX: Attach correct `mhlo.num_partitions` and `mhlo.num_replicas` to the module.
+        #      Currently using dummy values for debugging.
+        __add_mhlo_attributes_and_name!(mod, f; num_partitions=1, num_replicas=1)
+
         return (mod, evalinfo...)
     end
     Base.delete!(context_gc_vector, ctx)
@@ -974,6 +980,31 @@ function codegen_xla_call(exec, device, flatten_names, donated_args_mask, nresul
     return concretized_res_names, xla_call_code
 end
 
+function __add_mhlo_attributes_and_name!(mod::MLIR.IR.Module, f; kwargs...)
+    fname = string(f)
+    length(fname) > 10 && (fname = fname[1:7] * "...")
+    __add_mhlo_attributes_and_name!(mod, fname; kwargs...)
+    return
+end
+
+function __add_mhlo_attributes_and_name!(
+    mod::MLIR.IR.Module, fname::String; num_partitions=1, num_replicas=1
+)
+    moduleop = MLIR.IR.Operation(mod)
+    module_name = Reactant.TracedUtils.__lookup_unique_name_in_module(
+        mod, "reactant_" * fname
+    )
+    module_name = MLIR.IR.Attribute(module_name)
+    MLIR.IR.attr!(moduleop, "mhlo.num_partitions", MLIR.IR.Attribute(num_partitions))
+    MLIR.IR.attr!(moduleop, "mhlo.num_replicas", MLIR.IR.Attribute(num_replicas))
+    MLIR.IR.attr!(
+        moduleop,
+        String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()),
+        module_name,
+    )
+    return
+end
+
 function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
@@ -1000,25 +1031,9 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
         )
 
         # Attach a name, and partitioning attributes to the module
-        fname = string(f)
-        length(fname) > 10 && (fname = fname[1:7] * "...")
-        module_name = Reactant.TracedUtils.__lookup_unique_name_in_module(
-            mod, "reactant_" * fname
-        )
-        module_name = MLIR.IR.Attribute(module_name)
-
         # XXX: Attach correct `mhlo.num_partitions` and `mhlo.num_replicas` to the module.
         #      Currently using dummy values for debugging.
-        moduleop = MLIR.IR.Operation(mod)
-        num_partitions = MLIR.IR.Attribute(1)
-        num_replicas = MLIR.IR.Attribute(1)
-        MLIR.IR.attr!(moduleop, "mhlo.num_partitions", num_partitions)
-        MLIR.IR.attr!(moduleop, "mhlo.num_replicas", num_replicas)
-        MLIR.IR.attr!(
-            moduleop,
-            String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()),
-            module_name,
-        )
+        __add_mhlo_attributes_and_name!(mod, f; num_partitions=1, num_replicas=1)
 
         # Resolve client and device
         device = nothing
