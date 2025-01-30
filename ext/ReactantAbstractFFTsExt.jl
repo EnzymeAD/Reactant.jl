@@ -32,7 +32,7 @@ function compute_correct_pdims(x::AbstractArray, dims)
 end
 
 for op in (stablehlo.FftType.RFFT, stablehlo.FftType.FFT, stablehlo.FftType.IFFT)
-    name = lowercase(string(op)) |> Symbol
+    name = Symbol(lowercase(string(op)))
     @eval function AbstractFFTs.$(name)(x::TracedRArray, dims)
         @assert maximum(dims) ≤ ndims(x) "dims out of range"
         if dims isa Integer
@@ -55,7 +55,7 @@ for op in (stablehlo.FftType.RFFT, stablehlo.FftType.FFT, stablehlo.FftType.IFFT
 end
 
 for op in (stablehlo.FftType.IRFFT,)
-    name = lowercase(string(op)) |> Symbol
+    name = Symbol(lowercase(string(op)))
     @eval function AbstractFFTs.$(name)(x::TracedRArray, d::Int, dims)
         @assert maximum(dims) ≤ ndims(x) "dims out of range"
         if dims isa Integer
@@ -70,16 +70,20 @@ for op in (stablehlo.FftType.IRFFT,)
         if !check_contiguous_innermost_dims(dims, ndims(x))
             pdims = compute_correct_pdims(x, dims)
             return permutedims(
-                AbstractFFTs.$(name)(permutedims(x, pdims), d, 1:length(dims)), invperm(pdims)
+                AbstractFFTs.$(name)(permutedims(x, pdims), d, 1:length(dims)),
+                invperm(pdims),
             )
         end
         return generalized_fft(x, $(op), d, length(dims))
     end
 end
 
-function generalized_fft(x::TracedRArray{T,N}, mode::stablehlo.FftType.T, d, first_n::Int) where {T,N}
+function generalized_fft(
+    x::TracedRArray{T,N}, mode::stablehlo.FftType.T, d, first_n::Int
+) where {T,N}
     if d === nothing
-        @assert mode ∈ (stablehlo.FftType.RFFT, stablehlo.FftType.FFT, stablehlo.FftType.IFFT)
+        @assert mode ∈
+            (stablehlo.FftType.RFFT, stablehlo.FftType.FFT, stablehlo.FftType.IFFT)
         fft_length = [size(x, i) for i in 1:first_n]
     else
         @assert mode == stablehlo.FftType.IRFFT

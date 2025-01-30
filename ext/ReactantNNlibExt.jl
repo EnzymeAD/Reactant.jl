@@ -176,9 +176,7 @@ function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
         end
 
     attr = fill(Reactant.MLIR.IR.Attribute(init), unranked)
-    init_value = Reactant.MLIR.IR.result(
-        Ops.constant(; value=attr)
-    )
+    init_value = Reactant.MLIR.IR.result(Ops.constant(; value=attr))
     reduction = Reactant.MLIR.Dialects.stablehlo.reduce_window(
         [get_mlir_data(x)],
         [init_value];

@@ -610,10 +610,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 1,
             )
             alloc = MLIR.IR.result(
-                MLIR.Dialects.llvm.alloca(
-                    c1; elem_type=argty, res=llvmptr
-                ),
-                1,
+                MLIR.Dialects.llvm.alloca(c1; elem_type=argty, res=llvmptr), 1
             )
             push!(allocs, (alloc, argty))
 

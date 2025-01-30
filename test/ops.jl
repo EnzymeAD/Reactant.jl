@@ -545,8 +545,12 @@ end
     genFloat32(seed) = Ops.rng_bit_generator(Float32, seed, [2, 4])
     genFloat64(seed) = Ops.rng_bit_generator(Float64, seed, [2, 4])
 
-    @testset for (alg, sz) in
-                 [(stablehlo.RngAlgorithm.DEFAULT, 2), (stablehlo.RngAlgorithm.PHILOX, 2), (stablehlo.RngAlgorithm.PHILOX, 3), (stablehlo.RngAlgorithm.THREE_FRY, 2)]
+    @testset for (alg, sz) in [
+        (stablehlo.RngAlgorithm.DEFAULT, 2),
+        (stablehlo.RngAlgorithm.PHILOX, 2),
+        (stablehlo.RngAlgorithm.PHILOX, 3),
+        (stablehlo.RngAlgorithm.THREE_FRY, 2),
+    ]
         seed = ConcreteRArray(zeros(UInt64, sz))
 
         res = @jit genInt32(seed)
