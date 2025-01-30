@@ -42,6 +42,10 @@ end
 
 Base.:(==)(a::Client, b::Client) = a.client == b.client
 
+struct Device
+    device::Ptr{Cvoid}
+end
+
 function device_ordinal(client::Client, device::Device)
     return client.global_ordinals[DeviceGetLocalDeviceId(device) + 1]
 end
@@ -256,10 +260,6 @@ mutable struct Buffer
     function Buffer(buffer::Ptr{Cvoid})
         return finalizer(free_buffer, new(buffer))
     end
-end
-
-struct Device
-    device::Ptr{Cvoid}
 end
 
 function Base.show(io::IO, ::MIME"text/plain", device::Device)
