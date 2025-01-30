@@ -71,7 +71,8 @@ Base.copy(rng::ConcreteRNG) = ConcreteRNG(copy(rng.seed), rng.algorithm)
 Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
 
 @noinline ConcreteRNG() = ConcreteRNG(ConcreteRArray(make_seed()))
-@noinline ConcreteRNG(seed::ConcreteRArray{UInt64,1}) = ConcreteRNG(seed, stablehlo.RngAlgorithm.DEFAULT)
+@noinline ConcreteRNG(seed::ConcreteRArray{UInt64,1}) =
+    ConcreteRNG(seed, stablehlo.RngAlgorithm.DEFAULT)
 
 @noinline default_rng() = ConcreteRNG()
 

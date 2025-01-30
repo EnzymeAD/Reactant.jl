@@ -312,9 +312,7 @@ function overload_autodiff(
             act = act_from_type(A, reverse, needs_primal(CMode))
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
-                attr = MLIR.IR.DenseElements(
-                    fill(one(unwrapped_eltype(a)), size(a))
-                )
+                attr = MLIR.IR.DenseElements(fill(one(unwrapped_eltype(a)), size(a)))
                 cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
                 push!(ad_inputs, cst)
             end

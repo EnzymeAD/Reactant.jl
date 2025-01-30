@@ -495,9 +495,7 @@ function Base.mapreduce(
 
     body = MLIR.IR.Region()
     push!(body, fnbody)
-    red = MLIR.Dialects.stablehlo.reduce(
-        inp, init; result=TT, dimensions=rdims, body
-    )
+    red = MLIR.Dialects.stablehlo.reduce(inp, init; result=TT, dimensions=rdims, body)
 
     red = MLIR.IR.result(red, 1)
     redT = eltype(MLIR.IR.julia_type(MLIR.IR.type(red)))

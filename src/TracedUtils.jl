@@ -438,10 +438,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     end
 
     res = MLIR.Dialects.enzyme.batch(
-        batch_inputs;
-        outputs=out_tys2,
-        fn=fname,
-        batch_shape=[Int64(i) for i in OutShape],
+        batch_inputs; outputs=out_tys2, fn=fname, batch_shape=[Int64(i) for i in OutShape]
     )
 
     residx = 1

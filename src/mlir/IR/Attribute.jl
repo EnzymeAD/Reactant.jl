@@ -876,6 +876,6 @@ struct DenseElements{T}
 end
 Attribute(d::DenseElements) = d.attr
 
-
-DenseArrayAttribute(values::Vector{<:Enum}) = Attribute([Attribute(value) for value in values])
-
+function DenseArrayAttribute(values::Vector{<:Enum})
+    return Attribute([Attribute(value) for value in values])
+end

@@ -682,7 +682,12 @@ end
     lhs_contracting_dimensions = lhs_contracting_dimensions .- 1
     rhs_contracting_dimensions = rhs_contracting_dimensions .- 1
 
-    dot_dimension_numbers = stablehlo.Dot(lhs_batching_dimensions, rhs_batching_dimensions, lhs_contracting_dimensions, rhs_contracting_dimensions)
+    dot_dimension_numbers = stablehlo.Dot(
+        lhs_batching_dimensions,
+        rhs_batching_dimensions,
+        lhs_contracting_dimensions,
+        rhs_contracting_dimensions,
+    )
     algorithm = nothing
     # all or nothing: if one is set, all must be set
     # TODO maybe be more flexible, by setting some defaults?
@@ -709,14 +714,14 @@ end
         lhs_precision_type, rhs_precision_type = precision_type
         lhs_component_count, rhs_component_count = component_count
         algorithm = stablehlo.DotAlgorithm(
-                    lhs_precision_type,
-                    rhs_precision_type,
-                    accumulation_type,
-                    lhs_component_count,
-                    rhs_component_count,
-                    num_primitive_operations,
-                    allow_imprecise_accumulation,
-                )
+            lhs_precision_type,
+            rhs_precision_type,
+            accumulation_type,
+            lhs_component_count,
+            rhs_component_count,
+            num_primitive_operations,
+            allow_imprecise_accumulation,
+        )
     end
 
     res = MLIR.IR.result(
@@ -756,11 +761,7 @@ end
 
     res = MLIR.IR.result(
         stablehlo.einsum(
-            lhs.mlir_data,
-            rhs.mlir_data;
-            result,
-            einsum_config=equation,
-            location,
+            lhs.mlir_data, rhs.mlir_data; result, einsum_config=equation, location
         ),
     )
     return TracedRArray{T,length(rsize)}((), res, rsize)
@@ -890,9 +891,7 @@ end
     result = map(results) do (typ, shape)
         MLIR.IR.TensorType(shape, mlir_type(typ))
     end
-    op = stablehlo.recv(
-        token.mlir_data; result, channel_handle, is_host_transfer, location
-    )
+    op = stablehlo.recv(token.mlir_data; result, channel_handle, is_host_transfer, location)
     return tuple(
         map(enumerate(results)) do (i, (typ, shape))
             typ = MLIR.IR.TensorType(shape, mlir_type(typ))
@@ -1107,7 +1106,7 @@ distribution between 0 and 1. Returns a NamedTuple with the following fields:
     output = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
     output_state = MLIR.IR.TensorType(size(seed), MLIR.IR.Type(UInt64))
     op = stablehlo.rng_bit_generator(
-        seed.mlir_data; output, output_state, rng_algorithm = algorithm, location
+        seed.mlir_data; output, output_state, rng_algorithm=algorithm, location
     )
     return (;
         output_state=TracedRArray{UInt64,1}((), MLIR.IR.result(op, 1), size(seed)),
@@ -1266,11 +1265,7 @@ end
 
     res = MLIR.IR.result(
         stablehlo.compare(
-            lhs.mlir_data,
-            rhs.mlir_data;
-            comparison_direction,
-            compare_type,
-            location,
+            lhs.mlir_data, rhs.mlir_data; comparison_direction, compare_type, location
         ),
         1,
     )
