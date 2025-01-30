@@ -318,7 +318,11 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
     passes = ["inline{default-pipeline=canonicalize max-iterations=4}"]
     if sroa
         push!(passes, "propagate-constant-bounds")
-        push!(passes, "sroa-wrappers")
+        if DUMP_LLVMIR[]
+            push!(passes, "sroa-wrappers{dump_prellvm=true dump_postllvm=true}")
+        else
+            push!(passes, "sroa-wrappers")
+        end
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
         push!(passes, "remove-duplicate-func-def")
@@ -428,8 +432,11 @@ function cubinFeatures()
 end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
+const DUMP_LLVMIR = Ref{Bool}(false)
 
-function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false)
+function compile_mlir!(
+    mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu"
+)
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
@@ -456,7 +463,10 @@ function compile_mlir!(mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::
     if isdefined(Reactant_jll, :ptxas_path)
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
-    if DEBUG_KERNEL[]
+
+    if backend == "cpu"
+        kern = "lower-kernel{openmp=false backend=cpu},symbol-dce"
+    elseif DEBUG_KERNEL[]
         curesulthandler = XLA.Libdl.dlsym(
             Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
         )
@@ -604,7 +614,9 @@ end
     @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
 """
 macro code_hlo(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :no_nan => false)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true, :no_nan => false, :backend => "gpu"
+    )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
     )
@@ -975,16 +987,26 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
+    if client !== nothing
+        backend = XLA.ClientGetPlatformName(client)
+    else
+        backend = XLA.ClientGetPlatformName(XLA.default_backend[])
+    end
+    if backend == "CUDA"
+        backend = "GPU"
+    elseif backend == "CPU"
+        backend = "cpu"
+    end
+
     MLIR.IR.activate!(ctx)
     results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
-            mod, f, args; optimize, no_nan
+            mod, f, args; optimize, no_nan, backend
         )
 
         # Resolve client and device
-        device_ordinal = -1
         if device === nothing
             if length(linear_args) > 0
                 devices_list = [
@@ -1002,32 +1024,20 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
                 client = XLA.client(device)
             else
                 client = XLA.default_backend[]
-                device = XLA.ClientGetDevice(client, XLA.default_device_idx[])
-                device_ordinal = XLA.default_device_idx[]
             end
         else
             if device !== nothing
                 @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
-            else
-                device = XLA.ClientGetDevice(client, XLA.default_device_idx[])
-                device_ordinal = XLA.default_device_idx[]
             end
         end
 
-        if device_ordinal < 0
-            device_ordinal = XLA.DeviceToClientDeviceOrdinal(device)
-        end
 
         # compile MLIR module to XLA executable
         exec = XLA.Compile(
             client,
-            mod;
-            device_ordinal,
-            num_replicas=1,
-            num_partitions=1,
-            use_shardy_partitioner=false,
+            mod
         )
-        return (
+        (
             exec,
             linear_args,
             linear_results,

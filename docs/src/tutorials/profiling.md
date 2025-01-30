@@ -3,7 +3,7 @@
 ## Capturing traces
 
 When running Reactant, it is possible to capture traces using the [XLA profiler](https://jax.readthedocs.io/en/latest/profiling.html).
-These traces can provide information about where the XLA specific parts of program spend time during compilation or execution.
+These traces can provide information about where the XLA specific parts of program spend time during compilation or execution. Note that tracing and compilation happen on the CPU even though the final execution is aimed to run on another device such as GPU or TPU. Therefore, including tracing and compilation in a trace will create annotations on the CPU.
 
 Let's setup a simple function which we can then profile
 

@@ -15,17 +15,51 @@ end
 
 mutable struct Client
     client::Ptr{Cvoid}
+    global_ordinals::Vector{Cint}
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        return new(client)
+        global_ordinals = Cint[]
+        client = new(client, global_ordinals)
+
+        # https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L127
+        devices = [
+            ClientGetAddressableDevice(client, i - 1) for
+            i in 1:ClientNumAddressableDevices(client)
+        ]
+        sort!(devices; lt=(a, b) -> DeviceGetLocalDeviceId(a) < DeviceGetLocalDeviceId(b))
+
+        local_ids = [DeviceGetLocalDeviceId(device) + 1 for device in devices]
+        max_local_id = maximum(local_ids)
+        resize!(global_ordinals, max_local_id)
+        global_ordinals .= -1
+        for (i, device) in enumerate(devices)
+            global_ordinals[local_ids[i]] = i - 1
+        end
+        return client
     end
 end
 
 Base.:(==)(a::Client, b::Client) = a.client == b.client
 
-function Base.show(io::IO, ::MIME"text/plain", client::Client)
-    print(io, "Client($(client.client), platform_name=$(ClientGetPlatformName(client)))")
+struct Device
+    device::Ptr{Cvoid}
+end
+
+function device_ordinal(client::Client, device::Device)
+    return client.global_ordinals[DeviceGetLocalDeviceId(device) + 1]
+end
+
+function DeviceToString(device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    return "$(uppercase(platform_name)):$(device_ordinal(pjrtclient, device))"
+end
+
+function Base.show(io::IO, ::MIME"text/plain", device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    print(io, "Device($(device.device), platform_name=$(platform_name))")
     return nothing
 end
 
@@ -148,7 +182,7 @@ function __init__()
     end
 
     @static if !Sys.isapple()
-        if isfile("/usr/lib/libtpu.so")
+        if Reactant.has_tpu()
             dataset_dir = @get_scratch!("libtpu")
             if !isfile(dataset_dir * "/libtpu.so")
                 Downloads.download(
@@ -178,6 +212,7 @@ function __init__()
         end
     end
 
+    @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
     # This wasn't properly exported on macos, we'll remove the try once macOS JLL
@@ -225,17 +260,6 @@ mutable struct Buffer
     function Buffer(buffer::Ptr{Cvoid})
         return finalizer(free_buffer, new(buffer))
     end
-end
-
-struct Device
-    device::Ptr{Cvoid}
-end
-
-function Base.show(io::IO, ::MIME"text/plain", device::Device)
-    pjrtclient = client(device)
-    platform_name = ClientGetPlatformName(pjrtclient)
-    print(io, "Device($(device.device), platform_name=$(platform_name))")
-    return nothing
 end
 
 function DeviceToClientDeviceOrdinal(device::Device)
@@ -336,7 +360,7 @@ Return an [`AllocatorStats`](@ref) instance with information about the device sp
     This method is currently not implemented for the CPU device.
 """
 function allocatorstats(
-    device::Device=ClientGetDevice(default_backend[], default_device_idx[])
+    device::Device=ClientGetAddressableDevice(default_backend[], default_device_idx[])
 )
     ref = Ref{JLAllocatorStats}()
     @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
@@ -539,21 +563,16 @@ end
 
 function Compile(
     client::Client,
-    mod::MLIR.IR.Module;
-    device_ordinal::Int=-1,
-    num_replicas::Int=1,
-    num_partitions::Int=1,
-    use_shardy_partitioner::Bool=false,
+    mod::MLIR.IR.Module
 )
+    max_local_id = length(client.global_ordinals)
     GC.@preserve client mod begin
         executable = LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
                 client.client::Ptr{Cvoid},
                 mod.module_::MLIR.API.MlirModule,
-                device_ordinal::Cint,
-                num_replicas::Cint,
-                num_partitions::Cint,
-                use_shardy_partitioner::Bool,
+                client.global_ordinals::Ptr{Cint},
+                max_local_id::Cint,
             )::Ptr{Cvoid}
         )
     end
@@ -606,6 +625,37 @@ function ClientGetPlatformName(client::Client)
         )::Cstring
     end
     return unsafe_string(str)
+end
+
+function DeviceGetLocalDeviceId(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
+            device.device::Ptr{Cvoid}
+        )::Cint
+    end
+end
+
+function PjRtLoadedExecutableGetClient(exec::LoadedExecutable)
+    GC.@preserve exec begin
+        return Client(
+            @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetClient(
+                exec.exec::Ptr{Cvoid}
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+function replicate_buffer_on_all_addressable_devices(buffer::Buffer)
+    pjrtclient = client(buffer)
+    devices = [
+        ClientGetAddressableDevice(pjrtclient, i - 1) for
+        i in 1:ClientNumAddressableDevices(pjrtclient)
+    ]
+    orig_device = device(buffer)
+    return [
+        device == orig_device ? buffer : CopyBufferToDevice(buffer, device) for
+        device in devices
+    ]
 end
 
 function is_ready(future::Future)

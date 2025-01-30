@@ -1,11 +1,16 @@
 module ReactantCUDAExt
 
 using CUDA
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
+using Reactant:
+    Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
+using KernelAbstractions: KernelAbstractions
 using Libdl
 
 using Adapt
+
+KernelAbstractions.get_backend(::AnyTracedRArray) = CUDABackend()
+KernelAbstractions.get_backend(::AnyConcreteRArray) = CUDABackend()
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
@@ -353,6 +358,9 @@ function compile(job)
         end
         entryname = LLVM.name(meta.entry)
 
+        if Reactant.Compiler.DUMP_LLVMIR[]
+            println("cuda.jl immediate IR\n", string(mod))
+        end
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
         LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
@@ -395,6 +403,9 @@ function compile(job)
                 end
             end
             return true
+        end
+        if Reactant.Compiler.DUMP_LLVMIR[]
+            println("cuda.jl postopt IR\n", string(mod))
         end
         if !isempty(errors)
             throw(GPUCompiler.InvalidIRError(job, errors))

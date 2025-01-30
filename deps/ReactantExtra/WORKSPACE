@@ -9,7 +9,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "33bd450e8e7132a9081d2b97419a20c515b15076"
+ENZYMEXLA_COMMIT = "d89468ed883ca18c04346eec10f784bbe2b754fc"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
@@ -52,6 +52,9 @@ load("@enzyme_ad//:workspace.bzl", "JAX_COMMIT", "JAX_SHA256", "ENZYME_COMMIT", 
 XLA_PATCHES = XLA_PATCHES + [
 """
 sed -i.bak0 "s/__cpp_lib_hardware_interference_size/HW_INTERFERENCE_SIZE/g" xla/backends/cpu/runtime/thunk_executor.h
+""",
+"""
+sed -i.bak0 "s/__cpp_lib_hardware_interference_size/HW_INTERFERENCE_SIZE/g" xla/backends/cpu/runtime/work_queue.h
 """,
 """
 sed -i.bak0 "s/__cpp_lib_hardware_interference_size/HW_INTERFERENCE_SIZE/g" xla/tsl/concurrency/async_value_ref.h
@@ -136,7 +139,7 @@ http_archive(
 )
 
 # load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
-XLA_COMMIT = "7ad64b5df46daf1f84d8a80ec87ae5ddbb3f82b7"
+XLA_COMMIT = "c2a9a2dfe9494e52f5134b53989e9ca0de307dfe"
 XLA_SHA256 = ""
 
 http_archive(
