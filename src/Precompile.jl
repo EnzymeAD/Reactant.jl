@@ -60,14 +60,13 @@ end
 @setup_workload begin
     initialize_dialect()
     client = XLA.CPUClient(; checkcount=false)
-    device = XLA.ClientGetAddressableDevice(client, 0)
     @compile_workload begin
         @static if precompilation_supported()
-            x = ConcreteRNumber(2.0; client, device)
-            Reactant.compile(sin, (x,); client, device)
+            x = ConcreteRNumber(2.0; client)
+            Reactant.compile(sin, (x,); client)
 
-            y = ConcreteRArray([2.0]; client, device)
-            Reactant.compile(Base.sum, (y,); client, device)
+            y = ConcreteRArray([2.0]; client)
+            Reactant.compile(Base.sum, (y,); client)
         end
     end
     XLA.free_client(client)
