@@ -33,7 +33,6 @@
 #include "mlir/InitAllPasses.h"
 #include "mlir/Pass/PassRegistry.h"
 #include "mlir/Transforms/Passes.h"
-#include "shardy/dialect/sdy/ir/dialect.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
@@ -68,6 +67,10 @@
 #include "llvm/TargetParser/Host.h"
 
 #include "llvm-c/TargetMachine.h"
+
+// shardy
+#include "shardy/dialect/sdy/ir/dialect.h"
+#include "shardy/integrations/c/attributes.h"
 
 // IFRT
 #include "xla/python/ifrt/array.h"
