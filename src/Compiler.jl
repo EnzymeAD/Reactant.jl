@@ -318,7 +318,11 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
     passes = ["inline{default-pipeline=canonicalize max-iterations=4}"]
     if sroa
         push!(passes, "propagate-constant-bounds")
-        push!(passes, "sroa-wrappers")
+        if DUMP_LLVMIR[]
+            push!(passes, "sroa-wrappers{dump_prellvm=true dump_postllvm=true}")
+        else
+            push!(passes, "sroa-wrappers")
+        end
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
         push!(passes, "remove-duplicate-func-def")
@@ -428,6 +432,7 @@ function cubinFeatures()
 end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
+const DUMP_LLVMIR = Ref{Bool}(false)
 
 function compile_mlir!(
     mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu"
