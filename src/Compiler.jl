@@ -999,6 +999,25 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
             mod, f, args; optimize, no_nan, backend
         )
 
+        # Attach a name, and partitioning attributes to the module
+        fname = string(f)
+        length(fname) > 10 && (fname = fname[1:7] * "...")
+        module_name = Reactant.TracedUtils.__lookup_unique_name_in_module(
+            mod, "reactant_" * fname
+        )
+        module_name = MLIR.IR.Attribute(module_name)
+
+        # XXX: Attach correct `mhlo.num_partitions` and `mhlo.num_replicas` to the module.
+        #      Currently using dummy values for debugging.
+        moduleop = MLIR.IR.Operation(mod)
+        num_partitions = MLIR.IR.Attribute(1)
+        num_replicas = MLIR.IR.Attribute(1)
+        MLIR.IR.attr!(moduleop, "mhlo.num_partitions", num_partitions)
+        MLIR.IR.attr!(moduleop, "mhlo.num_replicas", num_replicas)
+        MLIR.IR.attr!(
+            moduleop, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()), module_name
+        )
+
         # Resolve client and device
         device = nothing
         if length(linear_args) > 0
@@ -1030,7 +1049,6 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
                 device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
             end
         end
-
 
         # compile MLIR module to XLA executable
         exec = XLA.Compile(client, mod)
