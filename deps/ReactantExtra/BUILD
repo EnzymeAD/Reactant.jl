@@ -360,8 +360,9 @@ cc_library(
         ],
 
     ) + [
-	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
-	"@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
+        "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
+        "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
@@ -448,7 +449,13 @@ cc_library(
 "-Wl,-exported_symbol,_ProfilerActivityEnd",
 "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
 "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
-"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions"
+"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
+"-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
+"-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
+"-Wl,-exported_symbol,_PjRtDeviceGetLocalHardwareId",
+"-Wl,-exported_symbol,_XLAExecuteSharded",
+"-Wl,-exported_symbol,_ClientGetPlatformName",
+"-Wl,-exported_symbol,_RegisterEnzymeXLACPUHandler",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -550,6 +557,7 @@ cc_library(
         "@xla//xla/mlir/utils:type_util",
         "@stablehlo//:stablehlo_capi_objects",
         "@stablehlo//:chlo_capi_objects",
+        "@shardy//shardy/integrations/c:sdy_capi_objects",
         "@com_google_absl//absl/hash:hash",
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
@@ -557,6 +565,7 @@ cc_library(
         "@llvm-project//mlir:CAPILLVMObjects",
         "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
         "@jax//jaxlib/triton:triton_dialect_capi_objects",
+        "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
     ] + select({
         "@xla//xla/tsl:is_cuda_enabled_and_oss":[
             "@xla//xla/stream_executor/cuda:all_runtime",
@@ -568,7 +577,6 @@ cc_library(
             "@xla//xla/backends/profiler/gpu:device_tracer",
         ],
         "//conditions:default": [
-            "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         ],
     }) + if_rocm([
         "@xla//xla/service/gpu:amdgpu_compiler",
