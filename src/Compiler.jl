@@ -959,7 +959,7 @@ function codegen_xla_call(exec, device, flatten_names, donated_args_mask, nresul
     else
         quote
             GC.@preserve $(flatten_names...) begin
-                linearized_results = XLA.ExecutableCall(
+                linearized_results = XLA.ExecutableCallSharded(
                     $exec,
                     $(device),
                     ($(flatten_buffer_refs...),),
