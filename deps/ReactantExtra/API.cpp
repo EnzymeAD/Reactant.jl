@@ -692,10 +692,13 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
   }
 }
 
-extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_devices, int num_args,
+extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
                            PjRtBuffer **op_args, uint8_t *is_arg_donatable,
                            int num_results, PjRtBuffer **op_results,
                            uint8_t *futures, FutureType **future_results) {
+  auto client = exec->client();
+  int num_devices = client->addressable_device_count();
+
   // Ensure argument_handles is structured as num_devices x num_args
   std::vector<std::vector<PjRtBuffer *>> argument_handles(num_devices);
 
