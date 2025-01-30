@@ -1015,7 +1015,9 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
         MLIR.IR.attr!(moduleop, "mhlo.num_partitions", num_partitions)
         MLIR.IR.attr!(moduleop, "mhlo.num_replicas", num_replicas)
         MLIR.IR.attr!(
-            moduleop, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()), module_name
+            moduleop,
+            String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()),
+            module_name,
         )
 
         # Resolve client and device
