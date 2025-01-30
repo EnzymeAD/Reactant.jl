@@ -1,25 +1,25 @@
 function ReactantCore.traced_if(
     cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args
 ) where {TFn,FFn}
-    (_, true_branch_compiled, true_branch_results, _, _, _, _, _, true_linear_results) = Reactant.TracedUtils.make_mlir_fn(
+    (_, true_branch_compiled, true_branch_results, _, _, _, _, _, true_linear_results, _) = Reactant.TracedUtils.make_mlir_fn(
         true_fn,
         args,
         (),
         string(gensym("true_branch")),
         false;
         return_dialect=:stablehlo,
-        no_args_in_result=true,
+        args_in_result=:none,
         construct_function_without_args=true,
     )
 
-    (_, false_branch_compiled, false_branch_results, _, _, _, _, _, false_linear_results) = Reactant.TracedUtils.make_mlir_fn(
+    (_, false_branch_compiled, false_branch_results, _, _, _, _, _, false_linear_results, _) = Reactant.TracedUtils.make_mlir_fn(
         false_fn,
         args,
         (),
         string(gensym("false_branch")),
         false;
         return_dialect=:stablehlo,
-        no_args_in_result=true,
+        args_in_result=:none,
         construct_function_without_args=true,
     )
 
@@ -88,24 +88,24 @@ function ReactantCore.traced_while(
         end for v in args
     ]
 
-    (_, cond_fn_compiled, cond_fn_results, _, _, _, _, in_tys, cond_fn_linear_results) = Reactant.TracedUtils.make_mlir_fn(
+    (_, cond_fn_compiled, cond_fn_results, _, _, _, _, in_tys, cond_fn_linear_results, _) = Reactant.TracedUtils.make_mlir_fn(
         cond_fn,
         traced_args,
         (),
         string(gensym("cond_fn")),
         false;
-        no_args_in_result=true,
+        args_in_result=:none,
         return_dialect=:stablehlo,
         do_transpose=false,
     )
 
-    (_, body_fn_compiled, body_fn_results, _, _, _, _, _, body_fn_linear_results) = Reactant.TracedUtils.make_mlir_fn(
+    (_, body_fn_compiled, body_fn_results, _, _, _, _, _, body_fn_linear_results, _) = Reactant.TracedUtils.make_mlir_fn(
         body_fn,
         traced_args,
         (),
         string(gensym("body_fn")),
         false;
-        no_args_in_result=true,
+        args_in_result=:none,
         return_dialect=:stablehlo,
         do_transpose=false,
     )
@@ -140,10 +140,12 @@ function ReactantCore.traced_call(f::Function, args...)
         toscalar=false,
         track_numbers=(), # TODO: track_numbers?
     )
-    linear_args = Reactant.MLIR.IR.Value[]
+    linear_args = []
+    mlir_caller_args = Reactant.MLIR.IR.Value[]
     for (k, v) in seen_cache
         v isa TracedType || continue
-        push!(linear_args, v.mlir_data)
+        push!(linear_args, v)
+        push!(mlir_caller_args, v.mlir_data)
         # make tracer inserted `()` into the path, here we remove it:
         v.paths = v.paths[1:end-1]
     end
@@ -154,7 +156,7 @@ function ReactantCore.traced_call(f::Function, args...)
     cache = Reactant.Compiler.callcache()
     if haskey(cache, cache_key)
         # cache lookup:
-        (; f_name, mlir_result_types, traced_result) = cache[cache_key]
+        (; f_name, mlir_result_types, traced_result, mutated) = cache[cache_key]
     else
         f_name = String(gensym(Symbol(f)))
         temp = Reactant.TracedUtils.make_mlir_fn(
@@ -163,16 +165,16 @@ function ReactantCore.traced_call(f::Function, args...)
             (),
             f_name,
             false;
-            no_args_in_result=true,
+            args_in_result=:mutated,
             do_transpose=false,
         )
-        traced_result, ret = temp[[3, 6]]
+        traced_result, ret, mutated = temp[[3, 6, 10]]
         mlir_result_types = [MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)]
-        cache[cache_key] = (; f_name, mlir_result_types, traced_result)
+        cache[cache_key] = (; f_name, mlir_result_types, traced_result, mutated)
     end
 
     call_op = MLIR.Dialects.func.call(
-        linear_args;
+        mlir_caller_args;
         result_0=mlir_result_types,
         callee=MLIR.IR.FlatSymbolRefAttribute(f_name),
     )
@@ -194,6 +196,16 @@ function ReactantCore.traced_call(f::Function, args...)
         # make tracer inserted `()` into the path, here we remove it:
         v.paths = v.paths[1:end-1]
         i += 1
+    end
+    nres = MLIR.IR.nresults(call_op)
+    # mutated args are included as the last ones in the call op results
+    for (result_i, arg_i) in zip(nres-length(mutated):nres, mutated)
+        TracedUtils.set_mlir_data!(linear_args[arg_i], MLIR.IR.result(call_op, result_i+1))
+        paths = TracedUtils.get_paths(linear_args[arg_i])
+        if length(paths) > 0 && length(paths[1]) == 2 && paths[1][1] == :args
+            # we remove arg from path to make sure it is definitely returned (since it changed)
+            TracedUtils.set_paths!(linear_args[arg_i], paths[2:end])
+        end
     end
 
     return traced_result

@@ -971,7 +971,7 @@ end
         (a, b),
         (),
         "comparator";
-        no_args_in_result=true,
+        args_in_result=:none,
         return_dialect=:stablehlo,
     )[2]
     @assert MLIR.IR.nregions(func) == 1
