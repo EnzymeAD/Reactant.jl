@@ -239,13 +239,17 @@ end
             ConcreteRArray([5.0 + 5im, 6.0 + 6im, -7.0 - 7im, -8.0 - 8im]),
         ),
     ]
-        @test a .* b ≈ @jit f1(a, b)
-        @test reshape(kron(Array(b), Array(a)), 4, 4) ≈ @jit f2(a, b)
+        @test a .* b ≈
+            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f1(a, b)
+        @test reshape(kron(Array(b), Array(a)), 4, 4) ≈
+            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f2(a, b)
 
         x = ConcreteRArray(reshape(a, (2, 2)))
         y = ConcreteRArray(reshape(b, (2, 2)))
-        @test x .* y ≈ @jit f3(x, y)
-        @test Array(x) * Array(y) ≈ @jit f4(x, y)
+        @test x .* y ≈
+            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f3(x, y)
+        @test Array(x) * Array(y) ≈
+            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f4(x, y)
     end
 end
 
