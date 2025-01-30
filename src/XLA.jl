@@ -262,13 +262,6 @@ mutable struct Buffer
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", device::Device)
-    pjrtclient = client(device)
-    platform_name = ClientGetPlatformName(pjrtclient)
-    print(io, "Device($(device.device), platform_name=$(platform_name))")
-    return nothing
-end
-
 function DeviceToClientDeviceOrdinal(device::Device)
     pjrtclient = client(device)
     naddressable_devices = ClientNumAddressableDevices(pjrtclient)
