@@ -5811,874 +5811,6 @@ function mlirOpaqueTypeGetData(type)
     @ccall mlir_c.mlirOpaqueTypeGetData(type::MlirType)::MlirStringRef
 end
 
-struct MlirPass
-    ptr::Ptr{Cvoid}
-end
-
-struct MlirExternalPass
-    ptr::Ptr{Cvoid}
-end
-
-struct MlirPassManager
-    ptr::Ptr{Cvoid}
-end
-
-struct MlirOpPassManager
-    ptr::Ptr{Cvoid}
-end
-
-"""
-    mlirPassManagerCreate(ctx)
-
-Create a new top-level PassManager with the default anchor.
-"""
-function mlirPassManagerCreate(ctx)
-    @ccall mlir_c.mlirPassManagerCreate(ctx::MlirContext)::MlirPassManager
-end
-
-"""
-    mlirPassManagerCreateOnOperation(ctx, anchorOp)
-
-Create a new top-level PassManager anchored on `anchorOp`.
-"""
-function mlirPassManagerCreateOnOperation(ctx, anchorOp)
-    @ccall mlir_c.mlirPassManagerCreateOnOperation(
-        ctx::MlirContext, anchorOp::MlirStringRef
-    )::MlirPassManager
-end
-
-"""
-    mlirPassManagerDestroy(passManager)
-
-Destroy the provided PassManager.
-"""
-function mlirPassManagerDestroy(passManager)
-    @ccall mlir_c.mlirPassManagerDestroy(passManager::MlirPassManager)::Cvoid
-end
-
-"""
-    mlirPassManagerIsNull(passManager)
-
-Checks if a PassManager is null.
-"""
-function mlirPassManagerIsNull(passManager)
-    @ccall mlir_c.mlirPassManagerIsNull(passManager::MlirPassManager)::Bool
-end
-
-"""
-    mlirPassManagerGetAsOpPassManager(passManager)
-
-Cast a top-level PassManager to a generic OpPassManager.
-"""
-function mlirPassManagerGetAsOpPassManager(passManager)
-    @ccall mlir_c.mlirPassManagerGetAsOpPassManager(
-        passManager::MlirPassManager
-    )::MlirOpPassManager
-end
-
-"""
-    mlirPassManagerRunOnOp(passManager, op)
-
-Run the provided `passManager` on the given `op`.
-"""
-function mlirPassManagerRunOnOp(passManager, op)
-    @ccall mlir_c.mlirPassManagerRunOnOp(
-        passManager::MlirPassManager, op::MlirOperation
-    )::MlirLogicalResult
-end
-
-"""
-    mlirPassManagerEnableIRPrinting(passManager, printBeforeAll, printAfterAll, printModuleScope, printAfterOnlyOnChange, printAfterOnlyOnFailure, flags, treePrintingPath)
-
-Enable IR printing. The treePrintingPath argument is an optional path to a directory where the dumps will be produced. If it isn't provided then dumps are produced to stderr.
-"""
-function mlirPassManagerEnableIRPrinting(
-    passManager,
-    printBeforeAll,
-    printAfterAll,
-    printModuleScope,
-    printAfterOnlyOnChange,
-    printAfterOnlyOnFailure,
-    flags,
-    treePrintingPath,
-)
-    @ccall mlir_c.mlirPassManagerEnableIRPrinting(
-        passManager::MlirPassManager,
-        printBeforeAll::Bool,
-        printAfterAll::Bool,
-        printModuleScope::Bool,
-        printAfterOnlyOnChange::Bool,
-        printAfterOnlyOnFailure::Bool,
-        flags::MlirOpPrintingFlags,
-        treePrintingPath::MlirStringRef,
-    )::Cvoid
-end
-
-"""
-    mlirPassManagerEnableVerifier(passManager, enable)
-
-Enable / disable verify-each.
-"""
-function mlirPassManagerEnableVerifier(passManager, enable)
-    @ccall mlir_c.mlirPassManagerEnableVerifier(
-        passManager::MlirPassManager, enable::Bool
-    )::Cvoid
-end
-
-"""
-    mlirPassManagerGetNestedUnder(passManager, operationName)
-
-Nest an OpPassManager under the top-level PassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed. To further nest more OpPassManager under the newly returned one, see `mlirOpPassManagerNest` below.
-"""
-function mlirPassManagerGetNestedUnder(passManager, operationName)
-    @ccall mlir_c.mlirPassManagerGetNestedUnder(
-        passManager::MlirPassManager, operationName::MlirStringRef
-    )::MlirOpPassManager
-end
-
-"""
-    mlirOpPassManagerGetNestedUnder(passManager, operationName)
-
-Nest an OpPassManager under the provided OpPassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed.
-"""
-function mlirOpPassManagerGetNestedUnder(passManager, operationName)
-    @ccall mlir_c.mlirOpPassManagerGetNestedUnder(
-        passManager::MlirOpPassManager, operationName::MlirStringRef
-    )::MlirOpPassManager
-end
-
-"""
-    mlirPassManagerAddOwnedPass(passManager, pass)
-
-Add a pass and transfer ownership to the provided top-level mlirPassManager. If the pass is not a generic operation pass or a ModulePass, a new OpPassManager is implicitly nested under the provided PassManager.
-"""
-function mlirPassManagerAddOwnedPass(passManager, pass)
-    @ccall mlir_c.mlirPassManagerAddOwnedPass(
-        passManager::MlirPassManager, pass::MlirPass
-    )::Cvoid
-end
-
-"""
-    mlirOpPassManagerAddOwnedPass(passManager, pass)
-
-Add a pass and transfer ownership to the provided mlirOpPassManager. If the pass is not a generic operation pass or matching the type of the provided PassManager, a new OpPassManager is implicitly nested under the provided PassManager.
-"""
-function mlirOpPassManagerAddOwnedPass(passManager, pass)
-    @ccall mlir_c.mlirOpPassManagerAddOwnedPass(
-        passManager::MlirOpPassManager, pass::MlirPass
-    )::Cvoid
-end
-
-"""
-    mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
-
-Parse a sequence of textual MLIR pass pipeline elements and add them to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
-"""
-function mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
-    @ccall mlir_c.mlirOpPassManagerAddPipeline(
-        passManager::MlirOpPassManager,
-        pipelineElements::MlirStringRef,
-        callback::MlirStringCallback,
-        userData::Ptr{Cvoid},
-    )::MlirLogicalResult
-end
-
-"""
-    mlirPrintPassPipeline(passManager, callback, userData)
-
-Print a textual MLIR pass pipeline by sending chunks of the string representation and forwarding `userData to `callback`. Note that the callback may be called several times with consecutive chunks of the string.
-"""
-function mlirPrintPassPipeline(passManager, callback, userData)
-    @ccall mlir_c.mlirPrintPassPipeline(
-        passManager::MlirOpPassManager, callback::MlirStringCallback, userData::Ptr{Cvoid}
-    )::Cvoid
-end
-
-"""
-    mlirParsePassPipeline(passManager, pipeline, callback, userData)
-
-Parse a textual MLIR pass pipeline and assign it to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
-"""
-function mlirParsePassPipeline(passManager, pipeline, callback, userData)
-    @ccall mlir_c.mlirParsePassPipeline(
-        passManager::MlirOpPassManager,
-        pipeline::MlirStringRef,
-        callback::MlirStringCallback,
-        userData::Ptr{Cvoid},
-    )::MlirLogicalResult
-end
-
-"""
-    MlirExternalPassCallbacks
-
-Structure of external [`MlirPass`](@ref) callbacks. All callbacks are required to be set unless otherwise specified.
-
-| Field      | Note                                                                                                                                                                                              |
-| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| construct  | This callback is called from the pass is created. This is analogous to a C++ pass constructor.                                                                                                    |
-| destruct   | This callback is called when the pass is destroyed This is analogous to a C++ pass destructor.                                                                                                    |
-| initialize | This callback is optional. The callback is called before the pass is run, allowing a chance to initialize any complex state necessary for running the pass. See Pass::initialize(MLIRContext *).  |
-| clone      | This callback is called when the pass is cloned. See Pass::clonePass().                                                                                                                           |
-| run        | This callback is called when the pass is run. See Pass::runOnOperation().                                                                                                                         |
-"""
-struct MlirExternalPassCallbacks
-    construct::Ptr{Cvoid}
-    destruct::Ptr{Cvoid}
-    initialize::Ptr{Cvoid}
-    clone::Ptr{Cvoid}
-    run::Ptr{Cvoid}
-end
-
-"""
-    mlirCreateExternalPass(passID, name, argument, description, opName, nDependentDialects, dependentDialects, callbacks, userData)
-
-Creates an external [`MlirPass`](@ref) that calls the supplied `callbacks` using the supplied `userData`. If `opName` is empty, the pass is a generic operation pass. Otherwise it is an operation pass specific to the specified pass name.
-"""
-function mlirCreateExternalPass(
-    passID,
-    name,
-    argument,
-    description,
-    opName,
-    nDependentDialects,
-    dependentDialects,
-    callbacks,
-    userData,
-)
-    @ccall mlir_c.mlirCreateExternalPass(
-        passID::MlirTypeID,
-        name::MlirStringRef,
-        argument::MlirStringRef,
-        description::MlirStringRef,
-        opName::MlirStringRef,
-        nDependentDialects::intptr_t,
-        dependentDialects::Ptr{MlirDialectHandle},
-        callbacks::MlirExternalPassCallbacks,
-        userData::Ptr{Cvoid},
-    )::MlirPass
-end
-
-"""
-    mlirExternalPassSignalFailure(pass)
-
-This signals that the pass has failed. This is only valid to call during the `run` callback of [`MlirExternalPassCallbacks`](@ref). See Pass::signalPassFailure().
-"""
-function mlirExternalPassSignalFailure(pass)
-    @ccall mlir_c.mlirExternalPassSignalFailure(pass::MlirExternalPass)::Cvoid
-end
-
-function mlirRegisterConversionPasses()
-    @ccall mlir_c.mlirRegisterConversionPasses()::Cvoid
-end
-
-function mlirCreateConversionArithToAMDGPUConversionPass()
-    @ccall mlir_c.mlirCreateConversionArithToAMDGPUConversionPass()::MlirPass
-end
-
-function mlirRegisterConversionArithToAMDGPUConversionPass()
-    @ccall mlir_c.mlirRegisterConversionArithToAMDGPUConversionPass()::Cvoid
-end
-
-function mlirCreateConversionArithToArmSMEConversionPass()
-    @ccall mlir_c.mlirCreateConversionArithToArmSMEConversionPass()::MlirPass
-end
-
-function mlirRegisterConversionArithToArmSMEConversionPass()
-    @ccall mlir_c.mlirRegisterConversionArithToArmSMEConversionPass()::Cvoid
-end
-
-function mlirCreateConversionArithToLLVMConversionPass()
-    @ccall mlir_c.mlirCreateConversionArithToLLVMConversionPass()::MlirPass
-end
-
-function mlirRegisterConversionArithToLLVMConversionPass()
-    @ccall mlir_c.mlirRegisterConversionArithToLLVMConversionPass()::Cvoid
-end
-
-function mlirCreateConversionConvertAMDGPUToROCDL()
-    @ccall mlir_c.mlirCreateConversionConvertAMDGPUToROCDL()::MlirPass
-end
-
-function mlirRegisterConversionConvertAMDGPUToROCDL()
-    @ccall mlir_c.mlirRegisterConversionConvertAMDGPUToROCDL()::Cvoid
-end
-
-function mlirCreateConversionConvertAffineForToGPU()
-    @ccall mlir_c.mlirCreateConversionConvertAffineForToGPU()::MlirPass
-end
-
-function mlirRegisterConversionConvertAffineForToGPU()
-    @ccall mlir_c.mlirRegisterConversionConvertAffineForToGPU()::Cvoid
-end
-
-function mlirCreateConversionConvertAffineToStandard()
-    @ccall mlir_c.mlirCreateConversionConvertAffineToStandard()::MlirPass
-end
-
-function mlirRegisterConversionConvertAffineToStandard()
-    @ccall mlir_c.mlirRegisterConversionConvertAffineToStandard()::Cvoid
-end
-
-function mlirCreateConversionConvertArithToEmitC()
-    @ccall mlir_c.mlirCreateConversionConvertArithToEmitC()::MlirPass
-end
-
-function mlirRegisterConversionConvertArithToEmitC()
-    @ccall mlir_c.mlirRegisterConversionConvertArithToEmitC()::Cvoid
-end
-
-function mlirCreateConversionConvertArithToSPIRV()
-    @ccall mlir_c.mlirCreateConversionConvertArithToSPIRV()::MlirPass
-end
-
-function mlirRegisterConversionConvertArithToSPIRV()
-    @ccall mlir_c.mlirRegisterConversionConvertArithToSPIRV()::Cvoid
-end
-
-function mlirCreateConversionConvertArmNeon2dToIntr()
-    @ccall mlir_c.mlirCreateConversionConvertArmNeon2dToIntr()::MlirPass
-end
-
-function mlirRegisterConversionConvertArmNeon2dToIntr()
-    @ccall mlir_c.mlirRegisterConversionConvertArmNeon2dToIntr()::Cvoid
-end
-
-function mlirCreateConversionConvertArmSMEToLLVM()
-    @ccall mlir_c.mlirCreateConversionConvertArmSMEToLLVM()::MlirPass
-end
-
-function mlirRegisterConversionConvertArmSMEToLLVM()
-    @ccall mlir_c.mlirRegisterConversionConvertArmSMEToLLVM()::Cvoid
-end
-
-function mlirCreateConversionConvertArmSMEToSCF()
-    @ccall mlir_c.mlirCreateConversionConvertArmSMEToSCF()::MlirPass
-end
-
-function mlirRegisterConversionConvertArmSMEToSCF()
-    @ccall mlir_c.mlirRegisterConversionConvertArmSMEToSCF()::Cvoid
-end
-
-function mlirCreateConversionConvertAsyncToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertAsyncToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertAsyncToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertAsyncToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertBufferizationToMemRef()
-    @ccall mlir_c.mlirCreateConversionConvertBufferizationToMemRef()::MlirPass
-end
-
-function mlirRegisterConversionConvertBufferizationToMemRef()
-    @ccall mlir_c.mlirRegisterConversionConvertBufferizationToMemRef()::Cvoid
-end
-
-function mlirCreateConversionConvertComplexToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertComplexToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertComplexToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertComplexToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertComplexToLibm()
-    @ccall mlir_c.mlirCreateConversionConvertComplexToLibm()::MlirPass
-end
-
-function mlirRegisterConversionConvertComplexToLibm()
-    @ccall mlir_c.mlirRegisterConversionConvertComplexToLibm()::Cvoid
-end
-
-function mlirCreateConversionConvertComplexToSPIRVPass()
-    @ccall mlir_c.mlirCreateConversionConvertComplexToSPIRVPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertComplexToSPIRVPass()
-    @ccall mlir_c.mlirRegisterConversionConvertComplexToSPIRVPass()::Cvoid
-end
-
-function mlirCreateConversionConvertComplexToStandard()
-    @ccall mlir_c.mlirCreateConversionConvertComplexToStandard()::MlirPass
-end
-
-function mlirRegisterConversionConvertComplexToStandard()
-    @ccall mlir_c.mlirRegisterConversionConvertComplexToStandard()::Cvoid
-end
-
-function mlirCreateConversionConvertControlFlowToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertControlFlowToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertControlFlowToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertControlFlowToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertControlFlowToSPIRV()
-    @ccall mlir_c.mlirCreateConversionConvertControlFlowToSPIRV()::MlirPass
-end
-
-function mlirRegisterConversionConvertControlFlowToSPIRV()
-    @ccall mlir_c.mlirRegisterConversionConvertControlFlowToSPIRV()::Cvoid
-end
-
-function mlirCreateConversionConvertFuncToEmitC()
-    @ccall mlir_c.mlirCreateConversionConvertFuncToEmitC()::MlirPass
-end
-
-function mlirRegisterConversionConvertFuncToEmitC()
-    @ccall mlir_c.mlirRegisterConversionConvertFuncToEmitC()::Cvoid
-end
-
-function mlirCreateConversionConvertFuncToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertFuncToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertFuncToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertFuncToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertFuncToSPIRV()
-    @ccall mlir_c.mlirCreateConversionConvertFuncToSPIRV()::MlirPass
-end
-
-function mlirRegisterConversionConvertFuncToSPIRV()
-    @ccall mlir_c.mlirRegisterConversionConvertFuncToSPIRV()::Cvoid
-end
-
-function mlirCreateConversionConvertGPUToSPIRV()
-    @ccall mlir_c.mlirCreateConversionConvertGPUToSPIRV()::MlirPass
-end
-
-function mlirRegisterConversionConvertGPUToSPIRV()
-    @ccall mlir_c.mlirRegisterConversionConvertGPUToSPIRV()::Cvoid
-end
-
-function mlirCreateConversionConvertGpuOpsToLLVMSPVOps()
-    @ccall mlir_c.mlirCreateConversionConvertGpuOpsToLLVMSPVOps()::MlirPass
-end
-
-function mlirRegisterConversionConvertGpuOpsToLLVMSPVOps()
-    @ccall mlir_c.mlirRegisterConversionConvertGpuOpsToLLVMSPVOps()::Cvoid
-end
-
-function mlirCreateConversionConvertGpuOpsToNVVMOps()
-    @ccall mlir_c.mlirCreateConversionConvertGpuOpsToNVVMOps()::MlirPass
-end
-
-function mlirRegisterConversionConvertGpuOpsToNVVMOps()
-    @ccall mlir_c.mlirRegisterConversionConvertGpuOpsToNVVMOps()::Cvoid
-end
-
-function mlirCreateConversionConvertGpuOpsToROCDLOps()
-    @ccall mlir_c.mlirCreateConversionConvertGpuOpsToROCDLOps()::MlirPass
-end
-
-function mlirRegisterConversionConvertGpuOpsToROCDLOps()
-    @ccall mlir_c.mlirRegisterConversionConvertGpuOpsToROCDLOps()::Cvoid
-end
-
-function mlirCreateConversionConvertIndexToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertIndexToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertIndexToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertIndexToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertIndexToSPIRVPass()
-    @ccall mlir_c.mlirCreateConversionConvertIndexToSPIRVPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertIndexToSPIRVPass()
-    @ccall mlir_c.mlirRegisterConversionConvertIndexToSPIRVPass()::Cvoid
-end
-
-function mlirCreateConversionConvertLinalgToStandard()
-    @ccall mlir_c.mlirCreateConversionConvertLinalgToStandard()::MlirPass
-end
-
-function mlirRegisterConversionConvertLinalgToStandard()
-    @ccall mlir_c.mlirRegisterConversionConvertLinalgToStandard()::Cvoid
-end
-
-function mlirCreateConversionConvertMathToEmitC()
-    @ccall mlir_c.mlirCreateConversionConvertMathToEmitC()::MlirPass
-end
-
-function mlirRegisterConversionConvertMathToEmitC()
-    @ccall mlir_c.mlirRegisterConversionConvertMathToEmitC()::Cvoid
-end
-
-function mlirCreateConversionConvertMathToFuncs()
-    @ccall mlir_c.mlirCreateConversionConvertMathToFuncs()::MlirPass
-end
-
-function mlirRegisterConversionConvertMathToFuncs()
-    @ccall mlir_c.mlirRegisterConversionConvertMathToFuncs()::Cvoid
-end
-
-function mlirCreateConversionConvertMathToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertMathToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertMathToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertMathToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertMathToLibm()
-    @ccall mlir_c.mlirCreateConversionConvertMathToLibm()::MlirPass
-end
-
-function mlirRegisterConversionConvertMathToLibm()
-    @ccall mlir_c.mlirRegisterConversionConvertMathToLibm()::Cvoid
-end
-
-function mlirCreateConversionConvertMathToROCDL()
-    @ccall mlir_c.mlirCreateConversionConvertMathToROCDL()::MlirPass
-end
-
-function mlirRegisterConversionConvertMathToROCDL()
-    @ccall mlir_c.mlirRegisterConversionConvertMathToROCDL()::Cvoid
-end
-
-function mlirCreateConversionConvertMathToSPIRV()
-    @ccall mlir_c.mlirCreateConversionConvertMathToSPIRV()::MlirPass
-end
-
-function mlirRegisterConversionConvertMathToSPIRV()
-    @ccall mlir_c.mlirRegisterConversionConvertMathToSPIRV()::Cvoid
-end
-
-function mlirCreateConversionConvertMemRefToEmitC()
-    @ccall mlir_c.mlirCreateConversionConvertMemRefToEmitC()::MlirPass
-end
-
-function mlirRegisterConversionConvertMemRefToEmitC()
-    @ccall mlir_c.mlirRegisterConversionConvertMemRefToEmitC()::Cvoid
-end
-
-function mlirCreateConversionConvertMemRefToSPIRV()
-    @ccall mlir_c.mlirCreateConversionConvertMemRefToSPIRV()::MlirPass
-end
-
-function mlirRegisterConversionConvertMemRefToSPIRV()
-    @ccall mlir_c.mlirRegisterConversionConvertMemRefToSPIRV()::Cvoid
-end
-
-function mlirCreateConversionConvertMeshToMPIPass()
-    @ccall mlir_c.mlirCreateConversionConvertMeshToMPIPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertMeshToMPIPass()
-    @ccall mlir_c.mlirRegisterConversionConvertMeshToMPIPass()::Cvoid
-end
-
-function mlirCreateConversionConvertNVGPUToNVVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertNVGPUToNVVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertNVGPUToNVVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertNVGPUToNVVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertNVVMToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertNVVMToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertNVVMToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertNVVMToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertOpenACCToSCF()
-    @ccall mlir_c.mlirCreateConversionConvertOpenACCToSCF()::MlirPass
-end
-
-function mlirRegisterConversionConvertOpenACCToSCF()
-    @ccall mlir_c.mlirRegisterConversionConvertOpenACCToSCF()::Cvoid
-end
-
-function mlirCreateConversionConvertOpenMPToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertOpenMPToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertOpenMPToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertOpenMPToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertPDLToPDLInterp()
-    @ccall mlir_c.mlirCreateConversionConvertPDLToPDLInterp()::MlirPass
-end
-
-function mlirRegisterConversionConvertPDLToPDLInterp()
-    @ccall mlir_c.mlirRegisterConversionConvertPDLToPDLInterp()::Cvoid
-end
-
-function mlirCreateConversionConvertParallelLoopToGpu()
-    @ccall mlir_c.mlirCreateConversionConvertParallelLoopToGpu()::MlirPass
-end
-
-function mlirRegisterConversionConvertParallelLoopToGpu()
-    @ccall mlir_c.mlirRegisterConversionConvertParallelLoopToGpu()::Cvoid
-end
-
-function mlirCreateConversionConvertSCFToOpenMPPass()
-    @ccall mlir_c.mlirCreateConversionConvertSCFToOpenMPPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertSCFToOpenMPPass()
-    @ccall mlir_c.mlirRegisterConversionConvertSCFToOpenMPPass()::Cvoid
-end
-
-function mlirCreateConversionConvertSPIRVToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertSPIRVToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertSPIRVToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertSPIRVToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertShapeConstraints()
-    @ccall mlir_c.mlirCreateConversionConvertShapeConstraints()::MlirPass
-end
-
-function mlirRegisterConversionConvertShapeConstraints()
-    @ccall mlir_c.mlirRegisterConversionConvertShapeConstraints()::Cvoid
-end
-
-function mlirCreateConversionConvertShapeToStandard()
-    @ccall mlir_c.mlirCreateConversionConvertShapeToStandard()::MlirPass
-end
-
-function mlirRegisterConversionConvertShapeToStandard()
-    @ccall mlir_c.mlirRegisterConversionConvertShapeToStandard()::Cvoid
-end
-
-function mlirCreateConversionConvertTensorToLinalg()
-    @ccall mlir_c.mlirCreateConversionConvertTensorToLinalg()::MlirPass
-end
-
-function mlirRegisterConversionConvertTensorToLinalg()
-    @ccall mlir_c.mlirRegisterConversionConvertTensorToLinalg()::Cvoid
-end
-
-function mlirCreateConversionConvertTensorToSPIRV()
-    @ccall mlir_c.mlirCreateConversionConvertTensorToSPIRV()::MlirPass
-end
-
-function mlirRegisterConversionConvertTensorToSPIRV()
-    @ccall mlir_c.mlirRegisterConversionConvertTensorToSPIRV()::Cvoid
-end
-
-function mlirCreateConversionConvertToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertToSPIRVPass()
-    @ccall mlir_c.mlirCreateConversionConvertToSPIRVPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertToSPIRVPass()
-    @ccall mlir_c.mlirRegisterConversionConvertToSPIRVPass()::Cvoid
-end
-
-function mlirCreateConversionConvertVectorToArmSME()
-    @ccall mlir_c.mlirCreateConversionConvertVectorToArmSME()::MlirPass
-end
-
-function mlirRegisterConversionConvertVectorToArmSME()
-    @ccall mlir_c.mlirRegisterConversionConvertVectorToArmSME()::Cvoid
-end
-
-function mlirCreateConversionConvertVectorToGPU()
-    @ccall mlir_c.mlirCreateConversionConvertVectorToGPU()::MlirPass
-end
-
-function mlirRegisterConversionConvertVectorToGPU()
-    @ccall mlir_c.mlirRegisterConversionConvertVectorToGPU()::Cvoid
-end
-
-function mlirCreateConversionConvertVectorToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionConvertVectorToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionConvertVectorToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionConvertVectorToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionConvertVectorToSCF()
-    @ccall mlir_c.mlirCreateConversionConvertVectorToSCF()::MlirPass
-end
-
-function mlirRegisterConversionConvertVectorToSCF()
-    @ccall mlir_c.mlirRegisterConversionConvertVectorToSCF()::Cvoid
-end
-
-function mlirCreateConversionConvertVectorToSPIRV()
-    @ccall mlir_c.mlirCreateConversionConvertVectorToSPIRV()::MlirPass
-end
-
-function mlirRegisterConversionConvertVectorToSPIRV()
-    @ccall mlir_c.mlirRegisterConversionConvertVectorToSPIRV()::Cvoid
-end
-
-function mlirCreateConversionConvertVectorToXeGPU()
-    @ccall mlir_c.mlirCreateConversionConvertVectorToXeGPU()::MlirPass
-end
-
-function mlirRegisterConversionConvertVectorToXeGPU()
-    @ccall mlir_c.mlirRegisterConversionConvertVectorToXeGPU()::Cvoid
-end
-
-function mlirCreateConversionFinalizeMemRefToLLVMConversionPass()
-    @ccall mlir_c.mlirCreateConversionFinalizeMemRefToLLVMConversionPass()::MlirPass
-end
-
-function mlirRegisterConversionFinalizeMemRefToLLVMConversionPass()
-    @ccall mlir_c.mlirRegisterConversionFinalizeMemRefToLLVMConversionPass()::Cvoid
-end
-
-function mlirCreateConversionGpuToLLVMConversionPass()
-    @ccall mlir_c.mlirCreateConversionGpuToLLVMConversionPass()::MlirPass
-end
-
-function mlirRegisterConversionGpuToLLVMConversionPass()
-    @ccall mlir_c.mlirRegisterConversionGpuToLLVMConversionPass()::Cvoid
-end
-
-function mlirCreateConversionLiftControlFlowToSCFPass()
-    @ccall mlir_c.mlirCreateConversionLiftControlFlowToSCFPass()::MlirPass
-end
-
-function mlirRegisterConversionLiftControlFlowToSCFPass()
-    @ccall mlir_c.mlirRegisterConversionLiftControlFlowToSCFPass()::Cvoid
-end
-
-function mlirCreateConversionLowerHostCodeToLLVMPass()
-    @ccall mlir_c.mlirCreateConversionLowerHostCodeToLLVMPass()::MlirPass
-end
-
-function mlirRegisterConversionLowerHostCodeToLLVMPass()
-    @ccall mlir_c.mlirRegisterConversionLowerHostCodeToLLVMPass()::Cvoid
-end
-
-function mlirCreateConversionMapMemRefStorageClass()
-    @ccall mlir_c.mlirCreateConversionMapMemRefStorageClass()::MlirPass
-end
-
-function mlirRegisterConversionMapMemRefStorageClass()
-    @ccall mlir_c.mlirRegisterConversionMapMemRefStorageClass()::Cvoid
-end
-
-function mlirCreateConversionReconcileUnrealizedCasts()
-    @ccall mlir_c.mlirCreateConversionReconcileUnrealizedCasts()::MlirPass
-end
-
-function mlirRegisterConversionReconcileUnrealizedCasts()
-    @ccall mlir_c.mlirRegisterConversionReconcileUnrealizedCasts()::Cvoid
-end
-
-function mlirCreateConversionSCFToControlFlow()
-    @ccall mlir_c.mlirCreateConversionSCFToControlFlow()::MlirPass
-end
-
-function mlirRegisterConversionSCFToControlFlow()
-    @ccall mlir_c.mlirRegisterConversionSCFToControlFlow()::Cvoid
-end
-
-function mlirCreateConversionSCFToEmitC()
-    @ccall mlir_c.mlirCreateConversionSCFToEmitC()::MlirPass
-end
-
-function mlirRegisterConversionSCFToEmitC()
-    @ccall mlir_c.mlirRegisterConversionSCFToEmitC()::Cvoid
-end
-
-function mlirCreateConversionSCFToSPIRV()
-    @ccall mlir_c.mlirCreateConversionSCFToSPIRV()::MlirPass
-end
-
-function mlirRegisterConversionSCFToSPIRV()
-    @ccall mlir_c.mlirRegisterConversionSCFToSPIRV()::Cvoid
-end
-
-function mlirCreateConversionSetLLVMModuleDataLayoutPass()
-    @ccall mlir_c.mlirCreateConversionSetLLVMModuleDataLayoutPass()::MlirPass
-end
-
-function mlirRegisterConversionSetLLVMModuleDataLayoutPass()
-    @ccall mlir_c.mlirRegisterConversionSetLLVMModuleDataLayoutPass()::Cvoid
-end
-
-function mlirCreateConversionTosaToArith()
-    @ccall mlir_c.mlirCreateConversionTosaToArith()::MlirPass
-end
-
-function mlirRegisterConversionTosaToArith()
-    @ccall mlir_c.mlirRegisterConversionTosaToArith()::Cvoid
-end
-
-function mlirCreateConversionTosaToLinalg()
-    @ccall mlir_c.mlirCreateConversionTosaToLinalg()::MlirPass
-end
-
-function mlirRegisterConversionTosaToLinalg()
-    @ccall mlir_c.mlirRegisterConversionTosaToLinalg()::Cvoid
-end
-
-function mlirCreateConversionTosaToLinalgNamed()
-    @ccall mlir_c.mlirCreateConversionTosaToLinalgNamed()::MlirPass
-end
-
-function mlirRegisterConversionTosaToLinalgNamed()
-    @ccall mlir_c.mlirRegisterConversionTosaToLinalgNamed()::Cvoid
-end
-
-function mlirCreateConversionTosaToMLProgram()
-    @ccall mlir_c.mlirCreateConversionTosaToMLProgram()::MlirPass
-end
-
-function mlirRegisterConversionTosaToMLProgram()
-    @ccall mlir_c.mlirRegisterConversionTosaToMLProgram()::Cvoid
-end
-
-function mlirCreateConversionTosaToSCF()
-    @ccall mlir_c.mlirCreateConversionTosaToSCF()::MlirPass
-end
-
-function mlirRegisterConversionTosaToSCF()
-    @ccall mlir_c.mlirRegisterConversionTosaToSCF()::Cvoid
-end
-
-function mlirCreateConversionTosaToTensor()
-    @ccall mlir_c.mlirCreateConversionTosaToTensor()::MlirPass
-end
-
-function mlirRegisterConversionTosaToTensor()
-    @ccall mlir_c.mlirRegisterConversionTosaToTensor()::Cvoid
-end
-
-function mlirCreateConversionUBToLLVMConversionPass()
-    @ccall mlir_c.mlirCreateConversionUBToLLVMConversionPass()::MlirPass
-end
-
-function mlirRegisterConversionUBToLLVMConversionPass()
-    @ccall mlir_c.mlirRegisterConversionUBToLLVMConversionPass()::Cvoid
-end
-
-function mlirCreateConversionUBToSPIRVConversionPass()
-    @ccall mlir_c.mlirCreateConversionUBToSPIRVConversionPass()::MlirPass
-end
-
-function mlirRegisterConversionUBToSPIRVConversionPass()
-    @ccall mlir_c.mlirRegisterConversionUBToSPIRVConversionPass()::Cvoid
-end
-
 """
     mlirEnableGlobalDebug(enable)
 
@@ -6851,58 +5983,6 @@ end
 
 function mlirGetDialectHandle__async__()
     @ccall mlir_c.mlirGetDialectHandle__async__()::MlirDialectHandle
-end
-
-function mlirRegisterAsyncPasses()
-    @ccall mlir_c.mlirRegisterAsyncPasses()::Cvoid
-end
-
-function mlirCreateAsyncAsyncFuncToAsyncRuntime()
-    @ccall mlir_c.mlirCreateAsyncAsyncFuncToAsyncRuntime()::MlirPass
-end
-
-function mlirRegisterAsyncAsyncFuncToAsyncRuntime()
-    @ccall mlir_c.mlirRegisterAsyncAsyncFuncToAsyncRuntime()::Cvoid
-end
-
-function mlirCreateAsyncAsyncParallelFor()
-    @ccall mlir_c.mlirCreateAsyncAsyncParallelFor()::MlirPass
-end
-
-function mlirRegisterAsyncAsyncParallelFor()
-    @ccall mlir_c.mlirRegisterAsyncAsyncParallelFor()::Cvoid
-end
-
-function mlirCreateAsyncAsyncRuntimePolicyBasedRefCounting()
-    @ccall mlir_c.mlirCreateAsyncAsyncRuntimePolicyBasedRefCounting()::MlirPass
-end
-
-function mlirRegisterAsyncAsyncRuntimePolicyBasedRefCounting()
-    @ccall mlir_c.mlirRegisterAsyncAsyncRuntimePolicyBasedRefCounting()::Cvoid
-end
-
-function mlirCreateAsyncAsyncRuntimeRefCounting()
-    @ccall mlir_c.mlirCreateAsyncAsyncRuntimeRefCounting()::MlirPass
-end
-
-function mlirRegisterAsyncAsyncRuntimeRefCounting()
-    @ccall mlir_c.mlirRegisterAsyncAsyncRuntimeRefCounting()::Cvoid
-end
-
-function mlirCreateAsyncAsyncRuntimeRefCountingOpt()
-    @ccall mlir_c.mlirCreateAsyncAsyncRuntimeRefCountingOpt()::MlirPass
-end
-
-function mlirRegisterAsyncAsyncRuntimeRefCountingOpt()
-    @ccall mlir_c.mlirRegisterAsyncAsyncRuntimeRefCountingOpt()::Cvoid
-end
-
-function mlirCreateAsyncAsyncToAsyncRuntime()
-    @ccall mlir_c.mlirCreateAsyncAsyncToAsyncRuntime()::MlirPass
-end
-
-function mlirRegisterAsyncAsyncToAsyncRuntime()
-    @ccall mlir_c.mlirRegisterAsyncAsyncToAsyncRuntime()::Cvoid
 end
 
 function mlirGetDialectHandle__cf__()
@@ -7129,90 +6209,6 @@ end
 
 function mlirGPUObjectAttrGetKernels(mlirObjectAttr)
     @ccall mlir_c.mlirGPUObjectAttrGetKernels(mlirObjectAttr::MlirAttribute)::MlirAttribute
-end
-
-function mlirRegisterGPUPasses()
-    @ccall mlir_c.mlirRegisterGPUPasses()::Cvoid
-end
-
-function mlirCreateGPUGpuAsyncRegionPass()
-    @ccall mlir_c.mlirCreateGPUGpuAsyncRegionPass()::MlirPass
-end
-
-function mlirRegisterGPUGpuAsyncRegionPass()
-    @ccall mlir_c.mlirRegisterGPUGpuAsyncRegionPass()::Cvoid
-end
-
-function mlirCreateGPUGpuDecomposeMemrefsPass()
-    @ccall mlir_c.mlirCreateGPUGpuDecomposeMemrefsPass()::MlirPass
-end
-
-function mlirRegisterGPUGpuDecomposeMemrefsPass()
-    @ccall mlir_c.mlirRegisterGPUGpuDecomposeMemrefsPass()::Cvoid
-end
-
-function mlirCreateGPUGpuEliminateBarriers()
-    @ccall mlir_c.mlirCreateGPUGpuEliminateBarriers()::MlirPass
-end
-
-function mlirRegisterGPUGpuEliminateBarriers()
-    @ccall mlir_c.mlirRegisterGPUGpuEliminateBarriers()::Cvoid
-end
-
-function mlirCreateGPUGpuKernelOutlining()
-    @ccall mlir_c.mlirCreateGPUGpuKernelOutlining()::MlirPass
-end
-
-function mlirRegisterGPUGpuKernelOutlining()
-    @ccall mlir_c.mlirRegisterGPUGpuKernelOutlining()::Cvoid
-end
-
-function mlirCreateGPUGpuLaunchSinkIndexComputations()
-    @ccall mlir_c.mlirCreateGPUGpuLaunchSinkIndexComputations()::MlirPass
-end
-
-function mlirRegisterGPUGpuLaunchSinkIndexComputations()
-    @ccall mlir_c.mlirRegisterGPUGpuLaunchSinkIndexComputations()::Cvoid
-end
-
-function mlirCreateGPUGpuMapParallelLoopsPass()
-    @ccall mlir_c.mlirCreateGPUGpuMapParallelLoopsPass()::MlirPass
-end
-
-function mlirRegisterGPUGpuMapParallelLoopsPass()
-    @ccall mlir_c.mlirRegisterGPUGpuMapParallelLoopsPass()::Cvoid
-end
-
-function mlirCreateGPUGpuModuleToBinaryPass()
-    @ccall mlir_c.mlirCreateGPUGpuModuleToBinaryPass()::MlirPass
-end
-
-function mlirRegisterGPUGpuModuleToBinaryPass()
-    @ccall mlir_c.mlirRegisterGPUGpuModuleToBinaryPass()::Cvoid
-end
-
-function mlirCreateGPUGpuNVVMAttachTarget()
-    @ccall mlir_c.mlirCreateGPUGpuNVVMAttachTarget()::MlirPass
-end
-
-function mlirRegisterGPUGpuNVVMAttachTarget()
-    @ccall mlir_c.mlirRegisterGPUGpuNVVMAttachTarget()::Cvoid
-end
-
-function mlirCreateGPUGpuROCDLAttachTarget()
-    @ccall mlir_c.mlirCreateGPUGpuROCDLAttachTarget()::MlirPass
-end
-
-function mlirRegisterGPUGpuROCDLAttachTarget()
-    @ccall mlir_c.mlirRegisterGPUGpuROCDLAttachTarget()::Cvoid
-end
-
-function mlirCreateGPUGpuSPIRVAttachTarget()
-    @ccall mlir_c.mlirCreateGPUGpuSPIRVAttachTarget()::MlirPass
-end
-
-function mlirRegisterGPUGpuSPIRVAttachTarget()
-    @ccall mlir_c.mlirRegisterGPUGpuSPIRVAttachTarget()::Cvoid
 end
 
 function mlirGetDialectHandle__irdl__()
@@ -8051,106 +7047,6 @@ function mlirGetDialectHandle__linalg__()
     @ccall mlir_c.mlirGetDialectHandle__linalg__()::MlirDialectHandle
 end
 
-function mlirRegisterLinalgPasses()
-    @ccall mlir_c.mlirRegisterLinalgPasses()::Cvoid
-end
-
-function mlirCreateLinalgConvertElementwiseToLinalgPass()
-    @ccall mlir_c.mlirCreateLinalgConvertElementwiseToLinalgPass()::MlirPass
-end
-
-function mlirRegisterLinalgConvertElementwiseToLinalgPass()
-    @ccall mlir_c.mlirRegisterLinalgConvertElementwiseToLinalgPass()::Cvoid
-end
-
-function mlirCreateLinalgConvertLinalgToAffineLoopsPass()
-    @ccall mlir_c.mlirCreateLinalgConvertLinalgToAffineLoopsPass()::MlirPass
-end
-
-function mlirRegisterLinalgConvertLinalgToAffineLoopsPass()
-    @ccall mlir_c.mlirRegisterLinalgConvertLinalgToAffineLoopsPass()::Cvoid
-end
-
-function mlirCreateLinalgConvertLinalgToLoopsPass()
-    @ccall mlir_c.mlirCreateLinalgConvertLinalgToLoopsPass()::MlirPass
-end
-
-function mlirRegisterLinalgConvertLinalgToLoopsPass()
-    @ccall mlir_c.mlirRegisterLinalgConvertLinalgToLoopsPass()::Cvoid
-end
-
-function mlirCreateLinalgConvertLinalgToParallelLoopsPass()
-    @ccall mlir_c.mlirCreateLinalgConvertLinalgToParallelLoopsPass()::MlirPass
-end
-
-function mlirRegisterLinalgConvertLinalgToParallelLoopsPass()
-    @ccall mlir_c.mlirRegisterLinalgConvertLinalgToParallelLoopsPass()::Cvoid
-end
-
-function mlirCreateLinalgLinalgBlockPackMatmul()
-    @ccall mlir_c.mlirCreateLinalgLinalgBlockPackMatmul()::MlirPass
-end
-
-function mlirRegisterLinalgLinalgBlockPackMatmul()
-    @ccall mlir_c.mlirRegisterLinalgLinalgBlockPackMatmul()::Cvoid
-end
-
-function mlirCreateLinalgLinalgDetensorizePass()
-    @ccall mlir_c.mlirCreateLinalgLinalgDetensorizePass()::MlirPass
-end
-
-function mlirRegisterLinalgLinalgDetensorizePass()
-    @ccall mlir_c.mlirRegisterLinalgLinalgDetensorizePass()::Cvoid
-end
-
-function mlirCreateLinalgLinalgElementwiseOpFusionPass()
-    @ccall mlir_c.mlirCreateLinalgLinalgElementwiseOpFusionPass()::MlirPass
-end
-
-function mlirRegisterLinalgLinalgElementwiseOpFusionPass()
-    @ccall mlir_c.mlirRegisterLinalgLinalgElementwiseOpFusionPass()::Cvoid
-end
-
-function mlirCreateLinalgLinalgFoldUnitExtentDimsPass()
-    @ccall mlir_c.mlirCreateLinalgLinalgFoldUnitExtentDimsPass()::MlirPass
-end
-
-function mlirRegisterLinalgLinalgFoldUnitExtentDimsPass()
-    @ccall mlir_c.mlirRegisterLinalgLinalgFoldUnitExtentDimsPass()::Cvoid
-end
-
-function mlirCreateLinalgLinalgGeneralizeNamedOpsPass()
-    @ccall mlir_c.mlirCreateLinalgLinalgGeneralizeNamedOpsPass()::MlirPass
-end
-
-function mlirRegisterLinalgLinalgGeneralizeNamedOpsPass()
-    @ccall mlir_c.mlirRegisterLinalgLinalgGeneralizeNamedOpsPass()::Cvoid
-end
-
-function mlirCreateLinalgLinalgInlineScalarOperandsPass()
-    @ccall mlir_c.mlirCreateLinalgLinalgInlineScalarOperandsPass()::MlirPass
-end
-
-function mlirRegisterLinalgLinalgInlineScalarOperandsPass()
-    @ccall mlir_c.mlirRegisterLinalgLinalgInlineScalarOperandsPass()::Cvoid
-end
-
-function mlirCreateLinalgLinalgNamedOpConversionPass()
-    @ccall mlir_c.mlirCreateLinalgLinalgNamedOpConversionPass()::MlirPass
-end
-
-function mlirRegisterLinalgLinalgNamedOpConversionPass()
-    @ccall mlir_c.mlirRegisterLinalgLinalgNamedOpConversionPass()::Cvoid
-end
-
-function mlirCreateLinalgLinalgSpecializeGenericOpsPass()
-    @ccall mlir_c.mlirCreateLinalgLinalgSpecializeGenericOpsPass()::MlirPass
-end
-
-function mlirRegisterLinalgLinalgSpecializeGenericOpsPass()
-    @ccall mlir_c.mlirRegisterLinalgLinalgSpecializeGenericOpsPass()::Cvoid
-end
-
 function mlirGetDialectHandle__ml_program__()
     @ccall mlir_c.mlirGetDialectHandle__ml_program__()::MlirDialectHandle
 end
@@ -8817,138 +7713,6 @@ function mlirSparseTensorEncodingAttrBuildLvlType(lvlFmt, properties, propSize, 
     )::MlirSparseTensorLevelType
 end
 
-function mlirRegisterSparseTensorPasses()
-    @ccall mlir_c.mlirRegisterSparseTensorPasses()::Cvoid
-end
-
-function mlirCreateSparseTensorLowerForeachToSCF()
-    @ccall mlir_c.mlirCreateSparseTensorLowerForeachToSCF()::MlirPass
-end
-
-function mlirRegisterSparseTensorLowerForeachToSCF()
-    @ccall mlir_c.mlirRegisterSparseTensorLowerForeachToSCF()::Cvoid
-end
-
-function mlirCreateSparseTensorLowerSparseIterationToSCF()
-    @ccall mlir_c.mlirCreateSparseTensorLowerSparseIterationToSCF()::MlirPass
-end
-
-function mlirRegisterSparseTensorLowerSparseIterationToSCF()
-    @ccall mlir_c.mlirRegisterSparseTensorLowerSparseIterationToSCF()::Cvoid
-end
-
-function mlirCreateSparseTensorLowerSparseOpsToForeach()
-    @ccall mlir_c.mlirCreateSparseTensorLowerSparseOpsToForeach()::MlirPass
-end
-
-function mlirRegisterSparseTensorLowerSparseOpsToForeach()
-    @ccall mlir_c.mlirRegisterSparseTensorLowerSparseOpsToForeach()::Cvoid
-end
-
-function mlirCreateSparseTensorPreSparsificationRewrite()
-    @ccall mlir_c.mlirCreateSparseTensorPreSparsificationRewrite()::MlirPass
-end
-
-function mlirRegisterSparseTensorPreSparsificationRewrite()
-    @ccall mlir_c.mlirRegisterSparseTensorPreSparsificationRewrite()::Cvoid
-end
-
-function mlirCreateSparseTensorSparseAssembler()
-    @ccall mlir_c.mlirCreateSparseTensorSparseAssembler()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparseAssembler()
-    @ccall mlir_c.mlirRegisterSparseTensorSparseAssembler()::Cvoid
-end
-
-function mlirCreateSparseTensorSparseBufferRewrite()
-    @ccall mlir_c.mlirCreateSparseTensorSparseBufferRewrite()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparseBufferRewrite()
-    @ccall mlir_c.mlirRegisterSparseTensorSparseBufferRewrite()::Cvoid
-end
-
-function mlirCreateSparseTensorSparseGPUCodegen()
-    @ccall mlir_c.mlirCreateSparseTensorSparseGPUCodegen()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparseGPUCodegen()
-    @ccall mlir_c.mlirRegisterSparseTensorSparseGPUCodegen()::Cvoid
-end
-
-function mlirCreateSparseTensorSparseReinterpretMap()
-    @ccall mlir_c.mlirCreateSparseTensorSparseReinterpretMap()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparseReinterpretMap()
-    @ccall mlir_c.mlirRegisterSparseTensorSparseReinterpretMap()::Cvoid
-end
-
-function mlirCreateSparseTensorSparseSpaceCollapse()
-    @ccall mlir_c.mlirCreateSparseTensorSparseSpaceCollapse()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparseSpaceCollapse()
-    @ccall mlir_c.mlirRegisterSparseTensorSparseSpaceCollapse()::Cvoid
-end
-
-function mlirCreateSparseTensorSparseTensorCodegen()
-    @ccall mlir_c.mlirCreateSparseTensorSparseTensorCodegen()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparseTensorCodegen()
-    @ccall mlir_c.mlirRegisterSparseTensorSparseTensorCodegen()::Cvoid
-end
-
-function mlirCreateSparseTensorSparseTensorConversionPass()
-    @ccall mlir_c.mlirCreateSparseTensorSparseTensorConversionPass()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparseTensorConversionPass()
-    @ccall mlir_c.mlirRegisterSparseTensorSparseTensorConversionPass()::Cvoid
-end
-
-function mlirCreateSparseTensorSparseVectorization()
-    @ccall mlir_c.mlirCreateSparseTensorSparseVectorization()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparseVectorization()
-    @ccall mlir_c.mlirRegisterSparseTensorSparseVectorization()::Cvoid
-end
-
-function mlirCreateSparseTensorSparsificationAndBufferization()
-    @ccall mlir_c.mlirCreateSparseTensorSparsificationAndBufferization()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparsificationAndBufferization()
-    @ccall mlir_c.mlirRegisterSparseTensorSparsificationAndBufferization()::Cvoid
-end
-
-function mlirCreateSparseTensorSparsificationPass()
-    @ccall mlir_c.mlirCreateSparseTensorSparsificationPass()::MlirPass
-end
-
-function mlirRegisterSparseTensorSparsificationPass()
-    @ccall mlir_c.mlirRegisterSparseTensorSparsificationPass()::Cvoid
-end
-
-function mlirCreateSparseTensorStageSparseOperations()
-    @ccall mlir_c.mlirCreateSparseTensorStageSparseOperations()::MlirPass
-end
-
-function mlirRegisterSparseTensorStageSparseOperations()
-    @ccall mlir_c.mlirRegisterSparseTensorStageSparseOperations()::Cvoid
-end
-
-function mlirCreateSparseTensorStorageSpecifierToLLVM()
-    @ccall mlir_c.mlirCreateSparseTensorStorageSpecifierToLLVM()::MlirPass
-end
-
-function mlirRegisterSparseTensorStorageSpecifierToLLVM()
-    @ccall mlir_c.mlirRegisterSparseTensorStorageSpecifierToLLVM()::Cvoid
-end
-
 function mlirGetDialectHandle__tensor__()
     @ccall mlir_c.mlirGetDialectHandle__tensor__()::MlirDialectHandle
 end
@@ -9334,6 +8098,262 @@ function mlirInferShapedTypeOpInterfaceInferReturnTypes(
         callback::MlirShapedTypeComponentsCallback,
         userData::Ptr{Cvoid},
     )::MlirLogicalResult
+end
+
+struct MlirPass
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirExternalPass
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirPassManager
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirOpPassManager
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirPassManagerCreate(ctx)
+
+Create a new top-level PassManager with the default anchor.
+"""
+function mlirPassManagerCreate(ctx)
+    @ccall mlir_c.mlirPassManagerCreate(ctx::MlirContext)::MlirPassManager
+end
+
+"""
+    mlirPassManagerCreateOnOperation(ctx, anchorOp)
+
+Create a new top-level PassManager anchored on `anchorOp`.
+"""
+function mlirPassManagerCreateOnOperation(ctx, anchorOp)
+    @ccall mlir_c.mlirPassManagerCreateOnOperation(
+        ctx::MlirContext, anchorOp::MlirStringRef
+    )::MlirPassManager
+end
+
+"""
+    mlirPassManagerDestroy(passManager)
+
+Destroy the provided PassManager.
+"""
+function mlirPassManagerDestroy(passManager)
+    @ccall mlir_c.mlirPassManagerDestroy(passManager::MlirPassManager)::Cvoid
+end
+
+"""
+    mlirPassManagerIsNull(passManager)
+
+Checks if a PassManager is null.
+"""
+function mlirPassManagerIsNull(passManager)
+    @ccall mlir_c.mlirPassManagerIsNull(passManager::MlirPassManager)::Bool
+end
+
+"""
+    mlirPassManagerGetAsOpPassManager(passManager)
+
+Cast a top-level PassManager to a generic OpPassManager.
+"""
+function mlirPassManagerGetAsOpPassManager(passManager)
+    @ccall mlir_c.mlirPassManagerGetAsOpPassManager(
+        passManager::MlirPassManager
+    )::MlirOpPassManager
+end
+
+"""
+    mlirPassManagerRunOnOp(passManager, op)
+
+Run the provided `passManager` on the given `op`.
+"""
+function mlirPassManagerRunOnOp(passManager, op)
+    @ccall mlir_c.mlirPassManagerRunOnOp(
+        passManager::MlirPassManager, op::MlirOperation
+    )::MlirLogicalResult
+end
+
+"""
+    mlirPassManagerEnableIRPrinting(passManager, printBeforeAll, printAfterAll, printModuleScope, printAfterOnlyOnChange, printAfterOnlyOnFailure, flags, treePrintingPath)
+
+Enable IR printing. The treePrintingPath argument is an optional path to a directory where the dumps will be produced. If it isn't provided then dumps are produced to stderr.
+"""
+function mlirPassManagerEnableIRPrinting(
+    passManager,
+    printBeforeAll,
+    printAfterAll,
+    printModuleScope,
+    printAfterOnlyOnChange,
+    printAfterOnlyOnFailure,
+    flags,
+    treePrintingPath,
+)
+    @ccall mlir_c.mlirPassManagerEnableIRPrinting(
+        passManager::MlirPassManager,
+        printBeforeAll::Bool,
+        printAfterAll::Bool,
+        printModuleScope::Bool,
+        printAfterOnlyOnChange::Bool,
+        printAfterOnlyOnFailure::Bool,
+        flags::MlirOpPrintingFlags,
+        treePrintingPath::MlirStringRef,
+    )::Cvoid
+end
+
+"""
+    mlirPassManagerEnableVerifier(passManager, enable)
+
+Enable / disable verify-each.
+"""
+function mlirPassManagerEnableVerifier(passManager, enable)
+    @ccall mlir_c.mlirPassManagerEnableVerifier(
+        passManager::MlirPassManager, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirPassManagerGetNestedUnder(passManager, operationName)
+
+Nest an OpPassManager under the top-level PassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed. To further nest more OpPassManager under the newly returned one, see `mlirOpPassManagerNest` below.
+"""
+function mlirPassManagerGetNestedUnder(passManager, operationName)
+    @ccall mlir_c.mlirPassManagerGetNestedUnder(
+        passManager::MlirPassManager, operationName::MlirStringRef
+    )::MlirOpPassManager
+end
+
+"""
+    mlirOpPassManagerGetNestedUnder(passManager, operationName)
+
+Nest an OpPassManager under the provided OpPassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed.
+"""
+function mlirOpPassManagerGetNestedUnder(passManager, operationName)
+    @ccall mlir_c.mlirOpPassManagerGetNestedUnder(
+        passManager::MlirOpPassManager, operationName::MlirStringRef
+    )::MlirOpPassManager
+end
+
+"""
+    mlirPassManagerAddOwnedPass(passManager, pass)
+
+Add a pass and transfer ownership to the provided top-level mlirPassManager. If the pass is not a generic operation pass or a ModulePass, a new OpPassManager is implicitly nested under the provided PassManager.
+"""
+function mlirPassManagerAddOwnedPass(passManager, pass)
+    @ccall mlir_c.mlirPassManagerAddOwnedPass(
+        passManager::MlirPassManager, pass::MlirPass
+    )::Cvoid
+end
+
+"""
+    mlirOpPassManagerAddOwnedPass(passManager, pass)
+
+Add a pass and transfer ownership to the provided mlirOpPassManager. If the pass is not a generic operation pass or matching the type of the provided PassManager, a new OpPassManager is implicitly nested under the provided PassManager.
+"""
+function mlirOpPassManagerAddOwnedPass(passManager, pass)
+    @ccall mlir_c.mlirOpPassManagerAddOwnedPass(
+        passManager::MlirOpPassManager, pass::MlirPass
+    )::Cvoid
+end
+
+"""
+    mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
+
+Parse a sequence of textual MLIR pass pipeline elements and add them to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
+"""
+function mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
+    @ccall mlir_c.mlirOpPassManagerAddPipeline(
+        passManager::MlirOpPassManager,
+        pipelineElements::MlirStringRef,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+    )::MlirLogicalResult
+end
+
+"""
+    mlirPrintPassPipeline(passManager, callback, userData)
+
+Print a textual MLIR pass pipeline by sending chunks of the string representation and forwarding `userData to `callback`. Note that the callback may be called several times with consecutive chunks of the string.
+"""
+function mlirPrintPassPipeline(passManager, callback, userData)
+    @ccall mlir_c.mlirPrintPassPipeline(
+        passManager::MlirOpPassManager, callback::MlirStringCallback, userData::Ptr{Cvoid}
+    )::Cvoid
+end
+
+"""
+    mlirParsePassPipeline(passManager, pipeline, callback, userData)
+
+Parse a textual MLIR pass pipeline and assign it to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
+"""
+function mlirParsePassPipeline(passManager, pipeline, callback, userData)
+    @ccall mlir_c.mlirParsePassPipeline(
+        passManager::MlirOpPassManager,
+        pipeline::MlirStringRef,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+    )::MlirLogicalResult
+end
+
+"""
+    MlirExternalPassCallbacks
+
+Structure of external [`MlirPass`](@ref) callbacks. All callbacks are required to be set unless otherwise specified.
+
+| Field      | Note                                                                                                                                                                                              |
+| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| construct  | This callback is called from the pass is created. This is analogous to a C++ pass constructor.                                                                                                    |
+| destruct   | This callback is called when the pass is destroyed This is analogous to a C++ pass destructor.                                                                                                    |
+| initialize | This callback is optional. The callback is called before the pass is run, allowing a chance to initialize any complex state necessary for running the pass. See Pass::initialize(MLIRContext *).  |
+| clone      | This callback is called when the pass is cloned. See Pass::clonePass().                                                                                                                           |
+| run        | This callback is called when the pass is run. See Pass::runOnOperation().                                                                                                                         |
+"""
+struct MlirExternalPassCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    initialize::Ptr{Cvoid}
+    clone::Ptr{Cvoid}
+    run::Ptr{Cvoid}
+end
+
+"""
+    mlirCreateExternalPass(passID, name, argument, description, opName, nDependentDialects, dependentDialects, callbacks, userData)
+
+Creates an external [`MlirPass`](@ref) that calls the supplied `callbacks` using the supplied `userData`. If `opName` is empty, the pass is a generic operation pass. Otherwise it is an operation pass specific to the specified pass name.
+"""
+function mlirCreateExternalPass(
+    passID,
+    name,
+    argument,
+    description,
+    opName,
+    nDependentDialects,
+    dependentDialects,
+    callbacks,
+    userData,
+)
+    @ccall mlir_c.mlirCreateExternalPass(
+        passID::MlirTypeID,
+        name::MlirStringRef,
+        argument::MlirStringRef,
+        description::MlirStringRef,
+        opName::MlirStringRef,
+        nDependentDialects::intptr_t,
+        dependentDialects::Ptr{MlirDialectHandle},
+        callbacks::MlirExternalPassCallbacks,
+        userData::Ptr{Cvoid},
+    )::MlirPass
+end
+
+"""
+    mlirExternalPassSignalFailure(pass)
+
+This signals that the pass has failed. This is only valid to call during the `run` callback of [`MlirExternalPassCallbacks`](@ref). See Pass::signalPassFailure().
+"""
+function mlirExternalPassSignalFailure(pass)
+    @ccall mlir_c.mlirExternalPassSignalFailure(pass::MlirExternalPass)::Cvoid
 end
 
 """
@@ -10079,170 +9099,6 @@ function mlirTranslateModuleToLLVMIR(_module, context)
     )::LLVMModuleRef
 end
 
-function mlirRegisterTransformsPasses()
-    @ccall mlir_c.mlirRegisterTransformsPasses()::Cvoid
-end
-
-function mlirCreateTransformsCSE()
-    @ccall mlir_c.mlirCreateTransformsCSE()::MlirPass
-end
-
-function mlirRegisterTransformsCSE()
-    @ccall mlir_c.mlirRegisterTransformsCSE()::Cvoid
-end
-
-function mlirCreateTransformsCanonicalizer()
-    @ccall mlir_c.mlirCreateTransformsCanonicalizer()::MlirPass
-end
-
-function mlirRegisterTransformsCanonicalizer()
-    @ccall mlir_c.mlirRegisterTransformsCanonicalizer()::Cvoid
-end
-
-function mlirCreateTransformsCompositeFixedPointPass()
-    @ccall mlir_c.mlirCreateTransformsCompositeFixedPointPass()::MlirPass
-end
-
-function mlirRegisterTransformsCompositeFixedPointPass()
-    @ccall mlir_c.mlirRegisterTransformsCompositeFixedPointPass()::Cvoid
-end
-
-function mlirCreateTransformsControlFlowSink()
-    @ccall mlir_c.mlirCreateTransformsControlFlowSink()::MlirPass
-end
-
-function mlirRegisterTransformsControlFlowSink()
-    @ccall mlir_c.mlirRegisterTransformsControlFlowSink()::Cvoid
-end
-
-function mlirCreateTransformsGenerateRuntimeVerification()
-    @ccall mlir_c.mlirCreateTransformsGenerateRuntimeVerification()::MlirPass
-end
-
-function mlirRegisterTransformsGenerateRuntimeVerification()
-    @ccall mlir_c.mlirRegisterTransformsGenerateRuntimeVerification()::Cvoid
-end
-
-function mlirCreateTransformsInliner()
-    @ccall mlir_c.mlirCreateTransformsInliner()::MlirPass
-end
-
-function mlirRegisterTransformsInliner()
-    @ccall mlir_c.mlirRegisterTransformsInliner()::Cvoid
-end
-
-function mlirCreateTransformsLocationSnapshot()
-    @ccall mlir_c.mlirCreateTransformsLocationSnapshot()::MlirPass
-end
-
-function mlirRegisterTransformsLocationSnapshot()
-    @ccall mlir_c.mlirRegisterTransformsLocationSnapshot()::Cvoid
-end
-
-function mlirCreateTransformsLoopInvariantCodeMotion()
-    @ccall mlir_c.mlirCreateTransformsLoopInvariantCodeMotion()::MlirPass
-end
-
-function mlirRegisterTransformsLoopInvariantCodeMotion()
-    @ccall mlir_c.mlirRegisterTransformsLoopInvariantCodeMotion()::Cvoid
-end
-
-function mlirCreateTransformsLoopInvariantSubsetHoisting()
-    @ccall mlir_c.mlirCreateTransformsLoopInvariantSubsetHoisting()::MlirPass
-end
-
-function mlirRegisterTransformsLoopInvariantSubsetHoisting()
-    @ccall mlir_c.mlirRegisterTransformsLoopInvariantSubsetHoisting()::Cvoid
-end
-
-function mlirCreateTransformsMem2Reg()
-    @ccall mlir_c.mlirCreateTransformsMem2Reg()::MlirPass
-end
-
-function mlirRegisterTransformsMem2Reg()
-    @ccall mlir_c.mlirRegisterTransformsMem2Reg()::Cvoid
-end
-
-function mlirCreateTransformsPrintIRPass()
-    @ccall mlir_c.mlirCreateTransformsPrintIRPass()::MlirPass
-end
-
-function mlirRegisterTransformsPrintIRPass()
-    @ccall mlir_c.mlirRegisterTransformsPrintIRPass()::Cvoid
-end
-
-function mlirCreateTransformsPrintOpStats()
-    @ccall mlir_c.mlirCreateTransformsPrintOpStats()::MlirPass
-end
-
-function mlirRegisterTransformsPrintOpStats()
-    @ccall mlir_c.mlirRegisterTransformsPrintOpStats()::Cvoid
-end
-
-function mlirCreateTransformsRemoveDeadValues()
-    @ccall mlir_c.mlirCreateTransformsRemoveDeadValues()::MlirPass
-end
-
-function mlirRegisterTransformsRemoveDeadValues()
-    @ccall mlir_c.mlirRegisterTransformsRemoveDeadValues()::Cvoid
-end
-
-function mlirCreateTransformsSCCP()
-    @ccall mlir_c.mlirCreateTransformsSCCP()::MlirPass
-end
-
-function mlirRegisterTransformsSCCP()
-    @ccall mlir_c.mlirRegisterTransformsSCCP()::Cvoid
-end
-
-function mlirCreateTransformsSROA()
-    @ccall mlir_c.mlirCreateTransformsSROA()::MlirPass
-end
-
-function mlirRegisterTransformsSROA()
-    @ccall mlir_c.mlirRegisterTransformsSROA()::Cvoid
-end
-
-function mlirCreateTransformsStripDebugInfo()
-    @ccall mlir_c.mlirCreateTransformsStripDebugInfo()::MlirPass
-end
-
-function mlirRegisterTransformsStripDebugInfo()
-    @ccall mlir_c.mlirRegisterTransformsStripDebugInfo()::Cvoid
-end
-
-function mlirCreateTransformsSymbolDCE()
-    @ccall mlir_c.mlirCreateTransformsSymbolDCE()::MlirPass
-end
-
-function mlirRegisterTransformsSymbolDCE()
-    @ccall mlir_c.mlirRegisterTransformsSymbolDCE()::Cvoid
-end
-
-function mlirCreateTransformsSymbolPrivatize()
-    @ccall mlir_c.mlirCreateTransformsSymbolPrivatize()::MlirPass
-end
-
-function mlirRegisterTransformsSymbolPrivatize()
-    @ccall mlir_c.mlirRegisterTransformsSymbolPrivatize()::Cvoid
-end
-
-function mlirCreateTransformsTopologicalSort()
-    @ccall mlir_c.mlirCreateTransformsTopologicalSort()::MlirPass
-end
-
-function mlirRegisterTransformsTopologicalSort()
-    @ccall mlir_c.mlirRegisterTransformsTopologicalSort()::Cvoid
-end
-
-function mlirCreateTransformsViewOpGraph()
-    @ccall mlir_c.mlirCreateTransformsViewOpGraph()::MlirPass
-end
-
-function mlirRegisterTransformsViewOpGraph()
-    @ccall mlir_c.mlirRegisterTransformsViewOpGraph()::Cvoid
-end
-
 function stablehloScatterDimensionNumbersGet(
     ctx,
     nUpdateWindowDims,
@@ -10909,6 +9765,341 @@ end
 
 function stablehloResultAccuracyAttrGetMode(attr)
     @ccall mlir_c.stablehloResultAccuracyAttrGetMode(attr::MlirAttribute)::MlirAttribute
+end
+
+function sdyAttributeIsAMeshAxisAttr(attr)
+    @ccall mlir_c.sdyAttributeIsAMeshAxisAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyMeshAxisAttrGet(ctx, name, size)
+    @ccall mlir_c.sdyMeshAxisAttrGet(
+        ctx::MlirContext, name::MlirStringRef, size::Int64
+    )::MlirAttribute
+end
+
+function sdyMeshAxisAttrGetName(attr)
+    @ccall mlir_c.sdyMeshAxisAttrGetName(attr::MlirAttribute)::MlirStringRef
+end
+
+function sdyMeshAxisAttrGetSize(attr)
+    @ccall mlir_c.sdyMeshAxisAttrGetSize(attr::MlirAttribute)::Int64
+end
+
+function sdyAttributeIsAMeshAttr(attr)
+    @ccall mlir_c.sdyAttributeIsAMeshAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyMeshAttrGet(ctx, nAxes, axes, nDeviceIds, deviceIds)
+    @ccall mlir_c.sdyMeshAttrGet(
+        ctx::MlirContext,
+        nAxes::intptr_t,
+        axes::Ptr{MlirAttribute},
+        nDeviceIds::intptr_t,
+        deviceIds::Ptr{Int64},
+    )::MlirAttribute
+end
+
+function sdyMeshAttrGetDeviceIdsSize(attr)
+    @ccall mlir_c.sdyMeshAttrGetDeviceIdsSize(attr::MlirAttribute)::Int64
+end
+
+function sdyMeshAttrGetDeviceIdsElem(attr, pos)
+    @ccall mlir_c.sdyMeshAttrGetDeviceIdsElem(attr::MlirAttribute, pos::Int64)::Int64
+end
+
+function sdyMeshAttrGetAxesSize(attr)
+    @ccall mlir_c.sdyMeshAttrGetAxesSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyMeshAttrGetAxesElem(attr, pos)
+    @ccall mlir_c.sdyMeshAttrGetAxesElem(attr::MlirAttribute, pos::intptr_t)::MlirAttribute
+end
+
+function sdyAttributeIsASubAxisInfoAttr(attr)
+    @ccall mlir_c.sdyAttributeIsASubAxisInfoAttr(attr::MlirAttribute)::Bool
+end
+
+function sdySubAxisInfoAttrGet(ctx, preSize, size)
+    @ccall mlir_c.sdySubAxisInfoAttrGet(
+        ctx::MlirContext, preSize::Int64, size::Int64
+    )::MlirAttribute
+end
+
+function sdySubAxisInfoAttrGetPreSize(attr)
+    @ccall mlir_c.sdySubAxisInfoAttrGetPreSize(attr::MlirAttribute)::Int64
+end
+
+function sdySubAxisInfoAttrGetSize(attr)
+    @ccall mlir_c.sdySubAxisInfoAttrGetSize(attr::MlirAttribute)::Int64
+end
+
+function sdyAttributeIsAnAxisRefAttr(attr)
+    @ccall mlir_c.sdyAttributeIsAnAxisRefAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyAxisRefAttrGet(ctx, name, subAxisInfo)
+    @ccall mlir_c.sdyAxisRefAttrGet(
+        ctx::MlirContext, name::MlirStringRef, subAxisInfo::MlirAttribute
+    )::MlirAttribute
+end
+
+function sdyAxisRefAttrGetName(attr)
+    @ccall mlir_c.sdyAxisRefAttrGetName(attr::MlirAttribute)::MlirStringRef
+end
+
+function sdyAxisRefAttrGetSubAxisInfo(attr)
+    @ccall mlir_c.sdyAxisRefAttrGetSubAxisInfo(attr::MlirAttribute)::MlirAttribute
+end
+
+function sdyAttributeIsADimensionShardingAttr(attr)
+    @ccall mlir_c.sdyAttributeIsADimensionShardingAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyDimensionShardingAttrGet(ctx, nAxes, axes, isClosed, priority)
+    @ccall mlir_c.sdyDimensionShardingAttrGet(
+        ctx::MlirContext,
+        nAxes::intptr_t,
+        axes::Ptr{MlirAttribute},
+        isClosed::Bool,
+        priority::Int64,
+    )::MlirAttribute
+end
+
+function sdyDimensionShardingAttrGetAxesSize(attr)
+    @ccall mlir_c.sdyDimensionShardingAttrGetAxesSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyDimensionShardingAttrGetAxesElem(attr, pos)
+    @ccall mlir_c.sdyDimensionShardingAttrGetAxesElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirAttribute
+end
+
+function sdyDimensionShardingAttrGetIsClosed(attr)
+    @ccall mlir_c.sdyDimensionShardingAttrGetIsClosed(attr::MlirAttribute)::Bool
+end
+
+function sdyDimensionShardingAttrGetPriority(attr)
+    @ccall mlir_c.sdyDimensionShardingAttrGetPriority(attr::MlirAttribute)::Int64
+end
+
+function sdyAttributeIsATensorShardingAttr(attr)
+    @ccall mlir_c.sdyAttributeIsATensorShardingAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyTensorShardingAttrGet(
+    ctx, meshOrRef, nDimShardings, dimShardings, nReplicatedAxes, replicatedAxes
+)
+    @ccall mlir_c.sdyTensorShardingAttrGet(
+        ctx::MlirContext,
+        meshOrRef::MlirAttribute,
+        nDimShardings::intptr_t,
+        dimShardings::Ptr{MlirAttribute},
+        nReplicatedAxes::intptr_t,
+        replicatedAxes::Ptr{MlirAttribute},
+    )::MlirAttribute
+end
+
+function sdyTensorShardingAttrGetMeshOrRef(attr)
+    @ccall mlir_c.sdyTensorShardingAttrGetMeshOrRef(attr::MlirAttribute)::MlirAttribute
+end
+
+function sdyTensorShardingAttrGetDimShardingsSize(attr)
+    @ccall mlir_c.sdyTensorShardingAttrGetDimShardingsSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyTensorShardingAttrGetDimShardingsElem(attr, pos)
+    @ccall mlir_c.sdyTensorShardingAttrGetDimShardingsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirAttribute
+end
+
+function sdyTensorShardingAttrGetReplicatedAxesSize(attr)
+    @ccall mlir_c.sdyTensorShardingAttrGetReplicatedAxesSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyTensorShardingAttrGetReplicatedAxesElem(attr, pos)
+    @ccall mlir_c.sdyTensorShardingAttrGetReplicatedAxesElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirAttribute
+end
+
+function sdyAttributeIsATensorShardingPerValueAttr(attr)
+    @ccall mlir_c.sdyAttributeIsATensorShardingPerValueAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyTensorShardingPerValueAttrGet(ctx, nShardings, shardings)
+    @ccall mlir_c.sdyTensorShardingPerValueAttrGet(
+        ctx::MlirContext, nShardings::intptr_t, shardings::Ptr{MlirAttribute}
+    )::MlirAttribute
+end
+
+function sdyTensorShardingPerValueAttrGetShardingsSize(attr)
+    @ccall mlir_c.sdyTensorShardingPerValueAttrGetShardingsSize(
+        attr::MlirAttribute
+    )::intptr_t
+end
+
+function sdyTensorShardingPerValueAttrGetShardingsElem(attr, pos)
+    @ccall mlir_c.sdyTensorShardingPerValueAttrGetShardingsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirAttribute
+end
+
+function sdyAttributeIsADimMappingAttr(attr)
+    @ccall mlir_c.sdyAttributeIsADimMappingAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyDimMappingAttrGet(ctx, nFactorIndices, factorIndices)
+    @ccall mlir_c.sdyDimMappingAttrGet(
+        ctx::MlirContext, nFactorIndices::intptr_t, factorIndices::Ptr{Int64}
+    )::MlirAttribute
+end
+
+function sdyDimMappingAttrGetFactorIndicesSize(attr)
+    @ccall mlir_c.sdyDimMappingAttrGetFactorIndicesSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyDimMappingAttrGetFactorIndicesElem(attr, pos)
+    @ccall mlir_c.sdyDimMappingAttrGetFactorIndicesElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::Int64
+end
+
+function sdyAttributeIsATensorMappingAttr(attr)
+    @ccall mlir_c.sdyAttributeIsATensorMappingAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyTensorMappingAttrGet(ctx, nMappings, mappings)
+    @ccall mlir_c.sdyTensorMappingAttrGet(
+        ctx::MlirContext, nMappings::intptr_t, mappings::Ptr{MlirAttribute}
+    )::MlirAttribute
+end
+
+function sdyTensorMappingAttrGetRank(attr)
+    @ccall mlir_c.sdyTensorMappingAttrGetRank(attr::MlirAttribute)::intptr_t
+end
+
+function sdyTensorMappingAttrGetDimMappingsSize(attr)
+    @ccall mlir_c.sdyTensorMappingAttrGetDimMappingsSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyTensorMappingAttrGetDimMappingsElem(attr, pos)
+    @ccall mlir_c.sdyTensorMappingAttrGetDimMappingsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirAttribute
+end
+
+function sdyAttributeIsAOpShardingRuleAttr(attr)
+    @ccall mlir_c.sdyAttributeIsAOpShardingRuleAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyOpShardingRuleAttrGet(
+    ctx,
+    nFactorSizes,
+    factorSizes,
+    nOperandMappings,
+    operandMappings,
+    nResultMappings,
+    resultMappings,
+    nReductionFactors,
+    reductionFactors,
+    nNeedReplicationFactors,
+    needReplicationFactors,
+    isCustomRule,
+)
+    @ccall mlir_c.sdyOpShardingRuleAttrGet(
+        ctx::MlirContext,
+        nFactorSizes::intptr_t,
+        factorSizes::Ptr{Int64},
+        nOperandMappings::intptr_t,
+        operandMappings::Ptr{MlirAttribute},
+        nResultMappings::intptr_t,
+        resultMappings::Ptr{MlirAttribute},
+        nReductionFactors::intptr_t,
+        reductionFactors::Ptr{Int64},
+        nNeedReplicationFactors::intptr_t,
+        needReplicationFactors::Ptr{Int64},
+        isCustomRule::Bool,
+    )::MlirAttribute
+end
+
+function sdyOpShardingRuleAttrGetIsCustom(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetIsCustom(attr::MlirAttribute)::Bool
+end
+
+function sdyOpShardingRuleAttrGetFactorSizesSize(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetFactorSizesSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyOpShardingRuleAttrGetFactorSizesElem(attr, pos)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetFactorSizesElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::Int64
+end
+
+function sdyOpShardingRuleAttrGetOperandMappingsSize(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetOperandMappingsSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyOpShardingRuleAttrGetOperandMappingsElem(attr, pos)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetOperandMappingsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirAttribute
+end
+
+function sdyOpShardingRuleAttrGetResultMappingsSize(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetResultMappingsSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyOpShardingRuleAttrGetResultMappingsElem(attr, pos)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetResultMappingsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirAttribute
+end
+
+function sdyOpShardingRuleAttrGetReductionFactorsSize(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetReductionFactorsSize(
+        attr::MlirAttribute
+    )::intptr_t
+end
+
+function sdyOpShardingRuleAttrGetReductionFactorsElem(attr, pos)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetReductionFactorsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::Int64
+end
+
+function sdyOpShardingRuleAttrGetNeedReplicationFactorsSize(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetNeedReplicationFactorsSize(
+        attr::MlirAttribute
+    )::intptr_t
+end
+
+function sdyOpShardingRuleAttrGetNeedReplicationFactorsElem(attr, pos)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetNeedReplicationFactorsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::Int64
+end
+
+function sdyAttributeIsAManualAxesAttr(attr)
+    @ccall mlir_c.sdyAttributeIsAManualAxesAttr(attr::MlirAttribute)::Bool
+end
+
+function sdyManualAxesAttrGet(ctx, nAxes, axes)
+    @ccall mlir_c.sdyManualAxesAttrGet(
+        ctx::MlirContext, nAxes::intptr_t, axes::Ptr{MlirAttribute}
+    )::MlirAttribute
+end
+
+function sdyManualAxesAttrGetAxesSize(attr)
+    @ccall mlir_c.sdyManualAxesAttrGetAxesSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyManualAxesAttrGetAxesElem(attr, pos)
+    @ccall mlir_c.sdyManualAxesAttrGetAxesElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirStringRef
 end
 
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1
