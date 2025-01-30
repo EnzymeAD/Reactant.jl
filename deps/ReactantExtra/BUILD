@@ -565,6 +565,7 @@ cc_library(
         "@llvm-project//mlir:CAPILLVMObjects",
         "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
         "@jax//jaxlib/triton:triton_dialect_capi_objects",
+        "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
     ] + select({
         "@xla//xla/tsl:is_cuda_enabled_and_oss":[
             "@xla//xla/stream_executor/cuda:all_runtime",
@@ -574,7 +575,6 @@ cc_library(
             "@xla//xla/service/gpu:gpu_transfer_manager",
             "@xla//xla/stream_executor:kernel",
             "@xla//xla/backends/profiler/gpu:device_tracer",
-            "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         ],
         "//conditions:default": [
         ],
