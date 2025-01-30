@@ -43,11 +43,14 @@ end
 
 include("mlir/MLIR.jl")
 include("XLA.jl")
+include("Sharding.jl")
 include("Devices.jl")
 include("Interpreter.jl")
 include("Profiler.jl")
 
 const with_profiler = Profiler.with_profiler
+
+export Sharding
 
 include("utils.jl")
 
