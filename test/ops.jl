@@ -1,5 +1,6 @@
 using Reactant, Test
 using Reactant: Ops
+using Reactant.MLIR.Dialects: stablehlo
 using LinearAlgebra
 using SpecialFunctions: SpecialFunctions
 
@@ -270,8 +271,8 @@ end
 end
 
 @testset "fft" begin
-    grfft(x) = Ops.fft(x; type="RFFT", length=[4])
-    gfft(x) = Ops.fft(x; type="FFT", length=[4])
+    grfft(x) = Ops.fft(x; type=stablehlo.FftType.RFFT, length=[4])
+    gfft(x) = Ops.fft(x; type=stablehlo.FftType.FFT, length=[4])
 
     x = ConcreteRArray([1.0, 1.0, 1.0, 1.0])
     @test ComplexF64[4.0, 0.0, 0.0] ≈ @jit grfft(x)
@@ -545,7 +546,7 @@ end
     genFloat64(seed) = Ops.rng_bit_generator(Float64, seed, [2, 4])
 
     @testset for (alg, sz) in
-                 [("DEFAULT", 2), ("PHILOX", 2), ("PHILOX", 3), ("THREE_FRY", 2)]
+                 [(stablehlo.RngAlgorithm.DEFAULT, 2), (stablehlo.RngAlgorithm.PHILOX, 2), (stablehlo.RngAlgorithm.PHILOX, 3), (stablehlo.RngAlgorithm.THREE_FRY, 2)]
         seed = ConcreteRArray(zeros(UInt64, sz))
 
         res = @jit genInt32(seed)

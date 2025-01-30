@@ -70,7 +70,7 @@ end
 @noinline function constant(
     x::DenseArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
-    value = MLIR.IR.DenseElementsAttribute(x)
+    value = MLIR.IR.DenseElements(x)
     output = mlir_type(TracedRArray{T,N}, size(x))
     res = MLIR.IR.result(stablehlo.constant(; output, value, location))
     return TracedRArray{T,N}((), res, size(x))
@@ -293,7 +293,7 @@ end
     # HLO reshape semantics collapse the opposite way
     res1 = transpose(x, Int64[N:-1:1...])
     restype = mlir_type(TracedRArray{T,length(dims)}, collect(Base.reverse(dims)))
-    res = MLIR.IR.result(stablehlo.reshape(res1.mlir_data; result_0=restype, location))
+    res = MLIR.IR.result(stablehlo.reshape(res1.mlir_data; result=restype, location))
     result = TracedRArray{T,length(dims)}((), res, collect(Base.reverse(dims)))
     # NOTE this last `transpose` is required for consistency with Julia's column-major order
     # do not remove, as it will be optimized away by the compiler
@@ -305,10 +305,10 @@ end
     dim;
     location=mlir_stacktrace("get_dimension_size", @__FILE__, @__LINE__),
 ) where {T,N}
-    dimension = MLIR.IR.Attribute(dim - 1)
+    dimension = dim - 1
     res = MLIR.IR.result(
         stablehlo.get_dimension_size(
-            x.mlir_data; result_0=mlir_type(TracedRArray{Int32,0}, ()), dimension, location
+            x.mlir_data; result=mlir_type(TracedRArray{Int32,0}, ()), dimension, location
         ),
     )
     return TracedRNumber{Int32}((), res)
@@ -320,7 +320,7 @@ end
     dim::Int;
     location=mlir_stacktrace("set_dimension_size", @__FILE__, @__LINE__),
 ) where {T,N}
-    dimension = MLIR.IR.Attribute(dim - 1)
+    dimension = dim - 1
     res = MLIR.IR.result(
         stablehlo.set_dimension_size(
             x.mlir_data,
@@ -341,7 +341,6 @@ end
     rsize = permute!(collect(size(x)), permutation)
     permutation = permutation .- 1
     result = mlir_type(TracedRArray{T,N}, rsize)
-    permutation = MLIR.IR.DenseArrayAttribute(permutation)
     res = MLIR.IR.result(stablehlo.transpose(x.mlir_data; result, permutation, location))
     return TracedRArray{T,N}((), res, rsize)
 end
@@ -360,9 +359,9 @@ end
         stablehlo.pad(
             x.mlir_data,
             padding_value.mlir_data;
-            edge_padding_low=MLIR.IR.DenseArrayAttribute(low),
-            edge_padding_high=MLIR.IR.DenseArrayAttribute(high),
-            interior_padding=MLIR.IR.DenseArrayAttribute(interior),
+            edge_padding_low=low,
+            edge_padding_high=high,
+            interior_padding=interior,
             location,
         ),
     )
@@ -384,10 +383,10 @@ end
     res = MLIR.IR.result(
         stablehlo.slice(
             x.mlir_data;
-            result_0=mlir_type(TracedRArray{T,N}, rsize),
-            start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
-            limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
-            strides=MLIR.IR.DenseArrayAttribute(strides),
+            result=mlir_type(TracedRArray{T,N}, rsize),
+            start_indices,
+            limit_indices,
+            strides,
             location,
         ),
     )
@@ -480,24 +479,24 @@ end
 
 @noinline function fft(
     x::TracedRArray{T,N};
-    type::String,
+    type::stablehlo.FftType.T,
     length,
     location=mlir_stacktrace("fft", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert 1 <= Base.length(length) <= 3 "fft only supports up to rank 3"
 
-    if type ∈ ("FFT", "IFFT")
+    if type ∈ (stablehlo.FftType.FFT, stablehlo.FftType.IFFT)
         @assert T <: Complex
         Tout = T
         rsize = size(x)
-    elseif type == "RFFT"
+    elseif type == stablehlo.FftType.RFFT
         @assert T <: Real
         Tout = Complex{T}
         rsize = let rsize = collect(size(x))
             rsize[end] = rsize[end] == 0 ? 0 : rsize[end] ÷ 2 + 1
             Tuple(rsize)
         end
-    elseif type == "IRFFT"
+    elseif type == stablehlo.FftType.IRFFT
         @assert T <: Complex
         Tout = Base.real(T)
         rsize = let rsize = collect(size(x))
@@ -511,9 +510,9 @@ end
     res = MLIR.IR.result(
         stablehlo.fft(
             x.mlir_data;
-            result_0=mlir_type(TracedRArray{Tout,N}, rsize),
-            fft_type=MLIR.API.stablehloFftTypeAttrGet(MLIR.IR.context(), type),
-            fft_length=MLIR.IR.DenseArrayAttribute(length),
+            result=mlir_type(TracedRArray{Tout,N}, rsize),
+            fft_type=type,
+            fft_length=length,
             location,
         ),
     )
@@ -525,7 +524,6 @@ end
     lower::Bool=false,
     location=mlir_stacktrace("cholesky", @__FILE__, @__LINE__),
 ) where {T,N}
-    lower = MLIR.IR.Attribute(lower)
     res = MLIR.IR.result(
         stablehlo.cholesky(
             x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), lower, location
@@ -684,29 +682,8 @@ end
     lhs_contracting_dimensions = lhs_contracting_dimensions .- 1
     rhs_contracting_dimensions = rhs_contracting_dimensions .- 1
 
-    dot_dimension_numbers = GC.@preserve lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
-        MLIR.IR.Attribute(
-            MLIR.API.stablehloDotDimensionNumbersGet(
-                ctx,
-                length(lhs_batching_dimensions),
-                lhs_batching_dimensions,
-                length(rhs_batching_dimensions),
-                rhs_batching_dimensions,
-                length(lhs_contracting_dimensions),
-                lhs_contracting_dimensions,
-                length(rhs_contracting_dimensions),
-                rhs_contracting_dimensions,
-            ),
-        )
-    end
-
-    if !isnothing(precision_config)
-        precision_config = MLIR.IR.Attribute([
-            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[1]),
-            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[2]),
-        ])
-    end
-
+    dot_dimension_numbers = stablehlo.Dot(lhs_batching_dimensions, rhs_batching_dimensions, lhs_contracting_dimensions, rhs_contracting_dimensions)
+    algorithm = nothing
     # all or nothing: if one is set, all must be set
     # TODO maybe be more flexible, by setting some defaults?
     if any(
@@ -731,10 +708,7 @@ end
         )
         lhs_precision_type, rhs_precision_type = precision_type
         lhs_component_count, rhs_component_count = component_count
-        algorithm = GC.@preserve begin
-            MLIR.IR.Attribute(
-                MLIR.API.stablehloDotAlgorithmGet(
-                    ctx,
+        algorithm = stablehlo.DotAlgorithm(
                     lhs_precision_type,
                     rhs_precision_type,
                     accumulation_type,
@@ -742,18 +716,14 @@ end
                     rhs_component_count,
                     num_primitive_operations,
                     allow_imprecise_accumulation,
-                ),
-            )
-        end
-    else
-        algorithm = nothing
+                )
     end
 
     res = MLIR.IR.result(
         stablehlo.dot_general(
             lhs.mlir_data,
             rhs.mlir_data;
-            result_0=mlir_type(TracedRArray{T,length(ressize)}, ressize),
+            result=mlir_type(TracedRArray{T,length(ressize)}, ressize),
             dot_dimension_numbers,
             precision_config,
             algorithm,
@@ -782,14 +752,14 @@ end
     end
 
     rsize = Tuple(sizes[i] for i in ic)
-    result_0 = mlir_type(TracedRArray{T,length(ic)}, rsize)
+    result = mlir_type(TracedRArray{T,length(ic)}, rsize)
 
     res = MLIR.IR.result(
         stablehlo.einsum(
             lhs.mlir_data,
             rhs.mlir_data;
-            result_0,
-            einsum_config=MLIR.IR.Attribute(equation),
+            result,
+            einsum_config=equation,
             location,
         ),
     )
@@ -806,11 +776,11 @@ end
 #     ia, ic = split(equation, "->")
 #     sizes = Dict(c => d for (c, d) in zip(ia, size(x)))
 #     rsize = Tuple(sizes[i] for i in ic)
-#     result_0 = mlir_type(TracedRArray{T,length(ic)}, rsize)
+#     result = mlir_type(TracedRArray{T,length(ic)}, rsize)
 
 #     res = MLIR.IR.result(
 #         stablehlo.unary_einsum(
-#             x.mlir_data; result_0, einsum_config=MLIR.IR.Attribute(equation), location
+#             x.mlir_data; result, einsum_config=MLIR.IR.Attribute(equation), location
 #         ),
 #     )
 #     if length(rsize) == 0
@@ -917,11 +887,11 @@ end
     else
         MLIR.IR.Attribute(is_host_transfer)
     end
-    result_0 = map(results) do (typ, shape)
+    result = map(results) do (typ, shape)
         MLIR.IR.TensorType(shape, mlir_type(typ))
     end
     op = stablehlo.recv(
-        token.mlir_data; result_0, channel_handle, is_host_transfer, location
+        token.mlir_data; result, channel_handle, is_host_transfer, location
     )
     return tuple(
         map(enumerate(results)) do (i, (typ, shape))
@@ -949,8 +919,8 @@ function broadcast_in_dim(
     res = MLIR.IR.result(
         stablehlo.broadcast_in_dim(
             x.mlir_data;
-            result_0=MLIR.IR.TensorType(result_size, MLIR.IR.Type(T)),
-            broadcast_dimensions=MLIR.IR.DenseArrayAttribute(dims .- 1),
+            result=MLIR.IR.TensorType(result_size, MLIR.IR.Type(T)),
+            broadcast_dimensions=dims .- 1,
             location,
         ),
     )
@@ -968,8 +938,8 @@ function broadcast_in_dim(
     res = MLIR.IR.result(
         stablehlo.broadcast_in_dim(
             x.mlir_data;
-            result_0=MLIR.IR.TensorType(result_size, MLIR.IR.Type(T)),
-            broadcast_dimensions=MLIR.IR.DenseArrayAttribute(dims .- 1),
+            result=MLIR.IR.TensorType(result_size, MLIR.IR.Type(T)),
+            broadcast_dimensions=dims .- 1,
             location,
         ),
     )
@@ -1018,12 +988,11 @@ end
     MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
     MLIR.IR.rmfromparent!(func)
 
-    dimension = MLIR.IR.Attribute(dimension - 1)
-    is_stable = MLIR.IR.Attribute(is_stable)
+    dimension = dimension - 1
 
     op = stablehlo.sort(
         [x.mlir_data for x in xs];
-        result_0=[mlir_type(typeof(x), size(x)) for x in xs],
+        result=[mlir_type(typeof(x), size(x)) for x in xs],
         dimension,
         is_stable,
         comparator,
@@ -1077,7 +1046,7 @@ end
 )
     N = length(shape)
     output = mlir_type(TracedRArray{T,N}, shape)
-    iota_dimension = MLIR.IR.Attribute(iota_dimension - 1)
+    iota_dimension = iota_dimension - 1
     res = MLIR.IR.result(stablehlo.iota(; output, iota_dimension, location))
     return TracedRArray{T,N}((), res, shape)
 end
@@ -1091,7 +1060,7 @@ end
         stablehlo.reverse(
             x.mlir_data;
             result=mlir_type(TracedRArray{T,N}, size(x)),
-            dimensions=MLIR.IR.DenseArrayAttribute(collect(dimensions .- 1)),
+            dimensions=collect(dimensions .- 1),
             location,
         ),
     )
@@ -1104,7 +1073,7 @@ end
         ::Type{T},
         seed::TracedRArray{UInt64,1},
         shape;
-        algorithm::String="DEFAULT",
+        algorithm::stablehlo.RngAlgorithm.T=stablehlo.RngAlgorithm.DEFAULT,
         location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
     )
 
@@ -1126,21 +1095,19 @@ distribution between 0 and 1. Returns a NamedTuple with the following fields:
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
-    algorithm::String="DEFAULT",
+    algorithm::stablehlo.RngAlgorithm.T=stablehlo.RngAlgorithm.DEFAULT,
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
 ) where {T<:Integer}
-    @assert algorithm in ("DEFAULT", "PHILOX", "THREE_FRY")
-    if algorithm == "PHILOX"
+    if algorithm == stablehlo.RngAlgorithm.PHILOX
         @assert length(seed) ∈ (2, 3)
-    elseif algorithm == "THREE_FRY"
+    elseif algorithm == stablehlo.RngAlgorithm.THREE_FRY
         @assert length(seed) == 2
     end
 
     output = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
     output_state = MLIR.IR.TensorType(size(seed), MLIR.IR.Type(UInt64))
-    rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
     op = stablehlo.rng_bit_generator(
-        seed.mlir_data; output, output_state, rng_algorithm, location
+        seed.mlir_data; output, output_state, rng_algorithm = algorithm, location
     )
     return (;
         output_state=TracedRArray{UInt64,1}((), MLIR.IR.result(op, 1), size(seed)),
@@ -1152,7 +1119,7 @@ end
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
-    algorithm::String="DEFAULT",
+    algorithm::stablehlo.RngAlgorithm.T=stablehlo.RngAlgorithm.DEFAULT,
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
 ) where {T<:AbstractFloat}
     nbits = sizeof(T) * 8
@@ -1170,7 +1137,7 @@ end
         ::Type{T},
         seed::TracedRArray{UInt64,1},
         shape;
-        algorithm::String="DEFAULT",
+        algorithm::stablehlo.RngAlgorithm.T=stablehlo.RngAlgorithm.DEFAULT,
         location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
     )
 
@@ -1193,7 +1160,7 @@ fields:
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
-    algorithm::String="DEFAULT",
+    algorithm::stablehlo.RngAlgorithm.T=stablehlo.RngAlgorithm.DEFAULT,
     location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
 ) where {T}
     res = rng_bit_generator(T, seed, shape; algorithm, location)
@@ -1213,7 +1180,7 @@ end
         ::Type{T},
         seed::TracedRArray{UInt64,1},
         shape;
-        algorithm::String="DEFAULT",
+        algorithm::stablehlo.RngAlgorithm.T=stablehlo.RngAlgorithm.DEFAULT,
         location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
     )
 
@@ -1235,7 +1202,7 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
-    algorithm::String="DEFAULT",
+    algorithm::stablehlo.RngAlgorithm.T=stablehlo.RngAlgorithm.DEFAULT,
     location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
 ) where {T}
     res = rng_bit_generator(T, seed, shape; algorithm, location)
@@ -1291,20 +1258,17 @@ end
 @noinline function compare(
     lhs::AT,
     rhs::AT;
-    comparison_direction::String,
+    comparison_direction::stablehlo.ComparisonDirection.T,
     compare_type=nothing,
     location=mlir_stacktrace("compare", @__FILE__, @__LINE__),
 ) where {AT<:Union{TracedRArray,TracedRNumber}}
-    @assert comparison_direction in ("EQ", "NE", "GE", "GT", "LE", "LT")
     @assert size(lhs) == size(rhs)
 
     res = MLIR.IR.result(
         stablehlo.compare(
             lhs.mlir_data,
             rhs.mlir_data;
-            comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                MLIR.IR.context(), comparison_direction
-            ),
+            comparison_direction,
             compare_type,
             location,
         ),
@@ -1449,8 +1413,8 @@ julia> Reactant.@jit(
     operands = [a.mlir_data for a in args]
     call = MLIR.Dialects.func.call(
         operands;
-        result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
-        callee=MLIR.IR.FlatSymbolRefAttribute(name_to_call),
+        result=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
+        callee=MLIR.IR.FlatSymbol(name_to_call),
         location,
     )
 
@@ -1504,13 +1468,12 @@ instead.
     scatter_dims_to_operand_dims = collect(Int64, 0:(N - 1))
     index_vector_dim = Int64(1)
 
-    scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
-        MLIR.IR.context(),
-        length(update_window_dims), update_window_dims,
-        length(inserted_window_dims), inserted_window_dims,
-        length(input_batching_dims), input_batching_dims,
-        length(scatter_indices_batching_dims), scatter_indices_batching_dims,
-        length(scatter_dims_to_operand_dims), scatter_dims_to_operand_dims,
+    scatter_dimension_numbers = stablehlo.Scatter(
+        update_window_dims,
+        inserted_window_dims,
+        input_batching_dims,
+        scatter_indices_batching_dims,
+        scatter_dims_to_operand_dims,
         index_vector_dim,
     )
     #! format: on
@@ -1522,7 +1485,7 @@ instead.
                 [dest.mlir_data],
                 scatter_indices.mlir_data,
                 [updates.mlir_data];
-                result_0=[mlir_type(TracedRArray{T,N}, size(dest))],
+                result=[mlir_type(TracedRArray{T,N}, size(dest))],
                 update_computation,
                 scatter_dimension_numbers,
             ),
@@ -1552,14 +1515,13 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
     start_index_map = collect(Int64, 0:(N - 1))
     index_vector_dim = Int64(1)
 
-    dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
-        MLIR.IR.context(),
-        Int64(length(offset_dims)), offset_dims,
-        Int64(length(collapsed_slice_dims)), collapsed_slice_dims,
-        Int64(length(operand_batching_dims)), operand_batching_dims,
-        Int64(length(start_indices_batching_dims)), start_indices_batching_dims,
-        Int64(length(start_index_map)), start_index_map,
-        Int64(index_vector_dim),
+    dimension_numbers = stablehlo.Gather(
+        offset_dims,
+        collapsed_slice_dims,
+        operand_batching_dims,
+        start_indices_batching_dims,
+        start_index_map,
+        index_vector_dim
     )
     #! format: on
 
@@ -1631,7 +1593,7 @@ end
 
     while_op = MLIR.Dialects.stablehlo.while_(
         MLIR.IR.Value[Reactant.TracedUtils.get_mlir_data(arg) for arg in linear_args];
-        result_0=input_types,
+        result=input_types,
         cond=cond_reg,
         body=body_reg,
     )
@@ -1680,7 +1642,7 @@ end
     ]
 
     input_types = [mlir_type(arg) for arg in tb_linear_args]
-    sym_visibility = MLIR.IR.Attribute("private")
+    sym_visibility = "private"
 
     # compile the true branch without any returns first
     true_fn_mod = MLIR.IR.mmodule()
@@ -1961,7 +1923,7 @@ end
     MLIR.IR.rmfromparent!(false_fn_compiled)
 
     if_compiled = MLIR.Dialects.stablehlo.if_(
-        cond.mlir_data; true_branch=tb_region, false_branch=fb_region, result_0=result_types
+        cond.mlir_data; true_branch=tb_region, false_branch=fb_region, result=result_types
     )
 
     corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr

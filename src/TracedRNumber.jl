@@ -1,7 +1,7 @@
 module TracedRNumberOverrides
 
 using ..Reactant:
-    Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
+    Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype, MLIR.Dialects.stablehlo.ComparisonDirection
 using ReactantCore
 
 ReactantCore.is_traced(::TracedRNumber) = true
@@ -122,13 +122,13 @@ function Base.:/(
 end
 
 for (jlop, hloop, hlocomp) in (
-    (:(Base.:(==)), :compare, "EQ"),
-    (:(Base.:(!=)), :compare, "NE"),
-    (:(Base.:(>=)), :compare, "GE"),
-    (:(Base.:(>)), :compare, "GT"),
-    (:(Base.:(<=)), :compare, "LE"),
-    (:(Base.:(<)), :compare, "LT"),
-    (:(Base.isless), :compare, "LT"),
+    (:(Base.:(==)), :compare, ComparisonDirection.EQ),
+    (:(Base.:(!=)), :compare, ComparisonDirection.NE),
+    (:(Base.:(>=)), :compare, ComparisonDirection.GE),
+    (:(Base.:(>)), :compare, ComparisonDirection.GT),
+    (:(Base.:(<=)), :compare, ComparisonDirection.LE),
+    (:(Base.:(<)), :compare, ComparisonDirection.LT),
+    (:(Base.isless), :compare, ComparisonDirection.LT),
 )
     @eval begin
         function $(jlop)(

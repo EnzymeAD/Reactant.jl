@@ -66,7 +66,7 @@ function Base.getindex(
     )
     res2 = MLIR.IR.result(
         MLIR.Dialects.stablehlo.reshape(
-            res1; result_0=MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(res1)))
+            res1; result=MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(res1)))
         ),
         1,
     )
@@ -496,7 +496,7 @@ function Base.mapreduce(
     body = MLIR.IR.Region()
     push!(body, fnbody)
     red = MLIR.Dialects.stablehlo.reduce(
-        inp, init; result_0=TT, dimensions=MLIR.IR.DenseArrayAttribute(rdims), body
+        inp, init; result=TT, dimensions=rdims, body
     )
 
     red = MLIR.IR.result(red, 1)
@@ -719,7 +719,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
             # TODO maybe we should do some conversion?
             MLIR.Dialects.stablehlo.concatenate(
                 collect(TracedUtils.get_mlir_data.(X));
-                result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
+                result=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
                 dimension=dims - 1, # stablehlo expects this to be zero-indexed
             ),
             1,

@@ -18,6 +18,7 @@ using ..Reactant:
     ConcreteRNumber,
     unwrapped_eltype
 using Random: Random, AbstractRNG
+using Reactant.MLIR.Dialects: stablehlo
 
 @noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =
     Random.rand!(rng, Vector{UInt64}(undef, 2))
@@ -70,12 +71,12 @@ Base.copy(rng::ConcreteRNG) = ConcreteRNG(copy(rng.seed), rng.algorithm)
 Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
 
 @noinline ConcreteRNG() = ConcreteRNG(ConcreteRArray(make_seed()))
-@noinline ConcreteRNG(seed::ConcreteRArray{UInt64,1}) = ConcreteRNG(seed, "DEFAULT")
+@noinline ConcreteRNG(seed::ConcreteRArray{UInt64,1}) = ConcreteRNG(seed, stablehlo.RngAlgorithm.DEFAULT)
 
 @noinline default_rng() = ConcreteRNG()
 
 @noinline rng_algorithm(rng::TracedRNG) = rng.algorithm
-@noinline rng_algorithm(::AbstractRNG) = "DEFAULT"
+@noinline rng_algorithm(::AbstractRNG) = stablehlo.RngAlgorithm.DEFAULT
 
 @noinline function internal_overload_rand!(
     rng::TracedRNG, A::AnyTracedRArray{T,N}
