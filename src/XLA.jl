@@ -15,20 +15,12 @@ end
 
 mutable struct Client
     client::Ptr{Cvoid}
-<<<<<<< HEAD
     global_ordinals::Vector{Cint}
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
         global_ordinals = Cint[]
-=======
-    global_ordinals::Vector{Int32}
 
-    function Client(client::Ptr{Cvoid})
-        @assert client != C_NULL
-
-        global_ordinals = Int32[]
->>>>>>> 78aeca90 (fix: use ExecuteSharded)
         client = new(client, global_ordinals)
 
         # https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L127
@@ -269,27 +261,6 @@ mutable struct Buffer
     function Buffer(buffer::Ptr{Cvoid})
         return finalizer(free_buffer, new(buffer))
     end
-end
-
-struct Device
-    device::Ptr{Cvoid}
-end
-
-function device_ordinal(client::Client, device::Device)
-    return client.global_ordinals[DeviceGetLocalDeviceId(device) + 1]
-end
-
-function DeviceToString(device::Device)
-    pjrtclient = client(device)
-    platform_name = ClientGetPlatformName(pjrtclient)
-    return "$(uppercase(platform_name)):$(device_ordinal(pjrtclient, device))"
-end
-
-function Base.show(io::IO, ::MIME"text/plain", device::Device)
-    pjrtclient = client(device)
-    platform_name = ClientGetPlatformName(pjrtclient)
-    print(io, "Device($(device.device), platform_name=$(platform_name))")
-    return nothing
 end
 
 mutable struct AsyncBuffer
