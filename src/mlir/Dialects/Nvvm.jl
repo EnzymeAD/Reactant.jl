@@ -1,7 +1,7 @@
 module nvvm
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
 
@@ -10,72 +10,80 @@ using EnumX
 `TMAReduxKind`
 NVVM TMA redux kind
 """
-@enumx TMAReduxKind add max min inc dec and or xor 
+@enumx TMAReduxKind ADD MAX MIN INC DEC AND OR XOR 
+TMAReduxKindStorage = ["add", "max", "min", "inc", "dec", "and", "or", "xor"]
 
-IR.Attribute(e::TMAReduxKind.T) = parse(Attribute,"#nvvm<tma_redux_kind <$(string(e))>>")
+IR.Attribute(e::TMAReduxKind.T) = parse(Attribute,"#nvvm<tma_redux_kind <$(TMAReduxKindStorage[Int(e)+1])>>")
 
 
 """
 `TMAStoreMode`
 NVVM TMA Store Mode
 """
-@enumx TMAStoreMode tile im2col 
+@enumx TMAStoreMode TILE IM2COL 
+TMAStoreModeStorage = ["tile", "im2col"]
 
-IR.Attribute(e::TMAStoreMode.T) = parse(Attribute,"#nvvm<tma_store_mode <$(string(e))>>")
+IR.Attribute(e::TMAStoreMode.T) = parse(Attribute,"#nvvm<tma_store_mode <$(TMAStoreModeStorage[Int(e)+1])>>")
 
 
 """
 `LoadCacheModifierKind`
 NVVM load cache modifier kind
 """
-@enumx LoadCacheModifierKind ca cg cs lu cv 
+@enumx LoadCacheModifierKind CA CG CS LU CV 
+LoadCacheModifierKindStorage = ["ca", "cg", "cs", "lu", "cv"]
 
-IR.Attribute(e::LoadCacheModifierKind.T) = parse(Attribute,"#nvvm<load_cache_modifier $value>")
+IR.Attribute(e::LoadCacheModifierKind.T) = parse(Attribute,"#nvvm<load_cache_modifier $(LoadCacheModifierKindStorage[Int(e)+1])>")
 
 
 """
 `FPRoundingMode`
 NVVM FPRoundingMode kind
 """
-@enumx FPRoundingMode none rn rm rp rz rna 
+@enumx FPRoundingMode NONE RN RM RP RZ RNA 
+FPRoundingModeStorage = ["none", "rn", "rm", "rp", "rz", "rna"]
 
-IR.Attribute(e::FPRoundingMode.T) = parse(Attribute,"#nvvm<fp_rnd_mode <$(string(e))>>")
+IR.Attribute(e::FPRoundingMode.T) = parse(Attribute,"#nvvm<fp_rnd_mode <$(FPRoundingModeStorage[Int(e)+1])>>")
 
 
 """
 `SaturationMode`
 NVVM SaturationMode kind
 """
-@enumx SaturationMode none satfinite 
+@enumx SaturationMode NONE SATFINITE 
+SaturationModeStorage = ["none", "satfinite"]
 
-IR.Attribute(e::SaturationMode.T) = parse(Attribute,"#nvvm<sat_mode <$(string(e))>>")
+IR.Attribute(e::SaturationMode.T) = parse(Attribute,"#nvvm<sat_mode <$(SaturationModeStorage[Int(e)+1])>>")
 
 
 """
 `MemScopeKind`
 NVVM Memory Scope kind
 """
-@enumx MemScopeKind cta cluster gpu sys 
+@enumx MemScopeKind CTA CLUSTER GPU SYS 
+MemScopeKindStorage = ["cta", "cluster", "gpu", "sys"]
 
-IR.Attribute(e::MemScopeKind.T) = parse(Attribute,"#nvvm<mem_scope <$(string(e))>>")
+IR.Attribute(e::MemScopeKind.T) = parse(Attribute,"#nvvm<mem_scope <$(MemScopeKindStorage[Int(e)+1])>>")
 
 
 """
 `ProxyKind`
 Proxy kind
 """
-@enumx ProxyKind alias async async_global async_shared tensormap generic 
+@enumx ProxyKind alias async async_global async_shared TENSORMAP GENERIC 
+ProxyKindStorage = ["alias", "async", "async.global", "async.shared", "tensormap", "generic"]
 
-IR.Attribute(e::ProxyKind.T) = parse(Attribute,"#nvvm<proxy_kind <$(string(e))>>")
+IR.Attribute(e::ProxyKind.T) = parse(Attribute,"#nvvm<proxy_kind <$(ProxyKindStorage[Int(e)+1])>>")
 
 
 """
 `SharedSpace`
 Shared memory space
 """
-@enumx SharedSpace cta cluster 
+@enumx SharedSpace shared_cta shared_cluster 
+SharedSpaceStorage = ["cta", "cluster"]
 
-IR.Attribute(e::SharedSpace.T) = parse(Attribute,"#nvvm<shared_space <$(string(e))>>")
+IR.Attribute(e::SharedSpace.T) = parse(Attribute,"#nvvm<shared_space <$(SharedSpaceStorage[Int(e)+1])>>")
 
 
 """
@@ -83,8 +91,9 @@ IR.Attribute(e::SharedSpace.T) = parse(Attribute,"#nvvm<shared_space <$(string(e
 NVVM MMA layout
 """
 @enumx MMALayout row col 
+MMALayoutStorage = ["row", "col"]
 
-IR.Attribute(e::MMALayout.T) = parse(Attribute,"#nvvm<mma_layout <$(string(e))>>")
+IR.Attribute(e::MMALayout.T) = parse(Attribute,"#nvvm<mma_layout <$(MMALayoutStorage[Int(e)+1])>>")
 
 
 """
@@ -92,8 +101,9 @@ IR.Attribute(e::MMALayout.T) = parse(Attribute,"#nvvm<mma_layout <$(string(e))>>
 MMA binary operations
 """
 @enumx MMAB1Op none xor_popc and_popc 
+MMAB1OpStorage = ["none", "xor_popc", "and_popc"]
 
-IR.Attribute(e::MMAB1Op.T) = parse(Attribute,"#nvvm<mma_b1op <$(string(e))>>")
+IR.Attribute(e::MMAB1Op.T) = parse(Attribute,"#nvvm<mma_b1op <$(MMAB1OpStorage[Int(e)+1])>>")
 
 
 """
@@ -101,8 +111,9 @@ IR.Attribute(e::MMAB1Op.T) = parse(Attribute,"#nvvm<mma_b1op <$(string(e))>>")
 MMA overflow options
 """
 @enumx MMAIntOverflow satfinite wrapped 
+MMAIntOverflowStorage = ["satfinite", "wrapped"]
 
-IR.Attribute(e::MMAIntOverflow.T) = parse(Attribute,"#nvvm<mma_int_overflow <$(string(e))>>")
+IR.Attribute(e::MMAIntOverflow.T) = parse(Attribute,"#nvvm<mma_int_overflow <$(MMAIntOverflowStorage[Int(e)+1])>>")
 
 
 """
@@ -110,17 +121,19 @@ IR.Attribute(e::MMAIntOverflow.T) = parse(Attribute,"#nvvm<mma_int_overflow <$(s
 NVVM MMA types
 """
 @enumx MMATypes f16 f32 tf32 bf16 s8 u8 s32 s4 u4 b1 f64 
+MMATypesStorage = ["f16", "f32", "tf32", "bf16", "s8", "u8", "s32", "s4", "u4", "b1", "f64"]
 
-IR.Attribute(e::MMATypes.T) = parse(Attribute,"#nvvm<mma_type <$(string(e))>>")
+IR.Attribute(e::MMATypes.T) = parse(Attribute,"#nvvm<mma_type <$(MMATypesStorage[Int(e)+1])>>")
 
 
 """
 `ReduxKind`
 NVVM redux kind
 """
-@enumx ReduxKind add and max min or umax umin xor 
+@enumx ReduxKind ADD AND MAX MIN OR UMAX UMIN XOR 
+ReduxKindStorage = ["add", "and", "max", "min", "or", "umax", "umin", "xor"]
 
-IR.Attribute(e::ReduxKind.T) = parse(Attribute,"#nvvm<redux_kind $value>")
+IR.Attribute(e::ReduxKind.T) = parse(Attribute,"#nvvm<redux_kind $(ReduxKindStorage[Int(e)+1])>")
 
 
 """
@@ -128,8 +141,9 @@ IR.Attribute(e::ReduxKind.T) = parse(Attribute,"#nvvm<redux_kind $value>")
 NVVM set max register action
 """
 @enumx SetMaxRegisterAction decrease increase 
+SetMaxRegisterActionStorage = ["decrease", "increase"]
 
-IR.Attribute(e::SetMaxRegisterAction.T) = parse(Attribute,"#nvvm<action $value>")
+IR.Attribute(e::SetMaxRegisterAction.T) = parse(Attribute,"#nvvm<action $(SetMaxRegisterActionStorage[Int(e)+1])>")
 
 
 """
@@ -137,8 +151,9 @@ IR.Attribute(e::SetMaxRegisterAction.T) = parse(Attribute,"#nvvm<action $value>"
 NVVM shuffle kind
 """
 @enumx ShflKind bfly up down idx 
+ShflKindStorage = ["bfly", "up", "down", "idx"]
 
-IR.Attribute(e::ShflKind.T) = parse(Attribute,"#nvvm<shfl_kind $value>")
+IR.Attribute(e::ShflKind.T) = parse(Attribute,"#nvvm<shfl_kind $(ShflKindStorage[Int(e)+1])>")
 
 
 """
@@ -146,8 +161,9 @@ IR.Attribute(e::ShflKind.T) = parse(Attribute,"#nvvm<shfl_kind $value>")
 NVVM MMA frag type
 """
 @enumx MMAFrag a b c 
+MMAFragStorage = ["a", "b", "c"]
 
-IR.Attribute(e::MMAFrag.T) = parse(Attribute,"#nvvm<mma_frag <$(string(e))>>")
+IR.Attribute(e::MMAFrag.T) = parse(Attribute,"#nvvm<mma_frag <$(MMAFragStorage[Int(e)+1])>>")
 
 
 """
@@ -155,8 +171,9 @@ IR.Attribute(e::MMAFrag.T) = parse(Attribute,"#nvvm<mma_frag <$(string(e))>>")
 NVVM WGMMA types
 """
 @enumx WGMMATypes f16 tf32 u8 s8 b1 bf16 e4m3 e5m2 f32 s32 
+WGMMATypesStorage = ["f16", "tf32", "u8", "s8", "b1", "bf16", "e4m3", "e5m2", "f32", "s32"]
 
-IR.Attribute(e::WGMMATypes.T) = parse(Attribute,"#nvvm<wgmma_type <$(string(e))>>")
+IR.Attribute(e::WGMMATypes.T) = parse(Attribute,"#nvvm<wgmma_type <$(WGMMATypesStorage[Int(e)+1])>>")
 
 
 """
@@ -164,8 +181,9 @@ IR.Attribute(e::WGMMATypes.T) = parse(Attribute,"#nvvm<wgmma_type <$(string(e))>
 WGMMA input predicate
 """
 @enumx WGMMAScaleOut zero one 
+WGMMAScaleOutStorage = ["zero", "one"]
 
-IR.Attribute(e::WGMMAScaleOut.T) = parse(Attribute,"#nvvm<wgmma_scale_out <$(string(e))>>")
+IR.Attribute(e::WGMMAScaleOut.T) = parse(Attribute,"#nvvm<wgmma_scale_out <$(WGMMAScaleOutStorage[Int(e)+1])>>")
 
 
 """
@@ -173,12 +191,13 @@ IR.Attribute(e::WGMMAScaleOut.T) = parse(Attribute,"#nvvm<wgmma_scale_out <$(str
 WGMMA overflow options
 """
 @enumx WGMMAScaleIn one neg 
+WGMMAScaleInStorage = ["one", "neg"]
 
-IR.Attribute(e::WGMMAScaleIn.T) = parse(Attribute,"#nvvm<wgmma_scale_in <$(string(e))>>")
+IR.Attribute(e::WGMMAScaleIn.T) = parse(Attribute,"#nvvm<wgmma_scale_in <$(WGMMAScaleInStorage[Int(e)+1])>>")
 
 
 
-function barrier0(; location=Location())
+function barrier0(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -205,7 +224,7 @@ The default barrier id is 0 that is similar to `nvvm.barrier` Op. When
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
 """
-function barrier_arrive(barrierId::Union{Nothing, Value}=nothing; numberOfThreads::Value, location=Location())
+function barrier_arrive(barrierId::Union{Nothing, Value}=nothing; numberOfThreads::Value, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[numberOfThreads, ]
     owned_regions = Region[]
@@ -222,7 +241,7 @@ function barrier_arrive(barrierId::Union{Nothing, Value}=nothing; numberOfThread
 end
 
 
-function barrier(barrierId::Union{Nothing, Value}=nothing; numberOfThreads::Union{Nothing, Value}=nothing, location=Location())
+function barrier(barrierId::Union{Nothing, Value}=nothing; numberOfThreads::Union{Nothing, Value}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -241,7 +260,7 @@ function barrier(barrierId::Union{Nothing, Value}=nothing; numberOfThreads::Unio
 end
 
 
-function read_ptx_sreg_ntid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_ntid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -258,7 +277,7 @@ function read_ptx_sreg_ntid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing
 end
 
 
-function read_ptx_sreg_ntid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_ntid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -275,7 +294,7 @@ function read_ptx_sreg_ntid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing
 end
 
 
-function read_ptx_sreg_ntid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_ntid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -292,7 +311,7 @@ function read_ptx_sreg_ntid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing
 end
 
 
-function read_ptx_sreg_ctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_ctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -309,7 +328,7 @@ function read_ptx_sreg_ctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothin
 end
 
 
-function read_ptx_sreg_ctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_ctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -326,7 +345,7 @@ function read_ptx_sreg_ctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothin
 end
 
 
-function read_ptx_sreg_ctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_ctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -343,7 +362,7 @@ function read_ptx_sreg_ctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothin
 end
 
 
-function read_ptx_sreg_cluster_ctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_cluster_ctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -360,7 +379,7 @@ function read_ptx_sreg_cluster_ctaid_x(; res::IR.Type, range::Union{Any, Nothing
 end
 
 
-function read_ptx_sreg_cluster_ctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_cluster_ctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -377,7 +396,7 @@ function read_ptx_sreg_cluster_ctaid_y(; res::IR.Type, range::Union{Any, Nothing
 end
 
 
-function read_ptx_sreg_cluster_ctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_cluster_ctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -399,7 +418,7 @@ end
 Breakpoint suspends execution of the program for debugging.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#miscellaneous-instructions-brkpt)
 """
-function breakpoint(; location=Location())
+function breakpoint(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -415,7 +434,7 @@ function breakpoint(; location=Location())
 end
 
 
-function read_ptx_sreg_clock64(; res::IR.Type, location=Location())
+function read_ptx_sreg_clock64(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -431,7 +450,7 @@ function read_ptx_sreg_clock64(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_clock(; res::IR.Type, location=Location())
+function read_ptx_sreg_clock(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -458,7 +477,7 @@ The `aligned` attribute, when provided, generates the .aligned version of the PT
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-barrier-cluster)
 """
-function cluster_arrive(; aligned::Union{Bool, Nothing}=nothing, location=Location())
+function cluster_arrive(; aligned::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -489,7 +508,7 @@ ordering and visibility guarantees provided for the memory accesses performed pr
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-barrier-cluster)
 """
-function cluster_arrive_relaxed(; aligned::Union{Bool, Nothing}=nothing, location=Location())
+function cluster_arrive_relaxed(; aligned::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -506,7 +525,7 @@ function cluster_arrive_relaxed(; aligned::Union{Bool, Nothing}=nothing, locatio
 end
 
 
-function read_ptx_sreg_cluster_nctarank(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_cluster_nctarank(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -523,7 +542,7 @@ function read_ptx_sreg_cluster_nctarank(; res::IR.Type, range::Union{Any, Nothin
 end
 
 
-function read_ptx_sreg_cluster_nctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_cluster_nctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -540,7 +559,7 @@ function read_ptx_sreg_cluster_nctaid_x(; res::IR.Type, range::Union{Any, Nothin
 end
 
 
-function read_ptx_sreg_cluster_nctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_cluster_nctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -557,7 +576,7 @@ function read_ptx_sreg_cluster_nctaid_y(; res::IR.Type, range::Union{Any, Nothin
 end
 
 
-function read_ptx_sreg_cluster_nctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_cluster_nctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -574,7 +593,7 @@ function read_ptx_sreg_cluster_nctaid_z(; res::IR.Type, range::Union{Any, Nothin
 end
 
 
-function read_ptx_sreg_nclusterid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_nclusterid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -591,7 +610,7 @@ function read_ptx_sreg_nclusterid_x(; res::IR.Type, range::Union{Any, Nothing}=n
 end
 
 
-function read_ptx_sreg_nclusterid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_nclusterid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -608,7 +627,7 @@ function read_ptx_sreg_nclusterid_y(; res::IR.Type, range::Union{Any, Nothing}=n
 end
 
 
-function read_ptx_sreg_nclusterid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_nclusterid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -625,7 +644,7 @@ function read_ptx_sreg_nclusterid_z(; res::IR.Type, range::Union{Any, Nothing}=n
 end
 
 
-function read_ptx_sreg_cluster_ctarank(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_cluster_ctarank(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -642,7 +661,7 @@ function read_ptx_sreg_cluster_ctarank(; res::IR.Type, range::Union{Any, Nothing
 end
 
 
-function read_ptx_sreg_clusterid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_clusterid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -659,7 +678,7 @@ function read_ptx_sreg_clusterid_x(; res::IR.Type, range::Union{Any, Nothing}=no
 end
 
 
-function read_ptx_sreg_clusterid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_clusterid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -676,7 +695,7 @@ function read_ptx_sreg_clusterid_y(; res::IR.Type, range::Union{Any, Nothing}=no
 end
 
 
-function read_ptx_sreg_clusterid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_clusterid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -702,7 +721,7 @@ generates the .aligned version of the PTX instruction.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-barrier-cluster)
 """
-function cluster_wait(; aligned::Union{Bool, Nothing}=nothing, location=Location())
+function cluster_wait(; aligned::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -727,7 +746,7 @@ instructions into a cp.async.bulk-group.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-commit-group)
 """
-function cp_async_bulk_commit_group(; location=Location())
+function cp_async_bulk_commit_group(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -759,7 +778,7 @@ eviction policy that may be used during the memory access.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
 """
-function cp_async_bulk_shared_cluster_global(dstMem::Value, srcMem::Value, mbar::Value, size::Value, multicastMask::Union{Nothing, Value}=nothing; l2CacheHint::Union{Nothing, Value}=nothing, location=Location())
+function cp_async_bulk_shared_cluster_global(dstMem::Value, srcMem::Value, mbar::Value, size::Value, multicastMask::Union{Nothing, Value}=nothing; l2CacheHint::Union{Nothing, Value}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[dstMem, srcMem, mbar, size, ]
     owned_regions = Region[]
@@ -788,7 +807,7 @@ eviction policy that may be used during the memory access.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
 """
-function cp_async_bulk_global_shared_cta(dstMem::Value, srcMem::Value, size::Value, l2CacheHint::Union{Nothing, Value}=nothing; location=Location())
+function cp_async_bulk_global_shared_cta(dstMem::Value, srcMem::Value, size::Value, l2CacheHint::Union{Nothing, Value}=nothing; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[dstMem, srcMem, size, ]
     owned_regions = Region[]
@@ -813,7 +832,7 @@ cluster memory.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
 """
-function cp_async_bulk_shared_cluster_shared_cta(dstMem::Value, srcMem::Value, mbar::Value, size::Value; location=Location())
+function cp_async_bulk_shared_cluster_shared_cta(dstMem::Value, srcMem::Value, mbar::Value, size::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[dstMem, srcMem, mbar, size, ]
     owned_regions = Region[]
@@ -855,7 +874,7 @@ eviction policy that may be used during the memory access.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-tensor)
 """
-function cp_async_bulk_tensor_shared_cluster_global(dstMem::Value, tmaDescriptor::Value, coordinates::Vector{Value}, mbar::Value, im2colOffsets::Vector{Value}, multicastMask::Union{Nothing, Value}=nothing; l2CacheHint::Union{Nothing, Value}=nothing, predicate::Union{Nothing, Value}=nothing, location=Location())
+function cp_async_bulk_tensor_shared_cluster_global(dstMem::Value, tmaDescriptor::Value, coordinates::Vector{Value}, mbar::Value, im2colOffsets::Vector{Value}, multicastMask::Union{Nothing, Value}=nothing; l2CacheHint::Union{Nothing, Value}=nothing, predicate::Union{Nothing, Value}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[dstMem, tmaDescriptor, coordinates..., mbar, im2colOffsets..., ]
     owned_regions = Region[]
@@ -895,7 +914,7 @@ eviction policy that may be used during the memory access.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-prefetch-tensor)
 """
-function cp_async_bulk_tensor_prefetch(tmaDescriptor::Value, coordinates::Vector{Value}, im2colOffsets::Vector{Value}, l2CacheHint::Union{Nothing, Value}=nothing; location=Location())
+function cp_async_bulk_tensor_prefetch(tmaDescriptor::Value, coordinates::Vector{Value}, im2colOffsets::Vector{Value}, l2CacheHint::Union{Nothing, Value}=nothing; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[tmaDescriptor, coordinates..., im2colOffsets..., ]
     owned_regions = Region[]
@@ -929,7 +948,7 @@ eviction policy that may be used during the memory access.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-reduce-async-bulk-tensor)
 """
-function cp_async_bulk_tensor_reduce(tmaDescriptor::Value, srcMem::Value, coordinates::Vector{Value}, l2CacheHint::Union{Nothing, Value}=nothing; redKind::TMAReduxKind.T, mode::Union{TMAStoreMode.T, Nothing}=nothing, location=Location())
+function cp_async_bulk_tensor_reduce(tmaDescriptor::Value, srcMem::Value, coordinates::Vector{Value}, l2CacheHint::Union{Nothing, Value}=nothing; redKind::TMAReduxKind.T, mode::Union{TMAStoreMode.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[tmaDescriptor, srcMem, coordinates..., ]
     owned_regions = Region[]
@@ -948,7 +967,7 @@ function cp_async_bulk_tensor_reduce(tmaDescriptor::Value, srcMem::Value, coordi
 end
 
 
-function cp_async_bulk_tensor_global_shared_cta(tmaDescriptor::Value, srcMem::Value, coordinates::Vector{Value}, predicate::Union{Nothing, Value}=nothing; location=Location())
+function cp_async_bulk_tensor_global_shared_cta(tmaDescriptor::Value, srcMem::Value, coordinates::Vector{Value}, predicate::Union{Nothing, Value}=nothing; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[tmaDescriptor, srcMem, coordinates..., ]
     owned_regions = Region[]
@@ -981,7 +1000,7 @@ from their source locations.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-wait-group)
 """
-function cp_async_bulk_wait_group(; group::UInt32, read::Union{Bool, Nothing}=nothing, location=Location())
+function cp_async_bulk_wait_group(; group::Int32, read::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -998,7 +1017,7 @@ function cp_async_bulk_wait_group(; group::UInt32, read::Union{Bool, Nothing}=no
 end
 
 
-function cp_async_commit_group(; location=Location())
+function cp_async_commit_group(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1024,7 +1043,7 @@ mbarrier\'s state is updated.
 [For more information, refer PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
 """
-function cp_async_mbarrier_arrive(addr::Value; noinc::Union{Bool, Nothing}=nothing, location=Location())
+function cp_async_mbarrier_arrive(addr::Value; noinc::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, ]
     owned_regions = Region[]
@@ -1050,7 +1069,7 @@ shared memory. The `noinc` attr impacts how the mbarrier\'s state
 is updated. [For more information, refer PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
 """
-function cp_async_mbarrier_arrive_shared(addr::Value; noinc::Union{Bool, Nothing}=nothing, location=Location())
+function cp_async_mbarrier_arrive_shared(addr::Value; noinc::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, ]
     owned_regions = Region[]
@@ -1067,7 +1086,7 @@ function cp_async_mbarrier_arrive_shared(addr::Value; noinc::Union{Bool, Nothing
 end
 
 
-function cp_async_shared_global(dst::Value, src::Value, cpSize::Union{Nothing, Value}=nothing; size::UInt32, modifier::LoadCacheModifierKind.T, location=Location())
+function cp_async_shared_global(dst::Value, src::Value, cpSize::Union{Nothing, Value}=nothing; size::Int32, modifier::LoadCacheModifierKind.T, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[dst, src, ]
     owned_regions = Region[]
@@ -1084,7 +1103,7 @@ function cp_async_shared_global(dst::Value, src::Value, cpSize::Union{Nothing, V
 end
 
 
-function cp_async_wait_group(; n::UInt32, location=Location())
+function cp_async_wait_group(; n::Int32, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1110,7 +1129,7 @@ the rounding and saturation modes respectively.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
-function cvt_float_to_tf32(src::Value; res::IR.Type, rnd::Union{FPRoundingMode.T, Nothing}=nothing, sat::Union{SaturationMode.T, Nothing}=nothing, relu::Union{Bool, Nothing}=nothing, location=Location())
+function cvt_float_to_tf32(src::Value; res::IR.Type, rnd::Union{FPRoundingMode.T, Nothing}=nothing, sat::Union{SaturationMode.T, Nothing}=nothing, relu::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -1140,7 +1159,7 @@ leader thread, and `False` for all other threads.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-elect-sync)
 """
-function elect_sync(; pred::IR.Type, location=Location())
+function elect_sync(; pred::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[pred, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1156,7 +1175,7 @@ function elect_sync(; pred::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg0(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg0(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1172,7 +1191,7 @@ function read_ptx_sreg_envreg0(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg1(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg1(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1188,7 +1207,7 @@ function read_ptx_sreg_envreg1(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg2(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg2(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1204,7 +1223,7 @@ function read_ptx_sreg_envreg2(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg3(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg3(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1220,7 +1239,7 @@ function read_ptx_sreg_envreg3(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg4(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg4(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1236,7 +1255,7 @@ function read_ptx_sreg_envreg4(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg5(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg5(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1252,7 +1271,7 @@ function read_ptx_sreg_envreg5(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg6(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg6(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1268,7 +1287,7 @@ function read_ptx_sreg_envreg6(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg7(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg7(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1284,7 +1303,7 @@ function read_ptx_sreg_envreg7(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg8(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg8(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1300,7 +1319,7 @@ function read_ptx_sreg_envreg8(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg9(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg9(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1316,7 +1335,7 @@ function read_ptx_sreg_envreg9(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg10(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg10(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1332,7 +1351,7 @@ function read_ptx_sreg_envreg10(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg11(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg11(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1348,7 +1367,7 @@ function read_ptx_sreg_envreg11(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg12(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg12(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1364,7 +1383,7 @@ function read_ptx_sreg_envreg12(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg13(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg13(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1380,7 +1399,7 @@ function read_ptx_sreg_envreg13(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg14(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg14(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1396,7 +1415,7 @@ function read_ptx_sreg_envreg14(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg15(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg15(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1412,7 +1431,7 @@ function read_ptx_sreg_envreg15(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg16(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg16(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1428,7 +1447,7 @@ function read_ptx_sreg_envreg16(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg17(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg17(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1444,7 +1463,7 @@ function read_ptx_sreg_envreg17(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg18(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg18(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1460,7 +1479,7 @@ function read_ptx_sreg_envreg18(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg19(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg19(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1476,7 +1495,7 @@ function read_ptx_sreg_envreg19(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg20(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg20(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1492,7 +1511,7 @@ function read_ptx_sreg_envreg20(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg21(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg21(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1508,7 +1527,7 @@ function read_ptx_sreg_envreg21(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg22(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg22(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1524,7 +1543,7 @@ function read_ptx_sreg_envreg22(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg23(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg23(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1540,7 +1559,7 @@ function read_ptx_sreg_envreg23(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg24(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg24(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1556,7 +1575,7 @@ function read_ptx_sreg_envreg24(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg25(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg25(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1572,7 +1591,7 @@ function read_ptx_sreg_envreg25(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg26(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg26(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1588,7 +1607,7 @@ function read_ptx_sreg_envreg26(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg27(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg27(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1604,7 +1623,7 @@ function read_ptx_sreg_envreg27(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg28(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg28(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1620,7 +1639,7 @@ function read_ptx_sreg_envreg28(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg29(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg29(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1636,7 +1655,7 @@ function read_ptx_sreg_envreg29(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg30(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg30(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1652,7 +1671,7 @@ function read_ptx_sreg_envreg30(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_envreg31(; res::IR.Type, location=Location())
+function read_ptx_sreg_envreg31(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1673,7 +1692,7 @@ end
 Ends execution of a thread.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#control-flow-instructions-exit)
 """
-function exit(; location=Location())
+function exit(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1695,7 +1714,7 @@ Fence operation that applies on the prior nvvm.mbarrier.init
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
 """
-function fence_mbarrier_init(; location=Location())
+function fence_mbarrier_init(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1726,7 +1745,7 @@ fall within the `.global` state space. Otherwise, the behavior is undefined
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
 """
-function fence_proxy_acquire(addr::Value, size::Value; scope::MemScopeKind.T, fromProxy::Union{ProxyKind.T, Nothing}=nothing, toProxy::Union{ProxyKind.T, Nothing}=nothing, location=Location())
+function fence_proxy_acquire(addr::Value, size::Value; scope::MemScopeKind.T, fromProxy::Union{ProxyKind.T, Nothing}=nothing, toProxy::Union{ProxyKind.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, size, ]
     owned_regions = Region[]
@@ -1751,7 +1770,7 @@ that may happen through different proxies.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
 """
-function fence_proxy(; kind::ProxyKind.T, space::Union{SharedSpace.T, Nothing}=nothing, location=Location())
+function fence_proxy(; kind::ProxyKind.T, space::Union{SharedSpace.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1778,7 +1797,7 @@ sequence that contains the fence.proxy.acquire proxy fence operation
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
 """
-function fence_proxy_release(; scope::MemScopeKind.T, fromProxy::Union{ProxyKind.T, Nothing}=nothing, toProxy::Union{ProxyKind.T, Nothing}=nothing, location=Location())
+function fence_proxy_release(; scope::MemScopeKind.T, fromProxy::Union{ProxyKind.T, Nothing}=nothing, toProxy::Union{ProxyKind.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1796,7 +1815,7 @@ function fence_proxy_release(; scope::MemScopeKind.T, fromProxy::Union{ProxyKind
 end
 
 
-function fence_sc_cluster(; location=Location())
+function fence_sc_cluster(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1812,7 +1831,7 @@ function fence_sc_cluster(; location=Location())
 end
 
 
-function read_ptx_sreg_globaltimer(; res::IR.Type, location=Location())
+function read_ptx_sreg_globaltimer(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1828,7 +1847,7 @@ function read_ptx_sreg_globaltimer(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_nctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_nctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1845,7 +1864,7 @@ function read_ptx_sreg_nctaid_x(; res::IR.Type, range::Union{Any, Nothing}=nothi
 end
 
 
-function read_ptx_sreg_nctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_nctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1862,7 +1881,7 @@ function read_ptx_sreg_nctaid_y(; res::IR.Type, range::Union{Any, Nothing}=nothi
 end
 
 
-function read_ptx_sreg_nctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_nctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1879,7 +1898,7 @@ function read_ptx_sreg_nctaid_z(; res::IR.Type, range::Union{Any, Nothing}=nothi
 end
 
 
-function read_ptx_sreg_gridid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_gridid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1896,7 +1915,7 @@ function read_ptx_sreg_gridid(; res::IR.Type, range::Union{Any, Nothing}=nothing
 end
 
 
-function read_ptx_sreg_laneid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_laneid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1913,7 +1932,7 @@ function read_ptx_sreg_laneid(; res::IR.Type, range::Union{Any, Nothing}=nothing
 end
 
 
-function read_ptx_sreg_lanemask_eq(; res::IR.Type, location=Location())
+function read_ptx_sreg_lanemask_eq(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1929,7 +1948,7 @@ function read_ptx_sreg_lanemask_eq(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_lanemask_ge(; res::IR.Type, location=Location())
+function read_ptx_sreg_lanemask_ge(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1945,7 +1964,7 @@ function read_ptx_sreg_lanemask_ge(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_lanemask_gt(; res::IR.Type, location=Location())
+function read_ptx_sreg_lanemask_gt(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1961,7 +1980,7 @@ function read_ptx_sreg_lanemask_gt(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_lanemask_le(; res::IR.Type, location=Location())
+function read_ptx_sreg_lanemask_le(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1977,7 +1996,7 @@ function read_ptx_sreg_lanemask_le(; res::IR.Type, location=Location())
 end
 
 
-function read_ptx_sreg_lanemask_lt(; res::IR.Type, location=Location())
+function read_ptx_sreg_lanemask_lt(; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -1993,7 +2012,7 @@ function read_ptx_sreg_lanemask_lt(; res::IR.Type, location=Location())
 end
 
 
-function ldmatrix(ptr::Value; res::IR.Type, num::UInt32, layout::MMALayout.T, location=Location())
+function ldmatrix(ptr::Value; res::IR.Type, num::Int32, layout::MMALayout.T, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[ptr, ]
     owned_regions = Region[]
@@ -2009,7 +2028,7 @@ function ldmatrix(ptr::Value; res::IR.Type, num::UInt32, layout::MMALayout.T, lo
 end
 
 
-function mbarrier_arrive_expect_tx(addr::Value, txcount::Value, predicate::Union{Nothing, Value}=nothing; location=Location())
+function mbarrier_arrive_expect_tx(addr::Value, txcount::Value, predicate::Union{Nothing, Value}=nothing; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, txcount, ]
     owned_regions = Region[]
@@ -2026,7 +2045,7 @@ function mbarrier_arrive_expect_tx(addr::Value, txcount::Value, predicate::Union
 end
 
 
-function mbarrier_arrive_expect_tx_shared(addr::Value, txcount::Value, predicate::Union{Nothing, Value}=nothing; location=Location())
+function mbarrier_arrive_expect_tx_shared(addr::Value, txcount::Value, predicate::Union{Nothing, Value}=nothing; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, txcount, ]
     owned_regions = Region[]
@@ -2043,7 +2062,7 @@ function mbarrier_arrive_expect_tx_shared(addr::Value, txcount::Value, predicate
 end
 
 
-function mbarrier_arrive_nocomplete(addr::Value, count::Value; res::IR.Type, location=Location())
+function mbarrier_arrive_nocomplete(addr::Value, count::Value; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[addr, count, ]
     owned_regions = Region[]
@@ -2059,7 +2078,7 @@ function mbarrier_arrive_nocomplete(addr::Value, count::Value; res::IR.Type, loc
 end
 
 
-function mbarrier_arrive_nocomplete_shared(addr::Value, count::Value; res::IR.Type, location=Location())
+function mbarrier_arrive_nocomplete_shared(addr::Value, count::Value; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[addr, count, ]
     owned_regions = Region[]
@@ -2075,7 +2094,7 @@ function mbarrier_arrive_nocomplete_shared(addr::Value, count::Value; res::IR.Ty
 end
 
 
-function mbarrier_arrive(addr::Value; res::IR.Type, location=Location())
+function mbarrier_arrive(addr::Value; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[addr, ]
     owned_regions = Region[]
@@ -2091,7 +2110,7 @@ function mbarrier_arrive(addr::Value; res::IR.Type, location=Location())
 end
 
 
-function mbarrier_arrive_shared(addr::Value; res::IR.Type, location=Location())
+function mbarrier_arrive_shared(addr::Value; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[addr, ]
     owned_regions = Region[]
@@ -2107,7 +2126,7 @@ function mbarrier_arrive_shared(addr::Value; res::IR.Type, location=Location())
 end
 
 
-function mbarrier_init(addr::Value, count::Value, predicate::Union{Nothing, Value}=nothing; location=Location())
+function mbarrier_init(addr::Value, count::Value, predicate::Union{Nothing, Value}=nothing; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, count, ]
     owned_regions = Region[]
@@ -2124,7 +2143,7 @@ function mbarrier_init(addr::Value, count::Value, predicate::Union{Nothing, Valu
 end
 
 
-function mbarrier_init_shared(addr::Value, count::Value, predicate::Union{Nothing, Value}=nothing; location=Location())
+function mbarrier_init_shared(addr::Value, count::Value, predicate::Union{Nothing, Value}=nothing; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, count, ]
     owned_regions = Region[]
@@ -2141,7 +2160,7 @@ function mbarrier_init_shared(addr::Value, count::Value, predicate::Union{Nothin
 end
 
 
-function mbarrier_inval(addr::Value; location=Location())
+function mbarrier_inval(addr::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, ]
     owned_regions = Region[]
@@ -2157,7 +2176,7 @@ function mbarrier_inval(addr::Value; location=Location())
 end
 
 
-function mbarrier_inval_shared(addr::Value; location=Location())
+function mbarrier_inval_shared(addr::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, ]
     owned_regions = Region[]
@@ -2173,7 +2192,7 @@ function mbarrier_inval_shared(addr::Value; location=Location())
 end
 
 
-function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location=Location())
+function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[addr, state, ]
     owned_regions = Region[]
@@ -2189,7 +2208,7 @@ function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location=Lo
 end
 
 
-function mbarrier_test_wait_shared(addr::Value, state::Value; res::IR.Type, location=Location())
+function mbarrier_test_wait_shared(addr::Value, state::Value; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[addr, state, ]
     owned_regions = Region[]
@@ -2205,7 +2224,7 @@ function mbarrier_test_wait_shared(addr::Value, state::Value; res::IR.Type, loca
 end
 
 
-function mbarrier_try_wait_parity(addr::Value, phase::Value, ticks::Value; location=Location())
+function mbarrier_try_wait_parity(addr::Value, phase::Value, ticks::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, phase, ticks, ]
     owned_regions = Region[]
@@ -2221,7 +2240,7 @@ function mbarrier_try_wait_parity(addr::Value, phase::Value, ticks::Value; locat
 end
 
 
-function mbarrier_try_wait_parity_shared(addr::Value, phase::Value, ticks::Value; location=Location())
+function mbarrier_try_wait_parity_shared(addr::Value, phase::Value, ticks::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr, phase, ticks, ]
     owned_regions = Region[]
@@ -2304,7 +2323,7 @@ combinations are possible for certain layouts according to the table below.
        -> !llvm.struct<(vector<2xf16>, vector<2xf16>)>
 ```
 """
-function mma_sync(operandA::Vector{Value}, operandB::Vector{Value}, operandC::Vector{Value}; res::IR.Type, shape::Any, b1Op::Union{MMAB1Op.T, Nothing}=nothing, intOverflowBehavior::Union{MMAIntOverflow.T, Nothing}=nothing, layoutA::MMALayout.T, layoutB::MMALayout.T, multiplicandAPtxType::Union{MMATypes.T, Nothing}=nothing, multiplicandBPtxType::Union{MMATypes.T, Nothing}=nothing, location=Location())
+function mma_sync(operandA::Vector{Value}, operandB::Vector{Value}, operandC::Vector{Value}; res::IR.Type, shape::Any, b1Op::Union{MMAB1Op.T, Nothing}=nothing, intOverflowBehavior::Union{MMAIntOverflow.T, Nothing}=nothing, layoutA::MMALayout.T, layoutB::MMALayout.T, multiplicandAPtxType::Union{MMATypes.T, Nothing}=nothing, multiplicandBPtxType::Union{MMATypes.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[operandA..., operandB..., operandC..., ]
     owned_regions = Region[]
@@ -2325,7 +2344,7 @@ function mma_sync(operandA::Vector{Value}, operandB::Vector{Value}, operandC::Ve
 end
 
 
-function prefetch_tensormap(tmaDescriptor::Value, predicate::Union{Nothing, Value}=nothing; location=Location())
+function prefetch_tensormap(tmaDescriptor::Value, predicate::Union{Nothing, Value}=nothing; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[tmaDescriptor, ]
     owned_regions = Region[]
@@ -2342,7 +2361,7 @@ function prefetch_tensormap(tmaDescriptor::Value, predicate::Union{Nothing, Valu
 end
 
 
-function rcp_approx_ftz_f(arg::Value; res::IR.Type, location=Location())
+function rcp_approx_ftz_f(arg::Value; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[arg, ]
     owned_regions = Region[]
@@ -2358,7 +2377,7 @@ function rcp_approx_ftz_f(arg::Value; res::IR.Type, location=Location())
 end
 
 
-function redux_sync(val::Value, mask_and_clamp::Value; res::IR.Type, kind::ReduxKind.T, location=Location())
+function redux_sync(val::Value, mask_and_clamp::Value; res::IR.Type, kind::ReduxKind.T, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[val, mask_and_clamp, ]
     owned_regions = Region[]
@@ -2374,7 +2393,7 @@ function redux_sync(val::Value, mask_and_clamp::Value; res::IR.Type, kind::Redux
 end
 
 
-function setmaxregister(; regCount::UInt32, action::SetMaxRegisterAction.T, location=Location())
+function setmaxregister(; regCount::Int32, action::SetMaxRegisterAction.T, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -2403,7 +2422,7 @@ for clamping the source lane index.
 [For more information, refer PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync)
 """
-function shfl_sync(thread_mask::Value, val::Value, offset::Value, mask_and_clamp::Value; res::IR.Type, kind::ShflKind.T, return_value_and_is_valid::Union{Bool, Nothing}=nothing, location=Location())
+function shfl_sync(thread_mask::Value, val::Value, offset::Value, mask_and_clamp::Value; res::IR.Type, kind::ShflKind.T, return_value_and_is_valid::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[thread_mask, val, offset, mask_and_clamp, ]
     owned_regions = Region[]
@@ -2420,7 +2439,7 @@ function shfl_sync(thread_mask::Value, val::Value, offset::Value, mask_and_clamp
 end
 
 
-function read_ptx_sreg_nsmid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_nsmid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -2437,7 +2456,7 @@ function read_ptx_sreg_nsmid(; res::IR.Type, range::Union{Any, Nothing}=nothing,
 end
 
 
-function read_ptx_sreg_smid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_smid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -2461,7 +2480,7 @@ location indicated by the address operand \$ptr in shared memory.
 [For more information, see PTX ISA]
 (https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-store-instruction-stmatrix)
 """
-function stmatrix(ptr::Value, sources::Vector{Value}; layout::MMALayout.T, location=Location())
+function stmatrix(ptr::Value, sources::Vector{Value}; layout::MMALayout.T, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[ptr, sources..., ]
     owned_regions = Region[]
@@ -2477,7 +2496,7 @@ function stmatrix(ptr::Value, sources::Vector{Value}; layout::MMALayout.T, locat
 end
 
 
-function bar_warp_sync(mask::Value; location=Location())
+function bar_warp_sync(mask::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[mask, ]
     owned_regions = Region[]
@@ -2493,7 +2512,7 @@ function bar_warp_sync(mask::Value; location=Location())
 end
 
 
-function read_ptx_sreg_tid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_tid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -2510,7 +2529,7 @@ function read_ptx_sreg_tid_x(; res::IR.Type, range::Union{Any, Nothing}=nothing,
 end
 
 
-function read_ptx_sreg_tid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_tid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -2527,7 +2546,7 @@ function read_ptx_sreg_tid_y(; res::IR.Type, range::Union{Any, Nothing}=nothing,
 end
 
 
-function read_ptx_sreg_tid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_tid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -2544,7 +2563,7 @@ function read_ptx_sreg_tid_z(; res::IR.Type, range::Union{Any, Nothing}=nothing,
 end
 
 
-function vote_ballot_sync(mask::Value, pred::Value; res::IR.Type, location=Location())
+function vote_ballot_sync(mask::Value, pred::Value; res::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[mask, pred, ]
     owned_regions = Region[]
@@ -2560,7 +2579,7 @@ function vote_ballot_sync(mask::Value, pred::Value; res::IR.Type, location=Locat
 end
 
 
-function wmma_load(ptr::Value, stride::Value; res::IR.Type, m::UInt32, n::UInt32, k::UInt32, layout::MMALayout.T, eltype::MMATypes.T, frag::MMAFrag.T, location=Location())
+function wmma_load(ptr::Value, stride::Value; res::IR.Type, m::Int32, n::Int32, k::Int32, layout::MMALayout.T, eltype::MMATypes.T, frag::MMAFrag.T, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[ptr, stride, ]
     owned_regions = Region[]
@@ -2576,7 +2595,7 @@ function wmma_load(ptr::Value, stride::Value; res::IR.Type, m::UInt32, n::UInt32
 end
 
 
-function wmma_mma(args::Vector{Value}; res::IR.Type, m::UInt32, n::UInt32, k::UInt32, layoutA::MMALayout.T, layoutB::MMALayout.T, eltypeA::MMATypes.T, eltypeB::MMATypes.T, location=Location())
+function wmma_mma(args::Vector{Value}; res::IR.Type, m::Int32, n::Int32, k::Int32, layoutA::MMALayout.T, layoutB::MMALayout.T, eltypeA::MMATypes.T, eltypeB::MMATypes.T, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[args..., ]
     owned_regions = Region[]
@@ -2592,7 +2611,7 @@ function wmma_mma(args::Vector{Value}; res::IR.Type, m::UInt32, n::UInt32, k::UI
 end
 
 
-function wmma_store(ptr::Value, args::Vector{Value}, stride::Value; m::UInt32, n::UInt32, k::UInt32, layout::MMALayout.T, eltype::MMATypes.T, location=Location())
+function wmma_store(ptr::Value, args::Vector{Value}, stride::Value; m::Int32, n::Int32, k::Int32, layout::MMALayout.T, eltype::MMATypes.T, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[ptr, args..., stride, ]
     owned_regions = Region[]
@@ -2608,7 +2627,7 @@ function wmma_store(ptr::Value, args::Vector{Value}, stride::Value; m::UInt32, n
 end
 
 
-function read_ptx_sreg_nwarpid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_nwarpid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -2625,7 +2644,7 @@ function read_ptx_sreg_nwarpid(; res::IR.Type, range::Union{Any, Nothing}=nothin
 end
 
 
-function read_ptx_sreg_warpid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_warpid(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -2642,7 +2661,7 @@ function read_ptx_sreg_warpid(; res::IR.Type, range::Union{Any, Nothing}=nothing
 end
 
 
-function read_ptx_sreg_warpsize(; res::IR.Type, range::Union{Any, Nothing}=nothing, location=Location())
+function read_ptx_sreg_warpsize(; res::IR.Type, range::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[res, ]
     operands = Value[]
     owned_regions = Region[]
@@ -2666,7 +2685,7 @@ multiplication and other operations.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-matrix-instructions-wgmma-fence)
 """
-function wgmma_fence_aligned(; location=Location())
+function wgmma_fence_aligned(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -2688,7 +2707,7 @@ Commits all prior uncommitted warpgroup level matrix multiplication operations.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-matrix-instructions-wgmma-commit-group)
 """
-function wgmma_commit_group_sync_aligned(; location=Location())
+function wgmma_commit_group_sync_aligned(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -2762,7 +2781,7 @@ Supported shapes:
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-matrix-instructions)
 """
-function wgmma_mma_async(inouts::Value, descriptorA::Value, descriptorB::Value; results::IR.Type, shape::Any, typeA::WGMMATypes.T, typeB::WGMMATypes.T, typeD::WGMMATypes.T, scaleD::WGMMAScaleOut.T, scaleA::WGMMAScaleIn.T, scaleB::WGMMAScaleIn.T, layoutA::MMALayout.T, layoutB::MMALayout.T, satfinite::Union{MMAIntOverflow.T, Nothing}=nothing, location=Location())
+function wgmma_mma_async(inouts::Value, descriptorA::Value, descriptorB::Value; results::IR.Type, shape::Any, typeA::WGMMATypes.T, typeB::WGMMATypes.T, typeD::WGMMATypes.T, scaleD::WGMMAScaleOut.T, scaleA::WGMMAScaleIn.T, scaleB::WGMMAScaleIn.T, layoutA::MMALayout.T, layoutB::MMALayout.T, satfinite::Union{MMAIntOverflow.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[results, ]
     operands = Value[inouts, descriptorA, descriptorB, ]
     owned_regions = Region[]
@@ -2785,7 +2804,7 @@ Signal the completion of a preceding warpgroup operation.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-matrix-instructions-wgmma-wait-group)
 """
-function wgmma_wait_group_sync_aligned(; group::UInt64, location=Location())
+function wgmma_wait_group_sync_aligned(; group::Int64, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]

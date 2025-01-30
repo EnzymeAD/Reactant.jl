@@ -1,7 +1,7 @@
 module func
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
 
@@ -23,7 +23,7 @@ Function values can be created with the
 %result = func.call_indirect %func(%0, %1) : (tensor<16xf32>, tensor<16xf32>) -> tensor<16xf32>
 ```
 """
-function call_indirect(callee::Value, callee_operands::Vector{Value}; results::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, location=Location())
+function call_indirect(callee::Value, callee_operands::Vector{Value}; results::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, location::Location=Location())
     op_ty_results = IR.Type[results..., ]
     operands = Value[callee, callee_operands..., ]
     owned_regions = Region[]
@@ -52,7 +52,7 @@ symbol reference attribute named \"callee\".
 %2 = func.call @my_add(%0, %1) : (f32, f32) -> f32
 ```
 """
-function call(operands::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, callee::IR.FlatSymbol, no_inline::Union{Bool, Nothing}=nothing, location=Location())
+function call(operands::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, callee::IR.FlatSymbol, no_inline::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[result..., ]
     operands = Value[operands..., ]
     owned_regions = Region[]
@@ -89,7 +89,7 @@ the compiler is multithreaded, and disallowing SSA values to directly
 reference a function simplifies this
 ([rationale](../Rationale/Rationale.md#multithreading-the-compiler)).
 """
-function constant(; result::IR.Type, value::IR.FlatSymbol, location=Location())
+function constant(; result::IR.Type, value::IR.FlatSymbol, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[]
     owned_regions = Region[]
@@ -143,7 +143,7 @@ func.func private @example_fn_result() -> (f64 {dialectName.attrName = 0 : i64})
 func.func private @example_fn_attr() attributes {dialectName.attrName = false}
 ```
 """
-function func_(; sym_name::String, function_type::IR.Type, sym_visibility::Union{String, Nothing}=nothing, arg_attrs::Union{Vector{Any}, Nothing}=nothing, res_attrs::Union{Vector{Any}, Nothing}=nothing, no_inline::Union{Bool, Nothing}=nothing, body::Region, location=Location())
+function func_(; sym_name::String, function_type::IR.Type, sym_visibility::Union{String, Nothing}=nothing, arg_attrs::Union{Vector{Any}, Nothing}=nothing, res_attrs::Union{Vector{Any}, Nothing}=nothing, no_inline::Union{Bool, Nothing}=nothing, body::Region, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[body, ]
@@ -179,7 +179,7 @@ func.func @foo() -> (i32, f8) {
 }
 ```
 """
-function return_(operands::Vector{Value}; location=Location())
+function return_(operands::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operands..., ]
     owned_regions = Region[]

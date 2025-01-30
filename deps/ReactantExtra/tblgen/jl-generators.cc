@@ -81,23 +81,24 @@ static bool canInferType(const Operator &op) {
 std::string assemblyFormatToJulia(
     std::string s,
     const std::function<std::string(std::string)> &applyJuliaFormat) {
-  auto p = 0;
+  auto p = -1;
   auto output = std::string();
+  auto length = s.length() - 1;
   for (auto [i, c] : llvm::enumerate(s)) {
     if (c == '`')
       continue;
     if (c == '$')
       p = i;
 
-    if (p != 0 && c == ' ') {
+    if (p != -1 && (c == ' ' || length == i)) {
       auto name = s.substr(p + 1, i - p - 1);
       auto new_name = applyJuliaFormat(name);
       output.append(new_name);
-      p = 0;
+      p = -1;
       continue;
     }
 
-    if (p == 0 && c != ' ')
+    if (p == -1 && c != ' ')
       output.push_back(c);
   }
   return output;
@@ -148,6 +149,9 @@ std::string getDialectName(llvm::ArrayRef<const llvm::Record *> opDefs) {
 
 std::string sanitizeName(std::string name,
                          std::optional<std::string> modulename = std::nullopt) {
+  if (name.empty()) {
+    return "empty";
+  }
   // check if name starts with digit:
   if (std::isdigit(name[0])) {
     name = "_" + name;
@@ -207,25 +211,29 @@ std::string emitEnum(llvm::Record def, std::string dialect) {
   auto enumJuliaType_ = e.getEnumClassName().str();
   auto enumJuliaType = sanitizeName(enumJuliaType_);
   auto juliaEnum = "@enumx " + enumJuliaType + ' ';
+  auto juliaStorage = enumJuliaType + "Storage";
   enumJuliaType += ".T";
   auto mlirAttributeDef = "IR.Attribute(e::" + enumJuliaType + ") = ";
   auto isSpecialized = e.genSpecializedAttr();
   if (!isSpecialized) { // parse the attribute using the name
+    auto juliaNameArray = juliaStorage + " = [";
     auto mnemonic = def.getValueAsString("mnemonic");
     for (auto c : e.getAllCases()) {
-      // TODO: handle the case where a enum variant name is a reserved keyword
-      juliaEnum += sanitizeName(c.getStr().str()) + ' ';
+      juliaEnum += sanitizeName(c.getSymbol().str()) + ' ';
+      juliaNameArray += '"' + c.getStr().str() + "\", ";
     }
 
-    auto assemblyFormat =
-        assemblyFormatToJulia(def.getValueAsString("assemblyFormat").str(),
-                              [](std::string _) { return "$(string(e))"; });
+    juliaEnum +=
+        "\n" + juliaNameArray.substr(0, juliaNameArray.size() - 2) + "]";
+    auto assemblyFormat = assemblyFormatToJulia(
+        def.getValueAsString("assemblyFormat").str(),
+        [&](std::string _) { return "$(" + juliaStorage + "[Int(e)+1])"; });
 
     mlirAttributeDef += llvm::formatv(R"(parse(Attribute,"#{0}<{1} {2}>"))",
                                       dialect, mnemonic, assemblyFormat);
   } else {
     for (auto c : e.getAllCases()) {
-      juliaEnum += sanitizeName(c.getStr().str()) + '=' +
+      juliaEnum += sanitizeName(c.getSymbol().str()) + '=' +
                    std::to_string(c.getValue()) + ' ';
     }
     mlirAttributeDef += "Int(e)";
@@ -242,8 +250,9 @@ std::string emitEnum(llvm::Record def, std::string dialect) {
 const llvm::StringMap<std::string> cppToJuliaTypeMap = {
     {"int32_t", "Int32"},
     {"int64_t", "Int64"},
-    {"uint32_t", "UInt32"},
-    {"uint64_t", "UInt64"},
+    {"uint32_t",
+     "Int32"}, // TODO: both are handled strangly => Int are working...
+    {"uint64_t", "Int64"},
     {"bool", "Bool"},
     {"Type", "IR.Type"},
     {"FunctionType", "IR.Type"},
@@ -297,26 +306,62 @@ std::string toPascalCase(std::string s) {
   return output;
 }
 
+std::string toSnakeCase(std::string s) {
+  std::string output = "";
+  output += llvm::toLower(s[0]);
+  auto nextUp = true;
+  for (auto c : s.substr(1)) {
+    if (llvm::isUpper(c)) {
+      output += '_';
+      output += llvm::toLower(c);
+    } else
+      output += c;
+  }
+  return output;
+}
+
+llvm::StringMap<std::string> blacklisted_struct = {
+    {"StableHLO_ConvDimensionNumbers", "WIP"},
+};
+
 // structure creation can fail if one of a field cannot be translated
 std::optional<std::string> emitStruct(llvm::Record def, std::string dialect) {
   auto tableGenName = def.getName().str();
   if (auto cached = get(attributeCache, tableGenName))
     return *cached;
   auto assembly = def.getValueAsOptionalString("assemblyFormat");
-  auto standardStructAssembly =
-      !assembly || *assembly == "`<` struct(params) `>`";
+
+  auto customAssembly = def.getValueAsBit("hasCustomAssemblyFormat");
+  if (customAssembly) {
+    if (!assembly) {
+      llvm::errs() << "Custom C++ assembly for " << tableGenName << '\n';
+      // custom assembly without format is a C++ custom parser/printer => must
+      // anyway a lot of struct have a C++ parser/printer equivalent
+      // to `<` struct(params) `>`
+      if (blacklisted_struct.contains(tableGenName)){
+        attributeCache.insert({tableGenName, "Attribute"});
+        llvm::errs() << "don\'t emit for this attribute" << '\n';
+        return std::nullopt;
+        }
+      customAssembly = false; //hack
+    } else {
+      customAssembly = *assembly != "`<` struct(params) `>`";
+    };
+  }
+
+  auto standardStructAssembly = !customAssembly;
   auto mnemonic = def.getValueAsString("mnemonic").str();
   auto structName = toPascalCase(mnemonic);
   auto params = def.getValueAsDag("parameters");
   auto structDef = "struct " + structName + '\n';
   auto mlirAttributeDef = "IR.Attribute(s::" + structName +
-                          ") = parse(IR.Attribute,\"#" + dialect + "." +
-                          mnemonic;
+                          ") = parse(Attribute,\"#" + dialect + "." + mnemonic;
   if (standardStructAssembly)
     mlirAttributeDef.push_back('<');
   for (auto [arg, name_] :
        llvm::zip(params->getArgs(), params->getArgNames())) {
-    auto name = name_->getAsUnquotedString();
+    auto name = toSnakeCase(name_->getAsUnquotedString());
+    // auto name = standardStructAssembly ? toSnakeCase(name_) : name_;
     auto sanitizedName = sanitizeName(name);
     std::string cppType;
     std::optional<std::string> juliaType;
@@ -334,7 +379,7 @@ std::optional<std::string> emitStruct(llvm::Record def, std::string dialect) {
                   auto normalizedCppType = removeNamespace(cppType);
                   juliaType = cppToJuliaType(normalizedCppType);
                 })
-          .Default([&]() { 
+          .Default([&]() {
             llvm::errs() << "unknown pattern : " << type << '\n';
           })();
     } else
@@ -351,7 +396,7 @@ std::optional<std::string> emitStruct(llvm::Record def, std::string dialect) {
     structDef += '\t' + sanitizedName + "::" + *juliaType + '\n';
     if (standardStructAssembly)
       mlirAttributeDef +=
-          llvm::formatv("{0} = $(s.{1}), ", name, sanitizedName);
+          llvm::formatv("{0} = $(c(s.{1})), ", name, sanitizedName);
   }
   structDef += "end";
   if (standardStructAssembly) {
@@ -360,13 +405,16 @@ std::optional<std::string> emitStruct(llvm::Record def, std::string dialect) {
   } else
     mlirAttributeDef += assemblyFormatToJulia(
         def.getValueAsString("assemblyFormat").str(), [](std::string name) {
-          return llvm::formatv("$(s.{})", sanitizeName(name));
+          return llvm::formatv(
+              "$(c(s.{}))",
+              sanitizeName(
+                  name)); // TODO: add this function only for some args. The c
+                          // function is here to deal with "Any[]", we want "[]"
         });
   mlirAttributeDef += "\")";
 
   if (auto description = def.getValueAsOptionalString("summary")) {
-    attribs +=
-        '\n' + formatDescription(mnemonic, description->str()) + '\n';
+    attribs += '\n' + formatDescription(mnemonic, description->str()) + '\n';
   }
   attribs += structDef + "\n\n" + mlirAttributeDef + "\n\n";
   attributeCache.insert({tableGenName, structName});
@@ -395,7 +443,7 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
   if (disableModuleWrap) {
     moduleTemplate =
         R"(import ...IR: IR, NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
 {0}
@@ -404,7 +452,7 @@ using EnumX
     moduleTemplate = R"(module {0}
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
 
@@ -415,7 +463,7 @@ end # {0}
 
   const char *functionTemplate = R"(
 {3}
-function {0}({1}location=Location())
+function {0}({1}location::Location=Location())
     {2}
 end
 )";      // 0: functionname, 1: functionarguments, 2: functionbody
@@ -435,7 +483,6 @@ end
          // result_inference
 
   std::string moduleContents = "";
-
   for (const auto *def : opdefs) {
     mlir::tblgen::Operator op(*def);
 
@@ -631,7 +678,7 @@ end
             varType = *juliaType;
             return;
           }
-          //os << '#' << attr.getAttrDefName() << '\n';
+          // os << '#' << attr.getAttrDefName() << '\n';
         }
       };
       closure_(attr);

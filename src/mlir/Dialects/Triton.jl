@@ -1,7 +1,7 @@
 module tt
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
 
@@ -10,7 +10,7 @@ using EnumX
 `MemSemantic`
 allowed 32-bit signless integer cases: 1, 2, 3, 4
 """
-@enumx MemSemantic relaxed=1 acquire=2 release=3 acq_rel=4 
+@enumx MemSemantic RELAXED=1 ACQUIRE=2 RELEASE=3 ACQUIRE_RELEASE=4 
 
 IR.Attribute(e::MemSemantic.T) = Int(e)
 
@@ -19,7 +19,7 @@ IR.Attribute(e::MemSemantic.T) = Int(e)
 `MemSyncScope`
 allowed 32-bit signless integer cases: 1, 2, 3
 """
-@enumx MemSyncScope gpu=1 cta=2 sys=3 
+@enumx MemSyncScope GPU=1 CTA=2 SYSTEM=3 
 
 IR.Attribute(e::MemSyncScope.T) = Int(e)
 
@@ -28,7 +28,7 @@ IR.Attribute(e::MemSyncScope.T) = Int(e)
 `RMWOp`
 allowed 32-bit signless integer cases: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 """
-@enumx RMWOp and=1 or=2 xor=3 add=4 fadd=5 max=6 min=7 umax=8 umin=9 exch=10 
+@enumx RMWOp AND=1 OR=2 XOR=3 ADD=4 FADD=5 MAX=6 MIN=7 UMAX=8 UMIN=9 XCHG=10 
 
 IR.Attribute(e::RMWOp.T) = Int(e)
 
@@ -37,7 +37,7 @@ IR.Attribute(e::RMWOp.T) = Int(e)
 `PropagateNan`
 allowed 32-bit signless integer cases: 0, 65535
 """
-@enumx PropagateNan none=0 all=65535 
+@enumx PropagateNan NONE=0 ALL=65535 
 
 IR.Attribute(e::PropagateNan.T) = Int(e)
 
@@ -46,7 +46,7 @@ IR.Attribute(e::PropagateNan.T) = Int(e)
 `InputPrecision`
 allowed 32-bit signless integer cases: 0, 1, 2
 """
-@enumx InputPrecision tf32=0 tf32x3=1 ieee=2 
+@enumx InputPrecision TF32=0 TF32x3=1 IEEE=2 
 
 IR.Attribute(e::InputPrecision.T) = Int(e)
 
@@ -55,7 +55,7 @@ IR.Attribute(e::InputPrecision.T) = Int(e)
 `ScaleDotElemType`
 allowed 32-bit signless integer cases: 0, 1, 2, 3, 4, 5, 6
 """
-@enumx ScaleDotElemType e4m3=0 e5m2=1 e2m3=2 e3m2=3 e2m1=4 bf16=5 fp16=6 
+@enumx ScaleDotElemType E4M3=0 E5M2=1 E2M3=2 E3M2=3 E2M1=4 BF16=5 FP16=6 
 
 IR.Attribute(e::ScaleDotElemType.T) = Int(e)
 
@@ -64,7 +64,7 @@ IR.Attribute(e::ScaleDotElemType.T) = Int(e)
 `CacheModifier`
 allowed 32-bit signless integer cases: 1, 2, 3, 4, 5, 6, 7
 """
-@enumx CacheModifier none=1 ca=2 cg=3 wb=4 cs=5 wt=6 cv=7 
+@enumx CacheModifier NONE=1 CA=2 CG=3 WB=4 CS=5 WT=6 CV=7 
 
 IR.Attribute(e::CacheModifier.T) = Int(e)
 
@@ -73,7 +73,7 @@ IR.Attribute(e::CacheModifier.T) = Int(e)
 `EvictionPolicy`
 allowed 32-bit signless integer cases: 1, 2, 3
 """
-@enumx EvictionPolicy evict_normal=1 evict_first=2 evict_last=3 
+@enumx EvictionPolicy NORMAL=1 EVICT_FIRST=2 EVICT_LAST=3 
 
 IR.Attribute(e::EvictionPolicy.T) = Int(e)
 
@@ -82,7 +82,7 @@ IR.Attribute(e::EvictionPolicy.T) = Int(e)
 `RoundingMode`
 allowed 32-bit signless integer cases: 0, 1
 """
-@enumx RoundingMode rtz=0 rtne=1 
+@enumx RoundingMode RTZ=0 RTNE=1 
 
 IR.Attribute(e::RoundingMode.T) = Int(e)
 
@@ -91,7 +91,7 @@ IR.Attribute(e::RoundingMode.T) = Int(e)
 `ProgramIDDim`
 allowed 32-bit signless integer cases: 0, 1, 2
 """
-@enumx ProgramIDDim x=0 y=1 z=2 
+@enumx ProgramIDDim X=0 Y=1 Z=2 
 
 IR.Attribute(e::ProgramIDDim.T) = Int(e)
 
@@ -100,7 +100,7 @@ IR.Attribute(e::ProgramIDDim.T) = Int(e)
 `PaddingOption`
 allowed 32-bit signless integer cases: 1, 2
 """
-@enumx PaddingOption zero=1 nan=2 
+@enumx PaddingOption PAD_ZERO=1 PAD_NAN=2 
 
 IR.Attribute(e::PaddingOption.T) = Int(e)
 
@@ -119,7 +119,7 @@ symbol reference attribute named \"callee\".
 %2 = tt.call @my_add(%0, %1) : (f32, f32) -> f32
 ```
 """
-function call(operands::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, callee::IR.FlatSymbol, location=Location())
+function call(operands::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, callee::IR.FlatSymbol, location::Location=Location())
     op_ty_results = IR.Type[result..., ]
     operands = Value[operands..., ]
     owned_regions = Region[]
@@ -173,7 +173,7 @@ tt.func @example_fn_result() -> (f64 {dialectName.attrName = 0 : i64})
 tt.func @example_fn_attr() attributes {dialectName.attrName = false}
 ```
 """
-function func(; sym_name::String, function_type::IR.Type, sym_visibility::Union{String, Nothing}=nothing, arg_attrs::Union{Vector{Any}, Nothing}=nothing, res_attrs::Union{Vector{Any}, Nothing}=nothing, body::Region, location=Location())
+function func(; sym_name::String, function_type::IR.Type, sym_visibility::Union{String, Nothing}=nothing, arg_attrs::Union{Vector{Any}, Nothing}=nothing, res_attrs::Union{Vector{Any}, Nothing}=nothing, body::Region, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[body, ]
@@ -197,7 +197,7 @@ end
 This Op exists to help the transition from untyped raw TMA objects to typed Tensor descriptor objects.
 Ideally, we can remove this once the APIs are fully fleshed out.
 """
-function reinterpret_tensor_descriptor(rawDesc::Value; result::IR.Type, location=Location())
+function reinterpret_tensor_descriptor(rawDesc::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[rawDesc, ]
     owned_regions = Region[]
@@ -229,7 +229,7 @@ tt.func @foo() : (i32, f8) {
 }
 ```
 """
-function return_(srcs::Vector{Value}; location=Location())
+function return_(srcs::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[srcs..., ]
     owned_regions = Region[]
@@ -245,7 +245,7 @@ function return_(srcs::Vector{Value}; location=Location())
 end
 
 
-function addptr(ptr::Value, offset::Value; result::IR.Type, location=Location())
+function addptr(ptr::Value, offset::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[ptr, offset, ]
     owned_regions = Region[]
@@ -261,7 +261,7 @@ function addptr(ptr::Value, offset::Value; result::IR.Type, location=Location())
 end
 
 
-function advance(ptr::Value, offsets::Vector{Value}; result::IR.Type, location=Location())
+function advance(ptr::Value, offsets::Vector{Value}; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[ptr, offsets..., ]
     owned_regions = Region[]
@@ -282,7 +282,7 @@ end
 `tt.assert` takes a condition tensor and a message string.
 If the condition is false, the message is printed, and the program is aborted.
 """
-function assert(condition::Value; message::String, location=Location())
+function assert(condition::Value; message::String, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[condition, ]
     owned_regions = Region[]
@@ -308,7 +308,7 @@ else store \$old to \$ptr,
 
 return \$old
 """
-function atomic_cas(ptr::Value, cmp::Value, val::Value; result::IR.Type, sem::MemSemantic.T, scope::MemSyncScope.T, location=Location())
+function atomic_cas(ptr::Value, cmp::Value, val::Value; result::IR.Type, sem::MemSemantic.T, scope::MemSyncScope.T, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[ptr, cmp, val, ]
     owned_regions = Region[]
@@ -330,7 +330,7 @@ load data at \$ptr, do \$rmw_op with \$val, and store result to \$ptr.
 
 return old value at \$ptr
 """
-function atomic_rmw(ptr::Value, val::Value, mask::Union{Nothing, Value}=nothing; result::IR.Type, atomic_rmw_op::RMWOp.T, sem::MemSemantic.T, scope::MemSyncScope.T, location=Location())
+function atomic_rmw(ptr::Value, val::Value, mask::Union{Nothing, Value}=nothing; result::IR.Type, atomic_rmw_op::RMWOp.T, sem::MemSemantic.T, scope::MemSyncScope.T, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[ptr, val, ]
     owned_regions = Region[]
@@ -347,7 +347,7 @@ function atomic_rmw(ptr::Value, val::Value, mask::Union{Nothing, Value}=nothing;
 end
 
 
-function bitcast(src::Value; result::IR.Type, location=Location())
+function bitcast(src::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -369,7 +369,7 @@ For a given tensor, broadcast changes one or more dimensions with size 1
 to a new size, e.g. tensor<1x32x1xf32> -> tensor<2x32x4xf32>.  You cannot
 change the size of a non-1 dimension.
 """
-function broadcast(src::Value; result::IR.Type, location=Location())
+function broadcast(src::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -385,7 +385,7 @@ function broadcast(src::Value; result::IR.Type, location=Location())
 end
 
 
-function cat(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function cat(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -407,7 +407,7 @@ Clamp operation for floating point types.
 
 The operation takes three arguments: x, min, and max. It returns a tensor of the same shape as x with its values clamped to the range [min, max].
 """
-function clampf(x::Value, min::Value, max::Value; result::Union{Nothing, IR.Type}=nothing, propagateNan::PropagateNan.T, location=Location())
+function clampf(x::Value, min::Value, max::Value; result::Union{Nothing, IR.Type}=nothing, propagateNan::PropagateNan.T, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[x, min, max, ]
     owned_regions = Region[]
@@ -433,7 +433,7 @@ tf32x3: implement the 3xTF32 trick. For more info see the pass in F32DotTC.cpp
 ieee: don\'t use TC, implement dot in software.
 If the GPU does not have Tensor cores or the inputs are not f32, this flag is ignored.
 """
-function dot(a::Value, b::Value, c::Value; d::Union{Nothing, IR.Type}=nothing, inputPrecision::Union{InputPrecision.T, Nothing}=nothing, maxNumImpreciseAcc::Union{UInt32, Nothing}=nothing, location=Location())
+function dot(a::Value, b::Value, c::Value; d::Union{Nothing, IR.Type}=nothing, inputPrecision::Union{InputPrecision.T, Nothing}=nothing, maxNumImpreciseAcc::Union{Int32, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[a, b, c, ]
     owned_regions = Region[]
@@ -457,7 +457,7 @@ end
 \$d = matrix_multiply(scale(\$lhs, \$lhs_scale), scale(\$rhs, \$rhs_scale)) + \$c.
 Where scale(x, s) is a function that applies the scale per block following microscaling spec.
 """
-function dot_scaled(lhs::Value, rhs::Value, c::Value, lhs_scale::Union{Nothing, Value}=nothing; rhs_scale::Union{Nothing, Value}=nothing, d::IR.Type, lhs_type::ScaleDotElemType.T, rhs_type::ScaleDotElemType.T, fastMath::Bool, location=Location())
+function dot_scaled(lhs::Value, rhs::Value, c::Value, lhs_scale::Union{Nothing, Value}=nothing; rhs_scale::Union{Nothing, Value}=nothing, d::IR.Type, lhs_type::ScaleDotElemType.T, rhs_type::ScaleDotElemType.T, fastMath::Bool, location::Location=Location())
     op_ty_results = IR.Type[d, ]
     operands = Value[lhs, rhs, c, ]
     owned_regions = Region[]
@@ -483,7 +483,7 @@ Runs an inline asm block to generate one or more tensors.
 The asm block is given `packed_element` elements at a time.  Exactly which
 elems it receives is unspecified.
 """
-function elementwise_inline_asm(args::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, asm_string::String, constraints::String, pure::Bool, packed_element::UInt32, location=Location())
+function elementwise_inline_asm(args::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, asm_string::String, constraints::String, pure::Bool, packed_element::Int32, location::Location=Location())
     op_ty_results = IR.Type[result..., ]
     operands = Value[args..., ]
     owned_regions = Region[]
@@ -499,7 +499,7 @@ function elementwise_inline_asm(args::Vector{Value}; result::Union{Vector{IR.Typ
 end
 
 
-function expand_dims(src::Value; result::Union{Nothing, IR.Type}=nothing, axis::UInt32, location=Location())
+function expand_dims(src::Value; result::Union{Nothing, IR.Type}=nothing, axis::Int32, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -525,7 +525,7 @@ The destination tensor type and shape must match the descriptor otherwise the re
 This is an escape hatch and is only there for testing/experimenting.
 This op will be removed in the future.
 """
-function experimental_descriptor_load(desc::Value, indices::Vector{Value}; result::IR.Type, cache::Union{CacheModifier.T, Nothing}=nothing, evict::Union{EvictionPolicy.T, Nothing}=nothing, location=Location())
+function experimental_descriptor_load(desc::Value, indices::Vector{Value}; result::IR.Type, cache::Union{CacheModifier.T, Nothing}=nothing, evict::Union{EvictionPolicy.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[desc, indices..., ]
     owned_regions = Region[]
@@ -552,7 +552,7 @@ The shape and types of `src` must match the descriptor otherwise the result is u
 This is an escape hatch and is only there for testing/experimenting.
 This op will be removed in the future.
 """
-function experimental_descriptor_store(desc::Value, src::Value, indices::Vector{Value}; location=Location())
+function experimental_descriptor_store(desc::Value, src::Value, indices::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[desc, src, indices..., ]
     owned_regions = Region[]
@@ -568,7 +568,7 @@ function experimental_descriptor_store(desc::Value, src::Value, indices::Vector{
 end
 
 
-function experimental_tensormap_create(desc_ptr::Value, global_address::Value, box_dim::Vector{Value}, global_dim::Vector{Value}, global_stride::Vector{Value}, element_stride::Vector{Value}; elem_type::UInt32, interleave_layout::UInt32, swizzle_mode::UInt32, fill_mode::UInt32, location=Location())
+function experimental_tensormap_create(desc_ptr::Value, global_address::Value, box_dim::Vector{Value}, global_dim::Vector{Value}, global_stride::Vector{Value}, element_stride::Vector{Value}; elem_type::Int32, interleave_layout::Int32, swizzle_mode::Int32, fill_mode::Int32, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[desc_ptr, global_address, box_dim..., global_dim..., global_stride..., element_stride..., ]
     owned_regions = Region[]
@@ -585,7 +585,7 @@ function experimental_tensormap_create(desc_ptr::Value, global_address::Value, b
 end
 
 
-function experimental_tensormap_fenceproxy_acquire(desc_ptr::Value; location=Location())
+function experimental_tensormap_fenceproxy_acquire(desc_ptr::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[desc_ptr, ]
     owned_regions = Region[]
@@ -606,7 +606,7 @@ end
 call an external function \$symbol implemented in \$libpath/\$libname with \$args
 return \$libpath/\$libname:\$symbol(\$args...)
 """
-function extern_elementwise(srcs::Vector{Value}; result::IR.Type, libname::String, libpath::String, symbol::String, pure::Bool, location=Location())
+function extern_elementwise(srcs::Vector{Value}; result::IR.Type, libname::String, libpath::String, symbol::String, pure::Bool, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[srcs..., ]
     owned_regions = Region[]
@@ -628,7 +628,7 @@ Floating point casting for custom types (F8), and non-default rounding modes.
 
 F8 <-> FP16, BF16, FP32, FP64
 """
-function fp_to_fp(src::Value; result::IR.Type, rounding::Union{RoundingMode.T, Nothing}=nothing, location=Location())
+function fp_to_fp(src::Value; result::IR.Type, rounding::Union{RoundingMode.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -658,7 +658,7 @@ The `efficient_layout` attribute is set when the compiler has determined an
 optimized layout for the operation, indicating that it should not be
 changed.
 """
-function gather(src::Value, indices::Value; result::Union{Nothing, IR.Type}=nothing, axis::UInt32, efficient_layout::Union{Bool, Nothing}=nothing, location=Location())
+function gather(src::Value, indices::Value; result::Union{Nothing, IR.Type}=nothing, axis::Int32, efficient_layout::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[src, indices, ]
     owned_regions = Region[]
@@ -676,7 +676,7 @@ function gather(src::Value, indices::Value; result::Union{Nothing, IR.Type}=noth
 end
 
 
-function get_num_programs(; result::Union{Nothing, IR.Type}=nothing, axis::ProgramIDDim.T, location=Location())
+function get_num_programs(; result::Union{Nothing, IR.Type}=nothing, axis::ProgramIDDim.T, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -693,7 +693,7 @@ function get_num_programs(; result::Union{Nothing, IR.Type}=nothing, axis::Progr
 end
 
 
-function get_program_id(; result::Union{Nothing, IR.Type}=nothing, axis::ProgramIDDim.T, location=Location())
+function get_program_id(; result::Union{Nothing, IR.Type}=nothing, axis::ProgramIDDim.T, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -716,7 +716,7 @@ Return the histogram of the input tensor. The number of bins is equal to
 the dimension of the output tensor. Each bins has a width of 1 and bins
 start at 0.
 """
-function histogram(src::Value; result::IR.Type, location=Location())
+function histogram(src::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -732,7 +732,7 @@ function histogram(src::Value; result::IR.Type, location=Location())
 end
 
 
-function int_to_ptr(src::Value; result::IR.Type, location=Location())
+function int_to_ptr(src::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -756,7 +756,7 @@ shape 4x8x2xf32.
 Because Triton tensors always have a power-of-two number of elements,
 the two input tensors must have the same shape.
 """
-function join(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function join(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -773,7 +773,7 @@ function join(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, l
 end
 
 
-function load(ptr::Value, mask::Union{Nothing, Value}=nothing; other::Union{Nothing, Value}=nothing, result::Union{Nothing, IR.Type}=nothing, boundaryCheck::Union{Vector{Int32}, Nothing}=nothing, padding::Union{PaddingOption.T, Nothing}=nothing, cache::Union{CacheModifier.T, Nothing}=nothing, evict::Union{EvictionPolicy.T, Nothing}=nothing, isVolatile::Union{Bool, Nothing}=nothing, location=Location())
+function load(ptr::Value, mask::Union{Nothing, Value}=nothing; other::Union{Nothing, Value}=nothing, result::Union{Nothing, IR.Type}=nothing, boundaryCheck::Union{Vector{Int32}, Nothing}=nothing, padding::Union{PaddingOption.T, Nothing}=nothing, cache::Union{CacheModifier.T, Nothing}=nothing, evict::Union{EvictionPolicy.T, Nothing}=nothing, isVolatile::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[ptr, ]
     owned_regions = Region[]
@@ -804,7 +804,7 @@ Returns an 1D int32 tensor.
 
 Values span from \$start to \$end (exclusive), with step = 1
 """
-function make_range(; result::IR.Type, start::UInt32, end_::UInt32, location=Location())
+function make_range(; result::IR.Type, start::Int32, end_::Int32, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[]
     owned_regions = Region[]
@@ -825,7 +825,7 @@ end
 `tt.make_tensor_descriptor` takes both meta information of the parent tensor and the block size,
 and returns a descriptor object which can be used to load/store from the tensor in global memory.
 """
-function make_tensor_descriptor(base::Value, shape::Vector{Value}, strides::Vector{Value}; result::IR.Type, location=Location())
+function make_tensor_descriptor(base::Value, shape::Vector{Value}, strides::Vector{Value}; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[base, shape..., strides..., ]
     owned_regions = Region[]
@@ -846,7 +846,7 @@ end
 `tt.make_tensor_ptr` takes both meta information of the parent tensor and the block tensor, then it returns a
 pointer to the block tensor, e.g. returns a type of `tt.ptr<tensor<8x8xf16>>`.
 """
-function make_tensor_ptr(base::Value, shape::Vector{Value}, strides::Vector{Value}, offsets::Vector{Value}; result::IR.Type, order::Vector{Int32}, location=Location())
+function make_tensor_ptr(base::Value, shape::Vector{Value}, strides::Vector{Value}, offsets::Vector{Value}; result::IR.Type, order::Vector{Int32}, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[base, shape..., strides..., offsets..., ]
     owned_regions = Region[]
@@ -866,7 +866,7 @@ end
 
 Most significant N bits of the 2N-bit product of two integers.
 """
-function mulhiui(x::Value, y::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function mulhiui(x::Value, y::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[x, y, ]
     owned_regions = Region[]
@@ -887,7 +887,7 @@ end
 
 Precise div for floating point types.
 """
-function precise_divf(x::Value, y::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function precise_divf(x::Value, y::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[x, y, ]
     owned_regions = Region[]
@@ -908,7 +908,7 @@ end
 
 Precise sqrt for floating point types.
 """
-function precise_sqrt(x::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function precise_sqrt(x::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[x, ]
     owned_regions = Region[]
@@ -930,7 +930,7 @@ end
 `tt.print` takes a literal string prefix and an arbitrary number of scalar or tensor arguments that should be printed.
 format are generated automatically from the arguments.
 """
-function print(args::Vector{Value}; prefix::String, hex::Bool, isSigned::Vector{Int32}, location=Location())
+function print(args::Vector{Value}; prefix::String, hex::Bool, isSigned::Vector{Int32}, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[args..., ]
     owned_regions = Region[]
@@ -946,7 +946,7 @@ function print(args::Vector{Value}; prefix::String, hex::Bool, isSigned::Vector{
 end
 
 
-function ptr_to_int(src::Value; result::IR.Type, location=Location())
+function ptr_to_int(src::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -962,7 +962,7 @@ function ptr_to_int(src::Value; result::IR.Type, location=Location())
 end
 
 
-function reduce(srcs::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, axis::UInt32, combineOp::Region, location=Location())
+function reduce(srcs::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, axis::Int32, combineOp::Region, location::Location=Location())
     op_ty_results = IR.Type[result..., ]
     operands = Value[srcs..., ]
     owned_regions = Region[combineOp, ]
@@ -978,7 +978,7 @@ function reduce(srcs::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg
 end
 
 
-function reduce_return(result::Vector{Value}; location=Location())
+function reduce_return(result::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[result..., ]
     owned_regions = Region[]
@@ -1004,7 +1004,7 @@ elements to generate more efficient code.
 If efficient_layout is set, this is a hint that the destination layout should be kept for performance reason.
 The compiler is still free to change it for better performance.
 """
-function reshape(src::Value; result::IR.Type, allow_reorder::Union{Bool, Nothing}=nothing, efficient_layout::Union{Bool, Nothing}=nothing, location=Location())
+function reshape(src::Value; result::IR.Type, allow_reorder::Union{Bool, Nothing}=nothing, efficient_layout::Union{Bool, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -1022,7 +1022,7 @@ function reshape(src::Value; result::IR.Type, allow_reorder::Union{Bool, Nothing
 end
 
 
-function scan(srcs::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, axis::UInt32, reverse::Bool, combineOp::Region, location=Location())
+function scan(srcs::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, axis::Int32, reverse::Bool, combineOp::Region, location::Location=Location())
     op_ty_results = IR.Type[result..., ]
     operands = Value[srcs..., ]
     owned_regions = Region[combineOp, ]
@@ -1038,7 +1038,7 @@ function scan(srcs::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{I
 end
 
 
-function scan_return(result::Vector{Value}; location=Location())
+function scan_return(result::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[result..., ]
     owned_regions = Region[]
@@ -1054,7 +1054,7 @@ function scan_return(result::Vector{Value}; location=Location())
 end
 
 
-function splat(src::Value; result::IR.Type, location=Location())
+function splat(src::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -1078,7 +1078,7 @@ tensors, src[..., 0] and src[..., 1].
 For example, if the input shape is 4x8x2xf32, returns two tensors of
 shape 4x8xf32.
 """
-function split(src::Value; outLHS::Union{Nothing, IR.Type}=nothing, outRHS::Union{Nothing, IR.Type}=nothing, location=Location())
+function split(src::Value; outLHS::Union{Nothing, IR.Type}=nothing, outRHS::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[src, ]
     owned_regions = Region[]
@@ -1096,7 +1096,7 @@ function split(src::Value; outLHS::Union{Nothing, IR.Type}=nothing, outRHS::Unio
 end
 
 
-function store(ptr::Value, value::Value, mask::Union{Nothing, Value}=nothing; boundaryCheck::Union{Vector{Int32}, Nothing}=nothing, cache::Union{CacheModifier.T, Nothing}=nothing, evict::Union{EvictionPolicy.T, Nothing}=nothing, location=Location())
+function store(ptr::Value, value::Value, mask::Union{Nothing, Value}=nothing; boundaryCheck::Union{Vector{Int32}, Nothing}=nothing, cache::Union{CacheModifier.T, Nothing}=nothing, evict::Union{EvictionPolicy.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[ptr, value, ]
     owned_regions = Region[]
@@ -1144,7 +1144,7 @@ convertLayout ops that appear before and/or after the operation.
 We do this so that you can chain multiple data-movement ops (e.g.
 transpose+reshape+concat) without going to shared memory after each one.
 """
-function trans(src::Value; result::Union{Nothing, IR.Type}=nothing, order::Vector{Int32}, location=Location())
+function trans(src::Value; result::Union{Nothing, IR.Type}=nothing, order::Vector{Int32}, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[src, ]
     owned_regions = Region[]

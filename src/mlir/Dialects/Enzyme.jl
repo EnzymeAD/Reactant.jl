@@ -1,7 +1,7 @@
 module enzyme
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
 
@@ -11,8 +11,9 @@ using EnumX
 Possible activity states for variables
 """
 @enumx Activity enzyme_active enzyme_dup enzyme_const enzyme_dupnoneed enzyme_activenoneed enzyme_constnoneed 
+ActivityStorage = ["enzyme_active", "enzyme_dup", "enzyme_const", "enzyme_dupnoneed", "enzyme_activenoneed", "enzyme_constnoneed"]
 
-IR.Attribute(e::Activity.T) = parse(Attribute,"#enzyme<activity $value>")
+IR.Attribute(e::Activity.T) = parse(Attribute,"#enzyme<activity $(ActivityStorage[Int(e)+1])>")
 
 
 """
@@ -20,7 +21,7 @@ IR.Attribute(e::Activity.T) = parse(Attribute,"#enzyme<activity $value>")
 
 TODO
 """
-function addTo(values::Vector{Value}; location=Location())
+function addTo(values::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[values..., ]
     owned_regions = Region[]
@@ -36,7 +37,7 @@ function addTo(values::Vector{Value}; location=Location())
 end
 
 
-function autodiff(inputs::Vector{Value}; outputs::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, fn::IR.FlatSymbol, activity::Vector{Activity.T}, ret_activity::Vector{Activity.T}, width::Union{UInt64, Nothing}=nothing, location=Location())
+function autodiff(inputs::Vector{Value}; outputs::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, fn::IR.FlatSymbol, activity::Vector{Activity.T}, ret_activity::Vector{Activity.T}, width::Union{Int64, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[outputs..., ]
     operands = Value[inputs..., ]
     owned_regions = Region[]
@@ -53,7 +54,7 @@ function autodiff(inputs::Vector{Value}; outputs::Union{Vector{IR.Type}, Tuple{V
 end
 
 
-function batch(inputs::Vector{Value}; outputs::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, fn::IR.FlatSymbol, batch_shape::Vector{Int64}, location=Location())
+function batch(inputs::Vector{Value}; outputs::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, fn::IR.FlatSymbol, batch_shape::Vector{Int64}, location::Location=Location())
     op_ty_results = IR.Type[outputs..., ]
     operands = Value[inputs..., ]
     owned_regions = Region[]
@@ -76,7 +77,7 @@ For scalar operands, ranked tensor is created.
 
 NOTE: Only works for scalar and *ranked* tensor operands for now.
 """
-function broadcast(input::Value; output::IR.Type, shape::Vector{Int64}, location=Location())
+function broadcast(input::Value; output::IR.Type, shape::Vector{Int64}, location::Location=Location())
     op_ty_results = IR.Type[output, ]
     operands = Value[input, ]
     owned_regions = Region[]
@@ -92,7 +93,7 @@ function broadcast(input::Value; output::IR.Type, shape::Vector{Int64}, location
 end
 
 
-function fwddiff(inputs::Vector{Value}; outputs::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, fn::IR.FlatSymbol, activity::Vector{Activity.T}, ret_activity::Vector{Activity.T}, width::Union{UInt64, Nothing}=nothing, location=Location())
+function fwddiff(inputs::Vector{Value}; outputs::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, fn::IR.FlatSymbol, activity::Vector{Activity.T}, ret_activity::Vector{Activity.T}, width::Union{Int64, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[outputs..., ]
     operands = Value[inputs..., ]
     owned_regions = Region[]
@@ -109,7 +110,7 @@ function fwddiff(inputs::Vector{Value}; outputs::Union{Vector{IR.Type}, Tuple{Va
 end
 
 
-function genericAdjoint(inputs::Vector{Value}, outputs::Vector{Value}; result_tensors::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, indexing_maps::Vector{Any}, iterator_types::Vector{Attribute}, doc::Union{String, Nothing}=nothing, library_call::Union{String, Nothing}=nothing, region::Region, location=Location())
+function genericAdjoint(inputs::Vector{Value}, outputs::Vector{Value}; result_tensors::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, indexing_maps::Vector{Any}, iterator_types::Vector{Attribute}, doc::Union{String, Nothing}=nothing, library_call::Union{String, Nothing}=nothing, region::Region, location::Location=Location())
     op_ty_results = IR.Type[result_tensors..., ]
     operands = Value[inputs..., outputs..., ]
     owned_regions = Region[region, ]
@@ -128,7 +129,7 @@ function genericAdjoint(inputs::Vector{Value}, outputs::Vector{Value}; result_te
 end
 
 
-function get(gradient::Value; result::IR.Type, location=Location())
+function get(gradient::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[gradient, ]
     owned_regions = Region[]
@@ -144,7 +145,7 @@ function get(gradient::Value; result::IR.Type, location=Location())
 end
 
 
-function init(; result::IR.Type, location=Location())
+function init(; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result, ]
     operands = Value[]
     owned_regions = Region[]
@@ -160,7 +161,7 @@ function init(; result::IR.Type, location=Location())
 end
 
 
-function placeholder(; output::IR.Type, location=Location())
+function placeholder(; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output, ]
     operands = Value[]
     owned_regions = Region[]
@@ -176,7 +177,7 @@ function placeholder(; output::IR.Type, location=Location())
 end
 
 
-function pop(cache::Value; output::IR.Type, location=Location())
+function pop(cache::Value; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output, ]
     operands = Value[cache, ]
     owned_regions = Region[]
@@ -192,7 +193,7 @@ function pop(cache::Value; output::IR.Type, location=Location())
 end
 
 
-function push(cache::Value, value::Value; location=Location())
+function push(cache::Value, value::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[cache, value, ]
     owned_regions = Region[]
@@ -208,7 +209,7 @@ function push(cache::Value, value::Value; location=Location())
 end
 
 
-function set(gradient::Value, value::Value; location=Location())
+function set(gradient::Value, value::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[gradient, value, ]
     owned_regions = Region[]

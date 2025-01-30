@@ -10,7 +10,7 @@ using ..Reactant:
     unwrapped_eltype,
     Ops,
     MLIR
-
+using ..Reactant.MLIR.Dialects: stablehlo
 using ..TracedUtils: TracedUtils, get_mlir_data, materialize_traced_array, set_mlir_data!
 
 using LinearAlgebra
@@ -42,7 +42,7 @@ function TracedUtils.materialize_traced_array(
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
 end
 
-for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
+for (AT, comp) in ((:LowerTriangular, stablehlo.ComparisonDirection.GE), (:UpperTriangular, stablehlo.ComparisonDirection.LE))
     uAT = Symbol(:Unit, AT)
     @eval begin
         function TracedUtils.materialize_traced_array(
@@ -61,7 +61,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
             m, n = size(x)
             row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
             col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
-            nondiag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="NE")
+            nondiag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=stablehlo.ComparisonDirection.NE)
             x = materialize_traced_array($(AT)(parent(x)))
             return Ops.select(nondiag_indicator, x, one.(x))
         end
@@ -75,12 +75,12 @@ function TracedUtils.materialize_traced_array(
     row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
     col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
     if x.uplo == 'L'
-        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="GT")
+        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=stablehlo.ComparisonDirection.GT)
         x_lt = Ops.select(indicator, parent(x), zero(parent(x)))
         x_ltd = materialize_traced_array(LowerTriangular(parent(x)))
         return Ops.add(x_lt, Ops.transpose(x_ltd, [2, 1]))
     else
-        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="LT")
+        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=stablehlo.ComparisonDirection.LT)
         x_ut = Ops.select(indicator, parent(x), zero(parent(x)))
         x_utd = materialize_traced_array(UpperTriangular(parent(x)))
         return Ops.add(Ops.transpose(x_utd, [2, 1]), x_ut)
@@ -121,10 +121,10 @@ function TracedUtils.set_mlir_data!(
 end
 
 for (AT, dcomp, ocomp) in (
-    (:LowerTriangular, "GE", "LT"),
-    (:UnitLowerTriangular, "GT", "LE"),
-    (:UpperTriangular, "LE", "GT"),
-    (:UnitUpperTriangular, "LT", "GE"),
+    (:LowerTriangular, stablehlo.ComparisonDirection.GE, stablehlo.ComparisonDirection.LT),
+    (:UnitLowerTriangular, stablehlo.ComparisonDirection.GT, stablehlo.ComparisonDirection.LE),
+    (:UpperTriangular, stablehlo.ComparisonDirection.LE, stablehlo.ComparisonDirection.GT),
+    (:UnitUpperTriangular, stablehlo.ComparisonDirection.LT, stablehlo.ComparisonDirection.GE),
 )
     @eval function TracedUtils.set_mlir_data!(
         x::$(AT){TracedRNumber{T},TracedRArray{T,2}}, data
@@ -233,7 +233,7 @@ function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) wh
         Ops.iota(Int64, [size(X)...]; iota_dimension=2),
         TracedUtils.broadcast_to_size(k, size(X)),
     )
-    idxs = Ops.compare(iota_1, iota_2; comparison_direction="LE")
+    idxs = Ops.compare(iota_1, iota_2; comparison_direction=stablehlo.ComparisonDirection.LE)
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
     return X
 end
@@ -244,7 +244,7 @@ function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) wh
         Ops.iota(Int64, [size(X)...]; iota_dimension=2),
         TracedUtils.broadcast_to_size(k, size(X)),
     )
-    idxs = Ops.compare(iota_1, iota_2; comparison_direction="GE")
+    idxs = Ops.compare(iota_1, iota_2; comparison_direction=stablehlo.ComparisonDirection.GE)
     X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
     return X
 end

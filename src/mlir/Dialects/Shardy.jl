@@ -1,7 +1,7 @@
 module sdy
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
 
@@ -46,7 +46,7 @@ inferred sharding.
 - Both operand and result shardings should be bound to the same `MeshAttr`.
 - Applying `gathering_axes` to the operand sharding gets `out_sharding`.
 """
-function all_gather(tensor::Value; result::Union{Nothing, IR.Type}=nothing, gathering_axes::Any, out_sharding::Any, location=Location())
+function all_gather(tensor::Value; result::Union{Nothing, IR.Type}=nothing, gathering_axes::Any, out_sharding::Any, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[tensor, ]
     owned_regions = Region[]
@@ -94,7 +94,7 @@ inferred sharding.
 - Both operand and result shardings should be bound to the same `MeshAttr`.
 - Applying `slicing_axes` to the operand sharding gets `out_sharding`.
 """
-function all_slice(tensor::Value; result::Union{Nothing, IR.Type}=nothing, slicing_axes::Any, out_sharding::Any, location=Location())
+function all_slice(tensor::Value; result::Union{Nothing, IR.Type}=nothing, slicing_axes::Any, out_sharding::Any, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[tensor, ]
     owned_regions = Region[]
@@ -129,7 +129,7 @@ is done between constants (or constant expressions).
 %output = sdy.constant dense<[[0.0, 1.0], [2.0, 3.0]]> : tensor<2x2xf32>
 ```
 """
-function constant(; output::Union{Nothing, IR.Type}=nothing, value::IR.DenseElements, location=Location())
+function constant(; output::Union{Nothing, IR.Type}=nothing, value::IR.DenseElements, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -201,7 +201,7 @@ between sources and targets, it\'s simply attached to the owner of the edge.
 The op that this edge is bound to (while in the example above) is
 responsible for providing this information.
 """
-function data_flow_edge(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding::Union{Any, Nothing}=nothing, location=Location())
+function data_flow_edge(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding::Union{Any, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[input, ]
     owned_regions = Region[]
@@ -236,7 +236,7 @@ the body on any free axes - those not in the manual_axes list.
 - The global and local shapes of the op regions arguments/results must match.
 - No manual axes are split.
 """
-function manual_computation(tensors::Vector{Value}; results::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, in_shardings::Any, out_shardings::Any, manual_axes::Any, body::Region, location=Location())
+function manual_computation(tensors::Vector{Value}; results::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, in_shardings::Any, out_shardings::Any, manual_axes::Any, body::Region, location::Location=Location())
     op_ty_results = IR.Type[results..., ]
     operands = Value[tensors..., ]
     owned_regions = Region[body, ]
@@ -259,7 +259,7 @@ of devices (except for meshes with a single device_id).
 The mesh is a `Symbol` operation that appears in the module\'s
 `SymbolTable` and can be referenced by its `name`.
 """
-function mesh(; sym_name::String, mesh::Any, location=Location())
+function mesh(; sym_name::String, mesh::Any, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -296,7 +296,7 @@ the same as the type of the operands and results type of the op.
 } : (tensor<16x32xf32>) -> tensor<16x32xf32>
 ```
 """
-function named_computation(operands::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, name::String, in_shardings::Union{Any, Nothing}=nothing, out_shardings::Union{Any, Nothing}=nothing, body::Region, location=Location())
+function named_computation(operands::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, name::String, in_shardings::Union{Any, Nothing}=nothing, out_shardings::Union{Any, Nothing}=nothing, body::Region, location::Location=Location())
     op_ty_results = IR.Type[result..., ]
     operands = Value[operands..., ]
     owned_regions = Region[body, ]
@@ -328,7 +328,7 @@ of the barrier op and its operand.
 - `NONE` means no sharding can propagate through this op.
 - Cannot specify `BOTH`, as this op would be redundant.
 """
-function propagation_barrier(input::Value; result::Union{Nothing, IR.Type}=nothing, allowed_direction::PropagationDirection.T, location=Location())
+function propagation_barrier(input::Value; result::Union{Nothing, IR.Type}=nothing, allowed_direction::PropagationDirection.T, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[input, ]
     owned_regions = Region[]
@@ -362,7 +362,7 @@ lifespan is:
   // TODO(b/331680067). Add a canonicalization pattern to remove redundant
   // reshard ops.
 """
-function reshard(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding::Any, location=Location())
+function reshard(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding::Any, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[input, ]
     owned_regions = Region[]
@@ -379,7 +379,7 @@ function reshard(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding
 end
 
 
-function return_(results::Vector{Value}; location=Location())
+function return_(results::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[results..., ]
     owned_regions = Region[]
@@ -412,7 +412,7 @@ This op can either:
   tensor might have a different sharding (if the input tensor has no other
   uses then the behavior is the same as the no uses case).
 """
-function sharding_constraint(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding::Any, location=Location())
+function sharding_constraint(input::Value; result::Union{Nothing, IR.Type}=nothing, sharding::Any, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[input, ]
     owned_regions = Region[]
@@ -439,7 +439,7 @@ argument group ID and returns no result, but instead modifies the internal
 sharding group representation to add the input tensor to the group with the
 given ID.
 """
-function sharding_group(input::Value; group_id::UInt64, location=Location())
+function sharding_group(input::Value; group_id::Int64, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[input, ]
     owned_regions = Region[]

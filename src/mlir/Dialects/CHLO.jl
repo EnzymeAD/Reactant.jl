@@ -1,7 +1,7 @@
 module chlo
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
 
@@ -11,8 +11,9 @@ using EnumX
 Which comparison operation to perform.
 """
 @enumx ComparisonDirection EQ NE GE GT LE LT 
+ComparisonDirectionStorage = ["EQ", "NE", "GE", "GT", "LE", "LT"]
 
-IR.Attribute(e::ComparisonDirection.T) = parse(Attribute,"#chlo<comparison_direction $value>")
+IR.Attribute(e::ComparisonDirection.T) = parse(Attribute,"#chlo<comparison_direction $(ComparisonDirectionStorage[Int(e)+1])>")
 
 
 """
@@ -20,8 +21,9 @@ IR.Attribute(e::ComparisonDirection.T) = parse(Attribute,"#chlo<comparison_direc
 Which comparison type to use.
 """
 @enumx ComparisonType NOTYPE FLOAT TOTALORDER SIGNED UNSIGNED 
+ComparisonTypeStorage = ["NOTYPE", "FLOAT", "TOTALORDER", "SIGNED", "UNSIGNED"]
 
-IR.Attribute(e::ComparisonType.T) = parse(Attribute,"#chlo<comparison_type $value>")
+IR.Attribute(e::ComparisonType.T) = parse(Attribute,"#chlo<comparison_type $(ComparisonTypeStorage[Int(e)+1])>")
 
 
 """
@@ -29,15 +31,15 @@ IR.Attribute(e::ComparisonType.T) = parse(Attribute,"#chlo<comparison_type $valu
 Attribute that models the dimension information for ragged dot.
 """
 struct RaggedDot
-	lhsBatchingDimensions::Vector{Int64}
-	rhsBatchingDimensions::Vector{Int64}
-	lhsContractingDimensions::Vector{Int64}
-	rhsContractingDimensions::Vector{Int64}
-	lhsRaggedDimensions::Vector{Int64}
-	rhsGroupDimensions::Vector{Int64}
+	lhs_batching_dimensions::Vector{Int64}
+	rhs_batching_dimensions::Vector{Int64}
+	lhs_contracting_dimensions::Vector{Int64}
+	rhs_contracting_dimensions::Vector{Int64}
+	lhs_ragged_dimensions::Vector{Int64}
+	rhs_group_dimensions::Vector{Int64}
 end
 
-IR.Attribute(s::RaggedDot) = parse(IR.Attribute,"#chlo.ragged_dot<lhsBatchingDimensions = $(s.lhsBatchingDimensions), rhsBatchingDimensions = $(s.rhsBatchingDimensions), lhsContractingDimensions = $(s.lhsContractingDimensions), rhsContractingDimensions = $(s.rhsContractingDimensions), lhsRaggedDimensions = $(s.lhsRaggedDimensions), rhsGroupDimensions = $(s.rhsGroupDimensions)>")
+IR.Attribute(s::RaggedDot) = parse(Attribute,"#chlo.ragged_dot<lhs_batching_dimensions = $(c(s.lhs_batching_dimensions)), rhs_batching_dimensions = $(c(s.rhs_batching_dimensions)), lhs_contracting_dimensions = $(c(s.lhs_contracting_dimensions)), rhs_contracting_dimensions = $(c(s.rhs_contracting_dimensions)), lhs_ragged_dimensions = $(c(s.lhs_ragged_dimensions)), rhs_group_dimensions = $(c(s.rhs_group_dimensions))>")
 
 
 """
@@ -45,8 +47,9 @@ IR.Attribute(s::RaggedDot) = parse(IR.Attribute,"#chlo.ragged_dot<lhsBatchingDim
 XLA precision for an operand. Has backend specific meaning.
 """
 @enumx Precision DEFAULT HIGH HIGHEST 
+PrecisionStorage = ["DEFAULT", "HIGH", "HIGHEST"]
 
-IR.Attribute(e::Precision.T) = parse(Attribute,"#chlo<precision $value>")
+IR.Attribute(e::Precision.T) = parse(Attribute,"#chlo<precision $(PrecisionStorage[Int(e)+1])>")
 
 
 """
@@ -59,7 +62,7 @@ Returns `Acos(operand)` element-wise.
          = pi                                  if x == -1
 \$\$
 """
-function acos(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function acos(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -85,7 +88,7 @@ Returns `Acosh(operand)` element-wise.
 \\acosh(x) = nan                         if x < -1
 \$\$
 """
-function acosh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function acosh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -119,7 +122,7 @@ This op is used as an intermediate value in decompositions and
 should never be constructed directly by frameworks or consumed by
 backends.
 """
-function _asin_acos_kernel(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function _asin_acos_kernel(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -144,7 +147,7 @@ Returns `Asin(operand)` element-wise.
 \\asin(x) = 2 * atan(x / (1 + sqrt(1 - x^2)))
 \$\$
 """
-function asin(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function asin(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -169,7 +172,7 @@ Returns `Asinh(operand)` element-wise.
 \\asinh(x) = log(x + sqrt(x^2 + 1))
 \$\$
 """
-function asinh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function asinh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -194,7 +197,7 @@ Returns `Atan(operand)` element-wise.
 \\atan(x) = \\atan2(x, 1)
 \$\$
 """
-function atan(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function atan(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -220,7 +223,7 @@ Returns `Atanh(operand)` element-wise.
           = nan                          otherwise
 \$\$
 """
-function atanh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function atanh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -241,7 +244,7 @@ end
 
 Returns `bessel_i1e(operand)` element-wise.
 """
-function bessel_i1e(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function bessel_i1e(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -265,7 +268,7 @@ Returns `lhs + rhs` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_add(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_add(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -290,7 +293,7 @@ Returns `logical_and(lhs, rhs)` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_and(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_and(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -315,7 +318,7 @@ Returns `atan2(lhs/rhs)` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_atan2(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_atan2(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -343,7 +346,7 @@ types.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_comparison_operations.
 """
-function broadcast_compare(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, comparison_direction::ComparisonDirection.T, compare_type::Union{ComparisonType.T, Nothing}=nothing, location=Location())
+function broadcast_compare(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, comparison_direction::ComparisonDirection.T, compare_type::Union{ComparisonType.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -367,7 +370,7 @@ end
 Performs element-wise conversion of a pair of real and imaginary values to
 a complex value.
 """
-function broadcast_complex(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_complex(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -392,7 +395,7 @@ Returns `lhs / rhs` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_divide(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_divide(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -417,7 +420,7 @@ Returns `max(lhs, rhs)` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_maximum(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_maximum(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -442,7 +445,7 @@ Returns `min(lhs, rhs)` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_minimum(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_minimum(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -467,7 +470,7 @@ Returns `lhs * rhs` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_multiply(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_multiply(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -492,7 +495,7 @@ element-wise. It can also return a subnormal number.
 
 Equivalent to the C++ std::nextafter function.
 """
-function broadcast_next_after(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_next_after(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -517,7 +520,7 @@ Returns `logical_or(lhs, rhs)` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_or(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_or(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -539,7 +542,7 @@ end
 
 Returns `Polygamma(operand, operand)` element-wise.
 """
-function broadcast_polygamma(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_polygamma(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -564,7 +567,7 @@ Returns `lhs ^ rhs` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_power(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_power(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -589,7 +592,7 @@ Returns `lhs % rhs` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_remainder(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_remainder(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -614,7 +617,7 @@ values of a predicate array.
 
 See https://www.tensorflow.org/xla/operation_semantics#select
 """
-function broadcast_select(pred::Value, on_true::Value, on_false::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function broadcast_select(pred::Value, on_true::Value, on_false::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[pred, on_true, on_false, ]
     owned_regions = Region[]
@@ -638,7 +641,7 @@ Returns `lhs << rhs` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_shift_left(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_shift_left(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -663,7 +666,7 @@ Returns `lhs >> rhs` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_shift_right_arithmetic(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_shift_right_arithmetic(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -688,7 +691,7 @@ Returns `lhs >> rhs` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_shift_right_logical(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_shift_right_logical(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -713,7 +716,7 @@ Returns `lhs - rhs` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_subtract(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_subtract(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -738,7 +741,7 @@ Returns `logical_xor(lhs, rhs)` element-wise.
 See
 https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmetic_operations.
 """
-function broadcast_xor(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_xor(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -764,7 +767,7 @@ Returns `Zeta(operand, operand)` element-wise.
 \\(\\zeta(x, q) = \\sum_{n=0}^{\\infty} (q + n)^{-x}\\)
 \$\$
 """
-function broadcast_zeta(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location=Location())
+function broadcast_zeta(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, broadcast_dimensions::Union{Vector{Int64}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -790,7 +793,7 @@ Returns `Conj(operand)` element-wise.
 \\conj(x) = (\\real(x), \\neg(\\imag(x)))
 \$\$
 """
-function conj(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function conj(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -811,7 +814,7 @@ end
 
 Returns a splat constant of the same shape as the operand.
 """
-function constant_like(operand::Value; result::Union{Nothing, IR.Type}=nothing, value::Any, location=Location())
+function constant_like(operand::Value; result::Union{Nothing, IR.Type}=nothing, value::Any, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -832,7 +835,7 @@ end
 
 Represents a constant value.
 """
-function constant(; output::Union{Nothing, IR.Type}=nothing, value::IR.DenseElements, location=Location())
+function constant(; output::Union{Nothing, IR.Type}=nothing, value::IR.DenseElements, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -857,7 +860,7 @@ Returns `Cosh(operand)` element-wise.
 \\cosh(x) = (e^x + e^-x) / 2
 \$\$
 """
-function cosh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function cosh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -878,7 +881,7 @@ end
 
 Returns `Digamma(operand)` element-wise.
 """
-function digamma(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function digamma(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -899,7 +902,7 @@ end
 
 Returns `ErfInv(operand)` element-wise.
 """
-function erf_inv(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function erf_inv(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -923,7 +926,7 @@ Computes the Gauss error function of `x` element-wise.
 erf(x) = erf_impl(x)            if |x| < 1
        = 1 - erfc_impl(x)       otherwise
 """
-function erf(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function erf(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -947,7 +950,7 @@ Computes an approximation of the error function complement (1 - erf(x)).
 erfc(x) = erfc_impl(x)           if |x| > 1
         = 1 - erf_impl(x)        otherwise
 """
-function erfc(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function erfc(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -968,7 +971,7 @@ end
 
 Returns if a value is +/-inf element-wise.
 """
-function is_inf(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function is_inf(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -989,7 +992,7 @@ end
 
 Returns if a value is -inf element-wise.
 """
-function is_neg_inf(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function is_neg_inf(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -1010,7 +1013,7 @@ end
 
 Returns if a value is +inf element-wise.
 """
-function is_pos_inf(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function is_pos_inf(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -1031,7 +1034,7 @@ end
 
 Returns `Lgamma(operand)` element-wise.
 """
-function lgamma(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function lgamma(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -1055,7 +1058,7 @@ element-wise. It can also return a subnormal number.
 
 Equivalent to the C++ std::nextafter function.
 """
-function next_after(x::Value, y::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function next_after(x::Value, y::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[x, y, ]
     owned_regions = Region[]
@@ -1076,7 +1079,7 @@ end
 
 Returns `Polygamma(operand, operand)` element-wise.
 """
-function polygamma(n::Value, x::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function polygamma(n::Value, x::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[n, x, ]
     owned_regions = Region[]
@@ -1114,7 +1117,7 @@ Here the ragged dimension is an lhs/rhs contracting dimension (`k`).
 In mode 3, the shape-signature is `[b,m,k], [b,k,n], [g] -> [b,m,n]`. Here
 the ragged dimension is an lhs/rhs batch dimension (`b`).
 """
-function ragged_dot(lhs::Value, rhs::Value, group_sizes::Value; result::Union{Nothing, IR.Type}=nothing, ragged_dot_dimension_numbers::RaggedDot, precision_config::Union{Vector{Precision.T}, Nothing}=nothing, location=Location())
+function ragged_dot(lhs::Value, rhs::Value, group_sizes::Value; result::Union{Nothing, IR.Type}=nothing, ragged_dot_dimension_numbers::RaggedDot, precision_config::Union{Vector{Precision.T}, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, group_sizes, ]
     owned_regions = Region[]
@@ -1141,7 +1144,7 @@ Returns `Sinh(operand)` element-wise.
          = e^(x + log(1/2)) - e^(-x + log(1/2)) otherwise.
 \$\$
 """
-function sinh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function sinh(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -1167,7 +1170,7 @@ Returns `Square(operand)` element-wise.
            = x * x                                                               otherwise
 \$\$
 """
-function square(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function square(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -1192,7 +1195,7 @@ Returns `Tan(operand)` element-wise.
 \\tan(x) = \\sin(x) / \\cos(x)
 \$\$
 """
-function tan(operand::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function tan(operand::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -1222,7 +1225,7 @@ row (resp. vector along the last dimension).  Thus,
 
 If two elements are equal, the lower-index element appears first.
 """
-function top_k(operand::Value; values::Union{Nothing, IR.Type}=nothing, indices::Union{Nothing, IR.Type}=nothing, k::UInt64, location=Location())
+function top_k(operand::Value; values::Union{Nothing, IR.Type}=nothing, indices::Union{Nothing, IR.Type}=nothing, k::Int64, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -1248,7 +1251,7 @@ Returns `Zeta(operand, operand)` element-wise.
 \\(\\zeta(x, q) = \\sum_{n=0}^{\\infty} (q + n)^{-x}\\)
 \$\$
 """
-function zeta(x::Value, q::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function zeta(x::Value, q::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[x, q, ]
     owned_regions = Region[]

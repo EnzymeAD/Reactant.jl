@@ -1,7 +1,7 @@
 module arith
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
 
@@ -11,8 +11,9 @@ using EnumX
 Floating point fast math flags
 """
 @enumx FastMathFlags none reassoc nnan ninf nsz arcp contract afn fast 
+FastMathFlagsStorage = ["none", "reassoc", "nnan", "ninf", "nsz", "arcp", "contract", "afn", "fast"]
 
-IR.Attribute(e::FastMathFlags.T) = parse(Attribute,"#arith<fastmath <$(string(e))>>")
+IR.Attribute(e::FastMathFlags.T) = parse(Attribute,"#arith<fastmath <$(FastMathFlagsStorage[Int(e)+1])>>")
 
 
 """
@@ -20,15 +21,16 @@ IR.Attribute(e::FastMathFlags.T) = parse(Attribute,"#arith<fastmath <$(string(e)
 Integer overflow arith flags
 """
 @enumx IntegerOverflowFlags none nsw nuw 
+IntegerOverflowFlagsStorage = ["none", "nsw", "nuw"]
 
-IR.Attribute(e::IntegerOverflowFlags.T) = parse(Attribute,"#arith<overflow <$(string(e))>>")
+IR.Attribute(e::IntegerOverflowFlags.T) = parse(Attribute,"#arith<overflow <$(IntegerOverflowFlagsStorage[Int(e)+1])>>")
 
 
 """
 `CmpFPredicate`
 allowed 64-bit signless integer cases: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
 """
-@enumx CmpFPredicate false_=0 oeq=1 ogt=2 oge=3 olt=4 ole=5 one=6 ord=7 ueq=8 ugt=9 uge=10 ult=11 ule=12 une=13 uno=14 true_=15 
+@enumx CmpFPredicate AlwaysFalse=0 OEQ=1 OGT=2 OGE=3 OLT=4 OLE=5 ONE=6 ORD=7 UEQ=8 UGT=9 UGE=10 ULT=11 ULE=12 UNE=13 UNO=14 AlwaysTrue=15 
 
 IR.Attribute(e::CmpFPredicate.T) = Int(e)
 
@@ -75,7 +77,7 @@ floating point tensor.
 TODO: In the distant future, this will accept optional attributes for fast
 math, contraction, rounding mode, and other controls.
 """
-function addf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function addf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -126,7 +128,7 @@ This op supports `nuw`/`nsw` overflow flags which stands stand for
 %x = arith.addi %y, %z : tensor<4x?xi8>
 ```
 """
-function addi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, overflowFlags::Union{IntegerOverflowFlags.T, Nothing}=nothing, location=Location())
+function addi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, overflowFlags::Union{IntegerOverflowFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -164,7 +166,7 @@ indicates no overflow.
 %x:2 = arith.addui_extended %y, %z : tensor<4x?xi8>, tensor<4x?xi1>
 ```
 """
-function addui_extended(lhs::Value, rhs::Value; sum::IR.Type, overflow::IR.Type, location=Location())
+function addui_extended(lhs::Value, rhs::Value; sum::IR.Type, overflow::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[sum, overflow, ]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -200,7 +202,7 @@ has no standard attributes.
 %x = arith.andi %y, %z : tensor<4x?xi8>
 ```
 """
-function andi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function andi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -234,7 +236,7 @@ endianness for the source and target types (e.g. float is big-endian and
 integer is little-endian) a proper lowering would add operations to swap the
 order of words in addition to the bitcast.
 """
-function bitcast(in::Value; out::IR.Type, location=Location())
+function bitcast(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -266,7 +268,7 @@ signed division overflow.
 %a = arith.ceildivsi %b, %c : i64
 ```
 """
-function ceildivsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function ceildivsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -300,7 +302,7 @@ zero.
 %a = arith.ceildivui %b, %c : i64
 ```
 """
-function ceildivui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function ceildivui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -343,7 +345,7 @@ attribute by the parser.
 %r3 = \"arith.cmpf\"(%0, %1) {predicate: 0} : (f8, f8) -> i1
 ```
 """
-function cmpf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, predicate::CmpFPredicate.T, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function cmpf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, predicate::CmpFPredicate.T, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -425,7 +427,7 @@ complement or large positives
     : (vector<4xi64>, vector<4xi64>) -> vector<4xi1>
 ```
 """
-function cmpi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, predicate::CmpIPredicate.T, location=Location())
+function cmpi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, predicate::CmpIPredicate.T, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -458,7 +460,7 @@ forms simple integer and floating point constants.
 %1 = \"arith.constant\"() {value = 42 : i32} : () -> i32
 ```
 """
-function constant(; result::Union{Nothing, IR.Type}=nothing, value::Any, location=Location())
+function constant(; result::Union{Nothing, IR.Type}=nothing, value::Any, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -475,7 +477,7 @@ function constant(; result::Union{Nothing, IR.Type}=nothing, value::Any, locatio
 end
 
 
-function divf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function divf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -516,7 +518,7 @@ signed division overflow.
 %x = arith.divsi %y, %z : tensor<4x?xi8>
 ```
 """
-function divsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function divsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -556,7 +558,7 @@ zero.
 %x = arith.divui %y, %z : tensor<4x?xi8>
 ```
 """
-function divui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function divui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -579,7 +581,7 @@ Cast a floating-point value to a larger floating-point-typed value.
 The destination type must to be strictly wider than the source type.
 When operating on vectors, casts elementwise.
 """
-function extf(in::Value; out::IR.Type, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function extf(in::Value; out::IR.Type, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -615,7 +617,7 @@ of the most-significant bit of the input.
 %5 = arith.extsi %0 : vector<2 x i32> to vector<2 x i64>
 ```
 """
-function extsi(in::Value; out::IR.Type, location=Location())
+function extsi(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -649,7 +651,7 @@ The top-most (N - M) bits of the output are filled with zeros.
   %5 = arith.extui %0 : vector<2 x i32> to vector<2 x i64>
 ```
 """
-function extui(in::Value; out::IR.Type, location=Location())
+function extui(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -671,7 +673,7 @@ Cast from a value interpreted as floating-point to the nearest (rounding
 towards zero) signed integer value. When operating on vectors, casts
 elementwise.
 """
-function fptosi(in::Value; out::IR.Type, location=Location())
+function fptosi(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -693,7 +695,7 @@ Cast from a value interpreted as floating-point to the nearest (rounding
 towards zero) unsigned integer value. When operating on vectors, casts
 elementwise.
 """
-function fptoui(in::Value; out::IR.Type, location=Location())
+function fptoui(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -726,7 +728,7 @@ signed division overflow.
 
 ```
 """
-function floordivsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function floordivsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -750,7 +752,7 @@ vectors. Index is an integer of platform-specific bit width. If casting to
 a wider integer, the value is sign-extended. If casting to a narrower
 integer, the value is truncated.
 """
-function index_cast(in::Value; out::IR.Type, location=Location())
+function index_cast(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -773,7 +775,7 @@ vectors. Index is an integer of platform-specific bit width. If casting to
 a wider integer, the value is zero-extended. If casting to a narrower
 integer, the value is truncated.
 """
-function index_castui(in::Value; out::IR.Type, location=Location())
+function index_castui(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -802,7 +804,7 @@ If one of the arguments is NaN, then the result is the other argument.
 %a = arith.maxnumf %b, %c : f64
 ```
 """
-function maxnumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function maxnumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -820,7 +822,7 @@ function maxnumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing
 end
 
 
-function maxsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function maxsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -837,7 +839,7 @@ function maxsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, 
 end
 
 
-function maxui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function maxui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -866,7 +868,7 @@ If one of the arguments is NaN, then the result is also NaN.
 %a = arith.maximumf %b, %c : f64
 ```
 """
-function maximumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function maximumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -897,7 +899,7 @@ If one of the arguments is NaN, then the result is the other argument.
 %a = arith.minnumf %b, %c : f64
 ```
 """
-function minnumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function minnumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -915,7 +917,7 @@ function minnumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing
 end
 
 
-function minsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function minsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -932,7 +934,7 @@ function minsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, 
 end
 
 
-function minui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function minui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -961,7 +963,7 @@ If one of the arguments is NaN, then the result is also NaN.
 %a = arith.minimumf %b, %c : f64
 ```
 """
-function minimumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function minimumf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1002,7 +1004,7 @@ floating point tensor.
 TODO: In the distant future, this will accept optional attributes for fast
 math, contraction, rounding mode, and other controls.
 """
-function mulf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function mulf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1053,7 +1055,7 @@ This op supports `nuw`/`nsw` overflow flags which stands stand for
 %x = arith.muli %y, %z : tensor<4x?xi8>
 ```
 """
-function muli(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, overflowFlags::Union{IntegerOverflowFlags.T, Nothing}=nothing, location=Location())
+function muli(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, overflowFlags::Union{IntegerOverflowFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1091,7 +1093,7 @@ the same operands.
 %x:2 = arith.mulsi_extended %y, %z : tensor<4x?xi8>
 ```
 """
-function mulsi_extended(lhs::Value, rhs::Value; low::Union{Nothing, IR.Type}=nothing, high::Union{Nothing, IR.Type}=nothing, location=Location())
+function mulsi_extended(lhs::Value, rhs::Value; low::Union{Nothing, IR.Type}=nothing, high::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1129,7 +1131,7 @@ the same operands.
 %x:2 = arith.mului_extended %y, %z : tensor<4x?xi8>
 ```
 """
-function mului_extended(lhs::Value, rhs::Value; low::Union{Nothing, IR.Type}=nothing, high::Union{Nothing, IR.Type}=nothing, location=Location())
+function mului_extended(lhs::Value, rhs::Value; low::Union{Nothing, IR.Type}=nothing, high::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1167,7 +1169,7 @@ It has no standard attributes.
 %x = arith.negf %y : tensor<4x?xf8>
 ```
 """
-function negf(operand::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function negf(operand::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operand, ]
     owned_regions = Region[]
@@ -1205,7 +1207,7 @@ standard attributes.
 %x = arith.ori %y, %z : tensor<4x?xi8>
 ```
 """
-function ori(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function ori(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1227,7 +1229,7 @@ end
 Returns the floating point division remainder.
 The remainder has the same sign as the dividend (lhs operand).
 """
-function remf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function remf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1267,7 +1269,7 @@ zero.
 %x = arith.remsi %y, %z : tensor<4x?xi8>
 ```
 """
-function remsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function remsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1306,7 +1308,7 @@ zero.
 %x = arith.remui %y, %z : tensor<4x?xi8>
 ```
 """
-function remui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function remui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1330,7 +1332,7 @@ floating-point value. If the value cannot be exactly represented, it is
 rounded using the default rounding mode. When operating on vectors, casts
 elementwise.
 """
-function sitofp(in::Value; out::IR.Type, location=Location())
+function sitofp(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -1368,7 +1370,7 @@ This op supports `nuw`/`nsw` overflow flags which stands stand for
 %4 = arith.shli %1, %2 overflow<nsw, nuw> : i8  
 ```
 """
-function shli(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, overflowFlags::Union{IntegerOverflowFlags.T, Nothing}=nothing, location=Location())
+function shli(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, overflowFlags::Union{IntegerOverflowFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1406,7 +1408,7 @@ returns poison.
 %5 = arith.shrsi %4, %2 : (i8, i8) -> i8   // %5 is 0b00001100
 ```
 """
-function shrsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function shrsi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1439,7 +1441,7 @@ bitwidth of the first operand, then the operation returns poison.
 %3 = arith.shrui %1, %2 : (i8, i8) -> i8   // %3 is 0b00010100
 ```
 """
-function shrui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function shrui(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1479,7 +1481,7 @@ floating point tensor.
 TODO: In the distant future, this will accept optional attributes for fast
 math, contraction, rounding mode, and other controls.
 """
-function subf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function subf(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1530,7 +1532,7 @@ This op supports `nuw`/`nsw` overflow flags which stands stand for
 %x = arith.subi %y, %z : tensor<4x?xi8>
 ```
 """
-function subi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, overflowFlags::Union{IntegerOverflowFlags.T, Nothing}=nothing, location=Location())
+function subi(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, overflowFlags::Union{IntegerOverflowFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1556,7 +1558,7 @@ If the value cannot be exactly represented, it is rounded using the
 provided rounding mode or the default one if no rounding mode is provided.
 When operating on vectors, casts elementwise.
 """
-function truncf(in::Value; out::IR.Type, roundingmode::Union{RoundingMode.T, Nothing}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location=Location())
+function truncf(in::Value; out::IR.Type, roundingmode::Union{RoundingMode.T, Nothing}=nothing, fastmath::Union{FastMathFlags.T, Nothing}=nothing, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -1591,7 +1593,7 @@ The top-most (N - M) bits of the input are discarded.
   %5 = arith.trunci %0 : vector<2 x i32> to vector<2 x i16>
 ```
 """
-function trunci(in::Value; out::IR.Type, location=Location())
+function trunci(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -1614,7 +1616,7 @@ floating-point value. If the value cannot be exactly represented, it is
 rounded using the default rounding mode. When operating on vectors, casts
 elementwise.
 """
-function uitofp(in::Value; out::IR.Type, location=Location())
+function uitofp(in::Value; out::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[out, ]
     operands = Value[in, ]
     owned_regions = Region[]
@@ -1650,7 +1652,7 @@ has no standard attributes.
 %x = arith.xori %y, %z : tensor<4x?xi8>
 ```
 """
-function xori(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function xori(lhs::Value, rhs::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, ]
     owned_regions = Region[]
@@ -1703,7 +1705,7 @@ or tensor is chosen.
 %vx = arith.select %cond, %vtrue, %vfalse : vector<42xf32>
 ```
 """
-function select(condition::Value, true_value::Value, false_value::Value; result::Union{Nothing, IR.Type}=nothing, location=Location())
+function select(condition::Value, true_value::Value, false_value::Value; result::Union{Nothing, IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[condition, true_value, false_value, ]
     owned_regions = Region[]

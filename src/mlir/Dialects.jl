@@ -16,6 +16,9 @@ function operandsegmentsizes(segments)
     return namedattribute("operand_segment_sizes", Attribute(Int32.(segments)))
 end
 
+c(a::AbstractArray)=isempty(a) ? "[]" : a
+c(x)=x
+
 for file in readdir(joinpath(@__DIR__, "Dialects"))
     endswith(file, ".jl") || continue
     include(joinpath(@__DIR__, "Dialects", file))
