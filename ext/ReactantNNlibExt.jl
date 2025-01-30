@@ -384,7 +384,7 @@ function NNlib.∇conv_filter!(
                 ),
             )
 
-            Reactant.MLIR.IR.DenseElementsAttribute(padding')
+            Reactant.MLIR.IR.DenseElements(padding')
         end
 
     batch_group_count = 1
