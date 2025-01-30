@@ -49,10 +49,10 @@ function test()
             end
         end
 
-        return println(string(mod))
+        return string(mod)
     end
 end
-test()
+@test test() == "module {\n}"
 
 @testset "ConcreteRArray broadcasting" begin
     x = ones(10, 10)
