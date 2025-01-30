@@ -984,7 +984,7 @@ function __add_mhlo_attributes_and_name!(mod::MLIR.IR.Module, f; kwargs...)
     fname = string(f)
     length(fname) > 10 && (fname = fname[1:7] * "...")
     __add_mhlo_attributes_and_name!(mod, fname; kwargs...)
-    return
+    return nothing
 end
 
 function __add_mhlo_attributes_and_name!(
@@ -998,11 +998,9 @@ function __add_mhlo_attributes_and_name!(
     MLIR.IR.attr!(moduleop, "mhlo.num_partitions", MLIR.IR.Attribute(num_partitions))
     MLIR.IR.attr!(moduleop, "mhlo.num_replicas", MLIR.IR.Attribute(num_replicas))
     MLIR.IR.attr!(
-        moduleop,
-        String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()),
-        module_name,
+        moduleop, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()), module_name
     )
-    return
+    return nothing
 end
 
 function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
