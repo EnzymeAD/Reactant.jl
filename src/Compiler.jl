@@ -441,7 +441,13 @@ const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 
 function compile_mlir!(
-    mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu"
+    mod,
+    f,
+    args;
+    optimize::Union{Bool,Symbol}=true,
+    no_nan::Bool=false,
+    backend="gpu",
+    in_shardings=nothing,
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -451,7 +457,7 @@ function compile_mlir!(
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true; in_shardings)
     finally
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
@@ -635,7 +641,11 @@ end
 """
 macro compile(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :sync => false, :no_nan => false, :client => nothing
+        :optimize => true,
+        :sync => false,
+        :no_nan => false,
+        :client => nothing,
+        :in_shardings => nothing,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -647,7 +657,11 @@ Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :sync => false, :no_nan => false, :client => nothing
+        :optimize => true,
+        :sync => false,
+        :no_nan => false,
+        :client => nothing,
+        :in_shardings => nothing,
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
@@ -1003,7 +1017,9 @@ function __add_mhlo_attributes_and_name!(
     return nothing
 end
 
-function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
+function compile_xla(
+    f, args; client=nothing, optimize=true, no_nan=false, in_shardings=nothing
+)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
@@ -1025,7 +1041,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
-            mod, f, args; optimize, no_nan, backend
+            mod, f, args; optimize, no_nan, backend, in_shardings
         )
 
         # Attach a name, and partitioning attributes to the module
@@ -1064,6 +1080,8 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
                 device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
             end
         end
+
+        display(mod)
 
         # compile MLIR module to XLA executable
         exec = XLA.Compile(client, mod)

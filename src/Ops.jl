@@ -1991,12 +1991,25 @@ end
 
 # Shardy Ops
 @noinline function mesh(
+    mod::MLIR.IR.Module,
+    m::Reactant.Sharding.Mesh;
+    location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
+)
+    mesh_axes = [
+        name => ndevices for (name, ndevices) in zip(m.axis_names, size(m.device_ids))
+    ]
+    device_ids = collect(vec(m.device_ids))
+    return mesh(mod, mesh_axes, device_ids; sym_name=m.mesh_name, location)
+end
+
+@noinline function mesh(
+    mod::MLIR.IR.Module,
     mesh_axes::Vector{Pair{String,Int64}},
     device_ids::Vector{Int64};
     sym_name=nothing,
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
-    ndevices = sum(last, mesh_axes)
+    ndevices = prod(last, mesh_axes)
     @assert ndevices == length(device_ids)
 
     ctx = MLIR.IR.context()
@@ -2007,21 +2020,12 @@ end
         ctx, length(mesh_axis_attrs), mesh_axis_attrs, ndevices, device_ids
     )
 
-    cur_block = MLIR.IR.block()
-    op = nothing
-    try
-        MLIR.IR.deactivate!(cur_block)
-        cur_module = MLIR.IR.mmodule()
-        if sym_name === nothing
-            sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(
-                cur_module, "mesh"
-            )
-        end
-        op = MLIR.IR.mmodule!(cur_module) do
-            return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
-        end
-    finally
-        MLIR.IR.activate!(cur_block)
+    sym_name === nothing && (sym_name = "mesh")
+    if sym_name isa String
+        sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
+    end
+    op = MLIR.IR.mmodule!(mod) do
+        return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
     return op
 end

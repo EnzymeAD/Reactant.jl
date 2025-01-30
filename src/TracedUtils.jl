@@ -17,6 +17,7 @@ using ..Reactant:
     ReactantPrimitive,
     Ops
 using ReactantCore: MissingTracedValue, is_traced
+using Functors: Functors
 
 materialize_traced_array(x::TracedRArray) = x
 
@@ -136,6 +137,7 @@ function make_mlir_fn(
     return_dialect=:func,
     do_transpose=true,
     no_args_in_result=false,
+    in_shardings=nothing,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         return (
@@ -150,6 +152,7 @@ function make_mlir_fn(
                 return_dialect,
                 do_transpose,
                 no_args_in_result,
+                in_shardings,
             )[2:end]...,
         )
     end
@@ -190,6 +193,33 @@ function make_mlir_fn(
     end
 
     mod = MLIR.IR.mmodule()
+
+    mesh_cache = OrderedIdDict()
+    traced_args_to_shardings = OrderedIdDict()
+
+    if in_shardings !== nothing
+        # We need to insert the corresponding `sdy.mesh` ops
+        Functors.fmap(
+            in_shardings,
+            Tuple(traced_args);
+            exclude=x -> x isa Reactant.Sharding.AbstractSharding || Functors.isleaf(x),
+        ) do sharding, arr
+            if sharding isa Reactant.Sharding.NamedSharding
+                mesh = sharding.mesh
+                if !haskey(traced_args_to_shardings, arr) && arr isa Reactant.TracedType
+                    traced_args_to_shardings[arr] = mesh
+                end
+                if !haskey(mesh_cache, mesh)
+                    meshop = Reactant.Ops.mesh(mod, mesh)
+                    mesh_cache[mesh] = meshop
+                end
+            end
+            return sharding
+        end
+
+        # TODO: For multiple meshes? check if num_partitions are equal
+    end
+
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
@@ -200,6 +230,11 @@ function make_mlir_fn(
 
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
+
+    if in_shardings !== nothing
+        # Here we attach sharding annotations to the function arguments
+        # TODO
+    end
 
     @assert MLIR.IR._has_block()
 
