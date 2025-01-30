@@ -884,7 +884,8 @@ end
 @testset "lgamma" begin
     if !(Sys.isapple() && Sys.ARCH === :x86_64)
         x = ConcreteRArray([-1.0, 0.0, 1.0, 2.5])
-        @test SpecialFunctions.lgamma.(Array(x)) ≈ @jit Ops.lgamma(x)
+        lgamma(x) = (SpecialFunctions.logabsgamma(x))[1]
+        @test lgamma.(Array(x)) ≈ @jit Ops.lgamma(x)
     end
 end
 
