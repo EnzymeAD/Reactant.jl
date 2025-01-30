@@ -1002,7 +1002,6 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
         )
 
         # Resolve client and device
-        device_ordinal = -1
         if device === nothing
             if length(linear_args) > 0
                 devices_list = [
@@ -1020,30 +1019,18 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
                 client = XLA.client(device)
             else
                 client = XLA.default_backend[]
-                device = XLA.ClientGetDevice(client, XLA.default_device_idx[])
-                device_ordinal = XLA.default_device_idx[]
             end
         else
             if device !== nothing
                 @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
-            else
-                device = XLA.ClientGetDevice(client, XLA.default_device_idx[])
-                device_ordinal = XLA.default_device_idx[]
             end
         end
 
-        if device_ordinal < 0
-            device_ordinal = XLA.DeviceToClientDeviceOrdinal(device)
-        end
 
         # compile MLIR module to XLA executable
         exec = XLA.Compile(
             client,
-            mod;
-            device_ordinal,
-            num_replicas=1,
-            num_partitions=1,
-            use_shardy_partitioner=false,
+            mod
         )
         (
             exec,
