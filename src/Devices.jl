@@ -24,6 +24,7 @@ function addressable_devices(client::XLA.Client=XLA.default_backend[])
     return [XLA.ClientGetAddressableDevice(client, i - 1) for i in 1:ndevices]
 end
 
+# https://github.com/jax-ml/jax/blob/152099ee0ef31119f16f4c2dac50d84fcb1575ef/jax/_src/hardware_utils.py#L19-L55
 const _GOOGLE_PCI_VENDOR_ID = "0x1ae0"
 const _TPU_PCI_DEVICE_IDS = (
     # TPU v2, v3
