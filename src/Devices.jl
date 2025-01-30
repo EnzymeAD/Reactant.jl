@@ -49,8 +49,8 @@ function has_tpu()
 
     try
         for path in readdir(devices_dir; join=true, sort=false)
-            if trim(read(joinpath(path, "vendor"), String)) == _GOOGLE_PCI_VENDOR_ID &&
-                trim(read(joinpath(path, "device"), String)) in _TPU_PCI_DEVICE_IDS
+            if strip(read(joinpath(path, "vendor"), String)) == _GOOGLE_PCI_VENDOR_ID &&
+                strip(read(joinpath(path, "device"), String)) in _TPU_PCI_DEVICE_IDS
                 return true
             end
         end
