@@ -148,7 +148,7 @@ function __init__()
     end
 
     @static if !Sys.isapple()
-        if isfile("/usr/lib/libtpu.so")
+        if Reactant.has_tpu()
             dataset_dir = @get_scratch!("libtpu")
             if !isfile(dataset_dir * "/libtpu.so")
                 Downloads.download(
