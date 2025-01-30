@@ -360,9 +360,9 @@ cc_library(
         ],
 
     ) + [
-	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
-	"@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
-	"@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
+        "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
+        "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
@@ -438,7 +438,6 @@ cc_library(
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
 "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
-"-Wl,-exported_symbol,_RegisterEnzymeXLACPUHandler",
 "-Wl,-exported_symbol,_ReactantThrowError",
 "-Wl,-exported_symbol,_ReactantHandleCuResult",
 "-Wl,-exported_symbol,_CreateProfilerSession",
@@ -450,8 +449,13 @@ cc_library(
 "-Wl,-exported_symbol,_ProfilerActivityEnd",
 "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
 "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
+"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
+"-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
+"-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
+"-Wl,-exported_symbol,_PjRtDeviceGetLocalHardwareId",
+"-Wl,-exported_symbol,_XLAExecuteSharded",
 "-Wl,-exported_symbol,_ClientGetPlatformName",
-"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions"
+"-Wl,-exported_symbol,_RegisterEnzymeXLACPUHandler",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -545,12 +549,15 @@ cc_library(
         "@xla//xla/backends/profiler/cpu:host_tracer_impl",
         "@xla//xla/backends/profiler/cpu:metadata_collector",
         "@xla//xla/backends/profiler/cpu:metadata_utils",
+        "@xla//xla/backends/profiler/tpu:tpu_tracer",
+        "@xla//xla/python:profiler_utils",
 
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
         "@stablehlo//:stablehlo_capi_objects",
         "@stablehlo//:chlo_capi_objects",
+        "@shardy//shardy/integrations/c:sdy_capi_objects",
         "@com_google_absl//absl/hash:hash",
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
@@ -832,6 +839,7 @@ genrule(
         "@llvm-project//mlir:AsyncPassIncGen_filegroup",
         "@llvm-project//mlir:GPUPassIncGen_filegroup",
         "@stablehlo//:stablehlo/integrations/c/StablehloAttributes.h",
+        "@shardy//shardy/integrations/c:attributes.h",
         "//:Project.toml",
         "//:Manifest.toml",
         "//:wrap.toml",
@@ -839,5 +847,5 @@ genrule(
         "//:make.jl"
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$@\"",
+    cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$@\"",
 )
