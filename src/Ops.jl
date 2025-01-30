@@ -1989,4 +1989,41 @@ end
     return corrected_traced_results
 end
 
+# Shardy Ops
+@noinline function mesh(
+    mesh_axes::Vector{Pair{String,Int64}},
+    device_ids::Vector{Int64};
+    sym_name=nothing,
+    location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
+)
+    ndevices = sum(last, mesh_axes)
+    @assert ndevices == length(device_ids)
+
+    ctx = MLIR.IR.context()
+    mesh_axis_attrs = [
+        MLIR.API.sdyMeshAxisAttrGet(ctx, name, size) for (name, size) in mesh_axes
+    ]
+    mesh_attr = MLIR.API.sdyMeshAttrGet(
+        ctx, length(mesh_axis_attrs), mesh_axis_attrs, ndevices, device_ids
+    )
+
+    cur_block = MLIR.IR.block()
+    op = nothing
+    try
+        MLIR.IR.deactivate!(cur_block)
+        cur_module = MLIR.IR.mmodule()
+        if sym_name === nothing
+            sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(
+                cur_module, "mesh"
+            )
+        end
+        op = MLIR.IR.mmodule!(cur_module) do
+            return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
+        end
+    finally
+        MLIR.IR.activate!(cur_block)
+    end
+    return op
+end
+
 end # module Ops
