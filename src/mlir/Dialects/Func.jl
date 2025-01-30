@@ -1,10 +1,18 @@
 module func
 using ...IR
-import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
+import ...IR:
+    NamedAttribute,
+    Value,
+    Location,
+    Block,
+    Region,
+    Attribute,
+    create_operation,
+    context,
+    IndexType
 import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
-
 
 """
 `call_indirect`
@@ -23,18 +31,27 @@ Function values can be created with the
 %result = func.call_indirect %func(%0, %1) : (tensor<16xf32>, tensor<16xf32>) -> tensor<16xf32>
 ```
 """
-function call_indirect(callee::Value, callee_operands::Vector{Value}; results::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, location::Location=Location())
-    op_ty_results = IR.Type[results..., ]
-    operands = Value[callee, callee_operands..., ]
+function call_indirect(
+    callee::Value,
+    callee_operands::Vector{Value};
+    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    location::Location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[callee, callee_operands...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "func.call_indirect", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "func.call_indirect",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -52,19 +69,29 @@ symbol reference attribute named \"callee\".
 %2 = func.call @my_add(%0, %1) : (f32, f32) -> f32
 ```
 """
-function call(operands::Vector{Value}; result::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, callee::IR.FlatSymbol, no_inline::Union{Bool, Nothing}=nothing, location::Location=Location())
-    op_ty_results = IR.Type[result..., ]
-    operands = Value[operands..., ]
+function call(
+    operands::Vector{Value};
+    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    callee::IR.FlatSymbol,
+    no_inline::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
+)
+    op_ty_results = IR.Type[result...,]
+    operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("callee", callee), ]
+    attributes = NamedAttribute[namedattribute("callee", callee),]
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
-    
-    create_operation(
-        "func.call", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "func.call",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -90,17 +117,21 @@ reference a function simplifies this
 ([rationale](../Rationale/Rationale.md#multithreading-the-compiler)).
 """
 function constant(; result::IR.Type, value::IR.FlatSymbol, location::Location=Location())
-    op_ty_results = IR.Type[result, ]
+    op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value), ]
-    
-    create_operation(
-        "func.constant", location;
-        operands, owned_regions, successors, attributes,
+    attributes = NamedAttribute[namedattribute("value", value),]
+
+    return create_operation(
+        "func.constant",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -143,22 +174,38 @@ func.func private @example_fn_result() -> (f64 {dialectName.attrName = 0 : i64})
 func.func private @example_fn_attr() attributes {dialectName.attrName = false}
 ```
 """
-function func_(; sym_name::String, function_type::IR.Type, sym_visibility::Union{String, Nothing}=nothing, arg_attrs::Union{Vector{Any}, Nothing}=nothing, res_attrs::Union{Vector{Any}, Nothing}=nothing, no_inline::Union{Bool, Nothing}=nothing, body::Region, location::Location=Location())
+function func_(;
+    sym_name::String,
+    function_type::IR.Type,
+    sym_visibility::Union{String,Nothing}=nothing,
+    arg_attrs::Union{Vector{Any},Nothing}=nothing,
+    res_attrs::Union{Vector{Any},Nothing}=nothing,
+    no_inline::Union{Bool,Nothing}=nothing,
+    body::Region,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
-    owned_regions = Region[body, ]
+    owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sym_name", sym_name), namedattribute("function_type", function_type), ]
-    !isnothing(sym_visibility) && push!(attributes, namedattribute("sym_visibility", sym_visibility))
+    attributes = NamedAttribute[
+        namedattribute("sym_name", sym_name), namedattribute("function_type", function_type)
+    ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, namedattribute("sym_visibility", sym_visibility))
     !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
-    
-    create_operation(
-        "func.func", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "func.func",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -181,16 +228,20 @@ func.func @foo() -> (i32, f8) {
 """
 function return_(operands::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[operands..., ]
+    operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "func.return", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "func.return",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 

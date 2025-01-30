@@ -1,10 +1,18 @@
 module builtin
 using ...IR
-import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
+import ...IR:
+    NamedAttribute,
+    Value,
+    Location,
+    Block,
+    Region,
+    Attribute,
+    create_operation,
+    context,
+    IndexType
 import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
 using EnumX
-
 
 """
 `module_`
@@ -25,20 +33,30 @@ module {
 }
 ```
 """
-function module_(; sym_name::Union{String, Nothing}=nothing, sym_visibility::Union{String, Nothing}=nothing, bodyRegion::Region, location::Location=Location())
+function module_(;
+    sym_name::Union{String,Nothing}=nothing,
+    sym_visibility::Union{String,Nothing}=nothing,
+    bodyRegion::Region,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
-    owned_regions = Region[bodyRegion, ]
+    owned_regions = Region[bodyRegion,]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(sym_name) && push!(attributes, namedattribute("sym_name", sym_name))
-    !isnothing(sym_visibility) && push!(attributes, namedattribute("sym_visibility", sym_visibility))
-    
-    create_operation(
-        "builtin.module", location;
-        operands, owned_regions, successors, attributes,
+    !isnothing(sym_visibility) &&
+        push!(attributes, namedattribute("sym_visibility", sym_visibility))
+
+    return create_operation(
+        "builtin.module",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
@@ -76,18 +94,26 @@ operands of arity 0-N.
 %result3 = unrealized_conversion_cast %operand, %operand : !foo.type, !foo.type to !bar.tuple_type<!foo.type, !foo.type>
 ```
 """
-function unrealized_conversion_cast(inputs::Vector{Value}; outputs::Union{Vector{IR.Type}, Tuple{Vararg{IR.Type}}}, location::Location=Location())
-    op_ty_results = IR.Type[outputs..., ]
-    operands = Value[inputs..., ]
+function unrealized_conversion_cast(
+    inputs::Vector{Value};
+    outputs::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    location::Location=Location(),
+)
+    op_ty_results = IR.Type[outputs...,]
+    operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    
-    create_operation(
-        "builtin.unrealized_conversion_cast", location;
-        operands, owned_regions, successors, attributes,
+
+    return create_operation(
+        "builtin.unrealized_conversion_cast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
-        result_inference=false
+        result_inference=false,
     )
 end
 
