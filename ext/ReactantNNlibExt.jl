@@ -533,7 +533,7 @@ function NNlib.∇conv_data!(
         get_mlir_data(dy),
         get_mlir_data(w);
         result=result_type,
-        window_strides=1,
+        window_strides=[1 for _ in dilation],
         padding,
         lhs_dilation=collect(stride),
         rhs_dilation=collect(dilation),
