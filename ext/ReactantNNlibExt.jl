@@ -502,7 +502,7 @@ function NNlib.∇conv_data!(
                 ),
             )
 
-            Reactant.MLIR.IR.DenseElementsAttribute(padding')
+            Reactant.MLIR.IR.DenseElements(padding')
         end
 
     dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
