@@ -71,7 +71,6 @@
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
 #include "shardy/integrations/c/attributes.h"
-#include "shardy/dialect/sdy/ir/utils.h"
 
 // IFRT
 #include "xla/python/ifrt/array.h"

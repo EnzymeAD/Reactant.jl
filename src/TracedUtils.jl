@@ -271,21 +271,15 @@ function make_mlir_fn(
                 for (j, name) in enumerate(sharding.partition_spec)
                     if name === nothing
                         axes = MLIR.IR.Attribute[]
-                        is_closed = false
+                        is_closed = false # TODO: propagate from user input
                     else
                         # TODO: can be sharded along multiple axes
                         axes = [
                             MLIR.API.sdyAxisRefAttrGet(
-                                ctx,
-                                name,
-                                MLIR.API.sdySubAxisInfoAttrGet(
-                                    ctx,
-                                    sharding.mesh.name_to_size[name],
-                                    sharding.mesh.name_to_size[name],
-                                ),
+                                ctx, name, MLIR.API.MlirAttribute(C_NULL)
                             ),
                         ]
-                        is_closed = true
+                        is_closed = true # TODO: propagate from user input
                     end
                     dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
                         ctx, length(axes), axes, is_closed, 0
@@ -386,17 +380,13 @@ function make_mlir_fn(
 
     # Attach `sdy.sharding` attribute to the argument
     if in_shardings !== nothing
-        for i in 1:length(linear_args)
-            if isassigned(linear_arg_shardings, i)
-                @show linear_arg_shardings[i]
-
+        for (i, arg) in enumerate(linear_args)
+            if haskey(traced_args_to_shardings, arg)
                 MLIR.API.mlirFuncSetArgAttr(
                     func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
                 )
             end
         end
-
-        display(mod)
     end
 
     MLIR.API.mlirOperationDestroy(func.operation)

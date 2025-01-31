@@ -498,8 +498,6 @@ function compile_mlir!(
 
     opt_passes2 = optimization_passes(; no_nan, sroa=false)
 
-    # display(mod)
-
     if optimize === :all
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
         run_pass_pipeline!(
@@ -616,6 +614,9 @@ function compile_mlir!(
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
+        arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
+        res_attrs=MLIR.IR.attr(compiled_f, "res_attrs"),
+        no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
         body=MLIR.IR.Region(),
     )
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
