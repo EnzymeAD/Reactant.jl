@@ -519,10 +519,7 @@ function compile_mlir!(
         kern = "lower-kernel{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
     end
 
-    # XXX: SROA fails with sharding for now. see https://github.com/EnzymeAD/Enzyme-JAX/issues/298
-    # opt_passes = optimization_passes(; no_nan, sroa=true)
-    opt_passes = optimization_passes(; no_nan, sroa=false)
-
+    opt_passes = optimization_passes(; no_nan, sroa=true)
     opt_passes2 = optimization_passes(; no_nan, sroa=false)
 
     if optimize === :all
