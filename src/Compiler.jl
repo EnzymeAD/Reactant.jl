@@ -374,6 +374,8 @@ function compile_mlir(f, args; kwargs...)
     return results
 end
 
+const PartitionKA = Ref{Bool}(true)
+
 const cuLaunch = Ref{UInt}(0)
 const cuFunc = Ref{UInt}(0)
 const cuModule = Ref{UInt}(0)
