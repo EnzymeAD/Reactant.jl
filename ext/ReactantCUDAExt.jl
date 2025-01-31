@@ -7,7 +7,8 @@ using ReactantCore: @trace
 using KernelAbstractions: KernelAbstractions
 import KernelAbstractions as KA
 using Libdl
-using ReactantKernelAbstractionsExt: ReactantBackend
+const ReactantKernelAbstractionsExt = Base.get_extension(Reactant, :ReactantKernelAbstractionsExt)
+const ReactantBackend = ReactantKernelAbstractionsExt.ReactantBackend
 
 using Adapt
 
