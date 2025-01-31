@@ -7,9 +7,7 @@ function square_kernel!(x, y)
     i = threadIdx().x
     x[i] *= y[i]
     # We don't yet auto lower this via polygeist
-    @static if !Sys.isapple()
-        sync_threads()
-    end
+    # sync_threads()
     return nothing
 end
 
