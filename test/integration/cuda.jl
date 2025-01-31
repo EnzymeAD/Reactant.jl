@@ -6,7 +6,10 @@ using CUDA
 function square_kernel!(x, y)
     i = threadIdx().x
     x[i] *= y[i]
-    sync_threads()
+    # We don't yet auto lower this via polygeist
+    @static if !Sys.isapple()
+        sync_threads()
+    end
     return nothing
 end
 
