@@ -1123,6 +1123,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
         client, device = __resolve_device_and_client(client, seen_args, linear_args)
         if mlir_fn_res.num_partitions == 1
             mlir_fn_res.num_replicas = XLA.ClientNumAddressableDevices(client)
+        else
             device = nothing
         end
 
@@ -1132,7 +1133,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # compile MLIR module to XLA executable
-        exec = XLA.Compile(client, mod)
+        exec = XLA.Compile(client, mod; is_sharded=mlir_fn_res.num_partitions > 1)
 
         return (
             exec,

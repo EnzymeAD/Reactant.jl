@@ -2,30 +2,6 @@ module Sharding
 
 using ..Reactant: Reactant, XLA
 
-#=
-# TODO: make this into a tutorial: https://openxla.org/shardy/getting_started_jax
-
-using Reactant
-
-mesh = Sharding.Mesh(
-    "mesh", reshape(collect(Int64, 0:7), (2, 2, 2)), ("data", "model_x", "model_y")
-);
-
-samples_sharding = Sharding.NamedSharding(mesh, ("data", nothing));
-w1_sharding = Sharding.NamedSharding(mesh, (nothing, ("model_x", "model_y")));
-w2_sharding = Sharding.UnspecifiedSharding();
-
-samples = rand(Float32, 3, 12) |> Reactant.to_rarray
-w1 = rand(Float32, 4, 3) |> Reactant.to_rarray
-w2 = rand(Float32, 2, 4) |> Reactant.to_rarray
-
-predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
-
-@code_hlo in_shardings=(samples_sharding, w1_sharding, w2_sharding) predict(samples, w1, w2)
-
-@jit in_shardings=(samples_sharding, w1_sharding, w2_sharding) predict(samples, w1, w2)
-=#
-
 struct Mesh{D}
     mesh_name::String
     device_ids::Array{Int,D}
