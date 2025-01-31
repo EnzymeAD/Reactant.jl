@@ -43,7 +43,7 @@ end
     @test y ≈ x
 
     x = Reactant.to_rarray(ones(3))
-    y = Reactant.to_rarray(2*ones(3))
+    y = Reactant.to_rarray(2 * ones(3))
     @jit(maskset!(y, x))
     @test y ≈ x
 end
