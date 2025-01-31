@@ -1031,12 +1031,8 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
             end
         end
 
-
         # compile MLIR module to XLA executable
-        exec = XLA.Compile(
-            client,
-            mod
-        )
+        exec = XLA.Compile(client, mod)
         (
             exec,
             linear_args,
