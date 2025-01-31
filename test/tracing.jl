@@ -138,6 +138,11 @@ using Test
                     Base.Pairs{Symbol,Union{}},
                     Base.Pairs{Symbol,Union{}},
                 ),
+                (
+                    NTuple{nsteps, SpectralVariable3D} where {nsteps, SpectralVariable3D},
+                    NTuple{nsteps, SpectralVariable3D} where {nsteps, SpectralVariable3D},
+                    NTuple{nsteps, SpectralVariable3D} where {nsteps, SpectralVariable3D},
+                ),
             ]
                 tracedty = traced_type(origty, Val(ConcreteToTraced), Union{})
                 @test tracedty == targetty
