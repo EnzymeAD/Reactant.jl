@@ -561,10 +561,7 @@ end
     end
 end
 
-function Compile(
-    client::Client,
-    mod::MLIR.IR.Module
-)
+function Compile(client::Client, mod::MLIR.IR.Module)
     max_local_id = length(client.global_ordinals)
     GC.@preserve client mod begin
         executable = LoadedExecutable(
