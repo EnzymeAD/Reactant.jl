@@ -19,7 +19,8 @@ samples = rand(Float32, 3, 12) |> Reactant.to_rarray
 w1 = rand(Float32, 4, 3) |> Reactant.to_rarray
 w2 = rand(Float32, 2, 4) |> Reactant.to_rarray
 
-predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
+# predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
+predict(samples, w1, w2) = w2 * (w1 * samples)
 
 @code_hlo in_shardings=(samples_sharding, w1_sharding, w2_sharding) predict(samples, w1, w2)
 
@@ -30,6 +31,7 @@ struct Mesh{D}
     mesh_name::String
     device_ids::Array{Int,D}
     axis_names::NTuple{D,String}
+    name_to_size::Dict{String,Int}
 
     function Mesh(
         mesh_name::String,
@@ -45,7 +47,10 @@ struct Mesh{D}
         axis_names::NTuple{D,String},
     ) where {D}
         @assert allunique(device_ids)
-        return new{D}(mesh_name, Int64.(device_ids), axis_names)
+        name_to_size = Dict(
+            name => Int64(size(device_ids, i)) for (i, name) in enumerate(axis_names)
+        )
+        return new{D}(mesh_name, Int64.(device_ids), axis_names, name_to_size)
     end
 end
 

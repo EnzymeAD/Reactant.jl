@@ -1998,12 +1998,13 @@ end
     m::Reactant.Sharding.Mesh;
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
-    mesh_axes = [
-        name => Int64(ndevices) for
-        (name, ndevices) in zip(m.axis_names, size(m.device_ids))
-    ]
-    device_ids = collect(Int64, vec(m.device_ids))
-    return mesh(mod, mesh_axes, device_ids; sym_name=m.mesh_name, location)
+    return mesh(
+        mod,
+        collect(k => v for (k, v) in m.name_to_size),
+        collect(Int64, vec(m.device_ids));
+        sym_name=m.mesh_name,
+        location,
+    )
 end
 
 @noinline function mesh(
@@ -2042,20 +2043,13 @@ end
     if sym_name isa String
         sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
     end
-    sym_name = MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx)
 
     MLIR.IR.mmodule!(mod) do
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 
     # We return the name of the mesh, since the operation is a Symbol op
-    return (;
-        sym_name,
-        mesh_attr,
-        axis_attrs=Dict(
-            name => mesh_axis_attrs[i] for (i, (name, _)) in enumerate(mesh_axes)
-        ),
-    )
+    return (; sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx), mesh_attr)
 end
 
 end # module Ops

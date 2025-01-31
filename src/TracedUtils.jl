@@ -207,6 +207,7 @@ function make_mlir_fn(
         sym_visibility = MLIR.IR.Attribute("private")
     end
 
+    ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
 
     mesh_cache = OrderedIdDict()
@@ -272,19 +273,30 @@ function make_mlir_fn(
                         axes = MLIR.IR.Attribute[]
                         is_closed = false
                     else
-                        axes = [mesh_op_attrs.axis_attrs[name]]
+                        # TODO: can be sharded along multiple axes
+                        axes = [
+                            MLIR.API.sdyAxisRefAttrGet(
+                                ctx,
+                                name,
+                                MLIR.API.sdySubAxisInfoAttrGet(
+                                    ctx,
+                                    sharding.mesh.name_to_size[name],
+                                    sharding.mesh.name_to_size[name],
+                                ),
+                            ),
+                        ]
                         is_closed = true
                     end
                     dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
-                        MLIR.IR.context(), length(axes), axes, is_closed, 0
+                        ctx, length(axes), axes, is_closed, 0
                     )
                 end
 
                 # Currently we don't support replicated axes from user input, we do
                 # implicitly via shardy
-                tensor_sharding_attr = MLIR.IR.Attribute(
+                linear_arg_shardings[i] = MLIR.IR.Attribute(
                     MLIR.API.sdyTensorShardingAttrGet(
-                        MLIR.IR.context(),
+                        ctx,
                         mesh_op_attrs.sym_name,
                         length(dimension_sharding_attrs),
                         dimension_sharding_attrs,
@@ -292,7 +304,6 @@ function make_mlir_fn(
                         MLIR.API.MlirAttribute[],
                     ),
                 )
-                linear_arg_shardings[i] = tensor_sharding_attr
             end
         end
     end
@@ -312,23 +323,6 @@ function make_mlir_fn(
         Reactant.call_with_reactant(f, traced_args...)
     finally
         MLIR.IR.deactivate!(fnbody)
-    end
-
-    # Attach `sdy.sharding` attribute to the argument
-    if in_shardings !== nothing
-        for i in 1:length(linear_args)
-            if isassigned(linear_arg_shardings, i)
-                MLIR.API.mlirFuncSetArgAttr(
-                    func, i - 1, "sdy.sharding", linear_arg_shardings[i]
-                )
-                # @ccall MLIR.API.mlir_c.ReactantFuncSetArgAttr(
-                #     func::MLIR.API.MlirOperation,
-                #     (i - 1)::Csize_t,
-                #     "sdy.sharding"::MLIR.API.MlirStringRef,
-                #     linear_arg_shardings[i]::MLIR.API.MlirAttribute,
-                # )::Cvoid
-            end
-        end
     end
 
     seen_results = OrderedIdDict()
@@ -389,6 +383,21 @@ function make_mlir_fn(
         )
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
+
+    # Attach `sdy.sharding` attribute to the argument
+    if in_shardings !== nothing
+        for i in 1:length(linear_args)
+            if isassigned(linear_arg_shardings, i)
+                @show linear_arg_shardings[i]
+
+                MLIR.API.mlirFuncSetArgAttr(
+                    func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
+                )
+            end
+        end
+
+        display(mod)
+    end
 
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
