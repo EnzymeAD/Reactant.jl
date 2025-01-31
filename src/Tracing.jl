@@ -110,7 +110,7 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
         end
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
     end
-    TT = Union{Type, Core.TypeofVararg}[]
+    TT = Union{Type,Core.TypeofVararg}[]
     for i in 1:length(T.parameters)
         st = traced_type_inner(T.parameters[i], seen, mode, track_numbers)
         push!(TT, st)
@@ -124,16 +124,12 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type)
 )
-    Vararg{traced_type_inner(T.T, seen, mode, track_numbers), T.N}
+    return Vararg{traced_type_inner(T.T, seen, mode, track_numbers),T.N}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::TypeVar),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(T::TypeVar), seen, mode::TraceMode, @nospecialize(track_numbers::Type)
 )
-
     if T.lb === Union{} && T.ub === Any
         return T
     end
@@ -146,7 +142,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type)
 )
-    traced_tuple_type_inner(T, seen, mode, track_numbers)
+    return traced_tuple_type_inner(T, seen, mode, track_numbers)
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -398,7 +394,7 @@ Base.@nospecializeinfer function traced_type_inner(
     seen2[T] = T
 
     changed = false
-    subTys = Union{Type, TypeVar}[]
+    subTys = Union{Type,TypeVar}[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
         subTT = traced_type_inner(subT, seen2, mode, track_numbers)
