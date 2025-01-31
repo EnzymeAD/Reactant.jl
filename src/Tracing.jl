@@ -358,11 +358,10 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     # unknown number of fields
-    if T isa UnionAll
+    if Base.inferencebarrier(T) isa UnionAll
         if T.var.lb === Union{} && T.var.ub === Any
             return UnionAll(T.var, traced_type_inner(T.body, seen, mode, track_numbers))
         end
-        @show T, T.var, T.var.lb, T.var.ub
         aT = Base.argument_datatype(T)
         if isnothing(aT)
             throw(TracedTypeError("Unhandled type $T"))
@@ -391,12 +390,6 @@ Base.@nospecializeinfer function traced_type_inner(
         return traced_tuple_type_inner(T, seen, mode, track_numbers)
     end
 
-    if !(Base.isconcretetype(T) || T isa UnionAll)
-        @show T
-        @show T <: Tuple
-        throw(AssertionError("Type $T is not concrete type or concrete tuple"))
-    end
-
     if haskey(seen, T)
         return seen[T]
     end
@@ -405,7 +398,7 @@ Base.@nospecializeinfer function traced_type_inner(
     seen2[T] = T
 
     changed = false
-    subTys = Type[]
+    subTys = Union{Type, TypeVar}[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
         subTT = traced_type_inner(subT, seen2, mode, track_numbers)
