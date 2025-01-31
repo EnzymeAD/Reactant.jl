@@ -588,8 +588,8 @@ end
 end
 
 @testset "$op" for op in [:round, :ceil, :floor]
-    intop = Symbol("int_$op")
     for x in (rand(Float32, (3, 3)), rand(Float64))
+        intop = gensym("int_$op")
         @eval begin
             @test @jit($op.(ConcreteRNumber.($x))) == $op.($x)
             $intop(x) = $op(Int, x)
@@ -662,8 +662,9 @@ end
 end
 
 @testset "ifelse" begin
-    @test 1.0 ==
-        @jit ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    @test 1.0 == @test_warn r"`ifelse` with different element-types" @jit(
+        ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    )
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     ) isa ConcreteRNumber{Float64}

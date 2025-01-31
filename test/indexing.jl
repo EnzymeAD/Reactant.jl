@@ -31,6 +31,23 @@ end
     # get_view_compiled = @compile get_view(x_concrete)
 end
 
+function maskset!(y, x)
+    y[:] = x
+    return nothing
+end
+
+@testset "setindex! with vectors & colon indexing" begin
+    x = Reactant.to_rarray([4.0])
+    y = Reactant.to_rarray([2.0])
+    @jit(maskset!(y, x))
+    @test y ≈ x
+
+    x = Reactant.to_rarray(ones(3))
+    y = Reactant.to_rarray(2 * ones(3))
+    @jit(maskset!(y, x))
+    @test y ≈ x
+end
+
 function masking(x)
     y = similar(x)
     y[1:2, :] .= 0
