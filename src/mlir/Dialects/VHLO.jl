@@ -105,7 +105,7 @@ end
 
 function all_gather_v2(
     operands::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     all_gather_dim::IR.Attribute,
     replica_groups::IR.Attribute,
     channel_id::IR.Attribute,
@@ -168,7 +168,7 @@ end
 
 function all_reduce_v2(
     operands::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     replica_groups::IR.Attribute,
     channel_id::IR.Attribute,
     use_global_device_ids::IR.Attribute,
@@ -233,7 +233,7 @@ end
 
 function all_to_all_v2(
     operands::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     split_dimension::IR.Attribute,
     concat_dimension::IR.Attribute,
     split_count::IR.Attribute,
@@ -469,7 +469,7 @@ end
 
 function call_v1(
     operands::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     callee::IR.Attribute,
     location::Location=Location(),
 )
@@ -493,7 +493,7 @@ end
 
 function case_v1(
     index::Value;
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     branches::Vector{Region},
     location::Location=Location(),
 )
@@ -722,7 +722,7 @@ end
 
 function composite_v1(
     inputs::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     name::IR.Attribute,
     composite_attributes::IR.Attribute,
     decomposition::IR.Attribute,
@@ -937,7 +937,7 @@ end
 
 function custom_call_v1(
     inputs::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     call_target_name::IR.Attribute,
     has_side_effect::IR.Attribute,
     backend_config::IR.Attribute,
@@ -1742,7 +1742,7 @@ end
 
 function if_v1(
     pred::Value;
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     true_branch::Region,
     false_branch::Region,
     location::Location=Location(),
@@ -1786,7 +1786,7 @@ end
 
 function infeed_v1(
     token::Value;
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     infeed_config::IR.Attribute,
     layout::IR.Attribute,
     location::Location=Location(),
@@ -2030,7 +2030,7 @@ end
 
 function optimization_barrier_v1(
     operand::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     location::Location=Location(),
 )
     op_ty_results = IR.Type[result...,]
@@ -2230,7 +2230,7 @@ end
 
 function recv_v1(
     token::Value;
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     channel_id::IR.Attribute,
     channel_type::IR.Attribute,
     is_host_transfer::IR.Attribute,
@@ -2261,7 +2261,7 @@ end
 function reduce_v1(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     dimensions::IR.Attribute,
     body::Region,
     location::Location=Location(),
@@ -2348,7 +2348,7 @@ end
 function reduce_window_v1(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     window_dimensions::IR.Attribute,
     window_strides::IR.Attribute,
     base_dilations::IR.Attribute,
@@ -2596,7 +2596,7 @@ function scatter_v1(
     inputs::Vector{Value},
     scatter_indices::Value,
     updates::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     update_window_dims::IR.Attribute,
     inserted_window_dims::IR.Attribute,
     scatter_dims_to_operand_dims::IR.Attribute,
@@ -2635,7 +2635,7 @@ function scatter_v2(
     inputs::Vector{Value},
     scatter_indices::Value,
     updates::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     update_window_dims::IR.Attribute,
     inserted_window_dims::IR.Attribute,
     input_batching_dims::IR.Attribute,
@@ -2922,7 +2922,7 @@ end
 
 function sort_v1(
     inputs::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     dimension::IR.Attribute,
     is_stable::IR.Attribute,
     comparator::Region,
@@ -3194,7 +3194,7 @@ end
 
 function while_v1(
     operand::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     cond::Region,
     body::Region,
     location::Location=Location(),

@@ -709,7 +709,7 @@ function matmul(
     transpose_lhs::Union{Bool,Nothing}=nothing,
     transpose_rhs::Union{Bool,Nothing}=nothing,
     precision::Union{ContractPrecision.T,Nothing}=nothing,
-    dimension_numbers::Union{Any,Nothing}=nothing,
+    dimension_numbers=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -905,9 +905,7 @@ function pack_subelements(
 end
 
 function region(;
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
-    region::Region,
-    location::Location=Location(),
+    results::Base.AbstractVecOrTuple{IR.Type}, region::Region, location::Location=Location()
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[]
@@ -1084,17 +1082,18 @@ function sem_signal(
     attributes = NamedAttribute[]
     !isnothing(device_id) && push!(operands, device_id)
     !isnothing(core_id) && push!(operands, core_id)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        if (device_id == nothing)
-            0
-        elseif 1(core_id == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, if (device_id == nothing)
+                0
+            elseif 1(core_id == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
     !isnothing(core_type) && push!(attributes, namedattribute("core_type", core_type))
 
     return create_operation(
@@ -1270,7 +1269,7 @@ function strided_store(
 end
 
 function trace(;
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     message::String,
     level::Int32,
     region::Region,
@@ -1364,9 +1363,7 @@ function unpack_subelements(
 end
 
 function unroll_vectors(
-    input::Value;
-    output::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
-    location::Location=Location(),
+    input::Value; output::Base.AbstractVecOrTuple{IR.Type}, location::Location=Location()
 )
     op_ty_results = IR.Type[output...,]
     operands = Value[input,]

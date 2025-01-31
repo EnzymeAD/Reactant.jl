@@ -294,15 +294,18 @@ function barrier(
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
     !isnothing(numberOfThreads) && push!(operands, numberOfThreads)
-    push!(attributes, operandsegmentsizes([
-        if (barrierId == nothing)
-            0
-        elseif 1(numberOfThreads == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            if (barrierId == nothing)
+                0
+            elseif 1(numberOfThreads == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
 
     return create_operation(
         "nvvm.barrier",
@@ -316,9 +319,7 @@ function barrier(
     )
 end
 
-function read_ptx_sreg_ntid_x(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_ntid_x(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -338,9 +339,7 @@ function read_ptx_sreg_ntid_x(;
     )
 end
 
-function read_ptx_sreg_ntid_y(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_ntid_y(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -360,9 +359,7 @@ function read_ptx_sreg_ntid_y(;
     )
 end
 
-function read_ptx_sreg_ntid_z(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_ntid_z(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -382,9 +379,7 @@ function read_ptx_sreg_ntid_z(;
     )
 end
 
-function read_ptx_sreg_ctaid_x(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_ctaid_x(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -404,9 +399,7 @@ function read_ptx_sreg_ctaid_x(;
     )
 end
 
-function read_ptx_sreg_ctaid_y(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_ctaid_y(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -426,9 +419,7 @@ function read_ptx_sreg_ctaid_y(;
     )
 end
 
-function read_ptx_sreg_ctaid_z(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_ctaid_z(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -449,7 +440,7 @@ function read_ptx_sreg_ctaid_z(;
 end
 
 function read_ptx_sreg_cluster_ctaid_x(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -471,7 +462,7 @@ function read_ptx_sreg_cluster_ctaid_x(;
 end
 
 function read_ptx_sreg_cluster_ctaid_y(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -493,7 +484,7 @@ function read_ptx_sreg_cluster_ctaid_y(;
 end
 
 function read_ptx_sreg_cluster_ctaid_z(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -649,7 +640,7 @@ function cluster_arrive_relaxed(;
 end
 
 function read_ptx_sreg_cluster_nctarank(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -671,7 +662,7 @@ function read_ptx_sreg_cluster_nctarank(;
 end
 
 function read_ptx_sreg_cluster_nctaid_x(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -693,7 +684,7 @@ function read_ptx_sreg_cluster_nctaid_x(;
 end
 
 function read_ptx_sreg_cluster_nctaid_y(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -715,7 +706,7 @@ function read_ptx_sreg_cluster_nctaid_y(;
 end
 
 function read_ptx_sreg_cluster_nctaid_z(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -737,7 +728,7 @@ function read_ptx_sreg_cluster_nctaid_z(;
 end
 
 function read_ptx_sreg_nclusterid_x(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -759,7 +750,7 @@ function read_ptx_sreg_nclusterid_x(;
 end
 
 function read_ptx_sreg_nclusterid_y(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -781,7 +772,7 @@ function read_ptx_sreg_nclusterid_y(;
 end
 
 function read_ptx_sreg_nclusterid_z(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -803,7 +794,7 @@ function read_ptx_sreg_nclusterid_z(;
 end
 
 function read_ptx_sreg_cluster_ctarank(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -825,7 +816,7 @@ function read_ptx_sreg_cluster_ctarank(;
 end
 
 function read_ptx_sreg_clusterid_x(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -847,7 +838,7 @@ function read_ptx_sreg_clusterid_x(;
 end
 
 function read_ptx_sreg_clusterid_y(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -869,7 +860,7 @@ function read_ptx_sreg_clusterid_y(;
 end
 
 function read_ptx_sreg_clusterid_z(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -981,19 +972,18 @@ function cp_async_bulk_shared_cluster_global(
     attributes = NamedAttribute[]
     !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        1,
-        if (multicastMask == nothing)
-            0
-        elseif 1(l2CacheHint == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, 1, if (multicastMask == nothing)
+                0
+            elseif 1(l2CacheHint == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
 
     return create_operation(
         "nvvm.cp.async.bulk.shared.cluster.global",
@@ -1055,132 +1045,6 @@ cluster memory.
 """
 function cp_async_bulk_shared_cluster_shared_cta(
     dstMem::Value, srcMem::Value, mbar::Value, size::Value; location::Location=Location()
-)
-    op_ty_results = IR.Type[]
-    operands = Value[dstMem, srcMem, mbar, size]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.cp.async.bulk.shared.cluster.shared.cta",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`cp_async_bulk_shared_cluster_global`
-
-Initiates an asynchronous copy operation from global memory to cluster\'s
-shared memory.
-
-The `multicastMask` operand is optional. When it is present, the Op copies
-data from global memory to shared memory of multiple CTAs in the cluster.
-Operand `multicastMask` specifies the destination CTAs in the cluster such
-that each bit position in the 16-bit `multicastMask` operand corresponds to
-the `nvvm.read.ptx.sreg.ctaid` of the destination CTA.
-
-The `l2CacheHint` operand is optional, and it is used to specify cache
-eviction policy that may be used during the memory access.
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
-"""
-function cp_async_bulk_shared_cluster_global(
-    dstMem::Value,
-    srcMem::Value,
-    mbar::Value,
-    size::Value,
-    multicastMask=nothing::Union{Nothing,Value};
-    l2CacheHint=nothing::Union{Nothing,Value},
-    location=Location(),
-)
-    op_ty_results = IR.Type[]
-    operands = Value[dstMem, srcMem, mbar, size]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(multicastMask) && push!(operands, multicastMask)
-    !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        1,
-        if (multicastMask == nothing)
-            0
-        elseif 1(l2CacheHint == nothing)
-            0
-        else
-            1
-        end,
-    ]))
-
-    return create_operation(
-        "nvvm.cp.async.bulk.shared.cluster.global",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`cp_async_bulk_global_shared_cta`
-
-Initiates an asynchronous copy operation from Shared CTA memory to
-global memory.
-
-The `l2CacheHint` operand is optional, and it is used to specify cache
-eviction policy that may be used during the memory access.
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
-"""
-function cp_async_bulk_global_shared_cta(
-    dstMem::Value,
-    srcMem::Value,
-    size::Value,
-    l2CacheHint=nothing::Union{Nothing,Value};
-    location=Location(),
-)
-    op_ty_results = IR.Type[]
-    operands = Value[dstMem, srcMem, size]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
-
-    return create_operation(
-        "nvvm.cp.async.bulk.global.shared.cta",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`cp_async_bulk_shared_cluster_shared_cta`
-
-Initiates an asynchronous copy operation from Shared CTA memory to Shared
-cluster memory.
-
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
-"""
-function cp_async_bulk_shared_cluster_shared_cta(
-    dstMem::Value, srcMem::Value, mbar::Value, size::Value; location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[dstMem, srcMem, mbar, size]
@@ -1599,41 +1463,6 @@ function cvt_float_to_tf32(
     sat::Union{SaturationMode.T,Nothing}=nothing,
     relu::Union{Bool,Nothing}=nothing,
     location::Location=Location(),
-)
-    op_ty_results = IR.Type[res,]
-    operands = Value[src,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
-    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
-    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
-
-    return create_operation(
-        "nvvm.cvt.float.to.tf32",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`cvt_float_to_tf32`
-
-This Op converts the given f32 input to tf32.
-The result `res` is represented as an i32 type.
-The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction. The `rnd` and `sat` attributes specify the
-the rounding and saturation modes respectively.
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
-"""
-function cvt_float_to_tf32(
-    src::Value; res::IR.Type, rnd=nothing, sat=nothing, relu=nothing, location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[src,]
@@ -2498,7 +2327,7 @@ function read_ptx_sreg_globaltimer(; res::IR.Type, location::Location=Location()
 end
 
 function read_ptx_sreg_nctaid_x(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -2520,7 +2349,7 @@ function read_ptx_sreg_nctaid_x(;
 end
 
 function read_ptx_sreg_nctaid_y(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -2542,7 +2371,7 @@ function read_ptx_sreg_nctaid_y(;
 end
 
 function read_ptx_sreg_nctaid_z(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -2563,9 +2392,7 @@ function read_ptx_sreg_nctaid_z(;
     )
 end
 
-function read_ptx_sreg_gridid(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_gridid(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -2585,9 +2412,7 @@ function read_ptx_sreg_gridid(;
     )
 end
 
-function read_ptx_sreg_laneid(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_laneid(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -3100,7 +2925,7 @@ function mma_sync(
     operandB::Vector{Value},
     operandC::Vector{Value};
     res::IR.Type,
-    shape::Any,
+    shape,
     b1Op::Union{MMAB1Op.T,Nothing}=nothing,
     intOverflowBehavior::Union{MMAIntOverflow.T,Nothing}=nothing,
     layoutA::MMALayout.T,
@@ -3279,9 +3104,7 @@ function shfl_sync(
     )
 end
 
-function read_ptx_sreg_nsmid(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_nsmid(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -3301,9 +3124,7 @@ function read_ptx_sreg_nsmid(;
     )
 end
 
-function read_ptx_sreg_smid(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_smid(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -3371,9 +3192,7 @@ function bar_warp_sync(mask::Value; location::Location=Location())
     )
 end
 
-function read_ptx_sreg_tid_x(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_tid_x(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -3393,9 +3212,7 @@ function read_ptx_sreg_tid_x(;
     )
 end
 
-function read_ptx_sreg_tid_y(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_tid_y(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -3415,9 +3232,7 @@ function read_ptx_sreg_tid_y(;
     )
 end
 
-function read_ptx_sreg_tid_z(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_tid_z(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -3568,9 +3383,7 @@ function wmma_store(
     )
 end
 
-function read_ptx_sreg_nwarpid(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_nwarpid(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -3590,9 +3403,7 @@ function read_ptx_sreg_nwarpid(;
     )
 end
 
-function read_ptx_sreg_warpid(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
-)
+function read_ptx_sreg_warpid(; res::IR.Type, range=nothing, location::Location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -3613,7 +3424,7 @@ function read_ptx_sreg_warpid(;
 end
 
 function read_ptx_sreg_warpsize(;
-    res::IR.Type, range::Union{Any,Nothing}=nothing, location::Location=Location()
+    res::IR.Type, range=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -3751,7 +3562,7 @@ function wgmma_mma_async(
     descriptorA::Value,
     descriptorB::Value;
     results::IR.Type,
-    shape::Any,
+    shape,
     typeA::WGMMATypes.T,
     typeB::WGMMATypes.T,
     typeD::WGMMATypes.T,

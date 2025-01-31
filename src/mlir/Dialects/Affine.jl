@@ -48,7 +48,7 @@ have ‘index’ type.
 function apply(
     mapOperands::Vector{Value};
     result::Union{Nothing,IR.Type}=nothing,
-    map::Any,
+    map,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -123,7 +123,7 @@ undefined behavior.
 function delinearize_index(
     linear_index::Value,
     dynamic_basis::Vector{Value};
-    multi_index::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    multi_index::Base.AbstractVecOrTuple{IR.Type},
     static_basis::Vector{Int64},
     location::Location=Location(),
 )
@@ -256,10 +256,10 @@ function for_(
     lowerBoundOperands::Vector{Value},
     upperBoundOperands::Vector{Value},
     inits::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
-    lowerBoundMap::Any,
-    upperBoundMap::Any,
-    step::Any,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    lowerBoundMap,
+    upperBoundMap,
+    step,
     region::Region,
     location::Location=Location(),
 )
@@ -363,8 +363,8 @@ func.func @pad_edges(%I : memref<10x10xf32>) -> (memref<12x12xf32) {
 """
 function if_(
     operand_0::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
-    condition::Any,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    condition,
     thenRegion::Region,
     elseRegion::Region,
     location::Location=Location(),
@@ -495,7 +495,7 @@ function load(
     memref::Value,
     indices::Vector{Value};
     result::IR.Type,
-    map::Any,
+    map,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -531,7 +531,7 @@ affine map.
 function max(
     operands::Vector{Value};
     result::Union{Nothing,IR.Type}=nothing,
-    map::Any,
+    map,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -578,7 +578,7 @@ input operands and result must all have \'index\' type.
 function min(
     operands::Vector{Value};
     result::Union{Nothing,IR.Type}=nothing,
-    map::Any,
+    map,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -667,11 +667,11 @@ affine.parallel (%ii, %jj) = (0, 0) to (%N, %M) step (32, 32) {
 """
 function parallel(
     mapOperands::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     reductions::Vector{AtomicRMWKind.T},
-    lowerBoundsMap::Any,
+    lowerBoundsMap,
     lowerBoundsGroups::IR.DenseElements{Int64},
-    upperBoundsMap::Any,
+    upperBoundsMap,
     upperBoundsGroups::IR.DenseElements{Int64},
     steps::Vector{Int64},
     region::Region,
@@ -726,7 +726,7 @@ function prefetch(
     isWrite::Bool,
     localityHint::Int32,
     isDataCache::Bool,
-    map::Any,
+    map,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -781,11 +781,7 @@ affine.store %v0, %0[%i0 + symbol(%n), %i1 + symbol(%m)] : memref<100x100xf32>
 ```
 """
 function store(
-    value::Value,
-    memref::Value,
-    indices::Vector{Value};
-    map::Any,
-    location::Location=Location(),
+    value::Value, memref::Value, indices::Vector{Value}; map, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[value, memref, indices...]
@@ -848,7 +844,7 @@ function vector_load(
     memref::Value,
     indices::Vector{Value};
     result::IR.Type,
-    map::Any,
+    map,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -911,11 +907,7 @@ TODOs:
 (see [vector.transfer_write](../Vector/#vectortransfer_write-mlirvectortransferwriteop)).
 """
 function vector_store(
-    value::Value,
-    memref::Value,
-    indices::Vector{Value};
-    map::Any,
-    location::Location=Location(),
+    value::Value, memref::Value, indices::Vector{Value}; map, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[value, memref, indices...]

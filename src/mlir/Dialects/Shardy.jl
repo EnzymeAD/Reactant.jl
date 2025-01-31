@@ -56,8 +56,8 @@ inferred sharding.
 function all_gather(
     tensor::Value;
     result::Union{Nothing,IR.Type}=nothing,
-    gathering_axes::Any,
-    out_sharding::Any,
+    gathering_axes,
+    out_sharding,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -117,8 +117,8 @@ inferred sharding.
 function all_slice(
     tensor::Value;
     result::Union{Nothing,IR.Type}=nothing,
-    slicing_axes::Any,
-    out_sharding::Any,
+    slicing_axes,
+    out_sharding,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -140,67 +140,6 @@ function all_slice(
         attributes,
         results=(isempty(op_ty_results) ? nothing : op_ty_results),
         result_inference=isempty(op_ty_results),
-    )
-end
-
-"""
-`all_slice`
-
-Slices chunks of a tensor along axes specified in `slicing_axes`. There is
-an algebric duality between `sdy.all_slice` and `sdy.all_gather`.
-
-The `slicing_axes` is a list of lists of axes. The outer list is over the
-dimensions of the tensor. Each inner list specifies the axes along which a
-slice should be performed on the respective dimension. It will be applied to
-the sharding of the operand (`tensor`) to obtain the sharding of the result
-(`out_sharding`).
-
-Note that `out_sharding` is not used to determine the sharding of the
-result. Instead, the sharding of the result is determined by the sharding of
-the operand and the `slicing_axes`, and `out_sharding` must match this
-inferred sharding.
-
-# Example
-```mlir
-%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\"}, {}, {}\\]>]>} : tensor<8x8xf32>
-%2 = sdy.all_slice [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 to_sharding=<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\]> : tensor<8x8xf32>
-```
-
-**Constraints:**
-- Elements in `slicing_axes` must satisfy the constraints listed in
-  `AxisRefListAttr`.
-- `out_sharding` must satisfy the constraints listed in
-  `TensorShardingAttr`.
-- The operand must have a sharding.
-- Both operand and result shardings should be bound to the same `MeshAttr`.
-- Applying `slicing_axes` to the operand sharding gets `out_sharding`.
-"""
-function all_slice(
-    tensor::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    slicing_axes,
-    out_sharding,
-    location=Location(),
-)
-    op_ty_results = IR.Type[]
-    operands = Value[tensor,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[
-        namedattribute("slicing_axes", slicing_axes),
-        namedattribute("out_sharding", out_sharding),
-    ]
-    !isnothing(result) && push!(op_ty_results, result)
-
-    return create_operation(
-        "sdy.all_slice",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -306,7 +245,7 @@ responsible for providing this information.
 function data_flow_edge(
     input::Value;
     result::Union{Nothing,IR.Type}=nothing,
-    sharding::Union{Any,Nothing}=nothing,
+    sharding=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -349,10 +288,10 @@ the body on any free axes - those not in the manual_axes list.
 """
 function manual_computation(
     tensors::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
-    in_shardings::Any,
-    out_shardings::Any,
-    manual_axes::Any,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    in_shardings,
+    out_shardings,
+    manual_axes,
     body::Region,
     location::Location=Location(),
 )
@@ -386,7 +325,7 @@ of devices (except for meshes with a single device_id).
 The mesh is a `Symbol` operation that appears in the module\'s
 `SymbolTable` and can be referenced by its `name`.
 """
-function mesh(; sym_name::String, mesh::Any, location::Location=Location())
+function mesh(; sym_name::String, mesh, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -431,10 +370,10 @@ the same as the type of the operands and results type of the op.
 """
 function named_computation(
     operands::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     name::String,
-    in_shardings::Union{Any,Nothing}=nothing,
-    out_shardings::Union{Any,Nothing}=nothing,
+    in_shardings=nothing,
+    out_shardings=nothing,
     body::Region,
     location::Location=Location(),
 )
@@ -521,7 +460,7 @@ lifespan is:
 function reshard(
     input::Value;
     result::Union{Nothing,IR.Type}=nothing,
-    sharding::Any,
+    sharding,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -583,7 +522,7 @@ This op can either:
 function sharding_constraint(
     input::Value;
     result::Union{Nothing,IR.Type}=nothing,
-    sharding::Any,
+    sharding,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]

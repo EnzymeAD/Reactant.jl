@@ -338,12 +338,12 @@ std::optional<std::string> emitStruct(llvm::Record def, std::string dialect) {
       // custom assembly without format is a C++ custom parser/printer => must
       // anyway a lot of struct have a C++ parser/printer equivalent
       // to `<` struct(params) `>`
-      if (blacklisted_struct.contains(tableGenName)){
+      if (blacklisted_struct.contains(tableGenName)) {
         attributeCache.insert({tableGenName, "Attribute"});
         llvm::errs() << "don\'t emit for this attribute" << '\n';
         return std::nullopt;
-        }
-      customAssembly = false; //hack
+      }
+      customAssembly = false; // hack
     } else {
       customAssembly = *assembly != "`<` struct(params) `>`";
     };
@@ -586,7 +586,7 @@ end
       bool variadic = namedResult.isVariadic();
 
       if (variadic) {
-        type = "Union{Vector{" + type + "}, Tuple{Vararg{" + type + "}}}";
+        type = "Base.AbstractVecOrTuple{" + type + "}";
       }
 
       if (optional) {
@@ -683,6 +683,8 @@ end
       };
       closure_(attr);
 
+      auto isAny = varType == "Any";
+
       if (optional) {
         optionals += llvm::formatv(
             R"(!isnothing({0}) && push!(attributes, namedattribute("{0}", {1}))
@@ -694,7 +696,11 @@ end
         attributeContainer += "namedattribute(\"" + attributeName + "\", " +
                               pushedExpression + "), ";
       }
-      attributeArguments += VarName + "::" + varType + defaultValue + ", ";
+      std::string typeConstraint = " ";
+      if (!isAny)
+        typeConstraint = "::" + varType;
+
+      attributeArguments += VarName + typeConstraint + defaultValue + ", ";
     }
 
     std::string regionArguments = "";

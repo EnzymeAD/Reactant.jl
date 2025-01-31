@@ -1123,7 +1123,7 @@ Returns a splat constant of the same shape as the operand.
 function constant_like(
     operand::Value;
     result::Union{Nothing,IR.Type}=nothing,
-    value::Any,
+    value,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]

@@ -34,7 +34,7 @@ Function values can be created with the
 function call_indirect(
     callee::Value,
     callee_operands::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -71,7 +71,7 @@ symbol reference attribute named \"callee\".
 """
 function call(
     operands::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     callee::IR.FlatSymbol,
     no_inline::Union{Bool,Nothing}=nothing,
     location::Location=Location(),

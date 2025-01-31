@@ -352,7 +352,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_gather
 """
 function all_gather(
     operands::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     all_gather_dim::Int64,
     replica_groups::IR.DenseElements{Int64},
     channel_handle::Union{ChannelHandle,Nothing}=nothing,
@@ -408,7 +408,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_reduce
 """
 function all_reduce(
     operands::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     replica_groups::IR.DenseElements{Int64},
     channel_handle::Union{ChannelHandle,Nothing}=nothing,
     use_global_device_ids::Union{Bool,Nothing}=nothing,
@@ -460,7 +460,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_to_all
 """
 function all_to_all(
     operands::Vector{Value};
-    result::Union{Nothing,Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}}}=nothing,
+    result::Union{Nothing,Base.AbstractVecOrTuple{IR.Type}}=nothing,
     split_dimension::Int64,
     concat_dimension::Int64,
     split_count::Int64,
@@ -863,7 +863,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#case
 """
 function case(
     index::Value;
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     branches::Vector{Region},
     location::Location=Location(),
 )
@@ -1274,9 +1274,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#composite
 """
 function composite(
     inputs::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     name::String,
-    composite_attributes::Union{Any,Nothing}=nothing,
+    composite_attributes=nothing,
     decomposition::IR.FlatSymbol,
     version::Union{Int32,Nothing}=nothing,
     location::Location=Location(),
@@ -1450,7 +1450,7 @@ function convolution(
     lhs_dilation::Union{Vector{Int64},Nothing}=nothing,
     rhs_dilation::Union{Vector{Int64},Nothing}=nothing,
     window_reversal::Union{Vector{Bool},Nothing}=nothing,
-    dimension_numbers::Any,
+    dimension_numbers,
     feature_group_count::Int64,
     batch_group_count::Int64,
     precision_config::Union{Vector{Precision.T},Nothing}=nothing,
@@ -1629,7 +1629,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#custom_call
 """
 function custom_call(
     inputs::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     call_target_name::String,
     has_side_effect::Union{Bool,Nothing}=nothing,
     backend_config::Union{IR.Attribute,Nothing}=nothing,
@@ -2252,7 +2252,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#exponential
 function exponential(
     operand::Value;
     result::Union{Nothing,IR.Type}=nothing,
-    result_accuracy::Union{Any,Nothing}=nothing,
+    result_accuracy=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -2542,7 +2542,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#if
 """
 function if_(
     pred::Value;
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     true_branch::Region,
     false_branch::Region,
     location::Location=Location(),
@@ -2617,7 +2617,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#infeed
 """
 function infeed(
     token::Value;
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     infeed_config::Union{String,Nothing}=nothing,
     layout::Union{Vector{Attribute},Nothing}=nothing,
     location::Location=Location(),
@@ -3072,7 +3072,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#optimization_barrier
 """
 function optimization_barrier(
     operand::Vector{Value};
-    result::Union{Nothing,Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}}}=nothing,
+    result::Union{Nothing,Base.AbstractVecOrTuple{IR.Type}}=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -3429,7 +3429,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#recv
 """
 function recv(
     token::Value;
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     channel_handle::ChannelHandle,
     is_host_transfer::Union{Bool,Nothing}=nothing,
     location::Location=Location(),
@@ -3477,7 +3477,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#reduce
 function reduce(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     dimensions::Vector{Int64},
     body::Region,
     location::Location=Location(),
@@ -3630,7 +3630,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#reduce_window
 function reduce_window(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     window_dimensions::Vector{Int64},
     window_strides::Union{Vector{Int64},Nothing}=nothing,
     base_dilations::Union{Vector{Int64},Nothing}=nothing,
@@ -4050,7 +4050,7 @@ function scatter(
     inputs::Vector{Value},
     scatter_indices::Value,
     updates::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     scatter_dimension_numbers::Scatter,
     indices_are_sorted::Union{Bool,Nothing}=nothing,
     unique_indices::Union{Bool,Nothing}=nothing,
@@ -4536,7 +4536,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#sort
 """
 function sort(
     inputs::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     dimension::Union{Int64,Nothing}=nothing,
     is_stable::Union{Bool,Nothing}=nothing,
     comparator::Region,
@@ -5020,7 +5020,7 @@ cond {
 """
 function while_(
     operand::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     cond::Region,
     body::Region,
     location::Location=Location(),

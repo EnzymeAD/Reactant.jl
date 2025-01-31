@@ -58,7 +58,7 @@ end
 
 function autodiff(
     inputs::Vector{Value};
-    outputs::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    outputs::Base.AbstractVecOrTuple{IR.Type},
     fn::IR.FlatSymbol,
     activity::Vector{Activity.T},
     ret_activity::Vector{Activity.T},
@@ -90,7 +90,7 @@ end
 
 function batch(
     inputs::Vector{Value};
-    outputs::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    outputs::Base.AbstractVecOrTuple{IR.Type},
     fn::IR.FlatSymbol,
     batch_shape::Vector{Int64},
     location::Location=Location(),
@@ -146,7 +146,7 @@ end
 
 function fwddiff(
     inputs::Vector{Value};
-    outputs::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    outputs::Base.AbstractVecOrTuple{IR.Type},
     fn::IR.FlatSymbol,
     activity::Vector{Activity.T},
     ret_activity::Vector{Activity.T},
@@ -179,7 +179,7 @@ end
 function genericAdjoint(
     inputs::Vector{Value},
     outputs::Vector{Value};
-    result_tensors::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result_tensors::Base.AbstractVecOrTuple{IR.Type},
     indexing_maps::Vector{Any},
     iterator_types::Vector{Attribute},
     doc::Union{String,Nothing}=nothing,

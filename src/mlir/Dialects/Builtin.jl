@@ -96,7 +96,7 @@ operands of arity 0-N.
 """
 function unrealized_conversion_cast(
     inputs::Vector{Value};
-    outputs::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    outputs::Base.AbstractVecOrTuple{IR.Type},
     location::Location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]

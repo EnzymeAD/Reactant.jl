@@ -23,7 +23,7 @@ function kernel_call(
     blockz::Value,
     shmem::Value,
     inputs::Vector{Value};
-    result::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    result::Base.AbstractVecOrTuple{IR.Type},
     fn::IR.FlatSymbol,
     backend_config::Union{String,Nothing}=nothing,
     operand_layouts::Union{IR.Attribute,Nothing}=nothing,
@@ -47,6 +47,44 @@ function kernel_call(
 
     return create_operation(
         "enzymexla.kernel_call",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function memref2pointer(source::Value; result::IR.Type, location::Location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.memref2pointer",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function pointer2memref(source::Value; result::IR.Type, location::Location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.pointer2memref",
         location;
         operands,
         owned_regions,

@@ -357,7 +357,7 @@ There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 function block_dim(;
     result::Union{Nothing,IR.Type}=nothing,
     dimension::Dimension.T,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -402,7 +402,7 @@ There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 function block_id(;
     result::Union{Nothing,IR.Type}=nothing,
     dimension::Dimension.T,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -445,7 +445,7 @@ There is an implicit upper bound of `kMaxClusterDim` (currently 8).
 function cluster_block_id(;
     result::Union{Nothing,IR.Type}=nothing,
     dimension::Dimension.T,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -489,7 +489,7 @@ There is an implicit upper bound of `kMaxClusterDim` (currently 8).
 function cluster_dim_blocks(;
     result::Union{Nothing,IR.Type}=nothing,
     dimension::Dimension.T,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -533,7 +533,7 @@ There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 function cluster_dim(;
     result::Union{Nothing,IR.Type}=nothing,
     dimension::Dimension.T,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -577,7 +577,7 @@ There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 function cluster_id(;
     result::Union{Nothing,IR.Type}=nothing,
     dimension::Dimension.T,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1337,7 +1337,7 @@ a combination of `known_block_size` and `known_grid_size`-type annotations.
 function global_id(;
     result::Union{Nothing,IR.Type}=nothing,
     dimension::Dimension.T,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1389,7 +1389,7 @@ There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 function grid_dim(;
     result::Union{Nothing,IR.Type}=nothing,
     dimension::Dimension.T,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1487,7 +1487,7 @@ target-independent `kMaxSubgroupSize` (currently 128).
 """
 function lane_id(;
     result::Union{Nothing,IR.Type}=nothing,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1622,7 +1622,7 @@ function launch_func(
     kernelOperands::Vector{Value},
     asyncObject::Union{Nothing,Value}=nothing,
     asyncToken::Union{Nothing,IR.Type}=nothing,
-    kernel::Any,
+    kernel,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1803,8 +1803,8 @@ function launch(
     clusterSizeZ::Union{Nothing,Value}=nothing,
     dynamicSharedMemorySize::Union{Nothing,Value}=nothing,
     asyncToken::Union{Nothing,IR.Type}=nothing,
-    kernelFunc::Union{Any,Nothing}=nothing,
-    kernelModule::Union{Any,Nothing}=nothing,
+    kernelFunc=nothing,
+    kernelModule=nothing,
     body::Region,
     location::Location=Location(),
 )
@@ -1970,7 +1970,7 @@ per workgroup cause undefined behavior. There is a default upper bound of
 """
 function num_subgroups(;
     result::Union{Nothing,IR.Type}=nothing,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -2540,7 +2540,7 @@ function spmm_buffer_size(
     spmatA::Value,
     dnmatB::Value,
     dnmatC::Value;
-    bufferSzs::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    bufferSzs::Base.AbstractVecOrTuple{IR.Type},
     asyncToken::Union{Nothing,IR.Type}=nothing,
     modeA::Union{TransposeMode.T,Nothing}=nothing,
     modeB::Union{TransposeMode.T,Nothing}=nothing,
@@ -2795,7 +2795,7 @@ cause undefined behavior. There is an implicit upper bound of `kMaxDim`
 """
 function subgroup_id(;
     result::Union{Nothing,IR.Type}=nothing,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -2999,7 +2999,7 @@ function subgroup_mma_load_matrix(
     srcMemref::Value,
     indices::Vector{Value};
     res::IR.Type,
-    leadDimension::Any,
+    leadDimension,
     transpose::Union{Bool,Nothing}=nothing,
     location::Location=Location(),
 )
@@ -3049,7 +3049,7 @@ function subgroup_mma_store_matrix(
     src::Value,
     dstMemref::Value,
     indices::Vector{Value};
-    leadDimension::Any,
+    leadDimension,
     transpose::Union{Bool,Nothing}=nothing,
     location::Location=Location(),
 )
@@ -3157,7 +3157,7 @@ similar machinery assume the default bound of `kMaxSubgroupSize`, currently
 """
 function subgroup_size(;
     result::Union{Nothing,IR.Type}=nothing,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -3227,7 +3227,7 @@ There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 function thread_id(;
     result::Union{Nothing,IR.Type}=nothing,
     dimension::Dimension.T,
-    upper_bound::Union{Any,Nothing}=nothing,
+    upper_bound=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -3412,7 +3412,7 @@ some_synchronization_primitive
 function warp_execute_on_lane_0(
     laneid::Value,
     args::Vector{Value};
-    results::Union{Vector{IR.Type},Tuple{Vararg{IR.Type}}},
+    results::Base.AbstractVecOrTuple{IR.Type},
     warp_size::Int64,
     warpRegion::Region,
     location::Location=Location(),

@@ -873,7 +873,12 @@ Base.show(io::IO, f::FlatSymbol) = print(io, "@$(flatsymbol(f.attr))")
 struct DenseElements{T}
     attr::Attribute
     DenseElements(a::AbstractArray{T}) where {T} = new{T}(IR.DenseElementsAttribute(a))
-    DenseElements(a::Attribute) = begin if !isdenseelements(a) throw("$a is not a dense elements attribute.") end; new{:Generic}(a) end
+    DenseElements(a::Attribute) = begin
+        if !isdenseelements(a)
+            throw("$a is not a dense elements attribute.")
+        end
+        new{:Generic}(a)
+    end
 end
 Attribute(d::DenseElements) = d.attr
 

@@ -552,7 +552,7 @@ forms simple integer and floating point constants.
 ```
 """
 function constant(;
-    result::Union{Nothing,IR.Type}=nothing, value::Any, location::Location=Location()
+    result::Union{Nothing,IR.Type}=nothing, value, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[]
