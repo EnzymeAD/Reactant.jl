@@ -12,6 +12,14 @@ export ReactantBackend
 
 struct ReactantBackend <: KA.GPU end
 
+function Base.getproperty(x::ReactantBackend, sym::Symbol)
+    if sym === :always_inline
+        return true
+    else
+        return Base.getfield(x, sym)
+    end
+end
+
 KA.allocate(n::ReactantBackend, ::Type{T}, dims::Tuple) where {T} = KA.zeros(b, T, dims)
 function KA.zeros(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
     return ConcreteRArray(zeros(T, dims))
