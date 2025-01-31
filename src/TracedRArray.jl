@@ -268,12 +268,6 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices) where {T,N}
     return a
 end
 
-function Base.setindex!(a::TracedRArray{T,N}, v, ::Colon) where {T,N}
-    v = TracedUtils.broadcast_to_size(v, size(a))
-    set_mlir_data!(a, get_mlir_data(v))
-    return a
-end
-
 function Base.setindex!(a::TracedRArray{T,N}, v, indices::CartesianIndex{N}) where {T,N}
     GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::CartesianIndex{N})")
     indices =
@@ -293,6 +287,16 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::CartesianIndex{N}) whe
 end
 
 function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
+    if (N == 1) && (indices isa Colon)
+        # Remove ambiguity from the previous
+        # ```julia
+        # Base.setindex!(a::TracedRArray{T,N}, v, ::Colon) where {T,N}
+        # ```
+        # signature, which would be confused with this one for N=1.
+        v = TracedUtils.broadcast_to_size(v, size(a))
+        set_mlir_data!(a, get_mlir_data(v))
+        return a
+    end
     maybe_assert_scalar_setindexing(a, indices...)
 
     indices = TracedUtils.normalize_indices(a, indices...)
