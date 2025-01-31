@@ -8,19 +8,18 @@ using ..Reactant: Reactant, XLA
 using Reactant
 
 mesh = Sharding.Mesh(
-    "mesh", reshape(collect(Int64, 0:7), (4, 2)), ("data", "model")
-)
+    "mesh", reshape(collect(Int64, 0:7), (2, 2, 2)), ("data", "model_x", "model_y")
+);
 
-samples_sharding = Sharding.NamedSharding(mesh, ("data", nothing))
-w1_sharding = Sharding.NamedSharding(mesh, (nothing, "model"))
-w2_sharding = Sharding.UnspecifiedSharding()
+samples_sharding = Sharding.NamedSharding(mesh, ("data", nothing));
+w1_sharding = Sharding.NamedSharding(mesh, (nothing, ("model_x", "model_y")));
+w2_sharding = Sharding.UnspecifiedSharding();
 
 samples = rand(Float32, 3, 12) |> Reactant.to_rarray
 w1 = rand(Float32, 4, 3) |> Reactant.to_rarray
 w2 = rand(Float32, 2, 4) |> Reactant.to_rarray
 
-# predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
-predict(samples, w1, w2) = w2 * (w1 * samples)
+predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
 
 @code_hlo in_shardings=(samples_sharding, w1_sharding, w2_sharding) predict(samples, w1, w2)
 
@@ -63,18 +62,34 @@ struct NoSharding <: AbstractSharding end
 
 struct UnspecifiedSharding <: AbstractSharding end
 
-struct NamedSharding{M<:Mesh,P<:Tuple} <: AbstractSharding
-    mesh::M
+struct NamedSharding{D1,P<:Tuple,D2} <: AbstractSharding
+    mesh::Mesh{D1}
     partition_spec::P
+    is_closed::NTuple{D2,Bool}
+    priority::NTuple{D2,Int}
 
-    function NamedSharding(mesh::M, partition_spec::P) where {M<:Mesh,P<:Tuple}
-        @assert length(partition_spec) == ndims(mesh)
+    function NamedSharding(
+        mesh::Mesh{D1},
+        partition_spec::P;
+        is_closed::NTuple{D2,Bool}=ntuple(
+            i -> partition_spec[i] !== nothing, length(partition_spec)
+        ),
+        priority::NTuple{D2,Int}=ntuple(i -> 0, length(partition_spec)),
+    ) where {D1,P<:Tuple,D2}
         for p in partition_spec
             if p !== nothing
-                @assert p isa String && p ∈ mesh.axis_names
+                if p isa String
+                    @assert p ∈ mesh.axis_names
+                elseif p isa Tuple
+                    for pᵢ in p
+                        @assert pᵢ isa String && pᵢ ∈ mesh.axis_names
+                    end
+                else
+                    error("Invalid partition spec $p")
+                end
             end
         end
-        return new{M,P}(mesh, partition_spec)
+        return new{D1,P,D2}(mesh, partition_spec, is_closed, priority)
     end
 end
 

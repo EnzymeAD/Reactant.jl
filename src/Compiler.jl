@@ -361,21 +361,48 @@ function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true
     return result
 end
 
-function compile_mlir(f, args; kwargs...)
+function compile_mlir(f, args; client=nothing, kwargs...)
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+
+    if client !== nothing
+        backend = XLA.ClientGetPlatformName(client)
+    else
+        backend = XLA.ClientGetPlatformName(XLA.default_backend[])
+    end
+    if backend == "CUDA"
+        backend = "GPU"
+    elseif backend == "CPU"
+        backend = "cpu"
+    end
+
     results = MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        evalinfo = compile_mlir!(mod, f, args; kwargs...)
-        mlir_fn_res = evalinfo[end]
+        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, mlir_fn_res = compile_mlir!(
+            mod, f, args; backend, kwargs...
+        )
+
+        client, _ = __resolve_device_and_client(client, seen_args, linear_args)
+        if mlir_fn_res.num_partitions == 1
+            mlir_fn_res.num_replicas = XLA.ClientNumAddressableDevices(client)
+        end
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
-        return (mod, evalinfo...)
+        return (
+            mod,
+            linear_args,
+            linear_results,
+            preserved_args,
+            seen_args,
+            concrete_result,
+            isclosure,
+            mlir_fn_res,
+        )
     end
     Base.delete!(context_gc_vector, ctx)
     return results
@@ -642,7 +669,7 @@ end
 """
 macro code_hlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :backend => "gpu", :in_shardings => nothing
+        :optimize => true, :no_nan => false, :client => nothing, :in_shardings => nothing
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1032,9 +1059,42 @@ function __add_mhlo_attributes_and_name!(
     return nothing
 end
 
-function compile_xla(
-    f, args; client=nothing, optimize=true, no_nan=false, in_shardings=nothing
-)
+function __resolve_device_and_client(client, seen_args, linear_args)
+    device = nothing
+    if length(linear_args) > 0
+        devices_list = [XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray]
+        if !isempty(devices_list)
+            if !allequal(devices_list)
+                msg = "Expected all arguments to be on the same device, got:\n"
+                for (i, device) in enumerate(devices_list)
+                    msg *= "    Device $(i): $(XLA.DeviceToString(device))\n"
+                end
+                throw(ArgumentError(msg))
+            end
+            @assert allequal(devices_list) "All arguments must be on the same device: $(devices_list)"
+            device = first(devices_list)
+        end
+    end
+
+    if client === nothing
+        if device !== nothing
+            client = XLA.client(device)
+        else
+            client = XLA.default_backend[]
+            device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
+        end
+    else
+        if device !== nothing
+            @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
+        else
+            device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
+        end
+    end
+
+    return (client, device)
+end
+
+function compile_xla(f, args; client=nothing, kwargs...)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
@@ -1056,46 +1116,20 @@ function compile_xla(
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, mlir_fn_res = compile_mlir!(
-            mod, f, args; optimize, no_nan, backend, in_shardings
+            mod, f, args; backend, kwargs...
         )
+
+        # Resolve client and device
+        client, device = __resolve_device_and_client(client, seen_args, linear_args)
+        if mlir_fn_res.num_partitions == 1
+            mlir_fn_res.num_replicas = XLA.ClientNumAddressableDevices(client)
+            device = nothing
+        end
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
-
-        # Resolve client and device
-        # XXX: This resolution logic is only valid for num_partitions == 1
-        device = nothing
-        if length(linear_args) > 0
-            devices_list = [XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray]
-            if !isempty(devices_list)
-                if !allequal(devices_list)
-                    msg = "Expected all arguments to be on the same device, got:\n"
-                    for (i, device) in enumerate(devices_list)
-                        msg *= "    Device $(i): $(XLA.DeviceToString(device))\n"
-                    end
-                    throw(ArgumentError(msg))
-                end
-                @assert allequal(devices_list) "All arguments must be on the same device: $(devices_list)"
-                device = first(devices_list)
-            end
-        end
-
-        if client === nothing
-            if device !== nothing
-                client = XLA.client(device)
-            else
-                client = XLA.default_backend[]
-                device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
-            end
-        else
-            if device !== nothing
-                @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
-            else
-                device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
-            end
-        end
 
         # compile MLIR module to XLA executable
         exec = XLA.Compile(client, mod)

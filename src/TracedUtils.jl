@@ -251,8 +251,7 @@ function make_mlir_fn(
     push!(MLIR.IR.region(func, 1), fnbody)
 
     if in_shardings !== nothing
-        # Here we attach sharding annotations to the function arguments
-
+        # Here we construct tensor sharding annotations for the function arguments
         linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
@@ -271,18 +270,21 @@ function make_mlir_fn(
                 for (j, name) in enumerate(sharding.partition_spec)
                     if name === nothing
                         axes = MLIR.IR.Attribute[]
-                        is_closed = false # TODO: propagate from user input
-                    else
-                        # TODO: can be sharded along multiple axes
+                    elseif name isa String
                         axes = [
                             MLIR.API.sdyAxisRefAttrGet(
                                 ctx, name, MLIR.API.MlirAttribute(C_NULL)
                             ),
                         ]
-                        is_closed = true # TODO: propagate from user input
+                    elseif name isa Tuple
+                        axes = [
+                            MLIR.API.sdyAxisRefAttrGet(
+                                ctx, nameᵢ, MLIR.API.MlirAttribute(C_NULL)
+                            ) for nameᵢ in name
+                        ]
                     end
                     dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
-                        ctx, length(axes), axes, is_closed, 0
+                        ctx, length(axes), axes, sharding.is_closed[j], sharding.priority[j]
                     )
                 end
 
