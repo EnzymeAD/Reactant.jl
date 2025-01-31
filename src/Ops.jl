@@ -85,9 +85,11 @@ end
 end
 
 fill(v, dims::Base.DimOrInd...) = fill(v, dims)
-fill(v, dims::NTuple{N, Union{Integer, Base.OneTo}}) where {N} = fill(v, map(Base.to_dim, dims))
-fill(v, dims::NTuple{N, Integer}) where {N} = fill(v, collect(dims))
-fill(v, dims::Tuple{}) = fill(v, Int[])
+function fill(v, dims::NTuple{N,Union{Integer,Base.OneTo}}) where {N}
+    return fill(v, map(Base.to_dim, dims))
+end
+fill(v, dims::NTuple{N,Integer}) where {N} = fill(v, collect(dims))
+fill(v, ::Tuple{}) = fill(v, Int[])
 
 for (T, mlir_func) in (
     (Bool, :mlirDenseElementsAttrBoolSplatGet),
@@ -120,7 +122,6 @@ end
 @noinline function fill(
     element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
 ) where {T}
-    Core.println("fill: element type: $T, shape: $shape")
     tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
     splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, MLIR.IR.Attribute(element))
     cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
