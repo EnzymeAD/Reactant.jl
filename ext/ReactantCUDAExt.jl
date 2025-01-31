@@ -7,7 +7,9 @@ using ReactantCore: @trace
 using KernelAbstractions: KernelAbstractions
 import KernelAbstractions as KA
 using Libdl
-const ReactantKernelAbstractionsExt = Base.get_extension(Reactant, :ReactantKernelAbstractionsExt)
+const ReactantKernelAbstractionsExt = Base.get_extension(
+    Reactant, :ReactantKernelAbstractionsExt
+)
 const ReactantBackend = ReactantKernelAbstractionsExt.ReactantBackend
 
 using Adapt
@@ -264,7 +266,9 @@ end
 function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
     backend = KA.backend(obj)
 
-    ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(obj, ndrange, workgroupsize)
+    ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
+        obj, ndrange, workgroupsize
+    )
     # this might not be the final context, since we may tune the workgroupsize
     ctx = KA.mkcontext(obj, ndrange, iterspace)
 
@@ -275,7 +279,8 @@ function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsi
         maxthreads = nothing
     end
 
-    kernel = CUDA.@cuda launch=false always_inline=backend.always_inline maxthreads=maxthreads obj.f(ctx, args...)
+    kernel = CUDA.@cuda launch = false always_inline = backend.always_inline maxthreads =
+        maxthreads obj.f(ctx, args...)
 
     # figure out the optimal workgroupsize automatically
     if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing

@@ -23,14 +23,14 @@ end
 const skip_non_cuda_tests = true
 
 @static if !Sys.isapple()
-@testset "Square Kernel" begin
-    oA = collect(1:1:64)
-    A = Reactant.to_rarray(oA)
-    B = Reactant.to_rarray(100 .* oA)
-    @jit square!(A, B)
-    @test all(Array(A) .≈ (oA .* oA .* 100))
-    @test all(Array(B) .≈ (oA .* 100))
-end
+    @testset "Square Kernel" begin
+        oA = collect(1:1:64)
+        A = Reactant.to_rarray(oA)
+        B = Reactant.to_rarray(100 .* oA)
+        @jit square!(A, B)
+        @test all(Array(A) .≈ (oA .* oA .* 100))
+        @test all(Array(B) .≈ (oA .* 100))
+    end
 end
 
 function sin_kernel!(x, y)
