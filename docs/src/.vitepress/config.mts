@@ -51,7 +51,12 @@ export default defineConfig({
     },
     nav: [
       { text: "Home", link: "/" },
-      { text: "Getting Started", link: "/introduction" },
+      { text: "Getting Started",
+        items: [
+          {text: "Introduction", link: "/introduction" },
+          {text: "Configuration", link: "/configuration" },
+        ],
+      },
       { text: "Benchmarks", link: "https://enzymead.github.io/Reactant.jl/benchmarks/" },
       {
         text: "Tutorials",
@@ -100,11 +105,11 @@ export default defineConfig({
     ],
     sidebar: {
       "/introduction/": {
-        // @ts-ignore
         text: "Getting Started",
         collapsed: false,
         items: [
           { text: "Introduction", link: "/introduction" },
+          { text: "Configuration", link: "/configuration" },
         ],
       },
       "/tutorials/": {
