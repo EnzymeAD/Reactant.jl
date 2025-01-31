@@ -90,7 +90,8 @@ gpu = "cuda"
 
 Reactant looks for the CUDA Driver library `libcuda` to determine whether the current system supports Nvidia GPUs.
 However in some cases this library may be actually present on the machine even though no GPU is actually attached to it, which would trick Reactant's installation process into believing a GPU is available.
-To force disabling GPU support, in the environment where you installed Reactant create a file called `LocalPreferences.toml` with the following content:
+Normally this is not a problem as Reactant will detect that in spite of the CUDA Driver being present there are no GPUs and will default to the CPU backend.
+If you do experience issues due to a GPU being detected erroneously, you can force disabling GPU support by creating a file called `LocalPreferences.toml` in the environment where you installed Reactant with the following content:
 
 ```toml
 [Reactant_jll]
