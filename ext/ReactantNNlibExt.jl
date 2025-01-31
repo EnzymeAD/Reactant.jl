@@ -147,7 +147,7 @@ function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
         (size(x, i) + pl + pr - d * (K - 1) - 1) ÷ s + 1
     end
 
-    padding = Reactant.MLIR.IR.DenseElementsAttribute(
+    padding = Reactant.MLIR.IR.DenseElements(
         reshape([padding..., 0, 0, 0, 0], (2, N))'
     )
 

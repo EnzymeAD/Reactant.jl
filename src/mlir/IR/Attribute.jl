@@ -862,7 +862,7 @@ function Base.convert(::Core.Type{API.MlirAttribute}, named_attribute::NamedAttr
     return named_attribute.named_attribute
 end
 
-struct FlatSymbol
+struct FlatSymbol 
     attr::Attribute
     FlatSymbol(s::String) = new(FlatSymbolRefAttribute(s))
 end

@@ -618,7 +618,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
             cdata = MLIR.IR.result(
                 MLIR.Dialects.llvm.mlir_constant(;
-                    res=array_ty, value=MLIR.IR.DenseElementsAttribute(to_bytes(a))
+                    res=array_ty, value=MLIR.IR.DenseElements(to_bytes(a))
                 ),
                 1,
             )
