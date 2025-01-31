@@ -23,7 +23,10 @@ examples = [
 
 pages = [
     "Reactant.jl" => "index.md",
-    "Introduction" => ["Getting Started" => "introduction/index.md"],
+    "Introduction" => [
+        "Getting Started" => "introduction/index.md",
+        "Configuration" => "configuration/index.md",
+    ],
     "Tutorials" =>
         ["Overview" => "tutorials/index.md", "Profiling" => "tutorials/profiling.md"],
     "API Reference" => [
