@@ -74,6 +74,18 @@ julia> Pkg.add("Reactant_jll")
 
 Here you can see that on this system Reactant found the CUDA Driver at `/lib/x86_64-linux-gnu/libcuda.so.1` with version 12.2.0.
 
+#### Installing Reactant on GPU Servers without Internet
+
+If you want to use Reactant on GPU Servers where all packages must be installed on the login nodes and the compute nodes don't have access to internet, add the following to the `Project.toml` and precompile the package:
+
+```toml
+[extras]
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
+
+[preferences.Reactant_jll]
+gpu = "cuda"
+```
+
 #### Disabling CUDA support
 
 Reactant looks for the CUDA Driver library `libcuda` to determine whether the current system supports Nvidia GPUs.
