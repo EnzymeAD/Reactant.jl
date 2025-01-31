@@ -994,14 +994,15 @@ end
         sample_inputs[2i - 1] = Reactant.ConcreteRNumber(T(0))
         sample_inputs[2i] = Reactant.ConcreteRNumber(T(0))
     end
-    func = Reactant.TracedUtils.make_mlir_fn(
-        comparator,
-        (sample_inputs...,),
-        (),
-        "comparator";
-        no_args_in_result=true,
-        return_dialect=:stablehlo,
-    )[2]
+    func =
+        Reactant.TracedUtils.make_mlir_fn(
+            comparator,
+            (sample_inputs...,),
+            (),
+            "comparator";
+            no_args_in_result=true,
+            return_dialect=:stablehlo,
+        ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
         MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
@@ -1601,27 +1602,29 @@ end
 
     input_types = [mlir_type(arg) for arg in linear_args]
 
-    (_, cond_fn_compiled, _, _, _, _, _, _, _) = Reactant.TracedUtils.make_mlir_fn(
-        cond_fn,
-        traced_args,
-        (),
-        string(gensym("cond_fn")),
-        false;
-        return_dialect=:stablehlo,
-        no_args_in_result=true,
-        do_transpose=false,
-    )
+    cond_fn_compiled =
+        Reactant.TracedUtils.make_mlir_fn(
+            cond_fn,
+            traced_args,
+            (),
+            string(gensym("cond_fn")),
+            false;
+            return_dialect=:stablehlo,
+            no_args_in_result=true,
+            do_transpose=false,
+        ).f
 
-    (_, body_fn_compiled, _, _, _, _, _, _, _) = Reactant.TracedUtils.make_mlir_fn(
-        body_fn,
-        traced_args,
-        (),
-        string(gensym("body_fn")),
-        false;
-        return_dialect=:stablehlo,
-        no_args_in_result=true,
-        do_transpose=false,
-    )
+    body_fn_compiled =
+        Reactant.TracedUtils.make_mlir_fn(
+            body_fn,
+            traced_args,
+            (),
+            string(gensym("body_fn")),
+            false;
+            return_dialect=:stablehlo,
+            no_args_in_result=true,
+            do_transpose=false,
+        ).f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
     body_reg = Reactant.TracedUtils.__take_region(body_fn_compiled)
@@ -1996,9 +1999,10 @@ end
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     mesh_axes = [
-        name => ndevices for (name, ndevices) in zip(m.axis_names, size(m.device_ids))
+        name => Int64(ndevices) for
+        (name, ndevices) in zip(m.axis_names, size(m.device_ids))
     ]
-    device_ids = collect(vec(m.device_ids))
+    device_ids = collect(Int64, vec(m.device_ids))
     return mesh(mod, mesh_axes, device_ids; sym_name=m.mesh_name, location)
 end
 
@@ -2009,25 +2013,49 @@ end
     sym_name=nothing,
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
+    # See https://github.com/openxla/shardy/blob/f9d83e779a58b811b848c4edfaf68e88b636787d/shardy/dialect/sdy/ir/verifiers.cc#L647-L699 for the checks
     ndevices = prod(last, mesh_axes)
-    @assert ndevices == length(device_ids)
+    @assert allunique(first, mesh_axes) "mesh_axes must be unique"
+    @assert ndevices == length(device_ids) "length(device_ids) should be same as \
+                                            prod(last, mesh_axes)"
+    @assert all(x -> x ≥ 0, device_ids) "device_ids must be non-negative"
+    @assert Base.sort(device_ids) == collect(Int64, 0:(ndevices - 1)) "sorted device_ids must be the same as iota(product(axes)), got $(Base.sort(device_ids))"
+
+    if Base.sort(device_ids) == device_ids
+        # error: if the ordered device ids are the same as iota(product(axes)), no need to specify them for simplicity
+        device_ids = Int64[]
+    end
 
     ctx = MLIR.IR.context()
     mesh_axis_attrs = [
         MLIR.API.sdyMeshAxisAttrGet(ctx, name, size) for (name, size) in mesh_axes
     ]
     mesh_attr = MLIR.API.sdyMeshAttrGet(
-        ctx, length(mesh_axis_attrs), mesh_axis_attrs, ndevices, device_ids
+        ctx,
+        Int64(length(mesh_axis_attrs)),
+        mesh_axis_attrs,
+        Int64(length(device_ids)),
+        device_ids,
     )
 
     sym_name === nothing && (sym_name = "mesh")
     if sym_name isa String
         sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
     end
-    op = MLIR.IR.mmodule!(mod) do
+    sym_name = MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx)
+
+    MLIR.IR.mmodule!(mod) do
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
-    return op
+
+    # We return the name of the mesh, since the operation is a Symbol op
+    return (;
+        sym_name,
+        mesh_attr,
+        axis_attrs=Dict(
+            name => mesh_axis_attrs[i] for (i, (name, _)) in enumerate(mesh_axes)
+        ),
+    )
 end
 
 end # module Ops

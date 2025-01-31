@@ -127,6 +127,20 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
+mutable struct MakeMLIRFnResult{F,TR,Re,Rt,LA,LR}
+    fnwrapped::Bool
+    f::F
+    traced_result::TR
+    result::Re
+    seen_args::OrderedIdDict
+    ret::Rt
+    linear_args::Vector{LA}
+    in_tys::Vector{MLIR.IR.Type}
+    linear_results::Vector{LR}
+    num_partitions::Int
+    num_replicas::Int
+end
+
 function make_mlir_fn(
     f,
     args,
@@ -140,22 +154,23 @@ function make_mlir_fn(
     in_shardings=nothing,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
-        return (
-            true,
-            make_mlir_fn(
-                Reactant.apply,
-                (f, args...),
-                kwargs,
-                name,
-                concretein;
-                toscalar,
-                return_dialect,
-                do_transpose,
-                no_args_in_result,
-                in_shardings,
-            )[2:end]...,
+        mlir_fn_res = make_mlir_fn(
+            Reactant.apply,
+            (f, args...),
+            kwargs,
+            name,
+            concretein;
+            toscalar,
+            return_dialect,
+            do_transpose,
+            no_args_in_result,
+            in_shardings,
         )
+        mlir_fn_res.fnwrapped = true
+        return mlir_fn_res
     end
+
+    num_partitions, num_replicas = 1, 1
 
     N = length(args)
     seen_args = OrderedIdDict()
@@ -207,17 +222,20 @@ function make_mlir_fn(
             if sharding isa Reactant.Sharding.NamedSharding
                 mesh = sharding.mesh
                 if !haskey(traced_args_to_shardings, arr) && arr isa Reactant.TracedType
-                    traced_args_to_shardings[arr] = mesh
+                    traced_args_to_shardings[arr] = sharding
                 end
                 if !haskey(mesh_cache, mesh)
-                    meshop = Reactant.Ops.mesh(mod, mesh)
-                    mesh_cache[mesh] = meshop
+                    mesh_op_attrs = Reactant.Ops.mesh(mod, mesh)
+                    mesh_cache[mesh] = mesh_op_attrs
                 end
             end
             return sharding
         end
 
-        # TODO: For multiple meshes? check if num_partitions are equal
+        unique_meshes = unique([m for (k, m) in traced_args_to_shardings])
+        sorted_devices = [sort(vec(m.mesh.device_ids)) for m in unique_meshes]
+        @assert allequal(sorted_devices) "All meshes must have the same device ids"
+        num_partitions = length(first(sorted_devices))
     end
 
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
@@ -233,7 +251,50 @@ function make_mlir_fn(
 
     if in_shardings !== nothing
         # Here we attach sharding annotations to the function arguments
-        # TODO
+
+        linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
+        for (i, arg) in enumerate(linear_args)
+            if haskey(traced_args_to_shardings, arg)
+                if ndims(arg) == 0
+                    throw(
+                        ErrorException(
+                            "Sharding annotations are not supported for scalar arguments"
+                        ),
+                    )
+                end
+                sharding = traced_args_to_shardings[arg]
+                mesh_op_attrs = mesh_cache[sharding.mesh]
+                @assert length(sharding.partition_spec) == ndims(arg)
+
+                dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(undef, ndims(arg))
+                for (j, name) in enumerate(sharding.partition_spec)
+                    if name === nothing
+                        axes = MLIR.IR.Attribute[]
+                        is_closed = false
+                    else
+                        axes = [mesh_op_attrs.axis_attrs[name]]
+                        is_closed = true
+                    end
+                    dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
+                        MLIR.IR.context(), length(axes), axes, is_closed, 0
+                    )
+                end
+
+                # Currently we don't support replicated axes from user input, we do
+                # implicitly via shardy
+                tensor_sharding_attr = MLIR.IR.Attribute(
+                    MLIR.API.sdyTensorShardingAttrGet(
+                        MLIR.IR.context(),
+                        mesh_op_attrs.sym_name,
+                        length(dimension_sharding_attrs),
+                        dimension_sharding_attrs,
+                        0,
+                        MLIR.API.MlirAttribute[],
+                    ),
+                )
+                linear_arg_shardings[i] = tensor_sharding_attr
+            end
+        end
     end
 
     @assert MLIR.IR._has_block()
@@ -251,6 +312,23 @@ function make_mlir_fn(
         Reactant.call_with_reactant(f, traced_args...)
     finally
         MLIR.IR.deactivate!(fnbody)
+    end
+
+    # Attach `sdy.sharding` attribute to the argument
+    if in_shardings !== nothing
+        for i in 1:length(linear_args)
+            if isassigned(linear_arg_shardings, i)
+                MLIR.API.mlirFuncSetArgAttr(
+                    func, i - 1, "sdy.sharding", linear_arg_shardings[i]
+                )
+                # @ccall MLIR.API.mlir_c.ReactantFuncSetArgAttr(
+                #     func::MLIR.API.MlirOperation,
+                #     (i - 1)::Csize_t,
+                #     "sdy.sharding"::MLIR.API.MlirStringRef,
+                #     linear_arg_shardings[i]::MLIR.API.MlirAttribute,
+                # )::Cvoid
+            end
+        end
     end
 
     seen_results = OrderedIdDict()
@@ -314,7 +392,8 @@ function make_mlir_fn(
 
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
-    return (
+
+    return MakeMLIRFnResult(
         false,
         func2,
         traced_result,
@@ -324,6 +403,8 @@ function make_mlir_fn(
         linear_args,
         in_tys,
         linear_results,
+        num_partitions,
+        num_replicas,
     )
 end
 
@@ -435,9 +516,12 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         return f(scalar_args...)
     end
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
+    mlir_fn_res = make_mlir_fn(
         f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
     )
+    fnwrap = mlir_fn_res.fnwrapped
+    func2 = mlir_fn_res.f
+    (; result, seen_args, linear_args, linear_results) = mlir_fn_res
 
     invmap = IdDict()
     for (k, v) in seen_args

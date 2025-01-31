@@ -7,7 +7,9 @@ using ..Reactant: Reactant, XLA
 
 using Reactant
 
-mesh = Sharding.Mesh("mesh", reshape(collect(Int64, 0:7), (4, 2)), ("data", "model"))
+mesh = Sharding.Mesh(
+    "mesh", reshape(collect(Int64, 0:7), (4, 2)), ("data", "model")
+)
 
 samples_sharding = Sharding.NamedSharding(mesh, ("data", nothing))
 w1_sharding = Sharding.NamedSharding(mesh, (nothing, "model"))
@@ -18,6 +20,8 @@ w1 = rand(Float32, 4, 3) |> Reactant.to_rarray
 w2 = rand(Float32, 2, 4) |> Reactant.to_rarray
 
 predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
+
+@code_hlo in_shardings=(samples_sharding, w1_sharding, w2_sharding) predict(samples, w1, w2)
 
 @jit in_shardings=(samples_sharding, w1_sharding, w2_sharding) predict(samples, w1, w2)
 =#

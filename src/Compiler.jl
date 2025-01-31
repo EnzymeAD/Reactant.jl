@@ -368,11 +368,12 @@ function compile_mlir(f, args; kwargs...)
     results = MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
         evalinfo = compile_mlir!(mod, f, args; kwargs...)
+        mlir_fn_res = evalinfo[end]
 
         # Attach a name, and partitioning attributes to the module
-        # XXX: Attach correct `mhlo.num_partitions` and `mhlo.num_replicas` to the module.
-        #      Currently using dummy values for debugging.
-        __add_mhlo_attributes_and_name!(mod, f; num_partitions=1, num_replicas=1)
+        __add_mhlo_attributes_and_name!(
+            mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
+        )
 
         return (mod, evalinfo...)
     end
@@ -454,14 +455,16 @@ function compile_mlir!(
 
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
-    fnwrapped,
-    func2, traced_result, result, seen_args, ret, linear_args, in_tys,
-    linear_results = try
+
+    mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true; in_shardings)
     finally
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
     end
+    (; fnwrapped, traced_result, seen_args, ret, linear_args, in_tys, linear_results) =
+        mlir_fn_res
+    compiled_f = mlir_fn_res.f
 
     concrete_seen = OrderedIdDict()
 
@@ -489,8 +492,13 @@ function compile_mlir!(
         kern = "lower-kernel{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
     end
 
-    opt_passes = optimization_passes(; no_nan, sroa=true)
+    # XXX: SROA fails with sharding for now. see https://github.com/EnzymeAD/Enzyme-JAX/issues/298
+    # opt_passes = optimization_passes(; no_nan, sroa=true)
+    opt_passes = optimization_passes(; no_nan, sroa=false)
+
     opt_passes2 = optimization_passes(; no_nan, sroa=false)
+
+    # display(mod)
 
     if optimize === :all
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
@@ -610,16 +618,22 @@ function compile_mlir!(
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
         body=MLIR.IR.Region(),
     )
-    MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(func2, 1))
+    MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
 
     push!(MLIR.IR.body(mod), func3)
 
-    MLIR.API.mlirOperationDestroy(func2.operation)
-    func2.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(compiled_f.operation)
+    compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
 
-    return linear_args,
-    linear_results2, preserved_args, seen_args, concrete_result,
-    fnwrapped
+    return (
+        linear_args,
+        linear_results2,
+        preserved_args,
+        seen_args,
+        concrete_result,
+        fnwrapped,
+        mlir_fn_res,
+    )
 end
 
 """
@@ -627,7 +641,7 @@ end
 """
 macro code_hlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :backend => "gpu"
+        :optimize => true, :no_nan => false, :backend => "gpu", :in_shardings => nothing
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1040,16 +1054,17 @@ function compile_xla(
     results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
+        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, mlir_fn_res = compile_mlir!(
             mod, f, args; optimize, no_nan, backend, in_shardings
         )
 
         # Attach a name, and partitioning attributes to the module
-        # XXX: Attach correct `mhlo.num_partitions` and `mhlo.num_replicas` to the module.
-        #      Currently using dummy values for debugging.
-        __add_mhlo_attributes_and_name!(mod, f; num_partitions=1, num_replicas=1)
+        __add_mhlo_attributes_and_name!(
+            mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
+        )
 
         # Resolve client and device
+        # XXX: This resolution logic is only valid for num_partitions == 1
         device = nothing
         if length(linear_args) > 0
             devices_list = [XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray]
@@ -1080,8 +1095,6 @@ function compile_xla(
                 device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
             end
         end
-
-        display(mod)
 
         # compile MLIR module to XLA executable
         exec = XLA.Compile(client, mod)
