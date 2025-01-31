@@ -861,3 +861,27 @@ end
 function Base.convert(::Core.Type{API.MlirAttribute}, named_attribute::NamedAttribute)
     return named_attribute.named_attribute
 end
+
+struct FlatSymbol 
+    attr::Attribute
+    FlatSymbol(s::String) = new(FlatSymbolRefAttribute(s))
+end
+
+Attribute(f::FlatSymbol) = f.attr
+Base.show(io::IO, f::FlatSymbol) = print(io, "@$(flatsymbol(f.attr))")
+
+struct DenseElements{T}
+    attr::Attribute
+    DenseElements(a::AbstractArray{T}) where {T} = new{T}(IR.DenseElementsAttribute(a))
+    DenseElements(a::Attribute) = begin
+        if !isdenseelements(a)
+            throw("$a is not a dense elements attribute.")
+        end
+        new{:Generic}(a)
+    end
+end
+Attribute(d::DenseElements) = d.attr
+
+function DenseArrayAttribute(values::Vector{<:Enum})
+    return Attribute([Attribute(value) for value in values])
+end

@@ -51,6 +51,8 @@ const with_profiler = Profiler.with_profiler
 
 include("utils.jl")
 
+using Reactant.MLIR.Dialects: stablehlo
+
 @leaf MissingTracedValue
 
 mutable struct TracedRNumber{T} <: RNumber{T}
@@ -170,12 +172,12 @@ end
 
 mutable struct ConcreteRNG <: Random.AbstractRNG
     seed::ConcreteRArray{UInt64,1}
-    const algorithm::String
+    const algorithm::stablehlo.RngAlgorithm.T
 end
 
 mutable struct TracedRNG <: Random.AbstractRNG
     seed::TracedRArray{UInt64,1}
-    const algorithm::String
+    const algorithm::stablehlo.RngAlgorithm.T
 end
 
 include("Ops.jl")
