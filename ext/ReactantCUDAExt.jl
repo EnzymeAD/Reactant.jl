@@ -272,7 +272,7 @@ function threads_to_workgroupsize(threads, ndrange)
     end
 end
 
-function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
+function ka_with_reactant(ndrange, workgroupsize, obj, args...)
     backend = KA.backend(obj)
 
     ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
@@ -323,6 +323,14 @@ function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsi
     kernel(ctx, args...; threads, blocks)
 
     return nothing
+end
+
+Reactant.@reactant_overlay @noinline function (obj::KA.Kernel{ReactantBackend})(
+    args...; ndrange=nothing, workgroupsize=nothing
+)
+    return Reactant.call_with_reactant(
+        ka_with_reactant, ndrange, workgroupsize, obj, args...
+    )
 end
 
 Adapt.adapt_storage(to::KA.ConstAdaptor, a::CuTracedArray) = Base.Experimental.Const(a)
