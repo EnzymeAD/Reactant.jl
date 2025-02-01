@@ -83,9 +83,12 @@ function KA.priority!(::ReactantBackend, prio::Symbol)
     return nothing
 end
 
+function tokw(ndrange, workgroupsize, obj, args...)
+    @inline obj(args...; ndrange, workgroupsize)
+end
+
 function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
-    obj2 = KA.Kernel{KA.CPU, KA.workgroupsize(obj), KA.ndrange(obj), typeof(obj.f)}(KA.CPU(), obj.f)
-    obj2(args...; ndrange, workgroupsize)
+    @jit tokw(ndrange, workgroupsize, obj, args...)
 end
 
 end
