@@ -79,7 +79,7 @@ function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
         )
     end
     rhs isa Number &&
-        return TracedUtils.promote_to(TracedRNumber{T}, Ops.constant(fill(T(rhs))))
+        return TracedUtils.promote_to(TracedRNumber{T}, Ops.fill(T(rhs)))
     return TracedUtils.promote_to(TracedRNumber{T}, Ops.constant(collect(rhs)))
 end
 

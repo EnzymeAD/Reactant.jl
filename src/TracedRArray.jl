@@ -997,12 +997,12 @@ function Base.findmin(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
     # Compute linear indices
     strds = strides(x)
     iotas = [Ops.iota(Int64, [size(indices)...]; iota_dimension=i) for i in 1:ndims(x)]
-    iotas[dims] = Ops.subtract(indices, Ops.constant(fill(Int64(1), size(indices))))
-    linear_indices = Ops.constant(fill(Int64(1), size(indices)))
+    iotas[dims] = Ops.subtract(indices, Ops.fill(Int64(1), size(indices)))
+    linear_indices = Ops.fill(Int64(1), size(indices))
     for d in eachindex(iotas)
         linear_indices = Ops.add(
             linear_indices,
-            Ops.multiply(iotas[d], Ops.constant(fill(Int64(strds[d]), size(iotas[d])))),
+            Ops.multiply(iotas[d], Ops.fill(Int64(strds[d]), size(iotas[d]))),
         )
     end
 
@@ -1026,12 +1026,12 @@ function Base.findmax(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
     # Compute linear indices
     strds = strides(x)
     iotas = [Ops.iota(Int64, [size(indices)...]; iota_dimension=i) for i in 1:ndims(x)]
-    iotas[dims] = Ops.subtract(indices, Ops.constant(fill(Int64(1), size(indices))))
-    linear_indices = Ops.constant(fill(Int64(1), size(indices)))
+    iotas[dims] = Ops.subtract(indices, Ops.fill(Int64(1), size(indices)))
+    linear_indices = Ops.fill(Int64(1), size(indices))
     for d in eachindex(iotas)
         linear_indices = Ops.add(
             linear_indices,
-            Ops.multiply(iotas[d], Ops.constant(fill(Int64(strds[d]), size(iotas[d])))),
+            Ops.multiply(iotas[d], Ops.fill(Int64(strds[d]), size(iotas[d]))),
         )
     end
 

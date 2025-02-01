@@ -303,7 +303,7 @@ function LinearAlgebra._diagm(
         (size(scatter_indices, 1),),
     )
     return Ops.scatter_setindex(
-        Ops.constant(fill(zero(T), (m, n))), scatter_indices, values
+        Ops.fill(zero(T), (m, n)), scatter_indices, values
     )
 end
 

@@ -402,9 +402,9 @@ end
 @noinline function pad(
     x::TracedRArray{T,N},
     padding_value::TracedRNumber{T};
-    low=fill(0, N),
-    high=fill(0, N),
-    interior=fill(0, N),
+    low=Base.fill(0, N),
+    high=Base.fill(0, N),
+    interior=Base.fill(0, N),
     location=mlir_stacktrace("pad", @__FILE__, @__LINE__),
 ) where {T,N}
     rsize = size(x) .+ low .+ high .+ max.(size(x) .- 1, 0) .* interior
@@ -1108,7 +1108,7 @@ end
     op = chlo.top_k(x.mlir_data; values, indices, k, location)
     indices = add(
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
-        constant(fill(Int32(1), Tuple(rsize))),
+        fill(Int32(1), Tuple(rsize)),
     ) # return the 1-indexed index
     indices = convert(TracedRArray{Int64,N}, indices) # julia indexes with Int64 generally
     values = TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize)
@@ -1212,7 +1212,7 @@ end
     (; output_state, output) = rng_bit_generator(uT, seed, shape; algorithm, location)
     output = divide(
         convert(TracedRArray{T,ndims(output)}, output),
-        constant(fill(T(typemax(uT)), Tuple(shape)); location),
+        fill(T(typemax(uT)), Tuple(shape); location),
     )
     return (; output_state, output)
 end
@@ -1252,11 +1252,11 @@ fields:
     rand_uniform = res.output
     seed = res.output_state
     scaled_uniform = subtract(
-        multiply(rand_uniform, constant(fill(T(2), size(rand_uniform)))),
-        constant(fill(T(1), size(rand_uniform))),
+        multiply(rand_uniform, fill(T(2), size(rand_uniform))),
+        fill(T(1), size(rand_uniform)),
     )
     probit = erf_inv(scaled_uniform)
-    rand_normal = multiply(probit, constant(fill(Base.sqrt(T(2)), size(rand_uniform))))
+    rand_normal = multiply(probit, fill(Base.sqrt(T(2)), size(rand_uniform)))
     return (; output_state=seed, output=rand_normal)
 end
 
@@ -1622,7 +1622,7 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
                     src.mlir_data,
                     gather_indices.mlir_data;
                     dimension_numbers,
-                    slice_sizes=fill(Int64(1), N),
+                    slice_sizes=Base.fill(Int64(1), N),
                     indices_are_sorted=false,
                 ),
                 1,
