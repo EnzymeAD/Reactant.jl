@@ -17,9 +17,6 @@ function square!(x, y)
     return nothing
 end
 
-# https://github.com/EnzymeAD/Reactant.jl/issues/614
-const skip_non_cuda_tests = true
-
 @static if !Sys.isapple()
     @testset "Square Kernel" begin
         oA = collect(1:1:64)

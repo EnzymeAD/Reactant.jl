@@ -952,12 +952,14 @@ function __init__()
     return nothing
 end
 
-@static if !Sys.isapple() && Sys.ARCH != :aarch64
+# In Julia v1.11.3 precompiling this module caches bad code:
+# <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
+@static if !Sys.isapple()
     Reactant.PrecompileTools.@setup_workload begin
         Reactant.initialize_dialect()
         client = Reactant.XLA.CPUClient(; checkcount=false)
         Reactant.PrecompileTools.@compile_workload begin
-            @static if Reactant.precompilation_supported()
+            @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
                 function square_kernel!(x)
                     i = CUDA.threadIdx().x
                     x[i] *= x[i]
