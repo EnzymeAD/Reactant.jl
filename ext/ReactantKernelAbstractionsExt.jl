@@ -83,4 +83,9 @@ function KA.priority!(::ReactantBackend, prio::Symbol)
     return nothing
 end
 
+function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
+    obj2 = KA.Kernel{KA.CPU, KA.workgroupsize(obj), KA.ndrange(obj), typeof(obj.f)}(KA.CPU(), obj.f)
+    obj2(args...; ndrange, workgroupsize)
+end
+
 end

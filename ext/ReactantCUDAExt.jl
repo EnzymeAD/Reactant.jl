@@ -272,7 +272,7 @@ function threads_to_workgroupsize(threads, ndrange)
     end
 end
 
-function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
+Reactant.@reactant_overlay @noinline function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
     backend = KA.backend(obj)
 
     ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
