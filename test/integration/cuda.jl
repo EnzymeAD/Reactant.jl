@@ -6,7 +6,8 @@ using CUDA
 function square_kernel!(x, y)
     i = threadIdx().x
     x[i] *= y[i]
-    sync_threads()
+    # We don't yet auto lower this via polygeist
+    # sync_threads()
     return nothing
 end
 
@@ -24,17 +25,9 @@ const skip_non_cuda_tests = true
         oA = collect(1:1:64)
         A = Reactant.to_rarray(oA)
         B = Reactant.to_rarray(100 .* oA)
-        if CUDA.functional()
-            @jit square!(A, B)
-            @test all(Array(A) .≈ (oA .* oA .* 100))
-            @test all(Array(B) .≈ (oA .* 100))
-        else
-            @static if skip_non_cuda_tests
-                @test false broken = true
-            else
-                @code_hlo optimize = :before_kernel square!(A, B)
-            end
-        end
+        @jit square!(A, B)
+        @test all(Array(A) .≈ (oA .* oA .* 100))
+        @test all(Array(B) .≈ (oA .* 100))
     end
 end
 
@@ -55,17 +48,9 @@ end
         oA = collect(Float64, 1:1:64)
         A = Reactant.to_rarray(oA)
         B = Reactant.to_rarray(100 .* oA)
-        if CUDA.functional()
-            @jit sin!(A, B)
-            @test all(Array(A) .≈ oA .* sin.(oA .* 100))
-            @test all(Array(B) .≈ (oA .* 100))
-        else
-            @static if skip_non_cuda_tests
-                @test false broken = true
-            else
-                @code_hlo optimize = :before_kernel sin!(A, B)
-            end
-        end
+        @jit sin!(A, B)
+        @test all(Array(A) .≈ oA .* sin.(oA .* 100))
+        @test all(Array(B) .≈ (oA .* 100))
     end
 end
 
@@ -86,16 +71,8 @@ end
     @testset "Constant Op Kernel" begin
         oA = collect(1:1:64)
         A = Reactant.to_rarray(oA)
-        if CUDA.functional()
-            @jit smul!(A)
-            @test all(Array(A) .≈ oA .* 15)
-        else
-            @static if skip_non_cuda_tests
-                @test false broken = true
-            else
-                @code_hlo optimize = :before_kernel smul!(A)
-            end
-        end
+        @jit smul!(A)
+        @test all(Array(A) .≈ oA .* 15)
     end
 end
 
@@ -115,40 +92,16 @@ tuplef2(a) = @cuda threads = 1 tuplef2!((5, a))
 @static if !Sys.isapple()
     @testset "Structured Kernel Arguments" begin
         A = ConcreteRArray(fill(1))
-        if CUDA.functional()
-            @jit tuplef(A)
-            @test all(Array(A) .≈ 3)
-        else
-            @static if skip_non_cuda_tests
-                @test false broken = true
-            else
-                @code_hlo optimize = :before_kernel tuplef(A)
-            end
-        end
+        @jit tuplef(A)
+        @test all(Array(A) .≈ 3)
 
         A = ConcreteRArray(fill(1))
-        if CUDA.functional()
-            @jit tuplef2(A)
-            @test all(Array(A) .≈ 5)
-        else
-            @static if skip_non_cuda_tests
-                @test false broken = true
-            else
-                @code_hlo optimize = :before_kernel tuplef2(A)
-            end
-        end
-    end
-    A = ConcreteRArray(fill(1))
-    if CUDA.functional()
         @jit tuplef2(A)
         @test all(Array(A) .≈ 5)
-    else
-        @static if skip_non_cuda_tests
-            @test false broken = true
-        else
-            @code_hlo optimize = :before_kernel tuplef2(A)
-        end
     end
+    A = ConcreteRArray(fill(1))
+    @jit tuplef2(A)
+    @test all(Array(A) .≈ 5)
 end
 
 # TODO this same code fails if we use a 0-d array...?
@@ -169,16 +122,8 @@ end
     @testset "Aliasing arguments" begin
         a = ConcreteRArray([3])
 
-        if CUDA.functional()
-            @jit aliased(a)
-            @test all(Array(a) .== 9)
-        else
-            @static if skip_non_cuda_tests
-                @test false broken = true
-            else
-                @code_hlo optimize = :before_kernel aliased(a)
-            end
-        end
+        @jit aliased(a)
+        @test all(Array(a) .== 9)
     end
 end
 

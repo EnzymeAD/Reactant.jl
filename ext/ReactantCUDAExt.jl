@@ -5,12 +5,14 @@ using Reactant:
     Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
 using KernelAbstractions: KernelAbstractions
+import KernelAbstractions as KA
 using Libdl
+const ReactantKernelAbstractionsExt = Base.get_extension(
+    Reactant, :ReactantKernelAbstractionsExt
+)
+const ReactantBackend = ReactantKernelAbstractionsExt.ReactantBackend
 
 using Adapt
-
-KernelAbstractions.get_backend(::AnyTracedRArray) = CUDABackend()
-KernelAbstractions.get_backend(::AnyConcreteRArray) = CUDABackend()
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
@@ -260,6 +262,70 @@ function Adapt.adapt_structure(
         (x...) -> T(x...), Adapt.adapt(to, bc.args), bc.axes
     )
 end
+
+function threads_to_workgroupsize(threads, ndrange)
+    total = 1
+    return map(ndrange) do n
+        x = min(div(threads, total), n)
+        total *= x
+        return x
+    end
+end
+
+function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
+    backend = KA.backend(obj)
+
+    ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
+        obj, ndrange, workgroupsize
+    )
+    # this might not be the final context, since we may tune the workgroupsize
+    ctx = KA.mkcontext(obj, ndrange, iterspace)
+
+    # If the kernel is statically sized we can tell the compiler about that
+    if KA.workgroupsize(obj) <: KA.StaticSize
+        maxthreads = prod(KA.get(KA.workgroupsize(obj)))
+    else
+        maxthreads = nothing
+    end
+
+    kernel = CUDA.@cuda launch = false always_inline = backend.always_inline maxthreads =
+        maxthreads obj.f(ctx, args...)
+
+    # figure out the optimal workgroupsize automatically
+    if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
+        if !Reactant.Compiler.PartitionKA[]
+            threads = prod(ndrange)
+        else
+            config = CUDA.launch_configuration(kernel.fun; max_threads=prod(ndrange))
+            if backend.prefer_blocks
+                # Prefer blocks over threads
+                threads = min(prod(ndrange), config.threads)
+                # XXX: Some kernels performs much better with all blocks active
+                cu_blocks = max(cld(prod(ndrange), threads), config.blocks)
+                threads = cld(prod(ndrange), cu_blocks)
+            else
+                threads = config.threads
+            end
+            workgroupsize = threads_to_workgroupsize(threads, ndrange)
+            iterspace, dynamic = KA.partition(obj, ndrange, workgroupsize)
+        end
+        ctx = KA.mkcontext(obj, ndrange, iterspace)
+    end
+
+    blocks = length(KA.blocks(iterspace))
+    threads = length(KA.workitems(iterspace))
+
+    if blocks == 0
+        return nothing
+    end
+
+    # Launch kernel
+    kernel(ctx, args...; threads, blocks)
+
+    return nothing
+end
+
+Adapt.adapt_storage(to::KA.ConstAdaptor, a::CuTracedArray) = Base.Experimental.Const(a)
 
 function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
