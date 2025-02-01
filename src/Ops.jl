@@ -84,12 +84,26 @@ end
     return TracedRNumber{T}((), res.mlir_data)
 end
 
-fill(v, dims::Base.DimOrInd...; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)) = fill(v, dims; location)
-function fill(v, dims::NTuple{N,Union{Integer,Base.OneTo}}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)) where {N}
+function fill(
+    v, dims::Base.DimOrInd...; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
+)
+    return fill(v, dims; location)
+end
+function fill(
+    v,
+    dims::NTuple{N,Union{Integer,Base.OneTo}};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {N}
     return fill(v, map(Base.to_dim, dims); location)
 end
-fill(v, dims::NTuple{N,Integer}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)) where {N} = fill(v, collect(dims); location)
-fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)) = fill(v, Int[]; location)
+function fill(
+    v, dims::NTuple{N,Integer}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
+) where {N}
+    return fill(v, collect(dims); location)
+end
+function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__))
+    return fill(v, Int[]; location)
+end
 
 for (T, mlir_func) in (
     (Bool, :mlirDenseElementsAttrBoolSplatGet),
@@ -120,10 +134,11 @@ for (T, mlir_func) in (
 end
 
 _fill_element_attr(x) = MLIR.IR.Attribute(x)
-_fill_element_attr(x::Complex) = MLIR.IR.Attribute([
-    MLIR.IR.Attribute(Base.real(x)),
-    MLIR.IR.Attribute(Base.imag(x)),
-])
+function _fill_element_attr(x::Complex)
+    return MLIR.IR.Attribute([
+        MLIR.IR.Attribute(Base.real(x)), MLIR.IR.Attribute(Base.imag(x))
+    ])
+end
 
 @noinline function fill(
     element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)

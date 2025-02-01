@@ -78,8 +78,7 @@ function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
             TracedRNumber{Reactant.unwrapped_eltype(rhs)}((), rhs.mlir_data),
         )
     end
-    rhs isa Number &&
-        return TracedUtils.promote_to(TracedRNumber{T}, Ops.fill(T(rhs)))
+    rhs isa Number && return TracedUtils.promote_to(TracedRNumber{T}, Ops.fill(T(rhs)))
     return TracedUtils.promote_to(TracedRNumber{T}, Ops.constant(collect(rhs)))
 end
 
