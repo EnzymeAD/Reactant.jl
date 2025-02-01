@@ -7,6 +7,12 @@ extern "C" bool reactant_contains_shared(void* ptr);
 extern "C" void reactant_release_rcreference(void* ptr);
 extern "C" bool reactant_contains_rcreference(void* ptr);
 
+namespace xla {
+namespace ifrt {
+class Array;
+} // namespace ifrt
+} // namespace xla
+
 namespace reactant {
 template <typename T, typename G = std::remove_cv_t<T>>
 inline G* capture_shared(std::shared_ptr<T> ptr) {
@@ -30,7 +36,7 @@ inline G* capture_rcreference(tsl::RCReference<T> ptr) {
 }
 
 template<>
-void* capture_rcreference(tsl::RCReference<void> ptr);
+void* capture_rcreference(tsl::RCReference<xla::ifrt::Array> ptr);
 
 template<typename  T>
 inline void destruct_or_release_if_shared(T* ptr) {
@@ -64,7 +70,7 @@ std::shared_ptr<T> get_or_insert_rcreference(T* ptr) {
     return std::reinterpret_pointer_cast<T>(get_rcreference(ptr));
 }
 
-std::shared_ptr<void> get_rcreference(void* ptr);
+tsl::RCReference<xla::ifrt::Array> get_rcreference(void* ptr);
 
 // TODO here we might have `std::shared_ptr` but also `tsl::RCReference`. what do we put?
 // do we use polymorphism here and return a `Holder*` (pointer to abstract base class) or do we explicitly return a `StdSharedHolder*`/`TslRCReferenceHolder*` (pointer to derived class)?

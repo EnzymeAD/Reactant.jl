@@ -2,10 +2,10 @@
 #include <memory>
 #include "src/memory_management.hpp"
 #include "llvm/Support/ExtensibleRTTI.h"
-#include "xla/tsl/concurrency/ref_count.h"
+#include "xla/python/ifrt/array.h"
 
 std::map<void*, std::shared_ptr<void>> captured_shared_ptr;
-std::map<void*, tsl::RCReference<void>> captured_rcreference;
+std::map<void*, tsl::RCReference<xla::ifrt::Array>> captured_rcreference;
 
 extern "C" void reactant_release_shared(void* ptr) {
     captured_shared_ptr.erase(ptr);
@@ -22,7 +22,7 @@ void* reactant::capture_shared(std::shared_ptr<void> ptr) {
 }
 
 template<>
-void* reactant::capture_rcreference(tsl::RCReference<void> ptr) {
+void* reactant::capture_rcreference(tsl::RCReference<xla::ifrt::Array> ptr) {
     captured_rcreference[ptr.get()] = ptr;
     return ptr.get();
 }
@@ -40,7 +40,7 @@ std::shared_ptr<void> reactant::get_shared(void* ptr) {
     return captured_shared_ptr[ptr];
 }
 
-tsl::RCReference<void> reactant::get_rcreference(void* ptr) {
+tsl::RCReference<xla::ifrt::Array> reactant::get_rcreference(void* ptr) {
     return captured_rcreference[ptr];
 }
 
