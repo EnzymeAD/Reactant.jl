@@ -689,6 +689,132 @@ function cp_async_bulk_commit_group(; location=Location())
 end
 
 """
+`cp_async_bulk_shared_cluster_global`
+
+Initiates an asynchronous copy operation from global memory to cluster\'s
+shared memory.
+
+The `multicastMask` operand is optional. When it is present, the Op copies
+data from global memory to shared memory of multiple CTAs in the cluster.
+Operand `multicastMask` specifies the destination CTAs in the cluster such
+that each bit position in the 16-bit `multicastMask` operand corresponds to
+the `nvvm.read.ptx.sreg.ctaid` of the destination CTA.
+
+The `l2CacheHint` operand is optional, and it is used to specify cache
+eviction policy that may be used during the memory access.
+[For more information, see PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
+"""
+function cp_async_bulk_shared_cluster_global(
+    dstMem::Value,
+    srcMem::Value,
+    mbar::Value,
+    size::Value,
+    multicastMask=nothing::Union{Nothing,Value};
+    l2CacheHint=nothing::Union{Nothing,Value},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[dstMem, srcMem, mbar, size]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(multicastMask) && push!(operands, multicastMask)
+    !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
+    push!(attributes, operandsegmentsizes([
+        1,
+        1,
+        1,
+        1,
+        if (multicastMask == nothing)
+            0
+        elseif 1(l2CacheHint == nothing)
+            0
+        else
+            1
+        end,
+    ]))
+
+    return create_operation(
+        "nvvm.cp.async.bulk.shared.cluster.global",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`cp_async_bulk_global_shared_cta`
+
+Initiates an asynchronous copy operation from Shared CTA memory to
+global memory.
+
+The `l2CacheHint` operand is optional, and it is used to specify cache
+eviction policy that may be used during the memory access.
+[For more information, see PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
+"""
+function cp_async_bulk_global_shared_cta(
+    dstMem::Value,
+    srcMem::Value,
+    size::Value,
+    l2CacheHint=nothing::Union{Nothing,Value};
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[dstMem, srcMem, size]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
+
+    return create_operation(
+        "nvvm.cp.async.bulk.global.shared.cta",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`cp_async_bulk_shared_cluster_shared_cta`
+
+Initiates an asynchronous copy operation from Shared CTA memory to Shared
+cluster memory.
+
+[For more information, see PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
+"""
+function cp_async_bulk_shared_cluster_shared_cta(
+    dstMem::Value, srcMem::Value, mbar::Value, size::Value; location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[dstMem, srcMem, mbar, size]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "nvvm.cp.async.bulk.shared.cluster.shared.cta",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `cp_async_bulk_tensor_shared_cluster_global`
 
 Initiates an asynchronous copy operation on the tensor data from global 
@@ -1053,6 +1179,41 @@ function cp_async_wait_group(; n, location=Location())
 
     return create_operation(
         "nvvm.cp.async.wait.group",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`cvt_float_to_tf32`
+
+This Op converts the given f32 input to tf32.
+The result `res` is represented as an i32 type.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction. The `rnd` and `sat` attributes specify the
+the rounding and saturation modes respectively.
+[For more information, see PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function cvt_float_to_tf32(
+    src::Value; res::IR.Type, rnd=nothing, sat=nothing, relu=nothing, location=Location()
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.cvt.float.to.tf32",
         location;
         operands,
         owned_regions,

@@ -51,7 +51,12 @@ export default defineConfig({
     },
     nav: [
       { text: "Home", link: "/" },
-      { text: "Getting Started", link: "/introduction" },
+      { text: "Getting Started",
+        items: [
+          { text: "Introduction", link: "/introduction" },
+          { text: "Configuration", link: "/introduction/configuration" },
+        ],
+      },
       { text: "Benchmarks", link: "https://enzymead.github.io/Reactant.jl/benchmarks/" },
       {
         text: "Tutorials",
@@ -81,6 +86,7 @@ export default defineConfig({
               { text: "NVVM", link: "/api/nvvm" },
               { text: "TPU", link: "/api/tpu" },
               { text: "Triton", link: "/api/triton" },
+              { text: "Shardy", link: "/api/shardy" },
             ],
           },
           {
@@ -99,11 +105,11 @@ export default defineConfig({
     ],
     sidebar: {
       "/introduction/": {
-        // @ts-ignore
         text: "Getting Started",
         collapsed: false,
         items: [
           { text: "Introduction", link: "/introduction" },
+          { text: "Configuration", link: "/introduction/configuration" },
         ],
       },
       "/tutorials/": {
@@ -140,6 +146,7 @@ export default defineConfig({
               { text: "NVVM", link: "/api/nvvm" },
               { text: "TPU", link: "/api/tpu" },
               { text: "Triton", link: "/api/triton" },
+              { text: "Shardy", link: "/api/shardy" },
             ],
           },
           {

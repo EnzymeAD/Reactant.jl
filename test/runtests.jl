@@ -65,6 +65,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
         @safetestset "CUDA" include("integration/cuda.jl")
+        @safetestset "KernelAbstractions" include("integration/kernelabstractions.jl")
         @safetestset "Linear Algebra" include("integration/linear_algebra.jl")
         @safetestset "OffsetArrays" include("integration/offsetarrays.jl")
         @safetestset "AbstractFFTs" include("integration/fft.jl")

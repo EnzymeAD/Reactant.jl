@@ -18,9 +18,11 @@ let options = deepcopy(options)
 
     genarg = first(eachsplit(ARGS[3], " "))
 
-    gen_include_dir = joinpath(splitpath(genarg)[1:(end - 3)]...)
+    gen_include_dir = joinpath(splitpath(genarg)[1:(end - 4)]...)
 
-    hlo_include_dir = joinpath(splitpath(ARGS[end - 1])[1:(end - 1)]...)
+    hlo_include_dir = joinpath(splitpath(ARGS[end - 2])[1:(end - 1)]...)
+
+    sdy_include_dir = joinpath(splitpath(ARGS[end - 1])[1:(end - 1)]...)
 
     append!(
         args,
@@ -33,6 +35,8 @@ let options = deepcopy(options)
             gen_include_dir,
             "-I",
             hlo_include_dir,
+            "-I",
+            sdy_include_dir,
             "-x",
             "c++",
         ],
@@ -41,6 +45,7 @@ let options = deepcopy(options)
     headers = [
         detect_headers(include_dir, args, Dict(), endswith("Python/Interop.h"))...,
         detect_headers(hlo_include_dir, args, Dict())...,
+        detect_headers(sdy_include_dir, args, Dict())...,
     ]
 
     ctx = create_context(headers, args, options)

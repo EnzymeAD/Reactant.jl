@@ -1,9 +1,16 @@
 module ReactantCUDAExt
 
 using CUDA
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
+using Reactant:
+    Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
+using KernelAbstractions: KernelAbstractions
+import KernelAbstractions as KA
 using Libdl
+const ReactantKernelAbstractionsExt = Base.get_extension(
+    Reactant, :ReactantKernelAbstractionsExt
+)
+const ReactantBackend = ReactantKernelAbstractionsExt.ReactantBackend
 
 using Adapt
 
@@ -256,6 +263,78 @@ function Adapt.adapt_structure(
     )
 end
 
+function threads_to_workgroupsize(threads, ndrange)
+    total = 1
+    return map(ndrange) do n
+        x = min(div(threads, total), n)
+        total *= x
+        return x
+    end
+end
+
+function ka_with_reactant(ndrange, workgroupsize, obj, args...)
+    backend = KA.backend(obj)
+
+    ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
+        obj, ndrange, workgroupsize
+    )
+    # this might not be the final context, since we may tune the workgroupsize
+    ctx = KA.mkcontext(obj, ndrange, iterspace)
+
+    # If the kernel is statically sized we can tell the compiler about that
+    if KA.workgroupsize(obj) <: KA.StaticSize
+        maxthreads = prod(KA.get(KA.workgroupsize(obj)))
+    else
+        maxthreads = nothing
+    end
+
+    kernel = CUDA.@cuda launch = false always_inline = backend.always_inline maxthreads =
+        maxthreads obj.f(ctx, args...)
+
+    # figure out the optimal workgroupsize automatically
+    if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
+        if !Reactant.Compiler.PartitionKA[]
+            threads = prod(ndrange)
+        else
+            config = CUDA.launch_configuration(kernel.fun; max_threads=prod(ndrange))
+            if backend.prefer_blocks
+                # Prefer blocks over threads
+                threads = min(prod(ndrange), config.threads)
+                # XXX: Some kernels performs much better with all blocks active
+                cu_blocks = max(cld(prod(ndrange), threads), config.blocks)
+                threads = cld(prod(ndrange), cu_blocks)
+            else
+                threads = config.threads
+            end
+            workgroupsize = threads_to_workgroupsize(threads, ndrange)
+            iterspace, dynamic = KA.partition(obj, ndrange, workgroupsize)
+        end
+        ctx = KA.mkcontext(obj, ndrange, iterspace)
+    end
+
+    blocks = length(KA.blocks(iterspace))
+    threads = length(KA.workitems(iterspace))
+
+    if blocks == 0
+        return nothing
+    end
+
+    # Launch kernel
+    kernel(ctx, args...; threads, blocks)
+
+    return nothing
+end
+
+Reactant.@reactant_overlay @noinline function (obj::KA.Kernel{ReactantBackend})(
+    args...; ndrange=nothing, workgroupsize=nothing
+)
+    return Reactant.call_with_reactant(
+        ka_with_reactant, ndrange, workgroupsize, obj, args...
+    )
+end
+
+Adapt.adapt_storage(to::KA.ConstAdaptor, a::CuTracedArray) = Base.Experimental.Const(a)
+
 function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
 end
@@ -353,6 +432,9 @@ function compile(job)
         end
         entryname = LLVM.name(meta.entry)
 
+        if Reactant.Compiler.DUMP_LLVMIR[]
+            println("cuda.jl immediate IR\n", string(mod))
+        end
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
         LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
@@ -396,6 +478,9 @@ function compile(job)
             end
             return true
         end
+        if Reactant.Compiler.DUMP_LLVMIR[]
+            println("cuda.jl postopt IR\n", string(mod))
+        end
         if !isempty(errors)
             throw(GPUCompiler.InvalidIRError(job, errors))
         end
@@ -428,8 +513,18 @@ function link(job, compiled)
     return compiled
 end
 
+function abi_sizeof(@nospecialize(x))
+    return sizeof(typeof(x))
+end
+function abi_sizeof(@nospecialize(x::CuTracedArray))
+    return sizeof(Ptr)
+end
+function abi_sizeof(@nospecialize(x::CUDA.CuDeviceArray))
+    return sizeof(Ptr)
+end
+
 function to_bytes(x)
-    sz = sizeof(x)
+    sz = abi_sizeof(x)
     ref = Ref(x)
     GC.@preserve ref begin
         ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
@@ -596,7 +691,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             )
             push!(allocs, (alloc, argty))
 
-            sz = sizeof(a)
+            sz = abi_sizeof(a)
             array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
             cdata = MLIR.IR.result(
                 MLIR.Dialects.llvm.mlir_constant(;

@@ -11,6 +11,11 @@ using Reactant:
     ReactantPrimitive
 using Test
 
+struct Wrapper{A,B}
+    a::A
+    b::B
+end
+
 @testset "Tracing" begin
     @testset "trace_type" begin
         @testset "mode = ConcreteToTraced" begin
@@ -138,6 +143,30 @@ using Test
                     Base.Pairs{Symbol,Union{}},
                     Base.Pairs{Symbol,Union{}},
                 ),
+                (
+                    NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
+                    NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
+                    NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
+                ),
+                (Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}),
+                (
+                    Wrapper{Float64,Vector{Float64}},
+                    Wrapper{Float64,Vector{Float64}},
+                    Wrapper{TracedRNumber{Float64},Vector{Float64}},
+                ),
+                (
+                    Wrapper{Float64,ConcreteRArray{Float64,1}},
+                    Wrapper{Float64,TracedRArray{Float64,1}},
+                    Wrapper{TracedRNumber{Float64},TracedRArray{Float64,1}},
+                ),
+                (Wrapper{Symbol}, Wrapper{Symbol}, Wrapper{Symbol}),
+                (Wrapper{Float64}, Wrapper{Float64}, Wrapper{TracedRNumber{Float64}}),
+                (
+                    Wrapper{ConcreteRArray{Float64,1}},
+                    Wrapper{TracedRArray{Float64,1}},
+                    Wrapper{TracedRArray{Float64,1}},
+                ),
+                (Wrapper, Wrapper, Wrapper),
             ]
                 tracedty = traced_type(origty, Val(ConcreteToTraced), Union{})
                 @test tracedty == targetty
