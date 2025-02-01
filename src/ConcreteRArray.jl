@@ -1,22 +1,9 @@
-function ConcreteRNumber{T}(
-    data::T2;
-    client::XLA.Client=XLA.default_backend[],
-    idx::Int=XLA.default_device_idx[],
-    device::Union{Nothing,XLA.Device}=nothing,
-) where {T<:Number,T2<:Number}
-    data = convert(T, data)
-    crarray = ConcreteRArray(fill(data); client, idx, device)
-    return ConcreteRNumber{T}(crarray.data)
+function ConcreteRNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
+    return ConcreteRNumber{T}(ConcreteRArray(fill(convert(T, data)); kwargs...).data)
 end
-function ConcreteRNumber(
-    data::T;
-    client::XLA.Client=XLA.default_backend[],
-    idx::Int=XLA.default_device_idx[],
-    device::Union{Nothing,XLA.Device}=nothing,
-) where {T<:Number}
-    crarray = ConcreteRArray(fill(data); client, idx, device)
-    return ConcreteRNumber{T}(crarray.data)
-end
+ConcreteRNumber(data::T; kwargs...) where {T<:Number} = ConcreteRNumber{T}(data; kwargs...)
+
+Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kwargs...)
 
 function Base.collect(x::ConcreteRNumber{T}) where {T}
     return collect(ConcreteRArray{T,0}(copy(x).data, ()))
@@ -43,19 +30,6 @@ for T in Base.uniontypes(ReactantPrimitive)
 end
 
 Base.convert(::Type{T}, x::ConcreteRNumber) where {T<:Number} = convert(T, to_number(x))
-
-function ConcreteRArray(
-    data::T;
-    client::XLA.Client=XLA.default_backend[],
-    idx::Int=XLA.default_device_idx[],
-    device::Union{Nothing,XLA.Device}=nothing,
-) where {T<:Number}
-    Base.depwarn(
-        "ConcreteRArray(data::Number) is deprecated, use ConcreteRNumber(data) instead",
-        :ConcreteRArray,
-    )
-    return ConcreteRArray(fill(data); client, idx, device)
-end
 
 const ConcreteRScalar{T} = Union{ConcreteRArray{T,0},ConcreteRNumber{T}}
 
