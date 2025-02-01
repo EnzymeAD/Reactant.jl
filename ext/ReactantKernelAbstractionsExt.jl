@@ -15,6 +15,8 @@ struct ReactantBackend <: KA.GPU end
 function Base.getproperty(x::ReactantBackend, sym::Symbol)
     if sym === :always_inline
         return true
+    elseif sym === :prefer_blocks
+        return false
     else
         return Base.getfield(x, sym)
     end
