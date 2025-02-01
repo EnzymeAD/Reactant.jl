@@ -14,7 +14,7 @@ extern "C" ExecuteOptions* ifrt_executeoptions_ctor(int32_t launch_id, span<int>
     absl::flat_hash_set<int> non_donatable_input_indices; // TODO conversion
     std::optional<AttributeMap> custom_options = std::nullopt;
 
-    return new ExecuteOptions(launch_id, non_donatable_input_indices, fill_status, custom_options);
+    return new ExecuteOptions{launch_id, non_donatable_input_indices, fill_status, custom_options};
 }
 
 extern "C" void ifrt_executeoptions_dtor(ExecuteOptions* exec_opts)
