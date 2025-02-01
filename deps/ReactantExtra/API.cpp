@@ -444,6 +444,10 @@ extern "C" PjRtClient *DeviceToClient(PjRtDevice *Device) {
 
 extern "C" void PjRtBufferFree(PjRtBuffer *Buffer) { delete Buffer; }
 
+extern "C" PjRtClient *PjRtLoadedExecutableGetClient(PjRtLoadedExecutable *exec) {
+  return exec->client();
+}
+
 // https://openxla.org/xla/shapes
 // This minor-to-major dimension order of 0 up to N-1 is akin to column-major
 // (at rank 2). Assuming a monotonic ordering of dimensions, another way we may
@@ -597,7 +601,8 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
 extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
                                                     MlirModule cmod,
                                                     int *global_ordinals,
-                                                    int num_global_ordinals) {
+                                                    int num_global_ordinals,
+                                                    bool is_sharded) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
@@ -606,18 +611,36 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
   // https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L601
   int device_count = client->addressable_device_count();
 
-  options.executable_build_options.set_num_replicas(device_count);
-  options.executable_build_options.set_num_partitions(1);
+  if (is_sharded) {
+    options.executable_build_options.set_num_replicas(1);
+    options.executable_build_options.set_num_partitions(device_count);
 
-  xla::DeviceAssignment device_assignment(device_count, 1);
-  for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
-    int ordinal = global_ordinals[device_id];
-    if (ordinal < 0) {
-      continue;
+    options.executable_build_options.set_use_spmd_partitioning(true);
+    options.executable_build_options.set_use_shardy_partitioner(true);
+
+    xla::DeviceAssignment device_assignment(1, device_count);
+    for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
+      int ordinal = global_ordinals[device_id];
+      if (ordinal < 0) {
+        continue;
+      }
+      device_assignment(0, ordinal) = device_id;
     }
-    device_assignment(ordinal, 0) = device_id;
+    options.executable_build_options.set_device_assignment(device_assignment);
+  } else {
+    options.executable_build_options.set_num_replicas(device_count);
+    options.executable_build_options.set_num_partitions(1);
+
+    xla::DeviceAssignment device_assignment(device_count, 1);
+    for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
+      int ordinal = global_ordinals[device_id];
+      if (ordinal < 0) {
+        continue;
+      }
+      device_assignment(ordinal, 0) = device_id;
+    }
+    options.executable_build_options.set_device_assignment(device_assignment);
   }
-  options.executable_build_options.set_device_assignment(device_assignment);
 
   auto addressable_devices = client->addressable_devices();
   if (!addressable_devices.empty()) {

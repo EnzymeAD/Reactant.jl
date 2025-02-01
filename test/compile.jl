@@ -84,7 +84,7 @@ end
 
     hlo_code = @code_hlo f(x_ra)
     @test !startswith(string(hlo_code), "Module")
-    @test startswith(string(hlo_code), "module {")
+    @test startswith(string(hlo_code), "module")
 end
 
 @testset "Bool attributes" begin

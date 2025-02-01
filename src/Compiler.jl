@@ -361,14 +361,48 @@ function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true
     return result
 end
 
-function compile_mlir(f, args; kwargs...)
+function compile_mlir(f, args; client=nothing, kwargs...)
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+
+    if client !== nothing
+        backend = XLA.ClientGetPlatformName(client)
+    else
+        backend = XLA.ClientGetPlatformName(XLA.default_backend[])
+    end
+    if backend == "CUDA"
+        backend = "GPU"
+    elseif backend == "CPU"
+        backend = "cpu"
+    end
+
     results = MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        evalinfo = compile_mlir!(mod, f, args; kwargs...)
-        return (mod, evalinfo...)
+        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, mlir_fn_res = compile_mlir!(
+            mod, f, args; backend, kwargs...
+        )
+
+        client, _ = __resolve_device_and_client(client, seen_args, linear_args)
+        if mlir_fn_res.num_partitions == 1
+            mlir_fn_res.num_replicas = XLA.ClientNumAddressableDevices(client)
+        end
+
+        # Attach a name, and partitioning attributes to the module
+        __add_mhlo_attributes_and_name!(
+            mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
+        )
+
+        return (
+            mod,
+            linear_args,
+            linear_results,
+            preserved_args,
+            seen_args,
+            concrete_result,
+            isclosure,
+            mlir_fn_res,
+        )
     end
     Base.delete!(context_gc_vector, ctx)
     return results
@@ -437,21 +471,29 @@ const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 
 function compile_mlir!(
-    mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu"
+    mod,
+    f,
+    args;
+    optimize::Union{Bool,Symbol}=true,
+    no_nan::Bool=false,
+    backend="gpu",
+    in_shardings=nothing,
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
-    fnwrapped,
-    func2, traced_result, result, seen_args, ret, linear_args, in_tys,
-    linear_results = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+
+    mlir_fn_res = try
+        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true; in_shardings)
     finally
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
     end
+    (; fnwrapped, traced_result, seen_args, ret, linear_args, in_tys, linear_results) =
+        mlir_fn_res
+    compiled_f = mlir_fn_res.f
 
     concrete_seen = OrderedIdDict()
 
@@ -598,18 +640,27 @@ function compile_mlir!(
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
+        arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
+        res_attrs=MLIR.IR.attr(compiled_f, "res_attrs"),
+        no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
         body=MLIR.IR.Region(),
     )
-    MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(func2, 1))
+    MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
 
     push!(MLIR.IR.body(mod), func3)
 
-    MLIR.API.mlirOperationDestroy(func2.operation)
-    func2.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(compiled_f.operation)
+    compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
 
-    return linear_args,
-    linear_results2, preserved_args, seen_args, concrete_result,
-    fnwrapped
+    return (
+        linear_args,
+        linear_results2,
+        preserved_args,
+        seen_args,
+        concrete_result,
+        fnwrapped,
+        mlir_fn_res,
+    )
 end
 
 """
@@ -617,7 +668,7 @@ end
 """
 macro code_hlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :backend => "gpu"
+        :optimize => true, :no_nan => false, :client => nothing, :in_shardings => nothing
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -635,7 +686,7 @@ macro compile(args...)
         :sync => false,
         :no_nan => false,
         :client => nothing,
-        :device => nothing,
+        :in_shardings => nothing,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -651,7 +702,7 @@ macro jit(args...)
         :sync => false,
         :no_nan => false,
         :client => nothing,
-        :device => nothing,
+        :in_shardings => nothing,
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
@@ -956,7 +1007,7 @@ Generate Julia code to call the XLA executable.
 - `donated_args_mask`: A list of `UInt8`s representing whether the argument is donated.
 - `nresults`: The number of results to expect.
 """
-function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
+function codegen_xla_call(exec, device, flatten_names, donated_args_mask, nresults)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
     concretized_res_names = Symbol[Symbol(:concrete_res_, i) for i in 1:nresults]
@@ -969,8 +1020,9 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     else
         quote
             GC.@preserve $(flatten_names...) begin
-                linearized_results = XLA.ExecutableCall(
+                linearized_results = XLA.ExecutableCallSharded(
                     $exec,
+                    $(device),
                     ($(flatten_buffer_refs...),),
                     $(Tuple(donated_args_mask)),
                     Val($nresults),
@@ -983,7 +1035,65 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     return concretized_res_names, xla_call_code
 end
 
-function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, device=nothing)
+function __add_mhlo_attributes_and_name!(mod::MLIR.IR.Module, f; kwargs...)
+    fname = string(f)
+    length(fname) > 10 && (fname = fname[1:7] * "...")
+    __add_mhlo_attributes_and_name!(mod, fname; kwargs...)
+    return nothing
+end
+
+function __add_mhlo_attributes_and_name!(
+    mod::MLIR.IR.Module, fname::String; num_partitions=1, num_replicas=1
+)
+    moduleop = MLIR.IR.Operation(mod)
+    module_name = Reactant.TracedUtils.__lookup_unique_name_in_module(
+        mod, "reactant_" * fname
+    )
+    module_name = MLIR.IR.Attribute(module_name)
+    MLIR.IR.attr!(moduleop, "mhlo.num_partitions", MLIR.IR.Attribute(num_partitions))
+    MLIR.IR.attr!(moduleop, "mhlo.num_replicas", MLIR.IR.Attribute(num_replicas))
+    MLIR.IR.attr!(
+        moduleop, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()), module_name
+    )
+    return nothing
+end
+
+function __resolve_device_and_client(client, seen_args, linear_args)
+    device = nothing
+    if length(linear_args) > 0
+        devices_list = [XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray]
+        if !isempty(devices_list)
+            if !allequal(devices_list)
+                msg = "Expected all arguments to be on the same device, got:\n"
+                for (i, device) in enumerate(devices_list)
+                    msg *= "    Device $(i): $(XLA.DeviceToString(device))\n"
+                end
+                throw(ArgumentError(msg))
+            end
+            @assert allequal(devices_list) "All arguments must be on the same device: $(devices_list)"
+            device = first(devices_list)
+        end
+    end
+
+    if client === nothing
+        if device !== nothing
+            client = XLA.client(device)
+        else
+            client = XLA.default_backend[]
+            device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
+        end
+    else
+        if device !== nothing
+            @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
+        else
+            device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
+        end
+    end
+
+    return (client, device)
+end
+
+function compile_xla(f, args; client=nothing, kwargs...)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
@@ -1004,38 +1114,27 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
     results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
-            mod, f, args; optimize, no_nan, backend
+        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, mlir_fn_res = compile_mlir!(
+            mod, f, args; backend, kwargs...
         )
 
         # Resolve client and device
-        if device === nothing
-            if length(linear_args) > 0
-                devices_list = [
-                    XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray
-                ]
-                if !isempty(devices_list)
-                    @assert allequal(devices_list) "All arguments must be on the same device: $(devices_list)"
-                    device = first(devices_list)
-                end
-            end
+        client, device = __resolve_device_and_client(client, seen_args, linear_args)
+        if mlir_fn_res.num_partitions == 1
+            mlir_fn_res.num_replicas = XLA.ClientNumAddressableDevices(client)
+        else
+            device = nothing
         end
 
-        if client === nothing
-            if device !== nothing
-                client = XLA.client(device)
-            else
-                client = XLA.default_backend[]
-            end
-        else
-            if device !== nothing
-                @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
-            end
-        end
+        # Attach a name, and partitioning attributes to the module
+        __add_mhlo_attributes_and_name!(
+            mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
+        )
 
         # compile MLIR module to XLA executable
-        exec = XLA.Compile(client, mod)
-        (
+        exec = XLA.Compile(client, mod; is_sharded=mlir_fn_res.num_partitions > 1)
+
+        return (
             exec,
             linear_args,
             linear_results,
@@ -1043,6 +1142,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
             seen_args,
             concrete_result,
             isclosure,
+            device,
         )
     finally
         MLIR.IR.deactivate!(ctx)
@@ -1052,7 +1152,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
 end
 
 function compile(f, args; sync=false, kwargs...)
-    exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
+    exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, device = compile_xla(
         f, args; kwargs...
     )
 
@@ -1069,8 +1169,11 @@ function compile(f, args; sync=false, kwargs...)
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(linear_args, result_stores)
 
+    # TODO: If we wan't we can omit `device` here and infer it from runtime arguments.
+    #       Currently we expect a compiled function to be called with arguments on the
+    #       same device as the compiled function.
     concretized_res_names, xla_call_code = codegen_xla_call(
-        exec, flatten_arg_names, donated_args_mask, length(linear_results)
+        exec, device, flatten_arg_names, donated_args_mask, length(linear_results)
     )
 
     unflatten_code = codegen_unflatten!(

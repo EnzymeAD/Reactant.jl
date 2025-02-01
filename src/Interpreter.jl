@@ -236,9 +236,12 @@ function overload_autodiff(
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = TracedUtils.make_mlir_fn(
+    mlir_fn_res = TracedUtils.make_mlir_fn(
         primf, primargs, (), string(f) * "_autodiff", false
     )
+    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
+    fnwrap = mlir_fn_res.fnwrapped
+    func2 = mlir_fn_res.f
 
     activity = Int32[]
     ad_inputs = MLIR.IR.Value[]

@@ -457,6 +457,7 @@ cc_library(
 "-Wl,-exported_symbol,_XLAExecuteSharded",
 "-Wl,-exported_symbol,_ClientGetPlatformName",
 "-Wl,-exported_symbol,_RegisterEnzymeXLACPUHandler",
+"-Wl,-exported_symbol,_PjRtLoadedExecutableGetClient",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",

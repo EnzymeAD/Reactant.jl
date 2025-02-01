@@ -20,6 +20,7 @@ mutable struct Client
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
         global_ordinals = Cint[]
+
         client = new(client, global_ordinals)
 
         # https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L127
@@ -262,15 +263,6 @@ mutable struct Buffer
     end
 end
 
-function DeviceToClientDeviceOrdinal(device::Device)
-    pjrtclient = client(device)
-    naddressable_devices = ClientNumAddressableDevices(pjrtclient)
-    for i in 1:naddressable_devices
-        (ClientGetAddressableDevice(pjrtclient, i - 1) == device) && return (i - 1)
-    end
-    return error("Device $(device) is not an addressable device")
-end
-
 mutable struct AsyncBuffer
     buffer::Buffer
     future::Union{Future,Nothing}
@@ -461,16 +453,20 @@ function BufferOnCPU(buffer::Buffer)
     end
 end
 
-function execute_ir(N, n_outs, fn)
+function execute_ir(N, n_outs, fn, with_device::Bool)
     ptr = sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
     cint = sizeof(Cint) == sizeof(Int64) ? "i64" : "i32"
     args = N > 0 ? ", [$N x $ptr] %inps, [$N x i8] %donated" : ""
+    with_device && (args = "$ptr %dev $args")
     stores = N > 0 ? """
 store [$N x $ptr] %inps, [$N x $ptr]* %inpa
 store [$N x i8] %donated, [$N x i8]* %dona
     """ : ""
 
-    res = """define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec $args) alwaysinline {
+    dev_str1 = with_device ? ", $ptr," : ","
+    dev_str2 = with_device ? ", $ptr %dev," : ","
+
+    res = """define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, $args) alwaysinline {
 entry:
     %inpa = alloca [$N x $ptr]
     %dona = alloca [$N x i8]
@@ -478,7 +474,7 @@ entry:
     %futpa = alloca [$n_outs x $ptr]
     $stores
     %futa = alloca i8
-    call void inttoptr ($ptr $fn to void ($ptr, $cint, [$N x $ptr]*, [$N x i8]*, $cint, [$n_outs x $ptr]*, i8*, [$n_outs x $ptr]*)*)($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, [$N x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
+    call void inttoptr ($ptr $fn to void ($ptr, $cint, [$N x $ptr]* $dev_str1 [$N x i8]*, $cint, [$n_outs x $ptr]*, i8*, [$n_outs x $ptr]*)*)($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa $dev_str2 [$N x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
     %out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
     %fut = load i8, i8* %futa
     %futp = load [$n_outs x $ptr], [$n_outs x $ptr]* %futpa
@@ -491,15 +487,16 @@ entry:
     return res
 end
 
-@generated function ExecutableCall(
+@generated function ExecutableCallSharded(
     exec::LoadedExecutable,
+    device::Device,
     inputs::NTuple{N,Ptr{Cvoid}},
     donated_args::NTuple{N,UInt8},
     ::Val{n_outs},
 ) where {N,n_outs}
-    sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecute")
+    sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecuteSharded")
     xla_execute_fn = reinterpret(UInt, sym0)
-    ir = execute_ir(N, n_outs, xla_execute_fn)
+    ir = execute_ir(N, n_outs, xla_execute_fn, true)
     results = []
     for i in 1:n_outs
         push!(
@@ -508,7 +505,52 @@ end
         )
     end
 
-    args_type = N > 0 ? (Ptr{Cvoid}, NTuple{N,Ptr{Cvoid}}, NTuple{N,UInt8}) : (Ptr{Cvoid},)
+    args_type = if N > 0
+        (Ptr{Cvoid}, Ptr{Cvoid}, NTuple{N,Ptr{Cvoid}}, NTuple{N,UInt8})
+    else
+        (Ptr{Cvoid}, Ptr{Cvoid})
+    end
+    args = N > 0 ? (:inputs, :donated_args) : ()
+    return quote
+        Base.@_inline_meta
+        exec = exec.exec
+        device = device.device
+        GC.@preserve exec device begin
+            outputs, future_res, future = Base.llvmcall(
+                ($ir, "f"),
+                Tuple{NTuple{n_outs,Ptr{Cvoid}},NTuple{n_outs,Ptr{Cvoid}},Bool},
+                Tuple{$args_type...},
+                exec,
+                device,
+                $(args...),
+            )
+        end
+        return ($(results...),)
+    end
+end
+
+@generated function ExecutableCall(
+    exec::LoadedExecutable,
+    inputs::NTuple{N,Ptr{Cvoid}},
+    donated_args::NTuple{N,UInt8},
+    ::Val{n_outs},
+) where {N,n_outs}
+    sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecute")
+    xla_execute_fn = reinterpret(UInt, sym0)
+    ir = execute_ir(N, n_outs, xla_execute_fn, false)
+    results = []
+    for i in 1:n_outs
+        push!(
+            results,
+            :(AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing)),
+        )
+    end
+
+    args_type = if N > 0
+        (Ptr{Cvoid}, Ptr{Cvoid}, NTuple{N,Ptr{Cvoid}}, NTuple{N,UInt8})
+    else
+        (Ptr{Cvoid}, Ptr{Cvoid})
+    end
     args = N > 0 ? (:inputs, :donated_args) : ()
     return quote
         Base.@_inline_meta
@@ -526,6 +568,43 @@ end
     end
 end
 
+@inline function ExecutableCallSharded0(
+    exec::LoadedExecutable,
+    device::Device,
+    inputs::NTuple{N,Ptr{Cvoid}},
+    donated_args::NTuple{N,UInt8},
+    ::Val{n_outs},
+) where {N,n_outs}
+    outputs = Ref{NTuple{n_outs,Ptr{Cvoid}}}()
+    future_res = Ref{NTuple{n_outs,Ptr{Cvoid}}}()
+    futures = Ref{UInt8}(0)
+
+    inputs = Base.RefValue(inputs)
+    donated_args = Base.RefValue(donated_args)
+    GC.@preserve inputs donated_args outputs futures future_res begin
+        @ccall MLIR.API.mlir_c.XLAExecuteSharded(
+            exec.exec::Ptr{Cvoid},
+            N::Cint,
+            inputs::Ptr{Cvoid},
+            device.device::Ptr{Cvoid},
+            donated_args::Ptr{UInt8},
+            n_outs::Cint,
+            Base.unsafe_convert(Ptr{Cvoid}, outputs)::Ptr{Cvoid},
+            Base.unsafe_convert(Ptr{UInt8}, futures)::Ptr{UInt8},
+            Base.unsafe_convert(Ptr{Cvoid}, future_res)::Ptr{Cvoid},
+        )::Cvoid
+    end
+
+    outputs = outputs[]
+    future_res = future_res[]
+    future = futures[] != 0
+
+    return ntuple(Val(n_outs)) do i
+        Base.@_inline_meta
+        return AsyncBuffer(Buffer(outputs[i]), future ? Future(future_res[i]) : nothing)
+    end
+end
+
 @inline function ExecutableCall0(
     exec::LoadedExecutable,
     inputs::NTuple{N,Ptr{Cvoid}},
@@ -539,7 +618,7 @@ end
     inputs = Base.RefValue(inputs)
     donated_args = Base.RefValue(donated_args)
     GC.@preserve inputs donated_args outputs futures future_res begin
-        @ccall MLIR.API.mlir_c.XLAExecute(
+        @ccall MLIR.API.mlir_c.XLAExecuteSharded(
             exec.exec::Ptr{Cvoid},
             N::Cint,
             inputs::Ptr{Cvoid},
@@ -561,7 +640,7 @@ end
     end
 end
 
-function Compile(client::Client, mod::MLIR.IR.Module)
+function Compile(client::Client, mod::MLIR.IR.Module; is_sharded::Bool=false)
     max_local_id = length(client.global_ordinals)
     GC.@preserve client mod begin
         executable = LoadedExecutable(
@@ -570,6 +649,7 @@ function Compile(client::Client, mod::MLIR.IR.Module)
                 mod.module_::MLIR.API.MlirModule,
                 client.global_ordinals::Ptr{Cint},
                 max_local_id::Cint,
+                is_sharded::Bool,
             )::Ptr{Cvoid}
         )
     end
