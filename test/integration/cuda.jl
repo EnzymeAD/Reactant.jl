@@ -18,9 +18,9 @@ function square!(x, y)
 end
 
 # https://github.com/EnzymeAD/Reactant.jl/issues/614
-const skip_non_cuda_tests = true
+const skip_non_cuda_tests = v"1.11.0" <= VERSION < v"1.11.4"
 
-@static if !Sys.isapple()
+@static if !Sys.isapple() || !skip_non_cuda_tests
     @testset "Square Kernel" begin
         oA = collect(1:1:64)
         A = Reactant.to_rarray(oA)
@@ -43,7 +43,7 @@ function sin!(x, y)
     return nothing
 end
 
-@static if !Sys.isapple()
+@static if !Sys.isapple() || !skip_non_cuda_tests
     @testset "Sin Kernel" begin
         oA = collect(Float64, 1:1:64)
         A = Reactant.to_rarray(oA)
@@ -67,7 +67,7 @@ function smul!(x)
     return nothing
 end
 
-@static if !Sys.isapple()
+@static if !Sys.isapple() || !skip_non_cuda_tests
     @testset "Constant Op Kernel" begin
         oA = collect(1:1:64)
         A = Reactant.to_rarray(oA)
