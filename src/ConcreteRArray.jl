@@ -1,10 +1,3 @@
-function ConcreteRNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
-    return ConcreteRNumber{T}(ConcreteRArray(fill(convert(T, data)); kwargs...).data)
-end
-ConcreteRNumber(data::T; kwargs...) where {T<:Number} = ConcreteRNumber{T}(data; kwargs...)
-
-Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kwargs...)
-
 function Base.collect(x::ConcreteRNumber{T}) where {T}
     return collect(ConcreteRArray{T,0}(copy(x).data, ()))
 end
@@ -31,69 +24,56 @@ end
 
 Base.convert(::Type{T}, x::ConcreteRNumber) where {T<:Number} = convert(T, to_number(x))
 
-const ConcreteRScalar{T} = Union{ConcreteRArray{T,0},ConcreteRNumber{T}}
-
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x)
-
-function ConcreteRArray(
-    data::Array{T,N};
-    client::XLA.Client=XLA.default_backend[],
-    idx::Int=XLA.default_device_idx[],
-    device::Union{Nothing,XLA.Device}=nothing,
-) where {T,N}
-    device = device === nothing ? XLA.ClientGetAddressableDevice(client, idx) : device
-    return ConcreteRArray{T,N}(
-        XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, data, device), nothing), size(data)
-    )
-end
-
-ConcreteRArray(x::AnyConcreteRArray) = ConcreteRArray{eltype(x),ndims(x)}(x)
-ConcreteRArray{T}(x::AnyConcreteRArray) where {T} = ConcreteRArray{T,ndims(x)}(x)
-ConcreteRArray{T,N}(x::ConcreteRArray{T,N}) where {T,N} = x
-function ConcreteRArray{T,N}(x::AnyConcreteRArray) where {T,N}
-    ancestor_x = ancestor(x)
-    return ConcreteRArray(
-        convert(Array{T,N}, x);
-        client=XLA.client(ancestor_x.data),
-        device=XLA.device(ancestor_x.data),
-    )
-end
 
 Base.size(x::ConcreteRArray) = x.shape
 
-function Base.convert(::Type{T}, X::ConcreteRArray{ElType,N}) where {T<:Array,ElType,N}
-    data = Array{ElType,N}(undef, size(X)...) # TODO replace for `similar`?
-    XLA.await(X.data)
-    buf = X.data.buffer
-    GC.@preserve data buf begin
-        XLA.BufferToHost(buf, pointer(data))
+Base.isempty(x::ConcreteRNumber) = x.data == XLA.AsyncEmptyBuffer
+Base.isempty(x::ConcreteRArray) = any(==(XLA.AsyncEmptyBuffer), x.data)
+Base.isempty(x::WrappedConcreteRArray) = isempty(ancestor(x))
+
+function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
+    data = Array{T,N}(undef, size(X)...)
+    XLA.await(X)
+
+    if X.sharding isa Sharding.FinalizedNoSharding
+        buf = only(X.data).buffer
+        GC.@preserve data buf begin
+            XLA.BufferToHost(buf, pointer(data))
+        end
+    elseif X.sharding isa Sharding.FinalizedNamedSharding
+        # TODO: We can we much more efficient here and only move data from the minimal
+        #       slices that populates the array.
+        for idx in CartesianIndices(X.data)
+            buffer = X.data[idx].buffer
+            # We can't use a pointer to a subarray since BufferToHost expects the data to
+            # be contiguous.
+            data_slice = data[X.sharding.device_to_array_slices[idx]...]
+            GC.@preserve data_slice buffer begin
+                XLA.BufferToHost(buffer, pointer(data_slice))
+            end
+            data[X.sharding.device_to_array_slices[idx]...] = data_slice
+        end
+    else
+        error("Unknown sharding type: $(typeof(X.sharding))")
     end
+
     return data
-    # XLA.from_row_major(data)
 end
-function Base.convert(
-    ::Type{T}, X::WrappedConcreteRArray{ElType,N}
-) where {T<:Array,ElType,N}
+function Base.convert(::Type{<:Array}, X::WrappedConcreteRArray)
     fn = compile(TracedUtils.materialize_traced_array, (X,))
     return convert(Array, fn(X))
 end
 Base.Array(x::AnyConcreteRArray) = convert(Array, x)
 
 function synchronize(x::Union{ConcreteRArray,ConcreteRNumber})
-    XLA.synced_buffer(x.data)
+    foreach(XLA.synced_buffer, x.data)
     return nothing
 end
 
-# function Base.similar(x::ConcreteRArray{T,N}, ::Type{T2}) where {T,N,T2}
-#     return ConcreteRArray{T,N}(x.data)
-# end
-# function Base.convert(::Type{ConcreteRArray{T2,N}}, x::ConcreteRArray{T,N}) where {T,N,T2}
-#     return ConcreteRArray{T,N}(x.data)
-# end
-
 function to_number(X::ConcreteRScalar{T}) where {T}
     data = Ref{T}()
-    XLA.await(X.data)
+    XLA.await(X)
     buf = X.data.buffer
     GC.@preserve data buf begin
         XLA.BufferToHost(buf, data)
@@ -104,9 +84,7 @@ end
 Base.convert(::Type{T}, x::ConcreteRScalar{T}) where {T} = to_number(x)
 
 for jlop in (:(Base.abs),), T in (ConcreteRNumber,)
-    @eval begin
-        $(jlop)(x::$(T)) = $(jlop)(to_number(x))
-    end
+    @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
 for jlop in (
@@ -166,7 +144,7 @@ function Base.:(==)(x::AnyConcreteRArray, y::AnyConcreteRArray)
 end
 
 function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
-    if X.data == XLA.AsyncEmptyBuffer
+    if isempty(X)
         println(io, "<Empty buffer>")
         return nothing
     end
@@ -177,8 +155,7 @@ function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
 end
 
 function Base.print_array(io::IO, X::AnyConcreteRArray)
-    data = ancestor(X).data
-    if data == XLA.AsyncEmptyBuffer
+    if isempty(X)
         println(io, "<Empty buffer>")
         return nothing
     end
@@ -186,8 +163,7 @@ function Base.print_array(io::IO, X::AnyConcreteRArray)
 end
 
 function Base.show(io::IO, X::AnyConcreteRArray)
-    data = ancestor(X).data
-    if data == XLA.AsyncEmptyBuffer
+    if isempty(X)
         println(io, "<Empty buffer>")
         return nothing
     end
@@ -198,12 +174,10 @@ function Base.show(io::IO, X::AnyConcreteRArray)
 end
 
 function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
-    if a.data == XLA.AsyncEmptyBuffer
-        throw("Cannot getindex from empty buffer")
-    end
+    isempty(a) && throw("Cannot getindex from empty buffer")
 
-    XLA.await(a.data)
-    if buffer_on_cpu(a)
+    XLA.await(a)
+    if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -211,8 +185,6 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
             for i in 1:N
                 start *= size(a, N - i + 1)
                 start += (args[N - i + 1] - 1)
-                # start *= size(a, i)
-                # start += (args[i]-1)
             end
             start += 1
             return unsafe_load(ptr, start)
@@ -229,12 +201,10 @@ function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
 end
 
 function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N}
-    if a.data == XLA.AsyncEmptyBuffer
-        throw("Cannot setindex! to empty buffer")
-    end
+    isempty(a) && throw("Cannot setindex! to empty buffer")
 
-    XLA.await(a.data)
-    if buffer_on_cpu(a)
+    XLA.await(a)
+    if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -242,8 +212,6 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
             for i in 1:N
                 start *= size(a, N - i + 1)
                 start += (args[N - i + 1] - 1)
-                # start *= size(a, i)
-                # start += (args[i]-1)
             end
             start += 1
             unsafe_store!(ptr, v, start)
@@ -260,11 +228,10 @@ end
 # TODO is there any way to allocate an uninitialized buffer in XLA?
 function Base.similar(a::ConcreteRArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
     return ConcreteRArray(
-        Array{S}(undef, dims); client=XLA.client(a.data), device=XLA.device(a.data)
+        Array{S}(undef, dims); client=XLA.client(a), device=XLA.device(a), a.sharding
     )
 end
 Base.similar(a::ConcreteRArray, dims::Dims) = similar(a, eltype(a), dims)
-
 function Base.similar(::Type{ConcreteRArray{T}}, dims) where {T}
     return ConcreteRArray(similar(Array{T}, dims))
 end
@@ -274,17 +241,22 @@ Base.BroadcastStyle(::Type{<:ConcreteRArray}) = Broadcast.ArrayStyle{ConcreteRAr
 function Base.similar(
     bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}}, ::Type{T}
 ) where {T}
+    # XXX: correct device + sharding?
     return ConcreteRArray(similar(Array{T}, axes(bc)))
 end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}})
     for x in bc.args
-        x isa ConcreteRArray && XLA.await(x.data)
+        x isa ConcreteRArray && XLA.await(x)
     end
 
-    all_on_cpu = all(buffer_on_cpu, bc.args)
-    if all_on_cpu
+    if all(buffer_on_cpu, bc.args) && all(
+        x ->
+            !(x isa ConcreteRArray) ||
+                (x isa ConcreteRArray && x.sharding isa Sharding.FinalizedNoSharding),
+        bc.args,
+    )
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
         if !Base.isconcretetype(ElType)
             throw(
@@ -329,7 +301,9 @@ end
 (f::CallMapReduce)(A) = Base.mapreduce(f.f, f.op, A; f.dims, f.init)
 
 buffer_on_cpu(::Any) = true
-buffer_on_cpu(x::ConcreteRArray) = XLA.BufferOnCPU(x.data.buffer)
+function buffer_on_cpu(x::ConcreteRArray)
+    return all(XLA.BufferOnCPU ∘ Base.Fix2(getproperty, :buffer), x.data)
+end
 
 function Ops.constant(x::ConcreteRArray; kwargs...)
     return Ops.constant(Base.convert(Array, x); kwargs...)
@@ -341,17 +315,15 @@ end
 
 function Base.zero(x::ConcreteRArray{T,N}) where {T,N}
     return ConcreteRArray(
-        zeros(T, size(x)...); client=XLA.client(x.data), device=XLA.device(x.data)
+        zeros(T, size(x)...); client=XLA.client(x), device=XLA.device(x), x.sharding
     )
 end
 
 function Base.fill!(a::ConcreteRArray{T,N}, val) where {T,N}
-    if a.data == XLA.AsyncEmptyBuffer
-        throw("Cannot setindex! to empty buffer")
-    end
+    isempty(a) && throw("Cannot setindex! to empty buffer")
 
-    XLA.await(a.data)
-    if buffer_on_cpu(a)
+    XLA.await(a)
+    if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
         buf = a.data.buffer
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))

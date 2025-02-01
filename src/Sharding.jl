@@ -37,15 +37,16 @@ Base.size(mesh::Mesh) = size(mesh.device_ids)
 
 abstract type AbstractSharding end
 
+function (T::AbstractSharding)(::XLA.Client, device, ::AbstractArray)
+    return error("(::$(T))(::XLA.Client, ::AbstractArray) is not implemented")
+end
+
 struct NoSharding <: AbstractSharding end
 
-(::NoSharding)(x::AbstractArray) = x
-(::NoSharding)(x::Number) = x
-
-struct UnspecifiedSharding <: AbstractSharding end
-
-(::UnspecifiedSharding)(x::AbstractArray) = x
-(::UnspecifiedSharding)(::Number) = error("Sharding cannot be applied to Number")
+function (::NoSharding)(client::XLA.Client, device, x::AbstractArray)
+    buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, x, device), nothing)
+    return [buffer], FinalizedNoSharding(NoSharding())
+end
 
 struct NamedSharding{D1,P<:Tuple,D2} <: AbstractSharding
     mesh::Mesh{D1}
@@ -83,18 +84,10 @@ struct NamedSharding{D1,P<:Tuple,D2} <: AbstractSharding
     end
 end
 
-(::NamedSharding)(::Number) = error("Sharding cannot be applied to Number")
-
-# TODO: Similar to `ConcreteRArray` we should have a client argument while constructing this
-#       Though these issues go away once the types are merged
-
 # XXX: multiple axes partitioning
-function (sharding::NamedSharding)(x::AbstractArray)
+function (sharding::NamedSharding)(client::XLA.Client, x::AbstractArray)
     (; mesh, partition_spec) = sharding
     @assert length(partition_spec) == ndims(x)
-
-    # XXX
-    client = XLA.default_backend[]
 
     ndevices = Vector{Int}(undef, ndims(x))
     axis_name_to_dim_and_offset = Dict{String,Tuple{Int,Int}}()
@@ -132,30 +125,60 @@ function (sharding::NamedSharding)(x::AbstractArray)
     end
 
     data = Array{XLA.AsyncBuffer,ndims(mesh)}(undef, size(mesh))
+    device_to_array_slices = Array{Vector{UnitRange{Int64}},ndims(mesh)}(undef, size(mesh))
 
-    for idx in CartesianIndices(data)
-        device_id = mesh.device_ids[idx]
-        idx_tup = Tuple(idx)
-        slice_idx = ones(Int, ndims(slices))
-        for (axis_name, idxᵢ) in zip(mesh.axis_names, idx_tup)
-            if haskey(axis_name_to_dim_and_offset, axis_name)
-                dim, offset = axis_name_to_dim_and_offset[axis_name]
-                slice_idx[dim] = idxᵢ + offset
+    @sync begin
+        for idx in CartesianIndices(data)
+            device_id = mesh.device_ids[idx]
+            idx_tup = Tuple(idx)
+            slice_idx = ones(Int, ndims(slices))
+            for (axis_name, idxᵢ) in zip(mesh.axis_names, idx_tup)
+                if haskey(axis_name_to_dim_and_offset, axis_name)
+                    dim, offset = axis_name_to_dim_and_offset[axis_name]
+                    slice_idx[dim] = idxᵢ + offset
+                end
+            end
+            device_to_array_slices[idx] = slices[CartesianIndex(slice_idx...)]
+            Threads.@spawn begin
+                data[idx] = XLA.AsyncBuffer(
+                    XLA.ArrayFromHostBuffer(
+                        client,
+                        x[device_to_array_slices[idx]...],
+                        XLA.ClientGetAddressableDevice(client, device_id),
+                    ),
+                    nothing,
+                )
             end
         end
-        data[idx] = XLA.AsyncBuffer(
-            XLA.ArrayFromHostBuffer(
-                client,
-                x[slices[CartesianIndex(slice_idx...)]...],
-                XLA.ClientGetAddressableDevice(client, device_id),
-            ),
-            nothing,
-        )
     end
 
-    return Reactant.ShardedConcreteRArray{eltype(x),ndims(x),ndims(mesh),typeof(sharding)}(
-        data, size(x), mesh, sharding
+    return (
+        data,
+        FinalizedNamedSharding{typeof(sharding),ndims(mesh)}(
+            sharding, device_to_array_slices
+        ),
     )
+end
+
+# Internal Type that mimics XYZSharding but contains mapping from device to array slices
+abstract type AbstractFinalizedSharding <: AbstractSharding end
+
+function Base.getproperty(sharding::AbstractFinalizedSharding, name::Symbol)
+    name ∈ (:sharding, :device_to_array_slices) && return getfield(sharding, name)
+    return getfield(sharding.sharding, name)
+end
+
+function (sharding::AbstractFinalizedSharding)(client::XLA.Client, x::AbstractArray)
+    return (sharding.sharding)(client, x)
+end
+
+struct FinalizedNoSharding <: AbstractFinalizedSharding
+    sharding::NoSharding
+end
+
+struct FinalizedNamedSharding{S<:NamedSharding,D} <: AbstractFinalizedSharding
+    sharding::S
+    device_to_array_slices::Array{Vector{UnitRange{Int64}},D}
 end
 
 end

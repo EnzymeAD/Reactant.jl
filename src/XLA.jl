@@ -47,6 +47,14 @@ struct Device
     device::Ptr{Cvoid}
 end
 
+function client(device::Device)
+    GC.@preserve device begin
+        return Client(
+            @ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
+        )
+    end
+end
+
 function device_ordinal(client::Client, device::Device)
     return client.global_ordinals[DeviceGetLocalDeviceId(device) + 1]
 end
@@ -263,11 +271,6 @@ mutable struct Buffer
     end
 end
 
-mutable struct AsyncBuffer
-    buffer::Buffer
-    future::Union{Future,Nothing}
-end
-
 function device(buffer::Buffer)
     GC.@preserve buffer begin
         return Device(
@@ -275,6 +278,7 @@ function device(buffer::Buffer)
         )
     end
 end
+
 function client(buffer::Buffer)
     GC.@preserve buffer begin
         return Client(
@@ -282,18 +286,20 @@ function client(buffer::Buffer)
         )
     end
 end
-function device(buffer::AsyncBuffer)
-    return device(buffer.buffer)
+
+mutable struct AsyncBuffer
+    buffer::Buffer
+    future::Union{Future,Nothing}
 end
-function client(buffer::AsyncBuffer)
-    return client(buffer.buffer)
-end
-function client(device::Device)
-    GC.@preserve device begin
-        return Client(
-            @ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
-        )
-    end
+
+device(buffer::AsyncBuffer) = device(buffer.buffer)
+
+client(buffer::AsyncBuffer) = client(buffer.buffer)
+
+function client(buffers::Array{<:AsyncBuffer})
+    all_clients = map(client, buffers)
+    @assert allequal(all_clients) "All buffers must have the same client"
+    return first(all_clients)
 end
 
 # To keep in sync with JLAllocatorStats in ReactantExtra/API.cpp

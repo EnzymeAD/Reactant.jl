@@ -376,15 +376,6 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:XLAArray}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
-)
-    throw("XLA $T array cannot be traced")
-end
-
-Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(A::Type{<:Array}),
     seen,
     mode::TraceMode,
