@@ -74,15 +74,6 @@ function KA.launch_config(kernel::KA.Kernel{ReactantBackend}, ndrange, workgroup
     return ndrange, workgroupsize, iterspace, dynamic
 end
 
-function threads_to_workgroupsize(threads, ndrange)
-    total = 1
-    return map(ndrange) do n
-        x = min(div(threads, total), n)
-        total *= x
-        return x
-    end
-end
-
 KA.argconvert(k::KA.Kernel{ReactantBackend}, arg) = arg
 
 function KA.priority!(::ReactantBackend, prio::Symbol)
