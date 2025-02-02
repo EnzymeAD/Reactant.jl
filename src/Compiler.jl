@@ -807,7 +807,7 @@ function codegen_flatten!(linear_args, seen_args, result_stores, is_sharded::Boo
 
         if is_sharded
             @show linear_args[i]
-            @show seen_args[linear_args[i]]
+            # @show seen_args[linear_args[i]]
             error("TODO: Sharding is not supported yet")
         else
             sbuf = Symbol(:sbuf_, i)
@@ -1138,6 +1138,10 @@ function compile_xla(f, args; client=nothing, kwargs...)
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
+        if mlir_fn_res.num_partitions > 1
+            display(mod)
+        end
+
         # compile MLIR module to XLA executable
         exec = XLA.Compile(client, mod; is_sharded=mlir_fn_res.num_partitions > 1)
 
@@ -1152,7 +1156,8 @@ end
 
 function compile(f, args; sync=false, kwargs...)
     exec, mlir_fn_res, device = compile_xla(f, args; kwargs...)
-    (; linear_args, seen_args, linear_results, preserved_args, concrete_result) = mlir_fn_res
+    (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
+        mlir_fn_res
 
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = map(1:length(linear_args)) do i

@@ -597,7 +597,7 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   return wrap(res);
 }
 
-/* Note that this */
+// TODO: For `is_sharded` we need the mesh device ids as well
 extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
                                                     MlirModule cmod,
                                                     int *global_ordinals,
@@ -617,6 +617,7 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
 
     options.executable_build_options.set_use_spmd_partitioning(true);
     options.executable_build_options.set_use_shardy_partitioner(true);
+    // options.executable_build_options.set_use_auto_spmd_partitioning(true);
 
     xla::DeviceAssignment device_assignment(1, device_count);
     for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
