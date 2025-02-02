@@ -778,10 +778,9 @@ The name is due to its similarity to the `flatten` function in `jax.tree_util.re
 
 The _linearized arguments_ do not directly refer to the  are the arguments that have been flattened into a single list.
 """
-function codegen_flatten!(linear_args, result_stores)
+function codegen_flatten!(linear_args, seen_args, result_stores, is_sharded::Bool)
     flatten_names = Symbol[]
     flatten_code = Expr[]
-    # resarg_code = Expr[]
 
     for (i, arg) in enumerate(linear_args)
         paths = (
@@ -799,45 +798,22 @@ function codegen_flatten!(linear_args, result_stores)
         end
 
         usbuf = Symbol(:usbuf_, i)
-        sbuf = Symbol(:sbuf_, i)
-        push!(flatten_names, sbuf)
 
         flatcode = :(getindex(args, $(path[2])))
         for p in path[3:end]
             flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
         end
         push!(flatten_code, :($usbuf = $flatcode.data))
-        push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
 
-        # TODO: unused for the time being
-        # respaths = ((p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :result || p[1] == :resargs)...,)
-
-        # resarg = false
-        # for respath in respaths
-        #     if respath[1] == :result
-        #         flatcode = :result
-        #         respath = respath[2:end]
-        #         result_stores[respath] = usbuf
-        #         resarg = true
-        #     else
-        #         @assert respath[1] == :resargs
-        #         if respath[2] != path[2]
-        #             continue
-        #         end
-        #         # flatcode = :(args[$(respath[2])])
-        #         path = path[3:end]
-        #     end
-        #     # for p in path
-        #     #     flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
-        #     # end
-        #     # resarg = true
-        #     # flatcode = :($flatcode.data = $usbuf)
-        #     # @show flatcode
-        #     # push!(flatten_code, res)
-        # end
-        # if resarg
-        #     push!(resarg_code, :($usbuf = $flatcode.data))
-        # end
+        if is_sharded
+            @show linear_args[i]
+            @show seen_args[linear_args[i]]
+            error("TODO: Sharding is not supported yet")
+        else
+            sbuf = Symbol(:sbuf_, i)
+            push!(flatten_names, sbuf)
+            push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+        end
     end
     return flatten_names, flatten_code
 end
@@ -855,13 +831,15 @@ function codegen_unflatten!(
     linear_results,
     concrete_result,
     result_stores,
+    is_sharded::Bool,
 )
     cache_dict = gensym("cache_dict")
-    unflatten_code = Expr[:(
-        $cache_dict = $(IdDict{
-            Union{TracedRArray,TracedRNumber},Union{ConcreteRArray,ConcreteRNumber}
-        }())
-    ),]
+    has_cache_dict = false
+    unflatten_code = Expr[]
+
+    if is_sharded
+        error("TODO: Sharding is not supported yet")
+    end
 
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
@@ -889,6 +867,18 @@ function codegen_unflatten!(
                 if length(path) > 0
                     final_val = gensym("final_val")
                     clocal = gensym("clocal")
+                    if !has_cache_dict
+                        has_cache_dict = true
+                        push!(
+                            unflatten_code,
+                            :(
+                                $cache_dict = $(IdDict{
+                                    Union{TracedRArray,TracedRNumber},
+                                    Union{ConcreteRArray,ConcreteRNumber},
+                                }())
+                            ),
+                        )
+                    end
                     unflatcode = quote
                         $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
                         if $final_val isa TracedRArray
@@ -1162,7 +1152,7 @@ end
 
 function compile(f, args; sync=false, kwargs...)
     exec, mlir_fn_res, device = compile_xla(f, args; kwargs...)
-    (; linear_args, linear_results, preserved_args, concrete_result) = mlir_fn_res
+    (; linear_args, seen_args, linear_results, preserved_args, concrete_result) = mlir_fn_res
 
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = map(1:length(linear_args)) do i
@@ -1172,7 +1162,9 @@ function compile(f, args; sync=false, kwargs...)
     result_stores = Dict{Tuple,Symbol}()
 
     # generate Julia `Thunk` code
-    flatten_arg_names, flatten_code = codegen_flatten!(linear_args, result_stores)
+    flatten_arg_names, flatten_code = codegen_flatten!(
+        linear_args, seen_args, result_stores, mlir_fn_res.is_sharded
+    )
 
     concretized_res_names, xla_call_code = codegen_xla_call(
         exec,
@@ -1190,6 +1182,7 @@ function compile(f, args; sync=false, kwargs...)
         linear_results,
         concrete_result,
         result_stores,
+        mlir_fn_res.is_sharded,
     )
 
     sync_call = if sync

@@ -93,6 +93,12 @@ Adapt.parent_type(::Type{ConcreteRArray{T,N,D,S}}) where {T,N,D,S} = ConcreteRAr
 
 Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kwargs...)
 
+function ConcreteRArray{T,N}(data::XLA.AsyncBuffer, shape::NTuple{N,Int}) where {T,N}
+    return ConcreteRArray{T,N,1,Sharding.FinalizedNoSharding}(
+        [data], shape, Sharding.FinalizedNoSharding(Sharding.NoSharding())
+    )
+end
+
 function ConcreteRArray(
     data::Array{T,N};
     client::XLA.Client=XLA.default_backend[],
