@@ -133,7 +133,7 @@ jobs:
           cp LocalPreferences.toml test/
       - name: Install dependencies
         run: |
-          julia --project=test --depwarn=yes --check-bounds=yes -g1 --code-coverage=@/home/runner/work/Reactant.jl/Reactant.jl --color=yes --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+          julia --color=yes --project=test -e 'using Pkg; Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
       - name: Install gdb
@@ -147,9 +147,4 @@ jobs:
         env:
           REACTANT_TEST_GROUP: ${{ matrix.test_group }}
         # NOTE: Reproduce failure with
-        #     gdb --args julia --project=test --depwarn=yes --check-bounds=yes -g1 --code-coverage=@/home/runner/work/Reactant.jl/Reactant.jl --color=yes --startup-file=no test/runtests.jl
-      # - run: |
-      #     julia --project=test --depwarn=yes --check-bounds=yes -g1 --code-coverage=@/home/runner/work/Reactant.jl/Reactant.jl --color=yes --startup-file=no test/runtests.jl
-      #   continue-on-error: true
-      #   env:
-      #     REACTANT_TEST_GROUP: ${{ matrix.test_group }}
+        #     gdb --args julia --color=yes --project=test test/runtests.jl

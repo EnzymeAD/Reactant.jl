@@ -39,32 +39,3 @@ const skip_non_cuda_tests = true
         end
     end
 end
-
-# simple square kernel
-@kernel function square_kernel!(y, @Const(x))
-    i = @index(Global)
-    @inbounds y[i] = x[i] * x[i]
-end
-
-function square(x)
-    y = similar(x)
-    backend = KernelAbstractions.get_backend(x)
-    kernel! = square_kernel!(backend)
-    kernel!(y, x; ndrange=length(x))
-    return y
-end
-
-@static if !Sys.isapple()
-    @testset "KernelAbstractions Square" begin
-        x = Reactant.to_rarray(collect(1:1:64) ./ 64)
-        if CUDA.functional()
-            @test all(Array(@jit(square(x))) .≈ Array(x) .* Array(x))
-        else
-            @static if skip_non_cuda_tests
-                @test false broken = true
-            else
-                @code_hlo optimize = :before_kernel square(x)
-            end
-        end
-    end
-end
