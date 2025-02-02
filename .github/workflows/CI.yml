@@ -23,6 +23,39 @@ on:
       - 'src/**'
       - 'test/**'
       - 'Project.toml'
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: Run the build with tmate debugging enabled
+        required: false
+        default: false
+      debug_os:
+        type: choice
+        description: OS to debug
+        options:
+          - ubuntu-20.04
+          - ubuntu-24.04-arm
+          - macOS-latest
+          - any
+        required: false
+        default: ubuntu-24.04-arm
+      debug_arch:
+        type: choice
+        description: Architecture to debug
+        options:
+          - x64
+          - aarch64
+          - any
+        required: false
+        default: aarch64
+      debug_detached:
+        type: boolean
+        description: 'Run tmate in detached mode (continues with workflow while waiting for connection)'
+        required: false
+        default: true
+
+
 
 concurrency:
   # Skip intermediate builds: always.
@@ -96,6 +129,15 @@ jobs:
             arch: x64
     steps:
       - uses: actions/checkout@v4
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          inputs.debug_enabled == true &&
+          (inputs.debug_os == 'any' || inputs.debug_os == matrix.os) &&
+          (inputs.debug_arch == 'any' || inputs.debug_arch == matrix.arch)
+        with:
+          detached: ${{ inputs.debug_detached }}
       - uses: julia-actions/setup-julia@v2
         if: ${{ ! matrix.assertions }}
         with:
