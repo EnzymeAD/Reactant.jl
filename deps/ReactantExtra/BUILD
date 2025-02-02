@@ -708,6 +708,20 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "MPIIncJLGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "MPI.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/MPI/IR/MPIOps.td",
+    deps = [
+        "@llvm-project//mlir:MPITdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
     name = "EnzymeJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],

@@ -38,6 +38,7 @@ for file in [
     "TPU.jl",
     "Triton.jl",
     "Shardy.jl",
+    "MPI.jl",
 ]
     build_file(joinpath(src_dir, "mlir", "Dialects", file))
 end
