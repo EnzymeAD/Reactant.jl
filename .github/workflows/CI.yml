@@ -135,6 +135,8 @@ jobs:
           julia --project=test --depwarn=yes --check-bounds=yes -g1 --code-coverage=@/home/runner/work/Reactant.jl/Reactant.jl --color=yes --startup-file=no -e 'using Pkg; Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
       - run: |
           julia --project=test --depwarn=yes --check-bounds=yes -g1 --code-coverage=@/home/runner/work/Reactant.jl/Reactant.jl --color=yes --startup-file=no test/runtests.jl
         continue-on-error: true
