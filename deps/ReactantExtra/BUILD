@@ -398,6 +398,7 @@ cc_library(
     "@bazel_tools//src/conditions:darwin": [
 "-Wl,-exported_symbol,_stablehlo*",
 "-Wl,-exported_symbol,_mlir*",
+"-Wl,-exported_symbol,_EnzymeJaXMapSymbol",
 "-Wl,-exported_symbol,_InitializeLogs",
 "-Wl,-exported_symbol,_SetLogLevel",
 "-Wl,-exported_symbol,_SetModuleLogLevel",

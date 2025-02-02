@@ -1,7 +1,6 @@
 module Compiler
 
 using Reactant_jll
-using LLVMOpenMP_jll: libomp_handle
 using Libdl: dlsym
 
 import ..Reactant:
@@ -468,10 +467,8 @@ function compile_mlir!(
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
 
-    kpmc_barrier = dlsym(libomp_handle, "__kmpc_barrier")
-
     if backend == "cpu"
-        kern = "lower-kernel{openmp=false backend=cpu},symbol-dce"
+        kern = "lower-kernel{openmp=true backend=cpu},symbol-dce"
     elseif DEBUG_KERNEL[]
         curesulthandler = dlsym(
             Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
