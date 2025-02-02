@@ -5,40 +5,38 @@
 using namespace xla::ifrt;
 using namespace reactant;
 
+// PjRtClient::CreateOptions
 // TODO support more parameters of `PjRtClient::CreateOptions`
-extern "C" PjRtClient* ifrt_pjrt_client_ctor(xla::PjRtClient* pjrt_client)
+extern "C" PjRtClient::CreateOptions* ifrt_pjrt_client_create_options_ctor(xla::PjRtClient* c_pjrt_client)
 {
-    auto options = PjRtClient::CreateOptions{std::shared_ptr<xla::PjRtClient>(pjrt_client)};
-    return MyValueOrThrow(PjRtClient::Create(options)).release();
+    std::shared_ptr<xla::PjRtClient> pjrt_client = reactant::get_or_insert_shared(c_pjrt_client);
+    PjRtClient::CreateOptions* ptr = new PjRtClient::CreateOptions(pjrt_client);
+    return ptr;
 }
 
-// NOTE deprecated
-// extern "C" PjRtClient* ifrt_pjrt_client_ctor(xla::PjRtClient* pjrt_client)
-// {
-//     return MyValueOrThrow(
-//         PjRtClient::Create(PjRtClient::CreateOptions {
-//             std::shared_ptr<xla::PjRtClient> { pjrt_client } }))
-//         .release();
-// }
+extern "C" PjRtClient::CreateOptions* ifrt_pjrt_client_create_options_dtor(PjRtClient::CreateOptions* options)
+{
+    delete options;
+}
 
-extern "C" void ifrt_pjrt_client_free(PjRtClient* client) { delete client; }
+// PjRtClient
+extern "C" PjRtClient* ifrt_pjrt_client_create(PjRtClient::CreateOptions* options)
+{
+    return MyValueOrThrow(PjRtClient::Create(*options)).release();
+}
 
+extern "C" void ifrt_pjrt_client_dtor(PjRtClient* client)
+{
+    reactant::destruct_or_release_if_shared(client);
+}
+
+// NOTE we use `shared_ptr_pjrt_client` instead of `pjrt_client` because latter uses just the `shared_ptr::get` and we could delete it accidentally
 extern "C" xla::PjRtClient* ifrt_pjrt_client_pjrt_client(PjRtClient* client)
 {
-    return client->pjrt_client();
+    return reactant::capture_shared(client->shared_ptr_pjrt_client());
 }
 
-// TODO there are problems with using `make_shared
-// extern "C" PjRtCompatibleArray*
-// ifrt_pjrt_client_create_pjrt_array(PjRtClient* client, xla::PjRtBuffer*
-// pjrt_buffer) {
-//     auto buffer_ptr = std::make_shared<xla::PjRtBuffer>(*pjrt_buffer);
-//     return MyValueOrThrow(client->CreatePjRtArray(buffer_ptr)).release();
-// }
-
-// TODO extern "C" PjRtCompatibleArray*
-// ifrt_pjrt_client_create_pjrt_array_from_buffers(Shape* shape,
-// PjRtBuffer** pjrt_buffers, int num_buffers) {}
+// NOTE we don't implement `CreatePjRtArray` because there are already equivalent methods in `PjRtArray` class
 
 extern "C" PjRtCompatibleDevice* ifrt_pjrt_client_lookup_pjrt_device(PjRtClient* client, xla::PjRtDevice* pjrt_device)
 {
