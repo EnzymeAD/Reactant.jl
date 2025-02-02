@@ -104,23 +104,23 @@ extern "C" span<xla::HloModule*> ifrt_loadedexecutable_hlo_modules(LoadedExecuta
 // TODO xla::LoadedExecutable::GetOutputMemoryKinds
 // TODO xla::LoadedExecutable::GetCostAnalysis
 
-// extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(LoadedExecutable* executable, span<Array*> c_args, const ExecuteOptions& options, span<Device*> c_devices) {
-//     std::optional<tsl::RCReference<DeviceList>> devices;
-//     if (!c_devices.empty())
-//         devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices)
+extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(LoadedExecutable* executable, span<Array*> c_args, const ExecuteOptions& options, span<Device*> c_devices) {
+    std::optional<tsl::RCReference<DeviceList>> devices;
+    if (!c_devices.empty())
+        devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices)
 
-//     // TODO original C++ method asks for tsl::RCReference<Array> for input, should we capture them like `shared_ptr`?
+    auto args = reactant::convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_args);
 
-//     auto exec_res = MyValueOrThrow(executable->Execute(args, options, ));
+    auto exec_res = MyValueOrThrow(executable->Execute(args, options, ));
 
-//     Future<>* status = nullptr;
-//     if (options.fill_status)
-//         status = new Future<>(exec_res.status);
+    Future<>* status = nullptr;
+    if (options.fill_status)
+        status = new Future<>(exec_res.status);
 
-//     auto results = convert(Type<span<Array*>>(), exec_res.outputs);
+    auto results = convert(Type<span<Array*>>(), exec_res.outputs);
 
-//     return std::make_tuple(status, results);
-// }
+    return std::make_tuple(status, results);
+}
 
 extern "C" Future<>* ifrt_loadedexecutable_delete(LoadedExecutable* executable)
 {
