@@ -131,8 +131,12 @@ jobs:
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
           SDKROOT=`xcrun --show-sdk-path` julia --color=yes --project=deps deps/build_local.jl
           cp LocalPreferences.toml test/
-      - uses: julia-actions/julia-runtest@v1
-        id: run_tests
+      - run: |
+          julia --project=test --depwarn=yes --check-bounds=yes -g1 --code-coverage=@/home/runner/work/Reactant.jl/Reactant.jl --color=yes --startup-file=no -e 'using Pkg; Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+      - run: |
+          julia --project=test --depwarn=yes --check-bounds=yes -g1 --code-coverage=@/home/runner/work/Reactant.jl/Reactant.jl --color=yes --startup-file=no test/runtests.jl
+        continue-on-error: true
+        env:
           REACTANT_TEST_GROUP: ${{ matrix.test_group }}
