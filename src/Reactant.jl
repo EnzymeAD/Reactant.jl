@@ -250,12 +250,23 @@ using Libdl
 using Reactant_jll
 using LLVMOpenMP_jll
 function initialize_ptrs()
-    for name in ("__kmpc_barrier", "__kmpc_global_thread_num", "__kmpc_for_static_fini", "__kmpc_for_static_init_8u", "__kmpc_fork_call")
+    for name in (
+        "__kmpc_barrier",
+        "__kmpc_global_thread_num",
+        "__kmpc_for_static_fini",
+        "__kmpc_for_static_init_8u",
+        "__kmpc_fork_call",
+    )
         sym = Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name)
         @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
     end
     if (@ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32) != 0
-        for name in ("cuLaunchKernel", "cuModuleLoadData", "cuModuleGetFunction", "cuStreamSynchronize")
+        for name in (
+            "cuLaunchKernel",
+            "cuModuleLoadData",
+            "cuModuleGetFunction",
+            "cuStreamSynchronize",
+        )
             sym = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
         end
