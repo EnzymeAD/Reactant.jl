@@ -90,7 +90,7 @@ auto convert(Type<span<T*>>, std::vector<std::shared_ptr<T>> vec) -> span<T*> {
     return span<T*>(vec.size(), ptr);
 }
 
-template <typename T, typename = std::enable_if_t<std::is_base_of<tsl::ReferenceCounted, T>>>
+template <typename T>
 auto convert(Type<span<T*>>, std::vector<tsl::RCReference<T>> vec) -> span<T*> {
     T** ptr = new T*[vec.size()];
     for (int i = 0; i < vec.size(); i++) {
@@ -116,7 +116,7 @@ auto convert(Type<absl::Span<T>>, span<T> span) -> absl::Span<T>
     return absl::Span<T>(span.ptr, span.size());
 }
 
-template <typename T, typename = std::enable_if_t<std::is_base_of<tsl::ReferenceCounted, T>>>
+template <typename T>
 auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<T*> span) -> absl::Span<tsl::RCReference<T>>
 {
     auto values_ptr = new tsl::RCReference<T>[span.size()];
