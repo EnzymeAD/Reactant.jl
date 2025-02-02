@@ -133,13 +133,13 @@ jobs:
           cp LocalPreferences.toml test/
       - name: Install dependencies
         run: |
-          julia --color=yes --project=test -e 'using Pkg; Pkg.instantiate()'
+          julia --color=yes --project=test -e 'using Pkg; Pkg.add(; url="https://github.com/giordano/Reactant_jll.jl"); Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - name: Install gdb
+      - name: Install gdb and emacs
         run: |
           sudo apt update
-          sudo apt install -y gdb
+          sudo apt install -y gdb emacs-nox
         env:
           DEBIAN_FRONTEND: noninteractive
       - name: Setup tmate session
