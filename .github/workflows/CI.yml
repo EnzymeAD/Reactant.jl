@@ -133,7 +133,7 @@ jobs:
           cp LocalPreferences.toml test/
       - name: Install dependencies
         run: |
-          julia --color=yes --project=test -e 'using Pkg; Pkg.add(; url="https://github.com/giordano/Reactant_jll.jl"); Pkg.instantiate()'
+          julia --color=yes --project=test -e 'using Pkg; Pkg.add(; url="https://github.com/giordano/Reactant_jll.jl", rev="b6c6f5eb6e9fd40b58f6dea9ee3490f9da8893df"); Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
       - name: Run the test but allow failure
