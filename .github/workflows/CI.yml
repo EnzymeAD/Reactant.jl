@@ -136,9 +136,3 @@ jobs:
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
           REACTANT_TEST_GROUP: ${{ matrix.test_group }}
-      - uses: julia-actions/julia-processcoverage@v1
-        if: steps.run_tests.outcome == 'success'
-      - uses: codecov/codecov-action@v5
-        if: steps.run_tests.outcome == 'success'
-        with:
-          files: lcov.info
