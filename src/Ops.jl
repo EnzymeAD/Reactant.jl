@@ -2003,7 +2003,6 @@ end
         # Don't use `name_to_size` here, we need correct ordering
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m.device_ids))],
         collect(Int64, vec(m.device_ids));
-        sym_name=m.mesh_name,
         location,
     )
 end

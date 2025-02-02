@@ -379,11 +379,16 @@ function compile_mlir(f, args; client=nothing, kwargs...)
 
     results = MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, mlir_fn_res = compile_mlir!(
-            mod, f, args; backend, kwargs...
+
+        mlir_fn_res = compile_mlir!(mod, f, args; backend, kwargs...)
+
+        client, _ = __resolve_device_and_client(
+            client,
+            mlir_fn_res.seen_args,
+            mlir_fn_res.linear_args,
+            mlir_fn_res.is_sharded,
         )
 
-        client, _ = __resolve_device_and_client(client, seen_args, linear_args)
         if mlir_fn_res.num_partitions == 1
             mlir_fn_res.num_replicas = XLA.ClientNumAddressableDevices(client)
         end
@@ -393,18 +398,10 @@ function compile_mlir(f, args; client=nothing, kwargs...)
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
-        return (
-            mod,
-            linear_args,
-            linear_results,
-            preserved_args,
-            seen_args,
-            concrete_result,
-            isclosure,
-            mlir_fn_res,
-        )
+        return mod, mlir_fn_res
     end
     Base.delete!(context_gc_vector, ctx)
+
     return results
 end
 
@@ -644,16 +641,21 @@ function compile_mlir!(
     MLIR.API.mlirOperationDestroy(compiled_f.operation)
     compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
 
-    display(mod)
-
-    return (
-        linear_args,
-        linear_results2,
-        preserved_args,
-        seen_args,
-        concrete_result,
+    return Reactant.TracedUtils.CompiledMlirFnResult(
         fnwrapped,
-        mlir_fn_res,
+        func3,
+        traced_result,
+        mlir_fn_res.result,
+        seen_args,
+        ret,
+        linear_args,
+        in_tys,
+        linear_results2,
+        mlir_fn_res.num_partitions,
+        mlir_fn_res.num_replicas,
+        mlir_fn_res.is_sharded,
+        preserved_args,
+        concrete_result,
     )
 end
 
@@ -1044,10 +1046,17 @@ function __add_mhlo_attributes_and_name!(
     return nothing
 end
 
-function __resolve_device_and_client(client, seen_args, linear_args)
+function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
+    if is_sharded
+        client === nothing && (client = XLA.default_backend[])
+        return client, nothing
+    end
+
     device = nothing
     if length(linear_args) > 0
-        devices_list = [XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray]
+        devices_list = [
+            XLA.device(only(k.data)) for (k, v) in seen_args if v isa TracedRArray
+        ]
         if !isempty(devices_list)
             if !allequal(devices_list)
                 msg = "Expected all arguments to be on the same device, got:\n"
@@ -1100,12 +1109,16 @@ function compile_xla(f, args; client=nothing, kwargs...)
     results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, mlir_fn_res = compile_mlir!(
-            mod, f, args; backend, kwargs...
-        )
+        mlir_fn_res = compile_mlir!(mod, f, args; backend, kwargs...)
 
         # Resolve client and device
-        client, device = __resolve_device_and_client(client, seen_args, linear_args)
+        client, device = __resolve_device_and_client(
+            client,
+            mlir_fn_res.seen_args,
+            mlir_fn_res.linear_args,
+            mlir_fn_res.is_sharded,
+        )
+
         if mlir_fn_res.num_partitions == 1
             mlir_fn_res.num_replicas = XLA.ClientNumAddressableDevices(client)
         else
@@ -1120,44 +1133,29 @@ function compile_xla(f, args; client=nothing, kwargs...)
         # compile MLIR module to XLA executable
         exec = XLA.Compile(client, mod; is_sharded=mlir_fn_res.num_partitions > 1)
 
-        return (
-            exec,
-            linear_args,
-            linear_results,
-            preserved_args,
-            seen_args,
-            concrete_result,
-            isclosure,
-            device,
-        )
+        return exec, mlir_fn_res, device
     finally
         MLIR.IR.deactivate!(ctx)
     end
+
     Base.delete!(context_gc_vector, ctx)
     return results
 end
 
 function compile(f, args; sync=false, kwargs...)
-    exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure, device = compile_xla(
-        f, args; kwargs...
-    )
+    exec, mlir_fn_res, device = compile_xla(f, args; kwargs...)
+    (; linear_args, linear_results, preserved_args, concrete_result) = mlir_fn_res
 
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = map(1:length(linear_args)) do i
         UInt8(i ∉ preserved_args_idx)
     end
 
-    fnwrap = isclosure ? f : nothing
-    closure_ty = typeof(fnwrap)
-
     result_stores = Dict{Tuple,Symbol}()
 
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(linear_args, result_stores)
 
-    # TODO: If we wan't we can omit `device` here and infer it from runtime arguments.
-    #       Currently we expect a compiled function to be called with arguments on the
-    #       same device as the compiled function.
     concretized_res_names, xla_call_code = codegen_xla_call(
         exec, device, flatten_arg_names, donated_args_mask, length(linear_results)
     )
@@ -1191,7 +1189,9 @@ function compile(f, args; sync=false, kwargs...)
         return result
     end
 
-    return register_thunk(fname, Tuple{map(Core.Typeof, args)...}, body, f, isclosure)
+    return register_thunk(
+        fname, Tuple{map(Core.Typeof, args)...}, body, f, mlir_fn_res.fnwrapped
+    )
 end
 
 # inspired by RuntimeGeneratedFunction.jl

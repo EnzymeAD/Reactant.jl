@@ -127,7 +127,7 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-mutable struct MakeMLIRFnResult{F,TR,Re,Rt,LA,LR}
+mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR}
     fnwrapped::Bool
     f::F
     traced_result::TR
@@ -139,6 +139,9 @@ mutable struct MakeMLIRFnResult{F,TR,Re,Rt,LA,LR}
     linear_results::Vector{LR}
     num_partitions::Int
     num_replicas::Int
+    is_sharded::Bool
+    preserved_args::PA
+    concrete_result::CR
 end
 
 function make_mlir_fn(
@@ -388,7 +391,7 @@ function make_mlir_fn(
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
 
-    return MakeMLIRFnResult(
+    return CompiledMlirFnResult(
         false,
         func2,
         traced_result,
@@ -400,6 +403,9 @@ function make_mlir_fn(
         linear_results,
         num_partitions,
         num_replicas,
+        is_sharded,
+        nothing,
+        nothing,
     )
 end
 

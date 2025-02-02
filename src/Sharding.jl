@@ -3,31 +3,24 @@ module Sharding
 using ..Reactant: Reactant, XLA
 
 struct Mesh{D}
-    mesh_name::String
     device_ids::Array{Int,D}
     axis_names::NTuple{D,String}
     name_to_size::Dict{String,Int}
     name_to_dim::Dict{String,Int}
 
-    function Mesh(
-        mesh_name::String,
-        devices::AbstractArray{<:XLA.Device,D},
-        axis_names::NTuple{D,String},
-    ) where {D}
-        return Mesh(mesh_name, XLA.DeviceGetLocalDeviceId.(devices), axis_names)
+    function Mesh(devices::AbstractArray{<:XLA.Device}, axis_names)
+        return Mesh(XLA.DeviceGetLocalDeviceId.(devices), axis_names)
     end
 
     function Mesh(
-        mesh_name::String,
-        device_ids::AbstractArray{<:Integer,D},
-        axis_names::NTuple{D,String},
+        device_ids::AbstractArray{<:Integer,D}, axis_names::NTuple{D,String}
     ) where {D}
         @assert allunique(device_ids)
         name_to_size = Dict(
             name => Int64(size(device_ids, i)) for (i, name) in enumerate(axis_names)
         )
         name_to_dim = Dict(name => i for (i, name) in enumerate(axis_names))
-        return new{D}(mesh_name, Int64.(device_ids), axis_names, name_to_size, name_to_dim)
+        return new{D}(Int64.(device_ids), axis_names, name_to_size, name_to_dim)
     end
 end
 
@@ -61,7 +54,8 @@ struct NamedSharding{D1,P<:Tuple,D2} <: AbstractSharding
         is_closed::NTuple{D2,Bool}=ntuple(
             i -> partition_spec[i] !== nothing, length(partition_spec)
         ),
-        priority::NTuple{D2,Int}=ntuple(i -> 0, length(partition_spec)),
+        # negative priority means that priority is not considered by shardy
+        priority::NTuple{D2,Int}=ntuple(i -> -1, length(partition_spec)),
     ) where {D1,P<:Tuple,D2}
         present_axes = String[]
         for p in partition_spec
@@ -88,6 +82,29 @@ end
 function (sharding::NamedSharding)(client::XLA.Client, x::AbstractArray)
     (; mesh, partition_spec) = sharding
     @assert length(partition_spec) == ndims(x)
+
+    # Fast Path for replicating the input across all devices
+    if all(Base.Fix2(===, nothing), partition_spec)
+        data = Array{XLA.AsyncBuffer,ndims(mesh)}(undef, size(mesh))
+        device_to_array_slices = Array{Vector{UnitRange{Int64}},ndims(mesh)}(
+            undef, size(mesh)
+        )
+
+        for idx in CartesianIndices(data)
+            device_id = mesh.device_ids[idx]
+            device_to_array_slices[idx] = [1:size(x, i) for i in 1:ndims(x)]
+            data[idx] = XLA.AsyncBuffer(
+                XLA.ArrayFromHostBuffer(client, x, device_id), nothing
+            )
+        end
+
+        return (
+            data,
+            FinalizedNamedSharding{typeof(sharding),ndims(mesh)}(
+                sharding, device_to_array_slices
+            ),
+        )
+    end
 
     ndevices = Vector{Int}(undef, ndims(x))
     axis_name_to_dim_and_offset = Dict{String,Tuple{Int,Int}}()
