@@ -783,8 +783,12 @@ end
     return buffer.buffer
 end
 
-@inline function synced_buffer(buffer::Buffer)
-    return buffer
-end
+@inline synced_buffer(buffer::Buffer) = buffer
+
+@inline synced_buffer(
+    buffers::Union{
+        AbstractArray{<:Union{AsyncBuffer,Buffer}},NTuple{<:Any,<:Union{AsyncBuffer,Buffer}}
+    },
+) = map(synced_buffer, buffers)
 
 end

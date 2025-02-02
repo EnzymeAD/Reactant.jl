@@ -36,6 +36,11 @@ end
 
 struct NoSharding <: AbstractSharding end
 
+finalized_sharding(::Type{NoSharding}) = FinalizedNoSharding
+
+# This allows us to mark entire branches as NoSharding
+Base.getproperty(::NoSharding, x) = NoSharding()
+
 function (::NoSharding)(client::XLA.Client, device, x::AbstractArray)
     buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, x, device), nothing)
     return [buffer], FinalizedNoSharding(NoSharding())
@@ -77,6 +82,8 @@ struct NamedSharding{D1,P<:Tuple,D2} <: AbstractSharding
         return new{D1,P,D2}(mesh, partition_spec, present_axes, is_closed, priority)
     end
 end
+
+finalized_sharding(::Type{<:NamedSharding}) = FinalizedNamedSharding
 
 # XXX: multiple axes partitioning
 function (sharding::NamedSharding)(client::XLA.Client, x::AbstractArray)

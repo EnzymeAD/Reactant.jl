@@ -997,7 +997,9 @@ Generate Julia code to call the XLA executable.
 - `donated_args_mask`: A list of `UInt8`s representing whether the argument is donated.
 - `nresults`: The number of results to expect.
 """
-function codegen_xla_call(exec, device, flatten_names, donated_args_mask, nresults)
+function codegen_xla_call(
+    exec, device, flatten_names, donated_args_mask, nresults, is_sharded::Bool
+)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
     concretized_res_names = Symbol[Symbol(:concrete_res_, i) for i in 1:nresults]
@@ -1008,17 +1010,31 @@ function codegen_xla_call(exec, device, flatten_names, donated_args_mask, nresul
     xla_call_code = if nresults == 0
         :()
     else
-        quote
-            GC.@preserve $(flatten_names...) begin
-                linearized_results = XLA.ExecutableCallSharded(
-                    $exec,
-                    $(device),
-                    ($(flatten_buffer_refs...),),
-                    $(Tuple(donated_args_mask)),
-                    Val($nresults),
-                )
+        if is_sharded
+            quote
+                GC.@preserve $(flatten_names...) begin
+                    linearized_results = XLA.ExecutableCall(
+                        $exec,
+                        ($(flatten_buffer_refs...),),
+                        $(Tuple(donated_args_mask)),
+                        Val($nresults),
+                    )
+                end
+                $(concretized_res_code...)
             end
-            $(concretized_res_code...)
+        else
+            quote
+                GC.@preserve $(flatten_names...) begin
+                    linearized_results = XLA.ExecutableCallSharded(
+                        $exec,
+                        $(device),
+                        ($(flatten_buffer_refs...),),
+                        $(Tuple(donated_args_mask)),
+                        Val($nresults),
+                    )
+                end
+                $(concretized_res_code...)
+            end
         end
     end
 
@@ -1159,7 +1175,12 @@ function compile(f, args; sync=false, kwargs...)
     flatten_arg_names, flatten_code = codegen_flatten!(linear_args, result_stores)
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        exec, device, flatten_arg_names, donated_args_mask, length(linear_results)
+        exec,
+        device,
+        flatten_arg_names,
+        donated_args_mask,
+        length(linear_results),
+        mlir_fn_res.is_sharded,
     )
 
     unflatten_code = codegen_unflatten!(
@@ -1190,6 +1211,8 @@ function compile(f, args; sync=false, kwargs...)
         $(unflatten_code...)
         return result
     end
+
+    display(body)
 
     return register_thunk(
         fname, Tuple{map(Core.Typeof, args)...}, body, f, mlir_fn_res.fnwrapped
