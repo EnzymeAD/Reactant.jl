@@ -105,6 +105,10 @@ function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE_
     return fill(v, Int[]; location)
 end
 
+function fill(number::TracedRNumber{T}, shape::Vector{Int}; location) where T
+    Base.fill(number, Tuple(shape))
+end
+
 for (T, mlir_func) in (
     (Bool, :mlirDenseElementsAttrBoolSplatGet),
     (UInt8, :mlirDenseElementsAttrUInt8SplatGet),
