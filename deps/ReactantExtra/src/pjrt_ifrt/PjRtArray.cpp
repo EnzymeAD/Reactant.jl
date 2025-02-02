@@ -50,17 +50,9 @@ extern "C" MemoryKind* ifrt_pjrt_make_memory_kind_from_pjrt_buffer(xla::PjRtBuff
     return new MemoryKind(MakeMemoryKindFromPjRtBuffer(pjrt_buffer));
 }
 
+// NOTE we just implement `mutable_pjrt_buffers` and not `pjrt_buffers` because the only difference is `const`ness which is not passed through C API
 extern "C" span<xla::PjRtBuffer*> ifrt_pjrt_array_pjrt_buffers(PjRtArray* array) {
-    auto buffers = array->pjrt_buffers();
-    auto ptr = new xla::PjRtBuffer*[buffers.size()];
-    for (int i = 0; i < buffers.size(); i++) {
-        ptr[i] = reactant::capture_shared(buffers[i]);
-    }
-    return span(buffers.size(), ptr);
-}
-
-extern "C" span<xla::PjRtBuffer*> ifrt_pjrt_array_mutable_pjrt_buffers(PjRtArray* array) {
-    auto buffers = MyValueOrThrow(array->mutable_pjrt_buffers());
+    auto buffers = array->mutable_pjrt_buffers();
     auto ptr = new xla::PjRtBuffer*[buffers.size()];
     for (int i = 0; i < buffers.size(); i++) {
         ptr[i] = reactant::capture_shared(buffers[i]);
