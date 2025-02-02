@@ -138,8 +138,10 @@ jobs:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
       - name: Run the test but allow failure
         run: |
-          julia --color=yes --project=test test/runtets.jl
+          julia --color=yes --project=test test/runtests.jl
         continue-on-error: true
+        env:
+          TF_CPP_MAX_VLOG_LEVEL: 3
       - name: Install gdb and emacs
         run: |
           sudo apt update
@@ -148,6 +150,8 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: false
         env:
           REACTANT_TEST_GROUP: ${{ matrix.test_group }}
         # NOTE: Reproduce failure with
