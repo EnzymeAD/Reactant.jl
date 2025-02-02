@@ -5,6 +5,7 @@
 #include "xla/tsl/concurrency/ref_count.h"
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device_list.h"
+#include "memory_management.hpp"
 #include <type_traits>
 #include <optional>
 #include <vector>
@@ -89,11 +90,11 @@ auto convert(Type<span<T*>>, std::vector<std::shared_ptr<T>> vec) -> span<T*> {
     return span<T*>(vec.size(), ptr);
 }
 
-template <typename T>
+template <typename T, typename = std::enable_if_t<std::is_base_of<tsl::ReferenceCounted, T>>>
 auto convert(Type<span<T*>>, std::vector<tsl::RCReference<T>> vec) -> span<T*> {
     T** ptr = new T*[vec.size()];
     for (int i = 0; i < vec.size(); i++) {
-        ptr[i] = vec[i].release();
+        ptr[i] = reactant::capture_rcreference(vec[i]);
     }
     return span<T*>(vec.size(), ptr);
 }
@@ -115,13 +116,12 @@ auto convert(Type<absl::Span<T>>, span<T> span) -> absl::Span<T>
     return absl::Span<T>(span.ptr, span.size());
 }
 
-template <typename T>
+template <typename T, typename = std::enable_if_t<std::is_base_of<tsl::ReferenceCounted, T>>>
 auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<T*> span) -> absl::Span<tsl::RCReference<T>>
 {
     auto values_ptr = new tsl::RCReference<T>[span.size()];
     for (int i = 0; i < span.size(); i++) {
-        values_ptr[i] = tsl::RCReference<T>();
-        values_ptr[i].reset(span[i]);
+        values_ptr[i] = reactant::get_or_insert_rcreference(span[i]);
     }
     return absl::Span<tsl::RCReference<T>>(values_ptr, span.size());
 }
