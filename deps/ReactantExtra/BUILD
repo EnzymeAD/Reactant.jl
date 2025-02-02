@@ -398,6 +398,7 @@ cc_library(
     "@bazel_tools//src/conditions:darwin": [
 "-Wl,-exported_symbol,_stablehlo*",
 "-Wl,-exported_symbol,_mlir*",
+"-Wl,-exported_symbol,_EnzymeJaXMapSymbol",
 "-Wl,-exported_symbol,_InitializeLogs",
 "-Wl,-exported_symbol,_SetLogLevel",
 "-Wl,-exported_symbol,_SetModuleLogLevel",
@@ -427,6 +428,7 @@ cc_library(
 "-Wl,-exported_symbol,_BufferToHost",
 "-Wl,-exported_symbol,_FreeClient",
 "-Wl,-exported_symbol,_ClientCompile",
+"-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
 "-Wl,-exported_symbol,_LinkInModule",
 "-Wl,-exported_symbol,_FreeFuture",
 "-Wl,-exported_symbol,_FutureIsReady",
@@ -702,6 +704,20 @@ gentbl_cc_library(
     td_file = "@llvm-project//mlir:include/mlir/Dialect/GPU/IR/GPUOps.td",
     deps = [
         "@llvm-project//mlir:GPUOpsTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
+    name = "MPIIncJLGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "MPI.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/MPI/IR/MPIOps.td",
+    deps = [
+        "@llvm-project//mlir:MPITdFiles",
     ],
     tblgen = "//:mlir-jl-tblgen",
 )
