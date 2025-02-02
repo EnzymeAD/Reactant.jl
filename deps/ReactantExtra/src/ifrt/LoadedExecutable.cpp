@@ -63,42 +63,44 @@ extern "C" int64_t ifrt_loadedexecutable_byte_size(LoadedExecutable* executable)
 
 // TODO xla::GetCompiledMemoryStats
 
-// TODO translate std::tuple to reactant::span
-// extern "C" std::tuple<size_t, OpSharding*> ifrt_loadedexecutable_parameter_shardings(LoadedExecutable* executable)
-// {
-//     auto shardings = executable->GetParameterShardings();
-//     if (!shardings.has_value())
-//         return std::make_tuple(0, nullptr);
-//     return std::make_tuple(shardings.value().size(), shardings.value().data());
-// }
+extern "C" span<OpSharding*> ifrt_loadedexecutable_parameter_shardings(LoadedExecutable* executable)
+{
+    auto shardings = executable->GetParameterShardings();
+    if (!shardings.has_value())
+        return span(0, nullptr);
+    return convert(Type<span<OpSharding*>>(), shardings.value());
+}
 
-// extern "C" std::tuple<size_t, OpSharding*> ifrt_loadedexecutable_output_shardings(LoadedExecutable* executable)
-// {
-//     auto shardings = executable->GetOutputShardings();
-//     if (!shardings.has_value())
-//         return std::make_tuple(0, nullptr);
-//     return std::make_tuple(shardings.value().size(), shardings.value().data());
-// }
+extern "C" span<OpSharding*> ifrt_loadedexecutable_output_shardings(LoadedExecutable* executable)
+{
+    auto shardings = executable->GetOutputShardings();
+    if (!shardings.has_value())
+        return span(0, nullptr);
+    return convert(Type<span<OpSharding*>>, shardings.value());
+}
 
-// TODO fix type conversion
-// extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_parameter_layouts(LoadedExecutable* executable)
-// {
-//     auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
-//     return convert(Type<span<xla::PjRtLayout*>>(), layouts);
-// }
+extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_parameter_layouts(LoadedExecutable* executable)
+{
+    auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
+    return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+}
 
-// TODO fix type conversion
-// extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_output_layouts(LoadedExecutable* executable)
-// {
-//     auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-//     return convert(Type<span<xla::PjRtLayout*>>(), layouts);
-// }
+extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_output_layouts(LoadedExecutable* executable)
+{
+    auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
+    return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+}
 
-// TODO fix type conversion
-extern "C" span<xla::HloModule*> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
+extern "C" span<span<xla::HloModule*>> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
 {
     auto modules = MyValueOrThrow(executable->GetHloModules());
-    return convert(Type<span<xla::HloModule*>>(), modules);
+
+    auto ptr = new span<xla::HloModule*>*[modules.size()];
+    for (int i = 0; i < modules.size(); i++) {
+        ptr[i] = convert(Type<span<xla::HloModule*>>(), modules[i]);
+    }
+    
+    return span(modules.size(), ptr);
 }
 
 // TODO xla::LoadedExecutable::GetOutputMemoryKinds
