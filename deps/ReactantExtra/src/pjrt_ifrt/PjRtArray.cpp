@@ -6,14 +6,48 @@
 using namespace xla::ifrt;
 using namespace reactant;
 
-// TODO constructors / `Create`
+namespace reactant {
+template <>
+auto convert(Type<xla::Array::PjRtBuffers>, span<xla::PjRtBuffer*> span) -> PjRtArray::PjRtBuffers {
+    xla::PjRtBuffers buffers;
+    for (int i = 0; i < span.size(); i++) {
+        buffers.push_back(reactant::get_shared(span[i]));
+    }
+    return buffers;
+}
+}  // namespace reactant
+
+extern "C" PjRtArray* ifrt_pjrt_array_create_general_static(PjRtCompatibleClient* client, DType* dtype, Shape* shape, Sharding* c_sharding, span<xla::PjRtBuffer*> c_pjrt_buffers) {
+    auto buffers = convert(Type<xla::Array::PjRtBuffers>(), c_pjrt_buffers);
+    return reactant::capture_rcreference(MyValueOrThrow(PjRtArray(client, *dtype, *shape, reactant::get_shared(c_sharding), buffers)));
+}
+
+extern "C" PjRtArray* ifrt_pjrt_array_create_general_dynamic(PjRtCompatibleClient* client, DType* dtype, DynamicShape* shape, Sharding* c_sharding, span<xla::PjRtBuffer*> c_pjrt_buffers) {
+    auto buffers = convert(Type<xla::Array::PjRtBuffers>(), c_pjrt_buffers);
+    return reactant::capture_rcreference(MyValueOrThrow(PjRtArray(client, *dtype, *shape, reactant::get_shared(c_sharding), buffers)));
+}
+
+extern "C" PjRtArray* ifrt_pjrt_array_create_shard_single(PjRtCompatibleClient* client, xla::PjRtBuffer* c_pjrt_buffers) {
+    auto buffers = convert(Type<xla::Array::PjRtBuffers>(), c_pjrt_buffers);
+    return reactant::capture_rcreference(MyValueOrThrow(PjRtArray(client, *dtype, *shape, reactant::get_shared(c_sharding), buffers)));
+}
+
+extern "C" PjRtArray* ifrt_pjrt_array_create_shard_concrete_static(PjRtCompatibleClient* client, Shape* shape, span<xla::PjRtBuffer*> c_pjrt_buffers) {
+    auto buffers = convert(Type<xla::Array::PjRtBuffers>(), c_pjrt_buffers);
+    return reactant::capture_rcreference(MyValueOrThrow(PjRtArray(client, *shape, buffers)));
+}
+
+extern "C" PjRtArray* ifrt_pjrt_array_create_shard_concrete_dynamic(PjRtCompatibleClient* client, DynamicShape* shape, span<xla::PjRtBuffer*> c_pjrt_buffers) {
+    auto buffers = convert(Type<xla::Array::PjRtBuffers>(), c_pjrt_buffers);
+    return reactant::capture_rcreference(MyValueOrThrow(PjRtArray(client, *shape, buffers)));
+}
+
+extern "C" void ifrt_pjrt_array_dtor(PjRtArray* array) {
+    reactant::destruct_or_release_if_rcreference(array);
+}
 
 extern "C" MemoryKind* ifrt_pjrt_make_memory_kind_from_pjrt_buffer(xla::PjRtBuffer* pjrt_buffer) {
     return new MemoryKind(MakeMemoryKindFromPjRtBuffer(pjrt_buffer));
-}
-
-extern "C" PjRtArray* ifrt_pjrt_array_create_shape(PjRtCompatibleClient* client, DType* dtype, Shape* shape, Sharding* sharding, span<xla::PjRtBuffer*> c_pjrt_buffers) {
-    // auto sharding_shared = reactant::get
 }
 
 extern "C" span<xla::PjRtBuffer*> ifrt_pjrt_array_pjrt_buffers(PjRtArray* array) {
