@@ -136,6 +136,10 @@ jobs:
           julia --color=yes --project=test -e 'using Pkg; Pkg.add(; url="https://github.com/giordano/Reactant_jll.jl"); Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+      - name: Run the test but allow failure
+        run: |
+          julia --color=yes --project=test test/runtets.jl
+        continue-on-error: true
       - name: Install gdb and emacs
         run: |
           sudo apt update
