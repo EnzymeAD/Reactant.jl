@@ -80,6 +80,7 @@ end
 ConcreteRNumber(data::T; kwargs...) where {T<:Number} = ConcreteRNumber{T}(data; kwargs...)
 
 ## ConcreteRArray
+# XXX: make data into a tuple of arrays
 mutable struct ConcreteRArray{T,N,D,S<:Sharding.AbstractFinalizedSharding} <: RArray{T,N}
     data::Array{XLA.AsyncBuffer,D}
     shape::NTuple{N,Int}

@@ -127,29 +127,25 @@ function (sharding::NamedSharding)(client::XLA.Client, x::AbstractArray)
     data = Array{XLA.AsyncBuffer,ndims(mesh)}(undef, size(mesh))
     device_to_array_slices = Array{Vector{UnitRange{Int64}},ndims(mesh)}(undef, size(mesh))
 
-    @sync begin
-        for idx in CartesianIndices(data)
-            device_id = mesh.device_ids[idx]
-            idx_tup = Tuple(idx)
-            slice_idx = ones(Int, ndims(slices))
-            for (axis_name, idxᵢ) in zip(mesh.axis_names, idx_tup)
-                if haskey(axis_name_to_dim_and_offset, axis_name)
-                    dim, offset = axis_name_to_dim_and_offset[axis_name]
-                    slice_idx[dim] = idxᵢ + offset
-                end
-            end
-            device_to_array_slices[idx] = slices[CartesianIndex(slice_idx...)]
-            Threads.@spawn begin
-                data[idx] = XLA.AsyncBuffer(
-                    XLA.ArrayFromHostBuffer(
-                        client,
-                        x[device_to_array_slices[idx]...],
-                        XLA.ClientGetAddressableDevice(client, device_id),
-                    ),
-                    nothing,
-                )
+    for idx in CartesianIndices(data)
+        device_id = mesh.device_ids[idx]
+        idx_tup = Tuple(idx)
+        slice_idx = ones(Int, ndims(slices))
+        for (axis_name, idxᵢ) in zip(mesh.axis_names, idx_tup)
+            if haskey(axis_name_to_dim_and_offset, axis_name)
+                dim, offset = axis_name_to_dim_and_offset[axis_name]
+                slice_idx[dim] = idxᵢ + offset
             end
         end
+        device_to_array_slices[idx] = slices[CartesianIndex(slice_idx...)]
+        data[idx] = XLA.AsyncBuffer(
+            XLA.ArrayFromHostBuffer(
+                client,
+                x[device_to_array_slices[idx]...],
+                XLA.ClientGetAddressableDevice(client, device_id),
+            ),
+            nothing,
+        )
     end
 
     return (

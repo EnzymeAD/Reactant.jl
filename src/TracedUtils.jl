@@ -151,7 +151,6 @@ function make_mlir_fn(
     return_dialect=:func,
     do_transpose=true,
     no_args_in_result=false,
-    in_shardings=nothing,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -164,7 +163,6 @@ function make_mlir_fn(
             return_dialect,
             do_transpose,
             no_args_in_result,
-            in_shardings,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
@@ -213,26 +211,22 @@ function make_mlir_fn(
     mesh_cache = OrderedIdDict()
     traced_args_to_shardings = OrderedIdDict()
 
-    if in_shardings !== nothing
-        # We need to insert the corresponding `sdy.mesh` ops
-        Functors.fmap(
-            in_shardings,
-            Tuple(traced_args);
-            exclude=x -> x isa Reactant.Sharding.AbstractSharding || Functors.isleaf(x),
-        ) do sharding, arr
-            if sharding isa Reactant.Sharding.NamedSharding
-                mesh = sharding.mesh
-                if !haskey(traced_args_to_shardings, arr) && arr isa Reactant.TracedType
-                    traced_args_to_shardings[arr] = sharding
-                end
-                if !haskey(mesh_cache, mesh)
-                    mesh_op_attrs = Reactant.Ops.mesh(mod, mesh)
-                    mesh_cache[mesh] = mesh_op_attrs
+    # Detect if any of the arguments are sharded
+    is_sharded = false
+    for (k, v) in seen_args
+        if k isa Reactant.ConcreteRArray
+            if !(k.sharding isa Reactant.Sharding.FinalizedNoSharding)
+                is_sharded = true
+                traced_args_to_shardings[v] = k.sharding
+                if !haskey(mesh_cache, k.sharding.mesh)
+                    mesh_op_attrs = Reactant.Ops.mesh(mod, k.sharding.mesh)
+                    mesh_cache[k.sharding.mesh] = mesh_op_attrs
                 end
             end
-            return sharding
         end
+    end
 
+    if is_sharded
         unique_meshes = unique([m for (k, m) in traced_args_to_shardings])
         sorted_devices = [sort(vec(m.mesh.device_ids)) for m in unique_meshes]
         @assert allequal(sorted_devices) "All meshes must have the same device ids"
@@ -250,7 +244,7 @@ function make_mlir_fn(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
 
-    if in_shardings !== nothing
+    if is_sharded
         # Here we construct tensor sharding annotations for the function arguments
         linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
         for (i, arg) in enumerate(linear_args)
@@ -381,7 +375,7 @@ function make_mlir_fn(
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
     # Attach `sdy.sharding` attribute to the argument
-    if in_shardings !== nothing
+    if is_sharded
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
                 MLIR.API.mlirFuncSetArgAttr(

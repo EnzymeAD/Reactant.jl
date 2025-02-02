@@ -66,9 +66,7 @@ function DeviceToString(device::Device)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", device::Device)
-    pjrtclient = client(device)
-    platform_name = ClientGetPlatformName(pjrtclient)
-    print(io, "Device($(device.device), platform_name=$(platform_name))")
+    print(io, "Device($(device.device), name=\"$(DeviceToString(device))\")")
     return nothing
 end
 

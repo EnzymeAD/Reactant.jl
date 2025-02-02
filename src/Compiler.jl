@@ -469,13 +469,7 @@ const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 
 function compile_mlir!(
-    mod,
-    f,
-    args;
-    optimize::Union{Bool,Symbol}=true,
-    no_nan::Bool=false,
-    backend="gpu",
-    in_shardings=nothing,
+    mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu"
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -484,7 +478,7 @@ function compile_mlir!(
     MLIR.IR.activate!(MLIR.IR.body(mod))
 
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true; in_shardings)
+        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
     finally
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
@@ -650,6 +644,8 @@ function compile_mlir!(
     MLIR.API.mlirOperationDestroy(compiled_f.operation)
     compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
 
+    display(mod)
+
     return (
         linear_args,
         linear_results2,
@@ -666,7 +662,7 @@ end
 """
 macro code_hlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :in_shardings => nothing
+        :optimize => true, :no_nan => false, :client => nothing
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -680,11 +676,7 @@ end
 """
 macro compile(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :in_shardings => nothing,
+        :optimize => true, :sync => false, :no_nan => false, :client => nothing
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -696,11 +688,7 @@ Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :in_shardings => nothing,
+        :optimize => true, :sync => false, :no_nan => false, :client => nothing
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
