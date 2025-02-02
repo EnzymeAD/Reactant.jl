@@ -85,7 +85,7 @@ template <typename T>
 auto convert(Type<span<T*>>, std::vector<std::shared_ptr<T>> vec) -> span<T*> {
     T** ptr = new T*[vec.size()];
     for (int i = 0; i < vec.size(); i++) {
-        ptr[i] = vec[i].get();
+        ptr[i] = reactant::capture_shared(vec[i]);
     }
     return span<T*>(vec.size(), ptr);
 }
