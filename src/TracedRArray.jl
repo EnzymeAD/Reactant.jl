@@ -27,6 +27,12 @@ Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
 
 Base.IndexStyle(::Type{<:TracedRArray}) = Base.IndexLinear()
 
+# This is required otherwise we will copy a tracedrarray each time
+# we use it
+function Base.convert(::Type{TracedRArray}, x::TracedRArray)
+    return x
+end
+
 function Base.convert(::Type{TracedRArray}, x::AnyTracedRArray)
     return Base.convert(TracedRArray{unwrapped_eltype(x),ndims(x)}, x)
 end
