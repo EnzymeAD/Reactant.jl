@@ -5,6 +5,7 @@ import ...MLIR
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
+using Reactant_jll
 const CUDA_DATA_DIR = Ref(
     isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
 )

@@ -939,32 +939,6 @@ function Reactant.make_tracer(
 end
 
 function __init__()
-    if isdefined(CUDA.CUDA_Driver_jll, :libcuda) && CUDA.CUDA_Driver_jll.libcuda !== nothing
-        handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
-        if handle === nothing
-            handle = C_NULL
-        end
-        ptr1 = Reactant.XLA.Libdl.dlsym(handle, "cuLaunchKernel"; throw_error=false)
-        if ptr1 === nothing
-            ptr1 = C_NULL
-        end
-        ptr2 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleLoadData"; throw_error=false)
-        if ptr2 === nothing
-            ptr2 = C_NULL
-        end
-        ptr3 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleGetFunction"; throw_error=false)
-        if ptr3 === nothing
-            ptr3 = C_NULL
-        end
-        Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
-        Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
-        Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
-        ptr4 = Reactant.XLA.Libdl.dlsym(handle, "cuStreamSynchronize"; throw_error=false)
-        if ptr4 === nothing
-            ptr4 = C_NULL
-        end
-        Reactant.Compiler.cuSync[] = Base.reinterpret(UInt, ptr4)
-    end
     if CUDA.functional()
         target = CUDA._compiler_config(CUDA.device()).target
         Reactant.Compiler.cubinChip[] = "sm_$(target.cap.major)$(target.cap.minor)"
