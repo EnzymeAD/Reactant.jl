@@ -373,9 +373,8 @@ Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
-# TODO is there a way to create an unitialized `tensor`? does it show an advantage? maybe `fill`?
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return Ops.constant(zeros(unwrapped_eltype(T), dims))
+    return Ops.fill(zero(unwrapped_eltype(T)), dims)
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
@@ -998,12 +997,12 @@ function Base.findmin(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
     # Compute linear indices
     strds = strides(x)
     iotas = [Ops.iota(Int64, [size(indices)...]; iota_dimension=i) for i in 1:ndims(x)]
-    iotas[dims] = Ops.subtract(indices, Ops.constant(fill(Int64(1), size(indices))))
-    linear_indices = Ops.constant(fill(Int64(1), size(indices)))
+    iotas[dims] = Ops.subtract(indices, Ops.fill(Int64(1), size(indices)))
+    linear_indices = Ops.fill(Int64(1), size(indices))
     for d in eachindex(iotas)
         linear_indices = Ops.add(
             linear_indices,
-            Ops.multiply(iotas[d], Ops.constant(fill(Int64(strds[d]), size(iotas[d])))),
+            Ops.multiply(iotas[d], Ops.fill(Int64(strds[d]), size(iotas[d]))),
         )
     end
 
@@ -1027,12 +1026,12 @@ function Base.findmax(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
     # Compute linear indices
     strds = strides(x)
     iotas = [Ops.iota(Int64, [size(indices)...]; iota_dimension=i) for i in 1:ndims(x)]
-    iotas[dims] = Ops.subtract(indices, Ops.constant(fill(Int64(1), size(indices))))
-    linear_indices = Ops.constant(fill(Int64(1), size(indices)))
+    iotas[dims] = Ops.subtract(indices, Ops.fill(Int64(1), size(indices)))
+    linear_indices = Ops.fill(Int64(1), size(indices))
     for d in eachindex(iotas)
         linear_indices = Ops.add(
             linear_indices,
-            Ops.multiply(iotas[d], Ops.constant(fill(Int64(strds[d]), size(iotas[d])))),
+            Ops.multiply(iotas[d], Ops.fill(Int64(strds[d]), size(iotas[d]))),
         )
     end
 
