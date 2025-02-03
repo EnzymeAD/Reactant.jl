@@ -302,7 +302,6 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
         "transpose_broadcast_in_dim_to_broadcast_in_dim",
         "not_select_simplify",
         "common_compare_expression_rewrite",
-        "normalize_loop",
         "compare_select_simplify",
         "while_simplify<1>",
     ]
