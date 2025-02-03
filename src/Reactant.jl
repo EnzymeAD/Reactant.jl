@@ -246,7 +246,36 @@ function deinitialize_dialect()
     return registry[] = nothing
 end
 
+using Libdl
+using Reactant_jll
+using LLVMOpenMP_jll
+function initialize_ptrs()
+    for name in (
+        "__kmpc_barrier",
+        "__kmpc_global_thread_num",
+        "__kmpc_for_static_fini",
+        "__kmpc_for_static_init_8u",
+        "__kmpc_fork_call",
+    )
+        sym = Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name)
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+    end
+    # TODO on next jll bump (0.61) change this to call ReactantHermeticCudaGetVersion
+    if (@ccall MLIR.API.mlir_c.ReactantCudaDriverGetVersion()::UInt32) != 0
+        for name in (
+            "cuLaunchKernel",
+            "cuModuleLoadData",
+            "cuModuleGetFunction",
+            "cuStreamSynchronize",
+        )
+            sym = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+        end
+    end
+end
+
 function __init__()
+    initialize_ptrs()
     return initialize_dialect()
 end
 
