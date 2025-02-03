@@ -461,22 +461,17 @@ function compile_mlir!(
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
-    toolkit = ""
-    if isdefined(Reactant_jll, :ptxas_path)
-        toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
-    end
-
     if backend == "cpu"
-        kern = "lower-kernel{openmp=false backend=cpu},symbol-dce"
+        kern = "lower-kernel{backend=cpu},symbol-dce"
     elseif DEBUG_KERNEL[]
         curesulthandler = XLA.Libdl.dlsym(
             Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
         )
         @assert curesulthandler !== nothing
         curesulthandler = Base.reinterpret(UInt, curesulthandler)
-        kern = "lower-kernel{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[]) cuStreamSynchronizePtr=$(cuSync[])},symbol-dce"
+        kern = "lower-kernel,symbol-dce"
     else
-        kern = "lower-kernel{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
+        kern = "lower-kernel,symbol-dce"
     end
 
     opt_passes = optimization_passes(; no_nan, sroa=true)
