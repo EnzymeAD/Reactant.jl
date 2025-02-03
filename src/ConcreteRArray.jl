@@ -28,6 +28,8 @@ function Base.rtoldefault(::Type{ConcreteRNumber{T}}) where {T}
     return ConcreteRNumber(Base.rtoldefault(T))
 end
 
+Base.strides(x::ConcreteRArray) = Base.size_to_strides(1, size(x)...)
+
 # Ensure the device and client are the same as the input
 function Base.float(x::ConcreteRNumber{T}) where {T}
     client = XLA.client(x.data)
@@ -75,7 +77,12 @@ ConcreteRArray(x::AnyConcreteRArray) = ConcreteRArray{eltype(x),ndims(x)}(x)
 ConcreteRArray{T}(x::AnyConcreteRArray) where {T} = ConcreteRArray{T,ndims(x)}(x)
 ConcreteRArray{T,N}(x::ConcreteRArray{T,N}) where {T,N} = x
 function ConcreteRArray{T,N}(x::AnyConcreteRArray) where {T,N}
-    return ConcreteRArray(convert(Array{T,N}, x))
+    ancestor_x = ancestor(x)
+    return ConcreteRArray(
+        convert(Array{T,N}, x);
+        client=XLA.client(ancestor_x.data),
+        device=XLA.device(ancestor_x.data),
+    )
 end
 
 Base.size(x::ConcreteRArray) = x.shape
@@ -144,6 +151,12 @@ for jlop in (
         $(jlop)(x::$(T), y::Number) = $(jlop)(to_number(x), y)
         $(jlop)(x::Number, y::$(T)) = $(jlop)(x, to_number(y))
     end
+end
+
+for jlop in (:(Base.isnan), :(Base.isfinite)),
+    T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
+
+    @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
 for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
@@ -272,7 +285,9 @@ end
 
 # TODO is there any way to allocate an uninitialized buffer in XLA?
 function Base.similar(a::ConcreteRArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
-    return ConcreteRArray(Array{S}(undef, dims))
+    return ConcreteRArray(
+        Array{S}(undef, dims); client=XLA.client(a.data), device=XLA.device(a.data)
+    )
 end
 Base.similar(a::ConcreteRArray, dims::Dims) = similar(a, eltype(a), dims)
 
@@ -305,7 +320,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteR
             )
         end
         aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
-        return ConcreteRArray(aux)
+        return ConcreteRArray(aux) # XXX: result should be on correct device?
     end
 
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
@@ -350,7 +365,11 @@ function Ops.constant(x::ConcreteRNumber{T}; kwargs...) where {T}
     return Ops.constant(Base.convert(T, x); kwargs...)
 end
 
-Base.zero(x::ConcreteRArray{T,N}) where {T,N} = ConcreteRArray(zeros(T, size(x)...))
+function Base.zero(x::ConcreteRArray{T,N}) where {T,N}
+    return ConcreteRArray(
+        zeros(T, size(x)...); client=XLA.client(x.data), device=XLA.device(x.data)
+    )
+end
 
 function Base.fill!(a::ConcreteRArray{T,N}, val) where {T,N}
     if a.data == XLA.AsyncEmptyBuffer

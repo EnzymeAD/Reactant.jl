@@ -69,7 +69,7 @@ end
 
 @testset "Forward Gradient" begin
     x = Reactant.ConcreteRArray(3.1 * ones(2, 2))
-    res = @jit gw(x)
+    res = @test_warn r"`Adapt.parent_type` is not implemented for" @jit gw(x)
     # TODO we should probably override https://github.com/EnzymeAD/Enzyme.jl/blob/5e6a82dd08e74666822b9d7b2b46c36b075668ca/src/Enzyme.jl#L2132
     # to make sure this gets merged as a tracedrarray
     @test typeof(res) == Tuple{Enzyme.TupleArray{ConcreteRNumber{Float64},(2, 2),4,2}}
@@ -130,4 +130,16 @@ end
     ddf(x) = Enzyme.gradient(Reverse, df, x)[1]
     res2 = @jit ddf(x)
     @test res2 ≈ 4 * 3 * 3.1^2
+end
+
+@testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
+    a = ones(ComplexF64, 2, 2)
+    b = 2.0 * ones(ComplexF64, 2, 2)
+    a_re = Reactant.to_rarray(a)
+    b_re = Reactant.to_rarray(b)
+    df(x, y) = Enzyme.gradient(ReverseWithPrimal, *, x, y)
+    res = @jit df(a_re, b_re) # before, this segfaulted
+    @test res.val ≈ 4ones(2, 2)
+    @test res.derivs[1] ≈ 4ones(2, 2)
+    @test res.derivs[2] ≈ 2ones(2, 2)
 end

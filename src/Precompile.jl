@@ -1,3 +1,4 @@
+using PrecompileTools
 using PrecompileTools: @setup_workload, @compile_workload
 
 function infer_sig(sig)
@@ -34,25 +35,7 @@ function infer_sig(sig)
     end
 end
 
-@setup_workload begin
-    initialize_dialect()
-    client = XLA.CPUClient(; checkcount=false)
-    @compile_workload begin
-        # Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
-        @static if VERSION < v"1.11"
-        else
-            # infer_sig(Tuple{typeof(Base.sum), Reactant.TracedRArray{Float64, 2}})
-            # infer_sig(Tuple{typeof(Base.sin), Reactant.TracedRNumber{Float64}})
-            x = ConcreteRNumber(2.0; client)
-            Reactant.compile(sin, (x,); client)
-
-            y = ConcreteRArray([2.0]; client)
-            Reactant.compile(Base.sum, (y,); client)
-        end
-    end
-    XLA.free_client(client)
-    client.client = C_NULL
-    deinitialize_dialect()
+function clear_oc_cache()
     # Opaque closures capture the worldage of their compilation and thus are not relocatable
     # Therefore we explicitly purge all OC's we have created here
     for v in oc_capture_vec
@@ -63,4 +46,32 @@ end
             empty!(v)
         end
     end
+end
+
+# Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
+function precompilation_supported()
+    return VERSION >= v"1.11" || VERSION >= v"1.10.8"
+end
+
+function precompiling()
+    return (@ccall jl_generating_output()::Cint) == 1
+end
+
+@setup_workload begin
+    initialize_dialect()
+    client = XLA.CPUClient(; checkcount=false)
+    device = XLA.ClientGetDevice(client, 0)
+    @compile_workload begin
+        @static if precompilation_supported()
+            x = ConcreteRNumber(2.0; client, device)
+            Reactant.compile(sin, (x,); client, device)
+
+            y = ConcreteRArray([2.0]; client, device)
+            Reactant.compile(Base.sum, (y,); client, device)
+        end
+    end
+    XLA.free_client(client)
+    client.client = C_NULL
+    deinitialize_dialect()
+    clear_oc_cache()
 end

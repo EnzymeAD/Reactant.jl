@@ -1,9 +1,16 @@
 module ReactantCUDAExt
 
 using CUDA
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
+using Reactant:
+    Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
+using KernelAbstractions: KernelAbstractions
+import KernelAbstractions as KA
 using Libdl
+const ReactantKernelAbstractionsExt = Base.get_extension(
+    Reactant, :ReactantKernelAbstractionsExt
+)
+const ReactantBackend = ReactantKernelAbstractionsExt.ReactantBackend
 
 using Adapt
 
@@ -41,6 +48,19 @@ function Base.unsafe_convert(
     return x.ptr
 end
 
+# TODO: arrays as allocated by the CUDA APIs are 256-byte aligned. we should keep track of
+#       this information, because it enables optimizations like Load Store Vectorization
+#       (cfr. shared memory and its wider-than-datatype alignment)
+
+@generated function alignment(::CuTracedArray{T}) where {T}
+    if Base.isbitsunion(T)
+        _, sz, al = Base.uniontype_layout(T)
+        al
+    else
+        Base.datatype_alignment(T)
+    end
+end
+
 ## indexing intrinsics
 
 CUDA.@device_function @inline function arrayref(
@@ -55,7 +75,8 @@ CUDA.@device_function @inline function arrayref(
 end
 
 @inline function arrayref_bits(A::CuTracedArray{T}, index::Integer) where {T}
-    return unsafe_load(pointer(A), index)
+    align = alignment(A)
+    return unsafe_load(pointer(A), index, Val(align))
 end
 
 @inline @generated function arrayref_union(
@@ -100,7 +121,8 @@ CUDA.@device_function @inline function arrayset(
 end
 
 @inline function arrayset_bits(A::CuTracedArray{T}, x::T, index::Integer) where {T}
-    return unsafe_store!(pointer(A), x, index)
+    align = alignment(A)
+    return unsafe_store!(pointer(A), x, index, Val(align))
 end
 
 @inline @generated function arrayset_union(
@@ -113,9 +135,10 @@ end
         selector_ptr = typetagdata(A, index)
         unsafe_store!(selector_ptr, $(UInt8(sel - 1)))
 
+        align = alignment(A)
         data_ptr = pointer(A, index)
 
-        unsafe_store!(reinterpret(Core.LLVMPtr{$x,AS}, data_ptr), x, 1)
+        unsafe_store!(reinterpret(Core.LLVMPtr{$x,AS}, data_ptr), x, 1, Val(align))
         return nothing
     end
 end
@@ -124,7 +147,8 @@ CUDA.@device_function @inline function const_arrayref(
     A::CuTracedArray{T}, index::Integer
 ) where {T}
     @boundscheck checkbounds(A, index)
-    return unsafe_cached_load(pointer(A), index)
+    align = alignment(A)
+    return unsafe_cached_load(pointer(A), index, Val(align))
 end
 
 ## indexing
@@ -239,8 +263,83 @@ function Adapt.adapt_structure(
     )
 end
 
-Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+function threads_to_workgroupsize(threads, ndrange)
+    total = 1
+    return map(ndrange) do n
+        x = min(div(threads, total), n)
+        total *= x
+        return x
+    end
+end
+
+function ka_with_reactant(ndrange, workgroupsize, obj, args...)
+    backend = KA.backend(obj)
+
+    ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
+        obj, ndrange, workgroupsize
+    )
+    # this might not be the final context, since we may tune the workgroupsize
+    ctx = KA.mkcontext(obj, ndrange, iterspace)
+
+    # If the kernel is statically sized we can tell the compiler about that
+    if KA.workgroupsize(obj) <: KA.StaticSize
+        maxthreads = prod(KA.get(KA.workgroupsize(obj)))
+    else
+        maxthreads = nothing
+    end
+
+    kernel = CUDA.@cuda launch = false always_inline = backend.always_inline maxthreads =
+        maxthreads obj.f(ctx, args...)
+
+    # figure out the optimal workgroupsize automatically
+    if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
+        if !Reactant.Compiler.PartitionKA[]
+            threads = prod(ndrange)
+        else
+            config = CUDA.launch_configuration(kernel.fun; max_threads=prod(ndrange))
+            if backend.prefer_blocks
+                # Prefer blocks over threads
+                threads = min(prod(ndrange), config.threads)
+                # XXX: Some kernels performs much better with all blocks active
+                cu_blocks = max(cld(prod(ndrange), threads), config.blocks)
+                threads = cld(prod(ndrange), cu_blocks)
+            else
+                threads = config.threads
+            end
+            workgroupsize = threads_to_workgroupsize(threads, ndrange)
+            iterspace, dynamic = KA.partition(obj, ndrange, workgroupsize)
+        end
+        ctx = KA.mkcontext(obj, ndrange, iterspace)
+    end
+
+    blocks = length(KA.blocks(iterspace))
+    threads = length(KA.workitems(iterspace))
+
+    if blocks == 0
+        return nothing
+    end
+
+    # Launch kernel
+    kernel(ctx, args...; threads, blocks)
+
+    return nothing
+end
+
+Reactant.@reactant_overlay @noinline function (obj::KA.Kernel{ReactantBackend})(
+    args...; ndrange=nothing, workgroupsize=nothing
+)
+    return Reactant.call_with_reactant(
+        ka_with_reactant, ndrange, workgroupsize, obj, args...
+    )
+end
+
+Adapt.adapt_storage(to::KA.ConstAdaptor, a::CuTracedArray) = Base.Experimental.Const(a)
+
+function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
+end
+Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+    return recudaconvert(arg)
 end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
@@ -328,10 +427,14 @@ function compile(job)
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
 
-        GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+        if !Reactant.precompiling()
+            GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+        end
         entryname = LLVM.name(meta.entry)
 
-        GPUCompiler.optimize_module!(job, mod)
+        if Reactant.Compiler.DUMP_LLVMIR[]
+            println("cuda.jl immediate IR\n", string(mod))
+        end
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
         LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
@@ -364,14 +467,27 @@ function compile(job)
             end
         end
 
-        # GPUCompiler.check_ir(job, mod)
-
-        LLVM.strip_debuginfo!(mod)
+        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
+        unique!(errors)
+        filter!(errors) do err
+            (kind, bt, meta) = err
+            if meta !== nothing
+                if kind == GPUCompiler.UNKNOWN_FUNCTION && startswith(meta, "__nv")
+                    return false
+                end
+            end
+            return true
+        end
+        if Reactant.Compiler.DUMP_LLVMIR[]
+            println("cuda.jl postopt IR\n", string(mod))
+        end
+        if !isempty(errors)
+            throw(GPUCompiler.InvalidIRError(job, errors))
+        end
+        # LLVM.strip_debuginfo!(mod)
         modstr = string(mod)
-
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
-
         mmod = MLIR.IR.Module(
             @ccall MLIR.API.mlir_c.ConvertLLVMStrToMLIR(
                 modstr::Cstring, MLIR.IR.context()::MLIR.API.MlirContext
@@ -397,8 +513,18 @@ function link(job, compiled)
     return compiled
 end
 
+function abi_sizeof(@nospecialize(x))
+    return sizeof(typeof(x))
+end
+function abi_sizeof(@nospecialize(x::CuTracedArray))
+    return sizeof(Ptr)
+end
+function abi_sizeof(@nospecialize(x::CUDA.CuDeviceArray))
+    return sizeof(Ptr)
+end
+
 function to_bytes(x)
-    sz = sizeof(x)
+    sz = abi_sizeof(x)
     ref = Ref(x)
     GC.@preserve ref begin
         ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
@@ -438,10 +564,12 @@ function get_field_offset(T::Type, path)
         end
 
         # Add the offset of this field
-        offset += fieldoffset(current_type, field_idx)
+        toffset = fieldoffset(current_type, field_idx)
+        tcurrent_type = fieldtype(current_type, field_idx)
+        offset += toffset
 
         # Update current_type to the field's type for next iteration
-        current_type = fieldtype(current_type, field_idx)
+        current_type = tcurrent_type
     end
 
     return offset
@@ -449,7 +577,7 @@ end
 
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
-    convert=Val(false),
+    convert=Val(true),
     blocks::CuDim=1,
     threads::CuDim=1,
     cooperative::Bool=false,
@@ -458,6 +586,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 ) where {F,tt}
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
+
+    if convert == Val(true)
+        args = recudaconvert.(args)
+    end
 
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
@@ -504,6 +636,14 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
     push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
+    for i in 1:length(wrapper_tys)
+        @ccall MLIR.API.mlir_c.ReactantFuncSetArgAttr(
+            wrapfunc::MLIR.API.MlirOperation,
+            (i - 1)::Csize_t,
+            "llvm.noalias"::MLIR.API.MlirStringRef,
+            MLIR.IR.UnitAttribute()::MLIR.API.MlirAttribute,
+        )::Cvoid
+    end
 
     wrapargs = MLIR.IR.Value[]
     argidx = 1
@@ -551,7 +691,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             )
             push!(allocs, (alloc, argty))
 
-            sz = sizeof(a)
+            sz = abi_sizeof(a)
             array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
             cdata = MLIR.IR.result(
                 MLIR.Dialects.llvm.mlir_constant(;
@@ -575,6 +715,20 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         arg = Reactant.TracedUtils.transpose_val(arg)
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
+
+        push!(
+            aliases,
+            MLIR.IR.Attribute(
+                MLIR.API.stablehloOutputOperandAliasGet(
+                    MLIR.IR.context(),
+                    length(wrapper_tys) == 1 ? 0 : 1,
+                    length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
+                    argidx - 1,
+                    0,
+                    C_NULL,
+                ),
+            ),
+        )
 
         for p in paths
             if p[1] !== kernelargsym
@@ -600,20 +754,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 )
                 MLIR.Dialects.llvm.store(MLIR.IR.argument(wrapbody, argidx), ptr)
             end
-
-            push!(
-                aliases,
-                MLIR.IR.Attribute(
-                    MLIR.API.stablehloOutputOperandAliasGet(
-                        MLIR.IR.context(),
-                        length(wrapper_tys) == 1 ? 0 : 1,
-                        length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
-                        argidx - 1,
-                        0,
-                        C_NULL,
-                    ),
-                ),
-            )
         end
         argidx += 1
     end
@@ -648,6 +788,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 
     location = MLIR.IR.Location()
+    @assert length(restys) == length(aliases)
     call = MLIR.Dialects.enzymexla.kernel_call(
         blk_operands...,
         mlir_args;
@@ -707,37 +848,51 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     return Core.Typeof(res)(f, res.entry)
 end
 
-function Reactant.traced_type(
-    ::Type{A}, seen::ST, ::Val{mode}, track_numbers
-) where {A<:CuTracedArray,ST,mode}
+Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @nospecialize(A::Type{<:CuTracedArray}),
+    seen,
+    mode::Reactant.TraceMode,
+    @nospecialize(track_numbers::Type)
+)
     return A
 end
 
-function Reactant.traced_type(
-    ::Type{A}, seen::ST, ::Val{mode}, track_numbers
-) where {T,N,A<:CUDA.CuArray{T,N},ST,mode}
+Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @nospecialize(A::Type{<:CUDA.CuArray}),
+    seen,
+    mode::Reactant.TraceMode,
+    @nospecialize(track_numbers::Type)
+)
+    T = eltype(A)
+    N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         return Reactant.ConcreteRArray{T,N}
     else
-        TT = Reactant.traced_type(T, seen, Val(mode), track_numbers)
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers)
         if TT === T
             return A
         else
-            return Array{traced_type(T, seen, Val(mode), track_numbers),N}
+            return Array{Reactant.traced_type_inner(T, seen, mode, track_numbers),N}
         end
     end
 end
 
 function Reactant.make_tracer(
-    seen, @nospecialize(prev::RT), @nospecialize(path), mode; track_numbers=(), kwargs...
-) where {RT<:CUDA.CuArray}
+    seen,
+    @nospecialize(prev::CUDA.CuArray),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
+)
+    RT = Core.Typeof(prev)
     if haskey(seen, prev)
         return seen[prev]
     end
     if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
         return seen[prev] = Reactant.ConcreteRArray(Array(prev))
     end
-    TT = Reactant.traced_type(eltype(RT), (), Val(mode), track_numbers)
+    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers)
     if TT === eltype(RT)
         return prev
     end
@@ -764,28 +919,40 @@ function Reactant.make_tracer(
 end
 
 function __init__()
-    if isdefined(CUDA.CUDA_Driver_jll, :libcuda) && CUDA.CUDA_Driver_jll.libcuda !== nothing
-        handle = Reactant.XLA.Libdl.dlopen(CUDA.CUDA_Driver_jll.libcuda; throw_error=false)
-        if handle === nothing
-            handle = C_NULL
-        end
-        ptr1 = Reactant.XLA.Libdl.dlsym(handle, "cuLaunchKernel"; throw_error=false)
-        if ptr1 === nothing
-            ptr1 = C_NULL
-        end
-        ptr2 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleLoadData"; throw_error=false)
-        if ptr2 === nothing
-            ptr2 = C_NULL
-        end
-        ptr3 = Reactant.XLA.Libdl.dlsym(handle, "cuModuleGetFunction"; throw_error=false)
-        if ptr3 === nothing
-            ptr3 = C_NULL
-        end
-        Reactant.Compiler.cuLaunch[] = Base.reinterpret(UInt, ptr1)
-        Reactant.Compiler.cuModule[] = Base.reinterpret(UInt, ptr2)
-        Reactant.Compiler.cuFunc[] = Base.reinterpret(UInt, ptr3)
+    if CUDA.functional()
+        target = CUDA._compiler_config(CUDA.device()).target
+        Reactant.Compiler.cubinChip[] = "sm_$(target.cap.major)$(target.cap.minor)"
     end
     return nothing
+end
+
+# In Julia v1.11.3 precompiling this module caches bad code:
+# <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
+@static if !Sys.isapple()
+    Reactant.PrecompileTools.@setup_workload begin
+        Reactant.initialize_dialect()
+        client = Reactant.XLA.CPUClient(; checkcount=false)
+        Reactant.PrecompileTools.@compile_workload begin
+            @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
+                function square_kernel!(x)
+                    i = CUDA.threadIdx().x
+                    x[i] *= x[i]
+                    return nothing
+                end
+
+                function square!(x)
+                    CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
+                    return nothing
+                end
+                y = Reactant.ConcreteRArray([2.0]; client)
+                Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+            end
+        end
+        Reactant.XLA.free_client(client)
+        client.client = C_NULL
+        Reactant.deinitialize_dialect()
+        Reactant.clear_oc_cache()
+    end
 end
 
 end # module ReactantCUDAExt

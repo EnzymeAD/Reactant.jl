@@ -88,9 +88,9 @@ end
 end
 
 @testset "Bool attributes" begin
-    x_ra = Reactant.to_rarray(false; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(false; track_numbers=Number)
     @test @jit(iszero(x_ra)) == true
-    x_ra = Reactant.to_rarray(true; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(true; track_numbers=Number)
     @test @jit(iszero(x_ra)) == false
 end
 
@@ -128,7 +128,7 @@ end
     @test !occursin("add", repr(hlo))
 end
 
-# While a bit specific, the following is used to check for a bug in `should_rewrite_ft`
+# While a bit specific, the following is used to check for a bug in `should_rewrite_call`
 function sinusoidal_embedding(
     x::AbstractArray{T,4}, min_freq, max_freq, embedding_dims::Int
 ) where {T}
@@ -145,4 +145,10 @@ end
 @testset "sinusoidal_embedding" begin
     x_ra = Reactant.to_rarray(rand(Float32, 1, 1, 1, 4))
     hlo = @code_hlo sinusoidal_embedding(x_ra, 0.1, 10.0, 4)
+end
+
+# test #493
+@testset "unique(::Vector{Symbol}) (#493)" begin
+    x = [:a, :b, :a]
+    @test @jit(unique(x)) == [:a, :b]
 end

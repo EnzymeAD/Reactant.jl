@@ -1,14 +1,70 @@
 module XLA
 
+import ..Reactant
 import ...MLIR
+
+const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
+const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
+using Reactant_jll
+const CUDA_DATA_DIR = Ref(
+    isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
+)
+
+function LLVMclopts(opts...)
+    args = ["", opts...]
+    @ccall MLIR.API.mlir_c.ReactantLLVMParseCommandLineOptions(
+        length(args)::Cint, args::Ptr{Cstring}, C_NULL::Ptr{Cvoid}
+    )::Cvoid
+end
 
 mutable struct Client
     client::Ptr{Cvoid}
+    global_ordinals::Vector{Cint}
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        return new(client)
+        global_ordinals = Cint[]
+        client = new(client, global_ordinals)
+
+        # https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L127
+        devices = [
+            ClientGetAddressableDevice(client, i - 1) for
+            i in 1:ClientNumAddressableDevices(client)
+        ]
+        sort!(devices; lt=(a, b) -> DeviceGetLocalDeviceId(a) < DeviceGetLocalDeviceId(b))
+
+        local_ids = [DeviceGetLocalDeviceId(device) + 1 for device in devices]
+        max_local_id = maximum(local_ids)
+        resize!(global_ordinals, max_local_id)
+        global_ordinals .= -1
+        for (i, device) in enumerate(devices)
+            global_ordinals[local_ids[i]] = i - 1
+        end
+        return client
     end
+end
+
+Base.:(==)(a::Client, b::Client) = a.client == b.client
+
+struct Device
+    device::Ptr{Cvoid}
+end
+
+function device_ordinal(client::Client, device::Device)
+    return client.global_ordinals[DeviceGetLocalDeviceId(device) + 1]
+end
+
+function DeviceToString(device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    return "$(uppercase(platform_name)):$(device_ordinal(pjrtclient, device))"
+end
+
+function Base.show(io::IO, ::MIME"text/plain", device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    print(io, "Device($(device.device), platform_name=$(platform_name))")
+    return nothing
 end
 
 @inline function free_client(client::Client)
@@ -50,29 +106,31 @@ function CPUClient(asynchronous=false, node_id=0, num_nodes=1; checkcount=true)
     end
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
     client = ccall(f, Ptr{Cvoid}, (UInt, Cint, Cint), asynchronous, node_id, num_nodes)
+    LLVMclopts("-nvptx-fma-level=1")
     #client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
     return Client(client)
 end
 
 function GPUClient(node_id=0, num_nodes=1, platform="gpu")
-    #allowed_devices = [-1]
-    # GC.@preserve allowed_devices begin
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
     refstr = Ref{Cstring}()
     client = ccall(
         f,
         Ptr{Cvoid},
-        (Cint, Cint, Ptr{Cvoid}, Cint, Cstring, Ptr{Cstring}),
+        (Cint, Cint, Ptr{Cvoid}, Cint, Cdouble, Bool, Cstring, Ptr{Cstring}),
         node_id,
         num_nodes,
         C_NULL,
         0,
+        XLA_REACTANT_GPU_MEM_FRACTION[],
+        XLA_REACTANT_GPU_PREALLOCATE[],
         platform,
         refstr,
     )
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
+    LLVMclopts("-nvptx-fma-level=1")
     return Client(client)
 end
 
@@ -83,6 +141,7 @@ function TPUClient(tpu_path::String)
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
+    LLVMclopts("-nvptx-fma-level=1")
     return Client(client)
 end
 
@@ -114,8 +173,20 @@ function __init__()
     backends["cpu"] = cpu
     default_backend[] = cpu
 
+    if haskey(ENV, "XLA_REACTANT_GPU_MEM_FRACTION")
+        XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
+            Float64, ENV["XLA_REACTANT_GPU_MEM_FRACTION"]
+        )
+        @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[]
+    end
+
+    if haskey(ENV, "XLA_REACTANT_GPU_PREALLOCATE")
+        XLA_REACTANT_GPU_PREALLOCATE[] = parse(Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"])
+        @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[]
+    end
+
     @static if !Sys.isapple()
-        if isfile("/usr/lib/libtpu.so")
+        if Reactant.has_tpu()
             dataset_dir = @get_scratch!("libtpu")
             if !isfile(dataset_dir * "/libtpu.so")
                 Downloads.download(
@@ -145,6 +216,7 @@ function __init__()
         end
     end
 
+    @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
     # This wasn't properly exported on macos, we'll remove the try once macOS JLL
@@ -194,8 +266,13 @@ mutable struct Buffer
     end
 end
 
-struct Device
-    device::Ptr{Cvoid}
+function DeviceToClientDeviceOrdinal(device::Device)
+    pjrtclient = client(device)
+    naddressable_devices = ClientNumAddressableDevices(pjrtclient)
+    for i in 1:naddressable_devices
+        (ClientGetAddressableDevice(pjrtclient, i - 1) == device) && return (i - 1)
+    end
+    return error("Device $(device) is not an addressable device")
 end
 
 mutable struct AsyncBuffer
@@ -231,6 +308,86 @@ function client(device::Device)
     end
 end
 
+# To keep in sync with JLAllocatorStats in ReactantExtra/API.cpp
+struct JLAllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Int64
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Int64
+    largest_free_block_bytes::Int64
+    pool_bytes::Int64
+    peak_pool_bytes::Int64
+end
+
+"""
+  AllocatorStats()
+
+Contains the following fields:
+  - `num_allocs`
+  - `bytes_in_use`
+  - `peak_bytes_in_use`
+  - `largest_alloc_size`
+  - `bytes_limit`
+  - `bytes_reserved`
+  - `peak_bytes_reserved`
+  - `bytes_reservable_limit`
+  - `largest_free_block_bytes`
+  - `pool_bytes`
+  - `peak_pool_bytes`
+
+It should be constructed using the [`allocatorstats`](@ref) function.
+"""
+struct AllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Union{Nothing,Int64}
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Union{Nothing,Int64}
+    largest_free_block_bytes::Int64
+    pool_bytes::Union{Nothing,Int64}
+    peak_pool_bytes::Union{Nothing,Int64}
+end
+
+"""
+  allocatorstats([device])
+
+Return an [`AllocatorStats`](@ref) instance with information about the device specific allocator.
+
+!!! warning
+    This method is currently not implemented for the CPU device.
+"""
+function allocatorstats(
+    device::Device=ClientGetAddressableDevice(default_backend[], default_device_idx[])
+)
+    ref = Ref{JLAllocatorStats}()
+    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
+        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
+    )::Cvoid
+    stats = ref[]
+
+    nullopt = typemin(Int64)
+    return AllocatorStats(
+        stats.num_allocs,
+        stats.bytes_in_use,
+        stats.peak_bytes_in_use,
+        stats.largest_alloc_size,
+        stats.bytes_limit == nullopt ? nothing : stats.bytes_limit,
+        stats.bytes_reserved,
+        stats.peak_bytes_reserved,
+        stats.bytes_reservable_limit == nullopt ? nothing : stats.bytes_reservable_limit,
+        stats.largest_free_block_bytes,
+        stats.pool_bytes == nullopt ? nothing : stats.pool_bytes,
+        stats.peak_pool_bytes == nullopt ? nothing : stats.peak_pool_bytes,
+    )
+end
+
 # https://github.com/openxla/xla/blob/4bfb5c82a427151d6fe5acad8ebe12cee403036a/xla/xla_data.proto#L29
 @inline primitive_type(::Type{Bool}) = 1
 
@@ -248,6 +405,12 @@ end
 
 @inline primitive_type(::Type{Float16}) = 10
 @inline primitive_type(::Type{Float32}) = 11
+
+@inline primitive_type(::Type{Reactant.F8E5M2}) = 19
+@inline primitive_type(::Type{Reactant.F8E4M3FN}) = 20
+@inline primitive_type(::Type{Reactant.F8E4M3B11FNUZ}) = 23
+@inline primitive_type(::Type{Reactant.F8E5M2FNUZ}) = 24
+@inline primitive_type(::Type{Reactant.F8E4M3FNUZ}) = 25
 
 @static if isdefined(Core, :BFloat16)
     @inline primitive_type(::Type{Core.BFloat16}) = 16
@@ -403,10 +566,15 @@ end
 end
 
 function Compile(client::Client, mod::MLIR.IR.Module)
+    max_local_id = length(client.global_ordinals)
     GC.@preserve client mod begin
         executable = LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
-                client.client::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule
+                client.client::Ptr{Cvoid},
+                mod.module_::MLIR.API.MlirModule,
+                client.global_ordinals::Ptr{Cint},
+                max_local_id::Cint,
+                CUDA_DATA_DIR[]::Cstring,
             )::Ptr{Cvoid}
         )
     end
@@ -450,6 +618,46 @@ function ClientGetAddressableDevice(client::Client, idx)
             )::Ptr{Cvoid}
         )
     end
+end
+
+function ClientGetPlatformName(client::Client)
+    GC.@preserve client begin
+        str = @ccall MLIR.API.mlir_c.ClientGetPlatformName(
+            client.client::Ptr{Cvoid}
+        )::Cstring
+    end
+    return unsafe_string(str)
+end
+
+function DeviceGetLocalDeviceId(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
+            device.device::Ptr{Cvoid}
+        )::Cint
+    end
+end
+
+function PjRtLoadedExecutableGetClient(exec::LoadedExecutable)
+    GC.@preserve exec begin
+        return Client(
+            @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetClient(
+                exec.exec::Ptr{Cvoid}
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+function replicate_buffer_on_all_addressable_devices(buffer::Buffer)
+    pjrtclient = client(buffer)
+    devices = [
+        ClientGetAddressableDevice(pjrtclient, i - 1) for
+        i in 1:ClientNumAddressableDevices(pjrtclient)
+    ]
+    orig_device = device(buffer)
+    return [
+        device == orig_device ? buffer : CopyBufferToDevice(buffer, device) for
+        device in devices
+    ]
 end
 
 function is_ready(future::Future)

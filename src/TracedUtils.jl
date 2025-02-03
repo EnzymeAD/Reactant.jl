@@ -16,7 +16,7 @@ using ..Reactant:
     OrderedIdDict,
     ReactantPrimitive,
     Ops
-using ReactantCore: MissingTracedValue
+using ReactantCore: MissingTracedValue, is_traced
 
 materialize_traced_array(x::TracedRArray) = x
 
@@ -60,6 +60,40 @@ function set_mlir_data!(
     return x
 end
 
+function get_ancestor_indices(
+    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, indices...
+) where {T,N,M}
+    @assert length(indices) == N "Expected $N indices, got $(length(indices))"
+    indices = normalize_indices(x, indices...)
+    if any(is_traced, indices)
+        indices, integer_indices, result_size, flattened_size = traced_indices(indices...)
+        linear_indices = mapreduce(+, enumerate(indices)) do (i, idx)
+            bcasted_idxs = Ops.broadcast_in_dim(
+                idx, ndims(idx) == 0 ? Int64[] : Int64[i], flattened_size
+            )
+            Base.stride(x, i) .* (bcasted_idxs .- 1)
+        end
+        linear_indices = linear_indices .+ 1
+        parent_linear_indices_all = collect(LinearIndices(size(parent(x))))
+        parent_linear_indices = promote_to(
+            TracedRArray{Int64,ndims(parent_linear_indices_all)}, parent_linear_indices_all
+        )[linear_indices]
+        isempty(integer_indices) || (
+            parent_linear_indices = materialize_traced_array(
+                dropdims(parent_linear_indices; dims=integer_indices)
+            )
+        )
+        parent_linear_indices = Ops.reshape(parent_linear_indices, result_size)
+        return (parent_linear_indices,)
+    else
+        # Have this as a separate code-path since we can generate non-dynamic indexing
+        cartesian_indices = CartesianIndex.(Iterators.product(indices...))
+        linear_indices = LinearIndices(size(x))[cartesian_indices]
+        parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
+        return (parent_linear_indices,)
+    end
+end
+
 function set_mlir_data!(
     x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}, data
 ) where {T,N,perm,iperm}
@@ -68,7 +102,8 @@ function set_mlir_data!(
 end
 
 function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
-    setindex!(x, TracedRArray{T}(data), axes(x)...)
+    ancestor_indices = get_ancestor_indices(x, axes(x)...)
+    setindex!(Reactant.ancestor(x), TracedRArray{T}(data), ancestor_indices...)
     return x
 end
 
@@ -117,6 +152,7 @@ function make_mlir_fn(
                 args_in_result,
                 construct_function_without_args,
                 do_transpose,
+                no_args_in_result,
             )[2:end]...,
         )
     end
@@ -131,7 +167,6 @@ function make_mlir_fn(
             (:args, i),
             concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
             toscalar,
-            track_numbers=construct_function_without_args ? (Number,) : (),
         )
     end
 
@@ -166,11 +201,7 @@ function make_mlir_fn(
         )
     end
 
-    if construct_function_without_args
-        fnbody = MLIR.IR.Block()
-    else
-        fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
-    end
+    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
 
     @assert MLIR.IR._has_block()
@@ -180,13 +211,9 @@ function make_mlir_fn(
     MLIR.IR.activate!(fnbody)
     result = try
         for (i, arg) in enumerate(linear_args)
-            if construct_function_without_args
-                set_mlir_data!(arg, get_mlir_data(args[i]))
-            else
-                raw_arg = MLIR.IR.argument(fnbody, i)
-                row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
-                set_mlir_data!(arg, row_maj_arg)
-            end
+            raw_arg = MLIR.IR.argument(fnbody, i)
+            row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
+            set_mlir_data!(arg, row_maj_arg)
         end
 
         Reactant.call_with_reactant(f, traced_args...)
@@ -211,8 +238,7 @@ function make_mlir_fn(
         seen_results,
         result,
         (:result,),
-        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath;
-        track_numbers=construct_function_without_args ? (Number,) : (),
+        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath,
     )
 
     # marks buffers to be donated
@@ -226,11 +252,9 @@ function make_mlir_fn(
     end
 
     linear_results = Reactant.TracedType[]
-
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
-        paths = get_paths(v)
-        (args_in_result != :all && length(paths) > 0 && length(paths[1]) == 2 && paths[1][1] == :args) && continue
+        (args_in_result != :all && has_argidx(v)) && continue
         push!(linear_results, v)
     end
     if args_in_result == :mutated
@@ -249,7 +273,7 @@ function make_mlir_fn(
         for res in linear_results
             col_maj = if res isa MissingTracedValue
                 get_mlir_data(broadcast_to_size(false, ()))
-            elseif construct_function_without_args || !do_transpose
+            elseif !do_transpose
                 get_mlir_data(res)
             elseif do_transpose
                 transpose_val(get_mlir_data(res))
@@ -264,23 +288,9 @@ function make_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    name2 = name
-
-    tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
-    for i in 0:10000
-        name2 = if i == 0
-            name
-        else
-            name * string(i)
-        end
-        if MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, name2))
-            break
-        end
-    end
-
     func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
-            sym_name=name2,
+            sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
             sym_visibility,
@@ -304,16 +314,31 @@ function make_mlir_fn(
     )
 end
 
-elem_apply(::Type{T}, x::TracedRArray{T}) where {T<:ReactantPrimitive} = x
-
-struct TypeCast{T<:ReactantPrimitive} <: Function end
-
-function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
-    return TracedUtils.promote_to(TracedRNumber{T}, x)
+function __lookup_unique_name_in_module(mod, name)
+    new_name = name
+    tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
+    for i in 0:10000
+        new_name = i == 0 ? name : name * "_" * string(i)
+        MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) && return new_name
+    end
+    return error("Could not find unique name for $name")
 end
 
-function elem_apply(::Type{T}, x::TracedRArray) where {T<:ReactantPrimitive}
-    # Special Path to prevent going down a despecialized path
+function __take_region(compiled_fn)
+    region = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(region, MLIR.API.mlirOperationGetRegion(compiled_fn, 0))
+    return region
+end
+
+elem_apply(::Type{T}, x::TracedRArray{T}) where {T} = x
+
+struct TypeCast{T<:Reactant.ReactantPrimitive} <: Function end
+
+function (::TypeCast{T})(x::TracedRNumber{T2}) where {T,T2}
+    return promote_to(TracedRNumber{T}, x)
+end
+
+function elem_apply(::Type{T}, x::TracedRArray) where {T<:Reactant.ReactantPrimitive}
     return elem_apply(TypeCast{T}(), x)
 end
 
@@ -392,7 +417,7 @@ end
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
-            return promote_to(TracedRNumber{eltype(arg)}, arg)
+            return promote_to(TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg)
         end
         return f(scalar_args...)
     end
@@ -426,7 +451,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     batch_inputs = MLIR.IR.Value[]
 
     for a in linear_args
-        idx, path = TracedUtils.get_argidx(a)
+        idx, path = get_argidx(a)
         if idx == 1 && fnwrap
             push_val!(batch_inputs, f, path[3:end])
         else
@@ -447,20 +472,20 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     residx = 1
 
     for a in linear_results
-        if TracedUtils.has_residx(a)
-            path = TracedUtils.get_residx(a)
-            TracedUtils.set!(result, path[2:end], MLIR.IR.result(res, residx))
+        if has_residx(a)
+            path = get_residx(a)
+            set!(result, path[2:end], MLIR.IR.result(res, residx))
             residx += 1
         else
-            idx, path = TracedUtils.get_argidx(a)
+            idx, path = get_argidx(a)
             if idx == 1 && fnwrap
-                TracedUtils.set!(f, path[3:end], MLIR.IR.result(res, residx))
+                set!(f, path[3:end], MLIR.IR.result(res, residx))
                 residx += 1
             else
                 if fnwrap
                     idx -= 1
                 end
-                TracedUtils.set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
+                set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
                 residx += 1
             end
         end
@@ -476,12 +501,10 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-new_traced_value(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), nothing, size(A))
-new_traced_value(::TracedRNumber{T}) where {T} = TracedRNumber{T}((), nothing)
-
 function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
     return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
 end
+broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
 
 function broadcast_to_size(arg::Base.RefValue, rsize)
@@ -516,6 +539,32 @@ end
 
 @noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
     return Ops.broadcast_in_dim(x, collect(Int64, 1:ndims(x)), collect(Int64, rsize))
+end
+
+function normalize_indices(a::AbstractArray, indices...)
+    return map(enumerate(indices)) do (i, idx)
+        idx isa Colon && return collect(Int64, 1:size(a, i))
+        idx isa CartesianIndex && return Tuple(idx)
+        idx isa AbstractArray{Bool} && return findall(idx)
+        return idx
+    end
+end
+
+function traced_indices(indices...)
+    integer_indices = Int64[]
+    result_size = Int64[]
+    flattened_size = Int64[length(idx) for idx in indices]
+    new_indices = map(enumerate(indices)) do (i, idx)
+        if idx isa Number
+            push!(integer_indices, i)
+            idx isa TracedRNumber && return idx
+            return promote_to(TracedRNumber{Int}, idx)
+        end
+        append!(result_size, [size(idx)...])
+        idx isa TracedRArray && return materialize_traced_array(vec(idx))
+        return promote_to(TracedRArray{Int,1}, vec(idx))
+    end
+    return new_indices, Tuple(integer_indices), result_size, flattened_size
 end
 
 end

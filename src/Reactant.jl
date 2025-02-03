@@ -4,6 +4,7 @@ using ReactantCore: ReactantCore, @trace, within_compile, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
+using Functors: @leaf
 
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
@@ -17,21 +18,7 @@ using Enzyme
 
 struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
-@static if isdefined(Core, :BFloat16)
-    const ReactantFloat = Union{Float16,Core.BFloat16,Float32,Float64}
-else
-    const ReactantFloat = Union{Float16,Float32,Float64}
-end
-
-const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64}
-
-const ReactantFloatInt = Union{
-    Base.uniontypes(ReactantInt)...,Base.uniontypes(ReactantFloat)...
-}
-
-const ReactantPrimitive = Union{
-    Bool,Base.uniontypes(ReactantFloatInt)...,Complex{Float32},Complex{Float64}
-}
+include("PrimitiveTypes.jl")
 
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
@@ -56,9 +43,15 @@ end
 
 include("mlir/MLIR.jl")
 include("XLA.jl")
+include("Devices.jl")
 include("Interpreter.jl")
+include("Profiler.jl")
+
+const with_profiler = Profiler.with_profiler
 
 include("utils.jl")
+
+@leaf MissingTracedValue
 
 mutable struct TracedRNumber{T} <: RNumber{T}
     paths::Tuple
@@ -73,6 +66,8 @@ mutable struct TracedRNumber{T} <: RNumber{T}
         return new{T}(paths, mlir_data)
     end
 end
+
+@leaf TracedRNumber
 
 mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     paths::Tuple
@@ -89,6 +84,8 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         return new{T,N}(paths, mlir_data, shape)
     end
 end
+
+@leaf TracedRArray
 
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
@@ -125,10 +122,14 @@ mutable struct ConcreteRNumber{T} <: RNumber{T}
     data::XLA.AsyncBuffer
 end
 
+@leaf ConcreteRNumber
+
 mutable struct ConcreteRArray{T,N} <: RArray{T,N}
     data::XLA.AsyncBuffer
     shape::NTuple{N,Int}
 end
+
+@leaf ConcreteRArray
 
 Adapt.parent_type(::Type{ConcreteRArray{T,N}}) where {T,N} = ConcreteRArray{T,N}
 
@@ -137,7 +138,7 @@ const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
@@ -153,12 +154,12 @@ unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
-function aos_to_soa(x::AbstractArray{<:ConcreteRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{ConcreteRNumber{T}}) where {T}
     x_c = ConcreteRArray(zeros(T, size(x)))
     x_c .= x
     return x_c
 end
-function aos_to_soa(x::AbstractArray{<:TracedRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{TracedRNumber{T}}) where {T}
     for i in eachindex(x)
         if !isassigned(x, i)
             x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
@@ -245,7 +246,36 @@ function deinitialize_dialect()
     return registry[] = nothing
 end
 
+using Libdl
+using Reactant_jll
+using LLVMOpenMP_jll
+function initialize_ptrs()
+    for name in (
+        "__kmpc_barrier",
+        "__kmpc_global_thread_num",
+        "__kmpc_for_static_fini",
+        "__kmpc_for_static_init_8u",
+        "__kmpc_fork_call",
+    )
+        sym = Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name)
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+    end
+    # TODO on next jll bump (0.61) change this to call ReactantHermeticCudaGetVersion
+    if (@ccall MLIR.API.mlir_c.ReactantCudaDriverGetVersion()::UInt32) != 0
+        for name in (
+            "cuLaunchKernel",
+            "cuModuleLoadData",
+            "cuModuleGetFunction",
+            "cuStreamSynchronize",
+        )
+            sym = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+        end
+    end
+end
+
 function __init__()
+    initialize_ptrs()
     return initialize_dialect()
 end
 

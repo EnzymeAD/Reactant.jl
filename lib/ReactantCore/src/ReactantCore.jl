@@ -15,6 +15,8 @@ end
 
 MissingTracedValue() = MissingTracedValue(())
 
+Base.zero(::MissingTracedValue) = MissingTracedValue()
+
 const SPECIAL_SYMBOLS = [
     :(:), :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
 ]
@@ -172,8 +174,16 @@ function trace_for(mod, expr)
         external_syms...,
     )
 
+    cond_val(s) = :(@isdefined($s) ? $s : nothing)
+
+    while_defined = gensym(:while_defined)
+    locals = Expr[
+        [Expr(:(=), s, cond_val(s)) for s in external_syms]..., :(args = $(args_init))
+    ]
+
+    var_syms = all_syms.args[(begin + 1):end]
     reactant_code_block = quote
-        let args = $(args_init)
+        let $(locals...)
             cond_fn =
                 $(all_syms) -> begin
                     local num_iters = div($limit - $start, $step, RoundDown)
@@ -184,11 +194,15 @@ function trace_for(mod, expr)
                 end
             body_fn =
                 $(all_syms) -> begin
+                    local isdefined_before = isnothing.(Any[$(var_syms...)])
                     local step_ = $step
                     local start_ = $start
                     local $induction = start_ + $counter * step_
                     $body
-                    ($counter + 1, $(all_syms.args[(begin + 1):end]...))
+                    local results_ = Any[
+                        s for (d, s) in zip(isdefined_before, Any[$(var_syms...)]) if !d
+                    ]
+                    ($counter + 1, results_...)
                 end
 
             $(ReactantCore).traced_while(cond_fn, body_fn, args)
@@ -197,7 +211,7 @@ function trace_for(mod, expr)
 
     return quote
         if $(within_compile)() &&
-            $(any)($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
+            $(any)($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args[(begin + 1):end])...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -307,7 +321,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     non_existant_true_branch_vars = setdiff(all_output_vars, all_true_branch_vars)
     true_branch_extras = Expr(
         :block,
-        [:($(var) = $(MissingTracedValue())) for var in non_existant_true_branch_vars]...,
+        [:($(var) = $(MissingTracedValue)()) for var in non_existant_true_branch_vars]...,
     )
 
     true_branch_fn = :(($(all_input_vars...),) -> begin
@@ -325,7 +339,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     )
     false_branch_extras = Expr(
         :block,
-        [:($(var) = $(MissingTracedValue())) for var in non_existant_false_branch_vars]...,
+        [:($(var) = $(MissingTracedValue)()) for var in non_existant_false_branch_vars]...,
     )
 
     false_branch_fn = :(($(all_input_vars...),) -> begin
@@ -408,17 +422,21 @@ function traced_if(cond, true_fn, false_fn, args)
     return cond ? true_fn(args) : false_fn(args)
 end
 
-function traced_while(cond_fn, body_fn, args)
-    while cond_fn(args...)
-        args = body_fn(args...)
-    end
-    return args
-end
+function traced_while end # defined inside Reactant.jl
 
 traced_call(f, args...; kwargs...) = f(args...; kwargs...)
 
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     return MacroTools.postwalk(expr) do x
+        if Meta.isexpr(x, :kw) # undo lhs rewriting
+            if startswith(string(x.args[1]), string(prepend))
+                return Expr(
+                    :kw,
+                    Symbol(string(x.args[1])[(length(string(prepend)) + 1):end]),
+                    x.args[2],
+                )
+            end
+        end
         if x isa Symbol && x ∈ all_vars
             return Symbol(prepend, x)
         end

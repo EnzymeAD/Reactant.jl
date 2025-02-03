@@ -1,5 +1,5 @@
 
-function apply(f, args...; kwargs...)
+function apply(f::F, args...; kwargs...) where {F}
     return f(args...; kwargs...)
 end
 
@@ -89,7 +89,7 @@ function has_ancestor(query::Module, target::Module)
     end
 end
 
-function should_rewrite_ft(@nospecialize(ft))
+function should_rewrite_call(@nospecialize(ft))
     # Don't rewrite builtin or intrinsics
     if ft <: Core.IntrinsicFunction || ft <: Core.Builtin
         return false
@@ -181,6 +181,9 @@ function should_rewrite_ft(@nospecialize(ft))
     return true
 end
 
+# by default, same as `should_rewrite_call`
+should_rewrite_invoke(@nospecialize(ft), @nospecialize(args)) = should_rewrite_call(ft)
+
 # Avoid recursively interpreting into methods we define explicitly
 # as overloads, which we assume should handle the entirety of the
 # translation (and if not they can use call_in_reactant).
@@ -245,7 +248,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
         end
         if ft == typeof(Core._apply_iterate)
             ft = Core.Compiler.widenconst(maybe_argextype(inst.args[3], ir))
-            if Base.invokelatest(should_rewrite_ft, ft)
+            if Base.invokelatest(should_rewrite_call, ft)
                 if RT === Union{}
                     rep = Expr(
                         :call,
@@ -259,7 +262,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                     return true, rep, Any
                 end
             end
-        elseif Base.invokelatest(should_rewrite_ft, ft)
+        elseif Base.invokelatest(should_rewrite_call, ft)
             if RT === Union{}
                 rep = Expr(:call, call_with_reactant, MustThrowError(), inst.args...)
                 return true, rep, Union{}
@@ -273,10 +276,13 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
         omi = inst.args[1]::Core.MethodInstance
         sig = omi.specTypes
         ft = sig.parameters[1]
+        argsig = sig.parameters[2:end]
         if ft == typeof(Core.kwcall)
             ft = sig.parameters[3]
+            argsig = sig.parameters[4:end]
         end
-        if Base.invokelatest(should_rewrite_ft, ft) && !is_reactant_method(omi)
+        argsig = Core.apply_type(Core.Tuple, argsig...)
+        if Base.invokelatest(should_rewrite_invoke, ft, argsig) && !is_reactant_method(omi)
             method = omi.def::Core.Method
 
             min_world = Ref{UInt}(typemin(UInt))

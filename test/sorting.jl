@@ -1,0 +1,190 @@
+using Reactant, Test
+
+@testset "sort & sortperm" begin
+    x = randn(10)
+    x_ra = Reactant.to_rarray(x)
+
+    srt_rev(x) = sort(x; rev=true)
+    srtperm_rev(x) = sortperm(x; rev=true)
+    srt_by(x) = sort(x; by=abs2)
+    srtperm_by(x) = sortperm(x; by=abs2)
+    srt_lt(x) = sort(x; lt=(a, b) -> a > b)
+    srtperm_lt(x) = sortperm(x; lt=(a, b) -> a > b)
+
+    @test @jit(sort(x_ra)) == sort(x)
+    @test @jit(srt_rev(x_ra)) == srt_rev(x)
+    @test @jit(srt_lt(x_ra)) == srt_lt(x)
+    @test @jit(srt_by(x_ra)) == srt_by(x)
+    @test @jit(sortperm(x_ra)) == sortperm(x)
+    @test @jit(srtperm_rev(x_ra)) == srtperm_rev(x)
+    @test @jit(srtperm_lt(x_ra)) == srtperm_lt(x)
+    @test @jit(srtperm_by(x_ra)) == srtperm_by(x)
+
+    x = rand(10)
+    x_ra = Reactant.to_rarray(x)
+    @jit sort!(x_ra)
+    @test x_ra == sort(x)
+
+    x = rand(10)
+    x_ra = Reactant.to_rarray(x)
+    ix = similar(x_ra, Int)
+    @jit sortperm!(ix, x_ra)
+    @test ix == sortperm(x)
+
+    x = rand(10, 4, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    srt(x, d) = sort(x; dims=d)
+    srt_rev(x, d) = sort(x; dims=d, rev=true)
+    srt_by(x, d) = sort(x; dims=d, by=abs2)
+    srt_lt(x, d) = sort(x; dims=d, lt=(a, b) -> a > b)
+    srtperm(x, d) = sortperm(x; dims=d)
+    srtperm_rev(x, d) = sortperm(x; dims=d, rev=true)
+    srtperm_by(x, d) = sortperm(x; dims=d, by=abs2)
+    srtperm_lt(x, d) = sortperm(x; dims=d, lt=(a, b) -> a > b)
+
+    @testset for d in 1:ndims(x)
+        @test @jit(srt(x_ra, d)) == srt(x, d)
+        @test @jit(srtperm(x_ra, d)) == srtperm(x, d)
+        @test @jit(srt_rev(x_ra, d)) == srt_rev(x, d)
+        @test @jit(srtperm_rev(x_ra, d)) == srtperm_rev(x, d)
+        @test @jit(srt_by(x_ra, d)) == srt_by(x, d)
+        @test @jit(srtperm_by(x_ra, d)) == srtperm_by(x, d)
+        @test @jit(srt_lt(x_ra, d)) == srt_lt(x, d)
+        @test @jit(srtperm_lt(x_ra, d)) == srtperm_lt(x, d)
+    end
+end
+
+@testset "partialsort & partialsortperm" begin
+    x = randn(10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(partialsort(x_ra, 1:5)) == partialsort(x, 1:5)
+    @test @jit(partialsortperm(x_ra, 1:5)) == partialsortperm(x, 1:5)
+    @test @jit(partialsort(x_ra, 4)) == partialsort(x, 4)
+    @test @jit(partialsortperm(x_ra, 4)) == partialsortperm(x, 4)
+
+    psrt_rev(x, k) = partialsort(x, k; rev=true)
+    psrtperm_rev(x, k) = partialsortperm(x, k; rev=true)
+    psrt_by(x, k) = partialsort(x, k; by=abs2)
+    psrtperm_by(x, k) = partialsortperm(x, k; by=abs2)
+    psrt_lt(x, k) = partialsort(x, k; lt=(a, b) -> a > b)
+    psrtperm_lt(x, k) = partialsortperm(x, k; lt=(a, b) -> a > b)
+
+    @test @jit(psrt_rev(x_ra, 1:5)) == psrt_rev(x, 1:5)
+    @test @jit(psrtperm_rev(x_ra, 1:5)) == psrtperm_rev(x, 1:5)
+    @test @jit(psrt_by(x_ra, 1:5)) == psrt_by(x, 1:5)
+    @test @jit(psrtperm_by(x_ra, 1:5)) == psrtperm_by(x, 1:5)
+    @test @jit(psrt_lt(x_ra, 1:5)) == psrt_lt(x, 1:5)
+    @test @jit(psrtperm_lt(x_ra, 1:5)) == psrtperm_lt(x, 1:5)
+
+    x = randn(10)
+    x_ra = Reactant.to_rarray(x)
+    @jit partialsort!(x_ra, 1:5)
+    partialsort!(x, 1:5)
+    @test Array(x_ra)[1:5] == x[1:5]
+
+    x = randn(10)
+    x_ra = Reactant.to_rarray(x)
+    @jit partialsort!(x_ra, 3)
+    partialsort!(x, 3)
+    @test @allowscalar(x_ra[3]) == x[3]
+
+    x = randn(10)
+    x_ra = Reactant.to_rarray(x)
+
+    ix = similar(x, Int)
+    ix_ra = Reactant.to_rarray(ix)
+    @jit partialsortperm!(ix_ra, x_ra, 1:5)
+    partialsortperm!(ix, x, 1:5)
+    @test Array(ix_ra)[1:5] == ix[1:5]
+
+    ix = similar(x, Int)
+    ix_ra = Reactant.to_rarray(ix)
+    @jit partialsortperm!(ix_ra, x_ra, 3)
+    partialsortperm!(ix, x, 3)
+    @test @allowscalar(ix_ra[3]) == ix[3]
+end
+
+@testset "argmin / argmax" begin
+    x = rand(2, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    linargmin(x) = LinearIndices(x)[argmin(x)]
+    linargmax(x) = LinearIndices(x)[argmax(x)]
+
+    @test linargmin(x) == @jit(argmin(x_ra))
+    @test linargmax(x) == @jit(argmax(x_ra))
+
+    x = rand(2, 3, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    linargmin(x, d) = LinearIndices(x)[argmin(x; dims=d)]
+    linargmax(x, d) = LinearIndices(x)[argmax(x; dims=d)]
+    argmindims(x, d) = argmin(x; dims=d)
+    argmaxdims(x, d) = argmax(x; dims=d)
+
+    @test linargmin(x, 1) == @jit(argmindims(x_ra, 1))
+    @test linargmax(x, 1) == @jit(argmaxdims(x_ra, 1))
+    @test linargmin(x, 2) == @jit(argmindims(x_ra, 2))
+    @test linargmax(x, 2) == @jit(argmaxdims(x_ra, 2))
+    @test linargmin(x, 3) == @jit(argmindims(x_ra, 3))
+    @test linargmax(x, 3) == @jit(argmaxdims(x_ra, 3))
+
+    x = randn(2, 3, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test argmin(abs2, x) == @jit(argmin(abs2, x_ra))
+    @test argmax(abs2, x) == @jit(argmax(abs2, x_ra))
+end
+
+@testset "findmin / findmax" begin
+    xvec = randn(10)
+    xvec_ra = Reactant.to_rarray(xvec)
+
+    x = randn(2, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    function fwithlinindices(g, f, x; kwargs...)
+        values, indices = g(f, x; kwargs...)
+        return values, LinearIndices(x)[indices]
+    end
+
+    @test fwithlinindices(findmin, identity, x) == @jit(findmin(x_ra))
+    @test fwithlinindices(findmax, identity, x) == @jit(findmax(x_ra))
+    @test fwithlinindices(findmin, identity, xvec) == @jit(findmin(xvec_ra))
+    @test fwithlinindices(findmax, identity, xvec) == @jit(findmax(xvec_ra))
+
+    fmindims(x, d) = findmin(x; dims=d)
+    fmindims(f, x, d) = findmin(f, x; dims=d)
+    fmaxdims(x, d) = findmax(x; dims=d)
+    fmaxdims(f, x, d) = findmax(f, x; dims=d)
+
+    @test fwithlinindices(findmin, identity, x; dims=1) == @jit(fmindims(x_ra, 1))
+    @test fwithlinindices(findmax, identity, x; dims=1) == @jit(fmaxdims(x_ra, 1))
+    @test fwithlinindices(findmin, identity, x; dims=2) == @jit(fmindims(x_ra, 2))
+    @test fwithlinindices(findmax, identity, x; dims=2) == @jit(fmaxdims(x_ra, 2))
+    @test fwithlinindices(findmin, abs2, x; dims=1) == @jit(fmindims(abs2, x_ra, 1))
+    @test fwithlinindices(findmax, abs2, x; dims=1) == @jit(fmaxdims(abs2, x_ra, 1))
+    @test fwithlinindices(findmin, abs2, x; dims=2) == @jit(fmindims(abs2, x_ra, 2))
+    @test fwithlinindices(findmax, abs2, x; dims=2) == @jit(fmaxdims(abs2, x_ra, 2))
+end
+
+@testset "findfirst / findlast" begin
+    x = rand(Bool, 3, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    ffirstlinindices(x) = LinearIndices(x)[findfirst(x)]
+    ffirstlinindices(f, x) = LinearIndices(x)[findfirst(f, x)]
+    flastlinindices(x) = LinearIndices(x)[findlast(x)]
+    flastlinindices(f, x) = LinearIndices(x)[findlast(f, x)]
+
+    @test ffirstlinindices(x) == @jit(findfirst(x_ra))
+    @test flastlinindices(x) == @jit(findlast(x_ra))
+
+    x = rand(1:256, 3, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test ffirstlinindices(iseven, x) == @jit(findfirst(iseven, x_ra))
+    @test flastlinindices(iseven, x) == @jit(findlast(iseven, x_ra))
+end
