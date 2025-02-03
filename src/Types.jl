@@ -87,6 +87,12 @@ mutable struct ConcreteRArray{T,N,D,S<:Sharding.AbstractFinalizedSharding} <: RA
     sharding::S
 end
 
+# This dispatch is needed when converting a ConcreteRNumber to a 0D ConcreteRArray
+function Base.setproperty!(x::ConcreteRArray, f::Symbol, val::XLA.AsyncBuffer)
+    @assert f === :data
+    return setproperty!(x, :data, [val])
+end
+
 @leaf ConcreteRArray
 Adapt.parent_type(::Type{<:ConcreteRArray{T,N}}) where {T,N} = ConcreteRArray{T,N}
 Adapt.parent_type(::Type{ConcreteRArray{T,N,D,S}}) where {T,N,D,S} = ConcreteRArray{T,N,D,S}
@@ -106,7 +112,7 @@ function ConcreteRArray(
     device::Union{Nothing,XLA.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
-    if sharding isa Sharding.NoSharding
+    if !Sharding.is_sharded(sharding)
         if device === nothing
             idx = idx === nothing ? XLA.default_device_idx[] : idx
             device = XLA.ClientGetAddressableDevice(client, idx)
@@ -119,7 +125,7 @@ function ConcreteRArray(
         return ConcreteRArray{T,N,1,typeof(sharding)}(sdata, size(data), sharding)
     end
     @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, `device` and `idx` cannot be specified!"
-    sharded_data, sharding = sharding(client, data)
+    sharded_data, sharding = sharding(client, nothing, data)
     return ConcreteRArray{T,N,ndims(sharded_data),typeof(sharding)}(
         sharded_data, size(data), sharding
     )

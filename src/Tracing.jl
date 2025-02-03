@@ -278,7 +278,7 @@ Base.@nospecializeinfer function traced_type_inner(
     if mode == ConcreteToTraced
         throw("TracedRArray cannot be traced")
     elseif mode == TracedToConcrete
-        if sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding
+        if !Sharding.is_sharded(sharding)
             return ConcreteRArray{
                 T.parameters[1],T.parameters[2],1,Sharding.FinalizedNoSharding
             }
@@ -320,7 +320,7 @@ Base.@nospecializeinfer function traced_type_inner(
     if mode == ConcreteToTraced
         throw("TracedRNG cannot be traced")
     elseif mode == TracedToConcrete
-        if sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding
+        if !Sharding.is_sharded(sharding)
             return ConcreteRNG{1,Sharding.FinalizedNoSharding}
         else
             error("TODO: implement sharding")
@@ -342,13 +342,10 @@ Base.@nospecializeinfer function traced_type_inner(
     T = eltype(A)
     N = ndims(A)
     if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
-        if sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding
+        if !Sharding.is_sharded(sharding)
             return ConcreteRArray{T,N,1,Sharding.FinalizedNoSharding}
-        elseif sharding isa Sharding.NamedSharding ||
-            sharding isa Sharding.FinalizedNamedSharding
-
         else
-            error("Sharding $(typeof(sharding)) isn't implemented yet.")
+            error("TODO: implement sharding")
         end
     else
         return Array{
@@ -381,7 +378,7 @@ Base.@nospecializeinfer function traced_type_inner(
         return VT
     end
     T = VT.parameters[1]
-    if traced_type_inner(typeof(T), seen, mode, track_numbers) == typeof(T)
+    if traced_type_inner(typeof(T), seen, mode, track_numbers, sharding) == typeof(T)
         return Val{T}
     end
     throw("Val type $(Val{T}) cannot be traced")
@@ -787,9 +784,8 @@ function make_tracer(
     kwargs...,
 ) where {T}
     if mode == ArrayToConcrete
-        if !(sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding)
+        Sharding.is_sharded(sharding) &&
             error("Cannot specify sharding for ConcreteRNumber")
-        end
         return prev
     end
     if mode != ConcreteToTraced
@@ -849,7 +845,7 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]::ConcreteRArray{T,N}
         end
-        if sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding
+        if !Sharding.is_sharded(sharding)
             res = ConcreteRArray{T,N,1,Sharding.FinalizedNoSharding}(
                 [XLA.AsyncEmptyBuffer],
                 size(prev),
@@ -911,9 +907,8 @@ function make_tracer(
         if haskey(seen, prev)
             return seen[prev]::ConcreteRNumber{T}
         end
-        if !(sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding)
+        Sharding.is_sharded(sharding) &&
             error("Cannot specify sharding for ConcreteRNumber")
-        end
         res = ConcreteRNumber{T}(XLA.AsyncEmptyBuffer)
         seen[prev] = res
         return res
@@ -965,9 +960,7 @@ function make_tracer(
     kwargs...,
 )
     RT = Core.Typeof(prev)
-    if !(sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding)
-        error("Cannot specify sharding for Numbers")
-    end
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for Numbers")
     if RT <: track_numbers
         if mode == ArrayToConcrete
             return ConcreteRNumber(prev)
@@ -1006,9 +999,7 @@ function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
-    if !(sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding)
-        error("Cannot specify sharding for Complex")
-    end
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for Complex")
     return Complex(
         make_tracer(seen, prev.re, append_path(path, :re), mode; kwargs...),
         make_tracer(seen, prev.im, append_path(path, :im), mode; kwargs...),
@@ -1201,9 +1192,7 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
-    if !(sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding)
-        error("Cannot specify sharding for ConcreteRNumber")
-    end
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for ConcreteRNumber")
     return x
 end
 
@@ -1212,9 +1201,7 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
-    if !(sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding)
-        error("Cannot specify sharding for Numbers")
-    end
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for Numbers")
     typeof(x) <: track_numbers && return ConcreteRNumber(x)
     return x
 end
@@ -1222,9 +1209,7 @@ end
 @inline function to_rarray_internal(
     @nospecialize(x::Number), @nospecialize(track_numbers::Type), @nospecialize(sharding)
 )
-    if !(sharding isa Sharding.NoSharding || sharding isa Sharding.FinalizedNoSharding)
-        error("Cannot specify sharding for Numbers")
-    end
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for Numbers")
     if reactant_primitive(typeof(x)) !== nothing
         return ConcreteRArray(to_reactant_primitive(x))
     end

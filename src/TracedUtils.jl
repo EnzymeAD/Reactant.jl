@@ -231,6 +231,7 @@ function make_mlir_fn(
 
     if is_sharded
         unique_meshes = unique([m for (k, m) in traced_args_to_shardings])
+        # TODO: support multiple meshes
         @assert length(unique_meshes) == 1 "Currently we sort using a single mesh"
         sorted_devices = [sort(vec(m.mesh.device_ids)) for m in unique_meshes]
         @assert allequal(sorted_devices) "All meshes must have the same device ids"

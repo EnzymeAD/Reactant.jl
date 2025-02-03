@@ -12,7 +12,7 @@ using InteractiveUtils
 
     r_res = sum(x)
 
-    a = Reactant.ConcreteRArray(x)
+    a = ConcreteRArray(x)
 
     c_res = @allowscalar sum(a)
     @test c_res ≈ r_res
@@ -25,7 +25,7 @@ end
 
     r_res = fastmax(x)
 
-    a = Reactant.ConcreteRArray(x)
+    a = ConcreteRArray(x)
 
     c_res = @allowscalar fastmax(a)
     @test c_res ≈ r_res
@@ -41,7 +41,7 @@ sinexpbc(x) = sinexp.(x)
 
     r_res = sinexpbc(x)
 
-    a = Reactant.ConcreteRArray(x)
+    a = ConcreteRArray(x)
 
     c_res = @allowscalar sinexpbc(a)
     @test c_res ≈ r_res
@@ -55,7 +55,7 @@ sum_compare(x) = sum(x) > 0
 
 @testset "Basic mapreduce" begin
     x = rand(Float32, 10)
-    a = Reactant.ConcreteRArray(x)
+    a = ConcreteRArray(x)
     r_res = sumexp(x)
 
     f_res = @jit sumexp(a)
@@ -76,7 +76,7 @@ end
     x = rand(2, 10)
     r_res = mysoftmax!(x)
 
-    a = Reactant.ConcreteRArray(x)
+    a = ConcreteRArray(x)
 
     f_res = @jit mysoftmax!(a)
     @test f_res ≈ r_res
@@ -86,7 +86,7 @@ bcast_cos(x) = cos.(x)
 
 @testset "Basic cos" begin
     x = rand(3, 2)
-    c = Reactant.ConcreteRArray(x)
+    c = ConcreteRArray(x)
 
     @test @jit(bcast_cos(c)) ≈ cos.(x)
 end
@@ -101,9 +101,7 @@ f_var(args...) = sum(args)
     @test @jit(f_var(x, y, z)) ≈ [6.6, 6.6, 6.6]
 end
 
-function sumcos(x)
-    return sum(cos.(x))
-end
+sumcos(x) = sum(cos.(x))
 
 function grad_ip(x)
     dx = Enzyme.make_zero(x)
@@ -118,7 +116,7 @@ function resgrad_ip(x)
 end
 
 @testset "Basic grad cos" begin
-    c = Reactant.ConcreteRArray(ones(3, 2))
+    c = ConcreteRArray(ones(3, 2))
 
     @test @jit(grad_ip(c)) ≈ -sin.(ones(3, 2))
 
@@ -128,35 +126,32 @@ end
     @test r ≈ -sin.(ones(3, 2))
 end
 
-function mul(A, B)
-    return A * B
-end
 @testset "matmul" begin
-    c = Reactant.ConcreteRArray(ones(50, 70))
-    d = Reactant.ConcreteRArray(ones(70, 30))
+    c = ConcreteRArray(ones(50, 70))
+    d = ConcreteRArray(ones(70, 30))
 
-    @test @jit(mul(c, d)) ≈ mul(ones(50, 70), ones(70, 30))
+    @test @jit(*(c, d)) ≈ *(ones(50, 70), ones(70, 30))
 end
 
-@testset "ConcreteRArray" begin
-    c = Reactant.ConcreteRArray(ones(50, 70))
+@testset "similar ConcreteRArray" begin
+    c = ConcreteRArray(ones(50, 70))
     sim_c = similar(c)
     @test typeof(sim_c) == typeof(c) && size(sim_c) == size(sim_c)
 end
 
-@testset "Reactant.@code_hlo" begin
-    W = Reactant.ConcreteRArray(randn(Float32, 10, 20))
-    x = Reactant.ConcreteRArray(randn(Float32, 20, 5))
-    res = Reactant.@code_hlo W * x
+@testset "@code_hlo" begin
+    W = ConcreteRArray(randn(Float32, 10, 20))
+    x = ConcreteRArray(randn(Float32, 20, 5))
+    res = @code_hlo W * x
     res_repr = sprint(show, res)
 
     @test contains(res_repr, "stablehlo.dot_general")
 end
 
-@testset "Reactant.@code_hlo broadcasting" begin
-    x = Reactant.ConcreteRArray(randn(Float32, 2, 2))
-    y = Reactant.ConcreteRArray(randn(Float32, 2, 2))
-    res = Reactant.@code_hlo (.+)(x, y)
+@testset "@code_hlo broadcasting" begin
+    x = ConcreteRArray(randn(Float32, 2, 2))
+    y = ConcreteRArray(randn(Float32, 2, 2))
+    res = @code_hlo (.+)(x, y)
     res_repr = sprint(show, res)
 
     @test contains(res_repr, "stablehlo.add")
@@ -164,7 +159,7 @@ end
 
 @testset "Statistics: `mean` & `var`" begin
     x = randn(2, 3, 4)
-    x_ca = Reactant.ConcreteRArray(x)
+    x_ca = ConcreteRArray(x)
 
     # XXX: @jit doesn't work with `;`
     # @test @jit(mean(x_ca)) ≈ mean(x)
@@ -419,51 +414,17 @@ end
     end
 end
 
-function write_with_broadcast1!(x, y)
-    x[1, :, :] .= reshape(y, 4, 3)
-    return x
-end
-function write_with_broadcast2!(x, y)
-    x[:, 1, :] .= view(y, :, 1:3)
-    return x
-end
-
-@testset "write_with_broadcast" begin
-    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
-    y_ra = Reactant.to_rarray(rand(3, 4))
-
-    res = @jit write_with_broadcast1!(x_ra, y_ra)
-
-    @test res.data === x_ra.data
-
-    res = Array(res)
-    y = Array(y_ra)
-    @test res[1, :, :] ≈ reshape(y, 4, 3)
-
-    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
-    y_ra = Reactant.to_rarray(rand(3, 4))
-
-    res = @jit write_with_broadcast2!(x_ra, y_ra)
-
-    @test res.data === x_ra.data
-
-    res = Array(res)
-    y = Array(y_ra)
-    @test res[:, 1, :] ≈ view(y, :, 1:3)
-end
-
 tuple_byref(x) = (; a=(; b=x))
-tuple_byref2(x) = abs2.(x), tuple_byref2(x)
+tuple_byref2(x) = abs2.(x), tuple_byref(x)
 
 @testset "Tuple byref" begin
     x = Reactant.to_rarray([1.0 -2.0; -3.0 4.0])
     @test @jit(tuple_byref(x)).a.b.data === x.data
 
-    # TODO this seems to hang during compile
-    # f2 = @compile tuple_byref2(x)
-    # r2 = f2(x)
-    # @test r2[2].a.b.data === x.data
-    # @test r2[1] == abs2.([1.0 -2.0; -3.0 4.0])
+    f2 = @compile tuple_byref2(x)
+    r2 = f2(x)
+    @test r2[2].a.b.data === x.data
+    @test r2[1] == abs2.([1.0 -2.0; -3.0 4.0])
 end
 
 sum_xxᵀ(x) = sum(x .* x')

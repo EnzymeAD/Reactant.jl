@@ -648,13 +648,15 @@ end
     end
 end
 
-function Compile(client::Client, mod::MLIR.IR.Module; is_sharded::Bool=false)
+function Compile(client::Client, device, mod::MLIR.IR.Module; is_sharded::Bool=false)
     max_local_id = length(client.global_ordinals)
+    device_id = is_sharded ? -1 : device_ordinal(client, device)
     GC.@preserve client mod begin
-        executable = LoadedExecutable(
+        return LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
                 client.client::Ptr{Cvoid},
                 mod.module_::MLIR.API.MlirModule,
+                device_id::Cint,
                 client.global_ordinals::Ptr{Cint},
                 max_local_id::Cint,
                 is_sharded::Bool,

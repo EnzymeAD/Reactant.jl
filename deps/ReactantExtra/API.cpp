@@ -600,6 +600,7 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
 // TODO: For `is_sharded` we need the mesh device ids as well
 extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
                                                     MlirModule cmod,
+                                                    int device_id,
                                                     int *global_ordinals,
                                                     int num_global_ordinals,
                                                     bool is_sharded,
@@ -610,16 +611,17 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
   CompileOptions options;
   options.executable_build_options.mutable_debug_options()->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
 
-  // https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L601
-  int device_count = client->addressable_device_count();
-
   if (is_sharded) {
+    assert(device_id < 0);
+
+    int device_count = client->addressable_device_count();
     options.executable_build_options.set_num_replicas(1);
     options.executable_build_options.set_num_partitions(device_count);
 
     options.executable_build_options.set_use_spmd_partitioning(true);
     options.executable_build_options.set_use_shardy_partitioner(true);
-    // options.executable_build_options.set_use_auto_spmd_partitioning(true);
+    // options.executable_build_options.set_auto_spmd_partitioning_mesh_shape
+    // options.executable_build_options.set_auto_spmd_partitioning_mesh_shape
 
     xla::DeviceAssignment device_assignment(1, device_count);
     for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
@@ -631,17 +633,14 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
     }
     options.executable_build_options.set_device_assignment(device_assignment);
   } else {
-    options.executable_build_options.set_num_replicas(device_count);
-    options.executable_build_options.set_num_partitions(1);
+    assert(device_id >= 0);
 
-    xla::DeviceAssignment device_assignment(device_count, 1);
-    for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
-      int ordinal = global_ordinals[device_id];
-      if (ordinal < 0) {
-        continue;
-      }
-      device_assignment(ordinal, 0) = device_id;
-    }
+    options.executable_build_options.set_num_replicas(1);
+    options.executable_build_options.set_num_partitions(1);
+    options.executable_build_options.set_device_ordinal(device_id);
+
+    xla::DeviceAssignment device_assignment(1, 1);
+    device_assignment(0, 0) = device_id;
     options.executable_build_options.set_device_assignment(device_assignment);
   }
 

@@ -188,8 +188,8 @@ function Base.getproperty(sharding::AbstractFinalizedSharding, name::Symbol)
     return getfield(sharding.sharding, name)
 end
 
-function (sharding::AbstractFinalizedSharding)(client::XLA.Client, x::AbstractArray)
-    return (sharding.sharding)(client, x)
+function (sharding::AbstractFinalizedSharding)(client::XLA.Client, device, x::AbstractArray)
+    return (sharding.sharding)(client, device, x)
 end
 
 struct FinalizedNoSharding <: AbstractFinalizedSharding
@@ -199,6 +199,25 @@ end
 struct FinalizedNamedSharding{S<:NamedSharding,D} <: AbstractFinalizedSharding
     sharding::S
     device_to_array_slices::Array{Vector{UnitRange{Int64}},D}
+end
+
+"""
+    is_sharded(sharding)
+    is_sharded(x::AbstractArray)
+
+Checks whether the given sharding refers to no sharding.
+"""
+is_sharded(::NoSharding) = false
+is_sharded(::FinalizedNoSharding) = false
+is_sharded(::NamedSharding) = true
+is_sharded(::FinalizedNamedSharding) = true
+
+function Sharding.is_sharded(x::AbstractArray)
+    ancestor_x = Reactant.ancestor(x)
+    if hasfield(typeof(ancestor_x), :sharding)
+        return is_sharded(ancestor_x.sharding)
+    end
+    return false
 end
 
 end

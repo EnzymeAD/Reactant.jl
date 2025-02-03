@@ -33,7 +33,17 @@ end
 @inline function traced_setfield!(
     @nospecialize(obj::AbstractArray{T}), field, val
 ) where {T}
-    (isbitstype(T) || ancestor(obj) isa RArray) && return Base.setfield!(obj, field, val)
+    ancestor_obj = ancestor(obj)
+    if isbitstype(T) || ancestor_obj isa RArray
+        if val isa XLA.AsyncBuffer
+            if Reactant.Sharding.is_sharded(ancestor_obj)
+                error("`val` can't be a buffer if `obj` is sharded")
+            else
+                return Base.setfield!(obj, field, [val])
+            end
+        end
+        return Base.setfield!(obj, field, val)
+    end
     return Base.setindex!(obj, val, field)
 end
 
@@ -65,14 +75,17 @@ function create_result(tocopy::ConcreteRNumber{T}, path, result_stores) where {T
     return :(ConcreteRNumber{$T}($(tocopy.data)))
 end
 
-function create_result(tocopy::ConcreteRArray{T,N}, path, result_stores) where {T,N}
+function create_result(tocopy::ConcreteRArray{T,N,D,S}, path, result_stores) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
+        # TODO: restore sharding???
         return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
     end
     # We will set the data for this later
-    return :(ConcreteRArray{$T,$N}($(tocopy.data), $(tocopy.shape)))
+    return :(ConcreteRArray{$T,$N,$D,$S}(
+        $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
+    ))
 end
 
 function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
@@ -389,10 +402,6 @@ function compile_mlir(f, args; client=nothing, kwargs...)
             mlir_fn_res.linear_args,
             mlir_fn_res.is_sharded,
         )
-
-        if mlir_fn_res.num_partitions == 1
-            mlir_fn_res.num_replicas = XLA.ClientNumAddressableDevices(client)
-        end
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
@@ -803,13 +812,19 @@ function codegen_flatten!(linear_args, seen_args, result_stores, is_sharded::Boo
         push!(flatten_code, :($usbuf = $flatcode.data))
 
         if is_sharded
-            @show linear_args[i]
+            # @show linear_args[i]
             # @show seen_args[linear_args[i]]
             error("TODO: Sharding is not supported yet")
         else
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
-            push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+            if arg isa TracedRNumber
+                push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+            elseif arg isa TracedRArray
+                push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+            else
+                error("Unsupported type $(typeof(arg))")
+            end
         end
     end
     return flatten_names, flatten_code
@@ -1124,23 +1139,20 @@ function compile_xla(f, args; client=nothing, kwargs...)
             mlir_fn_res.is_sharded,
         )
 
-        if mlir_fn_res.num_partitions == 1
-            mlir_fn_res.num_replicas = XLA.ClientNumAddressableDevices(client)
-        else
-            device = nothing
-        end
+        mlir_fn_res.num_partitions > 1 && (device = nothing)
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
+        # XXX: Remove
         if mlir_fn_res.num_partitions > 1
             display(mod)
         end
 
         # compile MLIR module to XLA executable
-        exec = XLA.Compile(client, mod; is_sharded=mlir_fn_res.num_partitions > 1)
+        exec = XLA.Compile(client, device, mod; is_sharded=mlir_fn_res.num_partitions > 1)
 
         return exec, mlir_fn_res, device
     finally
@@ -1207,6 +1219,7 @@ function compile(f, args; sync=false, kwargs...)
         return result
     end
 
+    # XXX: Remove
     display(body)
 
     return register_thunk(

@@ -1,3 +1,12 @@
+get_buffer(x::ConcreteRNumber) = x.data.buffer
+get_buffer(x::ConcreteRArray{T,0}) where {T} = only(x.data).buffer
+function get_buffer(x::ConcreteRArray{T,N}) where {T,N}
+    if Sharding.is_sharded(x.sharding)
+        error("`x` is sharded, so `get_buffer` is not defined")
+    end
+    return only(x.data).buffer
+end
+
 function Base.collect(x::ConcreteRNumber{T}) where {T}
     return collect(ConcreteRArray{T,0}(copy(x).data, ()))
 end
@@ -74,7 +83,7 @@ end
 function to_number(X::ConcreteRScalar{T}) where {T}
     data = Ref{T}()
     XLA.await(X)
-    buf = X.data.buffer
+    buf = get_buffer(X)
     GC.@preserve data buf begin
         XLA.BufferToHost(buf, data)
     end
@@ -178,7 +187,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
 
     XLA.await(a)
     if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
-        buf = a.data.buffer
+        buf = get_buffer(a)
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
             start = 0
@@ -205,7 +214,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
 
     XLA.await(a)
     if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
-        buf = a.data.buffer
+        buf = get_buffer(a)
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
             start = 0
@@ -324,7 +333,7 @@ function Base.fill!(a::ConcreteRArray{T,N}, val) where {T,N}
 
     XLA.await(a)
     if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
-        buf = a.data.buffer
+        buf = get_buffer(a)
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
             for start in 1:length(a)
