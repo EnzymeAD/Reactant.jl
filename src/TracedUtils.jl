@@ -233,13 +233,13 @@ function make_mlir_fn(
     end
 
     if is_sharded
-        unique_meshes = unique([m for (k, m) in traced_args_to_shardings])
+        unique_meshes = unique([m.mesh for (k, m) in traced_args_to_shardings])
         # TODO: support multiple meshes
-        @assert length(unique_meshes) == 1 "Currently we sort using a single mesh"
-        sorted_devices = [sort(vec(m.mesh.device_ids)) for m in unique_meshes]
+        @assert length(unique_meshes) == 1 "Currently we support using a single mesh"
+        sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
         @assert allequal(sorted_devices) "All meshes must have the same device ids"
         num_partitions = length(first(sorted_devices))
-        sharding_mesh = first(unique_meshes).mesh
+        sharding_mesh = first(unique_meshes)
     else
         sharding_mesh = nothing
     end
@@ -300,7 +300,11 @@ function make_mlir_fn(
                         ctx,
                         mesh_op_attrs.sym_name,
                         length(dimension_sharding_attrs),
-                        dimension_sharding_attrs,
+                        if do_transpose
+                            reverse(dimension_sharding_attrs)
+                        else
+                            dimension_sharding_attrs
+                        end,
                         0,
                         MLIR.API.MlirAttribute[],
                     ),
