@@ -115,10 +115,13 @@ function ConcreteRArray(
     if !Sharding.is_sharded(sharding)
         if device === nothing
             idx = idx === nothing ? XLA.default_device_idx[] : idx
-            device = XLA.ClientGetAddressableDevice(client, idx)
+            device = XLA.ClientGetAddressableDevice(client, XLA.device_ordinal(client, idx))
         else
             if idx !== nothing
-                @assert XLA.ClientGetAddressableDevice(client, idx) == device "If both `idx` and `device` are specified, `idx` must match `device`"
+                device_from_idx = XLA.ClientGetAddressableDevice(
+                    client, XLA.device_ordinal(client, idx)
+                )
+                @assert device_from_idx == device "If both `idx` and `device` are specified, `idx` must match `device`"
             end
         end
         sdata, sharding = sharding(client, device, data)

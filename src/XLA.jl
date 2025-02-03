@@ -63,6 +63,10 @@ function device_ordinal(client::Client, device::Device)
     return client.global_ordinals[DeviceGetLocalDeviceId(device) + 1]
 end
 
+function device_ordinal(client::Client, local_device_id::Int)
+    return client.global_ordinals[local_device_id + 1]
+end
+
 function DeviceToString(device::Device)
     pjrtclient = client(device)
     platform_name = ClientGetPlatformName(pjrtclient)
@@ -648,18 +652,27 @@ end
     end
 end
 
-function Compile(client::Client, device, mod::MLIR.IR.Module; is_sharded::Bool=false)
-    max_local_id = length(client.global_ordinals)
-    device_id = is_sharded ? -1 : device_ordinal(client, device)
+function Compile(
+    client::Client,
+    device::Union{Device,Nothing},
+    mod::MLIR.IR.Module;
+    is_sharded::Bool=false,
+    mesh_ids::Vector{Int64}=Int64[],
+    # mesh_shape::Vector{Int64}=Int64[],
+)
+    device_id = is_sharded ? Int64(-1) : Int64(device_ordinal(client, device))
+    mesh_ids = Int64.(device_ordinal.((client,), mesh_ids))
     GC.@preserve client mod begin
         return LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
                 client.client::Ptr{Cvoid},
                 mod.module_::MLIR.API.MlirModule,
-                device_id::Cint,
-                client.global_ordinals::Ptr{Cint},
-                max_local_id::Cint,
+                device_id::Clong,
                 is_sharded::Bool,
+                # mesh_shape::Ptr{Clong},
+                # length(mesh_shape)::Clong,
+                mesh_ids::Ptr{Clong},
+                length(mesh_ids)::Clong,
                 CUDA_DATA_DIR[]::Cstring,
             )::Ptr{Cvoid}
         )
@@ -731,19 +744,6 @@ function PjRtLoadedExecutableGetClient(exec::LoadedExecutable)
             )::Ptr{Cvoid}
         )
     end
-end
-
-function replicate_buffer_on_all_addressable_devices(buffer::Buffer)
-    pjrtclient = client(buffer)
-    devices = [
-        ClientGetAddressableDevice(pjrtclient, i - 1) for
-        i in 1:ClientNumAddressableDevices(pjrtclient)
-    ]
-    orig_device = device(buffer)
-    return [
-        device == orig_device ? buffer : CopyBufferToDevice(buffer, device) for
-        device in devices
-    ]
 end
 
 function is_ready(future::Future)

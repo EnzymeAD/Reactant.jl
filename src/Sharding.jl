@@ -86,7 +86,7 @@ end
 finalized_sharding(::Type{<:NamedSharding}) = FinalizedNamedSharding
 
 # XXX: multiple axes partitioning
-function (sharding::NamedSharding)(client::XLA.Client, x::AbstractArray)
+function (sharding::NamedSharding)(client::XLA.Client, ::Nothing, x::AbstractArray)
     (; mesh, partition_spec) = sharding
     @assert length(partition_spec) == ndims(x)
 
@@ -166,7 +166,9 @@ function (sharding::NamedSharding)(client::XLA.Client, x::AbstractArray)
             XLA.ArrayFromHostBuffer(
                 client,
                 x[device_to_array_slices[idx]...],
-                XLA.ClientGetAddressableDevice(client, device_id),
+                XLA.ClientGetAddressableDevice(
+                    client, XLA.device_ordinal(client, device_id)
+                ),
             ),
             nothing,
         )

@@ -71,6 +71,7 @@
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
 #include "shardy/integrations/c/attributes.h"
+#include "xla/pjrt/mlir_to_hlo.h"
 
 // IFRT
 #include "xla/python/ifrt/array.h"
@@ -597,13 +598,14 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   return wrap(res);
 }
 
-// TODO: For `is_sharded` we need the mesh device ids as well
 extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
                                                     MlirModule cmod,
-                                                    int device_id,
-                                                    int *global_ordinals,
-                                                    int num_global_ordinals,
+                                                    int64_t device_id,
                                                     bool is_sharded,
+                                                    // const int64_t *mesh_shape,
+                                                    // int64_t num_mesh_shape,
+                                                    const int64_t *mesh_ids,
+                                                    int64_t num_mesh_ids,
                                                     const char* xla_gpu_cuda_data_dir) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
@@ -611,27 +613,34 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
   CompileOptions options;
   options.executable_build_options.mutable_debug_options()->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
 
+  auto cmodop = cast<ModuleOp>(*unwrap(cmod));
+
   if (is_sharded) {
     assert(device_id < 0);
 
-    int device_count = client->addressable_device_count();
     options.executable_build_options.set_num_replicas(1);
-    options.executable_build_options.set_num_partitions(device_count);
+    options.executable_build_options.set_num_partitions(num_mesh_ids);
 
     options.executable_build_options.set_use_spmd_partitioning(true);
     options.executable_build_options.set_use_shardy_partitioner(true);
-    // options.executable_build_options.set_auto_spmd_partitioning_mesh_shape
-    // options.executable_build_options.set_auto_spmd_partitioning_mesh_shape
 
-    xla::DeviceAssignment device_assignment(1, device_count);
-    for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
-      int ordinal = global_ordinals[device_id];
-      if (ordinal < 0) {
-        continue;
-      }
-      device_assignment(0, ordinal) = device_id;
+    // auto partitioning for GPUs is not available in open source version of XLA
+    // options.executable_build_options.set_use_auto_spmd_partitioning(true);
+    // std::vector<int64_t> mesh_shape_vec(mesh_shape, mesh_shape + num_mesh_shape);
+    // options.executable_build_options.set_auto_spmd_partitioning_mesh_shape(mesh_shape_vec);
+    // std::vector<int64_t> mesh_ids_vec(mesh_ids, mesh_ids + num_mesh_ids);
+    // options.executable_build_options.set_auto_spmd_partitioning_mesh_ids(mesh_ids_vec);
+
+    xla::DeviceAssignment device_assignment(1, num_mesh_ids);
+    for (int64_t i = 0; i < num_mesh_ids; ++i) {
+      int64_t mesh_id = mesh_ids[i];
+      assert(mesh_id >= 0);
+      device_assignment(0, mesh_id) = i;
     }
     options.executable_build_options.set_device_assignment(device_assignment);
+
+    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
+    xla::ExportShardyForHloRoundTrip(cmodop);
   } else {
     assert(device_id >= 0);
 
@@ -656,8 +665,7 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
       options.executable_build_options.set_device_memory_size(*stats->bytes_limit);
     }
   }
-  auto exec =
-      MyValueOrThrow(client->Compile(cast<ModuleOp>(*unwrap(cmod)), options));
+  auto exec = MyValueOrThrow(client->Compile(cmodop, options));
   return exec.release();
 }
 
@@ -807,6 +815,8 @@ extern "C" void RegisterDialects(MlirContext cctx) {
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMIRToLLVMTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/NVVM/LLVMIRToNVVMTranslation.h"
+#include "xla/service/spmd/shardy/sdy_round_trip/pipelines.h"
+
 extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::DialectRegistry &registry = *unwrap(creg);
   prepareRegistry(registry);
@@ -850,6 +860,10 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::transform::registerInterpreterPass();
   mlir::enzyme::registerGenerateApplyPatternsPass();
   mlir::enzyme::registerRemoveTransformPass();
+
+  // xla + shardy specific passes
+  xla::sdy::registerSdyRoundTripExportPipeline();
+  xla::sdy::registerSdyRoundTripImportPipeline();
 }
 
 /// Returns an unused symbol in `module` for `oldSymbolName` by trying numeric

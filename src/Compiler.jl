@@ -664,6 +664,7 @@ function compile_mlir!(
         mlir_fn_res.is_sharded,
         preserved_args,
         concrete_result,
+        mlir_fn_res.sharding_mesh,
     )
 end
 
@@ -1095,13 +1096,17 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
             client = XLA.client(device)
         else
             client = XLA.default_backend[]
-            device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
+            device = XLA.ClientGetAddressableDevice(
+                client, XLA.device_ordinal(client, XLA.default_device_idx[])
+            )
         end
     else
         if device !== nothing
             @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
         else
-            device = XLA.ClientGetAddressableDevice(client, XLA.default_device_idx[])
+            device = XLA.ClientGetAddressableDevice(
+                client, XLA.device_ordinal(client, XLA.default_device_idx[])
+            )
         end
     end
 
@@ -1152,7 +1157,16 @@ function compile_xla(f, args; client=nothing, kwargs...)
         end
 
         # compile MLIR module to XLA executable
-        exec = XLA.Compile(client, device, mod; is_sharded=mlir_fn_res.num_partitions > 1)
+        is_sharded = mlir_fn_res.num_partitions > 1
+        if is_sharded
+            # mesh_shape = collect(Int64, size(mlir_fn_res.sharding_mesh))
+            mesh_ids = collect(Int64, vec(mlir_fn_res.sharding_mesh.device_ids))
+        else
+            # mesh_shape = Int64[]
+            mesh_ids = Int64[]
+        end
+        # exec = XLA.Compile(client, device, mod; is_sharded, mesh_ids, mesh_shape)
+        exec = XLA.Compile(client, device, mod; is_sharded, mesh_ids)
 
         return exec, mlir_fn_res, device
     finally

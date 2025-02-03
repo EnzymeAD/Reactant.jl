@@ -127,7 +127,9 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR}
+mutable struct CompiledMlirFnResult{
+    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh}
+}
     fnwrapped::Bool
     f::F
     traced_result::TR
@@ -142,6 +144,7 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR}
     is_sharded::Bool
     preserved_args::PA
     concrete_result::CR
+    sharding_mesh::M
 end
 
 function make_mlir_fn(
@@ -236,6 +239,9 @@ function make_mlir_fn(
         sorted_devices = [sort(vec(m.mesh.device_ids)) for m in unique_meshes]
         @assert allequal(sorted_devices) "All meshes must have the same device ids"
         num_partitions = length(first(sorted_devices))
+        sharding_mesh = first(unique_meshes).mesh
+    else
+        sharding_mesh = nothing
     end
 
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
@@ -408,6 +414,7 @@ function make_mlir_fn(
         is_sharded,
         nothing,
         nothing,
+        sharding_mesh,
     )
 end
 
