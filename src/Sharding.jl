@@ -43,7 +43,7 @@ Base.getproperty(::NoSharding, x) = NoSharding()
 
 function (::NoSharding)(client::XLA.Client, device, x::AbstractArray)
     buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, x, device), nothing)
-    return [buffer], FinalizedNoSharding(NoSharding())
+    return [buffer], FinalizedNoSharding()
 end
 
 struct NamedSharding{D1,P<:Tuple,D2} <: AbstractSharding
@@ -194,8 +194,11 @@ function (sharding::AbstractFinalizedSharding)(client::XLA.Client, device, x::Ab
     return (sharding.sharding)(client, device, x)
 end
 
-struct FinalizedNoSharding <: AbstractFinalizedSharding
-    sharding::NoSharding
+struct FinalizedNoSharding <: AbstractFinalizedSharding end
+
+function Base.getproperty(::FinalizedNoSharding, name::Symbol)
+    @assert name === :sharding
+    return NoSharding()
 end
 
 struct FinalizedNamedSharding{S<:NamedSharding,D} <: AbstractFinalizedSharding

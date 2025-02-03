@@ -549,8 +549,6 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     OutShape = isempty(seen_args) ? nothing : first(input_shapes)
     @assert !isnothing(OutShape)
 
-    in_tys2 = [Ops.mlir_type(invmap[arg]) for arg in linear_args]
-
     out_tys2 = [
         MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
         arg in linear_results

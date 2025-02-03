@@ -101,7 +101,7 @@ Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kw
 
 function ConcreteRArray{T,N}(data::XLA.AsyncBuffer, shape::NTuple{N,Int}) where {T,N}
     return ConcreteRArray{T,N,1,Sharding.FinalizedNoSharding}(
-        [data], shape, Sharding.FinalizedNoSharding(Sharding.NoSharding())
+        [data], shape, Sharding.FinalizedNoSharding()
     )
 end
 

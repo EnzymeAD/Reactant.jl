@@ -1152,7 +1152,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # XXX: Remove
-        if mlir_fn_res.num_partitions > 1
+        if mlir_fn_res.is_sharded > 1
             display(mod)
         end
 
@@ -1234,7 +1234,9 @@ function compile(f, args; sync=false, kwargs...)
     end
 
     # XXX: Remove
-    display(body)
+    if mlir_fn_res.is_sharded
+        display(body)
+    end
 
     return register_thunk(
         fname, Tuple{map(Core.Typeof, args)...}, body, f, mlir_fn_res.fnwrapped
