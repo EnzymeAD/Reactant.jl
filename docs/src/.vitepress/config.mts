@@ -87,6 +87,7 @@ export default defineConfig({
               { text: "TPU", link: "/api/tpu" },
               { text: "Triton", link: "/api/triton" },
               { text: "Shardy", link: "/api/shardy" },
+              { text: "MPI", link: "/api/mpi" },
             ],
           },
           {
@@ -147,6 +148,7 @@ export default defineConfig({
               { text: "TPU", link: "/api/tpu" },
               { text: "Triton", link: "/api/triton" },
               { text: "Shardy", link: "/api/shardy" },
+              { text: "MPI", link: "/api/mpi" },
             ],
           },
           {
