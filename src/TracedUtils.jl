@@ -152,7 +152,6 @@ function make_mlir_fn(
                 args_in_result,
                 construct_function_without_args,
                 do_transpose,
-                no_args_in_result,
             )[2:end]...,
         )
     end

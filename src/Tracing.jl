@@ -614,7 +614,8 @@ function make_tracer(
     tobatch=nothing,
     @nospecialize(track_numbers::Type = Union{}),
     kwargs...,
-) where {RT}
+)
+    RT = Core.Typeof(prev)
     if haskey(seen, prev)
         if mode == TracedToTypes
             id = seen[prev]
@@ -627,7 +628,6 @@ function make_tracer(
         push!(path, RT)
         seen[prev] = VisitedObject(length(seen) + 1)
     end
-    RT = Core.Typeof(prev)
     TT = traced_type(RT, Val(mode), track_numbers)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
@@ -971,8 +971,8 @@ function make_tracer(
     toscalar=false,
     tobatch=nothing,
     kwargs...,
-)ß
-    if mode ß== TracedToTypes
+)
+    if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
         make_tracer(seen, prev.re, path, mode; toscalar, tobatch, kwargs...)
         make_tracer(seen, prev.im, path, mode; toscalar, tobatch, kwargs...)
@@ -993,7 +993,7 @@ function make_tracer(
     @nospecialize(prev::Array),
     @nospecialize(path),
     mode;
-    track_numbers=(),
+    track_numbers::Type=Union{},
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1071,7 +1071,7 @@ function make_tracer(
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     kwargs...,
-) where {A,RT}
+)
     NT = Core.Typeof(prev)
     A = NT.parameters[1]
     RT = NT.parameters[2]
