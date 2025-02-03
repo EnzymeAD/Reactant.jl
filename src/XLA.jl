@@ -2,11 +2,13 @@ module XLA
 
 import ..Reactant
 import ...MLIR
-import Reactant_jll
+using Reactant_jll: Reactant_jll
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
-const CUDA_DATA_DIR = Ref(isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : "")
+const CUDA_DATA_DIR = Ref(
+    isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
+)
 
 function LLVMclopts(opts...)
     args = ["", opts...]
