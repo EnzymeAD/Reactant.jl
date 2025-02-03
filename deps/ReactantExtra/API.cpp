@@ -598,7 +598,7 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
                                                     MlirModule cmod,
                                                     int *global_ordinals,
                                                     int num_global_ordinals,
-                                                    std::string xla_gpu_cuda_data_dir) {
+                                                    const char* xla_gpu_cuda_data_dir) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
