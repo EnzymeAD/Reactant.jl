@@ -5,6 +5,9 @@ import ...MLIR
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
+const CUDA_DATA_DIR = Ref(
+    isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
+)
 
 function LLVMclopts(opts...)
     args = ["", opts...]
@@ -654,6 +657,7 @@ function Compile(client::Client, mod::MLIR.IR.Module; is_sharded::Bool=false)
                 client.global_ordinals::Ptr{Cint},
                 max_local_id::Cint,
                 is_sharded::Bool,
+                CUDA_DATA_DIR[]::Cstring,
             )::Ptr{Cvoid}
         )
     end
