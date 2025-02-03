@@ -260,7 +260,8 @@ function initialize_ptrs()
         sym = Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name)
         @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
     end
-    if (@ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32) != 0
+    # TODO on next jll bump (0.61) change this to call ReactantHermeticCudaGetVersion
+    if (@ccall MLIR.API.mlir_c.ReactantCudaDriverGetVersion()::UInt32) != 0
         for name in (
             "cuLaunchKernel",
             "cuModuleLoadData",
