@@ -161,7 +161,7 @@ function initialize_dialect()
         registry[]::MLIR.API.MlirDialectRegistry, initialize_dialect_first_run[]::Bool
     )::Cvoid
     initialize_dialect_first_run[] = false
-    return
+    return nothing
 end
 
 function deinitialize_dialect()
