@@ -643,7 +643,7 @@ end
     @test @jit(call1(a_ra, b_ra)) ≈ call1(a, b)
 
     # check whether the func for _call1 was only generated once:
-    ir = @code_hlo optimize=false call1(a_ra, b_ra)
+    ir = @code_hlo optimize = false call1(a_ra, b_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 2 # call1, _call1
 
@@ -652,12 +652,12 @@ end
     c_ra = Reactant.to_rarray(c)
 
     @test @jit(call1(a_ra, c_ra)) ≈ call1(a, c)
-    ir = @code_hlo optimize=false call1(a_ra, c_ra)
+    ir = @code_hlo optimize = false call1(a_ra, c_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 3
 end
 
-_call2(a) = a+a
+_call2(a) = a + a
 function call2(a)
     return @trace _call2(a)
 end
@@ -687,7 +687,7 @@ end
     y = rand(3)
     y_ra = Reactant.to_rarray(y)
 
-    ir = @code_hlo optimize=false call3(y_ra)
+    ir = @code_hlo optimize = false call3(y_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
 end
@@ -699,7 +699,7 @@ struct Bar
     x
 end
 
-_call4(foobar::Union{Foo, Bar}) = foobar.x
+_call4(foobar::Union{Foo,Bar}) = foobar.x
 function call4(foo, foo2, bar)
     @trace _call4(foo)
     @trace _call4(foo2)
@@ -712,7 +712,7 @@ end
     foo = Foo(Reactant.to_rarray(a))
     foo2 = Foo(Reactant.to_rarray(b))
     bar = Foo(Bar(Reactant.to_rarray(b))) # typeof(foo) == typeof(bar), but these don't match!
-    ir = @code_hlo optimize=false call4(foo, foo2, bar)
+    ir = @code_hlo optimize = false call4(foo, foo2, bar)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
 end
