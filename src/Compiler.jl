@@ -443,13 +443,13 @@ function compile_mlir!(
 
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
+    activate_callcache!(callcache)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = try
-        callcache!(callcache) do # TODO: don't create a closure here either.
-          Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
-        end
+        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
     finally
+        deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
     end
