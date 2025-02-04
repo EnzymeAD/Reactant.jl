@@ -89,9 +89,7 @@ end
                 # Union types
                 (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRNumber{Int}}),
                 (
-                    Union{
-                        Nothing,ConcreteRArray{Float64,1,1,Sharding.FinalizedNoSharding}
-                    },
+                    Union{Nothing,ConcreteRArray{Float64,1,1,Sharding.FinalizedNoSharding}},
                     Union{Nothing,TracedRArray{Float64,1}},
                     Union{Nothing,TracedRArray{Float64,1}},
                 ),
@@ -109,9 +107,7 @@ end
                     Core.LLVMPtr{TracedRNumber{Float64}},
                 ),
                 (
-                    Core.LLVMPtr{
-                        ConcreteRArray{Float64,1,1,Sharding.FinalizedNoSharding}
-                    },
+                    Core.LLVMPtr{ConcreteRArray{Float64,1,1,Sharding.FinalizedNoSharding}},
                     Core.LLVMPtr{TracedRArray{Float64,1}},
                     Core.LLVMPtr{TracedRArray{Float64,1}},
                 ),
@@ -121,9 +117,7 @@ end
                     Base.RefValue{TracedRNumber{Float64}},
                 ),
                 (
-                    Base.RefValue{
-                        ConcreteRArray{Float64,1,1,Sharding.FinalizedNoSharding}
-                    },
+                    Base.RefValue{ConcreteRArray{Float64,1,1,Sharding.FinalizedNoSharding}},
                     Base.RefValue{TracedRArray{Float64,1}},
                     Base.RefValue{TracedRArray{Float64,1}},
                 ),
