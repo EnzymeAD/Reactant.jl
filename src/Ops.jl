@@ -80,8 +80,79 @@ end
     x::T; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T<:Number}
     x isa TracedRNumber && return x
-    res = constant(fill(x); location)
+    res = fill(x; location)
     return TracedRNumber{T}((), res.mlir_data)
+end
+
+function fill(
+    v, dims::Base.DimOrInd...; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
+)
+    return fill(v, dims; location)
+end
+function fill(
+    v,
+    dims::NTuple{N,Union{Integer,Base.OneTo}};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {N}
+    return fill(v, map(Base.to_dim, dims); location)
+end
+function fill(
+    v, dims::NTuple{N,Integer}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
+) where {N}
+    return fill(v, collect(dims); location)
+end
+function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__))
+    return fill(v, Int[]; location)
+end
+
+function fill(number::TracedRNumber{T}, shape::Vector{Int}; location) where {T}
+    return Base.fill(number, Tuple(shape))
+end
+
+for (T, mlir_func) in (
+    (Bool, :mlirDenseElementsAttrBoolSplatGet),
+    (UInt8, :mlirDenseElementsAttrUInt8SplatGet),
+    (Int8, :mlirDenseElementsAttrInt8SplatGet),
+    (UInt32, :mlirDenseElementsAttrUInt32SplatGet),
+    (Int32, :mlirDenseElementsAttrInt32SplatGet),
+    (UInt64, :mlirDenseElementsAttrUInt64SplatGet),
+    (Int64, :mlirDenseElementsAttrInt64SplatGet),
+    (Float32, :mlirDenseElementsAttrFloatSplatGet),
+    (Float64, :mlirDenseElementsAttrDoubleSplatGet),
+)
+    @eval begin
+        @noinline function fill(
+            number::$T,
+            shape::Vector{Int};
+            location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+        )
+            tt = MLIR.IR.TensorType(shape, MLIR.IR.Type($T); location=location)
+
+            splatattr = MLIR.API.$mlir_func(tt, number)
+            cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
+            cst = MLIR.IR.result(cst_op)
+            ta = TracedRArray{$T,length(shape)}((), cst, shape)
+            return ta
+        end
+    end
+end
+
+_fill_element_attr(x) = MLIR.IR.Attribute(x)
+function _fill_element_attr(x::Complex)
+    return MLIR.IR.Attribute([
+        MLIR.IR.Attribute(Base.real(x)), MLIR.IR.Attribute(Base.imag(x))
+    ])
+end
+
+@noinline function fill(
+    element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
+) where {T}
+    tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
+    cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
+    cst = MLIR.IR.result(cst_op)
+    ta = TracedRArray{T,length(shape)}((), cst, shape)
+    return ta
 end
 
 # unary elementwise ops
@@ -350,9 +421,9 @@ end
 @noinline function pad(
     x::TracedRArray{T,N},
     padding_value::TracedRNumber{T};
-    low=fill(0, N),
-    high=fill(0, N),
-    interior=fill(0, N),
+    low=Base.fill(0, N),
+    high=Base.fill(0, N),
+    interior=Base.fill(0, N),
     location=mlir_stacktrace("pad", @__FILE__, @__LINE__),
 ) where {T,N}
     rsize = size(x) .+ low .+ high .+ max.(size(x) .- 1, 0) .* interior
@@ -1057,7 +1128,7 @@ end
     op = chlo.top_k(x.mlir_data; values, indices, k, location)
     indices = add(
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
-        constant(fill(Int32(1), Tuple(rsize))),
+        fill(Int32(1), Tuple(rsize)),
     ) # return the 1-indexed index
     indices = convert(TracedRArray{Int64,N}, indices) # julia indexes with Int64 generally
     values = TracedRArray{T,N}((), MLIR.IR.result(op, 1), rsize)
@@ -1161,7 +1232,7 @@ end
     (; output_state, output) = rng_bit_generator(uT, seed, shape; algorithm, location)
     output = divide(
         convert(TracedRArray{T,ndims(output)}, output),
-        constant(fill(T(typemax(uT)), Tuple(shape)); location),
+        fill(T(typemax(uT)), Tuple(shape); location),
     )
     return (; output_state, output)
 end
@@ -1201,11 +1272,11 @@ fields:
     rand_uniform = res.output
     seed = res.output_state
     scaled_uniform = subtract(
-        multiply(rand_uniform, constant(fill(T(2), size(rand_uniform)))),
-        constant(fill(T(1), size(rand_uniform))),
+        multiply(rand_uniform, fill(T(2), size(rand_uniform))),
+        fill(T(1), size(rand_uniform)),
     )
     probit = erf_inv(scaled_uniform)
-    rand_normal = multiply(probit, constant(fill(Base.sqrt(T(2)), size(rand_uniform))))
+    rand_normal = multiply(probit, fill(Base.sqrt(T(2)), size(rand_uniform)))
     return (; output_state=seed, output=rand_normal)
 end
 
@@ -1571,7 +1642,7 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
                     src.mlir_data,
                     gather_indices.mlir_data;
                     dimension_numbers,
-                    slice_sizes=fill(Int64(1), N),
+                    slice_sizes=Base.fill(Int64(1), N),
                     indices_are_sorted=false,
                 ),
                 1,

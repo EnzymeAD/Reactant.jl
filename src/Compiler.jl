@@ -311,6 +311,12 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
         "replace_neg_add_with_subtract",
         "log_const_prop<1>",
         "log_plus_one_const_prop<1>",
+        "binop_const_simplify",
+        "transpose_broadcast_in_dim_to_broadcast_in_dim",
+        "not_select_simplify",
+        "common_compare_expression_rewrite",
+        "compare_select_simplify",
+        "while_simplify<1>",
     ]
     if no_nan
         append!(

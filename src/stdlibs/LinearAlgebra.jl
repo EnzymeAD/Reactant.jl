@@ -302,9 +302,7 @@ function LinearAlgebra._diagm(
         MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=0), 1),
         (size(scatter_indices, 1),),
     )
-    return Ops.scatter_setindex(
-        Ops.constant(fill(zero(T), (m, n))), scatter_indices, values
-    )
+    return Ops.scatter_setindex(Ops.fill(zero(T), (m, n)), scatter_indices, values)
 end
 
 # Common Utilities
