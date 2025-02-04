@@ -664,13 +664,13 @@ end
     @test @allowscalar T[1][1] == 2
 
     ptr_x = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.UnsafeBufferPointer(x.data.buffer)
+        Ptr{Float64}, Reactant.XLA.UnsafeBufferPointer(x.data[].buffer)
     )
     ptr_res = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.UnsafeBufferPointer(res.data.buffer)
+        Ptr{Float64}, Reactant.XLA.UnsafeBufferPointer(res.data[].buffer)
     )
     ptr_T1 = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.UnsafeBufferPointer(T[1].data.buffer)
+        Ptr{Float64}, Reactant.XLA.UnsafeBufferPointer(T[1].data[].buffer)
     )
 
     @test ptr_x == ptr_res == ptr_T1

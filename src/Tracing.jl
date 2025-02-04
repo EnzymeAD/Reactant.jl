@@ -93,7 +93,7 @@ Base.@nospecializeinfer function traced_type_inner(
     traced_fieldtypes = Type[]
     for i in 1:N
         next = traced_type_inner(
-            fieldtype(T, i), seen, mode, track_numbers, typeof(getproperty(sharding, i))
+            fieldtype(T, i), seen, mode, track_numbers, getproperty(sharding, i)
         )
         changed |= next != fieldtype(T, i)
         push!(traced_fieldtypes, next)
@@ -1199,7 +1199,7 @@ function make_tracer(
     RT = Core.Typeof(prev)
     if mode == TracedToTypes
         push!(path, RT)
-        for v in prev
+        for (i, v) in enumerate(prev)
             make_tracer(
                 seen, v, path, mode; sharding=Base.getproperty(sharding, i), kwargs...
             )

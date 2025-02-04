@@ -158,7 +158,9 @@ const initialize_dialect_first_run = Ref{Bool}(true)
 function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
     @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
-        registry[]::MLIR.API.MlirDialectRegistry, initialize_dialect_first_run[]::Bool
+        registry[]::MLIR.API.MlirDialectRegistry,
+        # XXX: fix???
+        true::Bool, # initialize_dialect_first_run[]::Bool
     )::Cvoid
     initialize_dialect_first_run[] = false
     return nothing

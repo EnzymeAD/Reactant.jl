@@ -491,7 +491,7 @@ function compile_mlir!(
             f_name::String,
             mlir_result_types::Vector{MLIR.IR.Type},
             traced_result::Any,
-            mutated::Vector{Int},
+            mutated_args::Vector{Int},
         }
     }();
     optimize::Union{Bool,Symbol}=true,

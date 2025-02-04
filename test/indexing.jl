@@ -309,7 +309,7 @@ end
 
     res = @jit write_with_broadcast1!(x_ra, y_ra)
 
-    @test res.data === x_ra.data
+    @test res.data[] === x_ra.data[]
 
     res = Array(res)
     y = Array(y_ra)
@@ -320,7 +320,7 @@ end
 
     res = @jit write_with_broadcast2!(x_ra, y_ra)
 
-    @test res.data === x_ra.data
+    @test res.data[] === x_ra.data[]
 
     res = Array(res)
     y = Array(y_ra)

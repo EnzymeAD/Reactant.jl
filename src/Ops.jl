@@ -1071,7 +1071,7 @@ end
             (sample_inputs...,),
             (),
             "comparator";
-            no_args_in_result=true,
+            args_in_result=:none,
             return_dialect=:stablehlo,
         ).f
     @assert MLIR.IR.nregions(func) == 1
@@ -1681,7 +1681,7 @@ end
             string(gensym("cond_fn")),
             false;
             return_dialect=:stablehlo,
-            no_args_in_result=true,
+            args_in_result=:none,
             do_transpose=false,
         ).f
 
@@ -1693,7 +1693,7 @@ end
             string(gensym("body_fn")),
             false;
             return_dialect=:stablehlo,
-            no_args_in_result=true,
+            args_in_result=:none,
             do_transpose=false,
         ).f
 
@@ -2088,13 +2088,13 @@ end
     cache = Reactant.Compiler.callcache()
     if haskey(cache, cache_key)
         # cache lookup:
-        (; f_name, mlir_result_types, traced_result, mutated) = cache[cache_key]
+        (; f_name, mlir_result_types, traced_result, mutated_args) = cache[cache_key]
     else
         f_name = String(gensym(Symbol(f)))
         temp = Reactant.TracedUtils.make_mlir_fn(
             f, args, (), f_name, false; args_in_result=:mutated, do_transpose=false
         )
-        (;traced_result, ret, mutated_args) = temp
+        (; traced_result, ret, mutated_args) = temp
         mlir_result_types = [
             MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
         ]
@@ -2126,7 +2126,7 @@ end
     end
     nres = MLIR.IR.nresults(call_op)
     # mutated args are included as the last ones in the call op results
-    for (result_i, arg_i) in zip((nres - length(mutated)):nres, mutated_args)
+    for (result_i, arg_i) in zip((nres - length(mutated_args)):nres, mutated_args)
         Reactant.TracedUtils.set_mlir_data!(
             linear_args[arg_i], MLIR.IR.result(call_op, result_i + 1)
         )

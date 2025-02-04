@@ -170,7 +170,7 @@ function make_mlir_fn(
             toscalar,
             return_dialect,
             do_transpose,
-            no_args_in_result,
+            args_in_result,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
