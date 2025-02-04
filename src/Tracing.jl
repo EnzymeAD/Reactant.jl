@@ -1200,7 +1200,9 @@ function make_tracer(
     if mode == TracedToTypes
         push!(path, RT)
         for v in prev
-            make_tracer(seen, v, path, mode; sharding=Base.getproperty(sharding, i),kwargs...)
+            make_tracer(
+                seen, v, path, mode; sharding=Base.getproperty(sharding, i), kwargs...
+            )
         end
         return nothing
     end
@@ -1234,7 +1236,9 @@ function make_tracer(
     if mode == TracedToTypes
         push!(path, NT)
         for i in 1:length(A)
-            make_tracer(seen, Base.getfield(prev, i), path, mode; track_numbers, sharding, kwargs...)
+            make_tracer(
+                seen, Base.getfield(prev, i), path, mode; track_numbers, sharding, kwargs...
+            )
         end
         return nothing
     end
@@ -1263,7 +1267,7 @@ function make_tracer(
 )
     if mode == TracedToTypes
         push!(path, Core.Box)
-        return make_tracer(seen, prev.contents, path, mode;sharding, kwargs...)
+        return make_tracer(seen, prev.contents, path, mode; sharding, kwargs...)
     end
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
