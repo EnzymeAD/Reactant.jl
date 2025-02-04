@@ -2094,11 +2094,11 @@ end
         temp = Reactant.TracedUtils.make_mlir_fn(
             f, args, (), f_name, false; args_in_result=:mutated, do_transpose=false
         )
-        traced_result, ret, mutated = temp[[3, 6, 10]]
+        (;traced_result, ret, mutated_args) = temp
         mlir_result_types = [
             MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
         ]
-        cache[cache_key] = (; f_name, mlir_result_types, traced_result, mutated)
+        cache[cache_key] = (; f_name, mlir_result_types, traced_result, mutated_args)
     end
 
     call_op = MLIR.Dialects.func.call(
@@ -2126,7 +2126,7 @@ end
     end
     nres = MLIR.IR.nresults(call_op)
     # mutated args are included as the last ones in the call op results
-    for (result_i, arg_i) in zip((nres - length(mutated)):nres, mutated)
+    for (result_i, arg_i) in zip((nres - length(mutated)):nres, mutated_args)
         Reactant.TracedUtils.set_mlir_data!(
             linear_args[arg_i], MLIR.IR.result(call_op, result_i + 1)
         )

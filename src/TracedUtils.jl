@@ -128,7 +128,7 @@ function transpose_val(val)
 end
 
 mutable struct CompiledMlirFnResult{
-    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh}
+    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA
 }
     fnwrapped::Bool
     f::F
@@ -145,6 +145,7 @@ mutable struct CompiledMlirFnResult{
     preserved_args::PA
     concrete_result::CR
     sharding_mesh::M
+    mutated_args::MA
 end
 
 function make_mlir_fn(
@@ -438,6 +439,7 @@ function make_mlir_fn(
         nothing,
         nothing,
         sharding_mesh,
+        mutated_args,
     )
 end
 

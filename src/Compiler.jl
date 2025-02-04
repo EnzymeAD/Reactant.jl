@@ -503,6 +503,7 @@ function compile_mlir!(
 
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
+    activate_callcache!(callcache)
 
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
@@ -688,6 +689,7 @@ function compile_mlir!(
         preserved_args,
         concrete_result,
         mlir_fn_res.sharding_mesh,
+        mlir_fn_res.mutated_args,
     )
 end
 
