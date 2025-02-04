@@ -675,7 +675,7 @@ function call4(foo, foo2, bar)
     @trace _call4(bar)
 end
 
-begin
+@testset "call: Caching struct arguments" begin
     a = rand(10)
     b = rand(10)
     foo = Foo(Reactant.to_rarray(a))
@@ -684,6 +684,24 @@ begin
     ir = @code_hlo optimize=false call4(foo, foo2, bar)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
+end
+
+function _call5!(a, b)
+    @allowscalar a[1] = zero(eltype(a))
+    return b
+end
+
+function call5!(a, b)
+    @trace _call5!(a, b)
+    return a
+end
+
+@testset "call: argument mutation" begin
+    a = ones(3)
+    b = ones(3)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    @jit call5!(a_ra, b_ra)
 end
 
 function for_inner_scope(x)
