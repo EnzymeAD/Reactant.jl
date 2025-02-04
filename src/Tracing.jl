@@ -164,9 +164,19 @@ end
 Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
 Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict{K}}) where {K} = K
 Base.@nospecializeinfer @inline dict_value(::Type{<:AbstractDict}) = nothing
-Base.@nospecializeinfer @inline dict_value(
-    ::Type{<:(AbstractDict{K,V} where {K})}
-) where {V} = V
+Base.@nospecializeinfer @inline function dict_value(
+    T::Type{<:(AbstractDict{K,V} where {K})}
+) where {V}
+    if @isdefined(V)
+        V
+    elseif T <: UnionAll
+        dict_value(T.body)
+    elseif T <: Dict && length(T.parameters) >= 2
+        T.parameters[2]
+    else
+        error("Could not get element type of $T")
+    end
+end
 
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{<:AbstractDict}),
