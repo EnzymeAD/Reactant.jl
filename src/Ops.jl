@@ -2056,13 +2056,7 @@ end
         Reactant.TracedUtils.set_mlir_data!(
             linear_args[arg_i], MLIR.IR.result(call_op, result_i + 1)
         )
-        paths = Reactant.TracedUtils.get_paths(linear_args[arg_i])
-        if length(paths) > 0 && length(paths[1]) == 2 && paths[1][1] == :args
-            # we remove arg from path to make sure it is definitely returned (since it changed)
-            Reactant.TracedUtils.set_paths!(linear_args[arg_i], paths[2:end])
-        end
     end
-
     return traced_result
 end
 
