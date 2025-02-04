@@ -143,6 +143,23 @@ end
                     (Dict{A,TracedRArray{Float64,0}} where {A}),
                 ),
                 (
+                    (
+                        Dict{
+                            Symbol,NTuple{nsteps,SpectralVariable3D}
+                        } where {nsteps} where {SpectralVariable3D}
+                    ),
+                    (
+                        Dict{
+                            Symbol,NTuple{nsteps,SpectralVariable3D}
+                        } where {nsteps} where {SpectralVariable3D}
+                    ),
+                    (
+                        Dict{
+                            Symbol,NTuple{nsteps,SpectralVariable3D}
+                        } where {nsteps} where {SpectralVariable3D}
+                    ),
+                ),
+                (
                     Base.Pairs{Symbol,Union{}},
                     Base.Pairs{Symbol,Union{}},
                     Base.Pairs{Symbol,Union{}},
