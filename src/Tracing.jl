@@ -314,13 +314,13 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(A::Type{AbstractArray{T, N}}),
+    @nospecialize(A::Type{AbstractArray{T,N}}),
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type)
-) where {T, N}
+) where {T,N}
     if mode == ConcreteToTraced
-        return AbstractArray{TracedRNumber{T}, N}
+        return AbstractArray{TracedRNumber{T},N}
     else
         return A
     end
@@ -634,9 +634,7 @@ function Base.showerror(io::IO, err::NoFieldMatchError)
     )
     for (i, subty) in zip(1:fieldcount(err.origty), err.subTys)
         origty = fieldtype(err.origty, i)
-        println(io,
-            "idx=", i, " Derived: ", subty, " Existing: ", origty
-        )
+        println(io, "idx=", i, " Derived: ", subty, " Existing: ", origty)
     end
 end
 
