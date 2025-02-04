@@ -436,7 +436,21 @@ const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 
 function compile_mlir!(
-    mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any, mutated::Vector{Int}}}(); optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu"
+    mod,
+    f,
+    args,
+    callcache=Dict{
+        Vector,
+        @NamedTuple{
+            f_name::String,
+            mlir_result_types::Vector{MLIR.IR.Type},
+            traced_result::Any,
+            mutated::Vector{Int},
+        }
+    }();
+    optimize::Union{Bool,Symbol}=true,
+    no_nan::Bool=false,
+    backend="gpu",
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -713,7 +727,6 @@ function compile_call_expr(mod, compiler, options, args...)
     end,
     (; compiled=compiled_symbol, args=args_symbol)
 end
-
 
 """
     codegen_flatten!
@@ -1196,6 +1209,5 @@ function callcache!(f, callcache)
         deactivate_callcache!(callcache)
     end
 end
-
 
 end

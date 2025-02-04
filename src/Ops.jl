@@ -2005,7 +2005,7 @@ end
         push!(linear_args, v)
         push!(mlir_caller_args, v.mlir_data)
         # make tracer inserted `()` into the path, here we remove it:
-        v.paths = v.paths[1:end-1]
+        v.paths = v.paths[1:(end - 1)]
     end
 
     seen = Dict()
@@ -2018,16 +2018,12 @@ end
     else
         f_name = String(gensym(Symbol(f)))
         temp = Reactant.TracedUtils.make_mlir_fn(
-            f,
-            args,
-            (),
-            f_name,
-            false;
-            args_in_result=:mutated,
-            do_transpose=false,
+            f, args, (), f_name, false; args_in_result=:mutated, do_transpose=false
         )
         traced_result, ret, mutated = temp[[3, 6, 10]]
-        mlir_result_types = [MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)]
+        mlir_result_types = [
+            MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
+        ]
         cache[cache_key] = (; f_name, mlir_result_types, traced_result, mutated)
     end
 
@@ -2051,13 +2047,15 @@ end
         # this mutates `traced_result`, which is what we want:
         v.mlir_data = MLIR.IR.result(call_op, i)
         # make tracer inserted `()` into the path, here we remove it:
-        v.paths = v.paths[1:end-1]
+        v.paths = v.paths[1:(end - 1)]
         i += 1
     end
     nres = MLIR.IR.nresults(call_op)
     # mutated args are included as the last ones in the call op results
-    for (result_i, arg_i) in zip(nres-length(mutated):nres, mutated)
-        Reactant.TracedUtils.set_mlir_data!(linear_args[arg_i], MLIR.IR.result(call_op, result_i+1))
+    for (result_i, arg_i) in zip((nres - length(mutated)):nres, mutated)
+        Reactant.TracedUtils.set_mlir_data!(
+            linear_args[arg_i], MLIR.IR.result(call_op, result_i + 1)
+        )
         paths = Reactant.TracedUtils.get_paths(linear_args[arg_i])
         if length(paths) > 0 && length(paths[1]) == 2 && paths[1][1] == :args
             # we remove arg from path to make sure it is definitely returned (since it changed)

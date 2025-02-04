@@ -620,7 +620,7 @@ function make_tracer(
         if mode == TracedToTypes
             id = seen[prev]
             push!(path, id)
-            return
+            return nothing
         elseif mode != NoStopTracedTrack && haskey(seen, prev)
             return seen[prev]
         end
@@ -636,7 +636,7 @@ function make_tracer(
     if TT === Module || TT === String
         if mode == TracedToTypes
             push!(path, prev)
-            return
+            return nothing
         end
         return prev
     end
@@ -650,14 +650,7 @@ function make_tracer(
                 newpath = mode == TracedToTypes ? path : append_path(path, i)
                 xi = Base.getfield(prev, i)
                 xi2 = make_tracer(
-                    seen,
-                    xi,
-                    newpath,
-                    mode;
-                    toscalar,
-                    tobatch,
-                    track_numbers,
-                    kwargs...,
+                    seen, xi, newpath, mode; toscalar, tobatch, track_numbers, kwargs...
                 )
                 if xi !== xi2
                     changed = true
@@ -675,7 +668,7 @@ function make_tracer(
     if nf == 0
         if mode == TracedToTypes
             push!(path, prev)
-            return
+            return nothing
         end
         return prev
     end
@@ -687,14 +680,7 @@ function make_tracer(
             newpath = mode == TracedToTypes ? path : append_path(path, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
-                seen,
-                xi,
-                newpath,
-                mode;
-                toscalar,
-                tobatch,
-                track_numbers,
-                kwargs...,
+                seen, xi, newpath, mode; toscalar, tobatch, track_numbers, kwargs...
             )
             if xi !== xi2
                 changed = true
@@ -706,7 +692,7 @@ function make_tracer(
         end
     end
     if mode == TracedToTypes
-        return
+        return nothing
     end
     if !changed
         seen[prev] = prev
@@ -772,7 +758,7 @@ function make_tracer(
     end
     if mode == TracedToTypes
         push!(path, MLIR.IR.type(prev.mlir_data))
-        return
+        return nothing
     end
     if mode == TracedTrack
         TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
@@ -829,7 +815,7 @@ function make_tracer(
     end
     if mode == TracedToTypes
         push!(path, MLIR.IR.type(prev.mlir_data))
-        return
+        return nothing
     end
     if mode == TracedTrack
         TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
@@ -918,7 +904,7 @@ function make_tracer(
 )
     if mode == TracedToTypes
         push!(path, prev)
-        return
+        return nothing
     end
     RT = Core.Typeof(prev)
     if RT <: track_numbers
@@ -951,14 +937,14 @@ end
 function make_tracer(seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...)
     if mode == TracedToTypes
         push!(path, prev)
-        return
+        return nothing
     end
     return prev
 end
 function make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...)
     if mode == TracedToTypes
         push!(path, prev)
-        return
+        return nothing
     end
     return prev
 end
@@ -976,7 +962,7 @@ function make_tracer(
         push!(path, Core.Typeof(prev))
         make_tracer(seen, prev.re, path, mode; toscalar, tobatch, kwargs...)
         make_tracer(seen, prev.im, path, mode; toscalar, tobatch, kwargs...)
-        return
+        return nothing
     end
     return Complex(
         make_tracer(
@@ -1001,18 +987,17 @@ function make_tracer(
         if mode == TracedToTypes
             visited = seen[prev]
             push!(path, visited)
-            return
+            return nothing
         end
         return seen[prev]
     end
     if eltype(RT) <: ReactantPrimitive
-        if mode == ArrayToConcrete && 
-            return seen[prev] = ConcreteRArray(prev)
+        if mode == ArrayToConcrete && return seen[prev] = ConcreteRArray(prev)
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
             push!(path, copy(prev))
             seen[prev] = VisitedObject(length(seen) + 1)
-            return
+            return nothing
         end
     elseif mode == TracedToTypes
         push!(path, RT)
@@ -1022,7 +1007,7 @@ function make_tracer(
                 make_tracer(seen, pv, path, mode; track_numbers, kwargs...)
             end
         end
-        return
+        return nothing
     end
     TT = traced_type(eltype(RT), Val(mode), track_numbers)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
@@ -1045,16 +1030,14 @@ function make_tracer(
     return newa
 end
 
-function make_tracer(
-    seen, @nospecialize(prev::Tuple), @nospecialize(path), mode; kwargs...
-)
+function make_tracer(seen, @nospecialize(prev::Tuple), @nospecialize(path), mode; kwargs...)
     RT = Core.Typeof(prev)
     if mode == TracedToTypes
         push!(path, RT)
         for v in prev
             make_tracer(seen, v, path, mode; kwargs...)
         end
-        return
+        return nothing
     end
     return (
         (
@@ -1079,16 +1062,9 @@ function make_tracer(
     if mode == TracedToTypes
         push!(path, NT)
         for i in 1:length(A)
-            make_tracer(
-                seen,
-                Base.getfield(prev, i),
-                path,
-                mode;
-                track_numbers,
-                kwargs...,
-            )
+            make_tracer(seen, Base.getfield(prev, i), path, mode; track_numbers, kwargs...)
         end
-        return
+        return nothing
     end
     return NamedTuple{A,traced_type(RT, Val(mode), track_numbers)}((
         (
