@@ -292,17 +292,60 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(A::Type{AbstractArray}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+)
+    return A
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(A::Type{AbstractArray{T}}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+) where {T}
+    if mode == ConcreteToTraced
+        return AbstractArray{TracedRNumber{T}}
+    else
+        return A
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(A::Type{AbstractArray{T,N}}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type)
+) where {T,N}
+    if mode == ConcreteToTraced
+        return AbstractArray{TracedRNumber{T},N}
+    else
+        return A
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(A::Type{<:Array}),
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type)
 )
     T = eltype(A)
-    N = ndims(A)
-    if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
-        return ConcreteRArray{T,N}
+    if A isa UnionAll
+        if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
+            return ConcreteRArray{T}
+        else
+            return Array{traced_type_inner(T, seen, mode, track_numbers)}
+        end
     else
-        return Array{traced_type_inner(T, seen, mode, track_numbers),N}
+        N = ndims(A)
+        if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
+            return ConcreteRArray{T,N}
+        else
+            return Array{traced_type_inner(T, seen, mode, track_numbers),N}
+        end
     end
 end
 
@@ -365,6 +408,7 @@ Base.@nospecializeinfer function traced_type_inner(
         if isnothing(Base.datatype_fieldcount(aT))
             throw(TracedTypeError("Unhandled type $T"))
         end
+        return T
     end
 
     if T isa Union
@@ -457,7 +501,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     name = Symbol[]
-    throw(NoFieldMatchError(T, TT2))
+    throw(NoFieldMatchError(T, TT2, subTys))
 end
 
 const traced_type_cache = Dict{Tuple{TraceMode,Type},Dict{Type,Type}}()
@@ -580,13 +624,18 @@ end
 struct NoFieldMatchError <: TracedTypeException
     origty
     besteffort
+    subTys
 end
 function Base.showerror(io::IO, err::NoFieldMatchError)
-    print(io, "NoFieldMatchError: ")
-    return print(
+    println(io, "NoFieldMatchError: ")
+    println(
         io,
         "Cannot convert type $(err.origty), best attempt $(err.besteffort) failed.\nThis could be because the type does not capture the fieldtypes that should be converted in its type parameters.",
     )
+    for (i, subty) in zip(1:fieldcount(err.origty), err.subTys)
+        origty = fieldtype(err.origty, i)
+        println(io, "idx=", i, " Derived: ", subty, " Existing: ", origty)
+    end
 end
 
 function make_tracer(

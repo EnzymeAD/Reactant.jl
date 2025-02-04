@@ -299,7 +299,8 @@ function __lookup_unique_name_in_module(mod, name)
         new_name = i == 0 ? name : name * "_" * string(i)
         MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) && return new_name
     end
-    return error("Could not find unique name for $name")
+    modstr = string(mod)
+    return error("Mod\n$modstr\nCould not find unique name for $name")
 end
 
 function __take_region(compiled_fn)
