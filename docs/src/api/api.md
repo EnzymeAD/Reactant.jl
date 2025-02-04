@@ -14,6 +14,10 @@ Reactant.@jit
 ## ReactantCore API
 
 ```@docs
+within_compile
+```
+
+```@docs
 @trace
 ```
 

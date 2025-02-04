@@ -4,7 +4,12 @@
     TracedToConcrete = 3
     ArrayToConcrete = 4
     TracedSetPath = 5
-    NoStopTracedTrack = 6
+    TracedToTypes = 6
+    NoStopTracedTrack = 7
+end
+
+struct VisitedObject
+    id::Int
 end
 
 function traced_type_inner end
@@ -720,16 +725,29 @@ function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
-    if mode != NoStopTracedTrack && haskey(seen, prev)
-        return seen[prev]
-    end
     RT = Core.Typeof(prev)
+    if haskey(seen, prev)
+        if mode == TracedToTypes
+            id = seen[prev]
+            push!(path, id)
+            return nothing
+        elseif mode != NoStopTracedTrack && haskey(seen, prev)
+            return seen[prev]
+        end
+    elseif mode == TracedToTypes
+        push!(path, RT)
+        seen[prev] = VisitedObject(length(seen) + 1)
+    end
     TT = traced_type(RT, Val(mode), track_numbers, sharding)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
 
     if TT === Module || TT === String
+        if mode == TracedToTypes
+            push!(path, prev)
+            return nothing
+        end
         return prev
     end
 
@@ -739,11 +757,12 @@ function make_tracer(
         changed = false
         for i in 1:nf
             if isdefined(prev, i)
+                newpath = mode == TracedToTypes ? path : append_path(path, i)
                 xi = Base.getfield(prev, i)
                 xi2 = make_tracer(
                     seen,
                     xi,
-                    append_path(path, i),
+                    newpath,
                     mode;
                     track_numbers,
                     sharding=Base.getproperty(sharding, i),
@@ -763,6 +782,10 @@ function make_tracer(
     end
 
     if nf == 0
+        if mode == TracedToTypes
+            push!(path, prev)
+            return nothing
+        end
         return prev
     end
 
@@ -770,11 +793,12 @@ function make_tracer(
     changed = false
     for i in 1:nf
         if isdefined(prev, i)
+            newpath = mode == TracedToTypes ? path : append_path(path, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
                 seen,
                 xi,
-                append_path(path, i),
+                newpath,
                 mode;
                 track_numbers,
                 sharding=Base.getproperty(sharding, i),
@@ -788,6 +812,9 @@ function make_tracer(
             nf = i - 1 # rest of tail must be undefined values
             break
         end
+    end
+    if mode == TracedToTypes
+        return nothing
     end
     if !changed
         seen[prev] = prev
@@ -806,6 +833,9 @@ function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 ) where {T,N}
+    if mode == TracedToTypes
+        throw("Cannot have ConcreteRArray as function call argument.")
+    end
     if mode == ArrayToConcrete
         if prev.sharding isa Sharding.finalized_sharding(typeof(sharding))
             return prev
@@ -834,6 +864,9 @@ function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 ) where {T}
+    if mode == TracedToTypes
+        throw("Cannot have ConcreteRNumber as function call argument.")
+    end
     if mode == ArrayToConcrete
         Sharding.is_sharded(sharding) &&
             error("Cannot specify sharding for ConcreteRNumber")
@@ -862,6 +895,10 @@ function make_tracer(
 ) where {T,N}
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
+    end
+    if mode == TracedToTypes
+        push!(path, MLIR.IR.type(prev.mlir_data))
+        return nothing
     end
     if mode == TracedTrack
         TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
@@ -923,6 +960,10 @@ function make_tracer(
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
+    if mode == TracedToTypes
+        push!(path, MLIR.IR.type(prev.mlir_data))
+        return nothing
+    end
     if mode == TracedTrack
         TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
@@ -972,6 +1013,9 @@ function make_tracer(
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
     end
+    if mode == TracedToTypes
+        throw("Cannot have MissingTracedValue as function call argument.")
+    end
     if mode == TracedTrack
         TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
@@ -1008,6 +1052,10 @@ function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
+    if mode == TracedToTypes
+        push!(path, prev)
+        return nothing
+    end
     RT = Core.Typeof(prev)
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Numbers")
     if RT <: track_numbers
@@ -1037,8 +1085,20 @@ function make_tracer(
     return prev
 end
 
-make_tracer(seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...) = prev
-make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...) = prev
+function make_tracer(seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...)
+    if mode == TracedToTypes
+        push!(path, prev)
+        return nothing
+    end
+    return prev
+end
+function make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...)
+    if mode == TracedToTypes
+        push!(path, prev)
+        return nothing
+    end
+    return prev
+end
 
 function make_tracer(
     seen,
@@ -1049,6 +1109,12 @@ function make_tracer(
     kwargs...,
 )
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Complex")
+    if mode == TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.re, path, mode; kwargs...)
+        make_tracer(seen, prev.im, path, mode; kwargs...)
+        return nothing
+    end
     return Complex(
         make_tracer(seen, prev.re, append_path(path, :re), mode; kwargs...),
         make_tracer(seen, prev.im, append_path(path, :im), mode; kwargs...),
@@ -1068,10 +1134,30 @@ function make_tracer(
     # XXX: If someone wants to shard the same array with different shardings, we need to
     #      somehow handle this correctly... Right now we just use the first sharding.
     if mode != NoStopTracedTrack && haskey(seen, prev)
+        if mode == TracedToTypes
+            visited = seen[prev]
+            push!(path, visited)
+            return nothing
+        end
         return seen[prev]
     end
-    if mode == ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
-        return seen[prev] = ConcreteRArray(prev; sharding)
+    if eltype(RT) <: ReactantPrimitive
+        if mode == ArrayToConcrete && return seen[prev] = ConcreteRArray(prev; sharding)
+        elseif mode == TracedToTypes
+            # Original array can get mutated so we store a copy:
+            push!(path, copy(prev))
+            seen[prev] = VisitedObject(length(seen) + 1)
+            return nothing
+        end
+    elseif mode == TracedToTypes
+        push!(path, RT)
+        for I in eachindex(prev)
+            if isassigned(prev, I)
+                pv = prev[I]
+                make_tracer(seen, pv, path, mode; track_numbers, sharding, kwargs...)
+            end
+        end
+        return nothing
     end
     TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
@@ -1110,6 +1196,14 @@ function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
+    RT = Core.Typeof(prev)
+    if mode == TracedToTypes
+        push!(path, RT)
+        for v in prev
+            make_tracer(seen, v, path, mode; sharding=Base.getproperty(sharding, i),kwargs...)
+        end
+        return nothing
+    end
     return (
         (
             make_tracer(
@@ -1136,6 +1230,14 @@ function make_tracer(
     NT = Core.Typeof(prev)
     A = NT.parameters[1]
     RT = NT.parameters[2]
+
+    if mode == TracedToTypes
+        push!(path, NT)
+        for i in 1:length(A)
+            make_tracer(seen, Base.getfield(prev, i), path, mode; track_numbers, sharding, kwargs...)
+        end
+        return nothing
+    end
     return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, sharding)}((
         (
             make_tracer(
@@ -1159,6 +1261,10 @@ function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
+    if mode == TracedToTypes
+        push!(path, Core.Box)
+        return make_tracer(seen, prev.contents, path, mode;sharding, kwargs...)
+    end
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end

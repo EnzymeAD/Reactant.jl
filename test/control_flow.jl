@@ -626,3 +626,113 @@ end
 
     @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x)
 end
+
+_call1(a, b) = a
+function call1(a, b)
+    x = @trace _call1(a, b)
+    y = @trace _call1(a, b)
+    return @trace _call1(x, y)
+end
+
+@testset "call: basic" begin
+    a = rand(2, 3)
+    b = rand(2, 3)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit(call1(a_ra, b_ra)) ≈ call1(a, b)
+
+    # check whether the func for _call1 was only generated once:
+    ir = @code_hlo optimize = false call1(a_ra, b_ra)
+    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    @test length(ops) == 2 # call1, _call1
+
+    # With different operand sizes, different functions need to be generated:
+    c = rand(4, 5)
+    c_ra = Reactant.to_rarray(c)
+
+    @test @jit(call1(a_ra, c_ra)) ≈ call1(a, c)
+    ir = @code_hlo optimize = false call1(a_ra, c_ra)
+    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    @test length(ops) == 3
+end
+
+_call2(a) = a + a
+function call2(a)
+    return @trace _call2(a)
+end
+
+@testset "call: rnumber" begin
+    a = 10
+    a_rn = Reactant.ConcreteRNumber(a)
+
+    @test @jit(call2(a_rn)) == call2(a)
+end
+
+function _call3(x::Int, y)
+    if x > 10
+        return y .+ y
+    else
+        return y .* y
+    end
+end
+
+function call3(y)
+    z = @trace _call3(1, y)
+    @trace _call3(1, z) # doesn't generate new function because y.shape == z.shape
+    @trace _call3(11, y) # new function because x changed.
+end
+
+@testset "call: caching for Julia operands" begin
+    y = rand(3)
+    y_ra = Reactant.to_rarray(y)
+
+    ir = @code_hlo optimize = false call3(y_ra)
+    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
+end
+
+struct Foo
+    x
+end
+struct Bar
+    x
+end
+
+_call4(foobar::Union{Foo,Bar}) = foobar.x
+function call4(foo, foo2, bar)
+    @trace _call4(foo)
+    @trace _call4(foo2)
+    @trace _call4(bar)
+end
+
+@testset "call: Caching struct arguments" begin
+    a = rand(10)
+    b = rand(10)
+    foo = Foo(Reactant.to_rarray(a))
+    foo2 = Foo(Reactant.to_rarray(b))
+    bar = Foo(Bar(Reactant.to_rarray(b))) # typeof(foo) == typeof(bar), but these don't match!
+    ir = @code_hlo optimize = false call4(foo, foo2, bar)
+    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
+end
+
+function _call5!(a, b)
+    @allowscalar a[1] = zero(eltype(a))
+    return b
+end
+
+function call5!(a, b)
+    @trace _call5!(a, b)
+    return a
+end
+
+@testset "call: argument mutation" begin
+    a = ones(3)
+    b = ones(3)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    @jit call5!(a_ra, b_ra)
+    call5!(a, b)
+    @test a_ra == a
+end
