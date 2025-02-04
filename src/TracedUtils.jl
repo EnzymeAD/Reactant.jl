@@ -134,8 +134,9 @@ function make_mlir_fn(
     concretein=true;
     toscalar=false,
     return_dialect=:func,
+    args_in_result::Symbol=:all,
+    construct_function_without_args::Bool=false,
     do_transpose=true,
-    no_args_in_result=false,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         return (
@@ -148,8 +149,9 @@ function make_mlir_fn(
                 concretein;
                 toscalar,
                 return_dialect,
+                args_in_result,
+                construct_function_without_args,
                 do_transpose,
-                no_args_in_result,
             )[2:end]...,
         )
     end
@@ -218,6 +220,17 @@ function make_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
+    # check which arguments have been mutated
+    mutated_args = Int[]
+    if !construct_function_without_args
+        for (i, arg) in enumerate(linear_args)
+            if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
+                # mutation occured!
+                push!(mutated_args, i)
+            end
+        end
+    end
+
     seen_results = OrderedIdDict()
 
     traced_result = Reactant.make_tracer(
@@ -240,11 +253,18 @@ function make_mlir_fn(
     linear_results = Reactant.TracedType[]
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
-        (no_args_in_result && has_argidx(v)) && continue
+        (args_in_result != :all && has_argidx(v)) && continue
         push!(linear_results, v)
     end
+    if args_in_result == :mutated
+        append!(linear_results, linear_args[mutated_args])
+    end
 
-    out_tys = [transpose_ty(Ops.mlir_type(arg)) for arg in linear_results]
+    out_tys = if do_transpose
+        [transpose_ty(Ops.mlir_type(arg)) for arg in linear_results]
+    else
+        [Ops.mlir_type(arg) for arg in linear_results]
+    end
 
     MLIR.IR.activate!(fnbody)
     ret = try
@@ -259,7 +279,7 @@ function make_mlir_fn(
             end
             push!(vals, col_maj)
         end
-        !no_args_in_result && @assert length(vals) == length(linear_results)
+        args_in_result == :all && @assert length(vals) == length(linear_results)
 
         dialect = getfield(MLIR.Dialects, return_dialect)
         dialect.return_(vals)
@@ -289,6 +309,7 @@ function make_mlir_fn(
         linear_args,
         in_tys,
         linear_results,
+        mutated_args,
     )
 end
 
@@ -401,7 +422,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         return f(scalar_args...)
     end
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results, _ = make_mlir_fn(
         f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
     )
 

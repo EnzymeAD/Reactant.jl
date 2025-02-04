@@ -20,6 +20,8 @@ import ..Reactant:
     ancestor,
     TracedType
 
+import ..ReactantCore: correct_maybe_bcast_call
+
 @inline function traced_getfield(@nospecialize(obj), field)
     return Base.getfield(obj, field)
 end
@@ -440,18 +442,34 @@ const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 
 function compile_mlir!(
-    mod, f, args; optimize::Union{Bool,Symbol}=true, no_nan::Bool=false, backend="gpu"
+    mod,
+    f,
+    args,
+    callcache=Dict{
+        Vector,
+        @NamedTuple{
+            f_name::String,
+            mlir_result_types::Vector{MLIR.IR.Type},
+            traced_result::Any,
+            mutated::Vector{Int},
+        }
+    }();
+    optimize::Union{Bool,Symbol}=true,
+    no_nan::Bool=false,
+    backend="gpu",
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
+    activate_callcache!(callcache)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = try
         Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
     finally
+        deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
     end
@@ -714,11 +732,6 @@ function compile_call_expr(mod, compiler, options, args...)
         )
     end,
     (; compiled=compiled_symbol, args=args_symbol)
-end
-
-function correct_maybe_bcast_call(fname)
-    startswith(string(fname), '.') || return false, fname, fname
-    return true, Symbol(string(fname)[2:end]), fname
 end
 
 """
@@ -1165,6 +1178,42 @@ function register_thunk(
 )
     __thunk_body_cache[tag] = body
     return Thunk{Core.Typeof(f),tag,argtys,isclosure}(f)
+end
+
+function activate_callcache!(callcache)
+    stack = get!(task_local_storage(), :callcache) do
+        return []
+    end
+    push!(stack, callcache)
+    return nothing
+end
+
+function deactivate_callcache!(callcache)
+    callcache === last(task_local_storage(:callcache)) ||
+        error("Deactivating wrong callcache")
+    return pop!(task_local_storage(:callcache))
+end
+
+function _has_callcache()
+    return haskey(task_local_storage(), :callcache) &&
+           !Base.isempty(task_local_storage(:callcache))
+end
+
+function callcache(; throw_error::Bool=true)
+    if !_has_callcache()
+        throw_error && error("No callcache is active")
+        return nothing
+    end
+    return last(task_local_storage(:callcache))
+end
+
+function callcache!(f, callcache)
+    activate_callcache!(callcache)
+    try
+        return f()
+    finally
+        deactivate_callcache!(callcache)
+    end
 end
 
 end

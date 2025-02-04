@@ -3,7 +3,7 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools
 
-export @trace, MissingTracedValue
+export @trace, within_compile, MissingTracedValue
 
 # Traits
 is_traced(x) = false
@@ -20,6 +20,13 @@ Base.zero(::MissingTracedValue) = MissingTracedValue()
 const SPECIAL_SYMBOLS = [
     :(:), :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
 ]
+
+"""
+    within_compile()
+
+Returns true if this function is executed in a Reactant compilation context, otherwise false.
+"""
+@inline within_compile() = false # behavior is overwritten in Interpreter.jl
 
 # Code generation
 """
@@ -117,6 +124,13 @@ macro trace(expr)
             return esc(trace_if_with_returns(__module__, expr))
         end
     end
+    Meta.isexpr(expr, :call) && return esc(trace_call(__module__, expr))
+    if Meta.isexpr(expr, :(.), 2) && Meta.isexpr(expr.args[2], :tuple)
+        fname = :($(Base.Broadcast.BroadcastFunction)($(expr.args[1])))
+        args = only(expr.args[2:end]).args
+        call = Expr(:call, fname, args...)
+        return esc(trace_call(__module__, call))
+    end
     Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
     Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
@@ -196,7 +210,9 @@ function trace_for(mod, expr)
     end
 
     return quote
-        if any($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args[(begin + 1):end])...)))
+        if $(within_compile)() && $(any)(
+            $(is_traced), $(Expr(:tuple, cond_val.(all_syms.args[(begin + 1):end])...))
+        )
             $(reactant_code_block)
         else
             $(expr)
@@ -210,7 +226,7 @@ function trace_if_with_returns(mod, expr)
         mod, expr.args[2]; store_last_line=expr.args[1], depth=1
     )
     return quote
-        if any($(is_traced), ($(all_check_vars...),))
+        if $(within_compile)() && $(any)($(is_traced), ($(all_check_vars...),))
             $(new_expr)
         else
             $(expr)
@@ -356,10 +372,37 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     )
 
     return quote
-        if any($(is_traced), ($(all_check_vars...),))
+        if $(within_compile)() && $(any)($(is_traced), ($(all_check_vars...),))
             $(reactant_code_block)
         else
             $(original_expr)
+        end
+    end
+end
+
+function correct_maybe_bcast_call(fname)
+    startswith(string(fname), '.') || return false, fname, fname
+    return true, Symbol(string(fname)[2:end]), fname
+end
+
+function trace_call(mod, call)
+    bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
+    f = if bcast
+        quote
+            if isdefined(mod, $(Meta.quot(fname_full)))
+                $(fname_full)
+            else
+                Base.Broadcast.BroadcastFunction($(fname))
+            end
+        end
+    else
+        :($(fname))
+    end
+    return quote
+        if $(within_compile)()
+            $(traced_call)($f, $(call.args[2:end]...))
+        else
+            $(call)
         end
     end
 end
@@ -381,6 +424,8 @@ function traced_if(cond, true_fn, false_fn, args)
 end
 
 function traced_while end # defined inside Reactant.jl
+
+traced_call(f, args...; kwargs...) = f(args...; kwargs...)
 
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     return MacroTools.postwalk(expr) do x
