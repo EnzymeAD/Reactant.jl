@@ -833,7 +833,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
 #include "mlir/Target/LLVMIR/Dialect/NVVM/LLVMIRToNVVMTranslation.h"
 #include "xla/service/spmd/shardy/sdy_round_trip/pipelines.h"
 
-extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg, bool first_run) {
+extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::DialectRegistry &registry = *unwrap(creg);
   prepareRegistry(registry);
 
@@ -841,47 +841,45 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg, bool first
   mlir::registerNVVMDialectImport(registry);
   mlir::LLVM::registerInlinerInterface(registry);
 
-  if (first_run) {
-    mlir::registerenzymePasses();
-    enzyme::registerenzymexlaPasses();
+  mlir::registerenzymePasses();
+  enzyme::registerenzymexlaPasses();
 
-    // Register the standard passes we want.
-    mlir::registerCSEPass();
-    mlir::registerConvertAffineToStandardPass();
-    mlir::registerSCCPPass();
-    mlir::registerInlinerPass();
-    mlir::registerCanonicalizerPass();
-    mlir::registerSymbolDCEPass();
-    mlir::registerLoopInvariantCodeMotionPass();
-    mlir::registerConvertSCFToOpenMPPass();
-    mlir::affine::registerAffinePasses();
-    mlir::registerReconcileUnrealizedCasts();
+  // Register the standard passes we want.
+  mlir::registerCSEPass();
+  mlir::registerConvertAffineToStandardPass();
+  mlir::registerSCCPPass();
+  mlir::registerInlinerPass();
+  mlir::registerCanonicalizerPass();
+  mlir::registerSymbolDCEPass();
+  mlir::registerLoopInvariantCodeMotionPass();
+  mlir::registerConvertSCFToOpenMPPass();
+  mlir::affine::registerAffinePasses();
+  mlir::registerReconcileUnrealizedCasts();
 
-    /*
-      registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
-        LLVM::LLVMFunctionType::attachInterface<MemRefInsider>(*ctx);
-        LLVM::LLVMArrayType::attachInterface<MemRefInsider>(*ctx);
-        LLVM::LLVMPointerType::attachInterface<MemRefInsider>(*ctx);
-        LLVM::LLVMStructType::attachInterface<MemRefInsider>(*ctx);
-        MemRefType::attachInterface<PtrElementModel<MemRefType>>(*ctx);
-        LLVM::LLVMStructType::attachInterface<
-            PtrElementModel<LLVM::LLVMStructType>>(*ctx);
-        LLVM::LLVMPointerType::attachInterface<
-            PtrElementModel<LLVM::LLVMPointerType>>(*ctx);
-        LLVM::LLVMArrayType::attachInterface<PtrElementModel<LLVM::LLVMArrayType>>(
-            *ctx);
-      });
-      */
+  /*
+    registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
+      LLVM::LLVMFunctionType::attachInterface<MemRefInsider>(*ctx);
+      LLVM::LLVMArrayType::attachInterface<MemRefInsider>(*ctx);
+      LLVM::LLVMPointerType::attachInterface<MemRefInsider>(*ctx);
+      LLVM::LLVMStructType::attachInterface<MemRefInsider>(*ctx);
+      MemRefType::attachInterface<PtrElementModel<MemRefType>>(*ctx);
+      LLVM::LLVMStructType::attachInterface<
+          PtrElementModel<LLVM::LLVMStructType>>(*ctx);
+      LLVM::LLVMPointerType::attachInterface<
+          PtrElementModel<LLVM::LLVMPointerType>>(*ctx);
+      LLVM::LLVMArrayType::attachInterface<PtrElementModel<LLVM::LLVMArrayType>>(
+          *ctx);
+    });
+    */
 
-    // Transform dialect and extensions.
-    mlir::transform::registerInterpreterPass();
-    mlir::enzyme::registerGenerateApplyPatternsPass();
-    mlir::enzyme::registerRemoveTransformPass();
+  // Transform dialect and extensions.
+  mlir::transform::registerInterpreterPass();
+  mlir::enzyme::registerGenerateApplyPatternsPass();
+  mlir::enzyme::registerRemoveTransformPass();
 
-    // xla + shardy specific passes
-    xla::sdy::registerSdyRoundTripExportPipeline();
-    xla::sdy::registerSdyRoundTripImportPipeline();
-  }
+  // xla + shardy specific passes
+  xla::sdy::registerSdyRoundTripExportPipeline();
+  xla::sdy::registerSdyRoundTripImportPipeline();
 }
 
 /// Returns an unused symbol in `module` for `oldSymbolName` by trying numeric
