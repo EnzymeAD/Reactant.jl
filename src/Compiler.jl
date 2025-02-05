@@ -1052,7 +1052,7 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, devic
         num_devices = XLA.ClientNumAddressableDevices(client)
         if num_devices != 1
             error(
-                "Unsupported client with multiple addressible devices (we need to pass right shard data",
+                "Unsupported client with multiple addressible devices (we need to pass right shard data)",
             )
         end
 
