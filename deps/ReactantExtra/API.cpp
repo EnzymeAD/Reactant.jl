@@ -770,16 +770,11 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
   }
   options.untuple_result = true;
 
-  // TODO: support returning futures
-  // std::optional<std::vector<FutureType>> returned_futures = std::vector<FutureType>();
-  // auto results = MyValueOrThrow(
-  //     exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
-  //                       argument_handles),
-  //                   options, returned_futures));
+  std::optional<std::vector<FutureType>> returned_futures = std::vector<FutureType>();
   auto results = MyValueOrThrow(
       exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
                         argument_handles),
-                    options));
+                    options, returned_futures));
 
   assert(results.size() == num_mesh_ids);
 
@@ -793,12 +788,12 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
   }
 
   // Handle returned futures
-  // if (returned_futures.has_value()) {
-  //   *futures = true;
-  //   assert(returned_futures->size() == num_mesh_ids);
-  // } else {
-  *futures = false;
-  // }
+  if (returned_futures.has_value()) {
+    *futures = true;
+    assert(returned_futures->size() == num_mesh_ids);
+  } else {
+    *futures = false;
+  }
 
   // Copy results into the output buffers
   for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
@@ -806,9 +801,9 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
     for (int result_idx = 0; result_idx < num_results; ++result_idx) {
       int flat_index = mesh_id * num_results + result_idx;
       op_results[flat_index] = results[mesh_id][result_idx].release();
-      // if (returned_futures.has_value()) {
-      //   future_results[flat_index] = new FutureType((*returned_futures)[mesh_id]);
-      // }
+      if (returned_futures.has_value()) {
+        future_results[flat_index] = new FutureType((*returned_futures)[mesh_id]);
+      }
     }
   }
 }
