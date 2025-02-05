@@ -988,22 +988,10 @@ function codegen_unflatten!(
         end
     end
 
-    display(
-        quote
-            $(unflatten_code...)
-        end,
-    )
-
     prevkeys = collect(keys(result_stores))
     result_code = create_result(concrete_result, (), result_stores)
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
-
-    @show preserved_args
-
-    # if !isempty(preserved_args) && is_sharded
-    #     error("TODO: Currently we don't support preserving arguments when sharding.")
-    # end
 
     # if some argument is mutated, change them to point to the correct concrete results
     for (result, arg_idx) in preserved_args
@@ -1074,7 +1062,7 @@ function codegen_xla_call(
 )
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
-    concretized_res_names = Symbol[Symbol(:concrete_res_, i) for i in 1:nresults]
+    concretized_res_names = Symbol[Symbol(:result_buffer_, i) for i in 1:nresults]
     concretized_res_code = map(enumerate(concretized_res_names)) do (i, varname)
         :($varname = linearized_results[$i])
     end
