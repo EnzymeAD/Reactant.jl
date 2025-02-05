@@ -911,8 +911,6 @@ function codegen_unflatten!(
     has_cache_dict = false
     unflatten_code = Expr[]
 
-    @show linear_results
-
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
         paths = (

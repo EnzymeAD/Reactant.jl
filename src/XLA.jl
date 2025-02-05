@@ -615,13 +615,14 @@ end
     ::Val{n_outs},
     ::Val{K},
 ) where {N,M,n_outs,K}
-    outputs = Ref{NTuple{n_outs * M,Ptr{Cvoid}}}()
-    future_res = Ref{NTuple{n_outs * M,Ptr{Cvoid}}}()
+    @assert length(mesh_ids) == K
+    outputs = Ref{NTuple{n_outs * K,Ptr{Cvoid}}}()
+    future_res = Ref{NTuple{n_outs * K,Ptr{Cvoid}}}()
     futures = Ref{UInt8}(0)
 
     inputs = Base.RefValue(inputs)
     donated_args = Base.RefValue(donated_args)
-    GC.@preserve inputs donated_args outputs futures future_res begin
+    GC.@preserve inputs donated_args mesh_ids outputs futures future_res begin
         @ccall MLIR.API.mlir_c.XLAExecute(
             exec.exec::Ptr{Cvoid},
             N::Cint,
@@ -638,17 +639,16 @@ end
 
     outputs = outputs[]
     future = futures[] != 0
-
-    @show outputs
-    @show future
-
     future_res = future_res[]
 
-    error("TODO: Don't hardcode")
-
-    return ntuple(Val(n_outs)) do i
-        Base.@_inline_meta
-        return AsyncBuffer(Buffer(outputs[i]), future ? Future(future_res[i]) : nothing)
+    return ntuple(Val(n_outs)) do j
+        ntuple(Val(K)) do i
+            Base.@_inline_meta
+            idx = (i - 1) * K + j
+            return AsyncBuffer(
+                Buffer(outputs[idx]), future ? Future(future_res[idx]) : nothing
+            )
+        end
     end
 end
 
