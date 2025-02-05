@@ -27,13 +27,6 @@ s = ArgParseSettings()
         help = "Hermetic Python version."
         default = "3.10"
         arg_type = String
-    # For GCC < 13 we need to disable these flags
-    "--xnn_disable_avx512fp16"
-        help = "Disable AVX512 FP16 support in XNNPACK."
-        action = :store_true
-    "--xnn_disable_avxvnniint8"
-        help = "Disable AVX VNNI INT8 support in XNNPACK."
-        action = :store_true
     "--jobs"
         help = "Number of parallel jobs."
         default = Sys.CPU_THREADS
@@ -112,16 +105,23 @@ gcc_host_compiler_path = parsed_args["gcc_host_compiler_path"]
 cc = parsed_args["cc"]
 hermetic_python_version = parsed_args["hermetic_python_version"]
 
+# Try to guess if `cc` is GCC and get its version number.
+cc_is_gcc, gcc_version_number = let
+    io = IOBuffer()
+    run(pipeline(ignorestatus(`$(cc) --version`); stdout=io))
+    version_string = String(take!(io))
+    m = match(r"\(GCC\) (\d+\.\d+\.\d+)", version_string)
+    if !isnothing(m)
+        true, VersionNumber(m[1])
+    else
+        false, v"0"
+    end
+end
+
 build_cmd_list = [bazel_cmd, "build"]
 !isempty(arg) && push!(build_cmd_list, arg)
 append!(build_cmd_list, ["-c", "$(build_kind)"])
 push!(build_cmd_list, "--action_env=JULIA=$(Base.julia_cmd().exec[1])")
-if parsed_args["xnn_disable_avx512fp16"]
-    push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
-end
-if parsed_args["xnn_disable_avxvnniint8"]
-    push!(build_cmd_list, "--define=xnn_enable_avxvnniint8=false")
-end
 push!(build_cmd_list, "--repo_env=HERMETIC_PYTHON_VERSION=$(hermetic_python_version)")
 push!(build_cmd_list, "--repo_env=GCC_HOST_COMPILER_PATH=$(gcc_host_compiler_path)")
 push!(build_cmd_list, "--repo_env=CC=$(cc)")
@@ -136,6 +136,18 @@ for opt in parsed_args["cxxopt"]
 end
 for opt in parsed_args["extraopt"]
     push!(build_cmd_list, opt)
+end
+# Some versions of GCC can't deal with some components of XLA, disable them if necessary.
+if cc_is_gcc && build_backend == "cuda"
+    arch = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform())
+    if arch == "x86_64"
+        if gcc_version <= v"12"
+            push!(build_cmd_list, "--define=xnn_enable_avxvnniint8=false")
+        end
+        if gcc_version <= v"11"
+            push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
+        end
+    end
 end
 push!(build_cmd_list, ":libReactantExtra.so")
 
