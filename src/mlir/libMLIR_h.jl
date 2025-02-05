@@ -6142,6 +6142,17 @@ function mlirFuncSetArgAttr(op, pos, name, attr)
     )::Cvoid
 end
 
+"""
+    mlirFuncSetResultAttr(op, pos, name, attr)
+
+Sets the result attribute 'name' of an result at index 'pos'. Asserts that the operation is a FuncOp.
+"""
+function mlirFuncSetResultAttr(op, pos, name, attr)
+    @ccall mlir_c.mlirFuncSetResultAttr(
+        op::MlirOperation, pos::intptr_t, name::MlirStringRef, attr::MlirAttribute
+    )::Cvoid
+end
+
 function mlirGetDialectHandle__gpu__()
     @ccall mlir_c.mlirGetDialectHandle__gpu__()::MlirDialectHandle
 end

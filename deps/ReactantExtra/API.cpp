@@ -161,6 +161,13 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
 // TODO mlirComplexAttrGetnValue
 // TODO extern "C" MlirTypeID mlirComplexAttrGetTypeID(void) { return
 // wrap(complex::NumberAttr::getTypeID()); }
+
+extern "C" void mlirFuncSetResultAttr(MlirOperation op, intptr_t pos,
+                                      MlirStringRef name, MlirAttribute attr) {
+  llvm::cast<mlir::func::FuncOp>(unwrap(op))
+      .setResultAttr(pos, unwrap(name), unwrap(attr));
+}
+
 #pragma endregion
 
 // auxiliar functions

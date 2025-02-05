@@ -409,12 +409,30 @@ function make_mlir_fn(
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
-    # Attach `sdy.sharding` attribute to the argument
     if is_sharded
+        # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
                 MLIR.API.mlirFuncSetArgAttr(
                     func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
+                )
+            end
+        end
+
+        # Ensure the sharding of the mutated arguments is propagated to the results
+        for i in mutated_args
+            arg = linear_args[i]
+            if has_residx(arg) && haskey(traced_args_to_shardings, arg)
+                residx = -1
+                for (j, res) in enumerate(linear_results)
+                    if res === arg
+                        residx = j
+                        break
+                    end
+                end
+                @assert residx > 0
+                MLIR.API.mlirFuncSetResultAttr(
+                    func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
                 )
             end
         end
