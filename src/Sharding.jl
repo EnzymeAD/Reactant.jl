@@ -61,12 +61,12 @@ struct NamedSharding{D1,P<:Tuple,D2} <: AbstractSharding
     function NamedSharding(
         mesh::Mesh{D1},
         partition_spec::P;
-        is_closed::NTuple{D2,Bool}=ntuple(
-            i -> partition_spec[i] !== nothing, length(partition_spec)
-        ),
+        is_closed::NTuple{D2,Bool}=ntuple(Returns(true), length(partition_spec)),
         # negative priority means that priority is not considered by shardy
         priority::NTuple{D2,Int}=ntuple(i -> -1, length(partition_spec)),
     ) where {D1,P<:Tuple,D2}
+        # TODO: we need to check how open sharding works in XLA, i.e. how to specify inputs
+        @assert all(is_closed) "All partitions must be closed for now."
         present_axes = String[]
         for p in partition_spec
             if p !== nothing

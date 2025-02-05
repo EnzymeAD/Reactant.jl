@@ -154,7 +154,7 @@ end
 
 function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
     if isempty(X)
-        println(io, "<Empty buffer>")
+        print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
     end
     print(io, "$(typeof(X))(")
@@ -165,7 +165,7 @@ end
 
 function Base.print_array(io::IO, X::AnyConcreteRArray)
     if isempty(X)
-        println(io, "<Empty buffer>")
+        print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
     end
     return Base.print_array(io, convert(Array, X))
@@ -173,7 +173,7 @@ end
 
 function Base.show(io::IO, X::AnyConcreteRArray)
     if isempty(X)
-        println(io, "<Empty buffer>")
+        print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
     end
     print(io, "$(typeof(X))(")

@@ -44,12 +44,23 @@ end
                 return Base.setfield!(obj, field, [val])
             end
         end
+        if val isa Tuple
+            if Reactant.Sharding.is_sharded(ancestor_obj)
+                return Base.setfield!(
+                    obj, field, reshape([val...], size(getfield(obj, field)))
+                )
+            else
+                error("`val` can't be a tuple if `obj` is not sharded")
+            end
+        end
         return Base.setfield!(obj, field, val)
     end
     return Base.setindex!(obj, val, field)
 end
 
-function create_result(tocopy::T, path, result_stores) where {T}
+function create_result(
+    tocopy::T, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T}
     if !isstructtype(typeof(tocopy))
         error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
     end
@@ -60,14 +71,22 @@ function create_result(tocopy::T, path, result_stores) where {T}
         # If the field is undefined we don't set it. A common example for this is `du2`
         # for Tridiagonal
         isdefined(tocopy, i) || continue
-        ev = create_result(getfield(tocopy, i), append_path(path, i), result_stores)
+        ev = create_result(
+            getfield(tocopy, i),
+            append_path(path, i),
+            result_stores,
+            path_to_shard_info,
+            sharding_mesh,
+        )
         push!(elems, ev)
     end
 
     return Expr(:new, T, elems...)
 end
 
-function create_result(tocopy::ConcreteRNumber{T}, path, result_stores) where {T}
+function create_result(
+    tocopy::ConcreteRNumber{T}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
@@ -77,12 +96,42 @@ function create_result(tocopy::ConcreteRNumber{T}, path, result_stores) where {T
     return :(ConcreteRNumber{$T}($(tocopy.data)))
 end
 
-function create_result(tocopy::ConcreteRArray{T,N,D,S}, path, result_stores) where {T,N,D,S}
+function __construct_sharding_for_carray(
+    ::ConcreteRArray{T,N,D,S}, path, _, path_to_shard_info, sharding_mesh
+) where {T,N,D,S}
+    device_to_array_slices, partition_spec = path_to_shard_info[path]
+    delete!(path_to_shard_info, path)
+    sharding = Reactant.Sharding.NamedSharding(sharding_mesh, partition_spec)
+    return Reactant.Sharding.FinalizedNamedSharding{typeof(sharding),ndims(sharding_mesh)}(
+        sharding, device_to_array_slices
+    )
+end
+
+function create_result(
+    tocopy::ConcreteRArray{T,N,D,S}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        # TODO: restore sharding???
-        return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
+        if path_to_shard_info !== nothing # restore sharding
+            sharding = __construct_sharding_for_carray(
+                tocopy, path, result_stores, path_to_shard_info, sharding_mesh
+            )
+            return :(ConcreteRArray{$T,$N,$(ndims(sharding_mesh)),$(typeof(sharding))}(
+                reshape([$(restore)...], $(size(sharding_mesh))), $(tocopy.shape), $sharding
+            ))
+        else
+            return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
+        end
+    end
+
+    if path_to_shard_info !== nothing # restore sharding
+        sharding = __construct_sharding_for_carray(
+            tocopy, path, result_stores, path_to_shard_info, sharding_mesh
+        )
+        return :(ConcreteRArray{$T,$N,$(ndims(sharding_mesh)),$(typeof(sharding))}(
+            reshape([$(tocopy.data)...], $(size(sharding_mesh))), $(tocopy.shape), $sharding
+        ))
     end
     # We will set the data for this later
     return :(ConcreteRArray{$T,$N,$D,$S}(
@@ -90,35 +139,63 @@ function create_result(tocopy::ConcreteRArray{T,N,D,S}, path, result_stores) whe
     ))
 end
 
-function create_result(tocopy::Array{T,N}, path, result_stores) where {T,N}
+function create_result(
+    tocopy::Array{T,N}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T,N}
     elems = Expr[]
     for (i, v) in enumerate(tocopy)
-        push!(elems, create_result(v, append_path(path, i), result_stores))
+        push!(
+            elems,
+            create_result(
+                v, append_path(path, i), result_stores, path_to_shard_info, sharding_mesh
+            ),
+        )
     end
     # TODO is there a way to not call `reshape` here? what expr is used for array literals?
     return :(reshape($T[$(elems...)], $(size(tocopy))...))
 end
 
-function create_result(tocopy::Tuple, path, result_stores)
+function create_result(
+    tocopy::Tuple, path, result_stores, path_to_shard_info, sharding_mesh
+)
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
-        push!(elems, create_result(v, append_path(path, k), result_stores))
+        push!(
+            elems,
+            create_result(
+                v, append_path(path, k), result_stores, path_to_shard_info, sharding_mesh
+            ),
+        )
     end
     return :(($(elems...),))
 end
 
-function create_result(tocopy::NamedTuple{K,T}, path, result_stores) where {K,T}
+function create_result(
+    tocopy::NamedTuple{K,T}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {K,T}
     elems = Union{Symbol,Expr}[]
     for (i, (k, v)) in enumerate(pairs(tocopy))
-        push!(elems, create_result(v, append_path(path, i), result_stores))
+        push!(
+            elems,
+            create_result(
+                v, append_path(path, i), result_stores, path_to_shard_info, sharding_mesh
+            ),
+        )
     end
     return :(NamedTuple{$K}(($(elems...),)))
 end
 
-function create_result(tocopy::D, path, result_stores) where {K,V,D<:AbstractDict{K,V}}
+function create_result(
+    tocopy::D, path, result_stores, path_to_shard_info, sharding_mesh
+) where {K,V,D<:AbstractDict{K,V}}
     elems = Expr[]
     for (i, p) in enumerate(pairs(tocopy))
-        push!(elems, create_result(p, append_path(path, i), result_stores))
+        push!(
+            elems,
+            create_result(
+                p, append_path(path, i), result_stores, path_to_shard_info, sharding_mesh
+            ),
+        )
     end
     return :($D([$(elems...)]))
 end
@@ -127,6 +204,8 @@ function create_result(
     tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
     path,
     result_stores,
+    path_to_shard_info,
+    sharding_mesh,
 )
     return Meta.quot(tocopy)
 end
@@ -649,6 +728,7 @@ function compile_mlir!(
         end
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
     end
+
     fnbody = MLIR.IR.block(ret)
     MLIR.API.mlirOperationDestroy(ret.operation)
     ret.operation = MLIR.API.MlirOperation(C_NULL)
@@ -683,6 +763,7 @@ function compile_mlir!(
         linear_args,
         in_tys,
         linear_results2,
+        mlir_fn_res.linear_result_shard_info,
         mlir_fn_res.num_partitions,
         mlir_fn_res.num_replicas,
         mlir_fn_res.is_sharded,
@@ -905,14 +986,18 @@ function codegen_unflatten!(
     linear_results,
     concrete_result,
     result_stores,
+    path_to_shard_info,
     is_sharded::Bool,
+    linear_result_shard_info,
+    sharding_mesh,
 )
     cache_dict = gensym("cache_dict")
     has_cache_dict = false
     unflatten_code = Expr[]
 
     # mutate the result stores to point to the correct concrete results
-    for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
+    for (concrete_res_name, result, shard_info) in
+        zip(concretized_res_names, linear_results, linear_result_shard_info)
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
@@ -924,6 +1009,9 @@ function codegen_unflatten!(
                 unflatcode = :result
                 path = path[2:end]
                 result_stores[path] = concrete_res_name
+                if path_to_shard_info !== nothing
+                    path_to_shard_info[path] = shard_info
+                end
                 continue
             else
                 @assert path[1] == :resargs
@@ -989,7 +1077,9 @@ function codegen_unflatten!(
     end
 
     prevkeys = collect(keys(result_stores))
-    result_code = create_result(concrete_result, (), result_stores)
+    result_code = create_result(
+        concrete_result, (), result_stores, path_to_shard_info, sharding_mesh
+    )
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
 
@@ -1062,7 +1152,9 @@ function codegen_xla_call(
 )
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
-    concretized_res_names = Symbol[Symbol(:result_buffer_, i) for i in 1:nresults]
+    base_symbol_name =
+        is_sharded ? Symbol(:result_buffer_m, length(mesh_ids), :_) : :result_buffer_
+    concretized_res_names = Symbol[Symbol(base_symbol_name, i) for i in 1:nresults]
     concretized_res_code = map(enumerate(concretized_res_names)) do (i, varname)
         :($varname = linearized_results[$i])
     end
@@ -1242,6 +1334,11 @@ function compile(f, args; sync=false, kwargs...)
     end
 
     result_stores = Dict{Tuple,Symbol}()
+    path_to_shard_info = if mlir_fn_res.is_sharded
+        Dict{Tuple,Tuple{Array{Vector{UnitRange{Int}}},Tuple}}()
+    else
+        nothing
+    end
 
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(
@@ -1270,7 +1367,10 @@ function compile(f, args; sync=false, kwargs...)
         linear_results,
         concrete_result,
         result_stores,
+        path_to_shard_info,
         mlir_fn_res.is_sharded,
+        mlir_fn_res.linear_result_shard_info,
+        mlir_fn_res.sharding_mesh,
     )
 
     sync_call = if sync
@@ -1291,11 +1391,6 @@ function compile(f, args; sync=false, kwargs...)
         $(sync_call)
         $(unflatten_code...)
         return result
-    end
-
-    # XXX: Remove
-    if mlir_fn_res.is_sharded
-        display(body)
     end
 
     return register_thunk(

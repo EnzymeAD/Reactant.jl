@@ -770,7 +770,7 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
   }
   options.untuple_result = true;
 
-  std::optional<std::vector<FutureType>> returned_futures = std::vector<FutureType>();;
+  std::optional<std::vector<FutureType>> returned_futures = std::vector<FutureType>();
   auto results = MyValueOrThrow(
       exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
                         argument_handles),
