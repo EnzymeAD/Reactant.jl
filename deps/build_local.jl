@@ -110,7 +110,12 @@ cc_is_gcc, gcc_version_number = let
     io = IOBuffer()
     run(pipeline(ignorestatus(`$(cc) --version`); stdout=io))
     version_string = String(take!(io))
-    m = match(r"\(GCC\) (\d+\.\d+\.\d+)", version_string)
+    # Detecing GCC is hard, the name "gcc" may not appear anywhere in the
+    # version string, but on the second line there should be FSF.
+    m = match(
+        r"\([^)]+\) (\d+\.\d+\.\d+).*\n.*Free Software Foundation, Inc\.",
+        version_string,
+    )
     if !isnothing(m)
         true, VersionNumber(m[1])
     else
