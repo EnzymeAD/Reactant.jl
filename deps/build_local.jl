@@ -34,6 +34,22 @@ s = ArgParseSettings()
     "--xnn_disable_avxvnniint8"
         help = "Disable AVX VNNI INT8 support in XNNPACK."
         action = :store_true
+    "--jobs"
+        help = "Number of parallel jobs."
+        default = Sys.CPU_THREADS
+        arg_type = Int
+    "--copt"
+        help = "Options to be passed to the C compiler.  Can be used multiple times."
+        action = :append_arg
+        arg_type = String
+    "--cxxopt"
+        help = "Options to be passed to the C++ compiler.  Can be used multiple times."
+        action = :append_arg
+        arg_type = String
+    "--extraopt"
+        help = "Extra options to be passed to Bazel.  Can be used multiple times."
+        action = :append_arg
+        arg_type = String
 end
 #! format: on
 parsed_args = parse_args(ARGS, s)
@@ -130,6 +146,16 @@ push!(build_cmd_list, "--repo_env=GCC_HOST_COMPILER_PATH=$(gcc_host_compiler_pat
 push!(build_cmd_list, "--repo_env=CC=$(cc)")
 push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
+push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
+for opt in parsed_args["copt"]
+    push!(build_cmd_list, "--copt=$(opt)")
+end
+for opt in parsed_args["cxxopt"]
+    push!(build_cmd_list, "--cxxopt=$(opt)")
+end
+for opt in parsed_args["extraopt"]
+    push!(build_cmd_list, opt)
+end
 push!(build_cmd_list, ":libReactantExtra.so")
 
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))
