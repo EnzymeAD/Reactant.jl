@@ -805,9 +805,18 @@ The name is due to its similarity to the `flatten` function in `jax.tree_util.re
 
 The _linearized arguments_ do not directly refer to the  are the arguments that have been flattened into a single list.
 """
-function codegen_flatten!(linear_args, seen_args, result_stores, is_sharded::Bool)
+function codegen_flatten!(
+    linear_args, seen_args, result_stores, is_sharded::Bool, mesh, client
+)
     flatten_names = Symbol[]
     flatten_code = Expr[]
+
+    if is_sharded
+        inv_seen_args = Reactant.OrderedIdDict()
+        for (k, v) in seen_args
+            inv_seen_args[v] = k
+        end
+    end
 
     for (i, arg) in enumerate(linear_args)
         paths = (
@@ -833,9 +842,36 @@ function codegen_flatten!(linear_args, seen_args, result_stores, is_sharded::Boo
         push!(flatten_code, :($usbuf = $flatcode.data))
 
         if is_sharded
-            # @show linear_args[i]
-            # @show seen_args[linear_args[i]]
-            error("TODO: Sharding is not supported yet")
+            carg = inv_seen_args[arg]
+            if carg isa ConcreteRArray && Reactant.Sharding.is_sharded(carg)
+                for j in 1:length(mesh)
+                    sbuf = Symbol(:sbuf_, i, "_", j)
+                    push!(flatten_names, sbuf)
+                    push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
+                end
+            else
+                # Warn here first and then replicate the input across all devices on the
+                # mesh
+                if carg isa ConcreteRArray
+                    @warn "Input $carg is not sharded, replicating across all devices. It \
+                           is recommended to replicate the input across all devices on the \
+                           mesh manually using `Reactant.Sharding.NamedSharding`" maxlog = 1
+                end
+                buf = Symbol(:buf_, i)
+                if carg isa ConcreteRArray
+                    push!(flatten_code, :($buf = XLA.synced_buffer(only($usbuf))))
+                else
+                    push!(flatten_code, :($buf = XLA.synced_buffer($usbuf)))
+                end
+                for j in 1:length(mesh)
+                    device_id = mesh.device_ids[j]
+                    device_ordinal = XLA.device_ordinal(client, device_id)
+                    sbuf = Symbol(:sbuf_, i, "_", j)
+                    device = XLA.ClientGetAddressableDevice(client, device_ordinal)
+                    push!(flatten_names, sbuf)
+                    push!(flatten_code, :($sbuf = XLA.CopyBufferToDevice($buf, $device)))
+                end
+            end
         else
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
@@ -848,6 +884,11 @@ function codegen_flatten!(linear_args, seen_args, result_stores, is_sharded::Boo
             end
         end
     end
+
+    # We reorder how the buffers are passed to the XLA call
+    is_sharded &&
+        (flatten_names = vcat(eachrow(reshape(flatten_names, length(mesh), :))...))
+
     return flatten_names, flatten_code
 end
 
@@ -870,9 +911,7 @@ function codegen_unflatten!(
     has_cache_dict = false
     unflatten_code = Expr[]
 
-    if is_sharded
-        error("TODO: Sharding is not supported yet")
-    end
+    @show linear_results
 
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result) in zip(concretized_res_names, linear_results)
@@ -951,10 +990,22 @@ function codegen_unflatten!(
         end
     end
 
+    display(
+        quote
+            $(unflatten_code...)
+        end,
+    )
+
     prevkeys = collect(keys(result_stores))
     result_code = create_result(concrete_result, (), result_stores)
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
+
+    @show preserved_args
+
+    # if !isempty(preserved_args) && is_sharded
+    #     error("TODO: Currently we don't support preserving arguments when sharding.")
+    # end
 
     # if some argument is mutated, change them to point to the correct concrete results
     for (result, arg_idx) in preserved_args
@@ -1021,7 +1072,7 @@ Generate Julia code to call the XLA executable.
 - `nresults`: The number of results to expect.
 """
 function codegen_xla_call(
-    exec, device, flatten_names, donated_args_mask, nresults, is_sharded::Bool
+    exec, device, flatten_names, donated_args_mask, nresults, is_sharded::Bool, mesh_ids
 )
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
@@ -1038,9 +1089,11 @@ function codegen_xla_call(
                 GC.@preserve $(flatten_names...) begin
                     linearized_results = XLA.ExecutableCall(
                         $exec,
+                        $(mesh_ids),
                         ($(flatten_buffer_refs...),),
                         $(Tuple(donated_args_mask)),
                         Val($nresults),
+                        Val($(length(mesh_ids))),
                     )
                 end
                 $(concretized_res_code...)
@@ -1171,11 +1224,6 @@ function compile_xla(f, args; client=nothing, kwargs...)
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
-        # XXX: Remove
-        if mlir_fn_res.is_sharded > 1
-            display(mod)
-        end
-
         # compile MLIR module to XLA executable
         is_sharded = mlir_fn_res.num_partitions > 1
         if is_sharded
@@ -1188,7 +1236,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
         # exec = XLA.Compile(client, device, mod; is_sharded, mesh_ids, mesh_shape)
         exec = XLA.Compile(client, device, mod; is_sharded, mesh_ids)
 
-        return exec, mlir_fn_res, device
+        return exec, mlir_fn_res, device, client
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -1198,7 +1246,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
 end
 
 function compile(f, args; sync=false, kwargs...)
-    exec, mlir_fn_res, device = compile_xla(f, args; kwargs...)
+    exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
 
@@ -1211,7 +1259,12 @@ function compile(f, args; sync=false, kwargs...)
 
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(
-        linear_args, seen_args, result_stores, mlir_fn_res.is_sharded
+        linear_args,
+        seen_args,
+        result_stores,
+        mlir_fn_res.is_sharded,
+        mlir_fn_res.sharding_mesh,
+        client,
     )
 
     concretized_res_names, xla_call_code = codegen_xla_call(
@@ -1221,6 +1274,7 @@ function compile(f, args; sync=false, kwargs...)
         donated_args_mask,
         length(linear_results),
         mlir_fn_res.is_sharded,
+        mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh.device_ids) : Int64[],
     )
 
     unflatten_code = codegen_unflatten!(

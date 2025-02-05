@@ -725,23 +725,33 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
   }
 }
 
-extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
-                           PjRtBuffer **op_args, uint8_t *is_arg_donatable,
+extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
+                           PjRtBuffer **op_args,
+                           const int64_t *mesh_ids, int64_t num_mesh_ids,
+                           uint8_t *is_arg_donatable,
                            int num_results, PjRtBuffer **op_results,
                            uint8_t *futures, FutureType **future_results) {
   auto client = exec->client();
-  int num_devices = client->addressable_device_count();
 
-  // Ensure argument_handles is structured as num_devices x num_args
-  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_devices);
+  // Ensure argument_handles is structured as num_mesh_ids x num_args
+  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_mesh_ids);
+  int num_args = op_args_len / num_mesh_ids;
 
   // Distribute arguments across devices
-  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
-    argument_handles[device_idx].reserve(num_args);
+  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
+    int64_t mesh_id = mesh_ids[device_idx];
+
+    // Validate mesh_id
+    if (mesh_id < 0 || mesh_id >= num_mesh_ids) {
+        llvm::errs() << "Error: Invalid mesh_id " << mesh_id << " at device_idx " << device_idx << "\n";
+        assert(false);
+    }
+
+    argument_handles[mesh_id].reserve(num_args);
     for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
       // Assuming op_args is a flat array of size num_devices * num_args
       // where arguments for each device are contiguous
-      argument_handles[device_idx].push_back(op_args[device_idx * num_args + arg_idx]);
+      argument_handles[mesh_id].push_back(op_args[mesh_id * num_args + arg_idx]);
     }
   }
 
@@ -753,41 +763,40 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
   }
   options.untuple_result = true;
 
-  std::optional<std::vector<FutureType>> returned_futures;
+  std::optional<std::vector<FutureType>> returned_futures = std::vector<FutureType>();;
   auto results = MyValueOrThrow(
       exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
                         argument_handles),
                     options, returned_futures));
 
-  assert(results.size() == num_devices);
+  assert(results.size() == num_mesh_ids);
 
-  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
-    if (results[device_idx].size() != num_results) {
-      llvm::errs() << " results[" << device_idx << "].size()=" << results[device_idx].size()
+  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
+    int64_t mesh_id = mesh_ids[device_idx];
+    if (results[mesh_id].size() != num_results) {
+      llvm::errs() << " results[" << mesh_id << "].size()=" << results[mesh_id].size()
                    << " num_results=" << num_results << "\n";
     }
-    assert(results[device_idx].size() == num_results);
+    assert(results[mesh_id].size() == num_results);
   }
 
   // Handle returned futures
   if (returned_futures) {
     *futures = true;
-    assert(returned_futures->size() == num_devices * num_results);
-    for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
-      for (int result_idx = 0; result_idx < num_results; ++result_idx) {
-        int flat_index = device_idx * num_results + result_idx;
-        future_results[flat_index] = new FutureType((*returned_futures)[flat_index]);
-      }
-    }
+    assert(returned_futures->size() == num_mesh_ids * num_results);
   } else {
     *futures = false;
   }
 
   // Copy results into the output buffers
-  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
+    int64_t mesh_id = mesh_ids[device_idx];
     for (int result_idx = 0; result_idx < num_results; ++result_idx) {
-      int flat_index = device_idx * num_results + result_idx;
-      op_results[flat_index] = results[device_idx][result_idx].release();
+      int flat_index = mesh_id * num_results + result_idx;
+      op_results[flat_index] = results[mesh_id][result_idx].release();
+      if (returned_futures) {
+        future_results[flat_index] = new FutureType((*returned_futures)[flat_index]);
+      }
     }
   }
 }

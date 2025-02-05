@@ -2,6 +2,11 @@ module Sharding
 
 using ..Reactant: Reactant, XLA
 
+# NOTE: PjRt doesn't provide a native sharding mechanism, so this file implements sharding
+#       at the julia level. With our migration to IFRt, we should be able to rewrite this
+#       logic to directly use the sharded arrays from IFRt. This would also simplify our
+#       logic of storing multiple arrays in ConcreteRArray struct
+
 struct Mesh{D}
     device_ids::Array{Int,D}
     axis_names::NTuple{D,String}
