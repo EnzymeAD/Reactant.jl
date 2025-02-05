@@ -106,7 +106,7 @@ cc = parsed_args["cc"]
 hermetic_python_version = parsed_args["hermetic_python_version"]
 
 # Try to guess if `cc` is GCC and get its version number.
-cc_is_gcc, gcc_version_number = let
+cc_is_gcc, gcc_version = let
     io = IOBuffer()
     run(pipeline(ignorestatus(`$(cc) --version`); stdout=io))
     version_string = String(take!(io))
@@ -146,10 +146,10 @@ end
 if cc_is_gcc && build_backend == "cuda"
     arch = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform())
     if arch == "x86_64"
-        if gcc_version <= v"12"
+        if gcc_version < v"13"
             push!(build_cmd_list, "--define=xnn_enable_avxvnniint8=false")
         end
-        if gcc_version <= v"11"
+        if gcc_version < v"12"
             push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
         end
     end
