@@ -444,7 +444,9 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 ) where {T}
-    return Core.LLVMPtr{traced_type_inner(PT.body.parameters[1], seen, mode, track_numbers, sharding)}
+    return Core.LLVMPtr{
+        traced_type_inner(PT.body.parameters[1], seen, mode, track_numbers, sharding)
+    }
 end
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(PT::Type{Core.LLVMPtr{T,A}}),
