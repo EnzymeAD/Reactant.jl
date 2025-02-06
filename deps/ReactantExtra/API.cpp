@@ -162,10 +162,16 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
 // TODO extern "C" MlirTypeID mlirComplexAttrGetTypeID(void) { return
 // wrap(complex::NumberAttr::getTypeID()); }
 
-extern "C" void mlirFuncSetResultAttr(MlirOperation op, intptr_t pos,
-                                      MlirStringRef name, MlirAttribute attr) {
-  llvm::cast<mlir::func::FuncOp>(unwrap(op))
+extern "C" void ReactantFuncSetResultAttr(MlirOperation op, intptr_t pos,
+                                          MlirStringRef name, MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
       .setResultAttr(pos, unwrap(name), unwrap(attr));
+}
+
+extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
+                                       MlirStringRef name, MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
+      .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
 
 #pragma endregion
@@ -932,12 +938,6 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
 
   SymbolTable::setSymbolName(op, newSymName);
   return success();
-}
-
-extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
-                                       MlirStringRef name, MlirAttribute attr) {
-  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
-      .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
 
 extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
