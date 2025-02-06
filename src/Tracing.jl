@@ -416,15 +416,44 @@ end
 
 for P in (Ptr, Core.LLVMPtr, Base.RefValue)
     @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(PT::Type{<:$P}),
+        @nospecialize(PT::Type{$P}),
         seen,
         mode::TraceMode,
         @nospecialize(track_numbers::Type),
         @nospecialize(sharding)
     )
-        T = eltype(PT)
-        return $P{traced_type_inner(T, seen, mode, track_numbers, sharding)}
+        return $P
     end
+end
+for P in (Ptr, Base.RefValue)
+    @eval Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(PT::Type{$P{T}}),
+        seen,
+        mode::TraceMode,
+        @nospecialize(track_numbers::Type),
+        @nospecialize(sharding)
+    ) where {T}
+        return $P{traced_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding)}
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(PT::Type{Core.LLVMPtr{T}}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding)
+) where {T}
+    return Core.LLVMPtr{traced_type_inner(PT.body.parameters[1], seen, mode, track_numbers, sharding)}
+end
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(PT::Type{Core.LLVMPtr{T,A}}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding)
+) where {T,A}
+    return Core.LLVMPtr{traced_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding),A}
 end
 
 Base.@nospecializeinfer function traced_type_inner(

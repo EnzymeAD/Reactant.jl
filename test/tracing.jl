@@ -169,6 +169,11 @@ end
                     NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
                     NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
                 ),
+                (
+                    Base.RefValue{A} where {A},
+                    Base.RefValue{A} where {A},
+                    Base.RefValue{A} where {A},
+                ),
                 (Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}),
                 (
                     Wrapper{Float64,Vector{Float64}},
