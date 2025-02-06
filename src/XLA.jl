@@ -489,8 +489,6 @@ function execute_ir(N, M, n_outs, fn, with_device::Bool, nmesh_ids::Int64)
         args = "[$nmesh_ids x $ptr] %mesh_ids $args"
     end
 
-    println(args)
-
     stores = N > 0 ? """
 store [$N x $ptr] %inps, [$N x $ptr]* %inpa
 store [$M x i8] %donated, [$M x i8]* %dona
@@ -528,9 +526,6 @@ entry:
     ret { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.2.insert
 }
 """
-
-    println(res)
-
     return res
 end
 
