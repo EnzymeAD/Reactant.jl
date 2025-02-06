@@ -95,7 +95,7 @@ extern "C" span<span<xla::HloModule*>> ifrt_loadedexecutable_hlo_modules(LoadedE
 {
     auto modules = MyValueOrThrow(executable->GetHloModules());
 
-    auto ptr = new span<xla::HloModule*>*[modules.size()];
+    auto ptr = new span<xla::HloModule*>[modules.size()];
     for (int i = 0; i < modules.size(); i++) {
         ptr[i] = convert(Type<span<xla::HloModule*>>(), modules[i]);
     }
@@ -109,7 +109,7 @@ extern "C" span<span<xla::HloModule*>> ifrt_loadedexecutable_hlo_modules(LoadedE
 extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(LoadedExecutable* executable, span<Array*> c_args, const ExecuteOptions& options, span<Device*> c_devices) {
     std::optional<tsl::RCReference<DeviceList>> devices;
     if (!c_devices.empty())
-        devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices)
+        devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices);
 
     auto args = reactant::convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_args);
 

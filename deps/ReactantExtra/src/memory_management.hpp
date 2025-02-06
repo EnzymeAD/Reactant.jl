@@ -1,5 +1,9 @@
+#ifndef REACTANT_EXTRA_MEMORY_MANAGEMENT_
+#define REACTANT_EXTRA_MEMORY_MANAGEMENT_
+
 #include <memory>
 #include <type_traits>
+#include <variant>
 #include "xla/tsl/concurrency/ref_count.h"
 
 extern "C" void reactant_release_shared(void* ptr);
@@ -7,15 +11,45 @@ extern "C" bool reactant_contains_shared(void* ptr);
 extern "C" void reactant_release_rcreference(void* ptr);
 extern "C" bool reactant_contains_rcreference(void* ptr);
 
+
 namespace xla {
 namespace ifrt {
-class Array;
+class Value;
+class DeviceList;
+class LoadedHostCallback;
 } // namespace ifrt
 } // namespace xla
 
 namespace reactant {
+
+// type erased tsl::RCReference
+class RCRef {
+public:
+    RCRef() noexcept;
+    ~RCRef() noexcept;
+
+    template<typename T>
+    explicit RCRef(tsl::RCReference<T> obj);
+
+    void* get() const noexcept;
+    void destroy() noexcept;
+
+    template<typename T> T* get() const noexcept;
+    template<typename T> tsl::RCReference<T> get_rcref() const noexcept;
+    template<typename T> bool is() const noexcept; 
+
+private:
+    using storage_t = std::variant<
+        std::monostate,
+        tsl::RCReference<xla::ifrt::Value>, 
+        tsl::RCReference<xla::ifrt::DeviceList>,
+        tsl::RCReference<xla::ifrt::LoadedHostCallback>
+        >;
+    storage_t storage;
+};
+
 template <typename T, typename G = std::remove_cv_t<T>>
-inline G* capture_shared(std::shared_ptr<T> ptr) {
+G* capture_shared(std::shared_ptr<T> ptr) {
     return reinterpret_cast<G*>(
         capture_shared(
             std::const_pointer_cast<G>(ptr)
@@ -26,20 +60,13 @@ inline G* capture_shared(std::shared_ptr<T> ptr) {
 template<>
 void* capture_shared(std::shared_ptr<void> ptr);
 
-template <typename T, typename G = std::remove_cv_t<T>>
-inline G* capture_rcreference(tsl::RCReference<T> ptr) {
-    return reinterpret_cast<G*>(
-        capture_rcreference(
-            std::const_pointer_cast<G>(ptr)
-        )
-    );
-}
+void* capture_rcreference(RCRef ptr);
 
-template<>
-void* capture_rcreference(tsl::RCReference<xla::ifrt::Array> ptr);
+template <typename T, typename G = std::remove_cv_t<T>>
+G* capture_rcreference(tsl::RCReference<T> rcref);
 
 template<typename  T>
-inline void destruct_or_release_if_shared(T* ptr) {
+void destruct_or_release_if_shared(T* ptr) {
     if (reactant_contains_shared(ptr))
         reactant_release_shared(ptr);
     else
@@ -47,12 +74,15 @@ inline void destruct_or_release_if_shared(T* ptr) {
 }
 
 template<typename  T>
-inline void destruct_or_release_if_rcreference(T* ptr) {
+void destruct_or_release_if_rcreference(T* ptr) {
     if (reactant_contains_rcreference(ptr))
         reactant_release_rcreference(ptr);
     else
         delete ptr;
 }
+
+std::shared_ptr<void> get_shared(void* ptr);
+RCRef get_rcreference(void* ptr);
 
 template<typename T>
 std::shared_ptr<T> get_or_insert_shared(T* ptr) {
@@ -61,16 +91,14 @@ std::shared_ptr<T> get_or_insert_shared(T* ptr) {
     return std::reinterpret_pointer_cast<T>(get_shared(ptr));
 }
 
-std::shared_ptr<void> get_shared(void* ptr);
 
 template<typename T>
-std::shared_ptr<T> get_or_insert_rcreference(T* ptr) {
+RCRef get_or_insert_rcreference(T* ptr) {
     if (!reactant_contains_rcreference(ptr))
-        reactant::capture_rcreference(tsl::RCReference<T>(ptr));
-    return std::reinterpret_pointer_cast<T>(get_rcreference(ptr));
+        reactant::capture_rcreference(tsl::FormRef(ptr));
+    return get_rcreference(ptr);
 }
 
-tsl::RCReference<xla::ifrt::Array> get_rcreference(void* ptr);
 
 // TODO here we might have `std::shared_ptr` but also `tsl::RCReference`. what do we put?
 // do we use polymorphism here and return a `Holder*` (pointer to abstract base class) or do we explicitly return a `StdSharedHolder*`/`TslRCReferenceHolder*` (pointer to derived class)?
@@ -101,4 +129,28 @@ tsl::RCReference<xla::ifrt::Array> get_rcreference(void* ptr);
 //     TslRCReferenceHolder(tsl::RCReference<T>&) = default;
 // };
 
+/*
+ * Definitions
+ */
+template<typename T>
+T* RCRef::get() const noexcept {
+    if (auto ptr = std::get_if<tsl::RCReference<T>>(storage)) 
+        return ptr->get();
+    return nullptr;
 }
+template<typename T>
+bool RCRef::is() const noexcept {
+    return get<T>() != nullptr;
+}
+
+template <typename T, typename G>
+G* capture_rcreference(tsl::RCReference<T> rcref) {
+    return reinterpret_cast<G*>(
+        capture_rcreference(
+            RCRef{rcref}
+        )
+    );
+}
+
+} // namespace reactant
+#endif REACTANT_EXTRA_MEMORY_MANAGEMENT_

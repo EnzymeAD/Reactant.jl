@@ -20,6 +20,7 @@ struct span {
     size_t _size;
     T* ptr;
 
+    span() : span(0, nullptr) {}
     span(size_t size, T* ptr) : _size(size), ptr(ptr) {}
 
     T& operator[](size_t i) { return ptr[i]; }
@@ -121,7 +122,7 @@ auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<T*> span) -> absl::Span
 {
     auto values_ptr = new tsl::RCReference<T>[span.size()];
     for (int i = 0; i < span.size(); i++) {
-        values_ptr[i] = reactant::get_or_insert_rcreference(span[i]);
+        values_ptr[i] = reactant::get_or_insert_rcreference(span[i]).template get_rcref<T>();
     }
     return absl::Span<tsl::RCReference<T>>(values_ptr, span.size());
 }
