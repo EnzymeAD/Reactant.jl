@@ -10,8 +10,64 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
+
+"""
+`ComparisonDirection`
+Which comparison operation to perform.
+"""
+@enumx ComparisonDirection EQ NE GE GT LE LT
+ComparisonDirectionStorage = ["EQ", "NE", "GE", "GT", "LE", "LT"]
+
+function IR.Attribute(e::ComparisonDirection.T)
+    return parse(
+        Attribute, "#chlo<comparison_direction $(ComparisonDirectionStorage[Int(e)+1])>"
+    )
+end
+
+"""
+`ComparisonType`
+Which comparison type to use.
+"""
+@enumx ComparisonType NOTYPE FLOAT TOTALORDER SIGNED UNSIGNED
+ComparisonTypeStorage = ["NOTYPE", "FLOAT", "TOTALORDER", "SIGNED", "UNSIGNED"]
+
+function IR.Attribute(e::ComparisonType.T)
+    return parse(Attribute, "#chlo<comparison_type $(ComparisonTypeStorage[Int(e)+1])>")
+end
+
+"""
+`ragged_dot`
+Attribute that models the dimension information for ragged dot.
+"""
+struct RaggedDot
+    lhs_batching_dimensions::IR.DenseAttribute{Int64}
+    rhs_batching_dimensions::IR.DenseAttribute{Int64}
+    lhs_contracting_dimensions::IR.DenseAttribute{Int64}
+    rhs_contracting_dimensions::IR.DenseAttribute{Int64}
+    lhs_ragged_dimensions::IR.DenseAttribute{Int64}
+    rhs_group_dimensions::IR.DenseAttribute{Int64}
+end
+
+function IR.Attribute(s::RaggedDot)
+    return parse(
+        Attribute,
+        "#chlo.ragged_dot<lhs_batching_dimensions = $(c(s.lhs_batching_dimensions)), rhs_batching_dimensions = $(c(s.rhs_batching_dimensions)), lhs_contracting_dimensions = $(c(s.lhs_contracting_dimensions)), rhs_contracting_dimensions = $(c(s.rhs_contracting_dimensions)), lhs_ragged_dimensions = $(c(s.lhs_ragged_dimensions)), rhs_group_dimensions = $(c(s.rhs_group_dimensions))>",
+    )
+end
+
+"""
+`Precision`
+XLA precision for an operand. Has backend specific meaning.
+"""
+@enumx Precision DEFAULT HIGH HIGHEST
+PrecisionStorage = ["DEFAULT", "HIGH", "HIGHEST"]
+
+function IR.Attribute(e::Precision.T)
+    return parse(Attribute, "#chlo<precision $(PrecisionStorage[Int(e)+1])>")
+end
 
 """
 `acos`
@@ -23,7 +79,9 @@ Returns `Acos(operand)` element-wise.
          = pi                                  if x == -1
 \$\$
 """
-function acos(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function acos(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -38,8 +96,8 @@ function acos(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -53,7 +111,9 @@ Returns `Acosh(operand)` element-wise.
 \\acosh(x) = nan                         if x < -1
 \$\$
 """
-function acosh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function acosh(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -68,8 +128,8 @@ function acosh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -92,7 +152,7 @@ should never be constructed directly by frameworks or consumed by
 backends.
 """
 function _asin_acos_kernel(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -108,8 +168,8 @@ function _asin_acos_kernel(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -122,7 +182,9 @@ Returns `Asin(operand)` element-wise.
 \\asin(x) = 2 * atan(x / (1 + sqrt(1 - x^2)))
 \$\$
 """
-function asin(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function asin(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -137,8 +199,8 @@ function asin(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -151,7 +213,9 @@ Returns `Asinh(operand)` element-wise.
 \\asinh(x) = log(x + sqrt(x^2 + 1))
 \$\$
 """
-function asinh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function asinh(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -166,8 +230,8 @@ function asinh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -180,7 +244,9 @@ Returns `Atan(operand)` element-wise.
 \\atan(x) = \\atan2(x, 1)
 \$\$
 """
-function atan(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function atan(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -195,8 +261,8 @@ function atan(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -210,7 +276,9 @@ Returns `Atanh(operand)` element-wise.
           = nan                          otherwise
 \$\$
 """
-function atanh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function atanh(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -225,8 +293,8 @@ function atanh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -236,7 +304,7 @@ end
 Returns `bessel_i1e(operand)` element-wise.
 """
 function bessel_i1e(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -252,8 +320,8 @@ function bessel_i1e(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -268,16 +336,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_add(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -288,8 +356,8 @@ function broadcast_add(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -304,16 +372,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_and(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -324,8 +392,8 @@ function broadcast_and(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -340,16 +408,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_atan2(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -360,8 +428,8 @@ function broadcast_atan2(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -379,11 +447,11 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_comparison_opera
 function broadcast_compare(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    comparison_direction,
-    compare_type=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    comparison_direction::ComparisonDirection.T,
+    compare_type::Union{ComparisonType.T,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -392,7 +460,7 @@ function broadcast_compare(
     attributes = NamedAttribute[namedattribute(
         "comparison_direction", comparison_direction
     ),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
     !isnothing(compare_type) &&
@@ -405,8 +473,8 @@ function broadcast_compare(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -419,16 +487,16 @@ a complex value.
 function broadcast_complex(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -439,8 +507,8 @@ function broadcast_complex(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -455,16 +523,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_divide(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -475,8 +543,8 @@ function broadcast_divide(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -491,16 +559,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_maximum(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -511,8 +579,8 @@ function broadcast_maximum(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -527,16 +595,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_minimum(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -547,8 +615,8 @@ function broadcast_minimum(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -563,16 +631,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_multiply(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -583,8 +651,8 @@ function broadcast_multiply(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -599,16 +667,16 @@ Equivalent to the C++ std::nextafter function.
 function broadcast_next_after(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -619,8 +687,8 @@ function broadcast_next_after(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -635,16 +703,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_or(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -655,8 +723,8 @@ function broadcast_or(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -668,16 +736,16 @@ Returns `Polygamma(operand, operand)` element-wise.
 function broadcast_polygamma(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -688,8 +756,8 @@ function broadcast_polygamma(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -704,16 +772,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_power(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -724,8 +792,8 @@ function broadcast_power(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -740,16 +808,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_remainder(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -760,8 +828,8 @@ function broadcast_remainder(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -777,15 +845,15 @@ function broadcast_select(
     pred::Value,
     on_true::Value,
     on_false::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[pred, on_true, on_false]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "chlo.broadcast_select",
@@ -794,8 +862,8 @@ function broadcast_select(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -810,16 +878,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_shift_left(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -830,8 +898,8 @@ function broadcast_shift_left(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -846,16 +914,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_shift_right_arithmetic(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -866,8 +934,8 @@ function broadcast_shift_right_arithmetic(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -882,16 +950,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_shift_right_logical(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -902,8 +970,8 @@ function broadcast_shift_right_logical(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -918,16 +986,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_subtract(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -938,8 +1006,8 @@ function broadcast_subtract(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -954,16 +1022,16 @@ https://www.tensorflow.org/xla/operation_semantics#element-wise_binary_arithmeti
 function broadcast_xor(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -974,8 +1042,8 @@ function broadcast_xor(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -991,16 +1059,16 @@ Returns `Zeta(operand, operand)` element-wise.
 function broadcast_zeta(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_dimensions=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(broadcast_dimensions) &&
         push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
 
@@ -1011,8 +1079,8 @@ function broadcast_zeta(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1025,7 +1093,9 @@ Returns `Conj(operand)` element-wise.
 \\conj(x) = (\\real(x), \\neg(\\imag(x)))
 \$\$
 """
-function conj(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function conj(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1040,8 +1110,8 @@ function conj(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1051,14 +1121,17 @@ end
 Returns a splat constant of the same shape as the operand.
 """
 function constant_like(
-    operand::Value; result_0=nothing::Union{Nothing,IR.Type}, value, location=Location()
+    operand::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    value,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("value", value),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "chlo.constant_like",
@@ -1067,8 +1140,8 @@ function constant_like(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1077,7 +1150,11 @@ end
 
 Represents a constant value.
 """
-function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Location())
+function constant(;
+    output::Union{Nothing,IR.Type}=nothing,
+    value::IR.AbstractDenseElementsAttribute,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1092,8 +1169,8 @@ function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Loca
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1106,7 +1183,9 @@ Returns `Cosh(operand)` element-wise.
 \\cosh(x) = (e^x + e^-x) / 2
 \$\$
 """
-function cosh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function cosh(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1121,8 +1200,8 @@ function cosh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1132,7 +1211,7 @@ end
 Returns `Digamma(operand)` element-wise.
 """
 function digamma(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -1148,8 +1227,8 @@ function digamma(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1159,7 +1238,7 @@ end
 Returns `ErfInv(operand)` element-wise.
 """
 function erf_inv(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -1175,8 +1254,8 @@ function erf_inv(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1188,7 +1267,9 @@ Computes the Gauss error function of `x` element-wise.
 erf(x) = erf_impl(x)            if |x| < 1
        = 1 - erfc_impl(x)       otherwise
 """
-function erf(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function erf(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1203,8 +1284,8 @@ function erf(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Lo
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1216,7 +1297,9 @@ Computes an approximation of the error function complement (1 - erf(x)).
 erfc(x) = erfc_impl(x)           if |x| > 1
         = 1 - erf_impl(x)        otherwise
 """
-function erfc(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function erfc(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1231,8 +1314,8 @@ function erfc(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1241,7 +1324,9 @@ end
 
 Returns if a value is +/-inf element-wise.
 """
-function is_inf(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function is_inf(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1256,8 +1341,8 @@ function is_inf(operand::Value; result=nothing::Union{Nothing,IR.Type}, location
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1267,7 +1352,7 @@ end
 Returns if a value is -inf element-wise.
 """
 function is_neg_inf(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -1283,8 +1368,8 @@ function is_neg_inf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1294,7 +1379,7 @@ end
 Returns if a value is +inf element-wise.
 """
 function is_pos_inf(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -1310,8 +1395,8 @@ function is_pos_inf(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1320,7 +1405,9 @@ end
 
 Returns `Lgamma(operand)` element-wise.
 """
-function lgamma(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function lgamma(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1335,8 +1422,8 @@ function lgamma(operand::Value; result=nothing::Union{Nothing,IR.Type}, location
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1349,7 +1436,10 @@ element-wise. It can also return a subnormal number.
 Equivalent to the C++ std::nextafter function.
 """
 function next_after(
-    x::Value, y::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    x::Value,
+    y::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[x, y]
@@ -1365,8 +1455,8 @@ function next_after(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1376,7 +1466,10 @@ end
 Returns `Polygamma(operand, operand)` element-wise.
 """
 function polygamma(
-    n::Value, x::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    n::Value,
+    x::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[n, x]
@@ -1392,8 +1485,8 @@ function polygamma(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1423,10 +1516,10 @@ function ragged_dot(
     lhs::Value,
     rhs::Value,
     group_sizes::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    ragged_dot_dimension_numbers,
-    precision_config=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    ragged_dot_dimension_numbers::RaggedDot,
+    precision_config::Union{IR.DenseAttribute{Precision.T},Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs, group_sizes]
@@ -1446,8 +1539,8 @@ function ragged_dot(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1461,7 +1554,9 @@ Returns `Sinh(operand)` element-wise.
          = e^(x + log(1/2)) - e^(-x + log(1/2)) otherwise.
 \$\$
 """
-function sinh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function sinh(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1476,8 +1571,8 @@ function sinh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1491,7 +1586,9 @@ Returns `Square(operand)` element-wise.
            = x * x                                                               otherwise
 \$\$
 """
-function square(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function square(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1506,8 +1603,8 @@ function square(operand::Value; result=nothing::Union{Nothing,IR.Type}, location
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1520,7 +1617,9 @@ Returns `Tan(operand)` element-wise.
 \\tan(x) = \\sin(x) / \\cos(x)
 \$\$
 """
-function tan(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function tan(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1535,8 +1634,8 @@ function tan(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Lo
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1556,10 +1655,10 @@ If two elements are equal, the lower-index element appears first.
 """
 function top_k(
     operand::Value;
-    values=nothing::Union{Nothing,IR.Type},
-    indices=nothing::Union{Nothing,IR.Type},
-    k,
-    location=Location(),
+    values::Union{Nothing,IR.Type}=nothing,
+    indices::Union{Nothing,IR.Type}=nothing,
+    k::Int64,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -1576,8 +1675,8 @@ function top_k(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1591,7 +1690,10 @@ Returns `Zeta(operand, operand)` element-wise.
 \$\$
 """
 function zeta(
-    x::Value, q::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    x::Value,
+    q::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[x, q]
@@ -1607,8 +1709,8 @@ function zeta(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 

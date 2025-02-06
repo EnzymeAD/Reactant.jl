@@ -3,7 +3,7 @@ module ReactantNNlibExt
 using NNlib
 using GPUArraysCore: @allowscalar
 using Reactant: Reactant, Ops, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
-
+using Reactant.MLIR.Dialects: stablehlo
 using Reactant.TracedUtils:
     TracedUtils, materialize_traced_array, get_mlir_data, set_mlir_data!
 
@@ -94,7 +94,7 @@ function NNlib.conv!(
         Int64(output_batch_dim - 1),
         Int64(output_feature_dim - 1),
         length(output_spatial_dims), Int64[i - 1 for i in output_spatial_dims],
-    )
+    )#TODO:deal with this using a custom parser in julia code generation
     #! format: on
 
     padding = Reactant.MLIR.IR.DenseElementsAttribute(
@@ -110,11 +110,11 @@ function NNlib.conv!(
     conv = Reactant.MLIR.Dialects.stablehlo.convolution(
         get_mlir_data(x),
         get_mlir_data(weight);
-        result_0=result_type,
+        result=result_type,
         window_strides=collect(stride),
         padding,
         dimension_numbers,
-        lhs_dilation=1,
+        lhs_dilation=[1 for _ in dilation],
         rhs_dilation=collect(dilation),
         feature_group_count,
         batch_group_count=1,
@@ -176,13 +176,14 @@ function reduce_window(f, x::AnyTracedRArray{T,N}, pdims; init) where {T,N}
         end
 
     attr = fill(Reactant.MLIR.IR.Attribute(init), unranked)
+
     init_value = Reactant.MLIR.IR.result(
         Reactant.MLIR.Dialects.stablehlo.constant(; value=attr)
     )
     reduction = Reactant.MLIR.Dialects.stablehlo.reduce_window(
         [get_mlir_data(x)],
         [init_value];
-        result_0=[result_type],
+        result=[result_type],
         window_dimensions,
         window_strides,
         window_dilations,
@@ -415,7 +416,7 @@ function NNlib.∇conv_filter!(
     conv = MLIR.Dialects.stablehlo.convolution(
         get_mlir_data(x),
         get_mlir_data(dy);
-        result_0=result_type,
+        result=result_type,
         window_strides=collect(dilation),
         padding,
         dimension_numbers,
@@ -532,8 +533,8 @@ function NNlib.∇conv_data!(
     conv = MLIR.Dialects.stablehlo.convolution(
         get_mlir_data(dy),
         get_mlir_data(w);
-        result_0=result_type,
-        window_strides=1,
+        result=result_type,
+        window_strides=[1 for _ in dilation],
         padding,
         lhs_dilation=collect(stride),
         rhs_dilation=collect(dilation),

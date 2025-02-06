@@ -10,10 +10,11 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
 
-function get_stream(; result::IR.Type, location=Location())
+function get_stream(; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
@@ -34,15 +35,15 @@ end
 
 function jit_call(
     inputs::Vector{Value};
-    result_0::Vector{IR.Type},
-    fn,
-    backend_config=nothing,
-    operand_layouts=nothing,
-    result_layouts=nothing,
-    output_operand_aliases=nothing,
-    location=Location(),
+    result::Base.AbstractVecOrTuple{IR.Type},
+    fn::IR.FlatSymbolRefAttribute,
+    backend_config::Union{String,Nothing}=nothing,
+    operand_layouts::Union{IR.AbstractAttribute,Nothing}=nothing,
+    result_layouts::Union{IR.AbstractAttribute,Nothing}=nothing,
+    output_operand_aliases::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
@@ -77,15 +78,15 @@ function kernel_call(
     blockz::Value,
     shmem::Value,
     inputs::Vector{Value};
-    result_0::Vector{IR.Type},
-    fn,
-    backend_config=nothing,
-    operand_layouts=nothing,
-    result_layouts=nothing,
-    output_operand_aliases=nothing,
-    location=Location(),
+    result::Base.AbstractVecOrTuple{IR.Type},
+    fn::IR.FlatSymbolRefAttribute,
+    backend_config::Union{String,Nothing}=nothing,
+    operand_layouts::Union{IR.AbstractAttribute,Nothing}=nothing,
+    result_layouts::Union{IR.AbstractAttribute,Nothing}=nothing,
+    output_operand_aliases::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[gridx, gridy, gridz, blockx, blocky, blockz, shmem, inputs...]
     owned_regions = Region[]
     successors = Block[]
@@ -111,7 +112,7 @@ function kernel_call(
     )
 end
 
-function memref2pointer(source::Value; result::IR.Type, location=Location())
+function memref2pointer(source::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[source,]
     owned_regions = Region[]
@@ -130,7 +131,7 @@ function memref2pointer(source::Value; result::IR.Type, location=Location())
     )
 end
 
-function pointer2memref(source::Value; result::IR.Type, location=Location())
+function pointer2memref(source::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[source,]
     owned_regions = Region[]

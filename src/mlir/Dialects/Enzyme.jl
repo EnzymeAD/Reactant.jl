@@ -10,15 +10,34 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
+
+"""
+`Activity`
+Possible activity states for variables
+"""
+@enumx Activity enzyme_active enzyme_dup enzyme_const enzyme_dupnoneed enzyme_activenoneed enzyme_constnoneed
+ActivityStorage = [
+    "enzyme_active",
+    "enzyme_dup",
+    "enzyme_const",
+    "enzyme_dupnoneed",
+    "enzyme_activenoneed",
+    "enzyme_constnoneed",
+]
+
+function IR.Attribute(e::Activity.T)
+    return parse(Attribute, "#enzyme<activity $(ActivityStorage[Int(e)+1])>")
+end
 
 """
 `addTo`
 
 TODO
 """
-function addTo(values::Vector{Value}; location=Location())
+function addTo(values::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[values...,]
     owned_regions = Region[]
@@ -39,12 +58,12 @@ end
 
 function autodiff(
     inputs::Vector{Value};
-    outputs::Vector{IR.Type},
-    fn,
-    activity,
-    ret_activity,
-    width=nothing,
-    location=Location(),
+    outputs::Base.AbstractVecOrTuple{IR.Type},
+    fn::IR.FlatSymbolRefAttribute,
+    activity::IR.DenseAttribute{Activity.T},
+    ret_activity::IR.DenseAttribute{Activity.T},
+    width::Union{Int64,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
     operands = Value[inputs...,]
@@ -70,7 +89,11 @@ function autodiff(
 end
 
 function batch(
-    inputs::Vector{Value}; outputs::Vector{IR.Type}, fn, batch_shape, location=Location()
+    inputs::Vector{Value};
+    outputs::Base.AbstractVecOrTuple{IR.Type},
+    fn::IR.FlatSymbolRefAttribute,
+    batch_shape::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
     operands = Value[inputs...,]
@@ -100,7 +123,12 @@ For scalar operands, ranked tensor is created.
 
 NOTE: Only works for scalar and *ranked* tensor operands for now.
 """
-function broadcast(input::Value; output::IR.Type, shape, location=Location())
+function broadcast(
+    input::Value;
+    output::IR.Type,
+    shape::IR.DenseAttribute{Int64},
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[output,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -121,12 +149,12 @@ end
 
 function fwddiff(
     inputs::Vector{Value};
-    outputs::Vector{IR.Type},
-    fn,
-    activity,
-    ret_activity,
-    width=nothing,
-    location=Location(),
+    outputs::Base.AbstractVecOrTuple{IR.Type},
+    fn::IR.FlatSymbolRefAttribute,
+    activity::IR.DenseAttribute{Activity.T},
+    ret_activity::IR.DenseAttribute{Activity.T},
+    width::Union{Int64,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
     operands = Value[inputs...,]
@@ -154,13 +182,13 @@ end
 function genericAdjoint(
     inputs::Vector{Value},
     outputs::Vector{Value};
-    result_tensors::Vector{IR.Type},
-    indexing_maps,
-    iterator_types,
-    doc=nothing,
-    library_call=nothing,
+    result_tensors::Base.AbstractVecOrTuple{IR.Type},
+    indexing_maps::IR.DenseAttribute{Any},
+    iterator_types::Vector{<:IR.AbstractAttribute},
+    doc::Union{String,Nothing}=nothing,
+    library_call::Union{String,Nothing}=nothing,
     region::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result_tensors...,]
     operands = Value[inputs..., outputs...]
@@ -187,8 +215,8 @@ function genericAdjoint(
     )
 end
 
-function get(gradient::Value; result_0::IR.Type, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function get(gradient::Value; result::IR.Type, location::Location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[gradient,]
     owned_regions = Region[]
     successors = Block[]
@@ -206,8 +234,8 @@ function get(gradient::Value; result_0::IR.Type, location=Location())
     )
 end
 
-function init(; result_0::IR.Type, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function init(; result::IR.Type, location::Location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
@@ -225,7 +253,7 @@ function init(; result_0::IR.Type, location=Location())
     )
 end
 
-function placeholder(; output::IR.Type, location=Location())
+function placeholder(; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -244,7 +272,7 @@ function placeholder(; output::IR.Type, location=Location())
     )
 end
 
-function pop(cache::Value; output::IR.Type, location=Location())
+function pop(cache::Value; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[cache,]
     owned_regions = Region[]
@@ -263,7 +291,7 @@ function pop(cache::Value; output::IR.Type, location=Location())
     )
 end
 
-function push(cache::Value, value::Value; location=Location())
+function push(cache::Value, value::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[cache, value]
     owned_regions = Region[]
@@ -282,7 +310,7 @@ function push(cache::Value, value::Value; location=Location())
     )
 end
 
-function set(gradient::Value, value::Value; location=Location())
+function set(gradient::Value, value::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[gradient, value]
     owned_regions = Region[]

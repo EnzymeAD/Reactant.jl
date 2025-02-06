@@ -10,8 +10,19 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
+
+"""
+`AtomicRMWKind`
+
+allowed 64-bit signless integer cases: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+"""
+@enumx AtomicRMWKind addf = 0 addi = 1 assign = 2 maximumf = 3 maxs = 4 maxu = 5 minimumf =
+    6 mins = 7 minu = 8 mulf = 9 muli = 10 ori = 11 andi = 12 maxnumf = 13 minnumf = 14
+
+IR.Attribute(e::AtomicRMWKind.T) = Int(e)
 
 """
 `apply`
@@ -37,16 +48,16 @@ have ‘index’ type.
 """
 function apply(
     mapOperands::Vector{Value};
-    result_0=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     map,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[mapOperands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("map", map),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "affine.apply",
@@ -55,8 +66,8 @@ function apply(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -113,9 +124,9 @@ undefined behavior.
 function delinearize_index(
     linear_index::Value,
     dynamic_basis::Vector{Value};
-    multi_index::Vector{IR.Type},
-    static_basis,
-    location=Location(),
+    multi_index::Base.AbstractVecOrTuple{IR.Type},
+    static_basis::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[multi_index...,]
     operands = Value[linear_index, dynamic_basis...]
@@ -246,12 +257,12 @@ function for_(
     lowerBoundOperands::Vector{Value},
     upperBoundOperands::Vector{Value},
     inits::Vector{Value};
-    results::Vector{IR.Type},
+    results::Base.AbstractVecOrTuple{IR.Type},
     lowerBoundMap,
     upperBoundMap,
     step,
     region::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[lowerBoundOperands..., upperBoundOperands..., inits...]
@@ -353,11 +364,11 @@ func.func @pad_edges(%I : memref<10x10xf32>) -> (memref<12x12xf32) {
 """
 function if_(
     operand_0::Vector{Value};
-    results::Vector{IR.Type},
+    results::Base.AbstractVecOrTuple{IR.Type},
     condition,
     thenRegion::Region,
     elseRegion::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[operand_0...,]
@@ -429,9 +440,9 @@ In the above example, `%linear_index` conceptually holds the following:
 function linearize_index(
     multi_index::Vector{Value},
     dynamic_basis::Vector{Value};
-    linear_index=nothing::Union{Nothing,IR.Type},
-    static_basis,
-    location=Location(),
+    linear_index::Union{Nothing,IR.Type}=nothing,
+    static_basis::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[multi_index..., dynamic_basis...]
@@ -448,8 +459,8 @@ function linearize_index(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -482,7 +493,11 @@ Example 2: Uses `symbol` keyword for symbols `%n` and `%m`.
 ```
 """
 function load(
-    memref::Value, indices::Vector{Value}; result::IR.Type, map, location=Location()
+    memref::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    map,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[memref, indices...]
@@ -516,16 +531,16 @@ affine map.
 """
 function max(
     operands::Vector{Value};
-    result_0=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     map,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("map", map),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "affine.max",
@@ -534,8 +549,8 @@ function max(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -563,16 +578,16 @@ input operands and result must all have \'index\' type.
 """
 function min(
     operands::Vector{Value};
-    result_0=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     map,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("map", map),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "affine.min",
@@ -581,8 +596,8 @@ function min(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -653,15 +668,15 @@ affine.parallel (%ii, %jj) = (0, 0) to (%N, %M) step (32, 32) {
 """
 function parallel(
     mapOperands::Vector{Value};
-    results::Vector{IR.Type},
-    reductions,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    reductions::IR.DenseAttribute{AtomicRMWKind.T},
     lowerBoundsMap,
-    lowerBoundsGroups,
+    lowerBoundsGroups::IR.AbstractDenseElementsAttribute{Int64},
     upperBoundsMap,
-    upperBoundsGroups,
-    steps,
+    upperBoundsGroups::IR.AbstractDenseElementsAttribute{Int64},
+    steps::IR.DenseAttribute{Int64},
     region::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[mapOperands...,]
@@ -709,11 +724,11 @@ instruction cache.
 function prefetch(
     memref::Value,
     indices::Vector{Value};
-    isWrite,
-    localityHint,
-    isDataCache,
+    isWrite::Bool,
+    localityHint::Int32,
+    isDataCache::Bool,
     map,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[memref, indices...]
@@ -767,7 +782,7 @@ affine.store %v0, %0[%i0 + symbol(%n), %i1 + symbol(%m)] : memref<100x100xf32>
 ```
 """
 function store(
-    value::Value, memref::Value, indices::Vector{Value}; map, location=Location()
+    value::Value, memref::Value, indices::Vector{Value}; map, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[value, memref, indices...]
@@ -827,7 +842,11 @@ TODOs:
 (see [vector.transfer_read](../Vector/#vectortransfer_read-mlirvectortransferreadop)).
 """
 function vector_load(
-    memref::Value, indices::Vector{Value}; result::IR.Type, map, location=Location()
+    memref::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    map,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[memref, indices...]
@@ -889,7 +908,7 @@ TODOs:
 (see [vector.transfer_write](../Vector/#vectortransfer_write-mlirvectortransferwriteop)).
 """
 function vector_store(
-    value::Value, memref::Value, indices::Vector{Value}; map, location=Location()
+    value::Value, memref::Value, indices::Vector{Value}; map, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[value, memref, indices...]
@@ -922,7 +941,7 @@ left out in the custom syntax and the builders will insert one implicitly.
 Otherwise, it has to be present in the syntax to indicate which values are
 yielded.
 """
-function yield(operands::Vector{Value}; location=Location())
+function yield(operands::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operands...,]
     owned_regions = Region[]

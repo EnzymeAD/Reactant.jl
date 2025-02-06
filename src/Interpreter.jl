@@ -366,20 +366,14 @@ function overload_autodiff(
         end
     end
 
-    function act_attr(val)
-        val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
-            MLIR.IR.context()::MLIR.API.MlirContext, val::Int32
-        )::MLIR.API.MlirAttribute
-        return MLIR.IR.Attribute(val)
-    end
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
     res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)(
         [TracedUtils.transpose_val(v) for v in ad_inputs];
         outputs=outtys,
         fn=fname,
-        activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
-        ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
+        activity=[MLIR.Dialects.enzyme.Activity.T(a) for a in activity],
+        ret_activity=[MLIR.Dialects.enzyme.Activity.T(a) for a in ret_activity],
     )
 
     residx = 1
