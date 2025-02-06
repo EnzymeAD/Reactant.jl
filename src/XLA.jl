@@ -657,7 +657,7 @@ end
     return ntuple(Val(n_outs)) do j
         ntuple(Val(K)) do i
             Base.@_inline_meta
-            idx = (i - 1) * K + j
+            idx = (i - 1) * n_outs + j
             return AsyncBuffer(
                 Buffer(outputs[idx]), future ? Future(future_res[idx]) : nothing
             )
