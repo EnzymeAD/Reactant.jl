@@ -94,16 +94,10 @@ extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_output_layouts(LoadedExe
     return convert(Type<span<xla::PjRtLayout*>>(), layouts);
 }
 
-extern "C" span<span<xla::HloModule*>> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
+extern "C" span<xla::HloModule*> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
 {
     auto modules = MyValueOrThrow(executable->GetHloModules());
-
-    auto ptr = new span<xla::HloModule*>[modules.size()];
-    for (int i = 0; i < modules.size(); i++) {
-        ptr[i] = convert(Type<span<xla::HloModule*>>(), modules[i]);
-    }
-    
-    return span(modules.size(), ptr);
+    return convert(Type<span<xla::HloModule*>>(), modules);
 }
 
 // TODO xla::LoadedExecutable::GetOutputMemoryKinds
