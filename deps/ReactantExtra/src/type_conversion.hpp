@@ -20,6 +20,7 @@ struct span {
     size_t _size;
     T* ptr;
 
+    span() : span(0, nullptr) {}
     span(size_t size, T* ptr) : _size(size), ptr(ptr) {}
 
     T& operator[](size_t i) { return ptr[i]; }
@@ -52,7 +53,7 @@ auto convert(Type<const char*>, T text) -> const char* {
     return cstr;
 }
 
-template <typename T, typename = std::is_fundamental<T>>
+template <typename T, typename = std::enable_if_t<std::is_fundamental_v<T>>>
 auto convert(Type<span<T>>, std::vector<T> vec) -> span<T>
 {
     T* ptr = new T[vec.size()];
@@ -62,7 +63,9 @@ auto convert(Type<span<T>>, std::vector<T> vec) -> span<T>
     return span<T> { vec.size(), ptr };
 }
 
-template <typename T, typename = std::conjunction<std::negation<std::is_fundamental<T>>, std::is_copy_constructible<T>>>
+template <typename T, 
+    typename = std::enable_if_t<!std::is_fundamental_v<T> && std::is_copy_constructible_v<T>>
+    >
 auto convert(Type<span<T*>>, std::vector<T> vec) -> span<T*>
 {
     T** ptr = new T*[vec.size()];
@@ -121,7 +124,7 @@ auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<T*> span) -> absl::Span
 {
     auto values_ptr = new tsl::RCReference<T>[span.size()];
     for (int i = 0; i < span.size(); i++) {
-        values_ptr[i] = reactant::get_or_insert_rcreference(span[i]);
+        values_ptr[i] = reactant::get_or_insert_rcreference(span[i]).template get_rcref<T>();
     }
     return absl::Span<tsl::RCReference<T>>(values_ptr, span.size());
 }

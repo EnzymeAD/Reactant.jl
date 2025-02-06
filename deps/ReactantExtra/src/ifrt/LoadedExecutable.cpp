@@ -1,8 +1,10 @@
 #include "src/type_conversion.hpp"
 #include "src/error_handling.hpp"
 #include "xla/python/ifrt/executable.h"
+#include "xla/xla_data.pb.h"
 #include "absl/container/flat_hash_set.h"
 
+using xla::OpSharding;
 using namespace xla::ifrt;
 using namespace reactant;
 
@@ -67,7 +69,8 @@ extern "C" span<OpSharding*> ifrt_loadedexecutable_parameter_shardings(LoadedExe
 {
     auto shardings = executable->GetParameterShardings();
     if (!shardings.has_value())
-        return span(0, nullptr);
+        return {};
+
     return convert(Type<span<OpSharding*>>(), shardings.value());
 }
 
@@ -75,8 +78,8 @@ extern "C" span<OpSharding*> ifrt_loadedexecutable_output_shardings(LoadedExecut
 {
     auto shardings = executable->GetOutputShardings();
     if (!shardings.has_value())
-        return span(0, nullptr);
-    return convert(Type<span<OpSharding*>>, shardings.value());
+        return {};
+    return convert(Type<span<OpSharding*>>{}, shardings.value());
 }
 
 extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_parameter_layouts(LoadedExecutable* executable)
@@ -95,7 +98,7 @@ extern "C" span<span<xla::HloModule*>> ifrt_loadedexecutable_hlo_modules(LoadedE
 {
     auto modules = MyValueOrThrow(executable->GetHloModules());
 
-    auto ptr = new span<xla::HloModule*>*[modules.size()];
+    auto ptr = new span<xla::HloModule*>[modules.size()];
     for (int i = 0; i < modules.size(); i++) {
         ptr[i] = convert(Type<span<xla::HloModule*>>(), modules[i]);
     }
@@ -108,9 +111,9 @@ extern "C" span<span<xla::HloModule*>> ifrt_loadedexecutable_hlo_modules(LoadedE
 
 extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(LoadedExecutable* executable, span<Array*> c_args, const ExecuteOptions& options, span<Device*> c_devices) {
     std::optional<tsl::RCReference<DeviceList>> devices;
-    if (!c_devices.empty())
-        devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices)
-
+    if (!c_devices.empty()) {
+        devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
+    }
     auto args = reactant::convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_args);
 
     auto exec_res = MyValueOrThrow(executable->Execute(args, options, ));
