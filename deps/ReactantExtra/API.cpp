@@ -452,11 +452,23 @@ extern "C" PjRtClient *BufferToClient(PjRtBuffer *Buffer) {
   return Buffer->client();
 }
 
-extern "C" PjRtClient *DeviceToClient(PjRtDevice *Device) {
-  return Device->client();
+extern "C" absl::Span<const int64_t> BufferShape(PjRtBuffer *Buffer) {
+  return Buffer->dimensions();
+}
+
+extern "C" int64_t BufferNDimensions(PjRtBuffer *Buffer) {
+  return Buffer->dimensions().length();
+}
+
+extern "C" xla::PrimitiveType BufferPrimitiveType(PjRtBuffer *Buffer) {
+  return Buffer->element_type();
 }
 
 extern "C" void PjRtBufferFree(PjRtBuffer *Buffer) { delete Buffer; }
+
+extern "C" PjRtClient *DeviceToClient(PjRtDevice *Device) {
+  return Device->client();
+}
 
 extern "C" PjRtClient *PjRtLoadedExecutableGetClient(PjRtLoadedExecutable *exec) {
   return exec->client();

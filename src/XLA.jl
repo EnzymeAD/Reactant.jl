@@ -277,6 +277,19 @@ mutable struct Buffer
     end
 end
 
+function Base.ndims(buffer::Buffer)
+    GC.@preserve buffer begin
+        return @ccall MLIR.API.mlir_c.BufferNDimensions(buffer.buffer::Ptr{Cvoid})::Cint
+    end
+end
+
+function Base.size(buffer::Buffer)
+    GC.@preserve buffer begin
+        sz = @ccall MLIR.API.mlir_c.BufferShape(buffer.buffer::Ptr{Cvoid})::Ptr{Int64}
+    end
+    return [unsafe_load(sz, i) for i in 1:ndims(buffer)]
+end
+
 function device(buffer::Buffer)
     GC.@preserve buffer begin
         return Device(
@@ -298,9 +311,9 @@ mutable struct AsyncBuffer
     future::Union{Future,Nothing}
 end
 
-device(buffer::AsyncBuffer) = device(buffer.buffer)
-
-client(buffer::AsyncBuffer) = client(buffer.buffer)
+for op in (:(Base.ndims), :(Base.size), :device, :client)
+    @eval $op(buffer::AsyncBuffer) = $op(buffer.buffer)
+end
 
 function client(buffers::Array{<:AsyncBuffer})
     all_clients = map(client, buffers)
