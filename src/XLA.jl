@@ -479,7 +479,7 @@ function BufferOnCPU(buffer::Buffer)
     end
 end
 
-function execute_ir22(N, M, n_outs, fn, with_device::Bool, nmesh_ids::Int64)
+function execute_ir(N, M, n_outs, fn, with_device::Bool, nmesh_ids::Int64)
     ptr = sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
     cint = sizeof(Cint) == sizeof(Int64) ? "i64" : "i32"
     args = N > 0 ? ", [$N x $ptr] %inps, [$M x i8] %donated" : ""
@@ -543,7 +543,7 @@ end
 ) where {N,n_outs}
     sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecuteSharded")
     xla_execute_fn = reinterpret(UInt, sym0)
-    ir = execute_ir22(N, N, n_outs, xla_execute_fn, true, nothing)
+    ir = execute_ir(N, N, n_outs, xla_execute_fn, true, 0)
     results = []
     for i in 1:n_outs
         push!(
@@ -588,7 +588,7 @@ end
 #     sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecute")
 #     xla_execute_fn = reinterpret(UInt, sym0)
 
-#     ir = execute_ir22(N, M, n_outs * K, xla_execute_fn, false, K)
+#     ir = execute_ir(N, M, n_outs * K, xla_execute_fn, false, K)
 #     results = [Vector{Any}(undef, K) for i in 1:n_outs]
 #     for i in 1:n_outs, j in 1:K
 #         idx = (i - 1) * K + j
