@@ -84,13 +84,13 @@ auto convert(Type<span<T*>>, std::vector<std::unique_ptr<T>> vec) -> span<T*> {
     return span<T*>(vec.size(), ptr);
 }
 
-template <typename T>
-auto convert(Type<span<T*>>, std::vector<std::shared_ptr<T>> vec) -> span<T*> {
-    T** ptr = new T*[vec.size()];
+template <typename T, typename U = std::remove_cv_t<T>>
+auto convert(Type<span<U*>>, std::vector<std::shared_ptr<T>> vec) -> span<U*> {
+    U** ptr = new U*[vec.size()];
     for (int i = 0; i < vec.size(); i++) {
         ptr[i] = reactant::capture_shared(vec[i]);
     }
-    return span<T*>(vec.size(), ptr);
+    return span<U*>(vec.size(), ptr);
 }
 
 template <typename T>
