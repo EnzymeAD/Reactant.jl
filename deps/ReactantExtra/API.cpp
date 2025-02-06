@@ -162,10 +162,16 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
 // TODO extern "C" MlirTypeID mlirComplexAttrGetTypeID(void) { return
 // wrap(complex::NumberAttr::getTypeID()); }
 
-extern "C" void mlirFuncSetResultAttr(MlirOperation op, intptr_t pos,
-                                      MlirStringRef name, MlirAttribute attr) {
-  llvm::cast<mlir::func::FuncOp>(unwrap(op))
+extern "C" void ReactantFuncSetResultAttr(MlirOperation op, intptr_t pos,
+                                          MlirStringRef name, MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
       .setResultAttr(pos, unwrap(name), unwrap(attr));
+}
+
+extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
+                                       MlirStringRef name, MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
+      .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
 
 #pragma endregion
@@ -750,8 +756,8 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
 
     // Validate mesh_id
     if (mesh_id < 0 || mesh_id >= num_mesh_ids) {
-        llvm::errs() << "Error: Invalid mesh_id " << mesh_id << " at device_idx " << device_idx << "\n";
-        assert(false);
+      ReactantThrowError(("Invalid mesh_id " + std::to_string(mesh_id) + " at device_idx " +
+                          std::to_string(device_idx)).c_str());
     }
 
     argument_handles[mesh_id].reserve(num_args);
@@ -932,12 +938,6 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
 
   SymbolTable::setSymbolName(op, newSymName);
   return success();
-}
-
-extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
-                                       MlirStringRef name, MlirAttribute attr) {
-  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
-      .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
 
 extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
