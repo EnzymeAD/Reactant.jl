@@ -583,6 +583,7 @@ cc_library(
             "@xla//xla/service/gpu:gpu_transfer_manager",
             "@xla//xla/stream_executor:kernel",
             "@xla//xla/backends/profiler/gpu:device_tracer",
+            "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         ],
         "//conditions:default": [
         ],

@@ -680,6 +680,7 @@ function Compile(
             @ccall MLIR.API.mlir_c.ClientCompile(
                 client.client::Ptr{Cvoid},
                 mod.module_::MLIR.API.MlirModule,
+<<<<<<< HEAD
                 device_id::Clong,
                 is_sharded::Bool,
                 # mesh_shape::Ptr{Clong},
@@ -687,6 +688,13 @@ function Compile(
                 mesh_ids::Ptr{Clong},
                 length(mesh_ids)::Clong,
                 CUDA_DATA_DIR[]::Cstring,
+=======
+                device_ordinal::Cint,
+                num_replicas::Cint,
+                num_partitions::Cint,
+                use_shardy_partitioner::Bool,
+                global_ordinals::Ptr{Cint},
+>>>>>>> main
             )::Ptr{Cvoid}
         )
     end
@@ -758,6 +766,14 @@ function PjRtLoadedExecutableGetClient(exec::LoadedExecutable)
                 exec.exec::Ptr{Cvoid}
             )::Ptr{Cvoid}
         )
+    end
+end
+
+function DeviceGetLocalDeviceId(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
+            device.device::Ptr{Cvoid}
+        )::Cint
     end
 end
 
