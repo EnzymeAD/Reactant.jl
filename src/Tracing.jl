@@ -380,7 +380,7 @@ for P in (Ptr, Base.RefValue)
         seen,
         mode::TraceMode,
         @nospecialize(track_numbers::Type)
-    ) where T
+    ) where {T}
         return $P{traced_type_inner(PT.parameters[1], seen, mode, track_numbers)}
     end
 end
@@ -390,16 +390,16 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type)
-) where T
+) where {T}
     return Core.LLVMPtr{traced_type_inner(PT.body.parameters[1], seen, mode, track_numbers)}
 end
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(PT::Type{Core.LLVMPtr{T, A}}),
+    @nospecialize(PT::Type{Core.LLVMPtr{T,A}}),
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type)
-) where {T, A}
-    return Core.LLVMPtr{traced_type_inner(PT.parameters[1], seen, mode, track_numbers), A}
+) where {T,A}
+    return Core.LLVMPtr{traced_type_inner(PT.parameters[1], seen, mode, track_numbers),A}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
