@@ -743,14 +743,6 @@ function ClientGetPlatformName(client::Client)
     return str_jl
 end
 
-function DeviceGetLocalDeviceId(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
-            device.device::Ptr{Cvoid}
-        )::Cint
-    end
-end
-
 function PjRtLoadedExecutableGetClient(exec::LoadedExecutable)
     GC.@preserve exec begin
         return Client(
