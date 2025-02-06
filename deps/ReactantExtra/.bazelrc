@@ -25,7 +25,6 @@ build:cuda --repo_env=HERMETIC_CUDNN_VERSION="9.4.0"
 build:cuda --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
 build:cuda --crosstool_top="@local_config_cuda//crosstool:toolchain"
 build:cuda --@local_config_cuda//:enable_cuda
-build:cuda --@xla//xla/python:jax_cuda_pip_rpaths=true
 # Default hermetic CUDA and CUDNN versions.
 build:cuda --@local_config_cuda//cuda:include_cuda_libs=true
 build:cuda --@local_config_cuda//:cuda_compiler=nvcc

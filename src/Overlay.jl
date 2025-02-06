@@ -10,6 +10,14 @@
     return f
 end
 
+@reactant_overlay @noinline function Base.setindex!(
+    a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}
+) where {T,N}
+    ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
+    (Base.inferencebarrier(setindex!))(Reactant.ancestor(a), v, ancestor_indices...)
+    return a
+end
+
 # Enzyme.jl overlays
 @reactant_overlay @noinline function Enzyme.autodiff_deferred(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
@@ -140,5 +148,14 @@ end
             # rather than a call to the base method
             return Base.inferencebarrier(Base._stack)(dims, iter2)
         end
+    end
+end
+
+## fixes #493
+@reactant_overlay @noinline function Base._unique_dims(A::AbstractArray, dims::Colon)
+    if use_overlayed_version(A)
+        error("Reactant doesn't have a `Base._unique_dims` with the current interpreter.")
+    else
+        Base.inferencebarrier(Base._unique_dims)(A, dims)
     end
 end

@@ -219,14 +219,14 @@ end
 
 @testset "condition6: bareif relu" begin
     x = 2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition6_bareif_relu(x_ra))
     res = condition6_bareif_relu(x)
     @test res_ra ≈ res
 
     x = -2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition6_bareif_relu(x_ra))
     res = condition6_bareif_relu(x)
@@ -246,21 +246,21 @@ end
 
 @testset "condition7: bare elseif" begin
     x = 2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition7_bare_elseif(x_ra))
     res = condition7_bare_elseif(x)
     @test res_ra ≈ res
 
     x = -2.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition7_bare_elseif(x_ra))
     res = condition7_bare_elseif(x)
     @test res_ra ≈ res
 
     x = 0.0
-    x_ra = Reactant.to_rarray(x; track_numbers=(Number,))
+    x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
     res_ra = @jit(condition7_bare_elseif(x_ra))
     res = condition7_bare_elseif(x)
@@ -367,8 +367,8 @@ end
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
     @test @allowscalar(res_ra[1, 1]) == -1.0
     @test @allowscalar(res_ra[2, 1]) == -1.0
-    @test @allowscalar(x_ra[1, 1]) == -1.0 broken = true
-    @test @allowscalar(x_ra[2, 1]) == -1.0 broken = true
+    @test @allowscalar(x_ra[1, 1]) == -1.0
+    @test @allowscalar(x_ra[2, 1]) == -1.0
 
     x = -rand(2, 10)
     x[2, 1] = 0.0
@@ -377,7 +377,7 @@ end
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
     @test @allowscalar(res_ra[1, 1]) == 1.0
     @test @allowscalar(res_ra[2, 1]) == 0.0
-    @test @allowscalar(x_ra[1, 1]) == 1.0 broken = true
+    @test @allowscalar(x_ra[1, 1]) == 1.0
     @test @allowscalar(x_ra[2, 1]) == 0.0
 end
 
@@ -453,6 +453,36 @@ end
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
         condition12_compile_test(x, y, z)
+end
+
+function condition_with_structure(x)
+    y = x .+ 1
+    @trace if sum(y) > 0
+        z = (; a=y, b=(y .- 1, y))
+    else
+        z = (; a=-y, b=(y, y .+ 1))
+    end
+    return z
+end
+
+@testset "condition with structure" begin
+    x = rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit condition_with_structure(x_ra)
+    res = condition_with_structure(x)
+    @test res_ra.a ≈ res.a
+    @test res_ra.b[1] ≈ res.b[1]
+    @test res_ra.b[2] ≈ res.b[2]
+
+    x = -rand(2, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    res_ra = @jit condition_with_structure(x_ra)
+    res = condition_with_structure(x)
+    @test res_ra.a ≈ res.a
+    @test res_ra.b[1] ≈ res.b[1]
+    @test res_ra.b[2] ≈ res.b[2]
 end
 
 function for_with_step(x)
@@ -566,6 +596,37 @@ end
     @test @jit(for_ref_outer(x_ra)) ≈ for_ref_outer(x)
 end
 
+function for_inner_scope(x)
+    @trace for i in 1:10
+        s = sum(x)
+        x = x / s
+    end
+    return x
+end
+
+@testset "for: inner scope" begin
+    x = randn(Float64, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(for_inner_scope(x_ra)) ≈ for_inner_scope(x)
+end
+
+function for_with_named_tuple(x)
+    st = (; x)
+    res = x
+    @trace for i in 1:10
+        res .= res .+ st.x
+    end
+    return res
+end
+
+@testset "for: named tuple" begin
+    x = randn(Float64, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x)
+end
+
 _call1(a, b) = a
 function call1(a, b)
     x = @trace _call1(a, b)
@@ -582,7 +643,7 @@ end
     @test @jit(call1(a_ra, b_ra)) ≈ call1(a, b)
 
     # check whether the func for _call1 was only generated once:
-    ir = @code_hlo optimize=false call1(a_ra, b_ra)
+    ir = @code_hlo optimize = false call1(a_ra, b_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 2 # call1, _call1
 
@@ -591,12 +652,12 @@ end
     c_ra = Reactant.to_rarray(c)
 
     @test @jit(call1(a_ra, c_ra)) ≈ call1(a, c)
-    ir = @code_hlo optimize=false call1(a_ra, c_ra)
+    ir = @code_hlo optimize = false call1(a_ra, c_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 3
 end
 
-_call2(a) = a+a
+_call2(a) = a + a
 function call2(a)
     return @trace _call2(a)
 end
@@ -626,7 +687,7 @@ end
     y = rand(3)
     y_ra = Reactant.to_rarray(y)
 
-    ir = @code_hlo optimize=false call3(y_ra)
+    ir = @code_hlo optimize = false call3(y_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
 end
@@ -638,21 +699,40 @@ struct Bar
     x
 end
 
-_call4(foobar::Union{Foo, Bar}) = foobar.x
+_call4(foobar::Union{Foo,Bar}) = foobar.x
 function call4(foo, foo2, bar)
     @trace _call4(foo)
     @trace _call4(foo2)
     @trace _call4(bar)
 end
 
-begin
+@testset "call: Caching struct arguments" begin
     a = rand(10)
     b = rand(10)
     foo = Foo(Reactant.to_rarray(a))
     foo2 = Foo(Reactant.to_rarray(b))
     bar = Foo(Bar(Reactant.to_rarray(b))) # typeof(foo) == typeof(bar), but these don't match!
-    ir = @code_hlo optimize=false call4(foo, foo2, bar)
+    ir = @code_hlo optimize = false call4(foo, foo2, bar)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
 end
 
+function _call5!(a, b)
+    @allowscalar a[1] = zero(eltype(a))
+    return b
+end
+
+function call5!(a, b)
+    @trace _call5!(a, b)
+    return a
+end
+
+@testset "call: argument mutation" begin
+    a = ones(3)
+    b = ones(3)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    @jit call5!(a_ra, b_ra)
+    call5!(a, b)
+    @test a_ra == a
+end

@@ -13,10 +13,7 @@ mutable struct Data
     v::Reactant.TracedRArray{Float64,1}
 end
 @noinline function tmp(a, b, d)
-    @show d
-    @show typeof(d)
     c = d.v
-    @show typeof(c)
 
     return reshape(a, (4,)) ./ sqrt.(b .+ a)
 end
@@ -52,10 +49,10 @@ function test()
             end
         end
 
-        return println(string(mod))
+        return string(mod)
     end
 end
-test()
+@test test() == "module {\n}"
 
 @testset "ConcreteRArray broadcasting" begin
     x = ones(10, 10)

@@ -205,8 +205,8 @@ end
 `create_subelement_mask`
 
 The \"half-sublanes\", \"quarter-sublanes\", etc. (unit is determined by
-`num_subelems`) of the mask are masked in the range specified by `from` and
-`to`.
+the type of `output`) of the mask are masked in the range specified by
+`from` and `to`.
 
 - If `from <= to`, the range `[from, to)` is set and the rest is unset.
 - If `to <= from`, the range `[to, from)` is unset and the rest is set.
@@ -216,7 +216,7 @@ All lanes are set identically.
 # Example
 
 ```mlir
-%msk = tpu.create_subelement_mask 3, 9, 2 : vector<8x128x2xi1>
+%msk = tpu.create_subelement_mask 3, 9 : vector<8x128x2xi1>
 ```
 
 This creates a mask `%msk` where, for all `lane`s, `%msk[*][lane][*]` is:
@@ -229,18 +229,12 @@ It is currently only supported:
 - In TPU v4, for `num_subelems` of 1 and 2.
 - In TPU v5, for `num_subelems` of 1, 2, and 4.
 """
-function create_subelement_mask(;
-    output::IR.Type, from, to, num_subelems, location=Location()
-)
+function create_subelement_mask(; output::IR.Type, from, to, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[
-        namedattribute("from", from),
-        namedattribute("to", to),
-        namedattribute("num_subelems", num_subelems),
-    ]
+    attributes = NamedAttribute[namedattribute("from", from), namedattribute("to", to)]
 
     return create_operation(
         "tpu.create_subelement_mask",
@@ -408,6 +402,25 @@ function erase_memref_layout(operand::Value; result::IR.Type, location=Location(
     )
 end
 
+function fptosi(input::Value; output::IR.Type, rounding_mode, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("rounding_mode", rounding_mode),]
+
+    return create_operation(
+        "tpu.fptosi",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function gather(source::Value; output::IR.Type, indices, dimension, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[source,]
@@ -525,6 +538,25 @@ function load(
 
     return create_operation(
         "tpu.load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function log_buffer(input::Value; shape, tag, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("shape", shape), namedattribute("tag", tag)]
+
+    return create_operation(
+        "tpu.log_buffer",
         location;
         operands,
         owned_regions,
@@ -731,6 +763,25 @@ function prng_set_seed_32(seeds::Vector{Value}; location=Location())
     )
 end
 
+function pack_vmsk(low::Value, high::Value; output::IR.Type, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[low, high]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.pack_vmsk",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function pack_subelements(
     sources::Vector{Value}; output::IR.Type, positions, pack_format, location=Location()
 )
@@ -789,6 +840,26 @@ function reinterpret_cast(input::Value; result::IR.Type, location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function relayout(input::Value; output=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(output) && push!(op_ty_results, output)
+
+    return create_operation(
+        "tpu.relayout",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

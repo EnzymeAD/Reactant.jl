@@ -9,6 +9,8 @@
 #include "Enzyme/MLIR/Dialect/Ops.h"
 #include "Enzyme/MLIR/Implementations/CoreDialectsAutoDiffImplementations.h"
 #include "Enzyme/MLIR/Passes/Passes.h"
+
+#include "mlir/CAPI/Support.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -52,6 +54,12 @@
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/status_casters.h"
 
+#include "tsl/profiler/lib/profiler_session.h"
+#include "tsl/profiler/lib/traceme.h"
+#include "xla/tsl/profiler/rpc/client/capture_profile.h"
+#include "xla/tsl/profiler/rpc/profiler_server.h"
+#include "xla/python/profiler_utils.h"
+
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -59,6 +67,10 @@
 #include "llvm/TargetParser/Host.h"
 
 #include "llvm-c/TargetMachine.h"
+
+// shardy
+#include "shardy/dialect/sdy/ir/dialect.h"
+#include "shardy/integrations/c/attributes.h"
 
 // IFRT
 #include "xla/python/ifrt/array.h"
@@ -90,8 +102,8 @@
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
-#include "triton/Dialect/Triton/IR/Dialect.h"
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
+#include "triton/Dialect/Triton/IR/Dialect.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -116,6 +128,15 @@ template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
     return std::move(v).value();
   } else {
     return xla::ValueOrThrow(std::move(v));
+  }
+}
+
+extern "C" void ReactantHandleCuResult(uint32_t curesult) {
+  if (curesult != 0) {
+    std::string err = "Bad Cuda Result = " + std::to_string(curesult);
+    if (ReactantThrowError) {
+      ReactantThrowError(err.c_str());
+    }
   }
 }
 
@@ -201,6 +222,49 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
                                               (mlir::enzyme::Activity)val));
 }
 
+// Create profiler session and start profiling
+extern "C" tsl::ProfilerSession *
+CreateProfilerSession(uint32_t device_tracer_level,
+                      uint32_t host_tracer_level) {
+  tensorflow::ProfileOptions options = tsl::ProfilerSession::DefaultOptions();
+  options.set_device_tracer_level(device_tracer_level);
+  options.set_host_tracer_level(host_tracer_level);
+  auto sess = tsl::ProfilerSession::Create(options);
+  return sess.release();
+}
+
+extern "C" void ProfilerSessionCollectData(tsl::ProfilerSession *session,
+                                           const char *path) {
+  tensorflow::profiler::XSpace xspace;
+  auto status = session->CollectData(&xspace);
+  if (!status.ok())
+    ReactantThrowError("cannot collect data for profiler");
+  tsl::profiler::ExportToTensorBoard(xspace, path,
+                                     /*also_export_trace_json*/ true);
+}
+
+extern "C" void ProfilerSessionDelete(tsl::ProfilerSession *session) {
+  delete session;
+}
+
+extern "C" int64_t ProfilerActivityStart(const char *name, int level) {
+  return tsl::profiler::TraceMe::ActivityStart(name, level);
+}
+
+extern "C" void ProfilerActivityEnd(int64_t id) {
+  tsl::profiler::TraceMe::ActivityEnd(id);
+}
+
+extern "C" tsl::profiler::ProfilerServer *ProfilerServerStart(int32_t port) {
+  auto server = new tsl::profiler::ProfilerServer();
+  server->StartProfilerServer(port);
+  return server;
+}
+
+extern "C" void ProfilerServerStop(tsl::profiler::ProfilerServer *server) {
+  delete server;
+}
+
 extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
                                      int num_nodes) {
   CpuClientOptions options;
@@ -214,14 +278,15 @@ extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
 }
 
 // xla/python/xla.cc 390
-extern "C" PjRtClient *MakeGPUClient(int node_id, int num_nodes,
-                                     int *allowed_devices,
-                                     int num_allowed_devices,
-                                     const char *platform_name,
-                                     const char **error) {
+extern "C" PjRtClient *
+MakeGPUClient(int node_id, int num_nodes, int *allowed_devices,
+              int num_allowed_devices, double memory_fraction, bool preallocate,
+              const char *platform_name, const char **error) {
   GpuClientOptions options;
   // options.kv_store = "etcd";
   // options.allocator_config =
+  options.allocator_config.preallocate = preallocate;
+  options.allocator_config.memory_fraction = memory_fraction;
   options.node_id = node_id;
   options.num_nodes = num_nodes;
   options.allowed_devices =
@@ -295,11 +360,11 @@ extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
       LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
   if (pluginLoad == nullptr)
     return nullptr;
-
   auto tpu_status = InitializePjrtPlugin("tpu", error);
   if (tpu_status)
     return nullptr;
 
+  RegisterProfiler(pluginLoad);
   return GetCApiClient("TPU");
 }
 
@@ -323,6 +388,44 @@ extern "C" PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
                                                   int device_id) {
   return MyValueOrThrow(
       client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
+}
+
+extern "C" const char *ClientGetPlatformName(PjRtClient *client) {
+  return cstr_from_string(client->platform_name());
+}
+
+// To keep in sync with JLAllocatorStats in src/XLA.jl
+struct JLAllocatorStats {
+  int64_t num_allocs;
+  int64_t bytes_in_use;
+  int64_t peak_bytes_in_use;
+  int64_t largest_alloc_size;
+  int64_t bytes_limit;
+  int64_t bytes_reserved;
+  int64_t peak_bytes_reserved;
+  int64_t bytes_reservable_limit;
+  int64_t largest_free_block_bytes;
+  int64_t pool_bytes;
+  int64_t peak_pool_bytes;
+};
+
+extern "C" void PjRtDeviceGetAllocatorStats(PjRtDevice *device,
+                                            JLAllocatorStats *jlstats) {
+  auto stats = MyValueOrThrow(device->GetAllocatorStats());
+  int64_t optnull = std::numeric_limits<int64_t>::min();
+
+  jlstats->num_allocs = stats.num_allocs;
+  jlstats->bytes_in_use = stats.bytes_in_use;
+  jlstats->peak_bytes_in_use = stats.peak_bytes_in_use;
+  jlstats->largest_alloc_size = stats.largest_alloc_size;
+  jlstats->bytes_limit = stats.bytes_limit.value_or(optnull);
+  jlstats->bytes_reserved = stats.bytes_reserved;
+  jlstats->peak_bytes_reserved = stats.peak_bytes_reserved;
+  jlstats->bytes_reservable_limit =
+      stats.bytes_reservable_limit.value_or(optnull);
+  jlstats->largest_free_block_bytes = stats.largest_free_block_bytes;
+  jlstats->pool_bytes = stats.pool_bytes.value_or(optnull);
+  jlstats->peak_pool_bytes = stats.peak_pool_bytes.value_or(optnull);
 }
 
 extern "C" void ExecutableFree(xla::PjRtLoadedExecutable *exec) { delete exec; }
@@ -354,6 +457,13 @@ std::vector<int64_t> col_major(int64_t dim) {
   return minor_to_major;
 }
 
+extern "C" void ReactantLLVMParseCommandLineOptions(int argc,
+                                                    const char *const *argv,
+                                                    const char *Overview) {
+  llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(Overview),
+                                    &llvm::nulls());
+}
+
 std::vector<int64_t> row_major(int64_t dim) {
   std::vector<int64_t> minor_to_major;
   for (int i = 0; i < dim; i++) {
@@ -362,6 +472,19 @@ std::vector<int64_t> row_major(int64_t dim) {
   return minor_to_major;
 }
 static void noop() {}
+
+#ifdef REACTANT_CUDA
+#include "third_party/gpus/cuda/include/cuda.h"
+extern "C" int32_t ReactantCudaDriverGetVersion() {
+  int32_t data;
+  ReactantHandleCuResult(cuDriverGetVersion(&data));
+  return data;
+}
+extern "C" int32_t ReactantHermeticCudaGetVersion() { return CUDA_VERSION; }
+#else
+extern "C" int32_t ReactantCudaDriverGetVersion() { return 0; }
+extern "C" int32_t ReactantHermeticCudaGetVersion() { return 0; }
+#endif
 
 extern "C" void *UnsafeBufferPointer(PjRtBuffer *buffer) {
   auto unsafe = MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
@@ -410,6 +533,18 @@ extern "C" void BufferToHost(PjRtBuffer *buffer, void *data) {
 
 extern "C" void FreeClient(PjRtClient *client) { delete client; }
 
+extern "C" int64_t PjRtDeviceGetLocalDeviceId(PjRtDevice *device) {
+  return device->local_device_id().value();
+}
+
+extern "C" int64_t PjRtDeviceGetGlobalDeviceId(PjRtDevice *device) {
+  return device->global_device_id().value();
+}
+
+extern "C" int64_t PjRtDeviceGetLocalHardwareId(PjRtDevice *device) {
+  return device->local_hardware_id().value();
+}
+
 #include "xla/service/custom_call_target_registry.h"
 extern "C" void RegisterCustomCallTarget(const char *name, void *address,
                                          const char *platform) {
@@ -443,7 +578,7 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
     if (ReactantThrowError) {
       llvm::errs() << lmod << "\n";
       ReactantThrowError(err_str.c_str());
-      return wrap((mlir::ModuleOp)nullptr);
+      return wrap((mlir::ModuleOp) nullptr);
     }
   }
   mlir::MLIRContext &context = *unwrap(cctx);
@@ -460,14 +595,31 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
 
 /* Note that this */
 extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
-                                                    MlirModule cmod) {
+                                                    MlirModule cmod,
+                                                    int *global_ordinals,
+                                                    int num_global_ordinals,
+                                                    const char* xla_gpu_cuda_data_dir) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
   CompileOptions options;
-  // options.argument_layouts;
-  // options.executable_build_options.set_device_ordinal();
-  // options.executable_build_options.set_result_layout();
+
+  // https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L601
+  int device_count = client->addressable_device_count();
+
+  options.executable_build_options.set_num_replicas(device_count);
+  options.executable_build_options.set_num_partitions(1);
+  options.executable_build_options.mutable_debug_options()->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
+
+  xla::DeviceAssignment device_assignment(device_count, 1);
+  for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
+    int ordinal = global_ordinals[device_id];
+    if (ordinal < 0) {
+      continue;
+    }
+    device_assignment(ordinal, 0) = device_id;
+  }
+  options.executable_build_options.set_device_assignment(device_assignment);
 
   auto addressable_devices = client->addressable_devices();
   if (!addressable_devices.empty()) {
@@ -478,8 +630,7 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
     assert(device_ordinal < addressable_devices.size());
     auto stats = addressable_devices[device_ordinal]->GetAllocatorStats();
     if (stats.ok() && stats->bytes_limit) {
-      options.executable_build_options.set_device_memory_size(
-          *stats->bytes_limit);
+      options.executable_build_options.set_device_memory_size(*stats->bytes_limit);
     }
   }
   auto exec =
@@ -496,12 +647,72 @@ extern "C" uint8_t FutureIsReady(FutureType *Future) {
 
 extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 
+extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
+                                  PjRtBuffer **op_args, PjRtDevice *device,
+                                  uint8_t *is_arg_donatable, int num_results,
+                                  PjRtBuffer **op_results, uint8_t *futures,
+                                  FutureType **future_results) {
+  // Create a vector of PjRtBuffer* from the input array.
+  std::vector<PjRtBuffer *> argument_handles(op_args, op_args + num_args);
+
+  // Set up execution options.
+  ExecuteOptions options;
+  for (size_t i = 0; i < num_args; i++) {
+    if (!is_arg_donatable[i]) {
+      options.non_donatable_input_indices.insert(static_cast<int>(i));
+    }
+  }
+  options.untuple_result = true;
+
+  // Optional future to hold asynchronous execution results.
+  std::optional<PjRtFuture<>> returned_future;
+
+  auto results = MyValueOrThrow(
+      exec->ExecuteSharded(argument_handles,
+          device, options, returned_future, /*fill_future=*/true));
+
+  // Validate the number of results.
+  if (results.size() != num_results) {
+    llvm::errs() << "Error: results.size()=" << results.size()
+                 << " does not match num_results=" << num_results << "\n";
+    std::abort(); // Terminate if the number of results is incorrect.
+  }
+
+  // Handle futures if they are returned.
+  if (returned_future.has_value()) {
+    *futures = true;
+    for (size_t i = 0; i < num_results; i++) {
+      future_results[i] = new FutureType(*returned_future);
+    }
+  } else {
+    *futures = false;
+  }
+
+  // Release the results into the output array.
+  for (size_t i = 0; i < num_results; i++) {
+    op_results[i] = results[i].release();
+  }
+}
+
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
                            PjRtBuffer **op_args, uint8_t *is_arg_donatable,
                            int num_results, PjRtBuffer **op_results,
                            uint8_t *futures, FutureType **future_results) {
-  std::vector<std::vector<PjRtBuffer *>> argument_handles;
-  argument_handles.emplace_back(op_args, op_args + num_args);
+  auto client = exec->client();
+  int num_devices = client->addressable_device_count();
+
+  // Ensure argument_handles is structured as num_devices x num_args
+  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_devices);
+
+  // Distribute arguments across devices
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    argument_handles[device_idx].reserve(num_args);
+    for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
+      // Assuming op_args is a flat array of size num_devices * num_args
+      // where arguments for each device are contiguous
+      argument_handles[device_idx].push_back(op_args[device_idx * num_args + arg_idx]);
+    }
+  }
 
   ExecuteOptions options;
 
@@ -510,31 +721,43 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
       options.non_donatable_input_indices.insert((int)i);
   }
   options.untuple_result = true;
+
   std::optional<std::vector<FutureType>> returned_futures;
   auto results = MyValueOrThrow(
       exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
                         argument_handles),
                     options, returned_futures));
 
-  assert(results.size() == 1);
+  assert(results.size() == num_devices);
 
-  if (results[0].size() != num_results) {
-    llvm::errs() << " results.size()=" << results.size()
-                 << " num_results=" << num_results << "\n";
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    if (results[device_idx].size() != num_results) {
+      llvm::errs() << " results[" << device_idx << "].size()=" << results[device_idx].size()
+                   << " num_results=" << num_results << "\n";
+    }
+    assert(results[device_idx].size() == num_results);
   }
-  assert(results[0].size() == num_results);
+
+  // Handle returned futures
   if (returned_futures) {
     *futures = true;
-    assert(returned_futures->size() == num_results);
-    for (size_t i = 0; i < num_results; i++) {
-      future_results[i] = new FutureType((*returned_futures)[i]);
+    assert(returned_futures->size() == num_devices * num_results);
+    for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+      for (int result_idx = 0; result_idx < num_results; ++result_idx) {
+        int flat_index = device_idx * num_results + result_idx;
+        future_results[flat_index] = new FutureType((*returned_futures)[flat_index]);
+      }
     }
   } else {
     *futures = false;
   }
 
-  for (size_t i = 0; i < num_results; i++) {
-    op_results[i] = results[0][i].release();
+  // Copy results into the output buffers
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    for (int result_idx = 0; result_idx < num_results; ++result_idx) {
+      int flat_index = device_idx * num_results + result_idx;
+      op_results[flat_index] = results[device_idx][result_idx].release();
+    }
   }
 }
 
@@ -555,6 +778,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::mhlo::MhloDialect>();
   context.loadDialect<mlir::stablehlo::StablehloDialect>();
   context.loadDialect<mlir::chlo::ChloDialect>();
+  context.loadDialect<mlir::sdy::SdyDialect>();
 }
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
@@ -565,7 +789,7 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   prepareRegistry(registry);
 
   mlir::registerenzymePasses();
-  regsiterenzymeXLAPasses();
+  enzyme::registerenzymexlaPasses();
 
   // Register the standard passes we want.
   mlir::registerCSEPass();
@@ -642,8 +866,8 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
 
   if (auto func = dyn_cast<FunctionOpInterface>(op.getOperation())) {
     if (func.isExternal()) {
-        shouldRemove = true;
-        return success();
+      shouldRemove = true;
+      return success();
     }
   }
 
@@ -655,6 +879,12 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
 
   SymbolTable::setSymbolName(op, newSymName);
   return success();
+}
+
+extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
+                                       MlirStringRef name, MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
+      .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
 
 extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
@@ -678,13 +908,14 @@ extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
     }
 
     bool shouldRemove = false;
-    if (failed(updateSymbolAndAllUses(symbolOp, newMod, prevMod, lastUsedID, shouldRemove))) {
+    if (failed(updateSymbolAndAllUses(symbolOp, newMod, prevMod, lastUsedID,
+                                      shouldRemove))) {
       assert(0 && "failed to update all uses");
     }
     if (shouldRemove)
-        op.erase();
+      op.erase();
     else
-        SymbolTable::setSymbolVisibility(&op, SymbolTable::Visibility::Private);
+      SymbolTable::setSymbolVisibility(&op, SymbolTable::Visibility::Private);
   }
   prevMod.getBody()->getOperations().splice(
       prevMod.getBody()->getOperations().end(),

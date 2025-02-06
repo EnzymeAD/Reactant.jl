@@ -14,6 +14,10 @@ Reactant.@jit
 ## ReactantCore API
 
 ```@docs
+within_compile
+```
+
+```@docs
 @trace
 ```
 
@@ -23,18 +27,20 @@ Reactant.@jit
 @code_hlo
 ```
 
-```@raw html
-<br>
-```
+## Profile XLA
 
-# Internal Functionality
-
-!!! danger "Private"
-
-    These functions are not part of the public API and are subject to change at any time.
+Reactant can hook into XLA's profiler to generate compilation and execution traces.
+See the [profiling tutorial](@ref profiling) for more details.
 
 ```@docs
-Reactant.Compiler.codegen_unflatten!
-Reactant.Compiler.codegen_flatten!
-Reactant.Compiler.codegen_xla_call
+Reactant.Profiler.with_profiler
+Reactant.Profiler.annotate
+Reactant.Profiler.@annotate
+```
+
+## Devices
+
+```@docs
+Reactant.devices
+Reactant.addressable_devices
 ```

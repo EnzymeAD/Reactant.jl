@@ -54,12 +54,9 @@ cc_toolchain_config(
     coverage_link_flags = ["--coverage"],
     cpu = "k8",
     cxx_builtin_include_directories = [
-        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0",
-        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0/x86_64-linux-musl",
-        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/13.2.0/backward",
-        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0",
-        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0/x86_64-linux-musl",
-        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/10.2.0/backward",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/GCC_VERSION",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/GCC_VERSION/x86_64-linux-musl",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/GCC_VERSION/backward",
         "/opt/x86_64-linux-musl/x86_64-linux-musl/include",
         "/opt/x86_64-linux-musl/bin/../include/x86_64-unknown-linux-musl/c++/v1",
         "/opt/x86_64-linux-musl/bin/../include/c++/v1",
@@ -152,14 +149,14 @@ cc_toolchain_config(
     abi_libc_version = "local",
     abi_version = "local",
     cxx_builtin_include_directories = [
-        "/opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include",
-        "/opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include-fixed",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
         "/opt/BB_TARGET/BB_TARGET/include",
         "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/BB_TARGET",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/backward",
-        "/opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/parallel"
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
     ],
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
@@ -196,14 +193,14 @@ cc_toolchain_config(
         "-Wno-free-nonheap-object",
         "-fno-omit-frame-pointer",
         # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include",
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/13.2.0/include-fixed",
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
         "-isystem /opt/BB_TARGET/BB_TARGET/include",
         "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/BB_TARGET",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/backward",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/13.2.0/parallel",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
     ],
     opt_compile_flags = [
         "-g0",
@@ -363,12 +360,13 @@ cc_library(
         ],
 
     ) + [
-	"@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
-	"@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
+        "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
+        "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
         # "@xla//xla:xla.pb.cc",
         "@xla//xla:xla_data.pb.cc",
-        "@xla//xla/stream_executor:device_description.pb.cc",
+        # "@xla//xla/stream_executor:device_description.pb.cc",
         "@xla//xla/service:hlo.pb.cc",
         #  # "@tsl//tsl/protobuf:dnn.pb.cc",
         #"@tsl//tsl/protobuf:histogram.pb.cc",
@@ -387,7 +385,12 @@ cc_library(
         "-Werror=return-type",
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation"
+    ] + select({
+    "@xla//xla/tsl:is_cuda_enabled_and_oss":[
+        "-DREACTANT_CUDA=1",
     ],
+    "//conditions:default": [],
+    }),
     alwayslink = True,
     linkstatic = True,
     linkopts = select({
@@ -395,6 +398,7 @@ cc_library(
     "@bazel_tools//src/conditions:darwin": [
 "-Wl,-exported_symbol,_stablehlo*",
 "-Wl,-exported_symbol,_mlir*",
+"-Wl,-exported_symbol,_EnzymeJaXMapSymbol",
 "-Wl,-exported_symbol,_InitializeLogs",
 "-Wl,-exported_symbol,_SetLogLevel",
 "-Wl,-exported_symbol,_SetModuleLogLevel",
@@ -411,6 +415,7 @@ cc_library(
 "-Wl,-exported_symbol,_ClientProcessIndex",
 "-Wl,-exported_symbol,_ClientGetDevice",
 "-Wl,-exported_symbol,_ClientGetAddressableDevice",
+"-Wl,-exported_symbol,_PjRtDeviceGetAllocatorStats",
 "-Wl,-exported_symbol,_ExecutableFree",
 "-Wl,-exported_symbol,_BufferToDevice",
 "-Wl,-exported_symbol,_BufferToClient",
@@ -423,6 +428,7 @@ cc_library(
 "-Wl,-exported_symbol,_BufferToHost",
 "-Wl,-exported_symbol,_FreeClient",
 "-Wl,-exported_symbol,_ClientCompile",
+"-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
 "-Wl,-exported_symbol,_LinkInModule",
 "-Wl,-exported_symbol,_FreeFuture",
 "-Wl,-exported_symbol,_FutureIsReady",
@@ -435,6 +441,24 @@ cc_library(
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
 "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
 "-Wl,-exported_symbol,_ReactantThrowError",
+"-Wl,-exported_symbol,_ReactantHandleCuResult",
+"-Wl,-exported_symbol,_CreateProfilerSession",
+"-Wl,-exported_symbol,_ProfilerSessionCollectData",
+"-Wl,-exported_symbol,_ProfilerSessionDelete",
+"-Wl,-exported_symbol,_ProfilerServerStart",
+"-Wl,-exported_symbol,_ProfilerServerStop",
+"-Wl,-exported_symbol,_ProfilerActivityStart",
+"-Wl,-exported_symbol,_ProfilerActivityEnd",
+"-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
+"-Wl,-exported_symbol,ReactantHermeticCudaGetVersion",
+"-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
+"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
+"-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
+"-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
+"-Wl,-exported_symbol,_PjRtDeviceGetLocalHardwareId",
+"-Wl,-exported_symbol,_XLAExecuteSharded",
+"-Wl,-exported_symbol,_ClientGetPlatformName",
+"-Wl,-exported_symbol,_RegisterEnzymeXLACPUHandler",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -460,11 +484,11 @@ cc_library(
         "@llvm-project//mlir:SCFDialect",
         "@llvm-project//mlir:TransformDialect",
         "@llvm-project//mlir:Transforms",
-        
+
         "@llvm-project//mlir:LLVMIRToLLVMTranslation",
         "@llvm-project//mlir:LLVMIRToNVVMTranslation",
         "@llvm-project//mlir:LLVMIRTransforms",
-        
+
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:AArch64AsmParser",
@@ -480,9 +504,10 @@ cc_library(
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
-        
+
         "@xla//xla:xla_proto_cc",
         "@xla//xla:xla_proto_cc_impl",
+        "@xla//xla/stream_executor:device_description_proto_cc_impl",
 
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
@@ -491,10 +516,10 @@ cc_library(
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
         "@xla//xla/stream_executor/tpu:tpu_executor",
         "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
-        
+
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
-       
+
 	"@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
 
@@ -504,33 +529,61 @@ cc_library(
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/ffi:call_frame",
         "@com_google_protobuf//:protobuf",
-	"@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
+
+        "@tsl//tsl/profiler/lib:profiler_session_impl",
+        "@tsl//tsl/profiler/lib:profiler_factory_impl",
+        "@tsl//tsl/profiler/lib:profiler_controller",
+        "@tsl//tsl/profiler/lib:traceme",
+        "@xla//xla/tsl/profiler/rpc:profiler_server_impl",
+        "@xla//xla/tsl/profiler/rpc/client:capture_profile",
+        "@xla//xla/tsl/profiler/rpc/client:profiler_client",
+        "@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
         "@xla//xla/tsl/profiler/backends/cpu:traceme_recorder_impl",
         "@xla//xla/tsl/profiler/utils:time_utils_impl",
+        "@tsl//tsl/profiler/protobuf:profiler_service_monitor_result_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:profiler_service_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:profiler_analysis_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:profiler_options_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:profile_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:xplane_proto_cc_impl",
+        "@tsl//tsl/profiler/protobuf:trace_events_proto_cc_impl",
+
+        "@xla//xla/backends/profiler/cpu:host_tracer",
+        "@xla//xla/backends/profiler/cpu:host_tracer_impl",
+        "@xla//xla/backends/profiler/cpu:metadata_collector",
+        "@xla//xla/backends/profiler/cpu:metadata_utils",
+        "@xla//xla/backends/profiler/tpu:tpu_tracer",
+        "@xla//xla/python:profiler_utils",
+
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
         "@stablehlo//:stablehlo_capi_objects",
         "@stablehlo//:chlo_capi_objects",
+        "@shardy//shardy/integrations/c:sdy_capi_objects",
         "@com_google_absl//absl/hash:hash",
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
-        "@llvm-project//mlir:CAPILLVMObjects",    
+        "@llvm-project//mlir:CAPILLVMObjects",
         "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
         "@jax//jaxlib/triton:triton_dialect_capi_objects",
+        "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
     ] + select({
-    "@xla//xla/tsl:is_cuda_enabled_and_oss":[
-        "@xla//xla/stream_executor/cuda:all_runtime", 
-        "@xla//xla/service/gpu/model:hlo_op_profiles",
-        "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
-        "@xla//xla/service/gpu:nvptx_compiler",
-        "@xla//xla/service/gpu:gpu_transfer_manager",
-        "@xla//xla/stream_executor:kernel", 
-    ],
-    "//conditions:default": [],
+        "@xla//xla/tsl:is_cuda_enabled_and_oss":[
+            "@xla//xla/stream_executor/cuda:all_runtime",
+            "@xla//xla/service/gpu/model:hlo_op_profiles",
+            "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
+            "@xla//xla/service/gpu:nvptx_compiler",
+            "@xla//xla/service/gpu:gpu_transfer_manager",
+            "@xla//xla/stream_executor:kernel",
+            "@xla//xla/backends/profiler/gpu:device_tracer",
+        ],
+        "//conditions:default": [
+        ],
     }) + if_rocm([
         "@xla//xla/service/gpu:amdgpu_compiler",
+        "@xla//xla/backends/profiler/gpu:device_tracer",
     ]),
 )
 
@@ -656,6 +709,20 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "MPIIncJLGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "MPI.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/MPI/IR/MPIOps.td",
+    deps = [
+        "@llvm-project//mlir:MPITdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
     name = "EnzymeJLIncGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
@@ -755,6 +822,21 @@ gentbl_cc_library(
     tblgen = "//:mlir-jl-tblgen",
 )
 
+gentbl_cc_library(
+    name = "ShardyJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "Shardy.jl"
+        )
+    ],
+    td_file = "@shardy//shardy/dialect/sdy/ir:ops.td",
+    deps = [
+        "@shardy//shardy/dialect/sdy/ir:sdy_td_files",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    includes = ["external/shardy"],
+)
+
 genrule(
     name = "libMLIR_h.jl",
     tags = [
@@ -774,6 +856,7 @@ genrule(
         "@llvm-project//mlir:AsyncPassIncGen_filegroup",
         "@llvm-project//mlir:GPUPassIncGen_filegroup",
         "@stablehlo//:stablehlo/integrations/c/StablehloAttributes.h",
+        "@shardy//shardy/integrations/c:attributes.h",
         "//:Project.toml",
         "//:Manifest.toml",
         "//:wrap.toml",
@@ -781,5 +864,5 @@ genrule(
         "//:make.jl"
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$@\"",
+    cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$@\"",
 )

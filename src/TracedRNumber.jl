@@ -1,14 +1,7 @@
 module TracedRNumberOverrides
 
 using ..Reactant:
-    Reactant,
-    TracedRNumber,
-    TracedRArray,
-    ReactantPrimitive,
-    TracedUtils,
-    Ops,
-    MLIR,
-    unwrapped_eltype
+    Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
 using ReactantCore
 
 ReactantCore.is_traced(::TracedRNumber) = true
@@ -21,6 +14,20 @@ Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data,
 
 function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
+end
+
+function Base.isfinite(x::TracedRNumber{<:Complex})
+    return isfinite(real(x)) & isfinite(imag(x))
+end
+function Base.isfinite(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return Reactant.Ops.is_finite(x)
+end
+
+function Base.isnan(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return !isfinite(x) & (x != typemax(T)) & (x != typemin(T))
+end
+function Base.isnan(x::TracedRNumber{<:Complex})
+    return isnan(real(x)) | isnan(imag(x))
 end
 
 function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
@@ -71,8 +78,7 @@ function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
             TracedRNumber{Reactant.unwrapped_eltype(rhs)}((), rhs.mlir_data),
         )
     end
-    rhs isa Number &&
-        return TracedUtils.promote_to(TracedRNumber{T}, Ops.constant(fill(T(rhs))))
+    rhs isa Number && return TracedUtils.promote_to(TracedRNumber{T}, Ops.fill(T(rhs)))
     return TracedUtils.promote_to(TracedRNumber{T}, Ops.constant(collect(rhs)))
 end
 
@@ -108,6 +114,12 @@ function Base.div(
     return Ops.divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
 
+function Base.:/(
+    @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
+) where {T<:Integer}
+    return float(lhs) / float(rhs)
+end
+
 for (jlop, hloop, hlocomp) in (
     (:(Base.:(==)), :compare, "EQ"),
     (:(Base.:(!=)), :compare, "NE"),
@@ -115,6 +127,7 @@ for (jlop, hloop, hlocomp) in (
     (:(Base.:(>)), :compare, "GT"),
     (:(Base.:(<=)), :compare, "LE"),
     (:(Base.:(<)), :compare, "LT"),
+    (:(Base.isless), :compare, "LT"),
 )
     @eval begin
         function $(jlop)(
@@ -215,6 +228,12 @@ for (jlop, hloop) in (
     (:(Base.log), :log),
     (:(Base.log1p), :log_plus_one),
     (:(Base.sqrt), :sqrt),
+    (:(Base.acos), :acos),
+    (:(Base.acosh), :acosh),
+    (:(Base.asin), :asin),
+    (:(Base.asinh), :asinh),
+    (:(Base.atan), :atan),
+    (:(Base.atanh), :atanh),
 )
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
 end
@@ -232,8 +251,21 @@ Base.conj(x::TracedRNumber{<:Complex}) = Ops.conj(x)
 Base.real(x::TracedRNumber) = x
 Base.real(x::TracedRNumber{<:Complex}) = Ops.real(x)
 
+Base.isreal(::TracedRNumber) = false
+Base.isreal(::TracedRNumber{<:Real}) = true
+
 Base.imag(x::TracedRNumber) = zero(x)
 Base.imag(x::TracedRNumber{<:Complex}) = Ops.imag(x)
+
+Base.iseven(x::TracedRNumber) = iseven(real(x))
+function Base.iseven(x::TracedRNumber{<:Real})
+    return iszero(
+        rem(
+            TracedUtils.promote_to(TracedRNumber{Int}, x),
+            TracedUtils.promote_to(TracedRNumber{Int}, 2),
+        ),
+    )
+end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
     @eval Base.clamp(x::TracedRNumber, min::$(minT), max::$(maxT)) = Ops.clamp(min, x, max)
@@ -241,6 +273,9 @@ end
 
 function Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N}
     return TracedUtils.broadcast_to_size(x, dims)
+end
+function Base.fill(x::TracedRNumber, ::Tuple{})
+    return TracedUtils.broadcast_to_size(x, ())
 end
 
 function Base.float(x::TracedRNumber{T}) where {T}
@@ -252,6 +287,57 @@ using Reactant: ReactantFloat
 Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
 Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
 Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
+
+function Base.unsafe_trunc(
+    T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}
+)
+    return Ops.convert(TracedRNumber{T}, x)
+end
+
+for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
+    for Tf in (Float16, Float32, Float64)
+        if Ti <: Unsigned || sizeof(Ti) < sizeof(Tf)
+            # Here `Tf(typemin(Ti))-1` is exact, so we can compare the lower-bound
+            # directly. `Tf(typemax(Ti))+1` is either always exactly representable, or
+            # rounded to `Inf` (e.g. when `Ti==UInt128 && Tf==Float32`).
+            @eval begin
+                function Base.trunc(::Type{$Ti}, x::TracedRNumber{$Tf})
+                    # TODO throw error within traced
+                    # if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
+                    return Base.unsafe_trunc($Ti, x)
+                    # else
+                    #     throw(Base.InexactError(:trunc, $Ti, x))
+                    # end
+                end
+            end
+        else
+            # Here `eps(Tf(typemin(Ti))) > 1`, so the only value which can be truncated to
+            # `Tf(typemin(Ti)` is itself. Similarly, `Tf(typemax(Ti))` is inexact and will
+            # be rounded up. This assumes that `Tf(typemin(Ti)) > -Inf`, which is true for
+            # these types, but not for `Float16` or larger integer types.
+            @eval begin
+                function Base.trunc(::Type{$Ti}, x::TracedRNumber{$Tf})
+                    # TODO throw error within traced
+                    # if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
+                    return Base.unsafe_trunc($Ti, x)
+                    # else
+                    #     throw(Base.InexactError(:trunc, $Ti, x))
+                    # end
+                end
+            end
+        end
+    end
+end
+
+function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
+    return trunc(T, Base.round(x))
+end
+function Base.floor(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
+    return trunc(T, Base.floor(x))
+end
+function Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
+    return trunc(T, Base.ceil(x))
+end
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)

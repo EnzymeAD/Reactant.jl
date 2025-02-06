@@ -1,4 +1,5 @@
 name: Benchmarks
+
 permissions:
   contents: write # contents permission to update benchmark contents in gh-pages branch
   statuses: read
@@ -7,14 +8,25 @@ permissions:
 
 on:
   pull_request:
-
+    paths:
+      - '.github/workflows/benchmark_aggregate.yml'
+      - 'ext/**'
+      - 'lib/**'
+      - 'src/**'
+      - 'Project.toml'
   push:
     branches:
       - main
+    paths:
+      - '.github/workflows/benchmark_aggregate.yml'
+      - 'ext/**'
+      - 'lib/**'
+      - 'src/**'
+      - 'Project.toml'
 
 jobs:
   benchmark:
-    if: ${{ !contains(github.event.head_commit.message, '[skip benchmarks]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[skip benchmarks]') && ! github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

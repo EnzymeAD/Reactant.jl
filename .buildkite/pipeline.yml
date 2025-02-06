@@ -32,43 +32,7 @@ steps:
           cuda: "*"
         env:
           REACTANT_TEST_GROUP: "{{matrix.group}}"
-        if: build.message !~ /\[skip tests\]/
-        timeout_in_minutes: 120
-
-      - label: ":julia: :linux: aarch64 - Julia v{{matrix.version}} -- {{matrix.group}}"
-        matrix:
-          setup:
-            version:
-              - "1.10"
-              - "1.11"
-            group:
-              - core
-              - neural_networks
-              - integration
-        plugins:
-          - JuliaCI/julia#v1:
-              version: "{{matrix.version}}"
-          - JuliaCI/julia-coverage#v1:
-              codecov: true
-              dirs:
-                - src
-                - ext
-                - lib/ReactantCore/src
-        commands: |
-          julia --project=. -e 'println("--- :julia: Instantiating project")
-              using Pkg
-              Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
-
-          julia --project=. -e 'println("--- :julia: Run Tests")
-              using Pkg
-              Pkg.test(; coverage="user")'
-        agents:
-          queue: "juliaecosystem"
-          os: "linux"
-          sandbox_capable: "true"
-          arch: "aarch64"
-        env:
-          REACTANT_TEST_GROUP: "{{matrix.group}}"
+          CUDA_VISIBLE_DEVICES: 0
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 120
 

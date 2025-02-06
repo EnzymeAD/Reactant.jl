@@ -1,0 +1,30 @@
+name: Doc Preview Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+concurrency:
+  # Same group concurrency as the `docs.yml` workflow, because they both
+  # git-push to the same branch, so we want to avoid clashes.
+  group: docs-pushing
+
+jobs:
+  doc-preview-cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      - name: Delete preview and history + push changes
+        run: |
+          preview_directory=previews/PR${{ github.event.number }}
+            if [[ -d "${preview_directory}" ]]; then
+              git config user.name "${{github.actor}}"
+              git config user.email "${{github.actor_id}}+${{github.actor}}@users.noreply.github.com"
+              git rm -rf "${preview_directory}"
+              git commit -m 'Cleanup docs for PR #${{ github.event.number }}'
+              git branch gh-pages-new $(echo "Delete history" | git commit-tree HEAD^{tree})
+              git push --force origin gh-pages-new:gh-pages
+            fi

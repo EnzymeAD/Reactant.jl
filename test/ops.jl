@@ -239,13 +239,17 @@ end
             ConcreteRArray([5.0 + 5im, 6.0 + 6im, -7.0 - 7im, -8.0 - 8im]),
         ),
     ]
-        @test a .* b ≈ @jit f1(a, b)
-        @test reshape(kron(Array(b), Array(a)), 4, 4) ≈ @jit f2(a, b)
+        @test a .* b ≈
+            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f1(a, b)
+        @test reshape(kron(Array(b), Array(a)), 4, 4) ≈
+            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f2(a, b)
 
         x = ConcreteRArray(reshape(a, (2, 2)))
         y = ConcreteRArray(reshape(b, (2, 2)))
-        @test x .* y ≈ @jit f3(x, y)
-        @test Array(x) * Array(y) ≈ @jit f4(x, y)
+        @test x .* y ≈
+            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f3(x, y)
+        @test Array(x) * Array(y) ≈
+            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f4(x, y)
     end
 end
 
@@ -689,7 +693,7 @@ end
 end
 
 @testset "sort" begin
-    basic_sort(x, dimension) = Ops.sort(x; comparator=(a, b) -> a < b, dimension)
+    basic_sort(x, dimension) = only(Ops.sort(x; comparator=(a, b) -> a < b, dimension))
     @testset for i in 1:3
         t_size = tuple(fill(10, (i,))...)
         x = randn(t_size)
@@ -880,7 +884,8 @@ end
 @testset "lgamma" begin
     if !(Sys.isapple() && Sys.ARCH === :x86_64)
         x = ConcreteRArray([-1.0, 0.0, 1.0, 2.5])
-        @test SpecialFunctions.lgamma.(Array(x)) ≈ @jit Ops.lgamma(x)
+        lgamma(x) = (SpecialFunctions.logabsgamma(x))[1]
+        @test lgamma.(Array(x)) ≈ @jit Ops.lgamma(x)
     end
 end
 
@@ -916,7 +921,14 @@ end
 
 @testset "top_k" begin
     x = ConcreteRArray([1, 2, 3, 4])
-    @test (; values=[4, 3], indices=[3, 2]) == @jit Ops.top_k(x, 2)
+    @test (; values=[4, 3], indices=[4, 3]) == @jit Ops.top_k(x, 2)
+
+    x = ConcreteRArray([NaN, 123, 456, 789, 121])
+    res = @jit Ops.top_k(x, 2)
+    true_res = (; values=[NaN, 789], indices=[1, 4])
+    @test res.indices == true_res.indices
+    @test @allowscalar isnan(res.values[1])
+    @test @allowscalar res.values[2] == 789
 end
 
 @testset "zeta" begin

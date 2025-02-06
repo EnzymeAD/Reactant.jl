@@ -471,6 +471,7 @@ function dot_scaled(
     d::IR.Type,
     lhs_type,
     rhs_type,
+    fastMath,
     location=Location(),
 )
     op_ty_results = IR.Type[d,]
@@ -478,7 +479,9 @@ function dot_scaled(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("lhs_type", lhs_type), namedattribute("rhs_type", rhs_type)
+        namedattribute("lhs_type", lhs_type),
+        namedattribute("rhs_type", rhs_type),
+        namedattribute("fastMath", fastMath),
     ]
     !isnothing(lhs_scale) && push!(operands, lhs_scale)
     !isnothing(rhs_scale) && push!(operands, rhs_scale)
@@ -785,12 +788,17 @@ tensor. The input and indices tensors must have the same number of
 dimension, and each dimension of the indices tensor that is not the gather
 dimension cannot be greater than the corresponding dimension in the input
 tensor.
+
+The `efficient_layout` attribute is set when the compiler has determined an
+optimized layout for the operation, indicating that it should not be
+changed.
 """
 function gather(
     src::Value,
     indices::Value;
     result=nothing::Union{Nothing,IR.Type},
     axis,
+    efficient_layout=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -799,6 +807,8 @@ function gather(
     successors = Block[]
     attributes = NamedAttribute[namedattribute("axis", axis),]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(efficient_layout) &&
+        push!(attributes, namedattribute("efficient_layout", efficient_layout))
 
     return create_operation(
         "tt.gather",

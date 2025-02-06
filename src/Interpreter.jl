@@ -255,7 +255,7 @@ function overload_autodiff(
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = TracedUtils.make_mlir_fn(
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results, _ = TracedUtils.make_mlir_fn(
         primf, primargs, (), string(f) * "_autodiff", false
     )
 
@@ -331,7 +331,9 @@ function overload_autodiff(
             act = act_from_type(A, reverse, needs_primal(CMode))
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
-                attr = fill(MLIR.IR.Attribute(unwrapped_eltype(a)(1)), Ops.mlir_type(a))
+                attr = MLIR.IR.DenseElementsAttribute(
+                    fill(one(unwrapped_eltype(a)), size(a))
+                )
                 cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
                 push!(ad_inputs, cst)
             end

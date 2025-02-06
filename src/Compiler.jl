@@ -1,6 +1,7 @@
 module Compiler
 
 using Reactant_jll
+using Libdl: dlsym
 
 import ..Reactant:
     Reactant,
@@ -118,7 +119,7 @@ function create_result(
 end
 
 # Optimization passes via transform dialect
-function optimization_passes(; no_nan::Bool=false)
+function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
         "transpose_transpose<16>",
@@ -141,6 +142,8 @@ function optimization_passes(; no_nan::Bool=false)
         "transpose_is_reshape<16>",
         "zero_extent_tensor_canon<16>",
         "reorder_elementwise_and_shape_op<16>",
+        "chlo_inf_const_prop<16>",
+        "gamma_const_prop<16>",
         "cse_broadcast_in_dim<16>",
         "cse_slice<16>",
         "cse_transpose<16>",
@@ -267,6 +270,7 @@ function optimization_passes(; no_nan::Bool=false)
         "if_to_select<1>",
         "dynamic_update_slice_const_prop",
         "dynamic_gather_op_is_not_dynamic<16>",
+        "divide_sqrt_to_multiply_rsqrt<16>",
         "binary_op_transpose_simplify_add",
         "binary_op_transpose_simplify_sub",
         "binary_op_transpose_simplify_mul",
@@ -278,15 +282,38 @@ function optimization_passes(; no_nan::Bool=false)
         "binary_op_transpose_simplify_or",
         "binary_op_transpose_simplify_and",
         "binary_op_transpose_simplify_xor",
+        "transpose_unary_transpose_abs",
+        "transpose_unary_transpose_neg",
+        "transpose_unary_transpose_sqrt",
+        "transpose_unary_transpose_rsqrt",
+        "transpose_unary_transpose_ceil",
+        "transpose_unary_transpose_convert",
+        "transpose_unary_transpose_cosine",
+        "transpose_unary_transpose_exp",
+        "transpose_unary_transpose_expm1",
+        "transpose_unary_transpose_log",
+        "transpose_unary_transpose_log1p",
+        "transpose_unary_transpose_sign",
+        "transpose_unary_transpose_sine",
+        "transpose_unary_transpose_tanh",
+        "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
         "replace_neg_add_with_subtract",
         "log_const_prop<1>",
         "log_plus_one_const_prop<1>",
+        "binop_const_simplify",
+        "transpose_broadcast_in_dim_to_broadcast_in_dim",
+        "not_select_simplify",
+        "common_compare_expression_rewrite",
+        "compare_select_simplify",
+        "while_simplify<1>",
     ]
     if no_nan
         append!(
             transform_passes_list,
-            ["no_nan", "no_nan_self_sub_simplify", "no_nan_add_sub_simplify"],
+            ["no_nan", "no_nan_self_sub_simplify", "no_nan_add_sub_simplify(1)"],
         )
+    else
+        push!(transform_passes_list, "no_nan_add_sub_simplify(0)")
     end
     transform_passes = join(
         [
@@ -297,14 +324,20 @@ function optimization_passes(; no_nan::Bool=false)
         ",",
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
-    return join(
-        [
-            "inline{default-pipeline=canonicalize max-iterations=4}",
-            "libdevice-funcs-raise",
-            func_passes,
-        ],
-        ',',
-    )
+    passes = ["inline{default-pipeline=canonicalize max-iterations=4}"]
+    if sroa
+        push!(passes, "propagate-constant-bounds")
+        if DUMP_LLVMIR[]
+            push!(passes, "sroa-wrappers{dump_prellvm=true dump_postllvm=true}")
+        else
+            push!(passes, "sroa-wrappers")
+        end
+        push!(passes, "libdevice-funcs-raise")
+        push!(passes, "canonicalize")
+        push!(passes, "remove-duplicate-func-def")
+    end
+    push!(passes, func_passes)
+    return join(passes, ',')
 end
 
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
@@ -350,16 +383,87 @@ function compile_mlir(f, args; kwargs...)
     return results
 end
 
-const cuLaunch = Ref{UInt}(0)
-const cuFunc = Ref{UInt}(0)
-const cuModule = Ref{UInt}(0)
+const PartitionKA = Ref{Bool}(true)
 
-function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::String, mlir_result_types::Vector{MLIR.IR.Type}, traced_result::Any}}(); optimize::Union{Bool,Symbol}=true, no_nan::Bool=false)
+const cubinChip = Ref{String}("sm_60")
+const cubinFormat = Ref{String}("bin")
+const cuindexBitWidth = Ref{Int}(32)
+const cuOptLevel = Ref{Int}(2)
+# Wgatever the relevant highest version from our LLVM is within NVPTX.td
+# Or more specifically looking at clang/lib/Driver/ToolChains/Cuda.cpp:684
+#  We see relevant ptx version is CUDA 12.6 -> 85
+#                                      12.2 -> 82
+#                                      11.8 -> 78
+function cubinFeatures()
+    ver = @ccall MLIR.API.mlir_c.ReactantCudaDriverGetVersion()::UInt32
+    # No cuda available
+    if ver == 0
+        return "+ptx86"
+    end
+    ver2 = @ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32
+    ver = min(ver, ver2)
+    major, ver = divrem(ver, 1000)
+    minor, patch = divrem(ver, 10)
+    version = VersionNumber(major, minor, patch)
+    # From https://github.com/llvm/llvm-project/blob/106c483a102e1328f11e2b1d9398f4ad2826b59f/clang/lib/Driver/ToolChains/Cuda.cpp#L685
+    cuver_map = Dict([
+        (126, 85),
+        (125, 85),
+        (124, 84),
+        (123, 83),
+        (122, 82),
+        (121, 81),
+        (120, 80),
+        (118, 78),
+        (117, 77),
+        (116, 76),
+        (115, 75),
+        (114, 74),
+        (113, 73),
+        (112, 72),
+        (111, 71),
+        (110, 70),
+        (102, 65),
+        (101, 64),
+        (100, 63),
+        (92, 61),
+        (91, 61),
+        (90, 60),
+    ])
+    mver = major * 10 + minor
+    if mver > 126
+        return 86
+    end
+    ptx = cuver_map[mver]
+    return "+ptx$ptx"
+end
+
+const DEBUG_KERNEL = Ref{Bool}(false)
+const DUMP_LLVMIR = Ref{Bool}(false)
+
+function compile_mlir!(
+    mod,
+    f,
+    args,
+    callcache=Dict{
+        Vector,
+        @NamedTuple{
+            f_name::String,
+            mlir_result_types::Vector{MLIR.IR.Type},
+            traced_result::Any,
+            mutated::Vector{Int},
+        }
+    }();
+    optimize::Union{Bool,Symbol}=true,
+    no_nan::Bool=false,
+    backend="gpu",
+)
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
+    activate_callcache!(callcache)
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = try
@@ -367,6 +471,7 @@ function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::
           Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
         end
     finally
+        deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
     end
@@ -383,12 +488,25 @@ function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::
     if isdefined(Reactant_jll, :ptxas_path)
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
-    kern = "lower-kernel{run_init=true toolkitPath=$toolkit cuLaunchKernelPtr=$(cuLaunch[]) cuModuleLoadDataPtr=$(cuModule[]) cuModuleGetFunctionPtr=$(cuFunc[])},symbol-dce"
 
-    opt_passes = optimization_passes(; no_nan)
+    if backend == "cpu"
+        kern = "lower-kernel{backend=cpu},canonicalize,lower-jit{openmp=true backend=cpu},symbol-dce"
+    elseif DEBUG_KERNEL[]
+        curesulthandler = dlsym(
+            Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
+        )
+        @assert curesulthandler !== nothing
+        curesulthandler = Base.reinterpret(UInt, curesulthandler)
+        kern = "lower-kernel,canonicalize,lower-jit{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+    else
+        kern = "lower-kernel,canonicalize,lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+    end
+
+    opt_passes = optimization_passes(; no_nan, sroa=true)
+    opt_passes2 = optimization_passes(; no_nan, sroa=false)
 
     if optimize === :all
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
         run_pass_pipeline!(
             mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
         )
@@ -399,14 +517,14 @@ function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    opt_passes,
+                    opt_passes2,
                     kern,
                 ],
                 ',',
             ),
         )
     elseif optimize === :before_kernel
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
         run_pass_pipeline!(
             mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
         )
@@ -417,13 +535,13 @@ function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    opt_passes,
+                    opt_passes2,
                 ],
                 ',',
             ),
         )
     elseif optimize === :no_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
         run_pass_pipeline!(mod, "arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
@@ -432,7 +550,7 @@ function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    opt_passes,
+                    opt_passes2,
                 ],
                 ',',
             ),
@@ -461,14 +579,14 @@ function compile_mlir!(mod, f, args, callcache=Dict{Vector, @NamedTuple{f_name::
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    opt_passes,
+                    opt_passes2,
                     kern,
                 ],
                 ',',
             ),
         )
     elseif optimize === :before_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes], ","))
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
         run_pass_pipeline!(
             mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
         )
@@ -521,7 +639,9 @@ end
     @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
 """
 macro code_hlo(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :no_nan => false)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true, :no_nan => false, :backend => "gpu"
+    )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
     )
@@ -533,7 +653,13 @@ end
     @compile [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
 """
 macro compile(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false, :no_nan => false)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true,
+        :sync => false,
+        :no_nan => false,
+        :client => nothing,
+        :device => nothing,
+    )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
@@ -543,7 +669,13 @@ end
 Run @compile f(args..) then immediately execute it
 """
 macro jit(args...)
-    default_options = Dict{Symbol,Any}(:optimize => true, :sync => false, :no_nan => false)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true,
+        :sync => false,
+        :no_nan => false,
+        :client => nothing,
+        :device => nothing,
+    )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
     )
@@ -604,7 +736,6 @@ function compile_call_expr(mod, compiler, options, args...)
     (; compiled=compiled_symbol, args=args_symbol)
 end
 
-
 """
     codegen_flatten!
 
@@ -630,7 +761,12 @@ function codegen_flatten!(linear_args, result_stores)
     # resarg_code = Expr[]
 
     for (i, arg) in enumerate(linear_args)
-        paths = ((p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :args)...,)
+        paths = (
+            (
+                p for
+                p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
+            )...,
+        )
         path = if length(paths) == 1
             paths[1]
         else
@@ -709,7 +845,7 @@ function codegen_unflatten!(
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                p[1] == :result || p[1] == :resargs
+                length(p) > 0 && (p[1] == :result || p[1] == :resargs)
             )...,
         )
         for path in paths
@@ -779,14 +915,15 @@ function codegen_unflatten!(
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                p[1] == :result || p[1] == :resargs || p[1] == :args
+                length(p) > 0 && (p[1] == :result || p[1] == :resargs || p[1] == :args)
             )...,
         )
 
         for path in paths
             arg = linear_args[arg_idx + 1]
             argpath = only((
-                p for p in Reactant.TracedUtils.get_paths(arg) if p[1] == :args
+                p for
+                p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
             ))
 
             if path[1] == :result
@@ -864,36 +1001,74 @@ function codegen_xla_call(exec, flatten_names, donated_args_mask, nresults)
     return concretized_res_names, xla_call_code
 end
 
-function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
+function compile_xla(f, args; client=nothing, optimize=true, no_nan=false, device=nothing)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+
+    if client !== nothing
+        backend = XLA.ClientGetPlatformName(client)
+    else
+        backend = XLA.ClientGetPlatformName(XLA.default_backend[])
+    end
+    if backend == "CUDA"
+        backend = "GPU"
+    elseif backend == "CPU"
+        backend = "cpu"
+    end
 
     MLIR.IR.activate!(ctx)
     results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
         linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_mlir!(
-            mod, f, args; optimize, no_nan
+            mod, f, args; optimize, no_nan, backend
         )
 
-        if isnothing(client)
+        # Resolve client and device
+        if device === nothing
             if length(linear_args) > 0
-                for (k, _) in Iterators.filter(((_, v),) -> v isa TracedRArray, seen_args)
-                    client = XLA.client(k.data)
+                devices_list = [
+                    XLA.device(k.data) for (k, v) in seen_args if v isa TracedRArray
+                ]
+                if !isempty(devices_list)
+                    @assert allequal(devices_list) "All arguments must be on the same device: $(devices_list)"
+                    device = first(devices_list)
                 end
             end
-            if isnothing(client)
+        end
+
+        if client === nothing
+            if device !== nothing
+                client = XLA.client(device)
+            else
                 client = XLA.default_backend[]
             end
+        else
+            if device !== nothing
+                @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
+            end
+        end
+
+        num_devices = XLA.ClientNumAddressableDevices(client)
+        if num_devices != 1
+            error(
+                "Unsupported client with multiple addressible devices (we need to pass right shard data)",
+            )
         end
 
         # compile MLIR module to XLA executable
         exec = XLA.Compile(client, mod)
-        return exec,
-        linear_args, linear_results, preserved_args, seen_args, concrete_result,
-        isclosure
+        (
+            exec,
+            linear_args,
+            linear_results,
+            preserved_args,
+            seen_args,
+            concrete_result,
+            isclosure,
+        )
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -901,9 +1076,9 @@ function compile_xla(f, args; client=nothing, optimize=true, no_nan=false)
     return results
 end
 
-function compile(f, args; client=nothing, optimize=true, sync=false, no_nan=false)
+function compile(f, args; sync=false, kwargs...)
     exec, linear_args, linear_results, preserved_args, seen_args, concrete_result, isclosure = compile_xla(
-        f, args; client, optimize, no_nan
+        f, args; kwargs...
     )
 
     preserved_args_idx = last.(preserved_args)
@@ -1049,6 +1224,5 @@ function callcache!(f, callcache)
         deactivate_callcache!(callcache)
     end
 end
-
 
 end
