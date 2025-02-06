@@ -4,7 +4,8 @@ using ReactantCore: ReactantCore, @trace, within_compile, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
-using Functors: @leaf
+using EnumX: @enumx
+using Functors: Functors, @leaf
 
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`

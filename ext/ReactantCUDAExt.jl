@@ -850,35 +850,6 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     return Core.Typeof(res)(f, res.entry)
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(A::Type{<:CuTracedArray}),
-    seen,
-    mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type)
-)
-    return A
-end
-
-Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(A::Type{<:CUDA.CuArray}),
-    seen,
-    mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type)
-)
-    T = eltype(A)
-    N = ndims(A)
-    if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
-        return Reactant.ConcreteRArray{T,N}
-    else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers)
-        if TT === T
-            return A
-        else
-            return Array{Reactant.traced_type_inner(T, seen, mode, track_numbers),N}
-        end
-    end
-end
-
 function Reactant.make_tracer(
     seen,
     @nospecialize(prev::CUDA.CuArray),
