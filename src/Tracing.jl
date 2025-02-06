@@ -379,7 +379,7 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue)
         mode::TraceMode,
         @nospecialize(track_numbers::Type)
     ) where T
-        return $P{traced_type_inner(PT.parameters[1], seen, mode, track_numbers)}
+        return $P{traced_type_inner(PT.body.parameters[1], seen, mode, track_numbers)}
     end
 end
 
