@@ -390,7 +390,6 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(track_numbers::Type)
 ) where {T, A}
     return Core.LLVMPtr{traced_type_inner(PT.parameters[1], seen, mode, track_numbers), A}
-}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
