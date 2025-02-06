@@ -383,7 +383,7 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue)
     end
 end
 
-@eval Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(PT::Type{Core.LLVMPtr{T, A}})
     seen,
     mode::TraceMode,
