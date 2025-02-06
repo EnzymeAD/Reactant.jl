@@ -2,7 +2,7 @@
 #include <memory>
 #include "src/memory_management.hpp"
 #include "llvm/Support/ExtensibleRTTI.h"
-// #include "xla/python/ifrt/array.h"
+#include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/value.h"
 #include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/host_callback.h"
@@ -43,6 +43,10 @@ void* RCRef::get() const noexcept {
         else
             return obj.get();
     }, storage);
+}
+
+void RCRef::destroy() noexcept {
+    storage = std::monostate{};
 }
 
 template<>

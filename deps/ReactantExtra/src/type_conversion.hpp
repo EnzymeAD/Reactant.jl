@@ -53,7 +53,7 @@ auto convert(Type<const char*>, T text) -> const char* {
     return cstr;
 }
 
-template <typename T, typename = std::is_fundamental<T>>
+template <typename T, typename = std::enable_if_t<std::is_fundamental_v<T>>>
 auto convert(Type<span<T>>, std::vector<T> vec) -> span<T>
 {
     T* ptr = new T[vec.size()];
@@ -63,7 +63,9 @@ auto convert(Type<span<T>>, std::vector<T> vec) -> span<T>
     return span<T> { vec.size(), ptr };
 }
 
-template <typename T, typename = std::conjunction<std::negation<std::is_fundamental<T>>, std::is_copy_constructible<T>>>
+template <typename T, 
+    typename = std::enable_if_t<!std::is_fundamental_v<T> && std::is_copy_constructible_v<T>>
+    >
 auto convert(Type<span<T*>>, std::vector<T> vec) -> span<T*>
 {
     T** ptr = new T*[vec.size()];

@@ -1,19 +1,20 @@
-#ifndef REACTANT_EXTRA_MEMORY_MANAGEMENT_
-#define REACTANT_EXTRA_MEMORY_MANAGEMENT_
+#pragma once
 
 #include <memory>
 #include <type_traits>
 #include <variant>
 #include "xla/tsl/concurrency/ref_count.h"
 
-extern "C" void reactant_release_shared(void* ptr);
-extern "C" bool reactant_contains_shared(void* ptr);
-extern "C" void reactant_release_rcreference(void* ptr);
-extern "C" bool reactant_contains_rcreference(void* ptr);
-
+extern "C" {
+void reactant_release_shared(void* ptr);
+bool reactant_contains_shared(void* ptr);
+void reactant_release_rcreference(void* ptr);
+bool reactant_contains_rcreference(void* ptr);
+}
 
 namespace xla {
 namespace ifrt {
+class Array;
 class Value;
 class DeviceList;
 class LoadedHostCallback;
@@ -42,6 +43,7 @@ private:
     using storage_t = std::variant<
         std::monostate,
         tsl::RCReference<xla::ifrt::Value>, 
+        tsl::RCReference<xla::ifrt::Array>, 
         tsl::RCReference<xla::ifrt::DeviceList>,
         tsl::RCReference<xla::ifrt::LoadedHostCallback>
         >;
@@ -49,13 +51,7 @@ private:
 };
 
 template <typename T, typename G = std::remove_cv_t<T>>
-G* capture_shared(std::shared_ptr<T> ptr) {
-    return reinterpret_cast<G*>(
-        capture_shared(
-            std::const_pointer_cast<G>(ptr)
-        )
-    );
-}
+G* capture_shared(std::shared_ptr<T> ptr);
 
 template<>
 void* capture_shared(std::shared_ptr<void> ptr);
@@ -66,38 +62,19 @@ template <typename T, typename G = std::remove_cv_t<T>>
 G* capture_rcreference(tsl::RCReference<T> rcref);
 
 template<typename  T>
-void destruct_or_release_if_shared(T* ptr) {
-    if (reactant_contains_shared(ptr))
-        reactant_release_shared(ptr);
-    else
-        delete ptr;
-}
+void destruct_or_release_if_shared(T* ptr);
 
 template<typename  T>
-void destruct_or_release_if_rcreference(T* ptr) {
-    if (reactant_contains_rcreference(ptr))
-        reactant_release_rcreference(ptr);
-    else
-        delete ptr;
-}
+void destruct_or_release_if_rcreference(T* ptr);
 
 std::shared_ptr<void> get_shared(void* ptr);
 RCRef get_rcreference(void* ptr);
 
 template<typename T>
-std::shared_ptr<T> get_or_insert_shared(T* ptr) {
-    if (!reactant_contains_shared(ptr))
-        reactant::capture_shared(std::shared_ptr<T>(ptr));
-    return std::reinterpret_pointer_cast<T>(get_shared(ptr));
-}
-
+std::shared_ptr<T> get_or_insert_shared(T* ptr);
 
 template<typename T>
-RCRef get_or_insert_rcreference(T* ptr) {
-    if (!reactant_contains_rcreference(ptr))
-        reactant::capture_rcreference(tsl::FormRef(ptr));
-    return get_rcreference(ptr);
-}
+RCRef get_or_insert_rcreference(T* ptr);
 
 
 // TODO here we might have `std::shared_ptr` but also `tsl::RCReference`. what do we put?
@@ -134,23 +111,65 @@ RCRef get_or_insert_rcreference(T* ptr) {
  */
 template<typename T>
 T* RCRef::get() const noexcept {
-    if (auto ptr = std::get_if<tsl::RCReference<T>>(storage)) 
+    if (auto ptr = std::get_if<tsl::RCReference<T>>(&storage)) 
         return ptr->get();
     return nullptr;
 }
+template<typename T>
+tsl::RCReference<T> RCRef::get_rcref() const noexcept {
+    if (auto ptr = std::get_if<tsl::RCReference<T>>(&storage)) 
+        return *ptr;
+    return {};
+}
+
 template<typename T>
 bool RCRef::is() const noexcept {
     return get<T>() != nullptr;
 }
 
 template <typename T, typename G>
-G* capture_rcreference(tsl::RCReference<T> rcref) {
+G* capture_shared(std::shared_ptr<T> ptr) {
     return reinterpret_cast<G*>(
-        capture_rcreference(
-            RCRef{rcref}
-        )
+        capture_shared(std::reinterpret_pointer_cast<void>(std::const_pointer_cast<G>(ptr)))
     );
 }
 
+template <typename T, typename G>
+G* capture_rcreference(tsl::RCReference<T> rcref) {
+    return reinterpret_cast<G*>(
+        capture_rcreference(RCRef{rcref})
+    );
+}
+
+template<typename  T>
+void destruct_or_release_if_shared(T* ptr) {
+    if (reactant_contains_shared(ptr))
+        reactant_release_shared(ptr);
+    else
+        delete ptr;
+}
+
+template<typename  T>
+void destruct_or_release_if_rcreference(T* ptr) {
+    if (reactant_contains_rcreference(ptr))
+        reactant_release_rcreference(ptr);
+    else
+        delete ptr;
+}
+
+template<typename T>
+std::shared_ptr<T> get_or_insert_shared(T* ptr) {
+    if (!reactant_contains_shared(ptr))
+        reactant::capture_shared(std::shared_ptr<T>(ptr));
+    return std::reinterpret_pointer_cast<T>(get_shared(ptr));
+}
+
+
+template<typename T>
+RCRef get_or_insert_rcreference(T* ptr) {
+    if (!reactant_contains_rcreference(ptr))
+        reactant::capture_rcreference(tsl::FormRef(ptr));
+    return get_rcreference(ptr);
+}
+
 } // namespace reactant
-#endif REACTANT_EXTRA_MEMORY_MANAGEMENT_
