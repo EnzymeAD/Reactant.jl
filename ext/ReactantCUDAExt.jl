@@ -4,8 +4,10 @@ using CUDA
 using Reactant:
     Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
+using GPUCompiler: GPUCompiler
 using KernelAbstractions: KernelAbstractions
 import KernelAbstractions as KA
+using LLVM: LLVM
 using Libdl
 const ReactantKernelAbstractionsExt = Base.get_extension(
     Reactant, :ReactantKernelAbstractionsExt
@@ -295,7 +297,7 @@ function ka_with_reactant(ndrange, workgroupsize, obj, args...)
 
     # figure out the optimal workgroupsize automatically
     if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
-        if !Reactant.Compiler.PartitionKA[]
+        if !Reactant.Compiler.PartitionKA[] || Reactant.Compiler.Raise[]
             threads = prod(ndrange)
         else
             config = CUDA.launch_configuration(kernel.fun; max_threads=prod(ndrange))
@@ -376,9 +378,6 @@ end
     )
 end
 
-const GPUCompiler = CUDA.GPUCompiler
-const LLVM = GPUCompiler.LLVM
-
 function GPULowerCPUFeaturesPass()
     return LLVM.NewPMModulePass("GPULowerCPUFeatures", GPUCompiler.cpu_features!)
 end
@@ -411,6 +410,199 @@ end
 AddKernelStatePass() = LLVM.NewPMModulePass("AddKernelStatePass", kern_pass)
 LowerKernelStatePass() = LLVM.NewPMFunctionPass("LowerKernelStatePass", noop_pass)
 CleanupKernelStatePass() = LLVM.NewPMModulePass("CleanupKernelStatePass", noop_pass)
+
+# From https://github.com/JuliaGPU/GPUCompiler.jl/blob/7b9322faa34685026c4601a5084eecf5a5d7f3fe/src/ptx.jl#L149
+function vendored_optimize_module!(
+    @nospecialize(job), mod::LLVM.Module, instcombine::Bool=false
+)
+    tm = GPUCompiler.llvm_machine(job.config.target)
+    # TODO: Use the registered target passes (JuliaGPU/GPUCompiler.jl#450)
+    LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
+        LLVM.register!(pb, GPUCompiler.NVVMReflectPass())
+
+        LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
+            # TODO: need to run this earlier; optimize_module! is called after addOptimizationPasses!
+            LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
+
+            # needed by GemmKernels.jl-like code
+            LLVM.add!(fpm, LLVM.SpeculativeExecutionPass())
+
+            # NVPTX's target machine info enables runtime unrolling,
+            # but Julia's pass sequence only invokes the simple unroller.
+            LLVM.add!(fpm, LLVM.LoopUnrollPass(; job.config.opt_level))
+            if instcombine
+                LLVM.add!(fpm, LLVM.InstCombinePass())        # clean-up redundancy
+            else
+                LLVM.add!(fpm, LLVM.InstSimplifyPass())        # clean-up redundancy
+            end
+            LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
+                LLVM.add!(lpm, LLVM.LICMPass())           # the inner runtime check might be outer loop invariant
+            end
+
+            # the above loop unroll pass might have unrolled regular, non-runtime nested loops.
+            # that code still needs to be optimized (arguably, multiple unroll passes should be
+            # scheduled by the Julia optimizer). do so here, instead of re-optimizing entirely.
+            if job.config.opt_level == 2
+                LLVM.add!(fpm, LLVM.GVNPass())
+            elseif job.config.opt_level == 1
+                LLVM.add!(fpm, LLVM.EarlyCSEPass())
+            end
+            LLVM.add!(fpm, LLVM.DSEPass())
+
+            LLVM.add!(fpm, LLVM.SimplifyCFGPass())
+        end
+
+        # get rid of the internalized functions; now possible unused
+        LLVM.add!(pb, LLVM.GlobalDCEPass())
+
+        LLVM.run!(pb, mod, tm)
+    end
+end
+
+function vendored_buildEarlyOptimizerPipeline(
+    mpm, @nospecialize(job), opt_level; instcombine=false
+)
+    LLVM.add!(mpm, LLVM.NewPMCGSCCPassManager()) do cgpm
+        # TODO invokeCGSCCCallbacks
+        LLVM.add!(cgpm, LLVM.NewPMFunctionPassManager()) do fpm
+            LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
+            LLVM.add!(fpm, LLVM.Float2IntPass())
+            LLVM.add!(fpm, LLVM.LowerConstantIntrinsicsPass())
+        end
+    end
+    LLVM.add!(mpm, GPULowerCPUFeaturesPass())
+    if opt_level >= 1
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            if opt_level >= 2
+                LLVM.add!(fpm, LLVM.SROAPass())
+                if instcombine
+                    LLVM.add!(fpm, LLVM.InstCombinePass())
+                else
+                    LLVM.add!(fpm, LLVM.InstSimplifyPass())
+                end
+                LLVM.add!(fpm, LLVM.JumpThreadingPass())
+                LLVM.add!(fpm, LLVM.CorrelatedValuePropagationPass())
+                LLVM.add!(fpm, LLVM.ReassociatePass())
+                LLVM.add!(fpm, LLVM.EarlyCSEPass())
+                LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
+            else
+                if instcombine
+                    LLVM.add!(fpm, LLVM.InstCombinePass())
+                else
+                    LLVM.add!(fpm, LLVM.InstSimplifyPass())
+                end
+                LLVM.add!(fpm, LLVM.EarlyCSEPass())
+            end
+        end
+        # TODO invokePeepholeCallbacks
+    end
+end
+
+function vendored_buildIntrinsicLoweringPipeline(
+    mpm, @nospecialize(job), opt_level; instcombine::Bool=false
+)
+    GPUCompiler.add!(mpm, LLVM.Interop.RemoveNIPass())
+
+    # lower GC intrinsics
+    if !GPUCompiler.uses_julia_runtime(job)
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            LLVM.add!(fpm, GPULowerGCFramePass())
+        end
+    end
+
+    # lower kernel state intrinsics
+    # NOTE: we can only do so here, as GC lowering can introduce calls to the runtime,
+    #       and thus additional uses of the kernel state intrinsics.
+    if job.config.kernel
+        # TODO: now that all kernel state-related passes are being run here, merge some?
+        LLVM.add!(mpm, AddKernelStatePass())
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            LLVM.add!(fpm, LowerKernelStatePass())
+        end
+        LLVM.add!(mpm, CleanupKernelStatePass())
+    end
+
+    if !GPUCompiler.uses_julia_runtime(job)
+        # remove dead uses of ptls
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            LLVM.add!(fpm, LLVM.ADCEPass())
+        end
+        LLVM.add!(mpm, GPULowerPTLSPass())
+    end
+
+    LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+        # lower exception handling
+        if GPUCompiler.uses_julia_runtime(job)
+            LLVM.add!(fpm, LLVM.Interop.LowerExcHandlersPass())
+        end
+        LLVM.add!(fpm, GPUCompiler.GCInvariantVerifierPass())
+        LLVM.add!(fpm, LLVM.Interop.LateLowerGCPass())
+        if GPUCompiler.uses_julia_runtime(job) && VERSION >= v"1.11.0-DEV.208"
+            LLVM.add!(fpm, LLVM.Interop.FinalLowerGCPass())
+        end
+    end
+    if GPUCompiler.uses_julia_runtime(job) && VERSION < v"1.11.0-DEV.208"
+        LLVM.add!(mpm, LLVM.Interop.FinalLowerGCPass())
+    end
+
+    if opt_level >= 2
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            LLVM.add!(fpm, LLVM.GVNPass())
+            LLVM.add!(fpm, LLVM.SCCPPass())
+            LLVM.add!(fpm, LLVM.DCEPass())
+        end
+    end
+
+    # lower PTLS intrinsics
+    if GPUCompiler.uses_julia_runtime(job)
+        LLVM.add!(mpm, LLVM.Interop.LowerPTLSPass())
+    end
+
+    if opt_level >= 1
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            if instcombine
+                LLVM.add!(fpm, LLVM.InstCombinePass())
+            else
+                LLVM.add!(fpm, LLVM.InstSimplifyPass())
+            end
+            LLVM.add!(
+                fpm, LLVM.SimplifyCFGPass(; GPUCompiler.AggressiveSimplifyCFGOptions...)
+            )
+        end
+    end
+
+    # remove Julia address spaces
+    LLVM.add!(mpm, LLVM.Interop.RemoveJuliaAddrspacesPass())
+
+    # Julia's operand bundles confuse the inliner, so repeat here now they are gone.
+    # FIXME: we should fix the inliner so that inlined code gets optimized early-on
+    return LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
+end
+
+function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
+    # Doesn't call instcombine
+    GPUCompiler.buildEarlySimplificationPipeline(mpm, job, opt_level)
+    LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
+    vendored_buildEarlyOptimizerPipeline(mpm, job, opt_level)
+    LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+        # Doesn't call instcombine
+        GPUCompiler.buildLoopOptimizerPipeline(fpm, job, opt_level)
+        # Doesn't call instcombine
+        GPUCompiler.buildScalarOptimizerPipeline(fpm, job, opt_level)
+        if GPUCompiler.uses_julia_runtime(job) && opt_level >= 2
+            # XXX: we disable vectorization, as this generally isn't useful for GPU targets
+            #      and actually causes issues with some back-end compilers (like Metal).
+            # TODO: Make this not dependent on `uses_julia_runtime` (likely CPU), but it's own control
+            # Doesn't call instcombine
+            GPUCompiler.buildVectorPipeline(fpm, job, opt_level)
+        end
+        # if isdebug(:optim)
+        #     add!(fpm, WarnMissedTransformationsPass())
+        # end
+    end
+    vendored_buildIntrinsicLoweringPipeline(mpm, job, opt_level)
+    return GPUCompiler.buildCleanupPipeline(mpm, job, opt_level)
+end
 
 # compile to executable machine code
 function compile(job)
@@ -448,11 +640,17 @@ function compile(job)
             LLVM.register!(pb, CleanupKernelStatePass())
 
             LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
-                GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
+                vendored_buildNewPMPipeline!(mpm, job, opt_level)
             end
             LLVM.run!(pb, mod, tm)
         end
-        GPUCompiler.optimize_module!(job, mod)
+        if Reactant.Compiler.DUMP_LLVMIR[]
+            println("cuda.jl pre vendor IR\n", string(mod))
+        end
+        vendored_optimize_module!(job, mod)
+        if Reactant.Compiler.DUMP_LLVMIR[]
+            println("cuda.jl post vendor IR\n", string(mod))
+        end
         LLVM.run!(CUDA.GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
@@ -858,18 +1056,29 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(A::Type{<:CUDA.CuArray}),
     seen,
     mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding)
 )
     T = eltype(A)
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
-        return Reactant.ConcreteRArray{T,N}
+        if sharding isa Reactant.Sharding.NoSharding ||
+            sharding isa Reactant.Sharding.FinalizedNoSharding
+            return Reactant.ConcreteRArray{T,N,1,Reactant.Sharding.FinalizedNoSharding}
+        else
+            error("TODO: implement sharding")
+        end
     else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers)
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding)
         if TT === T
             return A
         else
-            return Array{Reactant.traced_type_inner(T, seen, mode, track_numbers),N}
+            return Array{
+                Reactant.traced_type_inner(
+                    T, seen, mode, track_numbers, Base.getproperty(sharding, 1)
+                ),
+                N,
+            }
         end
     end
 end
@@ -880,16 +1089,19 @@ function Reactant.make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Reactant.Sharding.NoSharding()),
     kwargs...,
 )
     RT = Core.Typeof(prev)
+    # XXX: If someone wants to shard the same array with different shardings, we need to
+    #      somehow handle this correctly... Right now we just use the first sharding.
     if haskey(seen, prev)
         return seen[prev]
     end
     if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
-        return seen[prev] = Reactant.ConcreteRArray(Array(prev))
+        return seen[prev] = Reactant.ConcreteRArray(Array(prev); sharding)
     end
-    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers)
+    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding)
     if TT === eltype(RT)
         return prev
     end
@@ -900,7 +1112,13 @@ function Reactant.make_tracer(
         if isassigned(prev, I)
             pv = prev[I]
             nv = Reactant.make_tracer(
-                seen, pv, append_path(path, I), mode; track_numbers, kwargs...
+                seen,
+                pv,
+                append_path(path, I),
+                mode;
+                track_numbers,
+                sharding=Base.getproperty(sharding, I),
+                kwargs...,
             )
             if pv !== nv
                 same = false

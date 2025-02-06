@@ -10,98 +10,15 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes, c
+import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
-using EnumX
-
-"""
-`AtomicOrdering`
-Atomic ordering for LLVM\'s memory model
-"""
-@enumx AtomicOrdering not_atomic = 0 unordered = 1 monotonic = 2 acquire = 4 release = 5 acq_rel =
-    6 seq_cst = 7
-
-IR.Attribute(e::AtomicOrdering.T) = Int(e)
-
-"""
-`AtomicBinOp`
-llvm.atomicrmw binary operations
-"""
-@enumx AtomicBinOp xchg = 0 add = 1 sub = 2 _and = 3 nand = 4 _or = 5 _xor = 6 max = 7 min =
-    8 umax = 9 umin = 10 fadd = 11 fsub = 12 fmax = 13 fmin = 14 uinc_wrap = 15 udec_wrap =
-    16 usub_cond = 17 usub_sat = 18
-
-IR.Attribute(e::AtomicBinOp.T) = Int(e)
-
-"""
-`FastmathFlags`
-LLVM fastmath flags
-"""
-@enumx FastmathFlags none nnan ninf nsz arcp contract afn reassoc fast
-FastmathFlagsStorage = [
-    "none", "nnan", "ninf", "nsz", "arcp", "contract", "afn", "reassoc", "fast"
-]
-
-function IR.Attribute(e::FastmathFlags.T)
-    return parse(Attribute, "#llvm<fastmath <$(FastmathFlagsStorage[Int(e)+1])>>")
-end
-
-"""
-`Comdat`
-LLVM Comdat Types
-"""
-@enumx Comdat Any = 0 ExactMatch = 1 Largest = 2 NoDeduplicate = 3 SameSize = 4
-
-IR.Attribute(e::Comdat.T) = Int(e)
-
-"""
-`FCmpPredicate`
-llvm.fcmp comparison predicate
-"""
-@enumx FCmpPredicate _false = 0 oeq = 1 ogt = 2 oge = 3 olt = 4 ole = 5 one = 6 ord = 7 ueq =
-    8 ugt = 9 uge = 10 ult = 11 ule = 12 une = 13 uno = 14 _true = 15
-
-IR.Attribute(e::FCmpPredicate.T) = Int(e)
-
-"""
-`UnnamedAddr`
-LLVM GlobalValue UnnamedAddr
-"""
-@enumx UnnamedAddr None = 0 Local = 1 Global = 2
-
-IR.Attribute(e::UnnamedAddr.T) = Int(e)
-
-"""
-`Visibility`
-LLVM GlobalValue Visibility
-"""
-@enumx Visibility Default = 0 Hidden = 1 Protected = 2
-
-IR.Attribute(e::Visibility.T) = Int(e)
-
-"""
-`ICmpPredicate`
-lvm.icmp comparison predicate
-"""
-@enumx ICmpPredicate eq = 0 ne = 1 slt = 2 sle = 3 sgt = 4 sge = 5 ult = 6 ule = 7 ugt = 8 uge =
-    9
-
-IR.Attribute(e::ICmpPredicate.T) = Int(e)
-
-"""
-`AsmDialect`
-ATT (0) or Intel (1) asm dialect
-"""
-@enumx AsmDialect AD_ATT = 0 AD_Intel = 1
-
-IR.Attribute(e::AsmDialect.T) = Int(e)
 
 function ashr(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    isExact::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -118,16 +35,13 @@ function ashr(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function add(
-    lhs::Value,
-    rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    lhs::Value, rhs::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -143,12 +57,12 @@ function add(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function addrspacecast(arg::Value; res::IR.Type, location::Location=Location())
+function addrspacecast(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -170,9 +84,9 @@ end
 """
 `mlir_addressof`
 
-Creates an SSA value containing a pointer to a global variable or constant
-defined by `llvm.mlir.global`. The global value can be defined after its
-first referenced. If the global value is a constant, storing into it is not
+Creates an SSA value containing a pointer to a global value (function,
+variable or alias). The global value can be defined after its first
+referenced. If the global value is a constant, storing into it is not
 allowed.
 
 Examples:
@@ -190,15 +104,22 @@ func @foo() {
 
   // The function address can be used for indirect calls.
   llvm.call %2() : !llvm.ptr, () -> ()
+
+  // Get the address of an aliased global.
+  %3 = llvm.mlir.addressof @const_alias : !llvm.ptr
 }
 
 // Define the global.
 llvm.mlir.global @const(42 : i32) : i32
+
+// Define an alias.
+llvm.mlir.alias @const_alias : i32 {
+  %0 = llvm.mlir.addressof @const : !llvm.ptr
+  llvm.return %0 : !llvm.ptr
+}
 ```
 """
-function mlir_addressof(;
-    res::IR.Type, global_name::IR.FlatSymbolRefAttribute, location::Location=Location()
-)
+function mlir_addressof(; res::IR.Type, global_name, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -217,13 +138,88 @@ function mlir_addressof(;
     )
 end
 
+"""
+`mlir_alias`
+
+`llvm.mlir.alias` is a top level operation that defines a global alias for
+global variables and functions. The operation is always initialized by
+using a initializer region which could be a direct map to another global
+value or contain some address computation on top of it.
+
+It uses a symbol for its value, which will be uniqued by the module
+with respect to other symbols in it.
+
+Similarly to functions and globals, they can also have a linkage attribute.
+This attribute is placed between `llvm.mlir.alias` and the symbol name. If
+the attribute is omitted, `external` linkage is assumed by default.
+
+Examples:
+
+```mlir
+// Global alias use @-identifiers.
+llvm.mlir.alias external @foo_alias {addr_space = 0 : i32} : !llvm.ptr {
+  %0 = llvm.mlir.addressof @some_function : !llvm.ptr
+  llvm.return %0 : !llvm.ptr
+}
+
+// More complex initialization.
+llvm.mlir.alias linkonce_odr hidden @glob
+{addr_space = 0 : i32, dso_local} : !llvm.array<32 x i32> {
+  %0 = llvm.mlir.constant(1234 : i64) : i64
+  %1 = llvm.mlir.addressof @glob.private : !llvm.ptr
+  %2 = llvm.ptrtoint %1 : !llvm.ptr to i64
+  %3 = llvm.add %2, %0 : i64
+  %4 = llvm.inttoptr %3 : i64 to !llvm.ptr
+  llvm.return %4 : !llvm.ptr
+}
+```
+"""
+function mlir_alias(;
+    alias_type,
+    sym_name,
+    linkage,
+    dso_local=nothing,
+    thread_local_=nothing,
+    unnamed_addr=nothing,
+    visibility_=nothing,
+    initializer::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[initializer,]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("alias_type", alias_type),
+        namedattribute("sym_name", sym_name),
+        namedattribute("linkage", linkage),
+    ]
+    !isnothing(dso_local) && push!(attributes, namedattribute("dso_local", dso_local))
+    !isnothing(thread_local_) &&
+        push!(attributes, namedattribute("thread_local_", thread_local_))
+    !isnothing(unnamed_addr) &&
+        push!(attributes, namedattribute("unnamed_addr", unnamed_addr))
+    !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+
+    return create_operation(
+        "llvm.mlir.alias",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function alloca(
     arraySize::Value;
     res::IR.Type,
-    alignment::Union{Int64,Nothing}=nothing,
-    elem_type::IR.Type,
-    inalloca::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
+    alignment=nothing,
+    elem_type,
+    inalloca=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[res,]
     operands = Value[arraySize,]
@@ -246,10 +242,7 @@ function alloca(
 end
 
 function and(
-    lhs::Value,
-    rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    lhs::Value, rhs::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -265,8 +258,8 @@ function and(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -274,18 +267,18 @@ function cmpxchg(
     ptr::Value,
     cmp::Value,
     val::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    success_ordering::AtomicOrdering.T,
-    failure_ordering::AtomicOrdering.T,
-    syncscope::Union{String,Nothing}=nothing,
-    alignment::Union{Int64,Nothing}=nothing,
-    weak::Union{Bool,Nothing}=nothing,
-    volatile_::Union{Bool,Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    success_ordering,
+    failure_ordering,
+    syncscope=nothing,
+    alignment=nothing,
+    weak=nothing,
+    volatile_=nothing,
+    access_groups=nothing,
+    alias_scopes=nothing,
+    noalias_scopes=nothing,
+    tbaa=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[ptr, cmp, val]
@@ -315,25 +308,25 @@ function cmpxchg(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function atomicrmw(
     ptr::Value,
     val::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    bin_op::AtomicBinOp.T,
-    ordering::AtomicOrdering.T,
-    syncscope::Union{String,Nothing}=nothing,
-    alignment::Union{Int64,Nothing}=nothing,
-    volatile_::Union{Bool,Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    bin_op,
+    ordering,
+    syncscope=nothing,
+    alignment=nothing,
+    volatile_=nothing,
+    access_groups=nothing,
+    alias_scopes=nothing,
+    noalias_scopes=nothing,
+    tbaa=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[ptr, val]
@@ -361,12 +354,12 @@ function atomicrmw(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function bitcast(arg::Value; res::IR.Type, location::Location=Location())
+function bitcast(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -386,10 +379,7 @@ function bitcast(arg::Value; res::IR.Type, location::Location=Location())
 end
 
 function br(
-    destOperands::Vector{Value};
-    loop_annotation=nothing,
-    dest::Block,
-    location::Location=Location(),
+    destOperands::Vector{Value}; loop_annotation=nothing, dest::Block, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[destOperands...,]
@@ -420,12 +410,12 @@ the MLIR function type of this op to determine which intrinsic to call.
 function call_intrinsic(
     args::Vector{Value},
     op_bundle_operands::Vector{Value};
-    results::Union{Nothing,IR.Type}=nothing,
-    intrin::String,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    op_bundle_sizes::IR.DenseAttribute{Int32},
-    op_bundle_tags::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
-    location::Location=Location(),
+    results=nothing::Union{Nothing,IR.Type},
+    intrin,
+    fastmathFlags=nothing,
+    op_bundle_sizes,
+    op_bundle_tags=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[args..., op_bundle_operands...]
@@ -495,24 +485,26 @@ llvm.call %1(%0) vararg(!llvm.func<void (...)>) : !llvm.ptr, (i32) -> ()
 function call(
     callee_operands::Vector{Value},
     op_bundle_operands::Vector{Value};
-    result::Union{Nothing,IR.Type}=nothing,
+    result=nothing::Union{Nothing,IR.Type},
     var_callee_type=nothing,
-    callee::Union{IR.FlatSymbolRefAttribute,Nothing}=nothing,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    branch_weights::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
+    callee=nothing,
+    fastmathFlags=nothing,
+    branch_weights=nothing,
     CConv=nothing,
     TailCallKind=nothing,
     memory_effects=nothing,
-    convergent::Union{Bool,Nothing}=nothing,
-    no_unwind::Union{Bool,Nothing}=nothing,
-    will_return::Union{Bool,Nothing}=nothing,
-    op_bundle_sizes::IR.DenseAttribute{Int32},
-    op_bundle_tags::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    location::Location=Location(),
+    convergent=nothing,
+    no_unwind=nothing,
+    will_return=nothing,
+    op_bundle_sizes,
+    op_bundle_tags=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    access_groups=nothing,
+    alias_scopes=nothing,
+    noalias_scopes=nothing,
+    tbaa=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[callee_operands..., op_bundle_operands...]
@@ -541,6 +533,8 @@ function call(
     !isnothing(will_return) && push!(attributes, namedattribute("will_return", will_return))
     !isnothing(op_bundle_tags) &&
         push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
     !isnothing(access_groups) &&
         push!(attributes, namedattribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
@@ -574,7 +568,7 @@ llvm.comdat @__llvm_comdat {
 llvm.mlir.global internal constant @has_any_comdat(1 : i64) comdat(@__llvm_comdat::@any) : i64
 ```
 """
-function comdat(; sym_name::String, body::Region, location::Location=Location())
+function comdat(; sym_name, body::Region, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[body,]
@@ -606,9 +600,7 @@ llvm.comdat @__llvm_comdat {
 llvm.mlir.global internal constant @has_any_comdat(1 : i64) comdat(@__llvm_comdat::@any) : i64
 ```
 """
-function comdat_selector(;
-    sym_name::String, comdat::Comdat.T, location::Location=Location()
-)
+function comdat_selector(; sym_name, comdat, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -633,11 +625,11 @@ function cond_br(
     condition::Value,
     trueDestOperands::Vector{Value},
     falseDestOperands::Vector{Value};
-    branch_weights::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
+    branch_weights=nothing,
     loop_annotation=nothing,
     trueDest::Block,
     falseDest::Block,
-    location::Location=Location(),
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[condition, trueDestOperands..., falseDestOperands...]
@@ -711,9 +703,7 @@ Examples:
 %3 = llvm.mlir.constant(dense<1.0> : vector<4xf32>) : vector<4xf32>
 ```
 """
-function mlir_constant(;
-    res::IR.Type, value::IR.AbstractAttribute, location::Location=Location()
-)
+function mlir_constant(; res::IR.Type, value, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -733,10 +723,7 @@ function mlir_constant(;
 end
 
 function extractelement(
-    vector::Value,
-    position::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    vector::Value, position::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[vector, position]
@@ -752,17 +739,12 @@ function extractelement(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function extractvalue(
-    container::Value;
-    res::IR.Type,
-    position::IR.DenseAttribute{Int64},
-    location::Location=Location(),
-)
+function extractvalue(container::Value; res::IR.Type, position, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[container,]
     owned_regions = Region[]
@@ -784,9 +766,9 @@ end
 function fadd(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    fastmathFlags=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -804,18 +786,18 @@ function fadd(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function fcmp(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    predicate::FCmpPredicate.T,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    predicate,
+    fastmathFlags=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -833,17 +815,17 @@ function fcmp(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function fdiv(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    fastmathFlags=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -861,17 +843,17 @@ function fdiv(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function fmul(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    fastmathFlags=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -889,16 +871,16 @@ function fmul(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function fneg(
     operand::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    fastmathFlags=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -916,12 +898,12 @@ function fneg(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function fpext(arg::Value; res::IR.Type, location::Location=Location())
+function fpext(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -940,7 +922,7 @@ function fpext(arg::Value; res::IR.Type, location::Location=Location())
     )
 end
 
-function fptosi(arg::Value; res::IR.Type, location::Location=Location())
+function fptosi(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -959,7 +941,7 @@ function fptosi(arg::Value; res::IR.Type, location::Location=Location())
     )
 end
 
-function fptoui(arg::Value; res::IR.Type, location::Location=Location())
+function fptoui(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -978,7 +960,7 @@ function fptoui(arg::Value; res::IR.Type, location::Location=Location())
     )
 end
 
-function fptrunc(arg::Value; res::IR.Type, location::Location=Location())
+function fptrunc(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -1000,9 +982,9 @@ end
 function frem(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    fastmathFlags=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1020,17 +1002,17 @@ function frem(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function fsub(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    fastmathFlags=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1048,16 +1030,12 @@ function fsub(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function fence(;
-    ordering::AtomicOrdering.T,
-    syncscope::Union{String,Nothing}=nothing,
-    location::Location=Location(),
-)
+function fence(; ordering, syncscope=nothing, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1077,9 +1055,7 @@ function fence(;
     )
 end
 
-function freeze(
-    val::Value; res::Union{Nothing,IR.Type}=nothing, location::Location=Location()
-)
+function freeze(val::Value; res=nothing::Union{Nothing,IR.Type}, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[val,]
     owned_regions = Region[]
@@ -1094,8 +1070,8 @@ function freeze(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1130,10 +1106,10 @@ function getelementptr(
     base::Value,
     dynamicIndices::Vector{Value};
     res::IR.Type,
-    rawConstantIndices::IR.DenseAttribute{Int32},
-    elem_type::IR.Type,
-    inbounds::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
+    rawConstantIndices,
+    elem_type,
+    inbounds=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[res,]
     operands = Value[base, dynamicIndices...]
@@ -1179,11 +1155,7 @@ llvm.func @ctor() {
 }
 ```
 """
-function mlir_global_ctors(;
-    ctors::IR.DenseAttribute{IR.FlatSymbolRefAttribute},
-    priorities::IR.DenseAttribute{Int32},
-    location::Location=Location(),
-)
+function mlir_global_ctors(; ctors, priorities, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1223,11 +1195,7 @@ llvm.func @dtor() {
 llvm.mlir.global_dtors {@dtor}
 ```
 """
-function mlir_global_dtors(;
-    dtors::IR.DenseAttribute{IR.FlatSymbolRefAttribute},
-    priorities::IR.DenseAttribute{Int32},
-    location::Location=Location(),
-)
+function mlir_global_dtors(; dtors, priorities, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1346,23 +1314,23 @@ llvm.mlir.global private constant @y(dense<1.0> : tensor<8xf32>) { alignment = 3
 ```
 """
 function mlir_global(;
-    global_type::IR.Type,
-    constant::Union{Bool,Nothing}=nothing,
-    sym_name::String,
+    global_type,
+    constant=nothing,
+    sym_name,
     linkage,
-    dso_local::Union{Bool,Nothing}=nothing,
-    thread_local_::Union{Bool,Nothing}=nothing,
-    externally_initialized::Union{Bool,Nothing}=nothing,
-    value::Union{IR.AbstractAttribute,Nothing}=nothing,
-    alignment::Union{Int64,Nothing}=nothing,
-    addr_space::Union{Int32,Nothing}=nothing,
-    unnamed_addr::Union{UnnamedAddr.T,Nothing}=nothing,
-    section::Union{String,Nothing}=nothing,
+    dso_local=nothing,
+    thread_local_=nothing,
+    externally_initialized=nothing,
+    value=nothing,
+    alignment=nothing,
+    addr_space=nothing,
+    unnamed_addr=nothing,
+    section=nothing,
     comdat=nothing,
-    dbg_exprs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    visibility_::Union{Visibility.T,Nothing}=nothing,
+    dbg_exprs=nothing,
+    visibility_=nothing,
     initializer::Region,
-    location::Location=Location(),
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -1404,9 +1372,9 @@ end
 function icmp(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    predicate::ICmpPredicate.T,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    predicate,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1422,8 +1390,8 @@ function icmp(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1439,14 +1407,14 @@ considered undefined behavior at this time.
 """
 function inline_asm(
     operands::Vector{Value};
-    res::Union{Nothing,IR.Type}=nothing,
-    asm_string::String,
-    constraints::String,
-    has_side_effects::Union{Bool,Nothing}=nothing,
-    is_align_stack::Union{Bool,Nothing}=nothing,
-    asm_dialect::Union{AsmDialect.T,Nothing}=nothing,
-    operand_attrs::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    asm_string,
+    constraints,
+    has_side_effects=nothing,
+    is_align_stack=nothing,
+    asm_dialect=nothing,
+    operand_attrs=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operands...,]
@@ -1480,8 +1448,8 @@ function insertelement(
     vector::Value,
     value::Value,
     position::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[vector, value, position]
@@ -1497,17 +1465,17 @@ function insertelement(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function insertvalue(
     container::Value,
     value::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    position::IR.DenseAttribute{Int64},
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    position,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[container, value]
@@ -1523,12 +1491,12 @@ function insertvalue(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function inttoptr(arg::Value; res::IR.Type, location::Location=Location())
+function inttoptr(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -1552,16 +1520,18 @@ function invoke(
     normalDestOperands::Vector{Value},
     unwindDestOperands::Vector{Value},
     op_bundle_operands::Vector{Value};
-    result::Union{Nothing,IR.Type}=nothing,
+    result=nothing::Union{Nothing,IR.Type},
     var_callee_type=nothing,
-    callee::Union{IR.FlatSymbolRefAttribute,Nothing}=nothing,
-    branch_weights::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
+    callee=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    branch_weights=nothing,
     CConv=nothing,
-    op_bundle_sizes::IR.DenseAttribute{Int32},
-    op_bundle_tags::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
+    op_bundle_sizes,
+    op_bundle_tags=nothing,
     normalDest::Block,
     unwindDest::Block,
-    location::Location=Location(),
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[
@@ -1586,6 +1556,8 @@ function invoke(
     !isnothing(var_callee_type) &&
         push!(attributes, namedattribute("var_callee_type", var_callee_type))
     !isnothing(callee) && push!(attributes, namedattribute("callee", callee))
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
     !isnothing(branch_weights) &&
         push!(attributes, namedattribute("branch_weights", branch_weights))
     !isnothing(CConv) && push!(attributes, namedattribute("CConv", CConv))
@@ -1634,57 +1606,57 @@ llvm.func internal @internal_func() {
 ```
 """
 function func(;
-    sym_name::String,
-    sym_visibility::Union{String,Nothing}=nothing,
+    sym_name,
+    sym_visibility=nothing,
     function_type,
     linkage=nothing,
-    dso_local::Union{Bool,Nothing}=nothing,
+    dso_local=nothing,
     CConv=nothing,
     comdat=nothing,
-    convergent::Union{Bool,Nothing}=nothing,
-    personality::Union{IR.FlatSymbolRefAttribute,Nothing}=nothing,
-    garbageCollector::Union{String,Nothing}=nothing,
-    passthrough::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    function_entry_count::Union{Int64,Nothing}=nothing,
+    convergent=nothing,
+    personality=nothing,
+    garbageCollector=nothing,
+    passthrough=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    function_entry_count=nothing,
     memory_effects=nothing,
-    visibility_::Union{Visibility.T,Nothing}=nothing,
-    arm_streaming::Union{Bool,Nothing}=nothing,
-    arm_locally_streaming::Union{Bool,Nothing}=nothing,
-    arm_streaming_compatible::Union{Bool,Nothing}=nothing,
-    arm_new_za::Union{Bool,Nothing}=nothing,
-    arm_in_za::Union{Bool,Nothing}=nothing,
-    arm_out_za::Union{Bool,Nothing}=nothing,
-    arm_inout_za::Union{Bool,Nothing}=nothing,
-    arm_preserves_za::Union{Bool,Nothing}=nothing,
-    section::Union{String,Nothing}=nothing,
-    unnamed_addr::Union{UnnamedAddr.T,Nothing}=nothing,
-    alignment::Union{Int64,Nothing}=nothing,
+    visibility_=nothing,
+    arm_streaming=nothing,
+    arm_locally_streaming=nothing,
+    arm_streaming_compatible=nothing,
+    arm_new_za=nothing,
+    arm_in_za=nothing,
+    arm_out_za=nothing,
+    arm_inout_za=nothing,
+    arm_preserves_za=nothing,
+    section=nothing,
+    unnamed_addr=nothing,
+    alignment=nothing,
     vscale_range=nothing,
     frame_pointer=nothing,
-    target_cpu::Union{String,Nothing}=nothing,
-    tune_cpu::Union{String,Nothing}=nothing,
+    target_cpu=nothing,
+    tune_cpu=nothing,
     target_features=nothing,
-    unsafe_fp_math::Union{Bool,Nothing}=nothing,
-    no_infs_fp_math::Union{Bool,Nothing}=nothing,
-    no_nans_fp_math::Union{Bool,Nothing}=nothing,
-    approx_func_fp_math::Union{Bool,Nothing}=nothing,
-    no_signed_zeros_fp_math::Union{Bool,Nothing}=nothing,
-    denormal_fp_math::Union{String,Nothing}=nothing,
-    denormal_fp_math_f32::Union{String,Nothing}=nothing,
-    fp_contract::Union{String,Nothing}=nothing,
-    no_inline::Union{Bool,Nothing}=nothing,
-    always_inline::Union{Bool,Nothing}=nothing,
-    no_unwind::Union{Bool,Nothing}=nothing,
-    will_return::Union{Bool,Nothing}=nothing,
-    optimize_none::Union{Bool,Nothing}=nothing,
+    unsafe_fp_math=nothing,
+    no_infs_fp_math=nothing,
+    no_nans_fp_math=nothing,
+    approx_func_fp_math=nothing,
+    no_signed_zeros_fp_math=nothing,
+    denormal_fp_math=nothing,
+    denormal_fp_math_f32=nothing,
+    fp_contract=nothing,
+    no_inline=nothing,
+    always_inline=nothing,
+    no_unwind=nothing,
+    will_return=nothing,
+    optimize_none=nothing,
     vec_type_hint=nothing,
-    work_group_size_hint::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
-    reqd_work_group_size::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
-    intel_reqd_sub_group_size::Union{Int32,Nothing}=nothing,
+    work_group_size_hint=nothing,
+    reqd_work_group_size=nothing,
+    intel_reqd_sub_group_size=nothing,
     body::Region,
-    location::Location=Location(),
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -1786,9 +1758,9 @@ end
 function lshr(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    isExact::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1805,16 +1777,13 @@ function lshr(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function landingpad(
-    operand_0::Vector{Value};
-    res::IR.Type,
-    cleanup::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
+    operand_0::Vector{Value}; res::IR.Type, cleanup=nothing, location=Location()
 )
     op_ty_results = IR.Type[res,]
     operands = Value[operand_0...,]
@@ -1851,7 +1820,7 @@ llvm.linker_options [\"/DEFAULTLIB:\", \"libcmt\"]
 llvm.linker_options [\"-l\", \"clang_rt.builtins-aarch64\"]
 ```
 """
-function linker_options(; options::IR.DenseAttribute{String}, location::Location=Location())
+function linker_options(; options, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1899,18 +1868,18 @@ https://llvm.org/docs/LangRef.html#load-instruction
 function load(
     addr::Value;
     res::IR.Type,
-    alignment::Union{Int64,Nothing}=nothing,
-    volatile_::Union{Bool,Nothing}=nothing,
-    nontemporal::Union{Bool,Nothing}=nothing,
-    invariant::Union{Bool,Nothing}=nothing,
-    invariantGroup::Union{Bool,Nothing}=nothing,
-    ordering::Union{AtomicOrdering.T,Nothing}=nothing,
-    syncscope::Union{String,Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    location::Location=Location(),
+    alignment=nothing,
+    volatile_=nothing,
+    nontemporal=nothing,
+    invariant=nothing,
+    invariantGroup=nothing,
+    ordering=nothing,
+    syncscope=nothing,
+    access_groups=nothing,
+    alias_scopes=nothing,
+    noalias_scopes=nothing,
+    tbaa=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[res,]
     operands = Value[addr,]
@@ -1946,10 +1915,7 @@ function load(
 end
 
 function mul(
-    lhs::Value,
-    rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    lhs::Value, rhs::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1965,8 +1931,8 @@ function mul(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1984,7 +1950,7 @@ Examples:
 %0 = llvm.mlir.none : !llvm.token
 ```
 """
-function mlir_none(; res::Union{Nothing,IR.Type}=nothing, location::Location=Location())
+function mlir_none(; res=nothing::Union{Nothing,IR.Type}, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1999,17 +1965,17 @@ function mlir_none(; res::Union{Nothing,IR.Type}=nothing, location::Location=Loc
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function or(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    isDisjoint::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    isDisjoint=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2026,8 +1992,8 @@ function or(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2047,7 +2013,7 @@ IR dialect type.
 %0 = llvm.mlir.poison : !llvm.struct<(i32, f32)>
 ```
 """
-function mlir_poison(; res::IR.Type, location::Location=Location())
+function mlir_poison(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -2066,7 +2032,7 @@ function mlir_poison(; res::IR.Type, location::Location=Location())
     )
 end
 
-function ptrtoint(arg::Value; res::IR.Type, location::Location=Location())
+function ptrtoint(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -2085,7 +2051,7 @@ function ptrtoint(arg::Value; res::IR.Type, location::Location=Location())
     )
 end
 
-function resume(value::Value; location::Location=Location())
+function resume(value::Value; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[value,]
     owned_regions = Region[]
@@ -2104,7 +2070,7 @@ function resume(value::Value; location::Location=Location())
     )
 end
 
-function return_(arg::Union{Nothing,Value}=nothing; location::Location=Location())
+function return_(arg=nothing::Union{Nothing,Value}; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -2127,9 +2093,9 @@ end
 function sdiv(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    isExact::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2146,12 +2112,12 @@ function sdiv(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function sext(arg::Value; res::IR.Type, location::Location=Location())
+function sext(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -2170,7 +2136,7 @@ function sext(arg::Value; res::IR.Type, location::Location=Location())
     )
 end
 
-function sitofp(arg::Value; res::IR.Type, location::Location=Location())
+function sitofp(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -2190,10 +2156,7 @@ function sitofp(arg::Value; res::IR.Type, location::Location=Location())
 end
 
 function srem(
-    lhs::Value,
-    rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    lhs::Value, rhs::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2209,8 +2172,8 @@ function srem(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2218,9 +2181,9 @@ function select(
     condition::Value,
     trueValue::Value,
     falseValue::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    fastmathFlags::Union{FastmathFlags.T,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    fastmathFlags=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[condition, trueValue, falseValue]
@@ -2238,16 +2201,13 @@ function select(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function shl(
-    lhs::Value,
-    rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    lhs::Value, rhs::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2263,18 +2223,12 @@ function shl(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function shufflevector(
-    v1::Value,
-    v2::Value;
-    res::IR.Type,
-    mask::IR.DenseAttribute{Int32},
-    location::Location=Location(),
-)
+function shufflevector(v1::Value, v2::Value; res::IR.Type, mask, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[v1, v2]
     owned_regions = Region[]
@@ -2322,17 +2276,17 @@ https://llvm.org/docs/LangRef.html#store-instruction
 function store(
     value::Value,
     addr::Value;
-    alignment::Union{Int64,Nothing}=nothing,
-    volatile_::Union{Bool,Nothing}=nothing,
-    nontemporal::Union{Bool,Nothing}=nothing,
-    invariantGroup::Union{Bool,Nothing}=nothing,
-    ordering::Union{AtomicOrdering.T,Nothing}=nothing,
-    syncscope::Union{String,Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    location::Location=Location(),
+    alignment=nothing,
+    volatile_=nothing,
+    nontemporal=nothing,
+    invariantGroup=nothing,
+    ordering=nothing,
+    syncscope=nothing,
+    access_groups=nothing,
+    alias_scopes=nothing,
+    noalias_scopes=nothing,
+    tbaa=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value, addr]
@@ -2367,10 +2321,7 @@ function store(
 end
 
 function sub(
-    lhs::Value,
-    rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    lhs::Value, rhs::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2386,8 +2337,8 @@ function sub(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2395,12 +2346,12 @@ function switch(
     value::Value,
     defaultOperands::Vector{Value},
     caseOperands::Vector{Value};
-    case_values::Union{IR.AbstractDenseElementsAttribute{Int64},Nothing}=nothing,
-    case_operand_segments::IR.DenseAttribute{Int32},
-    branch_weights::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
+    case_values=nothing,
+    case_operand_segments,
+    branch_weights=nothing,
     defaultDestination::Block,
     caseDestinations::Vector{Block},
-    location::Location=Location(),
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value, defaultOperands..., caseOperands...]
@@ -2428,7 +2379,7 @@ function switch(
     )
 end
 
-function trunc(arg::Value; res::IR.Type, location::Location=Location())
+function trunc(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -2450,9 +2401,9 @@ end
 function udiv(
     lhs::Value,
     rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    isExact::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
+    res=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2469,17 +2420,12 @@ function udiv(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function uitofp(
-    arg::Value;
-    res::IR.Type,
-    nonNeg::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
-)
+function uitofp(arg::Value; res::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -2500,10 +2446,7 @@ function uitofp(
 end
 
 function urem(
-    lhs::Value,
-    rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    lhs::Value, rhs::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2519,8 +2462,8 @@ function urem(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2539,7 +2482,7 @@ IR dialect type.
 %0 = llvm.mlir.undef : !llvm.struct<(i32, f32)>
 ```
 """
-function mlir_undef(; res::IR.Type, location::Location=Location())
+function mlir_undef(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]
@@ -2558,7 +2501,7 @@ function mlir_undef(; res::IR.Type, location::Location=Location())
     )
 end
 
-function unreachable(; location::Location=Location())
+function unreachable(; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -2577,7 +2520,7 @@ function unreachable(; location::Location=Location())
     )
 end
 
-function va_arg(arg::Value; res::IR.Type, location::Location=Location())
+function va_arg(arg::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -2597,10 +2540,7 @@ function va_arg(arg::Value; res::IR.Type, location::Location=Location())
 end
 
 function xor(
-    lhs::Value,
-    rhs::Value;
-    res::Union{Nothing,IR.Type}=nothing,
-    location::Location=Location(),
+    lhs::Value, rhs::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2616,17 +2556,12 @@ function xor(
         owned_regions,
         successors,
         attributes,
-        results=(isempty(op_ty_results) ? nothing : op_ty_results),
-        result_inference=isempty(op_ty_results),
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function zext(
-    arg::Value;
-    res::IR.Type,
-    nonNeg::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
-)
+function zext(arg::Value; res::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
@@ -2662,7 +2597,7 @@ value of the specified LLVM IR dialect type.
 %0 = llvm.mlir.zero : !llvm.struct<(i32, f32)>
 ```
 """
-function mlir_zero(; res::IR.Type, location::Location=Location())
+function mlir_zero(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
     owned_regions = Region[]

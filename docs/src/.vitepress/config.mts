@@ -69,6 +69,7 @@ export default defineConfig({
         text: "API",
         items: [
           { text: "Core Reactant API", link: "/api/api" },
+          { text: "Sharding", link: "/api/sharding" },
           { text: "Ops", link: "/api/ops" },
           {
             text: "MLIR Dialects",
@@ -129,6 +130,7 @@ export default defineConfig({
             text: "Reactant API",
             link: "/api/api",
           },
+          { text: "Sharding", link: "/api/sharding" },
           { text: "Ops", link: "/api/ops" },
           {
             text: "MLIR Dialects",

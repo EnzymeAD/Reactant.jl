@@ -17,6 +17,7 @@ using ..Reactant:
     ReactantPrimitive,
     Ops
 using ReactantCore: MissingTracedValue, is_traced
+using Functors: Functors
 
 materialize_traced_array(x::TracedRArray) = x
 
@@ -126,6 +127,28 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation), 1)
 end
 
+mutable struct CompiledMlirFnResult{
+    F,TR,Re,Rt,LA,LR,LRS,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA
+}
+    fnwrapped::Bool
+    f::F
+    traced_result::TR
+    result::Re
+    seen_args::OrderedIdDict
+    ret::Rt
+    linear_args::Vector{LA}
+    in_tys::Vector{MLIR.IR.Type}
+    linear_results::Vector{LR}
+    linear_result_shard_info::LRS
+    num_partitions::Int
+    num_replicas::Int
+    is_sharded::Bool
+    preserved_args::PA
+    concrete_result::CR
+    sharding_mesh::M
+    mutated_args::MA
+end
+
 function make_mlir_fn(
     f,
     args,
@@ -139,22 +162,22 @@ function make_mlir_fn(
     do_transpose=true,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
-        return (
-            true,
-            make_mlir_fn(
-                Reactant.apply,
-                (f, args...),
-                kwargs,
-                name,
-                concretein;
-                toscalar,
-                return_dialect,
-                args_in_result,
-                construct_function_without_args,
-                do_transpose,
-            )[2:end]...,
+        mlir_fn_res = make_mlir_fn(
+            Reactant.apply,
+            (f, args...),
+            kwargs,
+            name,
+            concretein;
+            toscalar,
+            return_dialect,
+            do_transpose,
+            args_in_result,
         )
+        mlir_fn_res.fnwrapped = true
+        return mlir_fn_res
     end
+
+    num_partitions, num_replicas = 1, 1
 
     N = length(args)
     seen_args = OrderedIdDict()
@@ -188,7 +211,40 @@ function make_mlir_fn(
 
     sym_visibility = concretein ? nothing : "private"
 
+    ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
+
+    mesh_cache = OrderedIdDict()
+    traced_args_to_shardings = OrderedIdDict()
+
+    # Detect if any of the arguments are sharded
+    is_sharded = false
+    for (k, v) in seen_args
+        if k isa Reactant.ConcreteRArray
+            if !(k.sharding isa Reactant.Sharding.FinalizedNoSharding)
+                is_sharded = true
+                traced_args_to_shardings[v] = k.sharding
+                if !haskey(mesh_cache, k.sharding.mesh)
+                    mesh_op_attrs = Reactant.Ops.mesh(mod, k.sharding.mesh)
+                    mesh_cache[k.sharding.mesh] = mesh_op_attrs
+                end
+            end
+        end
+    end
+
+    if is_sharded
+        unique_meshes = unique([m.mesh for (k, m) in traced_args_to_shardings])
+        # TODO: support multiple meshes
+        @assert length(unique_meshes) == 1 "Currently we support using a single mesh"
+        sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
+        @assert allequal(sorted_devices) "All meshes must have the same device ids"
+        num_partitions = length(first(sorted_devices))
+        sharding_mesh = first(unique_meshes)
+        mesh_op_attrs = mesh_cache[sharding_mesh]
+    else
+        sharding_mesh = nothing
+    end
+
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
@@ -199,6 +255,64 @@ function make_mlir_fn(
 
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
+
+    if is_sharded
+        # Here we construct tensor sharding annotations for the function arguments
+        linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
+        for (i, arg) in enumerate(linear_args)
+            if haskey(traced_args_to_shardings, arg)
+                if ndims(arg) == 0
+                    throw(
+                        ErrorException(
+                            "Sharding annotations are not supported for scalar arguments"
+                        ),
+                    )
+                end
+                sharding = traced_args_to_shardings[arg]
+                mesh_op_attrs = mesh_cache[sharding.mesh]
+                @assert length(sharding.partition_spec) == ndims(arg)
+
+                dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(undef, ndims(arg))
+                for (j, name) in enumerate(sharding.partition_spec)
+                    if name === nothing
+                        axes = MLIR.IR.Attribute[]
+                    elseif name isa String
+                        axes = [
+                            MLIR.API.sdyAxisRefAttrGet(
+                                ctx, name, MLIR.API.MlirAttribute(C_NULL)
+                            ),
+                        ]
+                    elseif name isa Tuple
+                        axes = [
+                            MLIR.API.sdyAxisRefAttrGet(
+                                ctx, nameᵢ, MLIR.API.MlirAttribute(C_NULL)
+                            ) for nameᵢ in name
+                        ]
+                    end
+                    dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
+                        ctx, length(axes), axes, sharding.is_closed[j], sharding.priority[j]
+                    )
+                end
+
+                # Currently we don't support replicated axes from user input, we do
+                # implicitly via shardy
+                linear_arg_shardings[i] = MLIR.IR.Attribute(
+                    MLIR.API.sdyTensorShardingAttrGet(
+                        ctx,
+                        mesh_op_attrs.sym_name,
+                        length(dimension_sharding_attrs),
+                        if do_transpose
+                            reverse(dimension_sharding_attrs)
+                        else
+                            dimension_sharding_attrs
+                        end,
+                        0,
+                        MLIR.API.MlirAttribute[],
+                    ),
+                )
+            end
+        end
+    end
 
     @assert MLIR.IR._has_block()
 
@@ -289,14 +403,95 @@ function make_mlir_fn(
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
+            arg_attrs=MLIR.IR.attr(func, "arg_attrs"),
+            res_attrs=MLIR.IR.attr(func, "res_attrs"),
+            no_inline=MLIR.IR.attr(func, "no_inline"),
             sym_visibility,
         )
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
+    if is_sharded
+        # Attach `sdy.sharding` attribute to the argument
+        for (i, arg) in enumerate(linear_args)
+            if haskey(traced_args_to_shardings, arg)
+                MLIR.API.mlirFuncSetArgAttr(
+                    func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
+                )
+            end
+        end
+
+        # Ensure the sharding of the mutated arguments is propagated to the results
+        result_not_replicated = falses(length(linear_results))
+        for i in mutated_args
+            arg = linear_args[i]
+            if has_residx(arg) && haskey(traced_args_to_shardings, arg)
+                residx = -1
+                for (j, res) in enumerate(linear_results)
+                    if res === arg
+                        residx = j
+                        break
+                    end
+                end
+                @assert residx > 0
+                result_not_replicated[residx] = true
+                MLIR.API.ReactantFuncSetResultAttr(
+                    func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
+                )
+            end
+        end
+
+        # TODO: Introduce OpSharding in API.cpp and use it here
+        # XLA gives us an API to query the final result sharding. However, currently we
+        # don't expose OpSharding from XLA, so we manually replicate the outputs to all the
+        # mesh elements manually.
+        for (idx, already_sharded) in enumerate(result_not_replicated)
+            already_sharded && continue
+
+            replicated_axes = [
+                MLIR.API.sdyAxisRefAttrGet(ctx, name, MLIR.API.MlirAttribute(C_NULL)) for
+                name in sharding_mesh.axis_names
+            ]
+            local result = linear_results[idx]
+            sharding = MLIR.IR.Attribute(
+                MLIR.API.sdyTensorShardingAttrGet(
+                    ctx,
+                    mesh_op_attrs.sym_name,
+                    ndims(result),
+                    MLIR.API.MlirAttribute[
+                        MLIR.API.sdyDimensionShardingAttrGet(
+                            ctx, 0, MLIR.API.MlirAttribute[], true, -1
+                        ) for _ in 1:ndims(result)
+                    ],
+                    length(replicated_axes),
+                    replicated_axes,
+                ),
+            )
+            MLIR.API.ReactantFuncSetResultAttr(func2, idx - 1, "sdy.sharding", sharding)
+        end
+
+        linear_result_shard_info = ntuple(length(linear_results)) do i
+            arg = linear_results[i]
+            if !result_not_replicated[i] || !haskey(traced_args_to_shardings, arg)
+                return (
+                    map(
+                        Returns([1:size(arg, i) for i in 1:ndims(arg)]),
+                        sharding_mesh.device_ids,
+                    ),
+                    ntuple(Returns(nothing), ndims(arg)),
+                )
+            end
+            local sharding = traced_args_to_shardings[arg]
+            return (sharding.device_to_array_slices, sharding.partition_spec)
+        end
+    else
+        linear_result_shard_info = ntuple(Returns(nothing), length(linear_results))
+    end
+
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
-    return (
+
+    return CompiledMlirFnResult(
         false,
         func2,
         traced_result,
@@ -306,6 +501,13 @@ function make_mlir_fn(
         linear_args,
         in_tys,
         linear_results,
+        linear_result_shard_info,
+        num_partitions,
+        num_replicas,
+        is_sharded,
+        nothing,
+        nothing,
+        sharding_mesh,
         mutated_args,
     )
 end
@@ -419,9 +621,12 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         return f(scalar_args...)
     end
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results, _ = make_mlir_fn(
+    mlir_fn_res = make_mlir_fn(
         f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
     )
+    fnwrap = mlir_fn_res.fnwrapped
+    func2 = mlir_fn_res.f
+    (; result, seen_args, linear_args, linear_results) = mlir_fn_res
 
     invmap = IdDict()
     for (k, v) in seen_args
@@ -434,8 +639,6 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     @assert allequal(input_shapes) "input shapes are $(input_shapes)"
     OutShape = isempty(seen_args) ? nothing : first(input_shapes)
     @assert !isnothing(OutShape)
-
-    in_tys2 = [Ops.mlir_type(invmap[arg]) for arg in linear_args]
 
     out_tys2 = [
         MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for

@@ -562,7 +562,7 @@ end
 """
 `dot_scaled`
 
-\$d = matrix_multiply(scale(\$lhs, \$lhs_scale), scale(\$rhs, \$rhs_scale)) + \$c.
+\$d = matrix_multiply(scale(\$lhs, \$lhs_scale), scale(rlhs, \$rhs_scale)) + \$c.
 Where scale(x, s) is a function that applies the scale per block following microscaling spec.
 """
 function dot_scaled(
@@ -679,6 +679,40 @@ function expand_dims(
 end
 
 """
+`experimental_descriptor_gather`
+
+The `tt.experimental_desciptor_gather` op will be lowered to NVIDIA TMA
+load operations on targets that support it.
+
+`desc_ptr` is a pointer to the TMA descriptor allocated in global memory.
+The descriptor block must have 1 row and the indices must be a 1D tensor.
+Accordingly, the result is a 2D tensor multiple rows.
+
+This is an escape hatch and is only there for testing/experimenting. This
+op will be removed in the future.
+"""
+function experimental_descriptor_gather(
+    desc::Value, x_offsets::Value, y_offset::Value; result::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[desc, x_offsets, y_offset]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.experimental_descriptor_gather",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `experimental_descriptor_load`
 
 This operation will be lowered to Nvidia TMA load operation on targets supporting it.
@@ -706,6 +740,27 @@ function experimental_descriptor_load(
 
     return create_operation(
         "tt.experimental_descriptor_load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function experimental_descriptor_scatter(
+    desc::Value, x_offsets::Value, y_offset::Value, src::Value; location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[desc, x_offsets, y_offset, src]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.experimental_descriptor_scatter",
         location;
         operands,
         owned_regions,

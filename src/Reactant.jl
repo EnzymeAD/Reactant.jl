@@ -20,10 +20,6 @@ struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
 include("PrimitiveTypes.jl")
 
-abstract type RNumber{T<:ReactantPrimitive} <: Number end
-
-abstract type RArray{T,N} <: AbstractArray{T,N} end
-
 function ancestor(x::AbstractArray)
     p_x = parent(x)
     p_x === x && return x
@@ -42,66 +38,18 @@ function ancestor(T::Type{<:AbstractArray})
 end
 
 include("mlir/MLIR.jl")
-include("XLA.jl")
+include("xla/XLA.jl")
+include("Sharding.jl")
 include("Devices.jl")
 include("Interpreter.jl")
 include("Profiler.jl")
+include("Types.jl")
 
 const with_profiler = Profiler.with_profiler
 
+export Sharding
+
 include("utils.jl")
-
-using Reactant.MLIR.Dialects: stablehlo
-
-@leaf MissingTracedValue
-
-mutable struct TracedRNumber{T} <: RNumber{T}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
-
-    function TracedRNumber{T}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
-    ) where {T}
-        if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == ()
-        end
-        return new{T}(paths, mlir_data)
-    end
-end
-
-@leaf TracedRNumber
-
-mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
-    shape::NTuple{N,Int}
-
-    function TracedRArray{T,N}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
-    ) where {T,N}
-        shape = Tuple(shape)
-        if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == shape "Expected: $(shape), got: $(size(MLIR.IR.type(mlir_data)))"
-        end
-        return new{T,N}(paths, mlir_data, shape)
-    end
-end
-
-@leaf TracedRArray
-
-Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
-
-const WrappedTracedRArray{T,N} = WrappedArray{
-    TracedRNumber{T},N,TracedRArray,TracedRArray{T,N}
-}
-const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
-const AnyTracedRVector{T} = AnyTracedRArray{T,1}
-const AnyTracedRMatrix{T} = Union{
-    AnyTracedRArray{T,2},
-    LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}},
-    LinearAlgebra.Tridiagonal{TracedRNumber{T},TracedRArray{T,1}},
-}
-const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
 function TracedRArray{T}(data::MLIR.IR.Value) where {T}
     data_type = MLIR.IR.type(data)
@@ -115,28 +63,6 @@ end
 function TracedRArray(data::MLIR.IR.Value)
     return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
 end
-
-struct XLAArray{T,N} <: RArray{T,N} end
-
-Adapt.parent_type(::Type{XLAArray{T,N}}) where {T,N} = XLAArray{T,N}
-
-mutable struct ConcreteRNumber{T} <: RNumber{T}
-    data::XLA.AsyncBuffer
-end
-
-@leaf ConcreteRNumber
-
-mutable struct ConcreteRArray{T,N} <: RArray{T,N}
-    data::XLA.AsyncBuffer
-    shape::NTuple{N,Int}
-end
-
-@leaf ConcreteRArray
-
-Adapt.parent_type(::Type{ConcreteRArray{T,N}}) where {T,N} = ConcreteRArray{T,N}
-
-const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
-const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
@@ -168,16 +94,6 @@ function aos_to_soa(x::AbstractArray{TracedRNumber{T}}) where {T}
         end
     end
     return Ops.reshape(vcat(x...), size(x)...)
-end
-
-mutable struct ConcreteRNG <: Random.AbstractRNG
-    seed::ConcreteRArray{UInt64,1}
-    const algorithm::stablehlo.RngAlgorithm.T
-end
-
-mutable struct TracedRNG <: Random.AbstractRNG
-    seed::TracedRArray{UInt64,1}
-    const algorithm::stablehlo.RngAlgorithm.T
 end
 
 include("Ops.jl")
@@ -237,14 +153,23 @@ export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace, withi
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
+const passes_initialized = Ref(false)
 function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
+    @ccall MLIR.API.mlir_c.InitializeRegistry(
         registry[]::MLIR.API.MlirDialectRegistry
     )::Cvoid
+    if !passes_initialized[]
+        @ccall MLIR.API.mlir_c.InitializePasses(
+            registry[]::MLIR.API.MlirDialectRegistry
+        )::Cvoid
+        passes_initialized[] = true
+    end
+    return nothing
 end
 
 function deinitialize_dialect()
+    passes_initialized[] = false
     return registry[] = nothing
 end
 
@@ -262,8 +187,7 @@ function initialize_ptrs()
         sym = Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name)
         @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
     end
-    # TODO on next jll bump (0.61) change this to call ReactantHermeticCudaGetVersion
-    if (@ccall MLIR.API.mlir_c.ReactantCudaDriverGetVersion()::UInt32) != 0
+    if (@ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32) != 0
         for name in (
             "cuLaunchKernel",
             "cuModuleLoadData",
