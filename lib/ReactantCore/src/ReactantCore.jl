@@ -427,8 +427,6 @@ function traced_while end # defined inside Reactant.jl
 
 traced_call(f, args...; kwargs...) = f(args...; kwargs...)
 
-traced_call(f, args...; kwargs...) = f(args...; kwargs...)
-
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     return MacroTools.postwalk(expr) do x
         if Meta.isexpr(x, :kw) # undo lhs rewriting

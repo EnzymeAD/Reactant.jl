@@ -188,6 +188,8 @@ end
 function prepare_results(
     result,
     traced_args,
+    linear_args,
+    fnbody,
     concretein,
     args_in_result,
     do_transpose,
@@ -237,7 +239,7 @@ function prepare_results(
         [Ops.mlir_type(arg) for arg in linear_results]
     end
 
-    return seen_results, traced_result, linear_results, out_tys
+    return seen_results, traced_result, linear_results, out_tys, mutated_args
 end
 
 function create_return!(
@@ -334,7 +336,9 @@ function make_mlir_fn(
     MLIR.IR.activate!(fnbody)
     result = try
         for (i, arg) in enumerate(linear_args)
-            set_mlir_data!(arg, get_mlir_data(args[i]))
+            raw_arg = MLIR.IR.argument(fnbody, i)
+            row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
+            set_mlir_data!(arg, row_maj_arg)
         end
 
         Reactant.call_with_reactant(f, traced_args...)
@@ -342,9 +346,11 @@ function make_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    _, traced_result, linear_results, out_tys = prepare_results(
+    _, traced_result, linear_results, out_tys, mutated_args = prepare_results(
         result,
         traced_args,
+        linear_args,
+        fnbody,
         concretein,
         args_in_result,
         do_transpose,
