@@ -1302,6 +1302,13 @@ function compile_xla(f, args; client=nothing, kwargs...)
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
+        num_devices = XLA.ClientNumAddressableDevices(client)
+        if num_devices != 1
+            error(
+                "Unsupported client with multiple addressible devices (we need to pass right shard data)",
+            )
+        end
+
         # compile MLIR module to XLA executable
         is_sharded = mlir_fn_res.num_partitions > 1
         if is_sharded
