@@ -639,7 +639,7 @@ end
 
     outputs = outputs[]
     future = futures[] != 0
-    future_res = future_res[]
+    future && (future_res = future_res[])
 
     return ntuple(Val(n_outs)) do j
         ntuple(Val(K)) do i
@@ -725,7 +725,9 @@ function ClientGetPlatformName(client::Client)
             client.client::Ptr{Cvoid}
         )::Cstring
     end
-    return unsafe_string(str)
+    str_jl = unsafe_string(str)
+    @ccall free(str::Cstring)::Cvoid
+    return str_jl
 end
 
 function DeviceGetLocalDeviceId(device::Device)

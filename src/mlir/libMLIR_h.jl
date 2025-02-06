@@ -6143,12 +6143,12 @@ function mlirFuncSetArgAttr(op, pos, name, attr)
 end
 
 """
-    mlirFuncSetResultAttr(op, pos, name, attr)
+    ReactantFuncSetResultAttr(op, pos, name, attr)
 
 Sets the result attribute 'name' of an result at index 'pos'. Asserts that the operation is a FuncOp.
 """
-function mlirFuncSetResultAttr(op, pos, name, attr)
-    @ccall mlir_c.mlirFuncSetResultAttr(
+function ReactantFuncSetResultAttr(op, pos, name, attr)
+    @ccall mlir_c.ReactantFuncSetResultAttr(
         op::MlirOperation, pos::intptr_t, name::MlirStringRef, attr::MlirAttribute
     )::Cvoid
 end

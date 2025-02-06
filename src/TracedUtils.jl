@@ -438,7 +438,7 @@ function make_mlir_fn(
                 end
                 @assert residx > 0
                 result_not_replicated[residx] = true
-                MLIR.API.mlirFuncSetResultAttr(
+                MLIR.API.ReactantFuncSetResultAttr(
                     func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
                 )
             end
@@ -452,8 +452,8 @@ function make_mlir_fn(
             already_sharded && continue
 
             replicated_axes = [
-                MLIR.API.sdyAxisRefAttrGet(ctx, name, MLIR.API.MlirAttribute(C_NULL))
-                for name in sharding_mesh.axis_names
+                MLIR.API.sdyAxisRefAttrGet(ctx, name, MLIR.API.MlirAttribute(C_NULL)) for
+                name in sharding_mesh.axis_names
             ]
             local result = linear_results[idx]
             sharding = MLIR.IR.Attribute(
@@ -470,7 +470,7 @@ function make_mlir_fn(
                     replicated_axes,
                 ),
             )
-            MLIR.API.mlirFuncSetResultAttr(func2, idx - 1, "sdy.sharding", sharding)
+            MLIR.API.ReactantFuncSetResultAttr(func2, idx - 1, "sdy.sharding", sharding)
         end
 
         linear_result_shard_info = ntuple(length(linear_results)) do i
