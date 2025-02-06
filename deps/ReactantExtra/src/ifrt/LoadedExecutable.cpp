@@ -110,13 +110,13 @@ extern "C" span<span<xla::HloModule*>> ifrt_loadedexecutable_hlo_modules(LoadedE
 // TODO xla::LoadedExecutable::GetCostAnalysis
 
 extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(LoadedExecutable* executable, span<Array*> c_args, const ExecuteOptions& options, span<Device*> c_devices) {
-    std::optional<tsl::RCReference<DeviceList>> devices;
-    if (!c_devices.empty()) {
-        devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
-    }
     auto args = reactant::convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_args);
 
-    auto exec_res = MyValueOrThrow(executable->Execute(args, options, ));
+    std::optional<tsl::RCReference<DeviceList>> devices;
+    if (!c_devices.empty())
+        devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
+
+    auto exec_res = MyValueOrThrow(executable->Execute(args, options, devices));
 
     Future<>* status = nullptr;
     if (options.fill_status)
