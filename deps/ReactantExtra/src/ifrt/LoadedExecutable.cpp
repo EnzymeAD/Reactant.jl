@@ -100,7 +100,19 @@ extern "C" span<xla::HloModule*> ifrt_loadedexecutable_hlo_modules(LoadedExecuta
     return convert(Type<span<xla::HloModule*>>(), modules);
 }
 
-// TODO xla::LoadedExecutable::GetOutputMemoryKinds
+extern "C" span<span<const char*>> ifrt_loadedexecutable_output_memory_kinds(LoadedExecutable* executable)
+{
+    auto memory_kinds = MyValueOrThrow(executable->GetOutputMemoryKinds());
+    span<span<const char*>> text_matrix = span<span<const char*>>(memory_kinds.size(), new span<const char*>[memory_kinds.size()]);
+    for (int i = 0; i < memory_kinds.size(); i++) {
+        text_matrix[i] = span<const char*>(memory_kinds[i].size(), new const char*[memory_kinds[i].size()]);
+        for (int j = 0; j < memory_kinds.size(); j++) {
+            text_matrix[i][j] = convert(Type<const char*>(), memory_kinds[i][j]);
+        }
+    }
+    return text_matrix;
+}
+
 // TODO xla::LoadedExecutable::GetCostAnalysis
 
 extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(LoadedExecutable* executable, span<Array*> c_args, const ExecuteOptions& options, span<Device*> c_devices) {
