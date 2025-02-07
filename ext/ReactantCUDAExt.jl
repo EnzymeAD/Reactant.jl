@@ -862,18 +862,29 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(A::Type{<:CUDA.CuArray}),
     seen,
     mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding)
 )
     T = eltype(A)
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
-        return Reactant.ConcreteRArray{T,N}
+        if sharding isa Reactant.Sharding.NoSharding ||
+            sharding isa Reactant.Sharding.FinalizedNoSharding
+            return Reactant.ConcreteRArray{T,N,1,Reactant.Sharding.FinalizedNoSharding}
+        else
+            error("TODO: implement sharding")
+        end
     else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers)
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding)
         if TT === T
             return A
         else
-            return Array{Reactant.traced_type_inner(T, seen, mode, track_numbers),N}
+            return Array{
+                Reactant.traced_type_inner(
+                    T, seen, mode, track_numbers, Base.getproperty(sharding, 1)
+                ),
+                N,
+            }
         end
     end
 end
@@ -884,16 +895,19 @@ function Reactant.make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Reactant.Sharding.NoSharding()),
     kwargs...,
 )
     RT = Core.Typeof(prev)
+    # XXX: If someone wants to shard the same array with different shardings, we need to
+    #      somehow handle this correctly... Right now we just use the first sharding.
     if haskey(seen, prev)
         return seen[prev]
     end
     if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
-        return seen[prev] = Reactant.ConcreteRArray(Array(prev))
+        return seen[prev] = Reactant.ConcreteRArray(Array(prev); sharding)
     end
-    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers)
+    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding)
     if TT === eltype(RT)
         return prev
     end
@@ -904,7 +918,13 @@ function Reactant.make_tracer(
         if isassigned(prev, I)
             pv = prev[I]
             nv = Reactant.make_tracer(
-                seen, pv, append_path(path, I), mode; track_numbers, kwargs...
+                seen,
+                pv,
+                append_path(path, I),
+                mode;
+                track_numbers,
+                sharding=Base.getproperty(sharding, I),
+                kwargs...,
             )
             if pv !== nv
                 same = false
