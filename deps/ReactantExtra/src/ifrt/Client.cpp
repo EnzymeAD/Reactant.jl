@@ -40,15 +40,31 @@ extern "C" span<Array*> ifrt_client_copy_arrays(Client* client, span<Array*> c_a
 
 // TODO RemapArrays (need to implement RemapPlan)
 
-extern "C" Future<>* ifrt_client_get_ready_future(Client* client, span<Value*> c_values)
+// NOTE right now we only support `Array` due to our shared ownership memory management system:
+// we capture `Value` and `Array` on different maps, so we can't cast easily
+// TODO fix this when we move to a "`Holder`" system
+extern "C" Future<>* ifrt_client_get_ready_future(Client* client, span<Array*> c_arrays)
 {
-    auto values = convert(Type<absl::Span<tsl::RCReference<Value>>>(), c_values);
+    auto arrays = convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_arrays);
+    auto values_ptr = new tsl::RCReference<Value>[arrays.size()];
+    for (int i = 0; i < arrays.size(); i++) {
+        values_ptr[i] = tsl::RCReference<Value>(arrays[i]);
+    }
+    auto values = absl::Span<tsl::RCReference<Value>>(values_ptr, arrays.size());
     return new Future<>(client->GetReadyFuture(values));
 }
 
-extern "C" Tuple* ifrt_client_make_tuple(Client* client, span<Value*> c_values)
+// NOTE right now we only support `Array` due to our shared ownership memory management system:
+// we capture `Value` and `Array` on different maps, so we can't cast easily
+// TODO fix this when we move to a "`Holder`" system
+extern "C" Tuple* ifrt_client_make_tuple(Client* client, span<Array*> c_arrays)
 {
-    auto values = convert(Type<absl::Span<tsl::RCReference<Value>>>(), c_values);
+    auto arrays = convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_arrays);
+    auto values_ptr = new tsl::RCReference<Value>[arrays.size()];
+    for (int i = 0; i < arrays.size(); i++) {
+        values_ptr[i] = tsl::RCReference<Value>(arrays[i]);
+    }
+    auto values = absl::Span<tsl::RCReference<Value>>(values_ptr, arrays.size());
     return MyValueOrThrow(client->MakeTuple(values)).release();
 }
 
