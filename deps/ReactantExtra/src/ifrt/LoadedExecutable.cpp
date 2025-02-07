@@ -4,7 +4,6 @@
 #include "xla/xla_data.pb.h"
 #include "absl/container/flat_hash_set.h"
 
-using xla::OpSharding;
 using namespace xla::ifrt;
 using namespace reactant;
 
@@ -65,21 +64,21 @@ extern "C" int64_t ifrt_loadedexecutable_byte_size(LoadedExecutable* executable)
 
 // TODO xla::GetCompiledMemoryStats
 
-extern "C" span<OpSharding*> ifrt_loadedexecutable_parameter_shardings(LoadedExecutable* executable)
+extern "C" span<xla::OpSharding*> ifrt_loadedexecutable_parameter_shardings(LoadedExecutable* executable)
 {
     auto shardings = executable->GetParameterShardings();
     if (!shardings.has_value())
         return {};
 
-    return convert(Type<span<OpSharding*>>(), shardings.value());
+    return convert(Type<span<xla::OpSharding*>>(), shardings.value());
 }
 
-extern "C" span<OpSharding*> ifrt_loadedexecutable_output_shardings(LoadedExecutable* executable)
+extern "C" span<xla::OpSharding*> ifrt_loadedexecutable_output_shardings(LoadedExecutable* executable)
 {
     auto shardings = executable->GetOutputShardings();
     if (!shardings.has_value())
         return {};
-    return convert(Type<span<OpSharding*>>{}, shardings.value());
+    return convert(Type<span<xla::OpSharding*>>{}, shardings.value());
 }
 
 extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_parameter_layouts(LoadedExecutable* executable)
