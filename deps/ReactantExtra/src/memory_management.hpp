@@ -44,7 +44,7 @@ private:
         std::monostate,
         tsl::RCReference<xla::ifrt::Value>, 
         tsl::RCReference<xla::ifrt::Array>, 
-        tsl::RCReference<xla::ifrt::DeviceList>,
+        // tsl::RCReference<xla::ifrt::DeviceList>, // we explicitly convert to span<Device*>
         tsl::RCReference<xla::ifrt::LoadedHostCallback>
         >;
     storage_t storage;
