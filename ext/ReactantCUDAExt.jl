@@ -438,7 +438,7 @@ function vendored_optimize_module!(@nospecialize(job),
                 LLVM.add!(fpm, LLVM.InstSimplifyPass())        # clean-up redundancy
             end
             LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
-                LLVM.add!(lpm, LICMPass())           # the inner runtime check might be
+                LLVM.add!(lpm, GPUCompiler.LICMPass())           # the inner runtime check might be
                                                 # outer loop invariant
             end
 
