@@ -420,11 +420,11 @@ function vendored_optimize_module!(@nospecialize(job),
     tm = GPUCompiler.llvm_machine(job.config.target)
     # TODO: Use the registered target passes (JuliaGPU/GPUCompiler.jl#450)
     LLVM.@dispose pb=LLVM.NewPMPassBuilder() begin
-        LLVM.register!(pb, LLVM.NVVMReflectPass())
+        LLVM.register!(pb, GPUCompiler.NVVMReflectPass())
 
         LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
             # TODO: need to run this earlier; optimize_module! is called after addOptimizationPasses!
-            LLVM.add!(fpm, LLVM.NVVMReflectPass())
+            LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
 
             # needed by GemmKernels.jl-like code
             LLVM.add!(fpm, LLVM.SpeculativeExecutionPass())
