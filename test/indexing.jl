@@ -85,10 +85,14 @@ end
     @test @allowscalar all(isone, x_ra_array[4, :])
 end
 
+using Reactant
 function non_contiguous_setindex!(x)
     x[[1, 3, 2], [1, 2, 3, 4]] .= 1.0
     return x
 end
+x = rand(6, 6)
+x_ra = Reactant.to_rarray(x)
+@code_hlo non_contiguous_setindex!(x_ra)
 
 @testset "non-contiguous setindex!" begin
     x = rand(6, 6)
