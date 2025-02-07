@@ -53,7 +53,7 @@ function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
     elseif X.sharding isa Sharding.FinalizedNamedSharding
         # TODO: We can we much more efficient here and only move data from the minimal
         #       slices that populates the array.
-        for idx in CartesianIndices(X.data)
+        for idx in 1:length(X.data)
             buffer = X.data[idx].buffer
             # We can't use a pointer to a subarray since BufferToHost expects the data to
             # be contiguous.

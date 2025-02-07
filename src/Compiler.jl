@@ -41,16 +41,7 @@ end
             if Reactant.Sharding.is_sharded(ancestor_obj)
                 error("`val` can't be a buffer if `obj` is sharded")
             else
-                return Base.setfield!(obj, field, [val])
-            end
-        end
-        if val isa Tuple
-            if Reactant.Sharding.is_sharded(ancestor_obj)
-                return Base.setfield!(
-                    obj, field, reshape([val...], size(getfield(obj, field)))
-                )
-            else
-                error("`val` can't be a tuple if `obj` is not sharded")
+                return Base.setfield!(obj, field, (val,))
             end
         end
         return Base.setfield!(obj, field, val)
@@ -118,7 +109,7 @@ function create_result(
                 tocopy, path, result_stores, path_to_shard_info, sharding_mesh
             )
             return :(ConcreteRArray{$T,$N,$(ndims(sharding_mesh)),$(typeof(sharding))}(
-                reshape([$(restore)...], $(size(sharding_mesh))), $(tocopy.shape), $sharding
+                ($(restore)...,), $(tocopy.shape), $sharding
             ))
         else
             return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
@@ -130,7 +121,7 @@ function create_result(
             tocopy, path, result_stores, path_to_shard_info, sharding_mesh
         )
         return :(ConcreteRArray{$T,$N,$(ndims(sharding_mesh)),$(typeof(sharding))}(
-            reshape([$(tocopy.data)...], $(size(sharding_mesh))), $(tocopy.shape), $sharding
+            ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
     end
     # We will set the data for this later

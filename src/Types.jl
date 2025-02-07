@@ -82,7 +82,7 @@ ConcreteRNumber(data::T; kwargs...) where {T<:Number} = ConcreteRNumber{T}(data;
 ## ConcreteRArray
 # XXX: make data into a tuple of arrays
 mutable struct ConcreteRArray{T,N,D,S<:Sharding.AbstractFinalizedSharding} <: RArray{T,N}
-    data::Array{XLA.AsyncBuffer,D}
+    data::NTuple{D,XLA.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::S
 end
@@ -101,7 +101,7 @@ Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kw
 
 function ConcreteRArray{T,N}(data::XLA.AsyncBuffer, shape::NTuple{N,Int}) where {T,N}
     return ConcreteRArray{T,N,1,Sharding.FinalizedNoSharding}(
-        [data], shape, Sharding.FinalizedNoSharding()
+        (data,), shape, Sharding.FinalizedNoSharding()
     )
 end
 
@@ -129,7 +129,7 @@ function ConcreteRArray(
     end
     @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, `device` and `idx` cannot be specified!"
     sharded_data, sharding = sharding(client, nothing, data)
-    return ConcreteRArray{T,N,ndims(sharded_data),typeof(sharding)}(
+    return ConcreteRArray{T,N,length(sharded_data),typeof(sharding)}(
         sharded_data, size(data), sharding
     )
 end

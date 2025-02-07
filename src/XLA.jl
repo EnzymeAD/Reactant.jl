@@ -315,7 +315,7 @@ for op in (:(Base.ndims), :(Base.size), :device, :client)
     @eval $op(buffer::AsyncBuffer) = $op(buffer.buffer)
 end
 
-function client(buffers::Array{<:AsyncBuffer})
+function client(buffers::Union{Array{<:AsyncBuffer},NTuple{<:Any,AsyncBuffer}})
     all_clients = map(client, buffers)
     @assert allequal(all_clients) "All buffers must have the same client"
     return first(all_clients)

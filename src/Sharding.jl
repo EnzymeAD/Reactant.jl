@@ -48,7 +48,7 @@ Base.getproperty(::NoSharding, x) = NoSharding()
 
 function (::NoSharding)(client::XLA.Client, device, x::AbstractArray)
     buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, x, device), nothing)
-    return [buffer], FinalizedNoSharding()
+    return (buffer,), FinalizedNoSharding()
 end
 
 struct NamedSharding{D1,P<:Tuple,D2} <: AbstractSharding
@@ -180,7 +180,7 @@ function (sharding::NamedSharding)(client::XLA.Client, ::Nothing, x::AbstractArr
     end
 
     return (
-        data,
+        Tuple(vec(data)),
         FinalizedNamedSharding{typeof(sharding),ndims(mesh)}(
             sharding, device_to_array_slices
         ),
