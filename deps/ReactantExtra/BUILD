@@ -357,6 +357,7 @@ cc_library(
     srcs = glob(
         ["src/**/*.cpp"],
     ) + [
+        "API.cpp",
         "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
