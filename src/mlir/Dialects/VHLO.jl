@@ -10,10 +10,11 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
 
-function abs_v1(operand::Value; result::IR.Type, location=Location())
+function abs_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -32,7 +33,7 @@ function abs_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function add_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function add_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -51,7 +52,7 @@ function add_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
     )
 end
 
-function after_all_v1(inputs::Vector{Value}; result::IR.Type, location=Location())
+function after_all_v1(inputs::Vector{Value}; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[inputs...,]
     owned_regions = Region[]
@@ -73,11 +74,11 @@ end
 function all_gather_v1(
     operand::Value;
     result::IR.Type,
-    all_gather_dim,
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
-    location=Location(),
+    all_gather_dim::IR.AbstractAttribute,
+    replica_groups::IR.AbstractAttribute,
+    channel_id::IR.AbstractAttribute,
+    use_global_device_ids::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -104,12 +105,12 @@ end
 
 function all_gather_v2(
     operands::Vector{Value};
-    results::Vector{IR.Type},
-    all_gather_dim,
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
-    location=Location(),
+    results::Base.AbstractVecOrTuple{IR.Type},
+    all_gather_dim::IR.AbstractAttribute,
+    replica_groups::IR.AbstractAttribute,
+    channel_id::IR.AbstractAttribute,
+    use_global_device_ids::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[operands...,]
@@ -137,11 +138,11 @@ end
 function all_reduce_v1(
     operand::Value;
     result::IR.Type,
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
+    replica_groups::IR.AbstractAttribute,
+    channel_id::IR.AbstractAttribute,
+    use_global_device_ids::IR.AbstractAttribute,
     computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -167,12 +168,12 @@ end
 
 function all_reduce_v2(
     operands::Vector{Value};
-    results::Vector{IR.Type},
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    replica_groups::IR.AbstractAttribute,
+    channel_id::IR.AbstractAttribute,
+    use_global_device_ids::IR.AbstractAttribute,
     computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[operands...,]
@@ -199,12 +200,12 @@ end
 function all_to_all_v1(
     operand::Value;
     result::IR.Type,
-    split_dimension,
-    concat_dimension,
-    split_count,
-    replica_groups,
-    channel_id,
-    location=Location(),
+    split_dimension::IR.AbstractAttribute,
+    concat_dimension::IR.AbstractAttribute,
+    split_count::IR.AbstractAttribute,
+    replica_groups::IR.AbstractAttribute,
+    channel_id::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -232,13 +233,13 @@ end
 
 function all_to_all_v2(
     operands::Vector{Value};
-    results::Vector{IR.Type},
-    split_dimension,
-    concat_dimension,
-    split_count,
-    replica_groups,
-    channel_id,
-    location=Location(),
+    results::Base.AbstractVecOrTuple{IR.Type},
+    split_dimension::IR.AbstractAttribute,
+    concat_dimension::IR.AbstractAttribute,
+    split_count::IR.AbstractAttribute,
+    replica_groups::IR.AbstractAttribute,
+    channel_id::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[operands...,]
@@ -264,7 +265,7 @@ function all_to_all_v2(
     )
 end
 
-function and_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function and_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -283,7 +284,7 @@ function and_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
     )
 end
 
-function atan2_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function atan2_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -311,9 +312,9 @@ function batch_norm_grad_v1(
     grad_operand::IR.Type,
     grad_scale::IR.Type,
     grad_offset::IR.Type,
-    epsilon,
-    feature_index,
-    location=Location(),
+    epsilon::IR.AbstractAttribute,
+    feature_index::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[grad_operand, grad_scale, grad_offset]
     operands = Value[operand, scale, mean, variance, grad_output]
@@ -342,9 +343,9 @@ function batch_norm_inference_v1(
     mean::Value,
     variance::Value;
     result::IR.Type,
-    epsilon,
-    feature_index,
-    location=Location(),
+    epsilon::IR.AbstractAttribute,
+    feature_index::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, scale, offset, mean, variance]
@@ -373,9 +374,9 @@ function batch_norm_training_v1(
     output::IR.Type,
     batch_mean::IR.Type,
     batch_var::IR.Type,
-    epsilon,
-    feature_index,
-    location=Location(),
+    epsilon::IR.AbstractAttribute,
+    feature_index::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[output, batch_mean, batch_var]
     operands = Value[operand, scale, offset]
@@ -397,7 +398,7 @@ function batch_norm_training_v1(
     )
 end
 
-function bitcast_convert_v1(operand::Value; result::IR.Type, location=Location())
+function bitcast_convert_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -417,7 +418,10 @@ function bitcast_convert_v1(operand::Value; result::IR.Type, location=Location()
 end
 
 function broadcast_in_dim_v1(
-    operand::Value; result::IR.Type, broadcast_dimensions, location=Location()
+    operand::Value;
+    result::IR.Type,
+    broadcast_dimensions::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -439,7 +443,12 @@ function broadcast_in_dim_v1(
     )
 end
 
-function broadcast_v1(operand::Value; result::IR.Type, broadcast_sizes, location=Location())
+function broadcast_v1(
+    operand::Value;
+    result::IR.Type,
+    broadcast_sizes::IR.AbstractAttribute,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -459,7 +468,10 @@ function broadcast_v1(operand::Value; result::IR.Type, broadcast_sizes, location
 end
 
 function call_v1(
-    operands::Vector{Value}; results::Vector{IR.Type}, callee, location=Location()
+    operands::Vector{Value};
+    results::Base.AbstractVecOrTuple{IR.Type},
+    callee::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[operands...,]
@@ -480,7 +492,10 @@ function call_v1(
 end
 
 function case_v1(
-    index::Value; results::Vector{IR.Type}, branches::Vector{Region}, location=Location()
+    index::Value;
+    results::Base.AbstractVecOrTuple{IR.Type},
+    branches::Vector{Region},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[index,]
@@ -500,7 +515,7 @@ function case_v1(
     )
 end
 
-function cbrt_v1(operand::Value; result::IR.Type, location=Location())
+function cbrt_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -519,7 +534,7 @@ function cbrt_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function ceil_v1(operand::Value; result::IR.Type, location=Location())
+function ceil_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -538,7 +553,9 @@ function ceil_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function cholesky_v1(a::Value; result::IR.Type, lower, location=Location())
+function cholesky_v1(
+    a::Value; result::IR.Type, lower::IR.AbstractAttribute, location::Location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[a,]
     owned_regions = Region[]
@@ -558,7 +575,7 @@ function cholesky_v1(a::Value; result::IR.Type, lower, location=Location())
 end
 
 function clamp_v1(
-    min::Value, operand::Value, max::Value; result::IR.Type, location=Location()
+    min::Value, operand::Value, max::Value; result::IR.Type, location::Location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[min, operand, max]
@@ -578,7 +595,9 @@ function clamp_v1(
     )
 end
 
-function count_leading_zeros_v1(operand::Value; result::IR.Type, location=Location())
+function count_leading_zeros_v1(
+    operand::Value; result::IR.Type, location::Location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -598,7 +617,11 @@ function count_leading_zeros_v1(operand::Value; result::IR.Type, location=Locati
 end
 
 function collective_broadcast_v1(
-    operand::Value; result::IR.Type, replica_groups, channel_id, location=Location()
+    operand::Value;
+    result::IR.Type,
+    replica_groups::IR.AbstractAttribute,
+    channel_id::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -622,7 +645,11 @@ function collective_broadcast_v1(
 end
 
 function collective_permute_v1(
-    operand::Value; result::IR.Type, source_target_pairs, channel_id, location=Location()
+    operand::Value;
+    result::IR.Type,
+    source_target_pairs::IR.AbstractAttribute,
+    channel_id::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -649,9 +676,9 @@ function compare_v1(
     lhs::Value,
     rhs::Value;
     result::IR.Type,
-    comparison_direction,
-    compare_type,
-    location=Location(),
+    comparison_direction::IR.AbstractAttribute,
+    compare_type::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -674,7 +701,7 @@ function compare_v1(
     )
 end
 
-function complex_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function complex_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -695,12 +722,12 @@ end
 
 function composite_v1(
     inputs::Vector{Value};
-    results::Vector{IR.Type},
-    name,
-    composite_attributes,
-    decomposition,
-    version,
-    location=Location(),
+    results::Base.AbstractVecOrTuple{IR.Type},
+    name::IR.AbstractAttribute,
+    composite_attributes::IR.AbstractAttribute,
+    decomposition::IR.AbstractAttribute,
+    version::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[inputs...,]
@@ -726,7 +753,10 @@ function composite_v1(
 end
 
 function concatenate_v1(
-    inputs::Vector{Value}; result::IR.Type, dimension, location=Location()
+    inputs::Vector{Value};
+    result::IR.Type,
+    dimension::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[inputs...,]
@@ -746,7 +776,9 @@ function concatenate_v1(
     )
 end
 
-function constant_v1(; output::IR.Type, value, location=Location())
+function constant_v1(;
+    output::IR.Type, value::IR.AbstractAttribute, location::Location=Location()
+)
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -765,7 +797,7 @@ function constant_v1(; output::IR.Type, value, location=Location())
     )
 end
 
-function convert_v1(operand::Value; result::IR.Type, location=Location())
+function convert_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -788,24 +820,24 @@ function convolution_v1(
     lhs::Value,
     rhs::Value;
     result::IR.Type,
-    window_strides,
-    padding,
-    lhs_dilation,
-    rhs_dilation,
-    window_reversal,
-    input_batch_dimension,
-    input_feature_dimension,
-    input_spatial_dimensions,
-    kernel_input_feature_dimension,
-    kernel_output_feature_dimension,
-    kernel_spatial_dimensions,
-    output_batch_dimension,
-    output_feature_dimension,
-    output_spatial_dimensions,
-    feature_group_count,
-    batch_group_count,
-    precision_config,
-    location=Location(),
+    window_strides::IR.AbstractAttribute,
+    padding::IR.AbstractAttribute,
+    lhs_dilation::IR.AbstractAttribute,
+    rhs_dilation::IR.AbstractAttribute,
+    window_reversal::IR.AbstractAttribute,
+    input_batch_dimension::IR.AbstractAttribute,
+    input_feature_dimension::IR.AbstractAttribute,
+    input_spatial_dimensions::IR.AbstractAttribute,
+    kernel_input_feature_dimension::IR.AbstractAttribute,
+    kernel_output_feature_dimension::IR.AbstractAttribute,
+    kernel_spatial_dimensions::IR.AbstractAttribute,
+    output_batch_dimension::IR.AbstractAttribute,
+    output_feature_dimension::IR.AbstractAttribute,
+    output_spatial_dimensions::IR.AbstractAttribute,
+    feature_group_count::IR.AbstractAttribute,
+    batch_group_count::IR.AbstractAttribute,
+    precision_config::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -843,7 +875,7 @@ function convolution_v1(
     )
 end
 
-function cosine_v1(operand::Value; result::IR.Type, location=Location())
+function cosine_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -862,7 +894,7 @@ function cosine_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function create_token_v1(; output::IR.Type, location=Location())
+function create_token_v1(; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -882,7 +914,10 @@ function create_token_v1(; output::IR.Type, location=Location())
 end
 
 function cross_replica_sum_v1(
-    operand::Value; result::IR.Type, replica_groups, location=Location()
+    operand::Value;
+    result::IR.Type,
+    replica_groups::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -904,16 +939,16 @@ end
 
 function custom_call_v1(
     inputs::Vector{Value};
-    results::Vector{IR.Type},
-    call_target_name,
-    has_side_effect,
-    backend_config,
-    api_version,
-    called_computations,
-    operand_layouts,
-    result_layouts,
-    output_operand_aliases,
-    location=Location(),
+    results::Base.AbstractVecOrTuple{IR.Type},
+    call_target_name::IR.AbstractAttribute,
+    has_side_effect::IR.AbstractAttribute,
+    backend_config::IR.AbstractAttribute,
+    api_version::IR.AbstractAttribute,
+    called_computations::IR.AbstractAttribute,
+    operand_layouts::IR.AbstractAttribute,
+    result_layouts::IR.AbstractAttribute,
+    output_operand_aliases::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[inputs...,]
@@ -942,7 +977,7 @@ function custom_call_v1(
     )
 end
 
-function divide_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function divide_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -965,12 +1000,12 @@ function dot_general_v1(
     lhs::Value,
     rhs::Value;
     result::IR.Type,
-    lhs_batching_dimensions,
-    rhs_batching_dimensions,
-    lhs_contracting_dimensions,
-    rhs_contracting_dimensions,
-    precision_config,
-    location=Location(),
+    lhs_batching_dimensions::IR.AbstractAttribute,
+    rhs_batching_dimensions::IR.AbstractAttribute,
+    lhs_contracting_dimensions::IR.AbstractAttribute,
+    rhs_contracting_dimensions::IR.AbstractAttribute,
+    precision_config::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -1000,19 +1035,19 @@ function dot_general_v2(
     lhs::Value,
     rhs::Value;
     result::IR.Type,
-    lhs_batching_dimensions,
-    rhs_batching_dimensions,
-    lhs_contracting_dimensions,
-    rhs_contracting_dimensions,
-    precision_config,
-    lhs_precision_type,
-    rhs_precision_type,
-    accumulation_type,
-    lhs_component_count,
-    rhs_component_count,
-    num_primitive_operations,
-    allow_imprecise_accumulation,
-    location=Location(),
+    lhs_batching_dimensions::IR.AbstractAttribute,
+    rhs_batching_dimensions::IR.AbstractAttribute,
+    lhs_contracting_dimensions::IR.AbstractAttribute,
+    rhs_contracting_dimensions::IR.AbstractAttribute,
+    precision_config::IR.AbstractAttribute,
+    lhs_precision_type::IR.AbstractAttribute,
+    rhs_precision_type::IR.AbstractAttribute,
+    accumulation_type::IR.AbstractAttribute,
+    lhs_component_count::IR.AbstractAttribute,
+    rhs_component_count::IR.AbstractAttribute,
+    num_primitive_operations::IR.AbstractAttribute,
+    allow_imprecise_accumulation::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -1046,7 +1081,11 @@ function dot_general_v2(
 end
 
 function dot_v1(
-    lhs::Value, rhs::Value; result::IR.Type, precision_config, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::IR.Type,
+    precision_config::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -1070,10 +1109,10 @@ function dynamic_broadcast_in_dim_v1(
     operand::Value,
     output_dimensions::Value;
     result::IR.Type,
-    broadcast_dimensions,
-    known_expanding_dimensions,
-    known_nonexpanding_dimensions,
-    location=Location(),
+    broadcast_dimensions::IR.AbstractAttribute,
+    known_expanding_dimensions::IR.AbstractAttribute,
+    known_nonexpanding_dimensions::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, output_dimensions]
@@ -1102,24 +1141,24 @@ function dynamic_conv_v1(
     rhs::Value,
     d_padding::Value;
     result::IR.Type,
-    window_strides,
-    padding,
-    lhs_dilation,
-    rhs_dilation,
-    window_reversal,
-    input_batch_dimension,
-    input_feature_dimension,
-    input_spatial_dimensions,
-    kernel_input_feature_dimension,
-    kernel_output_feature_dimension,
-    kernel_spatial_dimensions,
-    output_batch_dimension,
-    output_feature_dimension,
-    output_spatial_dimensions,
-    feature_group_count,
-    batch_group_count,
-    precision_config,
-    location=Location(),
+    window_strides::IR.AbstractAttribute,
+    padding::IR.AbstractAttribute,
+    lhs_dilation::IR.AbstractAttribute,
+    rhs_dilation::IR.AbstractAttribute,
+    window_reversal::IR.AbstractAttribute,
+    input_batch_dimension::IR.AbstractAttribute,
+    input_feature_dimension::IR.AbstractAttribute,
+    input_spatial_dimensions::IR.AbstractAttribute,
+    kernel_input_feature_dimension::IR.AbstractAttribute,
+    kernel_output_feature_dimension::IR.AbstractAttribute,
+    kernel_spatial_dimensions::IR.AbstractAttribute,
+    output_batch_dimension::IR.AbstractAttribute,
+    output_feature_dimension::IR.AbstractAttribute,
+    output_spatial_dimensions::IR.AbstractAttribute,
+    feature_group_count::IR.AbstractAttribute,
+    batch_group_count::IR.AbstractAttribute,
+    precision_config::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs, d_padding]
@@ -1162,23 +1201,23 @@ function dynamic_conv_v2(
     rhs::Value,
     padding::Value;
     result::IR.Type,
-    window_strides,
-    lhs_dilation,
-    rhs_dilation,
-    window_reversal,
-    input_batch_dimension,
-    input_feature_dimension,
-    input_spatial_dimensions,
-    kernel_input_feature_dimension,
-    kernel_output_feature_dimension,
-    kernel_spatial_dimensions,
-    output_batch_dimension,
-    output_feature_dimension,
-    output_spatial_dimensions,
-    feature_group_count,
-    batch_group_count,
-    precision_config,
-    location=Location(),
+    window_strides::IR.AbstractAttribute,
+    lhs_dilation::IR.AbstractAttribute,
+    rhs_dilation::IR.AbstractAttribute,
+    window_reversal::IR.AbstractAttribute,
+    input_batch_dimension::IR.AbstractAttribute,
+    input_feature_dimension::IR.AbstractAttribute,
+    input_spatial_dimensions::IR.AbstractAttribute,
+    kernel_input_feature_dimension::IR.AbstractAttribute,
+    kernel_output_feature_dimension::IR.AbstractAttribute,
+    kernel_spatial_dimensions::IR.AbstractAttribute,
+    output_batch_dimension::IR.AbstractAttribute,
+    output_feature_dimension::IR.AbstractAttribute,
+    output_spatial_dimensions::IR.AbstractAttribute,
+    feature_group_count::IR.AbstractAttribute,
+    batch_group_count::IR.AbstractAttribute,
+    precision_config::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs, padding]
@@ -1220,12 +1259,12 @@ function dynamic_gather_v1(
     start_indices::Value,
     slice_sizes::Value;
     result::IR.Type,
-    offset_dims,
-    collapsed_slice_dims,
-    start_index_map,
-    index_vector_dim,
-    indices_are_sorted,
-    location=Location(),
+    offset_dims::IR.AbstractAttribute,
+    collapsed_slice_dims::IR.AbstractAttribute,
+    start_index_map::IR.AbstractAttribute,
+    index_vector_dim::IR.AbstractAttribute,
+    indices_are_sorted::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, start_indices, slice_sizes]
@@ -1256,14 +1295,14 @@ function dynamic_gather_v2(
     start_indices::Value,
     slice_sizes::Value;
     result::IR.Type,
-    offset_dims,
-    collapsed_slice_dims,
-    operand_batching_dims,
-    start_indices_batching_dims,
-    start_index_map,
-    index_vector_dim,
-    indices_are_sorted,
-    location=Location(),
+    offset_dims::IR.AbstractAttribute,
+    collapsed_slice_dims::IR.AbstractAttribute,
+    operand_batching_dims::IR.AbstractAttribute,
+    start_indices_batching_dims::IR.AbstractAttribute,
+    start_index_map::IR.AbstractAttribute,
+    index_vector_dim::IR.AbstractAttribute,
+    indices_are_sorted::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, start_indices, slice_sizes]
@@ -1292,7 +1331,10 @@ function dynamic_gather_v2(
 end
 
 function dynamic_iota_v1(
-    output_shape::Value; result::IR.Type, iota_dimension, location=Location()
+    output_shape::Value;
+    result::IR.Type,
+    iota_dimension::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[output_shape,]
@@ -1319,7 +1361,7 @@ function dynamic_pad_v1(
     edge_padding_high::Value,
     interior_padding::Value;
     result::IR.Type,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[
@@ -1342,7 +1384,7 @@ function dynamic_pad_v1(
 end
 
 function dynamic_reshape_v1(
-    operand::Value, output_shape::Value; result::IR.Type, location=Location()
+    operand::Value, output_shape::Value; result::IR.Type, location::Location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, output_shape]
@@ -1366,8 +1408,8 @@ function dynamic_slice_v1(
     operand::Value,
     start_indices::Vector{Value};
     result::IR.Type,
-    slice_sizes,
-    location=Location(),
+    slice_sizes::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, start_indices...]
@@ -1392,7 +1434,7 @@ function dynamic_update_slice_v1(
     update::Value,
     start_indices::Vector{Value};
     result::IR.Type,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, update, start_indices...]
@@ -1413,7 +1455,11 @@ function dynamic_update_slice_v1(
 end
 
 function einsum_v1(
-    lhs::Value, rhs::Value; result::IR.Type, einsum_config, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::IR.Type,
+    einsum_config::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -1433,7 +1479,7 @@ function einsum_v1(
     )
 end
 
-function exponential_v1(operand::Value; result::IR.Type, location=Location())
+function exponential_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1453,7 +1499,10 @@ function exponential_v1(operand::Value; result::IR.Type, location=Location())
 end
 
 function exponential_v2(
-    operand::Value; result::IR.Type, result_accuracy, location=Location()
+    operand::Value;
+    result::IR.Type,
+    result_accuracy::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -1473,7 +1522,9 @@ function exponential_v2(
     )
 end
 
-function exponential_minus_one_v1(operand::Value; result::IR.Type, location=Location())
+function exponential_minus_one_v1(
+    operand::Value; result::IR.Type, location::Location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1492,7 +1543,13 @@ function exponential_minus_one_v1(operand::Value; result::IR.Type, location=Loca
     )
 end
 
-function fft_v1(operand::Value; result::IR.Type, fft_type, fft_length, location=Location())
+function fft_v1(
+    operand::Value;
+    result::IR.Type,
+    fft_type::IR.AbstractAttribute,
+    fft_length::IR.AbstractAttribute,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1513,7 +1570,7 @@ function fft_v1(operand::Value; result::IR.Type, fft_type, fft_length, location=
     )
 end
 
-function floor_v1(operand::Value; result::IR.Type, location=Location())
+function floor_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1533,13 +1590,13 @@ function floor_v1(operand::Value; result::IR.Type, location=Location())
 end
 
 function func_v1(;
-    sym_name,
-    function_type,
-    sym_visibility,
-    arg_attrs,
-    res_attrs,
+    sym_name::IR.AbstractAttribute,
+    function_type::IR.AbstractAttribute,
+    sym_visibility::IR.AbstractAttribute,
+    arg_attrs::IR.AbstractAttribute,
+    res_attrs::IR.AbstractAttribute,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -1569,13 +1626,13 @@ function gather_v1(
     operand::Value,
     start_indices::Value;
     result::IR.Type,
-    offset_dims,
-    collapsed_slice_dims,
-    start_index_map,
-    index_vector_dim,
-    slice_sizes,
-    indices_are_sorted,
-    location=Location(),
+    offset_dims::IR.AbstractAttribute,
+    collapsed_slice_dims::IR.AbstractAttribute,
+    start_index_map::IR.AbstractAttribute,
+    index_vector_dim::IR.AbstractAttribute,
+    slice_sizes::IR.AbstractAttribute,
+    indices_are_sorted::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, start_indices]
@@ -1606,15 +1663,15 @@ function gather_v2(
     operand::Value,
     start_indices::Value;
     result::IR.Type,
-    offset_dims,
-    collapsed_slice_dims,
-    operand_batching_dims,
-    start_indices_batching_dims,
-    start_index_map,
-    index_vector_dim,
-    slice_sizes,
-    indices_are_sorted,
-    location=Location(),
+    offset_dims::IR.AbstractAttribute,
+    collapsed_slice_dims::IR.AbstractAttribute,
+    operand_batching_dims::IR.AbstractAttribute,
+    start_indices_batching_dims::IR.AbstractAttribute,
+    start_index_map::IR.AbstractAttribute,
+    index_vector_dim::IR.AbstractAttribute,
+    slice_sizes::IR.AbstractAttribute,
+    indices_are_sorted::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, start_indices]
@@ -1644,7 +1701,10 @@ function gather_v2(
 end
 
 function get_dimension_size_v1(
-    operand::Value; result::IR.Type, dimension, location=Location()
+    operand::Value;
+    result::IR.Type,
+    dimension::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -1664,7 +1724,12 @@ function get_dimension_size_v1(
     )
 end
 
-function get_tuple_element_v1(operand::Value; result::IR.Type, index, location=Location())
+function get_tuple_element_v1(
+    operand::Value;
+    result::IR.Type,
+    index::IR.AbstractAttribute,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1685,10 +1750,10 @@ end
 
 function if_v1(
     pred::Value;
-    results::Vector{IR.Type},
+    results::Base.AbstractVecOrTuple{IR.Type},
     true_branch::Region,
     false_branch::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[pred,]
@@ -1708,7 +1773,7 @@ function if_v1(
     )
 end
 
-function imag_v1(operand::Value; result::IR.Type, location=Location())
+function imag_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1728,7 +1793,11 @@ function imag_v1(operand::Value; result::IR.Type, location=Location())
 end
 
 function infeed_v1(
-    token::Value; results::Vector{IR.Type}, infeed_config, layout, location=Location()
+    token::Value;
+    results::Base.AbstractVecOrTuple{IR.Type},
+    infeed_config::IR.AbstractAttribute,
+    layout::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[token,]
@@ -1750,7 +1819,9 @@ function infeed_v1(
     )
 end
 
-function iota_v1(; output::IR.Type, iota_dimension, location=Location())
+function iota_v1(;
+    output::IR.Type, iota_dimension::IR.AbstractAttribute, location::Location=Location()
+)
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -1769,7 +1840,7 @@ function iota_v1(; output::IR.Type, iota_dimension, location=Location())
     )
 end
 
-function is_finite_v1(x::Value; y::IR.Type, location=Location())
+function is_finite_v1(x::Value; y::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[y,]
     operands = Value[x,]
     owned_regions = Region[]
@@ -1788,7 +1859,7 @@ function is_finite_v1(x::Value; y::IR.Type, location=Location())
     )
 end
 
-function log_plus_one_v1(operand::Value; result::IR.Type, location=Location())
+function log_plus_one_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1807,7 +1878,7 @@ function log_plus_one_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function log_v1(operand::Value; result::IR.Type, location=Location())
+function log_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1826,7 +1897,7 @@ function log_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function logistic_v1(operand::Value; result::IR.Type, location=Location())
+function logistic_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1848,9 +1919,9 @@ end
 function map_v1(
     inputs::Vector{Value};
     result::IR.Type,
-    dimensions,
+    dimensions::IR.AbstractAttribute,
     computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[inputs...,]
@@ -1870,7 +1941,7 @@ function map_v1(
     )
 end
 
-function maximum_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function maximum_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -1889,7 +1960,7 @@ function maximum_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location()
     )
 end
 
-function minimum_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function minimum_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -1908,7 +1979,7 @@ function minimum_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location()
     )
 end
 
-function multiply_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function multiply_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -1927,7 +1998,7 @@ function multiply_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location(
     )
 end
 
-function negate_v1(operand::Value; result::IR.Type, location=Location())
+function negate_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1946,7 +2017,7 @@ function negate_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function not_v1(operand::Value; result::IR.Type, location=Location())
+function not_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1966,7 +2037,9 @@ function not_v1(operand::Value; result::IR.Type, location=Location())
 end
 
 function optimization_barrier_v1(
-    operand::Vector{Value}; result::Vector{IR.Type}, location=Location()
+    operand::Vector{Value};
+    result::Base.AbstractVecOrTuple{IR.Type},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result...,]
     operands = Value[operand...,]
@@ -1986,7 +2059,7 @@ function optimization_barrier_v1(
     )
 end
 
-function or_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function or_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -2009,8 +2082,8 @@ function outfeed_v1(
     inputs::Vector{Value},
     token::Value;
     result::IR.Type,
-    outfeed_config,
-    location=Location(),
+    outfeed_config::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[inputs..., token]
@@ -2034,10 +2107,10 @@ function pad_v1(
     operand::Value,
     padding_value::Value;
     result::IR.Type,
-    edge_padding_low,
-    edge_padding_high,
-    interior_padding,
-    location=Location(),
+    edge_padding_low::IR.AbstractAttribute,
+    edge_padding_high::IR.AbstractAttribute,
+    interior_padding::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, padding_value]
@@ -2061,7 +2134,7 @@ function pad_v1(
     )
 end
 
-function partition_id_v1(; result::IR.Type, location=Location())
+function partition_id_v1(; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
@@ -2080,7 +2153,7 @@ function partition_id_v1(; result::IR.Type, location=Location())
     )
 end
 
-function popcnt_v1(operand::Value; result::IR.Type, location=Location())
+function popcnt_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2099,7 +2172,7 @@ function popcnt_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function power_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function power_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -2124,7 +2197,7 @@ function real_dynamic_slice_v1(
     limit_indices::Value,
     strides::Value;
     result::IR.Type,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, start_indices, limit_indices, strides]
@@ -2144,7 +2217,7 @@ function real_dynamic_slice_v1(
     )
 end
 
-function real_v1(operand::Value; result::IR.Type, location=Location())
+function real_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2165,11 +2238,11 @@ end
 
 function recv_v1(
     token::Value;
-    results::Vector{IR.Type},
-    channel_id,
-    channel_type,
-    is_host_transfer,
-    location=Location(),
+    results::Base.AbstractVecOrTuple{IR.Type},
+    channel_id::IR.AbstractAttribute,
+    channel_type::IR.AbstractAttribute,
+    is_host_transfer::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[token,]
@@ -2196,10 +2269,10 @@ end
 function reduce_v1(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    results::Vector{IR.Type},
-    dimensions,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    dimensions::IR.AbstractAttribute,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[inputs..., init_values...]
@@ -2220,7 +2293,11 @@ function reduce_v1(
 end
 
 function reduce_precision_v1(
-    operand::Value; output::IR.Type, exponent_bits, mantissa_bits, location=Location()
+    operand::Value;
+    output::IR.Type,
+    exponent_bits::IR.AbstractAttribute,
+    mantissa_bits::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[output,]
     operands = Value[operand,]
@@ -2246,12 +2323,12 @@ end
 function reduce_scatter_v1(
     operand::Value;
     result::IR.Type,
-    scatter_dimension,
-    replica_groups,
-    channel_id,
-    use_global_device_ids,
+    scatter_dimension::IR.AbstractAttribute,
+    replica_groups::IR.AbstractAttribute,
+    channel_id::IR.AbstractAttribute,
+    use_global_device_ids::IR.AbstractAttribute,
     computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -2279,14 +2356,14 @@ end
 function reduce_window_v1(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    results::Vector{IR.Type},
-    window_dimensions,
-    window_strides,
-    base_dilations,
-    window_dilations,
-    padding,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    window_dimensions::IR.AbstractAttribute,
+    window_strides::IR.AbstractAttribute,
+    base_dilations::IR.AbstractAttribute,
+    window_dilations::IR.AbstractAttribute,
+    padding::IR.AbstractAttribute,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[inputs..., init_values...]
@@ -2312,7 +2389,9 @@ function reduce_window_v1(
     )
 end
 
-function remainder_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function remainder_v1(
+    lhs::Value, rhs::Value; result::IR.Type, location::Location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -2331,7 +2410,7 @@ function remainder_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location
     )
 end
 
-function replica_id_v1(; result::IR.Type, location=Location())
+function replica_id_v1(; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
@@ -2350,7 +2429,7 @@ function replica_id_v1(; result::IR.Type, location=Location())
     )
 end
 
-function reshape_v1(operand::Value; result::IR.Type, location=Location())
+function reshape_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2369,7 +2448,7 @@ function reshape_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function return_v1(results::Vector{Value}; location=Location())
+function return_v1(results::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[results...,]
     owned_regions = Region[]
@@ -2388,7 +2467,12 @@ function return_v1(results::Vector{Value}; location=Location())
     )
 end
 
-function reverse_v1(operand::Value; result::IR.Type, dimensions, location=Location())
+function reverse_v1(
+    operand::Value;
+    result::IR.Type,
+    dimensions::IR.AbstractAttribute,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2411,8 +2495,8 @@ function rng_bit_generator_v1(
     initial_state::Value;
     output_state::IR.Type,
     output::IR.Type,
-    rng_algorithm,
-    location=Location(),
+    rng_algorithm::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[output_state, output]
     operands = Value[initial_state,]
@@ -2433,7 +2517,12 @@ function rng_bit_generator_v1(
 end
 
 function rng_v1(
-    a::Value, b::Value, shape::Value; result::IR.Type, rng_distribution, location=Location()
+    a::Value,
+    b::Value,
+    shape::Value;
+    result::IR.Type,
+    rng_distribution::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[a, b, shape]
@@ -2453,7 +2542,9 @@ function rng_v1(
     )
 end
 
-function round_nearest_even_v1(operand::Value; result::IR.Type, location=Location())
+function round_nearest_even_v1(
+    operand::Value; result::IR.Type, location::Location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2472,7 +2563,9 @@ function round_nearest_even_v1(operand::Value; result::IR.Type, location=Locatio
     )
 end
 
-function round_nearest_afz_v1(operand::Value; result::IR.Type, location=Location())
+function round_nearest_afz_v1(
+    operand::Value; result::IR.Type, location::Location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2491,7 +2584,7 @@ function round_nearest_afz_v1(operand::Value; result::IR.Type, location=Location
     )
 end
 
-function rsqrt_v1(operand::Value; result::IR.Type, location=Location())
+function rsqrt_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2514,15 +2607,15 @@ function scatter_v1(
     inputs::Vector{Value},
     scatter_indices::Value,
     updates::Vector{Value};
-    results::Vector{IR.Type},
-    update_window_dims,
-    inserted_window_dims,
-    scatter_dims_to_operand_dims,
-    index_vector_dim,
-    indices_are_sorted,
-    unique_indices,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    update_window_dims::IR.AbstractAttribute,
+    inserted_window_dims::IR.AbstractAttribute,
+    scatter_dims_to_operand_dims::IR.AbstractAttribute,
+    index_vector_dim::IR.AbstractAttribute,
+    indices_are_sorted::IR.AbstractAttribute,
+    unique_indices::IR.AbstractAttribute,
     update_computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[inputs..., scatter_indices, updates...]
@@ -2553,17 +2646,17 @@ function scatter_v2(
     inputs::Vector{Value},
     scatter_indices::Value,
     updates::Vector{Value};
-    results::Vector{IR.Type},
-    update_window_dims,
-    inserted_window_dims,
-    input_batching_dims,
-    scatter_indices_batching_dims,
-    scatter_dims_to_operand_dims,
-    index_vector_dim,
-    indices_are_sorted,
-    unique_indices,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    update_window_dims::IR.AbstractAttribute,
+    inserted_window_dims::IR.AbstractAttribute,
+    input_batching_dims::IR.AbstractAttribute,
+    scatter_indices_batching_dims::IR.AbstractAttribute,
+    scatter_dims_to_operand_dims::IR.AbstractAttribute,
+    index_vector_dim::IR.AbstractAttribute,
+    indices_are_sorted::IR.AbstractAttribute,
+    unique_indices::IR.AbstractAttribute,
     update_computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[inputs..., scatter_indices, updates...]
@@ -2597,12 +2690,12 @@ function select_and_scatter_v1(
     source::Value,
     init_value::Value;
     result::IR.Type,
-    window_dimensions,
-    window_strides,
-    padding,
+    window_dimensions::IR.AbstractAttribute,
+    window_strides::IR.AbstractAttribute,
+    padding::IR.AbstractAttribute,
     select::Region,
     scatter::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, source, init_value]
@@ -2627,7 +2720,11 @@ function select_and_scatter_v1(
 end
 
 function select_v1(
-    pred::Value, on_true::Value, on_false::Value; result::IR.Type, location=Location()
+    pred::Value,
+    on_true::Value,
+    on_false::Value;
+    result::IR.Type,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[pred, on_true, on_false]
@@ -2651,10 +2748,10 @@ function send_v1(
     inputs::Vector{Value},
     token::Value;
     result::IR.Type,
-    channel_id,
-    channel_type,
-    is_host_transfer,
-    location=Location(),
+    channel_id::IR.AbstractAttribute,
+    channel_type::IR.AbstractAttribute,
+    is_host_transfer::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[inputs..., token]
@@ -2679,7 +2776,11 @@ function send_v1(
 end
 
 function set_dimension_size_v1(
-    operand::Value, size::Value; result::IR.Type, dimension, location=Location()
+    operand::Value,
+    size::Value;
+    result::IR.Type,
+    dimension::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, size]
@@ -2699,7 +2800,9 @@ function set_dimension_size_v1(
     )
 end
 
-function shift_left_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function shift_left_v1(
+    lhs::Value, rhs::Value; result::IR.Type, location::Location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -2719,7 +2822,7 @@ function shift_left_v1(lhs::Value, rhs::Value; result::IR.Type, location=Locatio
 end
 
 function shift_right_arithmetic_v1(
-    lhs::Value, rhs::Value; result::IR.Type, location=Location()
+    lhs::Value, rhs::Value; result::IR.Type, location::Location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -2740,7 +2843,7 @@ function shift_right_arithmetic_v1(
 end
 
 function shift_right_logical_v1(
-    lhs::Value, rhs::Value; result::IR.Type, location=Location()
+    lhs::Value, rhs::Value; result::IR.Type, location::Location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -2760,7 +2863,7 @@ function shift_right_logical_v1(
     )
 end
 
-function sign_v1(operand::Value; result::IR.Type, location=Location())
+function sign_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2779,7 +2882,7 @@ function sign_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function sine_v1(operand::Value; result::IR.Type, location=Location())
+function sine_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2801,10 +2904,10 @@ end
 function slice_v1(
     operand::Value;
     result::IR.Type,
-    start_indices,
-    limit_indices,
-    strides,
-    location=Location(),
+    start_indices::IR.AbstractAttribute,
+    limit_indices::IR.AbstractAttribute,
+    strides::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -2830,11 +2933,11 @@ end
 
 function sort_v1(
     inputs::Vector{Value};
-    results::Vector{IR.Type},
-    dimension,
-    is_stable,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    dimension::IR.AbstractAttribute,
+    is_stable::IR.AbstractAttribute,
     comparator::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[inputs...,]
@@ -2856,7 +2959,7 @@ function sort_v1(
     )
 end
 
-function sqrt_v1(operand::Value; result::IR.Type, location=Location())
+function sqrt_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2875,7 +2978,7 @@ function sqrt_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function subtract_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function subtract_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
@@ -2894,7 +2997,7 @@ function subtract_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location(
     )
 end
 
-function tan_v1(operand::Value; result::IR.Type, location=Location())
+function tan_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2913,7 +3016,7 @@ function tan_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
-function tanh_v1(operand::Value; result::IR.Type, location=Location())
+function tanh_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2933,7 +3036,12 @@ function tanh_v1(operand::Value; result::IR.Type, location=Location())
 end
 
 function torch_index_select_v1(
-    operand::Value, index::Value; result::IR.Type, dim, batch_dims, location=Location()
+    operand::Value,
+    index::Value;
+    result::IR.Type,
+    dim::IR.AbstractAttribute,
+    batch_dims::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, index]
@@ -2955,7 +3063,12 @@ function torch_index_select_v1(
     )
 end
 
-function transpose_v1(operand::Value; result::IR.Type, permutation, location=Location())
+function transpose_v1(
+    operand::Value;
+    result::IR.Type,
+    permutation::IR.AbstractAttribute,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2978,11 +3091,11 @@ function triangular_solve_v1(
     a::Value,
     b::Value;
     result::IR.Type,
-    left_side,
-    lower,
-    unit_diagonal,
-    transpose_a,
-    location=Location(),
+    left_side::IR.AbstractAttribute,
+    lower::IR.AbstractAttribute,
+    unit_diagonal::IR.AbstractAttribute,
+    transpose_a::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[a, b]
@@ -3007,7 +3120,7 @@ function triangular_solve_v1(
     )
 end
 
-function tuple_v1(val::Vector{Value}; result::IR.Type, location=Location())
+function tuple_v1(val::Vector{Value}; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[val...,]
     owned_regions = Region[]
@@ -3027,7 +3140,10 @@ function tuple_v1(val::Vector{Value}; result::IR.Type, location=Location())
 end
 
 function unary_einsum_v1(
-    operand::Value; result::IR.Type, einsum_config, location=Location()
+    operand::Value;
+    result::IR.Type,
+    einsum_config::IR.AbstractAttribute,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -3047,7 +3163,9 @@ function unary_einsum_v1(
     )
 end
 
-function uniform_dequantize_v1(operand::Value; result::IR.Type, location=Location())
+function uniform_dequantize_v1(
+    operand::Value; result::IR.Type, location::Location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -3066,7 +3184,7 @@ function uniform_dequantize_v1(operand::Value; result::IR.Type, location=Locatio
     )
 end
 
-function uniform_quantize_v1(operand::Value; result::IR.Type, location=Location())
+function uniform_quantize_v1(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -3087,10 +3205,10 @@ end
 
 function while_v1(
     operand::Vector{Value};
-    results::Vector{IR.Type},
+    results::Base.AbstractVecOrTuple{IR.Type},
     cond::Region,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[operand...,]
@@ -3110,7 +3228,7 @@ function while_v1(
     )
 end
 
-function xor_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function xor_v1(lhs::Value, rhs::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]

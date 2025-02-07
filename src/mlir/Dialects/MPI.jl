@@ -10,8 +10,84 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
+
+"""
+`MPI_ErrorClassEnum`
+MPI error class name
+"""
+@enumx MPI_ErrorClassEnum MPI_SUCCESS MPI_ERR_ACCESS MPI_ERR_AMODE MPI_ERR_ARG MPI_ERR_ASSERT MPI_ERR_BAD_FILE MPI_ERR_BASE MPI_ERR_BUFFER MPI_ERR_COMM MPI_ERR_CONVERSION MPI_ERR_COUNT MPI_ERR_DIMS MPI_ERR_DISP MPI_ERR_DUP_DATAREP MPI_ERR_ERRHANDLER MPI_ERR_FILE MPI_ERR_FILE_EXISTS MPI_ERR_FILE_IN_USE MPI_ERR_GROUP MPI_ERR_INFO MPI_ERR_INFO_KEY MPI_ERR_INFO_NOKEY MPI_ERR_INFO_VALUE MPI_ERR_IN_STATUS MPI_ERR_INTERN MPI_ERR_IO MPI_ERR_KEYVAL MPI_ERR_LOCKTYPE MPI_ERR_NAME MPI_ERR_NO_MEM MPI_ERR_NO_SPACE MPI_ERR_NO_SUCH_FILE MPI_ERR_NOT_SAME MPI_ERR_OP MPI_ERR_OTHER MPI_ERR_PENDING MPI_ERR_PORT MPI_ERR_PROC_ABORTED MPI_ERR_QUOTA MPI_ERR_RANK MPI_ERR_READ_ONLY MPI_ERR_REQUEST MPI_ERR_RMA_ATTACH MPI_ERR_RMA_CONFLICT MPI_ERR_RMA_FLAVOR MPI_ERR_RMA_RANGE MPI_ERR_RMA_SHARED MPI_ERR_RMA_SYNC MPI_ERR_ROOT MPI_ERR_SERVICE MPI_ERR_SESSION MPI_ERR_SIZE MPI_ERR_SPAWN MPI_ERR_TAG MPI_ERR_TOPOLOGY MPI_ERR_TRUNCATE MPI_ERR_TYPE MPI_ERR_UNKNOWN MPI_ERR_UNSUPPORTED_DATAREP MPI_ERR_UNSUPPORTED_OPERATION MPI_ERR_VALUE_TOO_LARGE MPI_ERR_WIN MPI_ERR_LASTCODE
+MPI_ErrorClassEnumStorage = [
+    "MPI_SUCCESS",
+    "MPI_ERR_ACCESS",
+    "MPI_ERR_AMODE",
+    "MPI_ERR_ARG",
+    "MPI_ERR_ASSERT",
+    "MPI_ERR_BAD_FILE",
+    "MPI_ERR_BASE",
+    "MPI_ERR_BUFFER",
+    "MPI_ERR_COMM",
+    "MPI_ERR_CONVERSION",
+    "MPI_ERR_COUNT",
+    "MPI_ERR_DIMS",
+    "MPI_ERR_DISP",
+    "MPI_ERR_DUP_DATAREP",
+    "MPI_ERR_ERRHANDLER",
+    "MPI_ERR_FILE",
+    "MPI_ERR_FILE_EXISTS",
+    "MPI_ERR_FILE_IN_USE",
+    "MPI_ERR_GROUP",
+    "MPI_ERR_INFO",
+    "MPI_ERR_INFO_KEY",
+    "MPI_ERR_INFO_NOKEY",
+    "MPI_ERR_INFO_VALUE",
+    "MPI_ERR_IN_STATUS",
+    "MPI_ERR_INTERN",
+    "MPI_ERR_IO",
+    "MPI_ERR_KEYVAL",
+    "MPI_ERR_LOCKTYPE",
+    "MPI_ERR_NAME",
+    "MPI_ERR_NO_MEM",
+    "MPI_ERR_NO_SPACE",
+    "MPI_ERR_NO_SUCH_FILE",
+    "MPI_ERR_NOT_SAME",
+    "MPI_ERR_OP",
+    "MPI_ERR_OTHER",
+    "MPI_ERR_PENDING",
+    "MPI_ERR_PORT",
+    "MPI_ERR_PROC_ABORTED",
+    "MPI_ERR_QUOTA",
+    "MPI_ERR_RANK",
+    "MPI_ERR_READ_ONLY",
+    "MPI_ERR_REQUEST",
+    "MPI_ERR_RMA_ATTACH",
+    "MPI_ERR_RMA_CONFLICT",
+    "MPI_ERR_RMA_FLAVOR",
+    "MPI_ERR_RMA_RANGE",
+    "MPI_ERR_RMA_SHARED",
+    "MPI_ERR_RMA_SYNC",
+    "MPI_ERR_ROOT",
+    "MPI_ERR_SERVICE",
+    "MPI_ERR_SESSION",
+    "MPI_ERR_SIZE",
+    "MPI_ERR_SPAWN",
+    "MPI_ERR_TAG",
+    "MPI_ERR_TOPOLOGY",
+    "MPI_ERR_TRUNCATE",
+    "MPI_ERR_TYPE",
+    "MPI_ERR_UNKNOWN",
+    "MPI_ERR_UNSUPPORTED_DATAREP",
+    "MPI_ERR_UNSUPPORTED_OPERATION",
+    "MPI_ERR_VALUE_TOO_LARGE",
+    "MPI_ERR_WIN",
+    "MPI_ERR_LASTCODE",
+]
+
+function IR.Attribute(e::MPI_ErrorClassEnum.T)
+    return parse(Attribute, "#mpi<errclass <$(MPI_ErrorClassEnumStorage[Int(e)+1])>>")
+end
 
 """
 `comm_rank`
@@ -22,7 +98,7 @@ This operation can optionally return an `!mpi.retval` value that can be used
 to check for errors.
 """
 function comm_rank(;
-    retval=nothing::Union{Nothing,IR.Type}, rank::IR.Type, location=Location()
+    retval::Union{Nothing,IR.Type}=nothing, rank::IR.Type, location::Location=Location()
 )
     op_ty_results = IR.Type[rank,]
     operands = Value[]
@@ -49,7 +125,7 @@ end
 `MPI_Error_class` maps return values from MPI calls to a set of well-known
 MPI error classes.
 """
-function error_class(val::Value; errclass::IR.Type, location=Location())
+function error_class(val::Value; errclass::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[errclass,]
     operands = Value[val,]
     owned_regions = Region[]
@@ -78,7 +154,7 @@ Notably, MPI_Init cannot be called again in the same program.
 This operation can optionally return an `!mpi.retval` value that can be used
 to check for errors.
 """
-function finalize(; retval=nothing::Union{Nothing,IR.Type}, location=Location())
+function finalize(; retval::Union{Nothing,IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -109,7 +185,7 @@ Passing &argc, &argv is not supported currently.
 This operation can optionally return an `!mpi.retval` value that can be used
 to check for errors.
 """
-function init(; retval=nothing::Union{Nothing,IR.Type}, location=Location())
+function init(; retval::Union{Nothing,IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -148,8 +224,8 @@ function recv(
     ref::Value,
     tag::Value,
     rank::Value;
-    retval=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    retval::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[ref, tag, rank]
@@ -176,7 +252,9 @@ end
 This operation compares MPI status codes to known error class
 constants such as `MPI_SUCCESS`, or `MPI_ERR_COMM`.
 """
-function retval_check(val::Value; res::IR.Type, errclass, location=Location())
+function retval_check(
+    val::Value; res::IR.Type, errclass::MPI_ErrorClassEnum.T, location::Location=Location()
+)
     op_ty_results = IR.Type[res,]
     operands = Value[val,]
     owned_regions = Region[]
@@ -211,8 +289,8 @@ function send(
     ref::Value,
     tag::Value,
     rank::Value;
-    retval=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    retval::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[ref, tag, rank]

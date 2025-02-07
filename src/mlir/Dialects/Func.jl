@@ -10,8 +10,9 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
 
 """
 `call_indirect`
@@ -33,8 +34,8 @@ Function values can be created with the
 function call_indirect(
     callee::Value,
     callee_operands::Vector{Value};
-    results::Vector{IR.Type},
-    location=Location(),
+    results::Base.AbstractVecOrTuple{IR.Type},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[callee, callee_operands...]
@@ -70,12 +71,12 @@ symbol reference attribute named \"callee\".
 """
 function call(
     operands::Vector{Value};
-    result_0::Vector{IR.Type},
-    callee,
-    no_inline=nothing,
-    location=Location(),
+    result::Base.AbstractVecOrTuple{IR.Type},
+    callee::IR.FlatSymbolRefAttribute,
+    no_inline::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
@@ -115,8 +116,10 @@ the compiler is multithreaded, and disallowing SSA values to directly
 reference a function simplifies this
 ([rationale](../Rationale/Rationale.md#multithreading-the-compiler)).
 """
-function constant(; result_0::IR.Type, value, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function constant(;
+    result::IR.Type, value::IR.FlatSymbolRefAttribute, location::Location=Location()
+)
+    op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
@@ -174,14 +177,14 @@ func.func private @example_fn_attr() attributes {dialectName.attrName = false}
 ```
 """
 function func_(;
-    sym_name,
-    function_type,
-    sym_visibility=nothing,
-    arg_attrs=nothing,
-    res_attrs=nothing,
-    no_inline=nothing,
+    sym_name::String,
+    function_type::IR.Type,
+    sym_visibility::Union{String,Nothing}=nothing,
+    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    no_inline::Union{Bool,Nothing}=nothing,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -225,7 +228,7 @@ func.func @foo() -> (i32, f8) {
 }
 ```
 """
-function return_(operands::Vector{Value}; location=Location())
+function return_(operands::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operands...,]
     owned_regions = Region[]
