@@ -533,9 +533,10 @@ extern "C" PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
   // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
   // &layout));
+  const xla::Layout* layout = nullptr;
   auto buffer = MyValueOrThrow(
       client->BufferFromHostBuffer(data, primtype, shape, /*byte_strides*/ {},
-                                   semantics, /*ondone*/ {}, device));
+                                   semantics, /*ondone*/ {}, *device->default_memory_space(), layout));
   auto bres = buffer.release();
   return bres;
 }
@@ -544,7 +545,7 @@ extern "C" uint8_t BufferOnCPU(PjRtBuffer *buffer) { return buffer->IsOnCpu(); }
 
 extern "C" PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
                                           PjRtDevice *dst_device) {
-  auto res = MyValueOrThrow(buffer->CopyToDevice(dst_device));
+  auto res = MyValueOrThrow(buffer->CopyToMemorySpace(*dst_device->default_memory_space()));
   return res.release();
 }
 
