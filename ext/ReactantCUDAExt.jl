@@ -4,8 +4,10 @@ using CUDA
 using Reactant:
     Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
 using ReactantCore: @trace
+using GPUCompiler: GPUCompiler
 using KernelAbstractions: KernelAbstractions
 import KernelAbstractions as KA
+using LLVM: LLVM
 using Libdl
 const ReactantKernelAbstractionsExt = Base.get_extension(
     Reactant, :ReactantKernelAbstractionsExt
@@ -375,9 +377,6 @@ end
         max_threads,
     )
 end
-
-const GPUCompiler = CUDA.GPUCompiler
-const LLVM = GPUCompiler.LLVM
 
 function GPULowerCPUFeaturesPass()
     return LLVM.NewPMModulePass("GPULowerCPUFeatures", GPUCompiler.cpu_features!)
