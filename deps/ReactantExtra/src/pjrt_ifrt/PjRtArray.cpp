@@ -57,3 +57,27 @@ extern "C" span<xla::PjRtBuffer*> ifrt_pjrt_array_pjrt_buffers(PjRtArray* array)
     }
     return span(buffers.size(), ptr);
 }
+
+extern "C" bool ifrt_pjrt_array_has_static_shape(PjRtArray* array) {
+    return array->has_static_shape();
+}
+
+extern "C" bool ifrt_pjrt_array_has_dynamic_shape(PjRtArray* array) {
+    return array->has_dynamic_shape();
+}
+
+extern "C" DynamicShape* ifrt_pjrt_array_dynamic_shape(PjRtArray* array) {
+    return new DynamicShape(array->dynamic_shape());
+}
+
+extern "C" Array* ifrt_pjrt_array_copy(PjRtArray* array, span<xla::ifrt::Device*> c_devices, MemoryKind* c_memory_kind, ArrayCopySemantics semantics) {
+    std::optional<tsl::RCReference<xla::ifrt::DeviceList>> devices;
+    if (!c_devices.empty())
+        devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
+
+    std::optional<xla::ifrt::MemoryKind> memory_kind;
+    if (c_memory_kind != nullptr)
+        memory_kind = *c_memory_kind;
+
+    return capture_rcreference(MyValueOrThrow(array->Copy(devices, memory_kind, semantics)));
+}
