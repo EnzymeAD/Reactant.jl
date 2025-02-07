@@ -77,6 +77,7 @@
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "src/error_handling.hpp"
+#include "src/type_conversion.hpp"
 
 using namespace mlir;
 using namespace llvm;
@@ -339,7 +340,7 @@ extern "C" PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
 }
 
 extern "C" const char *ClientGetPlatformName(PjRtClient *client) {
-  return cstr_from_string(client->platform_name());
+  return reactant::convert(reactant::Type<const char*>(), client->platform_name());
 }
 
 // To keep in sync with JLAllocatorStats in src/XLA.jl
