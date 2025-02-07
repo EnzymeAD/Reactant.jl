@@ -492,7 +492,7 @@ function temp1(f, args...)
         (), # we have to insert something here, but we remove it immediately below.
         TracedTrack;
         toscalar=false,
-        track_numbers=(), # TODO: track_numbers?
+        track_numbers=Union{}, # TODO: track_numbers?
     )
     mlir_caller_args = Reactant.MLIR.IR.Value[]
     for (k, v) in seen_cache
@@ -504,7 +504,7 @@ function temp1(f, args...)
     
     N = length(args)
     seen_args, traced_args, linear_args = TracedUtils.prepare_args(
-        args, concretein, construct_function_without_args, toscalar
+        args, concretein, toscalar
     )
 
     mod, temp_func, fnbody, in_tys, sym_visibility = TracedUtils.placeholder_func(
@@ -513,7 +513,6 @@ function temp1(f, args...)
         toscalar,
         do_transpose,
         concretein,
-        construct_function_without_args,
     )
     
     MLIR.IR.activate!(fnbody)
@@ -538,25 +537,24 @@ function temp2(
     MLIR.IR.deactivate!(fnbody)
     
     concretein = false
-    construct_function_without_args = false
-    no_args_in_result = true
+    args_in_result = :none
     do_transpose = false
     return_dialect = :func
     
     seen_result, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
         result,
         traced_args,
+        linear_args,
+        fnbody,
         concretein,
-        construct_function_without_args,
-        no_args_in_result,
+        args_in_result,
         do_transpose,
     )
     
     ret = TracedUtils.create_return!(
         fnbody, 
         linear_results,
-        construct_function_without_args,
-        no_args_in_result,
+        args_in_result,
         do_transpose,
         return_dialect,
     )
