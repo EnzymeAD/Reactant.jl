@@ -90,7 +90,7 @@ end
 # This dispatch is needed when converting a ConcreteRNumber to a 0D ConcreteRArray
 function Base.setproperty!(x::ConcreteRArray, f::Symbol, val::XLA.AsyncBuffer)
     @assert f === :data
-    return setproperty!(x, :data, [val])
+    return setproperty!(x, :data, (val,))
 end
 
 @leaf ConcreteRArray

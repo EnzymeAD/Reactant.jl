@@ -106,12 +106,19 @@ function (sharding::NamedSharding)(client::XLA.Client, ::Nothing, x::AbstractArr
             device_id = mesh.device_ids[idx]
             device_to_array_slices[idx] = [1:size(x, i) for i in 1:ndims(x)]
             data[idx] = XLA.AsyncBuffer(
-                XLA.ArrayFromHostBuffer(client, x, device_id), nothing
+                XLA.ArrayFromHostBuffer(
+                    client,
+                    x,
+                    XLA.ClientGetAddressableDevice(
+                        client, XLA.device_ordinal(client, device_id)
+                    ),
+                ),
+                nothing,
             )
         end
 
         return (
-            data,
+            Tuple(vec(data)),
             FinalizedNamedSharding{typeof(sharding),ndims(mesh)}(
                 sharding, device_to_array_slices
             ),
