@@ -21,15 +21,14 @@ extern "C" uint64_t ifrt_topology_platform_id(Topology* topology)
     return topology->platform_id();
 }
 
-// TODO change it for `span`
-extern "C" std::tuple<size_t, const xla::PjRtDeviceDescription**> ifrt_topology_device_descriptions(Topology* topology)
+extern "C" span<const xla::PjRtDeviceDescription*> ifrt_topology_device_descriptions(Topology* topology)
 {
     auto descriptions = topology->DeviceDescriptions();
     auto descriptions_ptr = new const xla::PjRtDeviceDescription*[descriptions.size()];
     for (int i = 0; i < descriptions.size(); i++) {
         descriptions_ptr[i] = descriptions[i].release();
     }
-    return std::make_tuple(descriptions.size(), descriptions_ptr);
+    return span(descriptions.size(), descriptions_ptr);
 }
 
 // TODO xla::Topology::GetDefaultLayout
