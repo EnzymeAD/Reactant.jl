@@ -40,6 +40,7 @@ public:
     template<typename T> bool is() const noexcept; 
 
 private:
+    // TODO can we avoid using `Array` here and cast from/to `Value`?
     using storage_t = std::variant<
         std::monostate,
         tsl::RCReference<xla::ifrt::Value>, 
