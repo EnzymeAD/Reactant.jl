@@ -10,8 +10,7 @@ using namespace reactant;
 extern "C" PjRtClient::CreateOptions* ifrt_pjrt_client_create_options_ctor(xla::PjRtClient* c_pjrt_client)
 {
     std::shared_ptr<xla::PjRtClient> pjrt_client = reactant::get_or_insert_shared(c_pjrt_client);
-    PjRtClient::CreateOptions* ptr = new PjRtClient::CreateOptions(pjrt_client);
-    return ptr;
+    return new PjRtClient::CreateOptions{pjrt_client};
 }
 
 extern "C" PjRtClient::CreateOptions* ifrt_pjrt_client_create_options_dtor(PjRtClient::CreateOptions* options)
