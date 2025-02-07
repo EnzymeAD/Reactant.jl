@@ -217,13 +217,15 @@ function __init__()
                 println(stdout, e)
             end
         else
+	    if !Reactant.precompiling()
             try
                 gpu = GPUClient()
                 backends["gpu"] = gpu
                 default_backend[] = gpu
             catch e
-                println(stdout, e)
+                   println(stdout, e)
             end
+	    end
         end
     end
 
