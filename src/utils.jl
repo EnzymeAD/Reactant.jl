@@ -448,6 +448,7 @@ function safe_print(name, x)
 end
 
 const DEBUG_INTERP = Ref(false)
+const TRACE_CALLS = Ref(false)
 
 # Rewrite type unstable calls to recurse into call_with_reactant to ensure
 # they continue to use our interpreter. Reset the derived return type
@@ -473,6 +474,107 @@ function rewrite_insts!(ir, interp, guaranteed_error)
         end
     end
     return ir, any_changed
+end
+
+function temp1(f, args...)
+    Core.println("TEMP 1 ($f)")
+    concretein = false
+    construct_function_without_args = false
+    toscalar = false
+    do_transpose = false
+
+    name = String(nameof(f))
+    
+    seen_cache = Reactant.OrderedIdDict()
+    make_tracer(
+        seen_cache,
+        args,
+        (), # we have to insert something here, but we remove it immediately below.
+        TracedTrack;
+        toscalar=false,
+        track_numbers=Union{}, # TODO: track_numbers?
+    )
+    mlir_caller_args = Reactant.MLIR.IR.Value[]
+    for (k, v) in seen_cache
+        v isa TracedType || continue
+        push!(mlir_caller_args, v.mlir_data)
+        # make tracer inserted `()` into the path, here we remove it:
+        v.paths = v.paths[1:end-1]
+    end
+    
+    N = length(args)
+    seen_args, traced_args, linear_args = TracedUtils.prepare_args(
+        args, concretein, toscalar
+    )
+
+    mod, temp_func, fnbody, in_tys, sym_visibility = TracedUtils.placeholder_func(
+        name,
+        linear_args,
+        toscalar,
+        do_transpose,
+        concretein,
+    )
+    
+    MLIR.IR.activate!(fnbody)
+    
+    for (i, arg) in enumerate(linear_args)
+        TracedUtils.set_mlir_data!(arg, MLIR.IR.argument(fnbody, i))
+    end
+
+    Core.println("##############################")
+    Core.println("CALLER ARGS: $mlir_caller_args")
+    Core.println("##############################")
+    return mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, linear_args, name
+end
+
+@inline get_traced_args_from_temp1((mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, linear_args, name)) = traced_args
+@inline call_splatted(f, args) = f(args...)
+
+function temp2(
+    result, (mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, linear_args, name)
+)
+    Core.println("TEMP 2 ($name)")
+    MLIR.IR.deactivate!(fnbody)
+    
+    concretein = false
+    args_in_result = :none
+    do_transpose = false
+    return_dialect = :func
+    
+    seen_result, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
+        result,
+        traced_args,
+        linear_args,
+        fnbody,
+        concretein,
+        args_in_result,
+        do_transpose,
+    )
+    
+    ret = TracedUtils.create_return!(
+        fnbody, 
+        linear_results,
+        args_in_result,
+        do_transpose,
+        return_dialect,
+    )
+    
+    final_func = TracedUtils.final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
+    
+    call_op = MLIR.Dialects.func.call(
+        mlir_caller_args; result_0=out_tys, callee=MLIR.IR.FlatSymbolRefAttribute(name)
+    )
+
+    i = 1
+    Core.println("BEFORE:")
+    Core.println(traced_result)
+    for (k, v) in seen_result
+        v isa TracedType || continue
+        TracedUtils.set_mlir_data!(v, MLIR.IR.result(call_op, i))
+    end
+    Core.println("AFTER:")
+    Core.println(traced_result)
+    return traced_result
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -733,10 +835,31 @@ function call_with_reactant_generator(
         Core.SSAValue(length(overdubbed_code))
     end
 
-    push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
-    push!(overdubbed_codelocs, code_info.codelocs[1])
-
+    if TRACE_CALLS[]
+        push!(overdubbed_code, Expr(:call, temp1, fn_args...))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        temp1_output = Core.SSAValue(length(overdubbed_code))
+        
+        push!(overdubbed_code, Expr(:call, get_traced_args_from_temp1, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        traced_args = Core.SSAValue(length(overdubbed_code))
+        
+        push!(overdubbed_code, Expr(:call, call_splatted, oc, traced_args))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+    else
+        push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
+        push!(overdubbed_codelocs, code_info.codelocs[1])        
+    end
+    
+    
     ocres = Core.SSAValue(length(overdubbed_code))
+
+    if TRACE_CALLS[]
+        push!(overdubbed_code, Expr(:call, temp2, ocres, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        
+        ocres = Core.SSAValue(length(overdubbed_code))
+    end
 
     if DEBUG_INTERP[]
         push!(overdubbed_code, Expr(:call, safe_print, "ocres", ocres))

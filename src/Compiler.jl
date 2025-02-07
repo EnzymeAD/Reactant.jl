@@ -467,7 +467,9 @@ function compile_mlir!(
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+        callcache!(callcache) do # TODO: don't create a closure here either.
+          Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+        end
     finally
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
