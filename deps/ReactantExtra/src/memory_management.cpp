@@ -5,7 +5,6 @@
 #include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/value.h"
 #include "xla/python/ifrt/device_list.h"
-#include "xla/python/ifrt/host_callback.h"
 
 std::map<void*, std::shared_ptr<void>> captured_shared_ptr;
 std::map<void*, reactant::RCRef> captured_rcreference;
@@ -34,6 +33,9 @@ void reactant_generic_llvm_rtti_root_dtor(llvm::RTTIRoot* root) {
 } // extern "C"
 
 namespace reactant {
+
+RCRef::RCRef() noexcept = default;
+RCRef::~RCRef() noexcept = default;
 
 void* RCRef::get() const noexcept {
     return std::visit([](auto&& obj) -> void* {

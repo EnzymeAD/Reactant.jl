@@ -4,6 +4,8 @@
 #include <type_traits>
 #include <variant>
 #include "xla/tsl/concurrency/ref_count.h"
+#include "xla/python/ifrt/host_callback.h"
+#include "xla/python/pjrt_ifrt/pjrt_array.h"
 
 extern "C" {
 void reactant_release_shared(void* ptr);
@@ -18,6 +20,7 @@ class Array;
 class Value;
 class DeviceList;
 class LoadedHostCallback;
+class PjRtArray;
 } // namespace ifrt
 } // namespace xla
 
@@ -45,6 +48,7 @@ private:
         std::monostate,
         tsl::RCReference<xla::ifrt::Value>, 
         tsl::RCReference<xla::ifrt::Array>, 
+        tsl::RCReference<xla::ifrt::PjRtArray>, 
         // tsl::RCReference<xla::ifrt::DeviceList>, // we explicitly convert to span<Device*>
         tsl::RCReference<xla::ifrt::LoadedHostCallback>
         >;
@@ -110,6 +114,12 @@ RCRef get_or_insert_rcreference(T* ptr);
 /*
  * Definitions
  */
+
+template<typename T>
+RCRef::RCRef(tsl::RCReference<T> obj) 
+    : storage{obj} {   
+}
+
 template<typename T>
 T* RCRef::get() const noexcept {
     if (auto ptr = std::get_if<tsl::RCReference<T>>(&storage)) 
