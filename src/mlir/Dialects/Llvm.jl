@@ -84,9 +84,9 @@ end
 """
 `mlir_addressof`
 
-Creates an SSA value containing a pointer to a global variable or constant
-defined by `llvm.mlir.global`. The global value can be defined after its
-first referenced. If the global value is a constant, storing into it is not
+Creates an SSA value containing a pointer to a global value (function,
+variable or alias). The global value can be defined after its first
+referenced. If the global value is a constant, storing into it is not
 allowed.
 
 Examples:
@@ -104,10 +104,19 @@ func @foo() {
 
   // The function address can be used for indirect calls.
   llvm.call %2() : !llvm.ptr, () -> ()
+
+  // Get the address of an aliased global.
+  %3 = llvm.mlir.addressof @const_alias : !llvm.ptr
 }
 
 // Define the global.
 llvm.mlir.global @const(42 : i32) : i32
+
+// Define an alias.
+llvm.mlir.alias @const_alias : i32 {
+  %0 = llvm.mlir.addressof @const : !llvm.ptr
+  llvm.return %0 : !llvm.ptr
+}
 ```
 """
 function mlir_addressof(; res::IR.Type, global_name, location=Location())
@@ -119,6 +128,81 @@ function mlir_addressof(; res::IR.Type, global_name, location=Location())
 
     return create_operation(
         "llvm.mlir.addressof",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`mlir_alias`
+
+`llvm.mlir.alias` is a top level operation that defines a global alias for
+global variables and functions. The operation is always initialized by
+using a initializer region which could be a direct map to another global
+value or contain some address computation on top of it.
+
+It uses a symbol for its value, which will be uniqued by the module
+with respect to other symbols in it.
+
+Similarly to functions and globals, they can also have a linkage attribute.
+This attribute is placed between `llvm.mlir.alias` and the symbol name. If
+the attribute is omitted, `external` linkage is assumed by default.
+
+Examples:
+
+```mlir
+// Global alias use @-identifiers.
+llvm.mlir.alias external @foo_alias {addr_space = 0 : i32} : !llvm.ptr {
+  %0 = llvm.mlir.addressof @some_function : !llvm.ptr
+  llvm.return %0 : !llvm.ptr
+}
+
+// More complex initialization.
+llvm.mlir.alias linkonce_odr hidden @glob
+{addr_space = 0 : i32, dso_local} : !llvm.array<32 x i32> {
+  %0 = llvm.mlir.constant(1234 : i64) : i64
+  %1 = llvm.mlir.addressof @glob.private : !llvm.ptr
+  %2 = llvm.ptrtoint %1 : !llvm.ptr to i64
+  %3 = llvm.add %2, %0 : i64
+  %4 = llvm.inttoptr %3 : i64 to !llvm.ptr
+  llvm.return %4 : !llvm.ptr
+}
+```
+"""
+function mlir_alias(;
+    alias_type,
+    sym_name,
+    linkage,
+    dso_local=nothing,
+    thread_local_=nothing,
+    unnamed_addr=nothing,
+    visibility_=nothing,
+    initializer::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[initializer,]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("alias_type", alias_type),
+        namedattribute("sym_name", sym_name),
+        namedattribute("linkage", linkage),
+    ]
+    !isnothing(dso_local) && push!(attributes, namedattribute("dso_local", dso_local))
+    !isnothing(thread_local_) &&
+        push!(attributes, namedattribute("thread_local_", thread_local_))
+    !isnothing(unnamed_addr) &&
+        push!(attributes, namedattribute("unnamed_addr", unnamed_addr))
+    !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+
+    return create_operation(
+        "llvm.mlir.alias",
         location;
         operands,
         owned_regions,
@@ -414,6 +498,8 @@ function call(
     will_return=nothing,
     op_bundle_sizes,
     op_bundle_tags=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
     access_groups=nothing,
     alias_scopes=nothing,
     noalias_scopes=nothing,
@@ -447,6 +533,8 @@ function call(
     !isnothing(will_return) && push!(attributes, namedattribute("will_return", will_return))
     !isnothing(op_bundle_tags) &&
         push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
     !isnothing(access_groups) &&
         push!(attributes, namedattribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
@@ -1435,6 +1523,8 @@ function invoke(
     result=nothing::Union{Nothing,IR.Type},
     var_callee_type=nothing,
     callee=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
     branch_weights=nothing,
     CConv=nothing,
     op_bundle_sizes,
@@ -1466,6 +1556,8 @@ function invoke(
     !isnothing(var_callee_type) &&
         push!(attributes, namedattribute("var_callee_type", var_callee_type))
     !isnothing(callee) && push!(attributes, namedattribute("callee", callee))
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
     !isnothing(branch_weights) &&
         push!(attributes, namedattribute("branch_weights", branch_weights))
     !isnothing(CConv) && push!(attributes, namedattribute("CConv", CConv))

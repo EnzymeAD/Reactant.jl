@@ -31,17 +31,14 @@ inferred sharding.
 
 # Example
 ```mlir
-%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\]>]>} : tensor<8x8xf32>
-%2 = sdy.all_gather [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 to_sharding=<@mesh, [{\"a\"}, {}, {}\\]> : tensor<8x8xf32>
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\]>]>} : tensor<8x8x8xf32>
+%2 = sdy.all_gather [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 out_sharding=<@mesh, [{\"a\"}, {}, {}\\]> : tensor<8x8x8xf32>
 ```
 
 **Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
 - Elements in `gathering_axes` must satisfy the constraints listed in
   `AxisRefListAttr`.
-- `out_sharding` must satisfy the constraints listed in
-  `TensorShardingAttr`.
-- The operand must have a sharding.
-- Both operand and result shardings should be bound to the same `MeshAttr`.
 - Applying `gathering_axes` to the operand sharding gets `out_sharding`.
 """
 function all_gather(
@@ -74,6 +71,47 @@ function all_gather(
 end
 
 """
+`all_reduce`
+
+Reduces chunks of a tensor along axes specified in `reduction_axes`.
+The order of `reduction_axes` is not important for the result, but can
+affect the order of the corresponding replica groups.
+
+**Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
+- `reduction_axes` must satisfy the constraints listed in `AxisRefListAttr`;
+- `reduction_axes` must not overlap with the operand sharding axes;
+"""
+function all_reduce(
+    tensor::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    reduction_axes,
+    out_sharding,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tensor,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("reduction_axes", reduction_axes),
+        namedattribute("out_sharding", out_sharding),
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "sdy.all_reduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `all_slice`
 
 Slices chunks of a tensor along axes specified in `slicing_axes`. There is
@@ -92,17 +130,14 @@ inferred sharding.
 
 # Example
 ```mlir
-%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\"}, {}, {}\\]>]>} : tensor<8x8xf32>
-%2 = sdy.all_slice [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 to_sharding=<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\]> : tensor<8x8xf32>
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\"}, {}, {}\\]>]>} : tensor<8x8x8xf32>
+%2 = sdy.all_slice [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 out_sharding=<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\]> : tensor<8x8x8xf32>
 ```
 
 **Constraints:**
 - Elements in `slicing_axes` must satisfy the constraints listed in
   `AxisRefListAttr`.
-- `out_sharding` must satisfy the constraints listed in
-  `TensorShardingAttr`.
-- The operand must have a sharding.
-- Both operand and result shardings should be bound to the same `MeshAttr`.
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
 - Applying `slicing_axes` to the operand sharding gets `out_sharding`.
 """
 function all_slice(
@@ -124,6 +159,124 @@ function all_slice(
 
     return create_operation(
         "sdy.all_slice",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`all_to_all`
+
+Slices chunks of a tensor along dimension `tgt_dim` and axes specified in
+`axes`, scatteres those chunks along the axes, and concatenates them along
+dimension `src_dim`.
+
+This operation is essentially a combination of an all-gather along `src_dim`
+and `axes`, followed by an all-slice along `tgt_dim` and `axes`, i.e., a
+suffix of the axes sharding dimension `src_dim` on the input tensor is
+appended to the axes sharding dimension `tgt_dim` on the output tensor.
+
+The all-to-all will be applied to the sharding of the operand (`tensor`) to
+obtain the sharding of the result (`out_sharding`).
+
+Note that `out_sharding` is not used to determine the sharding of the
+result. Instead, the sharding of the result is determined by the sharding of
+the operand, `src_dim`, `tgt_dim`, and `axes`, and `out_sharding` must match
+this inferred sharding.
+
+# Example
+```mlir
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\", \"c\"}, {}\\]>]>} : tensor<8x8xf32>
+%2 = sdy.all_to_all {\"b\", \"c\"} 0->1 %1 out_sharding=<@mesh, [{\"a\"}, {\"b\", \"c\"}\\]> : tensor<8x8xf32>
+```
+
+**Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
+- `axes` must satisfy the constraints listed in `AxisRefListAttr`.
+- `src_dim` and `tgt_dim` must be valid dimensions (positive and less than
+  rank of tensor), and different from each other.
+- Moving `axes` from `src_dim` to `tgt_dim` in the operand sharding gets
+  `out_sharding`.
+"""
+function all_to_all(
+    tensor::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    src_dim,
+    tgt_dim,
+    axes,
+    out_sharding,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tensor,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("src_dim", src_dim),
+        namedattribute("tgt_dim", tgt_dim),
+        namedattribute("axes", axes),
+        namedattribute("out_sharding", out_sharding),
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "sdy.all_to_all",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`collective_permute`
+
+Sends a chunk of the input tensor from each device to another to
+reorder/replace the axes that shard the tensor.
+
+A collective permute can transform the input sharding such that each
+dimension must be as sharded as it was before, i.e., it must be sharded
+along axes whose product of sizes matches that of the axes that previously
+sharded the tensor.
+
+This is useful for reordering axes in a single dimension or across different
+dimensions, and swapping sharded axes with replicated ones.
+
+In the below example, the sharded tensor size is `tensor<1x4x2xf32>`, and
+that is preserved by the collective permute.
+
+# Example
+```mlir
+sdy.mesh @mesh = <[\"a\"=2, \"b\"=2, \"c\"=4, \"d\"=2, \"e\"=2, \"f\"=2]>
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"c\"}, {\"f\"}, {\"d\", \"e\"}\\]>]>} : tensor<8x8x8xf32>
+%2 = sdy.collective_permute %1 out_sharding=<@mesh, [{\"c\":(1)2, \"b\", \"f\"}, {\"a\"}, {\"e\", \"d\"}\\]> : tensor<8x8x8xf32>
+```
+
+**Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
+- For each dimension, the product of sharding axis sizes in `out_sharding`
+  must match that of the corresponding operand dimension sharding.
+"""
+function collective_permute(
+    tensor::Value; result=nothing::Union{Nothing,IR.Type}, out_sharding, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tensor,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("out_sharding", out_sharding),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "sdy.collective_permute",
         location;
         operands,
         owned_regions,

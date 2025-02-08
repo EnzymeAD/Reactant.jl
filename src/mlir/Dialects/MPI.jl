@@ -14,6 +14,79 @@ import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
 
 """
+`allreduce`
+
+MPI_Allreduce performs a reduction operation on the values in the sendbuf
+array and stores the result in the recvbuf array. The operation is 
+performed across all processes in the communicator.
+
+The `op` attribute specifies the reduction operation to be performed.
+Currently only the `MPI_Op` predefined in the standard (e.g. `MPI_SUM`) are
+supported.
+
+Communicators other than `MPI_COMM_WORLD` are not supported for now.
+
+This operation can optionally return an `!mpi.retval` value that can be used
+to check for errors.
+"""
+function allreduce(
+    sendbuf::Value,
+    recvbuf::Value;
+    retval=nothing::Union{Nothing,IR.Type},
+    op,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[sendbuf, recvbuf]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("op", op),]
+    !isnothing(retval) && push!(op_ty_results, retval)
+
+    return create_operation(
+        "mpi.allreduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`barrier`
+
+MPI_Barrier blocks execution until all processes in the communicator have
+reached this routine.
+
+Communicators other than `MPI_COMM_WORLD` are not supported for now.
+
+This operation can optionally return an `!mpi.retval` value that can be used
+to check for errors.
+"""
+function barrier(; retval=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(retval) && push!(op_ty_results, retval)
+
+    return create_operation(
+        "mpi.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `comm_rank`
 
 Communicators other than `MPI_COMM_WORLD` are not supported for now.
@@ -33,6 +106,36 @@ function comm_rank(;
 
     return create_operation(
         "mpi.comm_rank",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`comm_size`
+
+Communicators other than `MPI_COMM_WORLD` are not supported for now.
+
+This operation can optionally return an `!mpi.retval` value that can be used
+to check for errors.
+"""
+function comm_size(;
+    retval=nothing::Union{Nothing,IR.Type}, size::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[size,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(retval) && push!(op_ty_results, retval)
+
+    return create_operation(
+        "mpi.comm_size",
         location;
         operands,
         owned_regions,
@@ -99,6 +202,86 @@ function finalize(; retval=nothing::Union{Nothing,IR.Type}, location=Location())
 end
 
 """
+`irecv`
+
+MPI_Irecv begins a non-blocking receive of `size` elements of type `dtype` 
+from rank `dest`. The `tag` value and communicator enables the library to 
+determine the matching of multiple sends and receives between the same 
+ranks.
+
+Communicators other than `MPI_COMM_WORLD` are not supported for now.
+
+This operation can optionally return an `!mpi.retval` value that can be used
+to check for errors.
+"""
+function irecv(
+    ref::Value,
+    tag::Value,
+    rank::Value;
+    retval=nothing::Union{Nothing,IR.Type},
+    req::IR.Type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[req,]
+    operands = Value[ref, tag, rank]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(retval) && push!(op_ty_results, retval)
+
+    return create_operation(
+        "mpi.irecv",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`isend`
+
+MPI_Isend begins a non-blocking send of `size` elements of type `dtype` to
+rank `dest`. The `tag` value and communicator enables the library to
+determine the matching of multiple sends and receives between the same
+ranks.
+
+Communicators other than `MPI_COMM_WORLD` are not supported for now.
+
+This operation can optionally return an `!mpi.retval` value that can be used
+to check for errors.
+"""
+function isend(
+    ref::Value,
+    tag::Value,
+    rank::Value;
+    retval=nothing::Union{Nothing,IR.Type},
+    req::IR.Type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[req,]
+    operands = Value[ref, tag, rank]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(retval) && push!(op_ty_results, retval)
+
+    return create_operation(
+        "mpi.isend",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `init`
 
 This operation must preceed most MPI calls (except for very few exceptions,
@@ -137,7 +320,7 @@ from rank `dest`. The `tag` value and communicator enables the library to
 determine the matching of multiple sends and receives between the same 
 ranks.
 
-Communicators other than `MPI_COMM_WORLD` are not supprted for now.
+Communicators other than `MPI_COMM_WORLD` are not supported for now.
 The MPI_Status is set to `MPI_STATUS_IGNORE`, as the status object 
 is not yet ported to MLIR.
 
@@ -202,7 +385,7 @@ MPI_Send performs a blocking send of `size` elements of type `dtype` to rank
 `dest`. The `tag` value and communicator enables the library to determine 
 the matching of multiple sends and receives between the same ranks.
 
-Communicators other than `MPI_COMM_WORLD` are not supprted for now.
+Communicators other than `MPI_COMM_WORLD` are not supported for now.
 
 This operation can optionally return an `!mpi.retval` value that can be used
 to check for errors.
@@ -223,6 +406,37 @@ function send(
 
     return create_operation(
         "mpi.send",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`wait`
+
+MPI_Wait blocks execution until the request has completed.
+
+The MPI_Status is set to `MPI_STATUS_IGNORE`, as the status object 
+is not yet ported to MLIR.
+
+This operation can optionally return an `!mpi.retval` value that can be used
+to check for errors.
+"""
+function wait(req::Value; retval=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[req,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(retval) && push!(op_ty_results, retval)
+
+    return create_operation(
+        "mpi.wait",
         location;
         operands,
         owned_regions,

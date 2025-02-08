@@ -41,8 +41,7 @@ given id and continue their execution.
 The default barrier id is 0 that is similar to `nvvm.barrier` Op. When 
 `barrierId` is not present, the default barrier id is used. 
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
 """
 function barrier_arrive(
     barrierId=nothing::Union{Nothing,Value}; numberOfThreads::Value, location=Location()
@@ -352,8 +351,7 @@ without causing the executing thread to wait for other participating threads.
 
 The `aligned` attribute, when provided, generates the .aligned version of the PTX instruction.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-barrier-cluster)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-barrier-cluster)
 """
 function cluster_arrive(; aligned=nothing, location=Location())
     op_ty_results = IR.Type[]
@@ -387,8 +385,7 @@ The .relaxed qualifier on `cluster.arrive` specifies that there are no memory
 ordering and visibility guarantees provided for the memory accesses performed prior to
 `cluster.arrive`.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-barrier-cluster)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-barrier-cluster)
 """
 function cluster_arrive_relaxed(; aligned=nothing, location=Location())
     op_ty_results = IR.Type[]
@@ -637,8 +634,7 @@ The `cluster.wait` causes the executing thread to wait for all non-exited thread
 of the cluster to perform `cluster.arrive`. The `aligned` attribute, when provided,
 generates the .aligned version of the PTX instruction.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-barrier-cluster)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-barrier-cluster)
 """
 function cluster_wait(; aligned=nothing, location=Location())
     op_ty_results = IR.Type[]
@@ -666,8 +662,7 @@ end
 This Op commits all prior initiated but uncommitted cp.async.bulk
 instructions into a cp.async.bulk-group.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-commit-group)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-commit-group)
 """
 function cp_async_bulk_commit_group(; location=Location())
     op_ty_results = IR.Type[]
@@ -702,8 +697,8 @@ the `nvvm.read.ptx.sreg.ctaid` of the destination CTA.
 
 The `l2CacheHint` operand is optional, and it is used to specify cache
 eviction policy that may be used during the memory access.
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
 """
 function cp_async_bulk_shared_cluster_global(
     dstMem::Value,
@@ -755,8 +750,8 @@ global memory.
 
 The `l2CacheHint` operand is optional, and it is used to specify cache
 eviction policy that may be used during the memory access.
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
 """
 function cp_async_bulk_global_shared_cta(
     dstMem::Value,
@@ -790,8 +785,7 @@ end
 Initiates an asynchronous copy operation from Shared CTA memory to Shared
 cluster memory.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
 """
 function cp_async_bulk_shared_cluster_shared_cta(
     dstMem::Value, srcMem::Value, mbar::Value, size::Value; location=Location()
@@ -838,8 +832,7 @@ the `nvvm.read.ptx.sreg.ctaid` of the destination CTA.
 The `l2CacheHint` operand is optional, and it is used to specify cache 
 eviction policy that may be used during the memory access.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-tensor)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-tensor)
 """
 function cp_async_bulk_tensor_shared_cluster_global(
     dstMem::Value,
@@ -910,8 +903,7 @@ columns at the destination. In this mode, the tensor has to be at least
 The `l2CacheHint` operand is optional, and it is used to specify cache
 eviction policy that may be used during the memory access.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-prefetch-tensor)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-prefetch-tensor)
 """
 function cp_async_bulk_tensor_prefetch(
     tmaDescriptor::Value,
@@ -959,8 +951,7 @@ The supported reduction operations are:
 The `l2CacheHint` operand is optional, and it is used to specify cache
 eviction policy that may be used during the memory access.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-reduce-async-bulk-tensor)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-reduce-async-bulk-tensor)
 """
 function cp_async_bulk_tensor_reduce(
     tmaDescriptor::Value,
@@ -1038,8 +1029,7 @@ The `\$read` indicates that the waiting has to be done until all the bulk
 async operations in the specified bulk async-group have completed reading 
 from their source locations.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-wait-group)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-wait-group)
 """
 function cp_async_bulk_wait_group(; group, read=nothing, location=Location())
     op_ty_results = IR.Type[]
@@ -1088,8 +1078,8 @@ all prior cp.async operations initiated by the executing thread.
 The `addr` operand specifies the address of the mbarrier object
 in generic address space. The `noinc` attr impacts how the
 mbarrier\'s state is updated.
-[For more information, refer PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
 """
 function cp_async_mbarrier_arrive(addr::Value; noinc=nothing, location=Location())
     op_ty_results = IR.Type[]
@@ -1118,8 +1108,9 @@ The `cp.async.mbarrier.arrive.shared` Op makes the mbarrier object
 track all prior cp.async operations initiated by the executing thread.
 The `addr` operand specifies the address of the mbarrier object in
 shared memory. The `noinc` attr impacts how the mbarrier\'s state
-is updated. [For more information, refer PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
+is updated. 
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
 """
 function cp_async_mbarrier_arrive_shared(addr::Value; noinc=nothing, location=Location())
     op_ty_results = IR.Type[]
@@ -1197,8 +1188,8 @@ The result `res` is represented as an i32 type.
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `rnd` and `sat` attributes specify the
 the rounding and saturation modes respectively.
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function cvt_float_to_tf32(
     src::Value; res::IR.Type, rnd=nothing, sat=nothing, relu=nothing, location=Location()
@@ -1233,8 +1224,7 @@ The membermask is set to `0xFFFFFFFF` for the current version
 of this Op. The predicate result is set to `True` for the
 leader thread, and `False` for all other threads.
 
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-elect-sync)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-elect-sync)
 """
 function elect_sync(; pred::IR.Type, location=Location())
     op_ty_results = IR.Type[pred,]
@@ -1892,8 +1882,8 @@ end
 `fence_mbarrier_init`
 
 Fence operation that applies on the prior nvvm.mbarrier.init
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
 """
 function fence_mbarrier_init(; location=Location())
     op_ty_results = IR.Type[]
@@ -1927,8 +1917,8 @@ memory accesses across the proxies is to be provided. The only supported
 value for the `size` operand is 128 and must be an immediate. Generic Addressing
 is used unconditionally, and the address specified by the operand `addr` must
 fall within the `.global` state space. Otherwise, the behavior is undefined
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
 """
 function fence_proxy_acquire(
     addr::Value, size::Value; scope, fromProxy=nothing, toProxy=nothing, location=Location()
@@ -1958,8 +1948,8 @@ end
 
 Fence operation with proxy to establish an ordering between memory accesses
 that may happen through different proxies.
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
 """
 function fence_proxy(; kind, space=nothing, location=Location())
     op_ty_results = IR.Type[]
@@ -1989,8 +1979,8 @@ between a prior memory access performed via the generic proxy and a
 subsequent memory access performed via the tensormap proxy. `fence.proxy.release`
 operation can form a release sequence that synchronizes with an acquire
 sequence that contains the fence.proxy.acquire proxy fence operation
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
 """
 function fence_proxy_release(;
     scope, fromProxy=nothing, toProxy=nothing, location=Location()
@@ -2123,6 +2113,64 @@ function read_ptx_sreg_gridid(; res::IR.Type, range=nothing, location=Location()
 
     return create_operation(
         "nvvm.read.ptx.sreg.gridid",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`griddepcontrol_launch_dependents`
+
+Signals that specific dependents the runtime system designated to react to 
+this instruction can be scheduled as soon as all other CTAs in the grid 
+issue the same instruction or have completed.
+
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol)
+"""
+function griddepcontrol_launch_dependents(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "nvvm.griddepcontrol.launch.dependents",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`griddepcontrol_wait`
+
+Causes the executing thread to wait until all prerequisite grids in flight 
+have completed and all the memory operations from the prerequisite grids 
+are performed and made visible to the current grid.
+
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol)
+"""
+function griddepcontrol_wait(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "nvvm.griddepcontrol.wait",
         location;
         operands,
         owned_regions,
@@ -2563,6 +2611,25 @@ function mbarrier_try_wait_parity_shared(
     )
 end
 
+function mapa(a::Value, b::Value; res::IR.Type, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[a, b]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "nvvm.mapa",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `mma_sync`
 
@@ -2772,8 +2839,8 @@ The `offset` specifies a source lane or source lane offset
 the source. The `mask_and_clamp` contains two packed values specifying
 a mask for logically splitting warps into sub-segments and an upper bound
 for clamping the source lane index.
-[For more information, refer PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync)
 """
 function shfl_sync(
     thread_mask::Value,
@@ -2852,8 +2919,8 @@ end
 
 Collectively store one or more matrices across all threads in a warp to the
 location indicated by the address operand \$ptr in shared memory.
-[For more information, see PTX ISA]
-(https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-store-instruction-stmatrix)
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-store-instruction-stmatrix)
 """
 function stmatrix(ptr::Value, sources::Vector{Value}; layout, location=Location())
     op_ty_results = IR.Type[]
@@ -2883,6 +2950,96 @@ function bar_warp_sync(mask::Value; location=Location())
 
     return create_operation(
         "nvvm.bar.warp.sync",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`tcgen05_alloc`
+
+The `tcgen05.alloc` Op allocates tensor core memory for
+the amount specified by `nCols` and writes the destination
+address to the `addr` argument. The `nCols` operand specifies the
+number of columns to be allocated and it must be a power-of-two.
+[For more information, refer to the PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-memory-alloc-manage-instructions)
+"""
+function tcgen05_alloc(addr::Value, nCols::Value; group=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[addr, nCols]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(group) && push!(attributes, namedattribute("group", group))
+
+    return create_operation(
+        "nvvm.tcgen05.alloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`tcgen05_dealloc`
+
+The `tcgen05.dealloc` Op de-allocates the tensor core memory
+specified by `tmemAddr`, which must be from a previous tensor
+memory allocation. The `nCols` operand specifies the number
+of columns to be de-allocated, and it must be a power-of-two.
+[For more information, refer to the PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-memory-alloc-manage-instructions)
+"""
+function tcgen05_dealloc(taddr::Value, nCols::Value; group=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[taddr, nCols]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(group) && push!(attributes, namedattribute("group", group))
+
+    return create_operation(
+        "nvvm.tcgen05.dealloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`tcgen05_relinquish_alloc_permit`
+
+The `tcgen05.relinquish_alloc_permit` Op specifies that the CTA
+of the executing thread is relinquishing the right to allocate
+Tensor Memory. So, it is illegal for a CTA to perform `tcgen05.alloc`
+after any of its constituent threads execute `tcgen05.relinquish_alloc_permit`.
+[For more information, refer to the PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-memory-alloc-manage-instructions)
+"""
+function tcgen05_relinquish_alloc_permit(; group=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(group) && push!(attributes, namedattribute("group", group))
+
+    return create_operation(
+        "nvvm.tcgen05.relinquish_alloc_permit",
         location;
         operands,
         owned_regions,
