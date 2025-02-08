@@ -160,10 +160,10 @@ function initialize_dialect()
         registry[]::MLIR.API.MlirDialectRegistry
     )::Cvoid
     if !passes_initialized[]
-      @ccall MLIR.API.mlir_c.InitializePasses(
-          registry[]::MLIR.API.MlirDialectRegistry
-      )::Cvoid
-      passes_initialized[] = true
+        @ccall MLIR.API.mlir_c.InitializePasses(
+            registry[]::MLIR.API.MlirDialectRegistry
+        )::Cvoid
+        passes_initialized[] = true
     end
     return nothing
 end
