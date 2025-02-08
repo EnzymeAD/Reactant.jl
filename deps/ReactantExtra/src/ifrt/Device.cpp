@@ -11,10 +11,10 @@ auto reactant::convert(Type<span<xla::ifrt::Device*>>, xla::ifrt::DeviceList* de
     return convert(Type<span<xla::ifrt::Device*>>(), dev_list->devices());
 }
 
-auto reactant::convert(Type<xla::ifrt::DeviceList*>, span<xla::ifrt::Device*> dev_list) -> xla::ifrt::DeviceList*
+auto reactant::convert(Type<tsl::RCReference<xla::ifrt::DeviceList>>, span<xla::ifrt::Device*> dev_list) -> tsl::RCReference<xla::ifrt::DeviceList>
 {
     auto tmp = span<xla::ifrt::Device* const>(dev_list.size(), dev_list.ptr);
-    return xla::ifrt::BasicDeviceList::Create(convert(Type<absl::Span<xla::ifrt::Device* const>>(), tmp)).release();
+    return xla::ifrt::BasicDeviceList::Create(convert(Type<absl::Span<xla::ifrt::Device* const>>(), tmp));
 }
 
 extern "C" Client* ifrt_device_client(Device* device)

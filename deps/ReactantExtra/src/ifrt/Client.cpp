@@ -16,16 +16,16 @@ extern "C" Array* ifrt_client_make_array_from_host_buffer(Client* client, const 
         byte_strides = convert(Type<absl::Span<const int64_t>>(), c_byte_strides);
 
     absl::Nonnull<std::shared_ptr<const Sharding>> sharding = std::shared_ptr<const Sharding>(c_sharding);
-    return MyValueOrThrow(client->MakeArrayFromHostBuffer(
+    return capture_rcreference(MyValueOrThrow(client->MakeArrayFromHostBuffer(
         data, dtype, shape, byte_strides, sharding, semantics, nullptr
-    )).release();
+    )));
 }
 
 extern "C" Array* ifrt_client_assemble_from_single_device_arrays(Client* client, Shape& shape, const Sharding* c_sharding, span<Array*> c_arrays, ArrayCopySemantics copy_semantics, SingleDeviceShardSemantics shard_semantics)
 {
     absl::Nonnull<std::shared_ptr<const Sharding>> sharding = std::shared_ptr<const Sharding>(c_sharding);
     auto arrays = convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_arrays);
-    return MyValueOrThrow(client->AssembleArrayFromSingleDeviceArrays(shape, sharding, arrays, copy_semantics, shard_semantics)).release();
+    return capture_rcreference(MyValueOrThrow(client->AssembleArrayFromSingleDeviceArrays(shape, sharding, arrays, copy_semantics, shard_semantics)));
 }
 
 extern "C" span<Array*> ifrt_client_copy_arrays(Client* client, span<Array*> c_arrays, span<Device* const> c_devices, MemoryKind* c_memory_kind, ArrayCopySemantics semantics)
@@ -65,7 +65,7 @@ extern "C" Tuple* ifrt_client_make_tuple(Client* client, span<Array*> c_arrays)
         values_ptr[i] = tsl::RCReference<Value>(arrays[i]);
     }
     auto values = absl::Span<tsl::RCReference<Value>>(values_ptr, arrays.size());
-    return MyValueOrThrow(client->MakeTuple(values)).release();
+    return capture_rcreference(MyValueOrThrow(client->MakeTuple(values)));
 }
 
 extern "C" const char* ifrt_client_runtime_type(Client* client)
@@ -136,8 +136,7 @@ extern "C" Compiler* ifrt_client_default_compiler(Client* client)
 
 extern "C" Topology* ifrt_client_get_topology_for_devices(Client* client, span<Device*> c_devices)
 {
-    auto devices = tsl::RCReference<DeviceList>();
-    devices.reset(convert(Type<DeviceList*>(), c_devices));
+    auto devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices);
     return reactant::capture_shared(MyValueOrThrow(client->GetTopologyForDevices(devices)));
 }
 

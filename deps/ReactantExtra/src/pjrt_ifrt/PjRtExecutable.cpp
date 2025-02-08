@@ -1,5 +1,6 @@
 #include "src/type_conversion.hpp"
 #include "src/error_handling.hpp"
+#include "src/memory_management.hpp"
 #include "xla/python/pjrt_ifrt/pjrt_executable.h"
 
 using namespace xla::ifrt;
@@ -7,7 +8,7 @@ using namespace reactant;
 
 // TODO is there any problem with ownership by using `std::shared_ptr` here?
 extern "C" Executable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable* c_pjrt_executable) {
-    auto pjrt_executable = std::shared_ptr<xla::PjRtExecutable>(c_pjrt_executable);
+    auto pjrt_executable = get_or_insert_shared(c_pjrt_executable);
     return MyValueOrThrow(PjRtExecutable::Create(pjrt_executable)).release();
 }
 

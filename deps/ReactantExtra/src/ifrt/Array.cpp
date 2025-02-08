@@ -34,7 +34,7 @@ extern "C" span<Array*> ifrt_array_disassemble_into_single_device_arrays(Array* 
 
 extern "C" Array* ifrt_array_fully_replicated_shard(Array* array, ArrayCopySemantics copy_semantics)
 {
-    return MyValueOrThrow(array->FullyReplicatedShard(copy_semantics)).release();
+    return capture_rcreference(MyValueOrThrow(array->FullyReplicatedShard(copy_semantics)));
 }
 
 extern "C" Future<>* ifrt_array_copy_to_host_buffer(Array* array, void* data, const int64_t* byte_strides, int semantics)
