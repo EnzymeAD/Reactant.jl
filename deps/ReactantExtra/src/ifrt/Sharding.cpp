@@ -7,6 +7,7 @@
 #include "xla/python/ifrt/index_domain.h"
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device_list.h"
+#include "xla/tsl/concurrency/ref_count.h"
 #include <optional>
 #include <tuple>
 
@@ -115,9 +116,35 @@ extern "C" SingleDeviceSharding* ifrt_single_device_sharding_ctor(Device* device
     return SingleDeviceSharding::Create(device, *memory_kind).release();
 }
 
-// TODO OpaqueSharding
-// TODO ConcreteSharding
-// TODO ConcreteEvenSharding
-// TODO ShardingParamsSharding
+// OpaqueSharding
+extern "C" OpaqueSharding* ifrt_opaque_sharding_ctor(span<Device*> c_devices, MemoryKind* memory_kind)
+{
+    auto devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
+    return new OpaqueSharding(devices, *memory_kind).release();
+}
 
+// ConcreteSharding
+extern "C" ConcreteSharding* ifrt_concrete_sharding_ctor_shape(span<Device*> c_devices, MemoryKind* memory_kind, Shape* shape, span<Shape*> c_shard_shapes)
+{
+    auto devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
+    auto shard_shape = convert(Type<std::vector<Shape>>(), c_shard_shapes);
+    return new ConcreteSharding(devices, *memory_kind, *shape, shard_shape).release();
+}
+
+extern "C" ConcreteSharding* ifrt_concrete_sharding_ctor_dynamicshape(span<Device*> c_devices, MemoryKind* memory_kind, DynamicShape* shape, span<DynamicShape*> c_shard_shapes)
+{
+    auto devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
+    auto shard_shape = convert(Type<std::vector<DynamicShape>>(), c_shard_shapes);
+    return new ConcreteSharding(devices, *memory_kind, *shape, shard_shape).release();
+}
+
+// ConcreteEvenSharding
+extern "C" ConcreteEvenSharding* ifrt_concrete_even_sharding_ctor(span<Device*> c_devices, MemoryKind* memory_kind, Shape* shape, Shape* shard_shape)
+{
+    auto devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
+    auto is_fully_replicated = false; // NOTE might be removed in the future
+    return ConcreteEvenSharding::Create(devices, *memory_kind, *shape, *shard_shape, is_fully_replicated).release();
+}
+
+// TODO ShardingParamsSharding
 // TODO DeserializeShardingOptions
