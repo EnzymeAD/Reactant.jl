@@ -412,13 +412,12 @@ LowerKernelStatePass() = LLVM.NewPMFunctionPass("LowerKernelStatePass", noop_pas
 CleanupKernelStatePass() = LLVM.NewPMModulePass("CleanupKernelStatePass", noop_pass)
 
 # From https://github.com/JuliaGPU/GPUCompiler.jl/blob/7b9322faa34685026c4601a5084eecf5a5d7f3fe/src/ptx.jl#L149
-function vendored_optimize_module!(@nospecialize(job),
-                                   mod::LLVM.Module,
-                                   instcombine::Bool=false
-    )
+function vendored_optimize_module!(
+    @nospecialize(job), mod::LLVM.Module, instcombine::Bool=false
+)
     tm = GPUCompiler.llvm_machine(job.config.target)
     # TODO: Use the registered target passes (JuliaGPU/GPUCompiler.jl#450)
-    LLVM.@dispose pb=LLVM.NewPMPassBuilder() begin
+    LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
         LLVM.register!(pb, GPUCompiler.NVVMReflectPass())
 
         LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
@@ -437,8 +436,7 @@ function vendored_optimize_module!(@nospecialize(job),
                 LLVM.add!(fpm, LLVM.InstSimplifyPass())        # clean-up redundancy
             end
             LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
-                LLVM.add!(lpm, LLVM.LICMPass())           # the inner runtime check might be
-                                                # outer loop invariant
+                LLVM.add!(lpm, LLVM.LICMPass())           # the inner runtime check might be outer loop invariant
             end
 
             # the above loop unroll pass might have unrolled regular, non-runtime nested loops.
