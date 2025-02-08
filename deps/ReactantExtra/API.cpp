@@ -852,14 +852,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
 #include "mlir/Target/LLVMIR/Dialect/NVVM/LLVMIRToNVVMTranslation.h"
 #include "xla/service/spmd/shardy/sdy_round_trip/pipelines.h"
 
-extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
-  mlir::DialectRegistry &registry = *unwrap(creg);
-  prepareRegistry(registry);
-
-  mlir::registerLLVMDialectImport(registry);
-  mlir::registerNVVMDialectImport(registry);
-  mlir::LLVM::registerInlinerInterface(registry);
-
+extern "C" void InitializePasses(MlirDialectRegistry creg) {
   mlir::registerenzymePasses();
   enzyme::registerenzymexlaPasses();
 
@@ -899,6 +892,16 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   // xla + shardy specific passes
   xla::sdy::registerSdyRoundTripExportPipeline();
   xla::sdy::registerSdyRoundTripImportPipeline();
+}
+
+extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
+  mlir::DialectRegistry &registry = *unwrap(creg);
+  prepareRegistry(registry);
+
+  mlir::registerLLVMDialectImport(registry);
+  mlir::registerNVVMDialectImport(registry);
+  mlir::LLVM::registerInlinerInterface(registry);
+
 }
 
 /// Returns an unused symbol in `module` for `oldSymbolName` by trying numeric
