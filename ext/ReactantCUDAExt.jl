@@ -436,8 +436,7 @@ function vendored_optimize_module!(
                 LLVM.add!(fpm, LLVM.InstSimplifyPass())        # clean-up redundancy
             end
             LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
-                LLVM.add!(lpm, LLVM.LICMPass())           # the inner runtime check might be
-                # outer loop invariant
+                LLVM.add!(lpm, LLVM.LICMPass())           # the inner runtime check might be outer loop invariant
             end
 
             # the above loop unroll pass might have unrolled regular, non-runtime nested loops.
