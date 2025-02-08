@@ -558,6 +558,9 @@ end
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 
+
+const Raise = Ref{Bool}(false)
+
 function compile_mlir!(
     mod,
     f,
@@ -607,16 +610,33 @@ function compile_mlir!(
     end
 
     if backend == "cpu"
-        kern = "lower-kernel{backend=cpu},canonicalize,lower-jit{openmp=true backend=cpu},symbol-dce"
+        kern = "lower-kernel{backend=cpu},canonicalize"
+        jit = "lower-jit{openmp=true backend=cpu},symbol-dce"
     elseif DEBUG_KERNEL[]
         curesulthandler = dlsym(
             Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
         )
         @assert curesulthandler !== nothing
         curesulthandler = Base.reinterpret(UInt, curesulthandler)
-        kern = "lower-kernel,canonicalize,lower-jit{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+        kern = if Raise[]
+            "lower-kernel{backend=cpu},canonicalize"
+        else
+            "lower-kernel,canonicalize"
+        end
+        jit = "lower-jit{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     else
-        kern = "lower-kernel,canonicalize,lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+        kern = if Raise[]
+            "lower-kernel{backend=cpu},canonicalize"
+        else
+            "lower-kernel,canonicalize"
+        end
+        jit = "lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+    end
+
+    raise = if Raise[]
+        "convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,llvm-to-affine-access,canonicalize"
+    else
+        "canonicalize"
     end
 
     opt_passes = optimization_passes(; no_nan, sroa=true)
@@ -636,6 +656,8 @@ function compile_mlir!(
                     "enzyme-simplify-math",
                     opt_passes2,
                     kern,
+                    raise,
+                    jit
                 ],
                 ',',
             ),
@@ -653,6 +675,43 @@ function compile_mlir!(
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes2,
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :before_jit
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
+        run_pass_pipeline!(
+            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
+        )
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes2,
+                    kern,
+                    raise,
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :before_raise
+        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
+        run_pass_pipeline!(
+            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
+        )
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes2,
+                    kern
                 ],
                 ',',
             ),
@@ -698,6 +757,8 @@ function compile_mlir!(
                     "enzyme-simplify-math",
                     opt_passes2,
                     kern,
+                    raise,
+                    jit
                 ],
                 ',',
             ),
@@ -708,7 +769,12 @@ function compile_mlir!(
             mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
         )
         run_pass_pipeline!(
-            mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math," * kern
+            mod, join([
+                "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                kern,
+                raise,
+                jit
+               ], ',')
         )
     elseif optimize === :canonicalize
         run_pass_pipeline!(
