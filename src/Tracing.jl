@@ -34,7 +34,7 @@ for T in (
     AbstractFloat,
     Integer,
     RNumber,
-    Val
+    Val,
 )
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(T::Type{<:$T}),

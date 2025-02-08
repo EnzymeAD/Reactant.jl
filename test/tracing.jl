@@ -244,7 +244,7 @@ end
     end
 
     @testset "no trace Val" begin
-        st = (; a = 1, training = Val(true))
+        st = (; a=1, training=Val(true))
         st_traced = Reactant.to_rarray(st; track_numbers=Number)
         @test st_traced.training isa Val{true}
     end
