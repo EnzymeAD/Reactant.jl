@@ -153,23 +153,18 @@ export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace, withi
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
-const passes_initialized = Ref(false)
+const initialize_dialect_first_run = Ref{Bool}(true)
+
 function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistry(
+    @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
         registry[]::MLIR.API.MlirDialectRegistry
     )::Cvoid
-    if !passes_initialized[]
-      @ccall MLIR.API.mlir_c.InitializePasses(
-          registry[]::MLIR.API.MlirDialectRegistry
-      )::Cvoid
-      passes_initialized[] = true
-    end
+    initialize_dialect_first_run[] = false
     return nothing
 end
 
 function deinitialize_dialect()
-    passes_initialized[] = false
     return registry[] = nothing
 end
 

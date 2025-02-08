@@ -202,7 +202,7 @@ function create_result(
 end
 
 # Optimization passes via transform dialect
-function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Bool=true)
+function optimization_passes(; no_nan::Bool=false, sroa::Bool=false)
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
         "transpose_transpose<16>",
@@ -389,8 +389,6 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "common_compare_expression_rewrite",
         "compare_select_simplify",
         "while_simplify<1>",
-        "scatter_update_computation_const_prop",
-        "if_remove_unused",
     ]
     if no_nan
         append!(
@@ -409,10 +407,7 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         ",",
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
-    passes = String[]
-    if inline
-        push!(passes, "inline{default-pipeline=canonicalize max-iterations=4}")
-    end
+    passes = ["inline{default-pipeline=canonicalize max-iterations=4}"]
     if sroa
         push!(passes, "propagate-constant-bounds")
         if DUMP_LLVMIR[]
@@ -707,14 +702,6 @@ function compile_mlir!(
         )
         run_pass_pipeline!(
             mod, "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math," * kern
-        )
-    elseif optimize === :canonicalize
-        run_pass_pipeline!(
-            mod, "canonicalize"
-        )
-    elseif optimize === :just_batch
-        run_pass_pipeline!(
-            mod, "enzyme-batch"
         )
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")

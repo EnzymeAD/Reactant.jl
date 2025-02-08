@@ -63,10 +63,10 @@ end
     @compile_workload begin
         @static if precompilation_supported()
             x = ConcreteRNumber(2.0; client)
-            Reactant.compile(sin, (x,); client, optimize=:all)
+            Reactant.compile(sin, (x,); client)
 
             y = ConcreteRArray([2.0]; client)
-            Reactant.compile(Base.sum, (y,); client, optimize=:all)
+            Reactant.compile(Base.sum, (y,); client)
         end
     end
     XLA.free_client(client)
