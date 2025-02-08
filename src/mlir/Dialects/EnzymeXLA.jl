@@ -13,6 +13,27 @@ import ...IR:
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
 
+function scope(
+    operands::Vector{Value}; results::Vector{IR.Type}, region::Region, location=Location()
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operands...,]
+    owned_regions = Region[region,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.scope",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function get_stream(; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]

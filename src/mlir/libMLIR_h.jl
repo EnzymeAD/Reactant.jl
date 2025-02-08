@@ -732,6 +732,17 @@ function mlirModuleCreateParse(context, _module)
 end
 
 """
+    mlirModuleCreateParseFromFile(context, fileName)
+
+Parses a module from file and transfers ownership to the caller.
+"""
+function mlirModuleCreateParseFromFile(context, fileName)
+    @ccall mlir_c.mlirModuleCreateParseFromFile(
+        context::MlirContext, fileName::MlirStringRef
+    )::MlirModule
+end
+
+"""
     mlirModuleGetContext(_module)
 
 Gets the context that a module was created with.
@@ -4261,6 +4272,12 @@ function mlirDenseElementsAttrGetUInt64Value(attr, pos)
     )::UInt64
 end
 
+function mlirDenseElementsAttrGetIndexValue(attr, pos)
+    @ccall mlir_c.mlirDenseElementsAttrGetIndexValue(
+        attr::MlirAttribute, pos::intptr_t
+    )::UInt64
+end
+
 function mlirDenseElementsAttrGetFloatValue(attr, pos)
     @ccall mlir_c.mlirDenseElementsAttrGetFloatValue(
         attr::MlirAttribute, pos::intptr_t
@@ -6142,13 +6159,8 @@ function mlirFuncSetArgAttr(op, pos, name, attr)
     )::Cvoid
 end
 
-"""
-    ReactantFuncSetResultAttr(op, pos, name, attr)
-
-Sets the result attribute 'name' of an result at index 'pos'. Asserts that the operation is a FuncOp.
-"""
-function ReactantFuncSetResultAttr(op, pos, name, attr)
-    @ccall mlir_c.ReactantFuncSetResultAttr(
+function mlirFuncSetResultAttr(op, pos, name, attr)
+    @ccall mlir_c.mlirFuncSetResultAttr(
         op::MlirOperation, pos::intptr_t, name::MlirStringRef, attr::MlirAttribute
     )::Cvoid
 end
@@ -6323,6 +6335,15 @@ Returns the pos-th input type.
 """
 function mlirLLVMFunctionTypeGetInput(type, pos)
     @ccall mlir_c.mlirLLVMFunctionTypeGetInput(type::MlirType, pos::intptr_t)::MlirType
+end
+
+"""
+    mlirLLVMFunctionTypeGetReturnType(type)
+
+Returns the return type of the function type.
+"""
+function mlirLLVMFunctionTypeGetReturnType(type)
+    @ccall mlir_c.mlirLLVMFunctionTypeGetReturnType(type::MlirType)::MlirType
 end
 
 """
@@ -9108,6 +9129,80 @@ function mlirTranslateModuleToLLVMIR(_module, context)
     @ccall mlir_c.mlirTranslateModuleToLLVMIR(
         _module::MlirOperation, context::LLVMContextRef
     )::LLVMModuleRef
+end
+
+struct MlirTypeFromLLVMIRTranslator
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirTypeFromLLVMIRTranslatorCreate(ctx)
+
+Create an LLVM::TypeFromLLVMIRTranslator and transfer ownership to the caller.
+"""
+function mlirTypeFromLLVMIRTranslatorCreate(ctx)
+    @ccall mlir_c.mlirTypeFromLLVMIRTranslatorCreate(
+        ctx::MlirContext
+    )::MlirTypeFromLLVMIRTranslator
+end
+
+"""
+    mlirTypeFromLLVMIRTranslatorDestroy(translator)
+
+Takes an LLVM::TypeFromLLVMIRTranslator owned by the caller and destroys it. It is the responsibility of the user to only pass an LLVM::TypeFromLLVMIRTranslator class.
+"""
+function mlirTypeFromLLVMIRTranslatorDestroy(translator)
+    @ccall mlir_c.mlirTypeFromLLVMIRTranslatorDestroy(
+        translator::MlirTypeFromLLVMIRTranslator
+    )::Cvoid
+end
+
+"""
+    mlirTypeFromLLVMIRTranslatorTranslateType(translator, llvmType)
+
+Translates the given LLVM IR type to the MLIR LLVM dialect.
+"""
+function mlirTypeFromLLVMIRTranslatorTranslateType(translator, llvmType)
+    @ccall mlir_c.mlirTypeFromLLVMIRTranslatorTranslateType(
+        translator::MlirTypeFromLLVMIRTranslator, llvmType::LLVMTypeRef
+    )::MlirType
+end
+
+struct MlirTypeToLLVMIRTranslator
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirTypeToLLVMIRTranslatorCreate(ctx)
+
+Create an LLVM::TypeToLLVMIRTranslator and transfer ownership to the caller.
+"""
+function mlirTypeToLLVMIRTranslatorCreate(ctx)
+    @ccall mlir_c.mlirTypeToLLVMIRTranslatorCreate(
+        ctx::LLVMContextRef
+    )::MlirTypeToLLVMIRTranslator
+end
+
+"""
+    mlirTypeToLLVMIRTranslatorDestroy(translator)
+
+Takes an LLVM::TypeToLLVMIRTranslator owned by the caller and destroys it. It is the responsibility of the user to only pass an LLVM::TypeToLLVMIRTranslator class.
+"""
+function mlirTypeToLLVMIRTranslatorDestroy(translator)
+    @ccall mlir_c.mlirTypeToLLVMIRTranslatorDestroy(
+        translator::MlirTypeToLLVMIRTranslator
+    )::Cvoid
+end
+
+"""
+    mlirTypeToLLVMIRTranslatorTranslateType(translator, mlirType)
+
+Translates the given MLIR LLVM dialect to the LLVM IR type.
+"""
+function mlirTypeToLLVMIRTranslatorTranslateType(translator, mlirType)
+    @ccall mlir_c.mlirTypeToLLVMIRTranslatorTranslateType(
+        translator::MlirTypeToLLVMIRTranslator, mlirType::MlirType
+    )::LLVMTypeRef
 end
 
 function stablehloScatterDimensionNumbersGet(
