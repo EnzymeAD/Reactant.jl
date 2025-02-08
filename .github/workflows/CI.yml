@@ -133,15 +133,16 @@ jobs:
           cp LocalPreferences.toml test/
       - name: Install dependencies
         run: |
-          julia --color=yes --project=test -e 'using Pkg; Pkg.add(; url="https://github.com/giordano/Reactant_jll.jl", rev="b6c6f5eb6e9fd40b58f6dea9ee3490f9da8893df"); Pkg.instantiate()'
+          # julia --color=yes --project=test -e 'using Pkg; Pkg.add(; url="https://github.com/giordano/Reactant_jll.jl", rev="b6c6f5eb6e9fd40b58f6dea9ee3490f9da8893df"); Pkg.instantiate()'
+          julia --color=yes --project=test -e 'using Pkg; Pkg.instantiate()'
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - name: Run the test but allow failure
-        run: |
-          julia --color=yes --project=test test/runtests.jl
-        continue-on-error: true
-        env:
-          TF_CPP_MAX_VLOG_LEVEL: 3
+      # - name: Run the test but allow failure
+      #   run: |
+      #     julia --color=yes --project=test test/runtests.jl
+      #   continue-on-error: true
+      #   env:
+      #     TF_CPP_MAX_VLOG_LEVEL: 3
       - name: Install gdb and emacs
         run: |
           sudo apt update
@@ -152,7 +153,7 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: false
-        env:
-          REACTANT_TEST_GROUP: ${{ matrix.test_group }}
+        # env:
+        #   REACTANT_TEST_GROUP: ${{ matrix.test_group }}
         # NOTE: Reproduce failure with
         #     gdb --args julia --color=yes --project=test test/runtests.jl
