@@ -636,6 +636,13 @@ end
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
     ) isa ConcreteRNumber{Float32}
+
+    cond = ConcreteRNumber(true)
+    x = ConcreteRNumber(1.0)
+    @test @jit(ifelse(cond, x, 0.0)) == ConcreteRNumber(1.0)
+    @test @jit(ifelse(cond, 0.0, x)) == ConcreteRNumber(0.0)
+    @test @jit(ifelse(cond, 1.0, 0.0)) == ConcreteRNumber(1.0)
+    @test @jit(ifelse(cond, 0.0, 1.0)) == ConcreteRNumber(0.0)
 end
 
 @testset "fill! and zero on ConcreteRArray" begin
