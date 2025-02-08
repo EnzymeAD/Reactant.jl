@@ -34,6 +34,7 @@ for T in (
     AbstractFloat,
     Integer,
     RNumber,
+    Val,
 )
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(T::Type{<:$T}),
@@ -458,23 +459,6 @@ Base.@nospecializeinfer function traced_type_inner(
     return Core.LLVMPtr{
         traced_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding),A
     }
-end
-
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(VT::Type{<:Val}),
-    seen,
-    @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
-)
-    if VT isa UnionAll
-        return VT
-    end
-    T = VT.parameters[1]
-    if traced_type_inner(typeof(T), seen, mode, track_numbers, sharding) == typeof(T)
-        return Val{T}
-    end
-    throw("Val type $(Val{T}) cannot be traced")
 end
 
 Base.@nospecializeinfer function traced_type_inner(

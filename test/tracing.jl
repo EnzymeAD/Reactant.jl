@@ -242,4 +242,10 @@ end
         x_ra = Reactant.to_rarray(1.0; track_numbers=Number)
         @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRNumber
     end
+
+    @testset "no trace Val" begin
+        st = (; a=1, training=Val(true))
+        st_traced = Reactant.to_rarray(st; track_numbers=Number)
+        @test st_traced.training isa Val{true}
+    end
 end
