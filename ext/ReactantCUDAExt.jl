@@ -459,7 +459,9 @@ function vendored_optimize_module!(
     end
 end
 
-function vendored_buildEarlyOptimizerPipeline(mpm, @nospecialize(job), opt_level; instcombine=false)
+function vendored_buildEarlyOptimizerPipeline(
+    mpm, @nospecialize(job), opt_level; instcombine=false
+)
     LLVM.add!(mpm, LLVM.NewPMCGSCCPassManager()) do cgpm
         # TODO invokeCGSCCCallbacks
         LLVM.add!(cgpm, LLVM.NewPMFunctionPassManager()) do fpm
@@ -496,7 +498,9 @@ function vendored_buildEarlyOptimizerPipeline(mpm, @nospecialize(job), opt_level
     end
 end
 
-function vendored_buildIntrinsicLoweringPipeline(mpm, @nospecialize(job), opt_level; instcombine::Bool=false)
+function vendored_buildIntrinsicLoweringPipeline(
+    mpm, @nospecialize(job), opt_level; instcombine::Bool=false
+)
     GPUCompiler.add!(mpm, LLVM.Interop.RemoveNIPass())
 
     # lower GC intrinsics
@@ -561,7 +565,9 @@ function vendored_buildIntrinsicLoweringPipeline(mpm, @nospecialize(job), opt_le
             else
                 LLVM.add!(fpm, LLVM.InstSimplifyPass())
             end
-            LLVM.add!(fpm, LLVM.SimplifyCFGPass(; GPUCompiler.AggressiveSimplifyCFGOptions...))
+            LLVM.add!(
+                fpm, LLVM.SimplifyCFGPass(; GPUCompiler.AggressiveSimplifyCFGOptions...)
+            )
         end
     end
 
@@ -570,7 +576,7 @@ function vendored_buildIntrinsicLoweringPipeline(mpm, @nospecialize(job), opt_le
 
     # Julia's operand bundles confuse the inliner, so repeat here now they are gone.
     # FIXME: we should fix the inliner so that inlined code gets optimized early-on
-    LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
+    return LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
 end
 
 function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
@@ -595,7 +601,7 @@ function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
         # end
     end
     vendored_buildIntrinsicLoweringPipeline(mpm, job, opt_level)
-    GPUCompiler.buildCleanupPipeline(mpm, job, opt_level)
+    return GPUCompiler.buildCleanupPipeline(mpm, job, opt_level)
 end
 
 # compile to executable machine code

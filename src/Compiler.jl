@@ -416,7 +416,10 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
     if sroa
         push!(passes, "propagate-constant-bounds")
         if DUMP_LLVMIR[]
-            push!(passes, "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true}")
+            push!(
+                passes,
+                "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true}",
+            )
         else
             push!(passes, "sroa-wrappers{instcombine=false instsimplify=true}")
         end
@@ -558,7 +561,6 @@ end
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 
-
 const Raise = Ref{Bool}(false)
 
 function compile_mlir!(
@@ -657,7 +659,7 @@ function compile_mlir!(
                     opt_passes2,
                     kern,
                     raise,
-                    jit
+                    jit,
                 ],
                 ',',
             ),
@@ -711,7 +713,7 @@ function compile_mlir!(
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes2,
-                    kern
+                    kern,
                 ],
                 ',',
             ),
@@ -758,7 +760,7 @@ function compile_mlir!(
                     opt_passes2,
                     kern,
                     raise,
-                    jit
+                    jit,
                 ],
                 ',',
             ),
@@ -769,21 +771,21 @@ function compile_mlir!(
             mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
         )
         run_pass_pipeline!(
-            mod, join([
-                "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                kern,
-                raise,
-                jit
-               ], ',')
+            mod,
+            join(
+                [
+                    "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                    kern,
+                    raise,
+                    jit,
+                ],
+                ',',
+            ),
         )
     elseif optimize === :canonicalize
-        run_pass_pipeline!(
-            mod, "canonicalize"
-        )
+        run_pass_pipeline!(mod, "canonicalize")
     elseif optimize === :just_batch
-        run_pass_pipeline!(
-            mod, "enzyme-batch"
-        )
+        run_pass_pipeline!(mod, "enzyme-batch")
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
     end
