@@ -416,10 +416,12 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
     if sroa
         push!(passes, "propagate-constant-bounds")
         if DUMP_LLVMIR[]
-            push!(passes, "sroa-wrappers{dump_prellvm=true dump_postllvm=true}")
+            push!(passes, "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true}")
         else
-            push!(passes, "sroa-wrappers")
+            push!(passes, "sroa-wrappers{instcombine=false instsimplify=true}")
         end
+        push!(passes, "canonicalize")
+        push!(passes, "sroa-wrappers{instcombine=false instsimplify=true}")
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
         push!(passes, "remove-duplicate-func-def")
