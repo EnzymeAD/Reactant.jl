@@ -198,6 +198,8 @@ function make_mlir_fn(
         push!(linear_args, v)
     end
 
+    @show linear_args
+
     in_tys = if toscalar
         [
             MLIR.IR.TensorType((), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
