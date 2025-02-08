@@ -120,7 +120,7 @@ extern "C" SingleDeviceSharding* ifrt_single_device_sharding_ctor(Device* device
 extern "C" OpaqueSharding* ifrt_opaque_sharding_ctor(span<Device*> c_devices, MemoryKind* memory_kind)
 {
     auto devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
-    return new OpaqueSharding(devices, *memory_kind).release();
+    return OpaqueSharding::Create(devices, *memory_kind).release();
 }
 
 // ConcreteSharding
@@ -128,14 +128,14 @@ extern "C" ConcreteSharding* ifrt_concrete_sharding_ctor_shape(span<Device*> c_d
 {
     auto devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
     auto shard_shape = convert(Type<std::vector<Shape>>(), c_shard_shapes);
-    return new ConcreteSharding(devices, *memory_kind, *shape, shard_shape).release();
+    return ConcreteSharding::Create(devices, *memory_kind, *shape, shard_shape).release();
 }
 
 extern "C" ConcreteSharding* ifrt_concrete_sharding_ctor_dynamicshape(span<Device*> c_devices, MemoryKind* memory_kind, DynamicShape* shape, span<DynamicShape*> c_shard_shapes)
 {
     auto devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
     auto shard_shape = convert(Type<std::vector<DynamicShape>>(), c_shard_shapes);
-    return new ConcreteSharding(devices, *memory_kind, *shape, shard_shape).release();
+    return ConcreteSharding::Create(devices, *memory_kind, *shape, shard_shape).release();
 }
 
 // ConcreteEvenSharding
