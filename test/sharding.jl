@@ -49,3 +49,23 @@ end
         @warn "Not enough addressable devices to run sharding tests"
     end
 end
+
+predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
+
+@testset "Sharding Across 8 Devices" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:7), (4, 2)), ("data", "model"))
+
+        samples_sharding = Sharding.NamedSharding(mesh, (nothing, "data"))
+        w1_sharding = Sharding.NamedSharding(mesh, ("model", nothing))
+
+        samples = ConcreteRArray(rand(Float32, 3, 12); sharding=samples_sharding)
+        w1 = ConcreteRArray(rand(Float32, 4, 3); sharding=w1_sharding)
+        w2 = ConcreteRArray(rand(Float32, 2, 4))
+
+        @test Array(@jit(predict(samples, w1, w2))) ≈
+            predict(Array(samples), Array(w1), Array(w2))
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
