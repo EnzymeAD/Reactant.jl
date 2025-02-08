@@ -794,10 +794,14 @@ function compile_mlir!(
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
     linear_results2 = TracedType[]
+    linear_result_shard_info = []
+    results_mask = falses(length(results))
     for (i, op) in enumerate(results)
         if !MLIR.IR.is_block_arg(op)
             push!(nresults, op)
             push!(linear_results2, linear_results[i])
+            push!(linear_result_shard_info, mlir_fn_res.linear_result_shard_info[i])
+            results_mask[i] = true
             continue
         end
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
@@ -812,11 +816,15 @@ function compile_mlir!(
 
     out_tys2 = [MLIR.IR.type(a) for a in nresults]
 
+    res_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
+    res_attrs isa MLIR.IR.Attribute &&
+        (res_attrs = [res_attrs[i] for (i, present) in enumerate(results_mask) if present])
+
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
         arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
-        res_attrs=MLIR.IR.attr(compiled_f, "res_attrs"),
+        res_attrs,
         no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
         body=MLIR.IR.Region(),
     )
@@ -837,7 +845,7 @@ function compile_mlir!(
         linear_args,
         in_tys,
         linear_results2,
-        mlir_fn_res.linear_result_shard_info,
+        Tuple(linear_result_shard_info),
         mlir_fn_res.num_partitions,
         mlir_fn_res.num_replicas,
         mlir_fn_res.is_sharded,
