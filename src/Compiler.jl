@@ -1377,24 +1377,19 @@ function compile_xla(f, args; client=nothing, kwargs...)
             mlir_fn_res.is_sharded,
         )
 
-        mlir_fn_res.num_partitions > 1 && (device = nothing)
-
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
         # compile MLIR module to XLA executable
-        is_sharded = mlir_fn_res.num_partitions > 1
-        if is_sharded
-            # mesh_shape = collect(Int64, size(mlir_fn_res.sharding_mesh))
-            mesh_ids = collect(Int64, vec(mlir_fn_res.sharding_mesh.device_ids))
+        mlir_fn_res.is_sharded && (device = nothing)
+        mesh_ids = if mlir_fn_res.is_sharded
+            collect(Int64, vec(mlir_fn_res.sharding_mesh.device_ids))
         else
-            # mesh_shape = Int64[]
-            mesh_ids = Int64[]
+            Int64[]
         end
-        # exec = XLA.Compile(client, device, mod; is_sharded, mesh_ids, mesh_shape)
-        exec = XLA.Compile(client, device, mod; is_sharded, mesh_ids)
+        exec = XLA.Compile(client, device, mod; mlir_fn_res.is_sharded, mesh_ids)
 
         return exec, mlir_fn_res, device, client
     finally
