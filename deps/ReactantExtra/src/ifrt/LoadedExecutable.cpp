@@ -119,7 +119,7 @@ extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(Loa
 
     std::optional<tsl::RCReference<DeviceList>> devices;
     if (!c_devices.empty())
-        devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
+        devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices);
 
     auto exec_res = MyValueOrThrow(executable->Execute(args, options, devices));
 

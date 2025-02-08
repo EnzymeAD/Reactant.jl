@@ -73,7 +73,7 @@ extern "C" DynamicShape* ifrt_pjrt_array_dynamic_shape(PjRtArray* array) {
 extern "C" Array* ifrt_pjrt_array_copy(PjRtArray* array, span<xla::ifrt::Device*> c_devices, MemoryKind* c_memory_kind, ArrayCopySemantics semantics) {
     std::optional<tsl::RCReference<xla::ifrt::DeviceList>> devices;
     if (!c_devices.empty())
-        devices = tsl::FormRef(convert(Type<DeviceList*>(), c_devices));
+        devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices);
 
     std::optional<xla::ifrt::MemoryKind> memory_kind;
     if (c_memory_kind != nullptr)

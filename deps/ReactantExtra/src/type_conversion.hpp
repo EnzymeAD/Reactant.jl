@@ -4,12 +4,15 @@
 #include "absl/types/span.h"
 #include "xla/tsl/concurrency/ref_count.h"
 #include "xla/python/ifrt/device.h"
-#include "xla/python/ifrt/device_list.h"
 #include "memory_management.hpp"
 #include <type_traits>
 #include <optional>
 #include <vector>
 #include <memory>
+
+namespace xla::ifrt {
+class DeviceList;
+}
 
 namespace reactant {
 template <typename T>
@@ -156,6 +159,6 @@ auto convert(Type<std::optional<T>>, T value) -> std::optional<T>
 
 // special case for DeviceList
 auto convert(Type<span<xla::ifrt::Device*>>, xla::ifrt::DeviceList* dev_list) -> span<xla::ifrt::Device*>;
-auto convert(Type<xla::ifrt::DeviceList*>, span<xla::ifrt::Device*> dev_list) -> xla::ifrt::DeviceList*;
+auto convert(Type<tsl::RCReference<xla::ifrt::DeviceList>>, span<xla::ifrt::Device*> dev_list) -> tsl::RCReference<xla::ifrt::DeviceList>;
 
 } // namespace reactant
