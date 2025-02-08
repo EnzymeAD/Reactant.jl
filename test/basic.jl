@@ -2,6 +2,8 @@ using Reactant
 using Test
 using Enzyme
 using Statistics
+using Random
+Random.seed!(123)
 
 fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
 
