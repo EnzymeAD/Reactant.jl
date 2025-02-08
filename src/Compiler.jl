@@ -389,6 +389,8 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "common_compare_expression_rewrite",
         "compare_select_simplify",
         "while_simplify<1>",
+        "scatter_update_computation_const_prop",
+        "if_remove_unused",
     ]
     if no_nan
         append!(
