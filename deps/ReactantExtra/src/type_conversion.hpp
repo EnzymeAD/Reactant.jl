@@ -76,6 +76,16 @@ auto convert(Type<span<T*>>, std::vector<T> vec) -> span<T*>
 }
 
 template <typename T>
+auto convert(Type<std::vector<T>>, span<T*> vec) -> std::vector<T>
+{
+    std::vector<T> result;
+    for (int i = 0; i < vec.size(); i++) {
+        result.push_back(*(vec[i]));
+    }
+    return result;
+}
+
+template <typename T>
 auto convert(Type<span<T*>>, std::vector<std::unique_ptr<T>> vec) -> span<T*> {
     T** ptr = new T*[vec.size()];
     for (int i = 0; i < vec.size(); i++) {
