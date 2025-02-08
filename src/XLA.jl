@@ -1,14 +1,81 @@
 module XLA
 
+import ..Reactant
 import ...MLIR
+
+const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
+const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
+using Reactant_jll
+const CUDA_DATA_DIR = Ref(
+    isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
+)
+
+function LLVMclopts(opts...)
+    args = ["", opts...]
+    @ccall MLIR.API.mlir_c.ReactantLLVMParseCommandLineOptions(
+        length(args)::Cint, args::Ptr{Cstring}, C_NULL::Ptr{Cvoid}
+    )::Cvoid
+end
 
 mutable struct Client
     client::Ptr{Cvoid}
+    global_ordinals::Vector{Cint}
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        return new(client)
+        global_ordinals = Cint[]
+
+        client = new(client, global_ordinals)
+
+        # https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L127
+        devices = [
+            ClientGetAddressableDevice(client, i - 1) for
+            i in 1:ClientNumAddressableDevices(client)
+        ]
+        sort!(devices; lt=(a, b) -> DeviceGetLocalDeviceId(a) < DeviceGetLocalDeviceId(b))
+
+        local_ids = [DeviceGetLocalDeviceId(device) + 1 for device in devices]
+        max_local_id = maximum(local_ids)
+        resize!(global_ordinals, max_local_id)
+        global_ordinals .= -1
+        for (i, device) in enumerate(devices)
+            global_ordinals[local_ids[i]] = i - 1
+        end
+        return client
     end
+end
+
+Base.:(==)(a::Client, b::Client) = a.client == b.client
+
+struct Device
+    device::Ptr{Cvoid}
+end
+
+function client(device::Device)
+    GC.@preserve device begin
+        return Client(
+            @ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
+        )
+    end
+end
+
+function device_ordinal(client::Client, device::Device)
+    return client.global_ordinals[DeviceGetLocalDeviceId(device) + 1]
+end
+
+function device_ordinal(client::Client, local_device_id::Int)
+    return client.global_ordinals[local_device_id + 1]
+end
+
+function DeviceToString(device::Device)
+    pjrtclient = client(device)
+    platform_name = ClientGetPlatformName(pjrtclient)
+    return "$(uppercase(platform_name)):$(device_ordinal(pjrtclient, device))"
+end
+
+function Base.show(io::IO, ::MIME"text/plain", device::Device)
+    print(io, "Device($(device.device), name=\"$(DeviceToString(device))\")")
+    return nothing
 end
 
 @inline function free_client(client::Client)
@@ -50,29 +117,31 @@ function CPUClient(asynchronous=false, node_id=0, num_nodes=1; checkcount=true)
     end
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeCPUClient")
     client = ccall(f, Ptr{Cvoid}, (UInt, Cint, Cint), asynchronous, node_id, num_nodes)
+    LLVMclopts("-nvptx-fma-level=1")
     #client = @ccall MLIR.API.mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint, num_nodes::Cint)::Ptr{Cvoid}
     return Client(client)
 end
 
 function GPUClient(node_id=0, num_nodes=1, platform="gpu")
-    #allowed_devices = [-1]
-    # GC.@preserve allowed_devices begin
     f = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "MakeGPUClient")
     refstr = Ref{Cstring}()
     client = ccall(
         f,
         Ptr{Cvoid},
-        (Cint, Cint, Ptr{Cvoid}, Cint, Cstring, Ptr{Cstring}),
+        (Cint, Cint, Ptr{Cvoid}, Cint, Cdouble, Bool, Cstring, Ptr{Cstring}),
         node_id,
         num_nodes,
         C_NULL,
         0,
+        XLA_REACTANT_GPU_MEM_FRACTION[],
+        XLA_REACTANT_GPU_PREALLOCATE[],
         platform,
         refstr,
     )
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
+    LLVMclopts("-nvptx-fma-level=1")
     return Client(client)
 end
 
@@ -83,6 +152,7 @@ function TPUClient(tpu_path::String)
     if client == C_NULL
         throw(AssertionError(unsafe_string(refstr[])))
     end
+    LLVMclopts("-nvptx-fma-level=1")
     return Client(client)
 end
 
@@ -114,8 +184,20 @@ function __init__()
     backends["cpu"] = cpu
     default_backend[] = cpu
 
+    if haskey(ENV, "XLA_REACTANT_GPU_MEM_FRACTION")
+        XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
+            Float64, ENV["XLA_REACTANT_GPU_MEM_FRACTION"]
+        )
+        @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[]
+    end
+
+    if haskey(ENV, "XLA_REACTANT_GPU_PREALLOCATE")
+        XLA_REACTANT_GPU_PREALLOCATE[] = parse(Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"])
+        @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[]
+    end
+
     @static if !Sys.isapple()
-        if isfile("/usr/lib/libtpu.so")
+        if Reactant.has_tpu()
             dataset_dir = @get_scratch!("libtpu")
             if !isfile(dataset_dir * "/libtpu.so")
                 Downloads.download(
@@ -135,16 +217,19 @@ function __init__()
                 println(stdout, e)
             end
         else
-            try
-                gpu = GPUClient()
-                backends["gpu"] = gpu
-                default_backend[] = gpu
-            catch e
-                println(stdout, e)
+            if !Reactant.precompiling()
+                try
+                    gpu = GPUClient()
+                    backends["gpu"] = gpu
+                    default_backend[] = gpu
+                catch e
+                    println(stdout, e)
+                end
             end
         end
     end
 
+    @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
     # This wasn't properly exported on macos, we'll remove the try once macOS JLL
@@ -194,13 +279,17 @@ mutable struct Buffer
     end
 end
 
-struct Device
-    device::Ptr{Cvoid}
+function Base.ndims(buffer::Buffer)
+    GC.@preserve buffer begin
+        return @ccall MLIR.API.mlir_c.BufferNDimensions(buffer.buffer::Ptr{Cvoid})::Cint
+    end
 end
 
-mutable struct AsyncBuffer
-    buffer::Buffer
-    future::Union{Future,Nothing}
+function Base.size(buffer::Buffer)
+    GC.@preserve buffer begin
+        sz = @ccall MLIR.API.mlir_c.BufferShape(buffer.buffer::Ptr{Cvoid})::Ptr{Int64}
+    end
+    return [unsafe_load(sz, i) for i in 1:ndims(buffer)]
 end
 
 function device(buffer::Buffer)
@@ -210,6 +299,7 @@ function device(buffer::Buffer)
         )
     end
 end
+
 function client(buffer::Buffer)
     GC.@preserve buffer begin
         return Client(
@@ -217,18 +307,20 @@ function client(buffer::Buffer)
         )
     end
 end
-function device(buffer::AsyncBuffer)
-    return device(buffer.buffer)
+
+mutable struct AsyncBuffer
+    buffer::Buffer
+    future::Union{Future,Nothing}
 end
-function client(buffer::AsyncBuffer)
-    return client(buffer.buffer)
+
+for op in (:(Base.ndims), :(Base.size), :device, :client)
+    @eval $op(buffer::AsyncBuffer) = $op(buffer.buffer)
 end
-function client(device::Device)
-    GC.@preserve device begin
-        return Client(
-            @ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
-        )
-    end
+
+function client(buffers::Union{Array{<:AsyncBuffer},NTuple{<:Any,AsyncBuffer}})
+    all_clients = map(client, buffers)
+    @assert allequal(all_clients) "All buffers must have the same client"
+    return first(all_clients)
 end
 
 # To keep in sync with JLAllocatorStats in ReactantExtra/API.cpp
@@ -246,6 +338,24 @@ struct JLAllocatorStats
     peak_pool_bytes::Int64
 end
 
+"""
+  AllocatorStats()
+
+Contains the following fields:
+  - `num_allocs`
+  - `bytes_in_use`
+  - `peak_bytes_in_use`
+  - `largest_alloc_size`
+  - `bytes_limit`
+  - `bytes_reserved`
+  - `peak_bytes_reserved`
+  - `bytes_reservable_limit`
+  - `largest_free_block_bytes`
+  - `pool_bytes`
+  - `peak_pool_bytes`
+
+It should be constructed using the [`allocatorstats`](@ref) function.
+"""
 struct AllocatorStats
     num_allocs::Int64
     bytes_in_use::Int64
@@ -260,8 +370,16 @@ struct AllocatorStats
     peak_pool_bytes::Union{Nothing,Int64}
 end
 
+"""
+  allocatorstats([device])
+
+Return an [`AllocatorStats`](@ref) instance with information about the device specific allocator.
+
+!!! warning
+    This method is currently not implemented for the CPU device.
+"""
 function allocatorstats(
-    device::Device=ClientGetDevice(default_backend[], default_device_idx[])
+    device::Device=ClientGetAddressableDevice(default_backend[], default_device_idx[])
 )
     ref = Ref{JLAllocatorStats}()
     @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
@@ -303,6 +421,12 @@ end
 @inline primitive_type(::Type{Float16}) = 10
 @inline primitive_type(::Type{Float32}) = 11
 
+@inline primitive_type(::Type{Reactant.F8E5M2}) = 19
+@inline primitive_type(::Type{Reactant.F8E4M3FN}) = 20
+@inline primitive_type(::Type{Reactant.F8E4M3B11FNUZ}) = 23
+@inline primitive_type(::Type{Reactant.F8E5M2FNUZ}) = 24
+@inline primitive_type(::Type{Reactant.F8E4M3FNUZ}) = 25
+
 @static if isdefined(Core, :BFloat16)
     @inline primitive_type(::Type{Core.BFloat16}) = 16
 end
@@ -340,11 +464,12 @@ function UnsafeBufferPointer(buffer::Buffer)
     @ccall MLIR.API.mlir_c.UnsafeBufferPointer(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
 end
 
-function CopyBufferToDevice(buffer::Buffer, device::Device)
-    GC.@preserve buffer device begin
+function CopyBufferToDevice(buffer::Buffer, dev::Device)
+    device(buffer) == dev && return buffer
+    GC.@preserve buffer dev begin
         Buffer(
             @ccall MLIR.API.mlir_c.CopyBufferToDevice(
-                buffer.buffer::Ptr{Cvoid}, device.device::Ptr{Cvoid}
+                buffer.buffer::Ptr{Cvoid}, dev.device::Ptr{Cvoid}
             )::Ptr{Cvoid}
         )
     end
@@ -356,24 +481,44 @@ function BufferOnCPU(buffer::Buffer)
     end
 end
 
-function execute_ir(N, n_outs, fn)
+function execute_ir(N, M, n_outs, fn, with_device::Bool, nmesh_ids::Int64)
     ptr = sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
     cint = sizeof(Cint) == sizeof(Int64) ? "i64" : "i32"
-    args = N > 0 ? ", [$N x $ptr] %inps, [$N x i8] %donated" : ""
+    args = N > 0 ? ", [$N x $ptr] %inps, [$M x i8] %donated" : ""
+    if with_device
+        args = "$ptr %dev $args"
+    else
+        args = "[$nmesh_ids x $ptr] %mesh_ids $args"
+    end
+
     stores = N > 0 ? """
 store [$N x $ptr] %inps, [$N x $ptr]* %inpa
-store [$N x i8] %donated, [$N x i8]* %dona
+store [$M x i8] %donated, [$M x i8]* %dona
     """ : ""
 
-    res = """define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec $args) alwaysinline {
+    if !with_device
+        stores *= """
+store [$nmesh_ids x $ptr] %mesh_ids, [$nmesh_ids x $ptr]* %mesha
+        """
+    end
+
+    extra_str1 = with_device ? "$ptr" : "[$nmesh_ids x $ptr]*, i64"
+    extra_str2 = if with_device
+        "$ptr %dev"
+    else
+        "[$(nmesh_ids) x $ptr]* nocapture readonly %mesha, i64 $(nmesh_ids)"
+    end
+
+    res = """define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, $args) alwaysinline {
 entry:
     %inpa = alloca [$N x $ptr]
-    %dona = alloca [$N x i8]
+    %dona = alloca [$M x i8]
     %outa = alloca [$n_outs x $ptr]
     %futpa = alloca [$n_outs x $ptr]
+    %mesha = alloca [$nmesh_ids x $ptr]
     $stores
     %futa = alloca i8
-    call void inttoptr ($ptr $fn to void ($ptr, $cint, [$N x $ptr]*, [$N x i8]*, $cint, [$n_outs x $ptr]*, i8*, [$n_outs x $ptr]*)*)($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, [$N x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
+    call void inttoptr ($ptr $fn to void ($ptr, $cint, [$N x $ptr]*, $extra_str1, [$M x i8]*, $cint, [$n_outs x $ptr]*, i8*, [$n_outs x $ptr]*)*)($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
     %out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
     %fut = load i8, i8* %futa
     %futp = load [$n_outs x $ptr], [$n_outs x $ptr]* %futpa
@@ -386,15 +531,16 @@ entry:
     return res
 end
 
-@generated function ExecutableCall(
+@generated function ExecutableCallSharded(
     exec::LoadedExecutable,
+    device::Device,
     inputs::NTuple{N,Ptr{Cvoid}},
     donated_args::NTuple{N,UInt8},
     ::Val{n_outs},
 ) where {N,n_outs}
-    sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecute")
+    sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecuteSharded")
     xla_execute_fn = reinterpret(UInt, sym0)
-    ir = execute_ir(N, n_outs, xla_execute_fn)
+    ir = execute_ir(N, N, n_outs, xla_execute_fn, true, 0)
     results = []
     for i in 1:n_outs
         push!(
@@ -403,17 +549,23 @@ end
         )
     end
 
-    args_type = N > 0 ? (Ptr{Cvoid}, NTuple{N,Ptr{Cvoid}}, NTuple{N,UInt8}) : (Ptr{Cvoid},)
+    args_type = if N > 0
+        (Ptr{Cvoid}, Ptr{Cvoid}, NTuple{N,Ptr{Cvoid}}, NTuple{N,UInt8})
+    else
+        (Ptr{Cvoid}, Ptr{Cvoid})
+    end
     args = N > 0 ? (:inputs, :donated_args) : ()
     return quote
         Base.@_inline_meta
         exec = exec.exec
-        GC.@preserve exec begin
+        device = device.device
+        GC.@preserve exec device begin
             outputs, future_res, future = Base.llvmcall(
                 ($ir, "f"),
                 Tuple{NTuple{n_outs,Ptr{Cvoid}},NTuple{n_outs,Ptr{Cvoid}},Bool},
                 Tuple{$args_type...},
                 exec,
+                device,
                 $(args...),
             )
         end
@@ -421,23 +573,72 @@ end
     end
 end
 
-@inline function ExecutableCall0(
+# XXX: Fix this
+# @generated function ExecutableCall(
+#     exec::LoadedExecutable,
+#     mesh_ids::Vector{Int64},
+#     inputs::NTuple{N,Ptr{Cvoid}},
+#     donated_args::NTuple{M,UInt8},
+#     ::Val{n_outs},
+#     ::Val{K},
+# ) where {N,M,K,n_outs}
+#     sym0 = dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecute")
+#     xla_execute_fn = reinterpret(UInt, sym0)
+
+#     ir = execute_ir(N, M, n_outs * K, xla_execute_fn, false, K)
+#     results = [Vector{Any}(undef, K) for i in 1:n_outs]
+#     for i in 1:n_outs, j in 1:K
+#         idx = (i - 1) * K + j
+#         results[i][j] = :(AsyncBuffer(
+#             Buffer(outputs[$idx]), future ? Future(future_res[$idx]) : nothing
+#         ))
+#     end
+
+#     args_type = if N > 0
+#         (Ptr{Cvoid}, Ptr{Clong}, NTuple{N,Ptr{Cvoid}}, NTuple{M,UInt8})
+#     else
+#         (Ptr{Cvoid}, Ptr{Clong})
+#     end
+#     args = N > 0 ? (:inputs, :donated_args) : ()
+#     return quote
+#         Base.@_inline_meta
+#         exec = exec.exec
+#         GC.@preserve exec begin
+#             outputs, future_res, future = Base.llvmcall(
+#                 ($ir, "f"),
+#                 Tuple{NTuple{n_outs * K,Ptr{Cvoid}},NTuple{n_outs * K,Ptr{Cvoid}},Bool},
+#                 Tuple{$args_type...},
+#                 exec,
+#                 mesh_ids,
+#                 $(args...),
+#             )
+#         end
+#         return ($(results...),)
+#     end
+# end
+
+@inline function ExecutableCall(
     exec::LoadedExecutable,
+    mesh_ids::Vector{Int64},
     inputs::NTuple{N,Ptr{Cvoid}},
-    donated_args::NTuple{N,UInt8},
+    donated_args::NTuple{M,UInt8},
     ::Val{n_outs},
-) where {N,n_outs}
-    outputs = Ref{NTuple{n_outs,Ptr{Cvoid}}}()
-    future_res = Ref{NTuple{n_outs,Ptr{Cvoid}}}()
+    ::Val{K},
+) where {N,M,n_outs,K}
+    @assert length(mesh_ids) == K
+    outputs = Ref{NTuple{n_outs * K,Ptr{Cvoid}}}()
+    future_res = Ref{NTuple{n_outs * K,Ptr{Cvoid}}}()
     futures = Ref{UInt8}(0)
 
     inputs = Base.RefValue(inputs)
     donated_args = Base.RefValue(donated_args)
-    GC.@preserve inputs donated_args outputs futures future_res begin
+    GC.@preserve inputs donated_args mesh_ids outputs futures future_res begin
         @ccall MLIR.API.mlir_c.XLAExecute(
             exec.exec::Ptr{Cvoid},
             N::Cint,
             inputs::Ptr{Cvoid},
+            mesh_ids::Ptr{Clong},
+            K::Clong,
             donated_args::Ptr{UInt8},
             n_outs::Cint,
             Base.unsafe_convert(Ptr{Cvoid}, outputs)::Ptr{Cvoid},
@@ -447,20 +648,42 @@ end
     end
 
     outputs = outputs[]
-    future_res = future_res[]
     future = futures[] != 0
+    future && (future_res = future_res[])
 
-    return ntuple(Val(n_outs)) do i
-        Base.@_inline_meta
-        return AsyncBuffer(Buffer(outputs[i]), future ? Future(future_res[i]) : nothing)
+    return ntuple(Val(n_outs)) do j
+        ntuple(Val(K)) do i
+            Base.@_inline_meta
+            idx = (i - 1) * n_outs + j
+            return AsyncBuffer(
+                Buffer(outputs[idx]), future ? Future(future_res[idx]) : nothing
+            )
+        end
     end
 end
 
-function Compile(client::Client, mod::MLIR.IR.Module)
+function Compile(
+    client::Client,
+    device::Union{Device,Nothing},
+    mod::MLIR.IR.Module;
+    is_sharded::Bool=false,
+    mesh_ids::Vector{Int64}=Int64[],
+    # mesh_shape::Vector{Int64}=Int64[],
+)
+    device_id = is_sharded ? Int64(-1) : Int64(device_ordinal(client, device))
+    mesh_ids = Int64.(device_ordinal.((client,), mesh_ids))
     GC.@preserve client mod begin
-        executable = LoadedExecutable(
+        return LoadedExecutable(
             @ccall MLIR.API.mlir_c.ClientCompile(
-                client.client::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule
+                client.client::Ptr{Cvoid},
+                mod.module_::MLIR.API.MlirModule,
+                device_id::Clong,
+                is_sharded::Bool,
+                # mesh_shape::Ptr{Clong},
+                # length(mesh_shape)::Clong,
+                mesh_ids::Ptr{Clong},
+                length(mesh_ids)::Clong,
+                CUDA_DATA_DIR[]::Cstring,
             )::Ptr{Cvoid}
         )
     end
@@ -503,6 +726,35 @@ function ClientGetAddressableDevice(client::Client, idx)
                 client.client::Ptr{Cvoid}, idx::Cint
             )::Ptr{Cvoid}
         )
+    end
+end
+
+function ClientGetPlatformName(client::Client)
+    GC.@preserve client begin
+        str = @ccall MLIR.API.mlir_c.ClientGetPlatformName(
+            client.client::Ptr{Cvoid}
+        )::Cstring
+    end
+    str_jl = unsafe_string(str)
+    @ccall free(str::Cstring)::Cvoid
+    return str_jl
+end
+
+function PjRtLoadedExecutableGetClient(exec::LoadedExecutable)
+    GC.@preserve exec begin
+        return Client(
+            @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetClient(
+                exec.exec::Ptr{Cvoid}
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+function DeviceGetLocalDeviceId(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
+            device.device::Ptr{Cvoid}
+        )::Cint
     end
 end
 
@@ -550,8 +802,12 @@ end
     return buffer.buffer
 end
 
-@inline function synced_buffer(buffer::Buffer)
-    return buffer
-end
+@inline synced_buffer(buffer::Buffer) = buffer
+
+@inline synced_buffer(
+    buffers::Union{
+        AbstractArray{<:Union{AsyncBuffer,Buffer}},NTuple{<:Any,<:Union{AsyncBuffer,Buffer}}
+    },
+) = map(synced_buffer, buffers)
 
 end

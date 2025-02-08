@@ -39,6 +39,25 @@ function set_reactant_abi(
 )
     (; fargs, argtypes) = arginfo
 
+    if f === ReactantCore.within_compile
+        if length(argtypes) != 1
+            @static if VERSION < v"1.11.0-"
+                return CallMeta(Union{}, Effects(), NoCallInfo())
+            else
+                return CallMeta(Union{}, Union{}, Effects(), NoCallInfo())
+            end
+        end
+        @static if VERSION < v"1.11.0-"
+            return CallMeta(
+                Core.Const(true), Core.Compiler.EFFECTS_TOTAL, MethodResultPure()
+            )
+        else
+            return CallMeta(
+                Core.Const(true), Union{}, Core.Compiler.EFFECTS_TOTAL, MethodResultPure()
+            )
+        end
+    end
+
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
     if f === Reactant.call_with_reactant
@@ -234,9 +253,12 @@ function overload_autodiff(
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = TracedUtils.make_mlir_fn(
+    mlir_fn_res = TracedUtils.make_mlir_fn(
         primf, primargs, (), string(f) * "_autodiff", false
     )
+    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
+    fnwrap = mlir_fn_res.fnwrapped
+    func2 = mlir_fn_res.f
 
     activity = Int32[]
     ad_inputs = MLIR.IR.Value[]
@@ -310,7 +332,9 @@ function overload_autodiff(
             act = act_from_type(A, reverse, needs_primal(CMode))
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
-                attr = fill(MLIR.IR.Attribute(unwrapped_eltype(a)(1)), Ops.mlir_type(a))
+                attr = MLIR.IR.DenseElementsAttribute(
+                    fill(one(unwrapped_eltype(a)), size(a))
+                )
                 cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
                 push!(ad_inputs, cst)
             end

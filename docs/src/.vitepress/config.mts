@@ -51,13 +51,25 @@ export default defineConfig({
     },
     nav: [
       { text: "Home", link: "/" },
-      { text: "Getting Started", link: "/introduction" },
+      { text: "Getting Started",
+        items: [
+          { text: "Introduction", link: "/introduction" },
+          { text: "Configuration", link: "/introduction/configuration" },
+        ],
+      },
       { text: "Benchmarks", link: "https://enzymead.github.io/Reactant.jl/benchmarks/" },
-      { text: "Tutorials", link: "/tutorials/" },
+      {
+        text: "Tutorials",
+        items: [
+          {text: "Overview", link: "/tutorials/"},
+          {text: "Profiling", link: "/tutorials/profiling"},
+        ],
+      },
       {
         text: "API",
         items: [
           { text: "Core Reactant API", link: "/api/api" },
+          { text: "Sharding", link: "/api/sharding" },
           { text: "Ops", link: "/api/ops" },
           {
             text: "MLIR Dialects",
@@ -75,6 +87,8 @@ export default defineConfig({
               { text: "NVVM", link: "/api/nvvm" },
               { text: "TPU", link: "/api/tpu" },
               { text: "Triton", link: "/api/triton" },
+              { text: "Shardy", link: "/api/shardy" },
+              { text: "MPI", link: "/api/mpi" },
             ],
           },
           {
@@ -93,11 +107,11 @@ export default defineConfig({
     ],
     sidebar: {
       "/introduction/": {
-        // @ts-ignore
         text: "Getting Started",
         collapsed: false,
         items: [
           { text: "Introduction", link: "/introduction" },
+          { text: "Configuration", link: "/introduction/configuration" },
         ],
       },
       "/tutorials/": {
@@ -105,6 +119,7 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: "Overview", link: "/tutorials/" },
+          { text: "Profiling", link: "/tutorials/profiling" },
         ],
       },
       "/api/": {
@@ -115,6 +130,7 @@ export default defineConfig({
             text: "Reactant API",
             link: "/api/api",
           },
+          { text: "Sharding", link: "/api/sharding" },
           { text: "Ops", link: "/api/ops" },
           {
             text: "MLIR Dialects",
@@ -133,6 +149,8 @@ export default defineConfig({
               { text: "NVVM", link: "/api/nvvm" },
               { text: "TPU", link: "/api/tpu" },
               { text: "Triton", link: "/api/triton" },
+              { text: "Shardy", link: "/api/shardy" },
+              { text: "MPI", link: "/api/mpi" },
             ],
           },
           {

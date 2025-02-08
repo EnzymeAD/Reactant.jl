@@ -169,3 +169,17 @@ mul_symmetric(x) = Symmetric(x) * x
         @test @jit(fn(x_ra)) ≈ fn(x)
     end
 end
+
+@testset "kron" begin
+    @testset for T in (Int64, Float64, ComplexF64)
+        @testset for (x_sz, y_sz) in [
+            ((3, 4), (2, 5)), ((3, 4), (2,)), ((3,), (2, 5)), ((3,), (5,)), ((10,), ())
+        ]
+            x = x_sz == () ? rand(T) : rand(T, x_sz)
+            y = y_sz == () ? rand(T) : rand(T, y_sz)
+            x_ra = Reactant.to_rarray(x; track_numbers=Number)
+            y_ra = Reactant.to_rarray(y; track_numbers=Number)
+            @test @jit(kron(x_ra, y_ra)) ≈ kron(x, y)
+        end
+    end
+end

@@ -9,6 +9,8 @@
 #include "Enzyme/MLIR/Dialect/Ops.h"
 #include "Enzyme/MLIR/Implementations/CoreDialectsAutoDiffImplementations.h"
 #include "Enzyme/MLIR/Passes/Passes.h"
+
+#include "mlir/CAPI/Support.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -35,7 +37,6 @@
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
 #include "llvm/Support/TargetSelect.h"
-#include "mlir/CAPI/Support.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
@@ -54,8 +55,10 @@
 #include "xla/pjrt/status_casters.h"
 
 #include "tsl/profiler/lib/profiler_session.h"
-#include "xla/tsl/profiler/rpc/profiler_server.h"
+#include "tsl/profiler/lib/traceme.h"
 #include "xla/tsl/profiler/rpc/client/capture_profile.h"
+#include "xla/tsl/profiler/rpc/profiler_server.h"
+#include "xla/python/profiler_utils.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -64,6 +67,11 @@
 #include "llvm/TargetParser/Host.h"
 
 #include "llvm-c/TargetMachine.h"
+
+// shardy
+#include "shardy/dialect/sdy/ir/dialect.h"
+#include "shardy/integrations/c/attributes.h"
+#include "xla/pjrt/mlir_to_hlo.h"
 
 // IFRT
 #include "xla/python/ifrt/array.h"
@@ -153,6 +161,19 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
 // TODO mlirComplexAttrGetnValue
 // TODO extern "C" MlirTypeID mlirComplexAttrGetTypeID(void) { return
 // wrap(complex::NumberAttr::getTypeID()); }
+
+extern "C" void ReactantFuncSetResultAttr(MlirOperation op, intptr_t pos,
+                                          MlirStringRef name, MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
+      .setResultAttr(pos, unwrap(name), unwrap(attr));
+}
+
+extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
+                                       MlirStringRef name, MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
+      .setArgAttr(pos, unwrap(name), unwrap(attr));
+}
+
 #pragma endregion
 
 // auxiliar functions
@@ -240,12 +261,21 @@ extern "C" void ProfilerSessionDelete(tsl::ProfilerSession *session) {
   delete session;
 }
 
-extern "C" void* ProfilerServerStart(int32_t port) {
+extern "C" int64_t ProfilerActivityStart(const char *name, int level) {
+  return tsl::profiler::TraceMe::ActivityStart(name, level);
+}
+
+extern "C" void ProfilerActivityEnd(int64_t id) {
+  tsl::profiler::TraceMe::ActivityEnd(id);
+}
+
+extern "C" tsl::profiler::ProfilerServer *ProfilerServerStart(int32_t port) {
   auto server = new tsl::profiler::ProfilerServer();
   server->StartProfilerServer(port);
   return server;
 }
-extern "C" void* ProfilerServerStop(tsl::profiler::ProfilerServer* server) {
+
+extern "C" void ProfilerServerStop(tsl::profiler::ProfilerServer *server) {
   delete server;
 }
 
@@ -262,14 +292,15 @@ extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
 }
 
 // xla/python/xla.cc 390
-extern "C" PjRtClient *MakeGPUClient(int node_id, int num_nodes,
-                                     int *allowed_devices,
-                                     int num_allowed_devices,
-                                     const char *platform_name,
-                                     const char **error) {
+extern "C" PjRtClient *
+MakeGPUClient(int node_id, int num_nodes, int *allowed_devices,
+              int num_allowed_devices, double memory_fraction, bool preallocate,
+              const char *platform_name, const char **error) {
   GpuClientOptions options;
   // options.kv_store = "etcd";
   // options.allocator_config =
+  options.allocator_config.preallocate = preallocate;
+  options.allocator_config.memory_fraction = memory_fraction;
   options.node_id = node_id;
   options.num_nodes = num_nodes;
   options.allowed_devices =
@@ -343,11 +374,11 @@ extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
       LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
   if (pluginLoad == nullptr)
     return nullptr;
-
   auto tpu_status = InitializePjrtPlugin("tpu", error);
   if (tpu_status)
     return nullptr;
 
+  RegisterProfiler(pluginLoad);
   return GetCApiClient("TPU");
 }
 
@@ -371,6 +402,10 @@ extern "C" PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
                                                   int device_id) {
   return MyValueOrThrow(
       client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
+}
+
+extern "C" const char *ClientGetPlatformName(PjRtClient *client) {
+  return cstr_from_string(client->platform_name());
 }
 
 // To keep in sync with JLAllocatorStats in src/XLA.jl
@@ -417,11 +452,27 @@ extern "C" PjRtClient *BufferToClient(PjRtBuffer *Buffer) {
   return Buffer->client();
 }
 
+extern "C" absl::Span<const int64_t> BufferShape(PjRtBuffer *Buffer) {
+  return Buffer->dimensions();
+}
+
+extern "C" int64_t BufferNDimensions(PjRtBuffer *Buffer) {
+  return Buffer->dimensions().length();
+}
+
+extern "C" xla::PrimitiveType BufferPrimitiveType(PjRtBuffer *Buffer) {
+  return Buffer->element_type();
+}
+
+extern "C" void PjRtBufferFree(PjRtBuffer *Buffer) { delete Buffer; }
+
 extern "C" PjRtClient *DeviceToClient(PjRtDevice *Device) {
   return Device->client();
 }
 
-extern "C" void PjRtBufferFree(PjRtBuffer *Buffer) { delete Buffer; }
+extern "C" PjRtClient *PjRtLoadedExecutableGetClient(PjRtLoadedExecutable *exec) {
+  return exec->client();
+}
 
 // https://openxla.org/xla/shapes
 // This minor-to-major dimension order of 0 up to N-1 is akin to column-major
@@ -436,6 +487,13 @@ std::vector<int64_t> col_major(int64_t dim) {
   return minor_to_major;
 }
 
+extern "C" void ReactantLLVMParseCommandLineOptions(int argc,
+                                                    const char *const *argv,
+                                                    const char *Overview) {
+  llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(Overview),
+                                    &llvm::nulls());
+}
+
 std::vector<int64_t> row_major(int64_t dim) {
   std::vector<int64_t> minor_to_major;
   for (int i = 0; i < dim; i++) {
@@ -448,14 +506,14 @@ static void noop() {}
 #ifdef REACTANT_CUDA
 #include "third_party/gpus/cuda/include/cuda.h"
 extern "C" int32_t ReactantCudaDriverGetVersion() {
-    int32_t data;
-    ReactantHandleCuResult(cuDriverGetVersion(&data));
-    return data;
+  int32_t data;
+  ReactantHandleCuResult(cuDriverGetVersion(&data));
+  return data;
 }
+extern "C" int32_t ReactantHermeticCudaGetVersion() { return CUDA_VERSION; }
 #else
-extern "C" int32_t ReactantCudaDriverGetVersion() {
-    return 0;
-}
+extern "C" int32_t ReactantCudaDriverGetVersion() { return 0; }
+extern "C" int32_t ReactantHermeticCudaGetVersion() { return 0; }
 #endif
 
 extern "C" void *UnsafeBufferPointer(PjRtBuffer *buffer) {
@@ -475,9 +533,10 @@ extern "C" PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
   // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
   // &layout));
+  const xla::Layout* layout = nullptr;
   auto buffer = MyValueOrThrow(
       client->BufferFromHostBuffer(data, primtype, shape, /*byte_strides*/ {},
-                                   semantics, /*ondone*/ {}, device));
+                                   semantics, /*ondone*/ {}, *device->default_memory_space(), layout));
   auto bres = buffer.release();
   return bres;
 }
@@ -486,7 +545,7 @@ extern "C" uint8_t BufferOnCPU(PjRtBuffer *buffer) { return buffer->IsOnCpu(); }
 
 extern "C" PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
                                           PjRtDevice *dst_device) {
-  auto res = MyValueOrThrow(buffer->CopyToDevice(dst_device));
+  auto res = MyValueOrThrow(buffer->CopyToMemorySpace(*dst_device->default_memory_space()));
   return res.release();
 }
 
@@ -504,6 +563,18 @@ extern "C" void BufferToHost(PjRtBuffer *buffer, void *data) {
 }
 
 extern "C" void FreeClient(PjRtClient *client) { delete client; }
+
+extern "C" int64_t PjRtDeviceGetLocalDeviceId(PjRtDevice *device) {
+  return device->local_device_id().value();
+}
+
+extern "C" int64_t PjRtDeviceGetGlobalDeviceId(PjRtDevice *device) {
+  return device->global_device_id().value();
+}
+
+extern "C" int64_t PjRtDeviceGetLocalHardwareId(PjRtDevice *device) {
+  return device->local_hardware_id().value();
+}
 
 #include "xla/service/custom_call_target_registry.h"
 extern "C" void RegisterCustomCallTarget(const char *name, void *address,
@@ -553,16 +624,60 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   return wrap(res);
 }
 
-/* Note that this */
 extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
-                                                    MlirModule cmod) {
+                                                    MlirModule cmod,
+                                                    int64_t device_id,
+                                                    bool is_sharded,
+                                                    // const int64_t *mesh_shape,
+                                                    // int64_t num_mesh_shape,
+                                                    const int64_t *mesh_ids,
+                                                    int64_t num_mesh_ids,
+                                                    const char* xla_gpu_cuda_data_dir) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
   CompileOptions options;
-  // options.argument_layouts;
-  // options.executable_build_options.set_device_ordinal();
-  // options.executable_build_options.set_result_layout();
+  options.executable_build_options.mutable_debug_options()->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
+
+  auto cmodop = cast<ModuleOp>(*unwrap(cmod));
+
+  if (is_sharded) {
+    assert(device_id < 0);
+
+    options.executable_build_options.set_num_replicas(1);
+    options.executable_build_options.set_num_partitions(num_mesh_ids);
+
+    options.executable_build_options.set_use_spmd_partitioning(true);
+    options.executable_build_options.set_use_shardy_partitioner(true);
+
+    // auto partitioning for GPUs is not available in open source version of XLA
+    // options.executable_build_options.set_use_auto_spmd_partitioning(true);
+    // std::vector<int64_t> mesh_shape_vec(mesh_shape, mesh_shape + num_mesh_shape);
+    // options.executable_build_options.set_auto_spmd_partitioning_mesh_shape(mesh_shape_vec);
+    // std::vector<int64_t> mesh_ids_vec(mesh_ids, mesh_ids + num_mesh_ids);
+    // options.executable_build_options.set_auto_spmd_partitioning_mesh_ids(mesh_ids_vec);
+
+    xla::DeviceAssignment device_assignment(1, num_mesh_ids);
+    for (int64_t i = 0; i < num_mesh_ids; ++i) {
+      int64_t mesh_id = mesh_ids[i];
+      assert(mesh_id >= 0);
+      device_assignment(0, mesh_id) = i;
+    }
+    options.executable_build_options.set_device_assignment(device_assignment);
+
+    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
+    xla::ExportShardyForHloRoundTrip(cmodop);
+  } else {
+    assert(device_id >= 0);
+
+    options.executable_build_options.set_num_replicas(1);
+    options.executable_build_options.set_num_partitions(1);
+    options.executable_build_options.set_device_ordinal(device_id);
+
+    xla::DeviceAssignment device_assignment(1, 1);
+    device_assignment(0, 0) = device_id;
+    options.executable_build_options.set_device_assignment(device_assignment);
+  }
 
   auto addressable_devices = client->addressable_devices();
   if (!addressable_devices.empty()) {
@@ -573,12 +688,10 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
     assert(device_ordinal < addressable_devices.size());
     auto stats = addressable_devices[device_ordinal]->GetAllocatorStats();
     if (stats.ok() && stats->bytes_limit) {
-      options.executable_build_options.set_device_memory_size(
-          *stats->bytes_limit);
+      options.executable_build_options.set_device_memory_size(*stats->bytes_limit);
     }
   }
-  auto exec =
-      MyValueOrThrow(client->Compile(cast<ModuleOp>(*unwrap(cmod)), options));
+  auto exec = MyValueOrThrow(client->Compile(cmodop, options));
   return exec.release();
 }
 
@@ -591,12 +704,82 @@ extern "C" uint8_t FutureIsReady(FutureType *Future) {
 
 extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 
-extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
-                           PjRtBuffer **op_args, uint8_t *is_arg_donatable,
+extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
+                                  PjRtBuffer **op_args, PjRtDevice *device,
+                                  uint8_t *is_arg_donatable, int num_results,
+                                  PjRtBuffer **op_results, uint8_t *futures,
+                                  FutureType **future_results) {
+  // Create a vector of PjRtBuffer* from the input array.
+  std::vector<PjRtBuffer *> argument_handles(op_args, op_args + num_args);
+
+  // Set up execution options.
+  ExecuteOptions options;
+  for (size_t i = 0; i < num_args; i++) {
+    if (!is_arg_donatable[i]) {
+      options.non_donatable_input_indices.insert(static_cast<int>(i));
+    }
+  }
+  options.untuple_result = true;
+
+  // Optional future to hold asynchronous execution results.
+  std::optional<PjRtFuture<>> returned_future;
+
+  auto results = MyValueOrThrow(
+      exec->ExecuteSharded(argument_handles,
+          device, options, returned_future, /*fill_future=*/true));
+
+  // Validate the number of results.
+  if (results.size() != num_results) {
+    llvm::errs() << "Error: results.size()=" << results.size()
+                 << " does not match num_results=" << num_results << "\n";
+    std::abort(); // Terminate if the number of results is incorrect.
+  }
+
+  // Handle futures if they are returned.
+  if (returned_future.has_value()) {
+    *futures = true;
+    for (size_t i = 0; i < num_results; i++) {
+      future_results[i] = new FutureType(*returned_future);
+    }
+  } else {
+    *futures = false;
+  }
+
+  // Release the results into the output array.
+  for (size_t i = 0; i < num_results; i++) {
+    op_results[i] = results[i].release();
+  }
+}
+
+extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
+                           PjRtBuffer **op_args,
+                           const int64_t *mesh_ids, int64_t num_mesh_ids,
+                           uint8_t *is_arg_donatable,
                            int num_results, PjRtBuffer **op_results,
                            uint8_t *futures, FutureType **future_results) {
-  std::vector<std::vector<PjRtBuffer *>> argument_handles;
-  argument_handles.emplace_back(op_args, op_args + num_args);
+  auto client = exec->client();
+
+  // Ensure argument_handles is structured as num_mesh_ids x num_args
+  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_mesh_ids);
+  int num_args = op_args_len / num_mesh_ids;
+
+  // Distribute arguments across devices
+  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
+    int64_t mesh_id = mesh_ids[device_idx];
+
+    // Validate mesh_id
+    if (mesh_id < 0 || mesh_id >= num_mesh_ids) {
+      ReactantThrowError(("Invalid mesh_id " + std::to_string(mesh_id) + " at device_idx " +
+                          std::to_string(device_idx)).c_str());
+    }
+
+    argument_handles[mesh_id].reserve(num_args);
+    for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
+      // Assuming op_args is a flat array of size num_devices * num_args
+      // where arguments for each device are contiguous
+      argument_handles[mesh_id].push_back(op_args[mesh_id * num_args + arg_idx]);
+    }
+  }
 
   ExecuteOptions options;
 
@@ -605,31 +788,42 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
       options.non_donatable_input_indices.insert((int)i);
   }
   options.untuple_result = true;
-  std::optional<std::vector<FutureType>> returned_futures;
+
+  std::optional<std::vector<FutureType>> returned_futures = std::vector<FutureType>();
   auto results = MyValueOrThrow(
       exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
                         argument_handles),
                     options, returned_futures));
 
-  assert(results.size() == 1);
+  assert(results.size() == num_mesh_ids);
 
-  if (results[0].size() != num_results) {
-    llvm::errs() << " results.size()=" << results.size()
-                 << " num_results=" << num_results << "\n";
-  }
-  assert(results[0].size() == num_results);
-  if (returned_futures) {
-    *futures = true;
-    assert(returned_futures->size() == num_results);
-    for (size_t i = 0; i < num_results; i++) {
-      future_results[i] = new FutureType((*returned_futures)[i]);
+  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
+    int64_t mesh_id = mesh_ids[device_idx];
+    if (results[mesh_id].size() != num_results) {
+      llvm::errs() << " results[" << mesh_id << "].size()=" << results[mesh_id].size()
+                   << " num_results=" << num_results << "\n";
     }
+    assert(results[mesh_id].size() == num_results);
+  }
+
+  // Handle returned futures
+  if (returned_futures.has_value()) {
+    *futures = true;
+    assert(returned_futures->size() == num_mesh_ids);
   } else {
     *futures = false;
   }
 
-  for (size_t i = 0; i < num_results; i++) {
-    op_results[i] = results[0][i].release();
+  // Copy results into the output buffers
+  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
+    int64_t mesh_id = mesh_ids[device_idx];
+    for (int result_idx = 0; result_idx < num_results; ++result_idx) {
+      int flat_index = mesh_id * num_results + result_idx;
+      op_results[flat_index] = results[mesh_id][result_idx].release();
+      if (returned_futures.has_value()) {
+        future_results[flat_index] = new FutureType((*returned_futures)[mesh_id]);
+      }
+    }
   }
 }
 
@@ -650,17 +844,17 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::mhlo::MhloDialect>();
   context.loadDialect<mlir::stablehlo::StablehloDialect>();
   context.loadDialect<mlir::chlo::ChloDialect>();
+  context.loadDialect<mlir::sdy::SdyDialect>();
 }
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMIRToLLVMTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/NVVM/LLVMIRToNVVMTranslation.h"
-extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
-  mlir::DialectRegistry &registry = *unwrap(creg);
-  prepareRegistry(registry);
+#include "xla/service/spmd/shardy/sdy_round_trip/pipelines.h"
 
+extern "C" void InitializePasses(MlirDialectRegistry creg) {
   mlir::registerenzymePasses();
-  registerenzymexlaPasses();
+  enzyme::registerenzymexlaPasses();
 
   // Register the standard passes we want.
   mlir::registerCSEPass();
@@ -673,10 +867,6 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::registerConvertSCFToOpenMPPass();
   mlir::affine::registerAffinePasses();
   mlir::registerReconcileUnrealizedCasts();
-
-  mlir::registerLLVMDialectImport(registry);
-  mlir::registerNVVMDialectImport(registry);
-  mlir::LLVM::registerInlinerInterface(registry);
 
   /*
     registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
@@ -698,6 +888,20 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::transform::registerInterpreterPass();
   mlir::enzyme::registerGenerateApplyPatternsPass();
   mlir::enzyme::registerRemoveTransformPass();
+
+  // xla + shardy specific passes
+  xla::sdy::registerSdyRoundTripExportPipeline();
+  xla::sdy::registerSdyRoundTripImportPipeline();
+}
+
+extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
+  mlir::DialectRegistry &registry = *unwrap(creg);
+  prepareRegistry(registry);
+
+  mlir::registerLLVMDialectImport(registry);
+  mlir::registerNVVMDialectImport(registry);
+  mlir::LLVM::registerInlinerInterface(registry);
+
 }
 
 /// Returns an unused symbol in `module` for `oldSymbolName` by trying numeric
@@ -750,12 +954,6 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
 
   SymbolTable::setSymbolName(op, newSymName);
   return success();
-}
-
-extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos, MlirStringRef name,
-                        MlirAttribute attr) {
-  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
-      .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
 
 extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,

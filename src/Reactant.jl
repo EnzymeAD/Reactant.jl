@@ -1,6 +1,6 @@
 module Reactant
 
-using ReactantCore: ReactantCore, @trace, MissingTracedValue
+using ReactantCore: ReactantCore, @trace, within_compile, MissingTracedValue
 
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
@@ -18,49 +18,7 @@ using Enzyme
 
 struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
-@static if isdefined(Core, :BFloat16)
-    const ReactantFloat = Union{Float16,Core.BFloat16,Float32,Float64}
-else
-    const ReactantFloat = Union{Float16,Float32,Float64}
-end
-
-@static if isdefined(Core, :BFloat16)
-    const ReactantComplexFloat = Union{
-        Complex{Float16},Complex{Core.BFloat16},Complex{Float32},Complex{Float64}
-    }
-else
-    const ReactantComplexFloat = Union{Complex{Float16},Complex{Float32},Complex{Float64}}
-end
-
-const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
-
-const ReactantComplexInt = Union{
-    Complex{Int8},
-    Complex{UInt8},
-    Complex{Int16},
-    Complex{UInt16},
-    Complex{Int32},
-    Complex{UInt32},
-    Complex{Int64},
-    Complex{UInt64},
-    Complex{Int128},
-    Complex{UInt128},
-}
-
-const ReactantFloatInt = Union{
-    Base.uniontypes(ReactantInt)...,Base.uniontypes(ReactantFloat)...
-}
-
-const ReactantPrimitive = Union{
-    Bool,
-    Base.uniontypes(ReactantFloatInt)...,
-    Base.uniontypes(ReactantComplexInt)...,
-    Base.uniontypes(ReactantComplexFloat)...,
-}
-
-abstract type RNumber{T<:ReactantPrimitive} <: Number end
-
-abstract type RArray{T,N} <: AbstractArray{T,N} end
+include("PrimitiveTypes.jl")
 
 function ancestor(x::AbstractArray)
     p_x = parent(x)
@@ -81,59 +39,17 @@ end
 
 include("mlir/MLIR.jl")
 include("XLA.jl")
+include("Sharding.jl")
+include("Devices.jl")
 include("Interpreter.jl")
+include("Profiler.jl")
+include("Types.jl")
+
+const with_profiler = Profiler.with_profiler
+
+export Sharding
 
 include("utils.jl")
-
-@leaf MissingTracedValue
-
-mutable struct TracedRNumber{T} <: RNumber{T}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
-
-    function TracedRNumber{T}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
-    ) where {T}
-        if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == ()
-        end
-        return new{T}(paths, mlir_data)
-    end
-end
-
-@leaf TracedRNumber
-
-mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
-    shape::NTuple{N,Int}
-
-    function TracedRArray{T,N}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
-    ) where {T,N}
-        shape = Tuple(shape)
-        if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == shape "Expected: $(shape), got: $(size(MLIR.IR.type(mlir_data)))"
-        end
-        return new{T,N}(paths, mlir_data, shape)
-    end
-end
-
-@leaf TracedRArray
-
-Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
-
-const WrappedTracedRArray{T,N} = WrappedArray{
-    TracedRNumber{T},N,TracedRArray,TracedRArray{T,N}
-}
-const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
-const AnyTracedRVector{T} = AnyTracedRArray{T,1}
-const AnyTracedRMatrix{T} = Union{
-    AnyTracedRArray{T,2},
-    LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}},
-    LinearAlgebra.Tridiagonal{TracedRNumber{T},TracedRArray{T,1}},
-}
-const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
 function TracedRArray{T}(data::MLIR.IR.Value) where {T}
     data_type = MLIR.IR.type(data)
@@ -148,31 +64,9 @@ function TracedRArray(data::MLIR.IR.Value)
     return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
 end
 
-struct XLAArray{T,N} <: RArray{T,N} end
-
-Adapt.parent_type(::Type{XLAArray{T,N}}) where {T,N} = XLAArray{T,N}
-
-mutable struct ConcreteRNumber{T} <: RNumber{T}
-    data::XLA.AsyncBuffer
-end
-
-@leaf ConcreteRNumber
-
-mutable struct ConcreteRArray{T,N} <: RArray{T,N}
-    data::XLA.AsyncBuffer
-    shape::NTuple{N,Int}
-end
-
-@leaf ConcreteRArray
-
-Adapt.parent_type(::Type{ConcreteRArray{T,N}}) where {T,N} = ConcreteRArray{T,N}
-
-const WrappedConcreteRArray{T,N} = WrappedArray{T,N,ConcreteRArray,ConcreteRArray{T,N}}
-const AnyConcreteRArray{T,N} = Union{ConcreteRArray{T,N},WrappedConcreteRArray{T,N}}
-
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
@@ -188,28 +82,18 @@ unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
-function aos_to_soa(x::AbstractArray{<:ConcreteRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{ConcreteRNumber{T}}) where {T}
     x_c = ConcreteRArray(zeros(T, size(x)))
     x_c .= x
     return x_c
 end
-function aos_to_soa(x::AbstractArray{<:TracedRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{TracedRNumber{T}}) where {T}
     for i in eachindex(x)
         if !isassigned(x, i)
             x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
         end
     end
     return Ops.reshape(vcat(x...), size(x)...)
-end
-
-mutable struct ConcreteRNG <: Random.AbstractRNG
-    seed::ConcreteRArray{UInt64,1}
-    const algorithm::String
-end
-
-mutable struct TracedRNG <: Random.AbstractRNG
-    seed::TracedRArray{UInt64,1}
-    const algorithm::String
 end
 
 include("Ops.jl")
@@ -247,9 +131,6 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 include("ControlFlow.jl")
 include("Tracing.jl")
 include("Compiler.jl")
-include("Profiler.jl")
-
-const with_profiler = Profiler.with_profiler
 
 include("Overlay.jl")
 
@@ -268,22 +149,59 @@ function Enzyme.make_zero(
 end
 
 using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
-export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace
+export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace, within_compile
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
+const passes_initialized = Ref(false)
 function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistryAndPasses(
+    @ccall MLIR.API.mlir_c.InitializeRegistry(
         registry[]::MLIR.API.MlirDialectRegistry
     )::Cvoid
+    if !passes_initialized[]
+        @ccall MLIR.API.mlir_c.InitializePasses(
+            registry[]::MLIR.API.MlirDialectRegistry
+        )::Cvoid
+        passes_initialized[] = true
+    end
+    return nothing
 end
 
 function deinitialize_dialect()
+    passes_initialized[] = false
     return registry[] = nothing
 end
 
+using Libdl
+using Reactant_jll
+using LLVMOpenMP_jll
+function initialize_ptrs()
+    for name in (
+        "__kmpc_barrier",
+        "__kmpc_global_thread_num",
+        "__kmpc_for_static_fini",
+        "__kmpc_for_static_init_8u",
+        "__kmpc_fork_call",
+    )
+        sym = Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name)
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+    end
+    if (@ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32) != 0
+        for name in (
+            "cuLaunchKernel",
+            "cuModuleLoadData",
+            "cuModuleGetFunction",
+            "cuStreamSynchronize",
+        )
+            sym = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+        end
+    end
+end
+
 function __init__()
+    initialize_ptrs()
     return initialize_dialect()
 end
 

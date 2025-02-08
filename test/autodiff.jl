@@ -18,7 +18,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         )
     )
 
-    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2}}
+    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding}}
     @test res1[1] ≈ ores1[1]
 
     ores1 = fwd(ForwardWithPrimal, Duplicated, ones(3, 2), 3.1 * ones(3, 2))
@@ -34,7 +34,10 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         )
     )
 
-    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2},ConcreteRArray{Float64,2}}
+    @test typeof(res1) == Tuple{
+        ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding},
+        ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding},
+    }
     @test res1[1] ≈ ores1[1]
     @test res1[2] ≈ ores1[2]
 
@@ -59,7 +62,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         )
     )
 
-    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2}}
+    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding}}
     @test res1[1] ≈ ores1[1]
 end
 
@@ -69,7 +72,7 @@ end
 
 @testset "Forward Gradient" begin
     x = Reactant.ConcreteRArray(3.1 * ones(2, 2))
-    res = @jit gw(x)
+    res = @test_warn r"`Adapt.parent_type` is not implemented for" @jit gw(x)
     # TODO we should probably override https://github.com/EnzymeAD/Enzyme.jl/blob/5e6a82dd08e74666822b9d7b2b46c36b075668ca/src/Enzyme.jl#L2132
     # to make sure this gets merged as a tracedrarray
     @test typeof(res) == Tuple{Enzyme.TupleArray{ConcreteRNumber{Float64},(2, 2),4,2}}
@@ -132,8 +135,6 @@ end
     @test res2 ≈ 4 * 3 * 3.1^2
 end
 
-using Reactant, Enzyme
-
 fn(x) = sum(abs2, x)
 
 function vector_forward_ad(x, dx1, dx2)
@@ -146,4 +147,16 @@ end
     dx2 = Reactant.to_rarray([0.0, 1.0])
 
     res = @jit vector_forward_ad(x, dx1, dx2)
+end
+
+@testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
+    a = ones(ComplexF64, 2, 2)
+    b = 2.0 * ones(ComplexF64, 2, 2)
+    a_re = Reactant.to_rarray(a)
+    b_re = Reactant.to_rarray(b)
+    df(x, y) = Enzyme.gradient(ReverseWithPrimal, *, x, y)
+    res = @jit df(a_re, b_re) # before, this segfaulted
+    @test res.val ≈ 4ones(2, 2)
+    @test res.derivs[1] ≈ 4ones(2, 2)
+    @test res.derivs[2] ≈ 2ones(2, 2)
 end

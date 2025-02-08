@@ -252,6 +252,7 @@ docs/site/
 # environment.
 Manifest.toml
 Manifest-v*.toml
+.CondaPkg
 
 .vscode/*
 .vscode/settings.json
