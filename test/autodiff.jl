@@ -135,6 +135,20 @@ end
     @test res2 ≈ 4 * 3 * 3.1^2
 end
 
+fn(x) = sum(abs2, x)
+
+function vector_forward_ad(x, dx1, dx2)
+    return Enzyme.autodiff(Forward, fn, BatchDuplicated(x, (dx1, dx2)))
+end
+
+@testset "Vector Mode AD" begin
+    x = Reactant.to_rarray([1.0, 3.0])
+    dx1 = Reactant.to_rarray([1.0, 0.0])
+    dx2 = Reactant.to_rarray([0.0, 1.0])
+
+    res = @jit vector_forward_ad(x, dx1, dx2)
+end
+
 @testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
     a = ones(ComplexF64, 2, 2)
     b = 2.0 * ones(ComplexF64, 2, 2)
