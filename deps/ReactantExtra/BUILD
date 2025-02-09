@@ -437,7 +437,6 @@ cc_library(
 "-Wl,-exported_symbol,_RegisterDialects",
 "-Wl,-exported_symbol,_InitializeRegistry",
 "-Wl,-exported_symbol,_InitializePasses",
-"-Wl,-exported_symbol,_ifrt_*",
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
 "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
@@ -465,6 +464,8 @@ cc_library(
 "-Wl,-exported_symbol,_BufferShape",
 "-Wl,-exported_symbol,_BufferNDimensions",
 "-Wl,-exported_symbol,_BufferPrimitiveType",
+"-Wl,-exported_symbol,_ifrt_*",
+"-Wl,-exported_symbol,_reactant_*",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",

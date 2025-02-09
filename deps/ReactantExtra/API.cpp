@@ -1047,14 +1047,14 @@ extern "C" Holded<std::shared_ptr<xla::PjRtBuffer>>* reactant_hold_pjrtbuffer(xl
 
 extern "C" void reactant_release_pjrtbuffer(Holded<std::shared_ptr<PjRtBuffer>>* buffer) { delete buffer; }
 
-extern "C" ifrt::PjRtClient* MakeIFRTPJRTClient(Holded<std::shared_ptr<PjRtClient>>* pjrt_client) {
+extern "C" ifrt::PjRtClient* ifrt_pjrt_MakeClient(Holded<std::shared_ptr<PjRtClient>>* pjrt_client) {
   xla::ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
 }
 
-extern "C" void FreeIFRTPJRTClient(ifrt::PjRtClient* client) { delete client; }
+extern "C" void ifrt_pjrt_FreeClient(ifrt::PjRtClient* client) { delete client; }
 
-extern "C" xla::ifrt::LoadedExecutable* IFRTPJRT_ClientCompile(ifrt::PjRtClient* client, MlirModule mlir_mod) {
+extern "C" xla::ifrt::LoadedExecutable* ifrt_pjrt_ClientCompile(ifrt::PjRtClient* client, MlirModule mlir_mod) {
   mlir::ModuleOp mlir_mod_op = cast<ModuleOp>(*unwrap(mlir_mod));
   // TODO import sharding config from `ClientCompile`?
   xla::CompileOptions compile_options;
@@ -1062,15 +1062,15 @@ extern "C" xla::ifrt::LoadedExecutable* IFRTPJRT_ClientCompile(ifrt::PjRtClient*
   return MyValueOrThrow(xla::ifrt::PjRtLoadedExecutable::Create(client, mlir_mod_op, compile_options, std::vector<tsl::RCReference<xla::ifrt::LoadedHostCallback>>())).release();
 }
 
-extern "C" void FreeLoadedExecutableIFRTPJRT(xla::ifrt::PjRtLoadedExecutable* exec) { delete exec; }
+extern "C" void ifrt_pjrt_FreeLoadedExecutable(xla::ifrt::PjRtLoadedExecutable* exec) { delete exec; }
 
-extern "C" Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* ArrayFromHostBufferIFRTPJRT(ifrt::PjRtClient* client, Holded<std::shared_ptr<xla::PjRtBuffer>>* buffer) {
+extern "C" Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* ifrt_pjrt_ArrayFromHostBuffer(ifrt::PjRtClient* client, Holded<std::shared_ptr<xla::PjRtBuffer>>* buffer) {
   return reactant::capture(MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj())));
 }
 
 extern "C" void reactant_release_ifrt_pjrt_array(Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* array) { delete array; }
 
-extern "C" void IFRT_Execute(ifrt::LoadedExecutable* exec, int num_args, Holded<tsl::RCReference<ifrt::Array>>** op_args, uint8_t* is_arg_donatable, int num_results, Holded<tsl::RCReference<ifrt::Array>>** op_results, uint8_t *futures, FutureType** status) {
+extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, Holded<tsl::RCReference<ifrt::Array>>** op_args, uint8_t* is_arg_donatable, int num_results, Holded<tsl::RCReference<ifrt::Array>>** op_results, uint8_t *futures, FutureType** status) {
   std::vector<tsl::RCReference<xla::ifrt::Array>> args;
   for (int i = 0; i < num_args; i++) {
     args.emplace_back(op_args[i]->obj());
@@ -1102,6 +1102,6 @@ extern "C" void IFRT_Execute(ifrt::LoadedExecutable* exec, int num_args, Holded<
 }
 
 // in principle, use ArrayCopySemantics::kAlwaysCopy (=0)
-extern "C" FutureType* IFRT_Array_CopyToHostBuffer(Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* array, void* data, ifrt::ArrayCopySemantics semantics) {
+extern "C" FutureType* ifrt_CopyArrayToHostBuffer(Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* array, void* data, ifrt::ArrayCopySemantics semantics) {
   (*array)->CopyToHostBuffer(data, std::nullopt, semantics);
 }
