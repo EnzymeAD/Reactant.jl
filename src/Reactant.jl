@@ -38,7 +38,7 @@ function ancestor(T::Type{<:AbstractArray})
 end
 
 include("mlir/MLIR.jl")
-include("XLA.jl")
+include("xla/XLA.jl")
 include("Sharding.jl")
 include("Devices.jl")
 include("Interpreter.jl")
