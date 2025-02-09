@@ -108,7 +108,7 @@ function create_result(
             sharding = __construct_sharding_for_carray(
                 tocopy, path, result_stores, path_to_shard_info, sharding_mesh
             )
-            return :(ConcreteRArray{$T,$N,$(ndims(sharding_mesh)),$(typeof(sharding))}(
+            return :(ConcreteRArray{$T,$N,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $(tocopy.shape), $sharding
             ))
         else
@@ -120,7 +120,7 @@ function create_result(
         sharding = __construct_sharding_for_carray(
             tocopy, path, result_stores, path_to_shard_info, sharding_mesh
         )
-        return :(ConcreteRArray{$T,$N,$(ndims(sharding_mesh)),$(typeof(sharding))}(
+        return :(ConcreteRArray{$T,$N,length($(restore)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
     end
@@ -817,8 +817,11 @@ function compile_mlir!(
     out_tys2 = [MLIR.IR.type(a) for a in nresults]
 
     res_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
-    res_attrs isa MLIR.IR.Attribute &&
-        (res_attrs = [res_attrs[i] for (i, present) in enumerate(results_mask) if present])
+    if res_attrs isa MLIR.IR.Attribute
+        res_attrs = [
+            res_attrs[i - 1] for (i, present) in enumerate(results_mask) if present
+        ]
+    end
 
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
