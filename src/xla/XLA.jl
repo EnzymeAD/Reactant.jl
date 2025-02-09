@@ -26,6 +26,7 @@ include("Future.jl")
 include("Buffer.jl")
 include("Stats.jl")
 include("Utils.jl")
+include("OpSharding.jl")
 
 const backends = Dict{String,Client}()
 const default_backend = Ref{Client}()
