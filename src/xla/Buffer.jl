@@ -1,7 +1,8 @@
 # Buffer
 @inline function free_buffer(buffer)
-    if buffer.buffer != C_NULL
-        @ccall MLIR.API.mlir_c.PjRtBufferFree(buffer.buffer::Ptr{Cvoid})::Cvoid
+    sbuffer = buffer.buffer
+    if sbuffer != C_NULL
+        @ccall MLIR.API.mlir_c.PjRtBufferFree(sbuffer::Ptr{Cvoid})::Cvoid
     end
 end
 
