@@ -62,26 +62,26 @@ extern "C" Sharding* ifrt_sharding_with_device_assignment(Sharding* sharding, sp
     return MyValueOrThrow(sharding->WithDeviceAssignment(devices, memory_kind)).release();
 }
 
-extern "C" span<std::tuple<Shape*, Sharding*>> ifrt_sharding_disassemble_shape(Sharding* sharding, Shape* shape, SingleDeviceShardSemantics shard_semantics)
+extern "C" span<std::tuple<Shape*, Holded<std::shared_ptr<const Sharding>>*>> ifrt_sharding_disassemble_shape(Sharding* sharding, Shape* shape, SingleDeviceShardSemantics shard_semantics)
 {
-    using T = std::tuple<Shape*, Sharding*>;
+    using T = std::tuple<Shape*, Holded<std::shared_ptr<const Sharding>>*>;
 
     auto result = MyValueOrThrow(sharding->Disassemble(*shape));
     auto n = result.size();
-    auto ptr = new T[n];
+    T* ptr = new T[n];
 
     for (int i = 0; i < n; i++) {
         auto shape_ptr = new Shape(std::get<0>(result[i]));
-        auto sharding_ptr = capture_shared(std::get<1>(result[i]));
+        auto sharding_ptr = capture(std::get<1>(result[i]));
         ptr[i] = std::make_tuple(shape_ptr, sharding_ptr);
     }
 
     return span<T>(n, ptr);
 }
 
-extern "C" span<std::tuple<DynamicShape*, Sharding*>> ifrt_sharding_disassemble_dynamicshape(Sharding* sharding, DynamicShape* shape, SingleDeviceShardSemantics shard_semantics)
+extern "C" span<std::tuple<DynamicShape*, Holded<std::shared_ptr<const Sharding>>*>> ifrt_sharding_disassemble_dynamicshape(Sharding* sharding, DynamicShape* shape, SingleDeviceShardSemantics shard_semantics)
 {
-    using T = std::tuple<DynamicShape*, Sharding*>;
+    using T = std::tuple<DynamicShape*, Holded<std::shared_ptr<const Sharding>>*>;
 
     auto result = MyValueOrThrow(sharding->Disassemble(*shape));
     auto n = result.size();
@@ -89,7 +89,7 @@ extern "C" span<std::tuple<DynamicShape*, Sharding*>> ifrt_sharding_disassemble_
 
     for (int i = 0; i < n; i++) {
         auto shape_ptr = new DynamicShape(std::get<0>(result[i]));
-        auto sharding_ptr = capture_shared(std::get<1>(result[i]));
+        auto sharding_ptr = capture(std::get<1>(result[i]));
         ptr[i] = std::make_tuple(shape_ptr, sharding_ptr);
     }
 

@@ -81,22 +81,22 @@ extern "C" span<xla::OpSharding*> ifrt_loadedexecutable_output_shardings(LoadedE
     return convert(Type<span<xla::OpSharding*>>{}, shardings.value());
 }
 
-extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_parameter_layouts(LoadedExecutable* executable)
+extern "C" span<Holded<std::shared_ptr<const xla::PjRtLayout>>*> ifrt_loadedexecutable_parameter_layouts(LoadedExecutable* executable)
 {
     auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
-    return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+    return convert(Type<span<Holded<std::shared_ptr<const xla::PjRtLayout>>*>>(), layouts);
 }
 
-extern "C" span<xla::PjRtLayout*> ifrt_loadedexecutable_output_layouts(LoadedExecutable* executable)
+extern "C" span<Holded<std::shared_ptr<const xla::PjRtLayout>>*> ifrt_loadedexecutable_output_layouts(LoadedExecutable* executable)
 {
     auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-    return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+    return convert(Type<span<Holded<std::shared_ptr<const xla::PjRtLayout>>*>>(), layouts);
 }
 
-extern "C" span<xla::HloModule*> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
+extern "C" span<Holded<std::shared_ptr<xla::HloModule>>*> ifrt_loadedexecutable_hlo_modules(LoadedExecutable* executable)
 {
     auto modules = MyValueOrThrow(executable->GetHloModules());
-    return convert(Type<span<xla::HloModule*>>(), modules);
+    return convert(Type<span<Holded<std::shared_ptr<xla::HloModule>>*>>(), modules);
 }
 
 extern "C" span<span<const char*>> ifrt_loadedexecutable_output_memory_kinds(LoadedExecutable* executable)
@@ -114,7 +114,7 @@ extern "C" span<span<const char*>> ifrt_loadedexecutable_output_memory_kinds(Loa
 
 // TODO xla::LoadedExecutable::GetCostAnalysis
 
-extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(LoadedExecutable* executable, span<Array*> c_args, const ExecuteOptions& options, span<Device*> c_devices) {
+extern "C" std::tuple<Future<>*, span<Holded<tsl::RCReference<xla::ifrt::Array>>*>> ifrt_loadedexecutable_execute(LoadedExecutable* executable, span<Holded<tsl::RCReference<xla::ifrt::Array>>*> c_args, const ExecuteOptions& options, span<Device*> c_devices) {
     auto args = reactant::convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_args);
 
     std::optional<tsl::RCReference<DeviceList>> devices;
@@ -127,7 +127,7 @@ extern "C" std::tuple<Future<>*, span<Array*>> ifrt_loadedexecutable_execute(Loa
     if (options.fill_status)
         status = new Future<>(exec_res.status);
 
-    auto results = convert(Type<span<Array*>>(), exec_res.outputs);
+    auto results = convert(Type<span<Holded<tsl::RCReference<xla::ifrt::Array>>*>>(), exec_res.outputs);
 
     return std::make_tuple(status, results);
 }

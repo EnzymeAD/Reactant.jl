@@ -9,4 +9,4 @@ extern "C" PjRtCompiler* ifrt_pjrt_compiler_ctor(PjRtClient* client)
     return new PjRtCompiler(client);
 }
 
-extern "C" void ifrt_pjrt_compiler_free(PjRtCompiler* compiler) { delete compiler; }
+extern "C" void ifrt_pjrt_compiler_dtor(PjRtCompiler* compiler) { delete compiler; }

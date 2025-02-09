@@ -9,7 +9,7 @@ extern "C" PjRtMemory* ifrt_pjrt_memory_ctor(PjRtClient* client, xla::PjRtMemory
     return new PjRtMemory(client, memory_space);
 }
 
-extern "C" void ifrt_pjrt_memory_free(PjRtMemory* memory)
+extern "C" void ifrt_pjrt_memory_dtor(PjRtMemory* memory)
 {
     delete memory;
 }

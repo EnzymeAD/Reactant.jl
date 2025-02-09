@@ -21,7 +21,7 @@ extern "C" PjRtDevice* ifrt_pjrt_device_ctor(
         absl::flat_hash_map<std::string, xla::PjRtDeviceAttribute>(), pjrt_device);
 }
 
-extern "C" void ifrt_pjrt_device_free(PjRtDevice* device)
+extern "C" void ifrt_pjrt_device_dtor(PjRtDevice* device)
 {
     delete device;
 }
