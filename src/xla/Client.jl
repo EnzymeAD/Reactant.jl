@@ -1,13 +1,12 @@
 mutable struct Client
     client::Ptr{Cvoid}
     global_ordinals::Vector{Cint}
-    holded::Ptr{Cvoid}
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
         global_ordinals = Cint[]
 
-        client = new(client, global_ordinals, C_NULL)
+        client = new(client, global_ordinals)
 
         # https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L127
         devices = [
@@ -30,20 +29,7 @@ end
 Base.:(==)(a::Client, b::Client) = a.client == b.client
 
 @inline function free_client(client::Client)
-    if client.holded == C_NULL
-        @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
-    else
-        @ccall MLIR.API.mlir_c.reactant_release_pjrtclient(client.holded::Ptr{Cvoid})::Cvoid
-    end
-end
-
-function hold!(client::Client)
-    if client.holded == C_NULL
-        client.holded = @ccall MLIR.API.mlir_c.reactant_hold_pjrtclient(
-            client.client::Ptr{Cvoid}
-        )::Ptr{Cvoid}
-    end
-    return client
+    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
 end
 
 function ClientNumDevices(client::Client)

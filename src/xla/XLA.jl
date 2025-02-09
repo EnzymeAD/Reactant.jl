@@ -95,6 +95,4 @@ function __init__()
     return nothing
 end
 
-include("IFRT/IFRT.jl")
-
 end
