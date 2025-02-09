@@ -21,12 +21,18 @@ end
 function Array(client::Client, buffer::XLA.Buffer)
     hold!(buffer)
     GC.@preserve client buffer begin
-        return Array(@ccall MLIR.API.mlir_c.ifrt_pjrt_ArrayFromHostBuffer(client.ptr::Ptr{Cvoid}, buffer.holded::Ptr{Cvoid})::Ptr{Cvoid})
+        return Array(
+            @ccall MLIR.API.mlir_c.ifrt_pjrt_ArrayFromHostBuffer(
+                client.ptr::Ptr{Cvoid}, buffer.holded::Ptr{Cvoid}
+            )::Ptr{Cvoid}
+        )
     end
 end
 
 function CopyArrayToHostBuffer(array::Array, data)
     GC.@preserve array begin
-        @ccall MLIR.API.mlir_c.ifrt_CopyArrayToHostBuffer(array.ptr::Ptr{Cvoid}, data::Ptr{Cvoid}, AlwaysCopy::Cuint)::Cvoid
+        @ccall MLIR.API.mlir_c.ifrt_CopyArrayToHostBuffer(
+            array.ptr::Ptr{Cvoid}, data::Ptr{Cvoid}, AlwaysCopy::Cuint
+        )::Cvoid
     end
 end

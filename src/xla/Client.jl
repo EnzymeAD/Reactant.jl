@@ -39,7 +39,9 @@ end
 
 function hold!(client::Client)
     if client.holded == C_NULL
-        client.holded = @ccall MLIR.API.mlir_c.reactant_hold_pjrtclient(client.client::Ptr{Cvoid})::Ptr{Cvoid}
+        client.holded = @ccall MLIR.API.mlir_c.reactant_hold_pjrtclient(
+            client.client::Ptr{Cvoid}
+        )::Ptr{Cvoid}
     end
     return client
 end

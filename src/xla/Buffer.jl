@@ -20,7 +20,9 @@ end
 function hold!(buffer::Buffer)
     if buffer.holded == C_NULL
         sbuffer = buffer.buffer
-        buffer.holded = @ccall MLIR.API.mlir_c.reactant_hold_pjrtbuffer(sbuffer::Ptr{Cvoid})::Ptr{Cvoid}
+        buffer.holded = @ccall MLIR.API.mlir_c.reactant_hold_pjrtbuffer(
+            sbuffer::Ptr{Cvoid}
+        )::Ptr{Cvoid}
     end
     return buffer
 end

@@ -11,7 +11,11 @@ end
 function Client(pjrt_client::XLA.Client)
     # it needs a `std::shared_ptr<xla::PjRtClient>`
     hold!(pjrt_client)
-    return Client(@ccall MLIR.API.mlir_c.ifrt_pjrt_MakeClient(pjrt_client.holded::Ptr{Cvoid})::Ptr{Cvoid})
+    return Client(
+        @ccall MLIR.API.mlir_c.ifrt_pjrt_MakeClient(
+            pjrt_client.holded::Ptr{Cvoid}
+        )::Ptr{Cvoid}
+    )
 end
 
 function free_client(client)
@@ -19,5 +23,9 @@ function free_client(client)
 end
 
 function compile(client::Client, code::MLIR.IR.Module)
-    return LoadedExecutable(@ccall MLIR.API.mlir_c.ifrt_pjrt_ClientCompile(client.ptr::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule)::Ptr{Cvoid})
+    return LoadedExecutable(
+        @ccall MLIR.API.mlir_c.ifrt_pjrt_ClientCompile(
+            client.ptr::Ptr{Cvoid}, mod.module_::MLIR.API.MlirModule
+        )::Ptr{Cvoid}
+    )
 end
