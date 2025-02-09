@@ -991,3 +991,117 @@ extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
       newMod.getBody()->getOperations());
   return wrap(entryFn);
 }
+
+namespace reactant {
+
+template <typename T> struct unwrap_type { typedef T type; };
+template <typename T> struct unwrap_type<std::shared_ptr<T>> { typedef T type; };
+template <typename T> struct unwrap_type<tsl::RCReference<T>> { typedef T type; };
+
+template <typename T> using unwrap_type_t = typename unwrap_type<T>::type;
+
+template<typename T>
+struct Holded {
+ public:
+    Holded(T& obj) : holded(obj) {}
+    ~Holded() = default;
+
+    unwrap_type_t<T>* ptr() const {
+        return holded.get();
+    }
+
+    T obj() const {
+        return holded;
+    }
+
+    T value() const {
+        return holded;
+    }
+
+    unwrap_type_t<T>* operator->() const {
+        return ptr();
+    }
+
+ private:
+    T holded;
+};
+
+template <typename T>
+Holded<T>* capture(T obj) {
+    return new Holded<T>(obj);
+}
+
+} // namespace reactant
+
+using reactant::Holded;
+
+extern "C" Holded<std::shared_ptr<PjRtClient>>* reactant_hold_pjrtclient(xla::PjRtClient* client) {
+  return reactant::capture(std::shared_ptr<PjRtClient>(client));
+}
+
+extern "C" void reactant_release_pjrtclient(Holded<std::shared_ptr<PjRtClient>>* client) { delete client; }
+
+extern "C" Holded<std::shared_ptr<xla::PjRtBuffer>>* reactant_hold_pjrtbuffer(xla::PjRtBuffer* buffer) {
+  return reactant::capture(std::shared_ptr<xla::PjRtBuffer>(buffer));
+}
+
+extern "C" void reactant_release_pjrtbuffer(Holded<std::shared_ptr<PjRtBuffer>>* buffer) { delete buffer; }
+
+extern "C" ifrt::PjRtClient* MakeIFRTPJRTClient(Holded<std::shared_ptr<PjRtClient>>* pjrt_client) {
+  xla::ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
+  return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
+}
+
+extern "C" void FreeIFRTPJRTClient(ifrt::PjRtClient* client) { delete client; }
+
+extern "C" xla::ifrt::LoadedExecutable* IFRTPJRT_ClientCompile(ifrt::PjRtClient* client, MlirModule mlir_mod) {
+  mlir::ModuleOp mlir_mod_op = cast<ModuleOp>(*unwrap(mlir_mod));
+  // TODO import sharding config from `ClientCompile`?
+  xla::CompileOptions compile_options;
+  // TODO can't create LoadedExecutable from mlir::ModuleOp on IFRT-proxy backend
+  return MyValueOrThrow(xla::ifrt::PjRtLoadedExecutable::Create(client, mlir_mod_op, compile_options, std::vector<tsl::RCReference<xla::ifrt::LoadedHostCallback>>())).release();
+}
+
+extern "C" void FreeLoadedExecutableIFRTPJRT(xla::ifrt::PjRtLoadedExecutable* exec) { delete exec; }
+
+extern "C" Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* ArrayFromHostBufferIFRTPJRT(ifrt::PjRtClient* client, Holded<std::shared_ptr<xla::PjRtBuffer>>* buffer) {
+  return reactant::capture(MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj())));
+}
+
+extern "C" void reactant_release_ifrt_pjrt_array(Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* array) { delete array; }
+
+extern "C" void IFRT_Execute(ifrt::LoadedExecutable* exec, int num_args, Holded<tsl::RCReference<ifrt::Array>>** op_args, uint8_t* is_arg_donatable, int num_results, Holded<tsl::RCReference<ifrt::Array>>** op_results, uint8_t *futures, FutureType** status) {
+  std::vector<tsl::RCReference<xla::ifrt::Array>> args;
+  for (int i = 0; i < num_args; i++) {
+    args.emplace_back(op_args[i]->obj());
+  }
+
+  ifrt::ExecuteOptions options;
+  for (size_t i = 0; i < num_args; i++) {
+    if (!is_arg_donatable[i]) {
+      options.non_donatable_input_indices.insert(static_cast<int>(i));
+    }
+  }
+  options.fill_status = true;
+  
+  auto result = MyValueOrThrow(exec->Execute(static_cast<absl::Span<tsl::RCReference<xla::ifrt::Array>>>(args), options, /* devices */ std::nullopt));
+
+  if (result.outputs.size() != num_results) {
+    llvm::errs() << "Error: results.size()=" << result.outputs.size()
+                 << " does not match num_results=" << num_results << "\n";
+    std::abort(); // Terminate if the number of results is incorrect.
+  }
+
+  // there is only 1 status and is valid because we set `options.fill_status = true`
+  *futures = true;
+  *status = new FutureType(result.status);
+
+  for (int i = 0; i < num_results; i++) {
+    op_results[i] = reactant::capture(result.outputs[i]);
+  }
+}
+
+// in principle, use ArrayCopySemantics::kAlwaysCopy (=0)
+extern "C" FutureType* IFRT_Array_CopyToHostBuffer(Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* array, void* data, ifrt::ArrayCopySemantics semantics) {
+  (*array)->CopyToHostBuffer(data, std::nullopt, semantics);
+}
