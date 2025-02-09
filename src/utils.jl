@@ -477,7 +477,6 @@ function rewrite_insts!(ir, interp, guaranteed_error)
 end
 
 function temp1(f, args...)
-    Core.println("TEMP 1 ($f)")
     concretein = false
     construct_function_without_args = false
     toscalar = false
@@ -495,21 +494,23 @@ function temp1(f, args...)
         track_numbers=Union{}, # TODO: track_numbers?
     )
     mlir_caller_args = Reactant.MLIR.IR.Value[]
+    caller_linear_args = []
     for (k, v) in seen_cache
         v isa TracedType || continue
+        push!(caller_linear_args, v)
         push!(mlir_caller_args, v.mlir_data)
         # make tracer inserted `()` into the path, here we remove it:
         v.paths = v.paths[1:end-1]
     end
     
     N = length(args)
-    seen_args, traced_args, linear_args = TracedUtils.prepare_args(
+    seen_args, traced_args, callee_linear_args = TracedUtils.prepare_args(
         args, concretein, toscalar
     )
 
     mod, temp_func, fnbody, in_tys, sym_visibility = TracedUtils.placeholder_func(
         name,
-        linear_args,
+        callee_linear_args,
         toscalar,
         do_transpose,
         concretein,
@@ -517,34 +518,30 @@ function temp1(f, args...)
     
     MLIR.IR.activate!(fnbody)
     
-    for (i, arg) in enumerate(linear_args)
+    for (i, arg) in enumerate(callee_linear_args)
         TracedUtils.set_mlir_data!(arg, MLIR.IR.argument(fnbody, i))
     end
 
-    Core.println("##############################")
-    Core.println("CALLER ARGS: $mlir_caller_args")
-    Core.println("##############################")
-    return mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, linear_args, name
+    return mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name
 end
 
-@inline get_traced_args_from_temp1((mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, linear_args, name)) = traced_args
+@inline get_traced_args_from_temp1((mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name)) = traced_args
 @inline call_splatted(f, args) = f(args...)
 
 function temp2(
-    result, (mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, linear_args, name)
+    result, (mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name)
 )
-    Core.println("TEMP 2 ($name)")
     MLIR.IR.deactivate!(fnbody)
     
     concretein = false
-    args_in_result = :none
+    args_in_result = :mutated
     do_transpose = false
     return_dialect = :func
     
-    seen_result, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
+    seen_result, traced_result, linear_results, out_tys, mutated = TracedUtils.prepare_results(
         result,
         traced_args,
-        linear_args,
+        callee_linear_args,
         fnbody,
         concretein,
         args_in_result,
@@ -566,14 +563,17 @@ function temp2(
     )
 
     i = 1
-    Core.println("BEFORE:")
-    Core.println(traced_result)
     for (k, v) in seen_result
         v isa TracedType || continue
         TracedUtils.set_mlir_data!(v, MLIR.IR.result(call_op, i))
     end
-    Core.println("AFTER:")
-    Core.println(traced_result)
+    nres = MLIR.IR.nresults(call_op)
+    # mutated args are included as the last ones in the call op results
+    for (result_i, arg_i) in zip((nres - length(mutated)):nres, mutated)
+        Reactant.TracedUtils.set_mlir_data!(
+            caller_linear_args[arg_i], MLIR.IR.result(call_op, result_i + 1)
+        )
+    end
     return traced_result
 end
 
