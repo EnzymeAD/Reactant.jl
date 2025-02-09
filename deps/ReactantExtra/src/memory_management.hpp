@@ -28,9 +28,6 @@ struct Holded {
         return holded.get();
     }
 
-    // T operator[]() const {
-    //     return holded;
-    // }
     T obj() const {
         return holded;
     }
@@ -51,15 +48,5 @@ template <typename T>
 Holded<T>* capture(T obj) {
     return new Holded<T>(obj);
 }
-
-// template <typename T>
-// T* Holded<std::shared_ptr<T>>::ptr() const {
-//     return this->holded.get();
-// }
-
-// template <typename T>
-// T* Holded<tsl::RCReference<T>>::ptr() const {
-//     return this->holded.get();
-// }
 
 } // namespace reactant
