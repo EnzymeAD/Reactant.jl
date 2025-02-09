@@ -30,7 +30,7 @@ function Array(client::Client, buffer::XLA.Buffer)
 end
 
 function CopyArrayToHostBuffer(array::Array, data)
-    GC.@preserve array begin
+    GC.@preserve array data begin
         @ccall MLIR.API.mlir_c.ifrt_CopyArrayToHostBuffer(
             array.ptr::Ptr{Cvoid}, data::Ptr{Cvoid}, AlwaysCopy::Cuint
         )::Cvoid
