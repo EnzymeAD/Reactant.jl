@@ -86,7 +86,9 @@ end
 # Clients for Different Backends
 const cpuclientcount = Ref(0)
 
-function CPUClient(node_id=0, num_nodes=1; checkcount=true, asynchronous=true)
+# TODO synchronization when async is not working because `future` in `ConcreteRArray` is
+#      always `nothing`
+function CPUClient(node_id=0, num_nodes=1; checkcount=true, asynchronous=false)
     if checkcount
         @assert cpuclientcount[] == 0
         cpuclientcount[] += 1
