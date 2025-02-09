@@ -11,7 +11,6 @@ struct Mesh{D}
     device_ids::Array{Int,D}
     axis_names::NTuple{D,String}
     name_to_size::Dict{String,Int}
-    name_to_dim::Dict{String,Int}
 
     function Mesh(devices::AbstractArray{<:XLA.Device}, axis_names)
         return Mesh(XLA.DeviceGetLocalDeviceId.(devices), axis_names)
@@ -24,8 +23,7 @@ struct Mesh{D}
         name_to_size = Dict(
             name => Int64(size(device_ids, i)) for (i, name) in enumerate(axis_names)
         )
-        name_to_dim = Dict(name => i for (i, name) in enumerate(axis_names))
-        return new{D}(Int64.(device_ids), axis_names, name_to_size, name_to_dim)
+        return new{D}(Int64.(device_ids), axis_names, name_to_size)
     end
 end
 
