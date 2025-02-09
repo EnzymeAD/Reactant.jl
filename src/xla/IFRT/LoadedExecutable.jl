@@ -12,10 +12,15 @@ end
     @ccall MLIR.API.mlir_c.ifrt_pjrt_FreeLoadedExecutable(exec.ptr::Ptr{Cvoid})::Cvoid
 end
 
-function execute(exec::LoadedExecutable, args::NTuple{N,Ptr{Cvoid}}, donated_mask::NTuple{N,UInt8}, ::Val{n_results}) where {N,n_results}
-    results = Ref{NTuple{n_results, Ptr{Cvoid}}}()
+function execute(
+    exec::LoadedExecutable,
+    args::NTuple{N,Ptr{Cvoid}},
+    donated_mask::NTuple{N,UInt8},
+    ::Val{n_results},
+) where {N,n_results}
+    results = Ref{NTuple{n_results,Ptr{Cvoid}}}()
     has_future = Ref{UInt8}()
-    status = Ref{NTuple{1, Ptr{Cvoid}}}() # unused right now
+    status = Ref{NTuple{1,Ptr{Cvoid}}}() # unused right now
 
     args = Base.RefValue(args)
     donated_mask = Base.RefValue(donated_mask)
