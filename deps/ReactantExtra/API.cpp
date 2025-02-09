@@ -452,8 +452,8 @@ extern "C" PjRtClient *BufferToClient(PjRtBuffer *Buffer) {
   return Buffer->client();
 }
 
-extern "C" absl::Span<const int64_t> BufferShape(PjRtBuffer *Buffer) {
-  return Buffer->dimensions();
+extern "C" const int64_t* BufferShape(PjRtBuffer *Buffer) {
+  return Buffer->dimensions().data();
 }
 
 extern "C" int64_t BufferNDimensions(PjRtBuffer *Buffer) {
