@@ -12,7 +12,7 @@ extern "C" MemoryKind* ifrt_memorykind_ctor(const char* memory_kind)
     return new MemoryKind(std::string(memory_kind));
 }
 
-extern "C" void ifrt_memorykind_free(MemoryKind* memory_kind)
+extern "C" void ifrt_memorykind_dtor(MemoryKind* memory_kind)
 {
     delete memory_kind;
 }

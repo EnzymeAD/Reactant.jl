@@ -7,12 +7,13 @@ using namespace xla::ifrt;
 using namespace reactant;
 
 // TODO is there any problem with ownership by using `std::shared_ptr` here?
-extern "C" Executable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable* c_pjrt_executable) {
-    auto pjrt_executable = get_or_insert_shared(c_pjrt_executable);
+extern "C" Executable* ifrt_pjrt_executable_ctor(Holded<std::shared_ptr<xla::PjRtExecutable>>* out_pjrt_executable, xla::PjRtExecutable* c_pjrt_executable) {
+    auto pjrt_executable = std::shared_ptr<xla::PjRtExecutable>(c_pjrt_executable);
+    (*out_pjrt_executable) = *capture(pjrt_executable);
     return MyValueOrThrow(PjRtExecutable::Create(pjrt_executable)).release();
 }
 
-extern "C" void ifrt_pjrt_executable_free(PjRtExecutable* executable) { delete executable; }
+extern "C" void ifrt_pjrt_executable_dtor(PjRtExecutable* executable) { delete executable; }
 
 extern "C" xla::PjRtExecutable* ifrt_pjrt_executable_pjrt_executable(PjRtExecutable* executable)
 {

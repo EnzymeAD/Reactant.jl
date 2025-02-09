@@ -6,10 +6,11 @@ using namespace xla::ifrt;
 using namespace reactant;
 
 // TODO add support for LoadedHostCallback
-extern "C" LoadedExecutable* ifrt_pjrt_loadedexecutable_ctor(PjRtCompatibleClient* client, xla::PjRtLoadedExecutable* pjrt_loaded_executable)
+extern "C" LoadedExecutable* ifrt_pjrt_loadedexecutable_ctor(Holded<std::shared_ptr<xla::PjRtLoadedExecutable>>* out_pjrt_loaded_executable, PjRtCompatibleClient* client, xla::PjRtLoadedExecutable* c_pjrt_loaded_executable)
 {
-    auto pjrt_loaded_executable_ptr = get_or_insert_shared(pjrt_loaded_executable);
-    return MyValueOrThrow(PjRtLoadedExecutable::Create(client, pjrt_loaded_executable_ptr, std::vector<tsl::RCReference<LoadedHostCallback>>())).release();
+    auto pjrt_loaded_executable = std::shared_ptr<xla::PjRtLoadedExecutable>(c_pjrt_loaded_executable);
+    (*out_pjrt_loaded_executable) = *capture(pjrt_loaded_executable);
+    return MyValueOrThrow(PjRtLoadedExecutable::Create(client, pjrt_loaded_executable, std::vector<tsl::RCReference<LoadedHostCallback>>())).release();
 }
 
 // TODO add support for LoadedHostCallback
@@ -25,7 +26,7 @@ extern "C" LoadedExecutable* ifrt_pjrt_loadedexecutable_ctor_from_mlir_module(
         .release();
 }
 
-extern "C" void ifrt_pjrt_loadedexecutable_free(PjRtLoadedExecutable* executable) { delete executable; }
+extern "C" void ifrt_pjrt_loadedexecutable_dtor(PjRtLoadedExecutable* executable) { delete executable; }
 
 extern "C" xla::PjRtLoadedExecutable* ifrt_pjrt_loadedexecutable_pjrt_loadedexecutable(PjRtLoadedExecutable* executable)
 {

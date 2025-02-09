@@ -53,22 +53,22 @@ extern "C" span<xla::OpSharding*> ifrt_executable_output_shardings(Executable* e
     return convert(Type<span<xla::OpSharding*>>{}, shardings.value());
 }
 
-extern "C" span<xla::PjRtLayout*> ifrt_executable_parameter_layouts(Executable* executable)
+extern "C" span<Holded<std::shared_ptr<const xla::PjRtLayout>>*> ifrt_executable_parameter_layouts(Executable* executable)
 {
     auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
-    return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+    return convert(Type<span<Holded<std::shared_ptr<const xla::PjRtLayout>>*>>(), layouts);
 }
 
-extern "C" span<xla::PjRtLayout*> ifrt_executable_output_layouts(Executable* executable)
+extern "C" span<Holded<std::shared_ptr<const xla::PjRtLayout>>*> ifrt_executable_output_layouts(Executable* executable)
 {
     auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-    return convert(Type<span<xla::PjRtLayout*>>(), layouts);
+    return convert(Type<span<Holded<std::shared_ptr<const xla::PjRtLayout>>*>>(), layouts);
 }
 
-extern "C" span<xla::HloModule*> ifrt_executable_hlo_modules(Executable* executable)
+extern "C" span<Holded<std::shared_ptr<xla::HloModule>>*> ifrt_executable_hlo_modules(Executable* executable)
 {
     auto modules = MyValueOrThrow(executable->GetHloModules());
-    return convert(Type<span<xla::HloModule*>>(), modules);
+    return convert(Type<span<Holded<std::shared_ptr<xla::HloModule>>*>>(), modules);
 }
 
 extern "C" span<span<const char*>> ifrt_executable_output_memory_kinds(Executable* executable)

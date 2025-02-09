@@ -9,7 +9,7 @@ extern "C" DType* ifrt_dtype_ctor(DType::Kind kind)
     return new DType(kind);
 }
 
-extern "C" void ifrt_dtype_free(DType* dtype) { delete dtype; }
+extern "C" void ifrt_dtype_dtor(DType* dtype) { delete dtype; }
 
 extern "C" DType::Kind ifrt_dtype_kind(DType* dtype)
 {

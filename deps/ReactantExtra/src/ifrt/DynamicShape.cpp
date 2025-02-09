@@ -13,7 +13,7 @@ extern "C" DynamicShape* ifrt_dynamicshape_ctor(Shape* shape, const bool* dynami
     return new DynamicShape(dynshape);
 }
 
-extern "C" void ifrt_dynamicshape_free(DynamicShape* shape) { delete shape; }
+extern "C" void ifrt_dynamicshape_dtor(DynamicShape* shape) { delete shape; }
 
 // TODO DynamicShape::GetTag
 

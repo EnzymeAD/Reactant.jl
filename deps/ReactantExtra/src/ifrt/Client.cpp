@@ -9,41 +9,41 @@ using namespace xla::ifrt;
 using namespace reactant;
 
 // TODO add `on_done_with_host_buffer` argument
-extern "C" Array* ifrt_client_make_array_from_host_buffer(Client* client, const void* data, DType& dtype, Shape& shape, span<const int64_t> c_byte_strides, Sharding* c_sharding, Client::HostBufferSemantics semantics)
+extern "C" Holded<tsl::RCReference<xla::ifrt::Array>>* ifrt_client_make_array_from_host_buffer(Client* client, const void* data, DType& dtype, Shape& shape, span<const int64_t> c_byte_strides, Sharding* c_sharding, Client::HostBufferSemantics semantics)
 {
     std::optional<absl::Span<const int64_t>> byte_strides;
     if (c_byte_strides.ptr != nullptr)
         byte_strides = convert(Type<absl::Span<const int64_t>>(), c_byte_strides);
 
     absl::Nonnull<std::shared_ptr<const Sharding>> sharding = std::shared_ptr<const Sharding>(c_sharding);
-    return capture_rcreference(MyValueOrThrow(client->MakeArrayFromHostBuffer(
+    return capture(MyValueOrThrow(client->MakeArrayFromHostBuffer(
         data, dtype, shape, byte_strides, sharding, semantics, nullptr
     )));
 }
 
-extern "C" Array* ifrt_client_assemble_from_single_device_arrays(Client* client, Shape& shape, const Sharding* c_sharding, span<Array*> c_arrays, ArrayCopySemantics copy_semantics, SingleDeviceShardSemantics shard_semantics)
+extern "C" Holded<tsl::RCReference<xla::ifrt::Array>>* ifrt_client_assemble_from_single_device_arrays(Client* client, Shape& shape, const Sharding* c_sharding, span<Holded<tsl::RCReference<xla::ifrt::Array>>*> c_arrays, ArrayCopySemantics copy_semantics, SingleDeviceShardSemantics shard_semantics)
 {
     absl::Nonnull<std::shared_ptr<const Sharding>> sharding = std::shared_ptr<const Sharding>(c_sharding);
     auto arrays = convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_arrays);
-    return capture_rcreference(MyValueOrThrow(client->AssembleArrayFromSingleDeviceArrays(shape, sharding, arrays, copy_semantics, shard_semantics)));
+    return capture(MyValueOrThrow(client->AssembleArrayFromSingleDeviceArrays(shape, sharding, arrays, copy_semantics, shard_semantics)));
 }
 
-extern "C" span<Array*> ifrt_client_copy_arrays(Client* client, span<Array*> c_arrays, span<Device* const> c_devices, MemoryKind* c_memory_kind, ArrayCopySemantics semantics)
+extern "C" span<Holded<tsl::RCReference<xla::ifrt::Array>>*> ifrt_client_copy_arrays(Client* client, span<Holded<tsl::RCReference<xla::ifrt::Array>>*> c_arrays, span<Device* const> c_devices, MemoryKind* c_memory_kind, ArrayCopySemantics semantics)
 {
     auto arrays = convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_arrays);
     auto devices = BasicDeviceList::Create(convert(Type<absl::Span<Device* const>>(), c_devices));
 
     auto memory_kind = convert(Type<std::optional<MemoryKind>>(), c_memory_kind);
     auto res = MyValueOrThrow(client->CopyArrays(arrays, devices, memory_kind, semantics));
-    return convert(Type<span<Array*>>(), res);
+    return convert(Type<span<Holded<tsl::RCReference<xla::ifrt::Array>>*>>(), res);
 }
 
 // TODO RemapArrays (need to implement RemapPlan)
 
 // NOTE right now we only support `Array` due to our shared ownership memory management system:
 // we capture `Value` and `Array` on different maps, so we can't cast easily
-// TODO fix this when we move to a "`Holder`" system
-extern "C" Future<>* ifrt_client_get_ready_future(Client* client, span<Array*> c_arrays)
+// TODO fix this when we move to a "`Holded`" system
+extern "C" Future<>* ifrt_client_get_ready_future(Client* client, span<Holded<tsl::RCReference<xla::ifrt::Array>>*> c_arrays)
 {
     auto arrays = convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_arrays);
     auto values_ptr = new tsl::RCReference<Value>[arrays.size()];
@@ -56,8 +56,8 @@ extern "C" Future<>* ifrt_client_get_ready_future(Client* client, span<Array*> c
 
 // NOTE right now we only support `Array` due to our shared ownership memory management system:
 // we capture `Value` and `Array` on different maps, so we can't cast easily
-// TODO fix this when we move to a "`Holder`" system
-extern "C" Tuple* ifrt_client_make_tuple(Client* client, span<Array*> c_arrays)
+// TODO fix this when we move to a "`Holded`" system
+extern "C" Holded<tsl::RCReference<Tuple>>* ifrt_client_make_tuple(Client* client, span<Holded<tsl::RCReference<xla::ifrt::Array>>*> c_arrays)
 {
     auto arrays = convert(Type<absl::Span<tsl::RCReference<Array>>>(), c_arrays);
     auto values_ptr = new tsl::RCReference<Value>[arrays.size()];
@@ -65,7 +65,7 @@ extern "C" Tuple* ifrt_client_make_tuple(Client* client, span<Array*> c_arrays)
         values_ptr[i] = tsl::RCReference<Value>(arrays[i]);
     }
     auto values = absl::Span<tsl::RCReference<Value>>(values_ptr, arrays.size());
-    return capture_rcreference(MyValueOrThrow(client->MakeTuple(values)));
+    return capture(MyValueOrThrow(client->MakeTuple(values)));
 }
 
 extern "C" const char* ifrt_client_runtime_type(Client* client)
@@ -134,15 +134,15 @@ extern "C" Compiler* ifrt_client_default_compiler(Client* client)
     return client->GetDefaultCompiler();
 }
 
-extern "C" Topology* ifrt_client_get_topology_for_devices(Client* client, span<Device*> c_devices)
+extern "C" Holded<std::shared_ptr<Topology>>* ifrt_client_get_topology_for_devices(Client* client, span<Device*> c_devices)
 {
     auto devices = convert(Type<tsl::RCReference<DeviceList>>(), c_devices);
-    return reactant::capture_shared(MyValueOrThrow(client->GetTopologyForDevices(devices)));
+    return reactant::capture(MyValueOrThrow(client->GetTopologyForDevices(devices)));
 }
 
-extern "C" xla::PjRtLayout* ifrt_client_get_default_layout(Client* client, DType* dtype, span<const int64_t> c_dims, Device* device, MemoryKind* memory_kind)
+extern "C" Holded<std::shared_ptr<const xla::PjRtLayout>>* ifrt_client_get_default_layout(Client* client, DType* dtype, span<const int64_t> c_dims, Device* device, MemoryKind* memory_kind)
 {
     auto dims = convert(Type<absl::Span<const int64_t>>(), c_dims);
     auto res = MyValueOrThrow(client->GetDefaultLayout(*dtype, dims, device, *memory_kind));
-    return reactant::capture_shared(res);
+    return reactant::capture(res);
 }

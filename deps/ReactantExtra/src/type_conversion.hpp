@@ -97,22 +97,22 @@ auto convert(Type<span<T*>>, std::vector<std::unique_ptr<T>> vec) -> span<T*> {
     return span<T*>(vec.size(), ptr);
 }
 
-template <typename T, typename U = std::remove_cv_t<T>>
-auto convert(Type<span<U*>>, std::vector<std::shared_ptr<T>> vec) -> span<U*> {
-    U** ptr = new U*[vec.size()];
+template <typename T>
+auto convert(Type<span<Holded<std::shared_ptr<T>>*>>, std::vector<std::shared_ptr<T>> vec) -> span<Holded<std::shared_ptr<T>>*> {
+    Holded<std::shared_ptr<T>>** ptr = new Holded<std::shared_ptr<T>>*[vec.size()];
     for (int i = 0; i < vec.size(); i++) {
-        ptr[i] = reactant::capture_shared(vec[i]);
+        ptr[i] = capture(vec[i]);
     }
-    return span<U*>(vec.size(), ptr);
+    return span<Holded<std::shared_ptr<T>>*>(vec.size(), ptr);
 }
 
 template <typename T>
-auto convert(Type<span<T*>>, std::vector<tsl::RCReference<T>> vec) -> span<T*> {
-    T** ptr = new T*[vec.size()];
+auto convert(Type<span<Holded<tsl::RCReference<T>>*>>, std::vector<tsl::RCReference<T>> vec) -> span<Holded<tsl::RCReference<T>>*> {
+    Holded<tsl::RCReference<T>>** ptr = new Holded<tsl::RCReference<T>>*[vec.size()];
     for (int i = 0; i < vec.size(); i++) {
-        ptr[i] = reactant::capture_rcreference(vec[i]);
+        ptr[i] = capture(vec[i]);
     }
-    return span<T*>(vec.size(), ptr);
+    return span<Holded<tsl::RCReference<T>>*>(vec.size(), ptr);
 }
 
 template <typename T, typename U, typename = std::enable_if_t<std::is_convertible_v<T, U>>>
@@ -133,11 +133,11 @@ auto convert(Type<absl::Span<T>>, span<T> span) -> absl::Span<T>
 }
 
 template <typename T>
-auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<T*> span) -> absl::Span<tsl::RCReference<T>>
+auto convert(Type<absl::Span<tsl::RCReference<T>>>, span<Holded<tsl::RCReference<T>>*> span) -> absl::Span<tsl::RCReference<T>>
 {
     auto values_ptr = new tsl::RCReference<T>[span.size()];
     for (int i = 0; i < span.size(); i++) {
-        values_ptr[i] = reactant::get_or_insert_rcreference(span[i]).template get_rcref<T>();
+        values_ptr[i] = span[i]->obj();
     }
     return absl::Span<tsl::RCReference<T>>(values_ptr, span.size());
 }

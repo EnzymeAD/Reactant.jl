@@ -7,9 +7,10 @@ using namespace reactant;
 
 // PjRtClient::CreateOptions
 // TODO support more parameters of `PjRtClient::CreateOptions`
-extern "C" PjRtClient::CreateOptions* ifrt_pjrt_client_create_options_ctor(xla::PjRtClient* c_pjrt_client)
+extern "C" PjRtClient::CreateOptions* ifrt_pjrt_client_create_options_ctor(Holded<std::shared_ptr<xla::PjRtClient>>* out_holded_pjrt_client, xla::PjRtClient* c_pjrt_client)
 {
-    std::shared_ptr<xla::PjRtClient> pjrt_client = reactant::get_or_insert_shared(c_pjrt_client);
+    std::shared_ptr<xla::PjRtClient> pjrt_client = std::shared_ptr<xla::PjRtClient>(c_pjrt_client);
+    (*out_holded_pjrt_client) = *capture(pjrt_client);
     return new PjRtClient::CreateOptions{pjrt_client};
 }
 
@@ -26,13 +27,13 @@ extern "C" PjRtClient* ifrt_pjrt_client_create(PjRtClient::CreateOptions* option
 
 extern "C" void ifrt_pjrt_client_dtor(PjRtClient* client)
 {
-    reactant::destruct_or_release_if_shared(client);
+    delete client;
 }
 
 // NOTE we use `shared_ptr_pjrt_client` instead of `pjrt_client` because latter uses just the `shared_ptr::get` and we could delete it accidentally
-extern "C" xla::PjRtClient* ifrt_pjrt_client_pjrt_client(PjRtClient* client)
+extern "C" Holded<std::shared_ptr<xla::PjRtClient>>* ifrt_pjrt_client_pjrt_client(PjRtClient* client)
 {
-    return reactant::capture_shared(client->shared_ptr_pjrt_client());
+    return reactant::capture(client->shared_ptr_pjrt_client());
 }
 
 // NOTE we don't implement `CreatePjRtArray` because there are already equivalent methods in `PjRtArray` class

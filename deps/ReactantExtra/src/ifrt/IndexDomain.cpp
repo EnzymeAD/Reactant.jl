@@ -14,7 +14,7 @@ extern "C" IndexDomain* ifrt_indexdomain_ctor_with_origin(Index* origin, Shape* 
     return new IndexDomain(*origin, *shape);
 }
 
-extern "C" void ifrt_indexdomain_free(IndexDomain* index_domain)
+extern "C" void ifrt_indexdomain_dtor(IndexDomain* index_domain)
 {
     delete index_domain;
 }

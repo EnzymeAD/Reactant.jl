@@ -10,7 +10,7 @@ extern "C" PjRtHostSendAndRecvLoadedHostCallback* ifrt_pjrt_hostsendandrecv_load
     return new PjRtHostSendAndRecvLoadedHostCallback(client, std::move(xla_callback_ptr));
 }
 
-extern "C" void ifrt_pjrt_hostsendandrecv_loadhostcallback_free(PjRtHostSendAndRecvLoadedHostCallback* host_callback) { delete host_callback; }
+extern "C" void ifrt_pjrt_hostsendandrecv_loadhostcallback_dtor(PjRtHostSendAndRecvLoadedHostCallback* host_callback) { delete host_callback; }
 
 extern "C" xla::HostCallback* ifrt_pjrt_hostsendandrecv_loadhostcallback_host_callback(PjRtHostSendAndRecvLoadedHostCallback* host_callback)
 {

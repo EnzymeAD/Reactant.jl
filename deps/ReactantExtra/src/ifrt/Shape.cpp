@@ -9,7 +9,7 @@ extern "C" Shape* ifrt_shape_ctor(const int64_t* dims, size_t dims_size)
     return new Shape(absl::Span<const int64_t>(dims, dims_size));
 }
 
-extern "C" void ifrt_shape_free(Shape* shape) { delete shape; }
+extern "C" void ifrt_shape_dtor(Shape* shape) { delete shape; }
 
 extern "C" span<int64_t> ifrt_shape_dims(Shape* shape)
 {

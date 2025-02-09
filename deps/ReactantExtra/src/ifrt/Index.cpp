@@ -9,7 +9,7 @@ extern "C" Index* ifrt_index_ctor(const int64_t* elements, size_t elements_size)
     return new Index(absl::Span<const int64_t>(elements, elements_size));
 }
 
-extern "C" void ifrt_index_free(Index* index) { delete index; }
+extern "C" void ifrt_index_dtor(Index* index) { delete index; }
 
 extern "C" Index* ifrt_index_zeros(int num_elements)
 {
