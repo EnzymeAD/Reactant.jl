@@ -874,6 +874,22 @@ macro code_hlo(args...)
 end
 
 """
+    @code_mhlo [optimize = ...] [no_nan = <true/false>] f(args...)
+
+Similar to `@code_hlo`, but prints the module after running the XLA compiler.
+"""
+macro code_mhlo(args...)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true, :no_nan => false, :client => nothing
+    )
+    compile_expr, (; compiled) = compile_call_expr(
+        __module__, compile_xla, default_options, args...
+    )
+    return esc(:($(compile_expr);
+    $(first)($(compiled))))
+end
+
+"""
     @compile [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
 """
 macro compile(args...)
@@ -1392,9 +1408,16 @@ function compile_xla(f, args; client=nothing, kwargs...)
         else
             Int64[]
         end
-        exec = XLA.Compile(client, device, mod; mlir_fn_res.is_sharded, mesh_ids)
+        exec = XLA.Compile(
+            client,
+            device,
+            mod;
+            num_results=length(mlir_fn_res.linear_results),
+            mlir_fn_res.is_sharded,
+            mesh_ids,
+        )
 
-        return exec, mlir_fn_res, device, client
+        return mod, exec, mlir_fn_res, device, client
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -1404,7 +1427,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
 end
 
 function compile(f, args; sync=false, kwargs...)
-    exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
+    _, exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
 

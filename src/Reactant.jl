@@ -148,8 +148,10 @@ function Enzyme.make_zero(
     return res
 end
 
-using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
-export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace, within_compile
+using .Compiler:
+    @compile, @code_hlo, @code_mhlo, @jit, traced_getfield, create_result, compile
+export ConcreteRArray,
+    ConcreteRNumber, @compile, @code_hlo, @code_mhlo, @jit, @trace, within_compile
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
