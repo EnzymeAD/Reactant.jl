@@ -19,12 +19,12 @@ function Client(pjrt_client::XLA.Client)
 end
 
 function free_client(client)
-    @ccall MLIR.API.mlir_c.ifrt_pjrt_FreeClient(client.ptr::Ptr{Cvoid})::Cvoid
+    @ccall MLIR.API.mlir_c.ifrt_FreeClient(client.ptr::Ptr{Cvoid})::Cvoid
 end
 
 function compile(client::Client, code::MLIR.IR.Module)
     return LoadedExecutable(
-        @ccall MLIR.API.mlir_c.ifrt_pjrt_ClientCompile(
+        @ccall MLIR.API.mlir_c.ifrt_ClientCompile(
             client.ptr::Ptr{Cvoid}, code.module_::MLIR.API.MlirModule
         )::Ptr{Cvoid}
     )

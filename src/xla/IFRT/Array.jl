@@ -15,7 +15,7 @@ mutable struct Array
 end
 
 function free_array(array)
-    @ccall MLIR.API.mlir_c.reactant_release_ifrt_pjrt_array(array.ptr::Ptr{Cvoid})::Cvoid
+    @ccall MLIR.API.mlir_c.reactant_release_ifrt_array(array.ptr::Ptr{Cvoid})::Cvoid
 end
 
 function Array(client::Client, buffer::XLA.Buffer)

@@ -106,6 +106,8 @@
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
+#include "llvm/Support/ExtensibleRTTI.h"
+
 using namespace mlir;
 using namespace llvm;
 using namespace xla;
@@ -1047,14 +1049,14 @@ extern "C" Holded<std::shared_ptr<xla::PjRtBuffer>>* reactant_hold_pjrtbuffer(xl
 
 extern "C" void reactant_release_pjrtbuffer(Holded<std::shared_ptr<PjRtBuffer>>* buffer) { delete buffer; }
 
-extern "C" ifrt::PjRtClient* ifrt_pjrt_MakeClient(Holded<std::shared_ptr<PjRtClient>>* pjrt_client) {
+extern "C" ifrt::Client* ifrt_pjrt_MakeClient(Holded<std::shared_ptr<PjRtClient>>* pjrt_client) {
   xla::ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
 }
 
-extern "C" void ifrt_pjrt_FreeClient(ifrt::PjRtClient* client) { delete client; }
+extern "C" void ifrt_FreeClient(ifrt::Client* client) { delete client; }
 
-extern "C" xla::ifrt::LoadedExecutable* ifrt_pjrt_ClientCompile(ifrt::PjRtClient* client, MlirModule mlir_mod) {
+extern "C" xla::ifrt::LoadedExecutable* ifrt_ClientCompile(ifrt::PjRtClient* client, MlirModule mlir_mod) {
   mlir::ModuleOp mlir_mod_op = cast<ModuleOp>(*unwrap(mlir_mod));
   // TODO import sharding config from `ClientCompile`?
   xla::CompileOptions compile_options;
@@ -1064,11 +1066,12 @@ extern "C" xla::ifrt::LoadedExecutable* ifrt_pjrt_ClientCompile(ifrt::PjRtClient
 
 extern "C" void ifrt_pjrt_FreeLoadedExecutable(xla::ifrt::PjRtLoadedExecutable* exec) { delete exec; }
 
-extern "C" Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* ifrt_pjrt_ArrayFromHostBuffer(ifrt::PjRtClient* client, Holded<std::shared_ptr<xla::PjRtBuffer>>* buffer) {
-  return reactant::capture(MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj())));
+// TODO replace with `Client::MakeArrayFromHostBuffer` and generalize to `ifrt::Client`
+extern "C" Holded<tsl::RCReference<xla::ifrt::Array>>* ifrt_pjrt_ArrayFromHostBuffer(ifrt::PjRtClient* client, Holded<std::shared_ptr<xla::PjRtBuffer>>* buffer) {
+  return reactant::capture(tsl::RCReference<ifrt::Array>(MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj()))));
 }
 
-extern "C" void reactant_release_ifrt_pjrt_array(Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* array) { delete array; }
+extern "C" void reactant_release_ifrt_array(Holded<tsl::RCReference<xla::ifrt::Array>>* array) { delete array; }
 
 extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, Holded<tsl::RCReference<ifrt::Array>>** op_args, uint8_t* is_arg_donatable, int num_results, Holded<tsl::RCReference<ifrt::Array>>** op_results, uint8_t *futures, FutureType** status) {
   std::vector<tsl::RCReference<xla::ifrt::Array>> args;
@@ -1102,6 +1105,10 @@ extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, Holded<
 }
 
 // in principle, use ArrayCopySemantics::kAlwaysCopy (=0)
-extern "C" FutureType* ifrt_CopyArrayToHostBuffer(Holded<tsl::RCReference<xla::ifrt::PjRtArray>>* array, void* data, ifrt::ArrayCopySemantics semantics) {
-  (*array)->CopyToHostBuffer(data, std::nullopt, semantics);
+extern "C" FutureType* ifrt_CopyArrayToHostBuffer(Holded<tsl::RCReference<xla::ifrt::Array>>* array, void* data, ifrt::ArrayCopySemantics semantics) {
+  return new FutureType((*array)->CopyToHostBuffer(data, std::nullopt, semantics));
+}
+
+extern "C" void reactant_generic_llvm_rtti_root_dtor(llvm::RTTIRoot* root) {
+  delete root;
 }
