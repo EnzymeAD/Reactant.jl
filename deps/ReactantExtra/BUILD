@@ -518,6 +518,7 @@ cc_library(
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
 
+        "@xla//xla/service:custom_call_target_registry",
         "@xla//xla/service/cpu:cpu_compiler",
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
         "@xla//xla/stream_executor/tpu:tpu_executor",
