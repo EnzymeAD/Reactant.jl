@@ -1108,7 +1108,3 @@ extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, Holded<
 extern "C" FutureType* ifrt_CopyArrayToHostBuffer(Holded<tsl::RCReference<xla::ifrt::Array>>* array, void* data, ifrt::ArrayCopySemantics semantics) {
   return new FutureType((*array)->CopyToHostBuffer(data, std::nullopt, semantics));
 }
-
-extern "C" void reactant_generic_llvm_rtti_root_dtor(llvm::RTTIRoot* root) {
-  delete root;
-}
