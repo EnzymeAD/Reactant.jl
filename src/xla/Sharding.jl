@@ -12,28 +12,33 @@ end
     Like
 end
 
-# https://github.com/openxla/xla/blob/8bac4a2c3c32144e39b1602450fe318bfab8e15d/xla/xla_data.proto#L897
 # TODO: tuple sharding / op metadata
 struct JLOpSharding
-    type::Int32
+    type::Cint
+    n_tile_dimensions::Cint
+    tile_dimensions::Ptr{Clong}
+    n_layout_minor_to_major::Cint
+    layout_minor_to_major::Ptr{Clong}
     replicate_on_last_tile_dim::Bool
-    n_last_tile_dims::Int32
-    last_tile_dims::Ptr{Int32}
-    n_tile_assignment_dimensions::Int32
-    tile_assignment_dimensions::Ptr{Int64}
-    n_tile_assignment_devices::Int32
-    tile_assignment_devices::Ptr{Int64}
-    n_iota_reshape_dims::Int32
-    iota_reshape_dims::Ptr{Int64}
-    n_iota_transpose_perm::Int32
-    iota_transpose_perm::Ptr{Int32}
+    n_last_tile_dims::Cint
+    last_tile_dims::Ptr{Cint}
+    n_tile_assignment_dimensions::Cint
+    tile_assignment_dimensions::Ptr{Clong}
+    n_tile_assignment_devices::Cint
+    tile_assignment_devices::Ptr{Clong}
+    n_iota_reshape_dims::Cint
+    iota_reshape_dims::Ptr{Clong}
+    n_iota_transpose_perm::Cint
+    iota_transpose_perm::Ptr{Cint}
     is_shard_group::Bool
-    shard_group_id::Int64
-    shard_group_type::Int32
+    shard_group_id::Clong
+    shard_group_type::Cint
 end
 
 struct OpSharding
     type::OpShardingType.T
+    tile_dimensions::Vector{Int64}
+    layout_minor_to_major::Vector{Int64}
     replicate_on_last_tile_dim::Bool
     last_tile_dims::Vector{OpShardingType.T}
     tile_assignment_dimensions::Vector{Int64}
@@ -43,6 +48,46 @@ struct OpSharding
     is_shard_group::Bool
     shard_group_id::Int64
     shard_group_type::ShardGroupType.T
+end
+
+function OpSharding(sharding::JLOpSharding)
+    @assert sharding.type != 2 "Tuple sharding is not supported yet!"
+
+    last_tile_dims = unsafe_wrap(Array, sharding.last_tile_dims, sharding.n_last_tile_dims)
+    tile_assignment_dimensions = unsafe_wrap(
+        Array, sharding.tile_assignment_dimensions, sharding.n_tile_assignment_dimensions
+    )
+    tile_assignment_devices = unsafe_wrap(
+        Array, sharding.tile_assignment_devices, sharding.n_tile_assignment_devices
+    )
+    iota_reshape_dims = unsafe_wrap(
+        Array, sharding.iota_reshape_dims, sharding.n_iota_reshape_dims
+    )
+    iota_transpose_perm = unsafe_wrap(
+        Array, sharding.iota_transpose_perm, sharding.n_iota_transpose_perm
+    )
+
+    tile_dimensions = unsafe_wrap(
+        Array, sharding.tile_dimensions, sharding.n_tile_dimensions
+    )
+    layout_minor_to_major = unsafe_wrap(
+        Array, sharding.layout_minor_to_major, sharding.n_layout_minor_to_major
+    )
+
+    return OpSharding(
+        int_to_op_sharding_type(sharding.type),
+        tile_dimensions,
+        layout_minor_to_major,
+        sharding.replicate_on_last_tile_dim,
+        last_tile_dims,
+        tile_assignment_dimensions,
+        tile_assignment_devices,
+        iota_reshape_dims,
+        iota_transpose_perm,
+        sharding.is_shard_group,
+        sharding.shard_group_id,
+        int_to_shard_group_type(sharding.shard_group_type),
+    )
 end
 
 function int_to_op_sharding_type(i::Int32)
@@ -64,63 +109,18 @@ end
 function get_output_shardings(exec::LoadedExecutable)
     exec.is_sharded || return OpSharding[]
 
-    jl_op_shardings = [Ref{JLOpSharding}() for _ in exec.num_results]
+    jl_op_shardings = [Ref{JLOpSharding}() for _ in 1:(exec.num_results)]
+    jl_op_shardings_ptr = [
+        Base.unsafe_convert(Ptr{JLOpSharding}, sharding) for sharding in jl_op_shardings
+    ]
+
     GC.@preserve jl_op_shardings begin
         @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetOuputShardings(
             exec.exec::Ptr{Cvoid},
-            Base.unsafe_convert(Ptr{Cvoid}, jl_op_shardings)::Ptr{Cvoid},
+            jl_op_shardings_ptr::Ptr{Ptr{JLOpSharding}},
             exec.num_results::Int32,
         )::Cvoid
     end
 
-    op_shardings = Vector{OpSharding}(undef, exec.num_results)
-    for (i, jl_op_sharding) in enumerate(jl_op_shardings)
-        last_tile_dims = Vector{Int32}(undef, jl_op_sharding.n_last_tile_dims)
-        for j in 1:(jl_op_sharding.n_last_tile_dims)
-            last_tile_dims[j] = unsafe_load(jl_op_sharding.last_tile_dims, j)
-        end
-
-        tile_assignment_dimensions = Vector{Int64}(
-            undef, jl_op_sharding.n_tile_assignment_dimensions
-        )
-        for j in 1:(jl_op_sharding.n_tile_assignment_dimensions)
-            tile_assignment_dimensions[j] = unsafe_load(
-                jl_op_sharding.tile_assignment_dimensions, j
-            )
-        end
-
-        tile_assignment_devices = Vector{Int64}(
-            undef, jl_op_sharding.n_tile_assignment_devices
-        )
-        for j in 1:(jl_op_sharding.n_tile_assignment_devices)
-            tile_assignment_devices[j] = unsafe_load(
-                jl_op_sharding.tile_assignment_devices, j
-            )
-        end
-
-        iota_reshape_dims = Vector{Int64}(undef, jl_op_sharding.n_iota_reshape_dims)
-        for j in 1:(jl_op_sharding.n_iota_reshape_dims)
-            iota_reshape_dims[j] = unsafe_load(jl_op_sharding.iota_reshape_dims, j)
-        end
-
-        iota_transpose_perm = Vector{Int32}(undef, jl_op_sharding.n_iota_transpose_perm)
-        for j in 1:(jl_op_sharding.n_iota_transpose_perm)
-            iota_transpose_perm[j] = unsafe_load(jl_op_sharding.iota_transpose_perm, j)
-        end
-
-        op_shardings[i] = OpSharding(
-            int_to_op_sharding_type(jl_op_sharding.type),
-            jl_op_sharding.replicate_on_last_tile_dim,
-            last_tile_dims,
-            tile_assignment_dimensions,
-            tile_assignment_devices,
-            iota_reshape_dims,
-            iota_transpose_perm,
-            jl_op_sharding.is_shard_group,
-            jl_op_sharding.shard_group_id,
-            int_to_shard_group_type(jl_op_sharding.shard_group_type),
-        )
-    end
-
-    return op_shardings
+    return map(OpSharding ∘ getindex, jl_op_shardings)
 end

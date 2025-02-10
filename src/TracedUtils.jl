@@ -484,8 +484,8 @@ function make_mlir_fn(
                     ntuple(Returns(nothing), ndims(arg)),
                 )
             end
-            local sharding = traced_args_to_shardings[arg]
-            return (sharding.device_to_array_slices, sharding.partition_spec)
+            shard_info = traced_args_to_shardings[arg]
+            return shard_info.device_to_array_slices, shard_info.partition_spec
         end
     else
         linear_result_shard_info = ntuple(Returns(nothing), length(linear_results))
