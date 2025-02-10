@@ -444,35 +444,6 @@ function make_mlir_fn(
             end
         end
 
-        # TODO: Introduce OpSharding in API.cpp and use it here
-        # XLA gives us an API to query the final result sharding. However, currently we
-        # don't expose OpSharding from XLA, so we manually replicate the outputs to all the
-        # mesh elements manually.
-        for (idx, already_sharded) in enumerate(result_not_replicated)
-            already_sharded && continue
-
-            replicated_axes = [
-                MLIR.API.sdyAxisRefAttrGet(ctx, name, MLIR.API.MlirAttribute(C_NULL)) for
-                name in sharding_mesh.axis_names
-            ]
-            local result = linear_results[idx]
-            sharding = MLIR.IR.Attribute(
-                MLIR.API.sdyTensorShardingAttrGet(
-                    ctx,
-                    mesh_op_attrs.sym_name,
-                    ndims(result),
-                    MLIR.API.MlirAttribute[
-                        MLIR.API.sdyDimensionShardingAttrGet(
-                            ctx, 0, MLIR.API.MlirAttribute[], true, -1
-                        ) for _ in 1:ndims(result)
-                    ],
-                    length(replicated_axes),
-                    replicated_axes,
-                ),
-            )
-            MLIR.API.mlirFuncSetResultAttr(func2, idx - 1, "sdy.sharding", sharding)
-        end
-
         linear_result_shard_info = ntuple(length(linear_results)) do i
             arg = linear_results[i]
             if !result_not_replicated[i] || !haskey(traced_args_to_shardings, arg)

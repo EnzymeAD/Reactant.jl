@@ -14,25 +14,25 @@ end
 
 # TODO: tuple sharding / op metadata
 struct JLOpSharding
-    type::Cint
-    n_tile_dimensions::Cint
-    tile_dimensions::Ptr{Clong}
-    n_layout_minor_to_major::Cint
-    layout_minor_to_major::Ptr{Clong}
+    type::Int32
+    n_tile_dimensions::Int32
+    tile_dimensions::Ptr{Int64}
+    n_layout_minor_to_major::Int32
+    layout_minor_to_major::Ptr{Int64}
     replicate_on_last_tile_dim::Bool
-    n_last_tile_dims::Cint
-    last_tile_dims::Ptr{Cint}
-    n_tile_assignment_dimensions::Cint
-    tile_assignment_dimensions::Ptr{Clong}
-    n_tile_assignment_devices::Cint
-    tile_assignment_devices::Ptr{Clong}
-    n_iota_reshape_dims::Cint
-    iota_reshape_dims::Ptr{Clong}
-    n_iota_transpose_perm::Cint
-    iota_transpose_perm::Ptr{Cint}
+    n_last_tile_dims::Int32
+    last_tile_dims::Ptr{Int32}
+    n_tile_assignment_dimensions::Int32
+    tile_assignment_dimensions::Ptr{Int64}
+    n_tile_assignment_devices::Int32
+    tile_assignment_devices::Ptr{Int64}
+    n_iota_reshape_dims::Int32
+    iota_reshape_dims::Ptr{Int64}
+    n_iota_transpose_perm::Int32
+    iota_transpose_perm::Ptr{Int32}
     is_shard_group::Bool
-    shard_group_id::Clong
-    shard_group_type::Cint
+    shard_group_id::Int64
+    shard_group_type::Int32
 end
 
 struct OpSharding
