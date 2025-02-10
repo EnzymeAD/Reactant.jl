@@ -398,6 +398,7 @@ cc_library(
     "@bazel_tools//src/conditions:darwin": [
 "-Wl,-exported_symbol,_stablehlo*",
 "-Wl,-exported_symbol,_mlir*",
+"-Wl,-exported_symbol,_sdy*",
 "-Wl,-exported_symbol,_EnzymeJaXMapSymbol",
 "-Wl,-exported_symbol,_InitializeLogs",
 "-Wl,-exported_symbol,_SetLogLevel",
@@ -464,6 +465,7 @@ cc_library(
 "-Wl,-exported_symbol,_BufferShape",
 "-Wl,-exported_symbol,_BufferNDimensions",
 "-Wl,-exported_symbol,_BufferPrimitiveType",
+"-Wl,-exported_symbol,_PjRtLoadedExecutableGetOuputShardings",
 "-Wl,-exported_symbol,_ifrt_*",
 "-Wl,-exported_symbol,_reactant_*",
     ]}),
