@@ -295,9 +295,7 @@ Base.@nospecializeinfer function traced_type_inner(
         throw("TracedRArray cannot be traced")
     elseif mode == TracedToConcrete
         if !Sharding.is_sharded(sharding)
-            return ConcreteRArray{
-                T.parameters[1],T.parameters[2],1,Sharding.NoShardInfo
-            }
+            return ConcreteRArray{T.parameters[1],T.parameters[2],1,Sharding.NoShardInfo}
         else
             error("TODO: implement sharding")
         end
@@ -864,7 +862,7 @@ function make_tracer(
         throw("Cannot have ConcreteRArray as function call argument.")
     end
     if mode == ArrayToConcrete
-        if prev.sharding isa <: Sharding.ShardInfo{typeof(sharding)}
+        if prev.sharding isa Sharding.ShardInfo{typeof(sharding)}
             return prev
         end
         error(
@@ -1348,7 +1346,7 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
-    if x.sharding isa <: Sharding.ShardInfo{typeof(sharding)}
+    if x.sharding isa Sharding.ShardInfo{typeof(sharding)}
         return x
     end
     return error(

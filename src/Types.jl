@@ -154,9 +154,7 @@ const UnshardedConcreteRArray{T,N} = ConcreteRArray{T,N,1,Sharding.NoShardInfo}
 const UnshardedWrappedConcreteRArray{T,N} = WrappedConcreteRArray{
     T,N,1,Sharding.NoShardInfo
 }
-const AnyUnshardedConcreteRArray{T,N} = AnyConcreteRArray{
-    T,N,1,Sharding.NoShardInfo
-}
+const AnyUnshardedConcreteRArray{T,N} = AnyConcreteRArray{T,N,1,Sharding.NoShardInfo}
 
 ConcreteRArray(x::AnyConcreteRArray) = ConcreteRArray{eltype(x),ndims(x)}(x)
 ConcreteRArray{T}(x::AnyConcreteRArray) where {T} = ConcreteRArray{T,ndims(x)}(x)
