@@ -1111,10 +1111,10 @@ template <typename T> struct unwrap_type<tsl::RCReference<T>> { typedef T type; 
 template <typename T> using unwrap_type_t = typename unwrap_type<T>::type;
 
 template<typename T>
-struct Holded {
+struct HeldValue {
  public:
-    Holded(T& obj) : holded(obj) {}
-    ~Holded() = default;
+    HeldValue(T& obj) : holded(obj) {}
+    ~HeldValue() = default;
 
     unwrap_type_t<T>* ptr() const {
         return holded.get();
@@ -1137,27 +1137,27 @@ struct Holded {
 };
 
 template <typename T>
-Holded<T>* capture(T obj) {
-    return new Holded<T>(obj);
+HeldValue<T>* capture(T obj) {
+    return new HeldValue<T>(obj);
 }
 
 } // namespace reactant
 
-using reactant::Holded;
+using reactant::HeldValue;
 
-extern "C" Holded<std::shared_ptr<PjRtClient>>* reactant_hold_pjrtclient(xla::PjRtClient* client) {
+extern "C" HeldValue<std::shared_ptr<PjRtClient>>* reactant_hold_pjrtclient(xla::PjRtClient* client) {
   return reactant::capture(std::shared_ptr<PjRtClient>(client));
 }
 
-extern "C" void reactant_release_pjrtclient(Holded<std::shared_ptr<PjRtClient>>* client) { delete client; }
+extern "C" void reactant_release_pjrtclient(HeldValue<std::shared_ptr<PjRtClient>>* client) { delete client; }
 
-extern "C" Holded<std::shared_ptr<xla::PjRtBuffer>>* reactant_hold_pjrtbuffer(xla::PjRtBuffer* buffer) {
+extern "C" HeldValue<std::shared_ptr<xla::PjRtBuffer>>* reactant_hold_pjrtbuffer(xla::PjRtBuffer* buffer) {
   return reactant::capture(std::shared_ptr<xla::PjRtBuffer>(buffer));
 }
 
-extern "C" void reactant_release_pjrtbuffer(Holded<std::shared_ptr<PjRtBuffer>>* buffer) { delete buffer; }
+extern "C" void reactant_release_pjrtbuffer(HeldValue<std::shared_ptr<PjRtBuffer>>* buffer) { delete buffer; }
 
-extern "C" ifrt::Client* ifrt_pjrt_MakeClient(Holded<std::shared_ptr<PjRtClient>>* pjrt_client) {
+extern "C" ifrt::Client* ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>>* pjrt_client) {
   xla::ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
 }
@@ -1175,13 +1175,13 @@ extern "C" xla::ifrt::LoadedExecutable* ifrt_ClientCompile(ifrt::PjRtClient* cli
 extern "C" void ifrt_pjrt_FreeLoadedExecutable(xla::ifrt::PjRtLoadedExecutable* exec) { delete exec; }
 
 // TODO replace with `Client::MakeArrayFromHostBuffer` and generalize to `ifrt::Client`
-extern "C" Holded<tsl::RCReference<xla::ifrt::Array>>* ifrt_pjrt_ArrayFromHostBuffer(ifrt::PjRtClient* client, Holded<std::shared_ptr<xla::PjRtBuffer>>* buffer) {
+extern "C" HeldValue<tsl::RCReference<xla::ifrt::Array>>* ifrt_pjrt_ArrayFromHostBuffer(ifrt::PjRtClient* client, HeldValue<std::shared_ptr<xla::PjRtBuffer>>* buffer) {
   return reactant::capture(tsl::RCReference<ifrt::Array>(MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj()))));
 }
 
-extern "C" void reactant_release_ifrt_array(Holded<tsl::RCReference<xla::ifrt::Array>>* array) { delete array; }
+extern "C" void reactant_release_ifrt_array(HeldValue<tsl::RCReference<xla::ifrt::Array>>* array) { delete array; }
 
-extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, Holded<tsl::RCReference<ifrt::Array>>** op_args, uint8_t* is_arg_donatable, int num_results, Holded<tsl::RCReference<ifrt::Array>>** op_results, uint8_t *futures, FutureType** status) {
+extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, HeldValue<tsl::RCReference<ifrt::Array>>** op_args, uint8_t* is_arg_donatable, int num_results, HeldValue<tsl::RCReference<ifrt::Array>>** op_results, uint8_t *futures, FutureType** status) {
   std::vector<tsl::RCReference<xla::ifrt::Array>> args;
   for (int i = 0; i < num_args; i++) {
     args.emplace_back(op_args[i]->obj());
@@ -1213,6 +1213,6 @@ extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, Holded<
 }
 
 // in principle, use ArrayCopySemantics::kAlwaysCopy (=0)
-extern "C" FutureType* ifrt_CopyArrayToHostBuffer(Holded<tsl::RCReference<xla::ifrt::Array>>* array, void* data, ifrt::ArrayCopySemantics semantics) {
+extern "C" FutureType* ifrt_CopyArrayToHostBuffer(HeldValue<tsl::RCReference<xla::ifrt::Array>>* array, void* data, ifrt::ArrayCopySemantics semantics) {
   return new FutureType((*array)->CopyToHostBuffer(data, std::nullopt, semantics));
 }
