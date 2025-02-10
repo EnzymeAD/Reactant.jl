@@ -93,9 +93,7 @@ function __construct_sharding_for_carray(
     device_to_array_slices, partition_spec = path_to_shard_info[path]
     delete!(path_to_shard_info, path)
     sharding = Reactant.Sharding.NamedSharding(sharding_mesh, partition_spec)
-    return Reactant.Sharding.FinalizedNamedSharding{typeof(sharding),ndims(sharding_mesh)}(
-        sharding, device_to_array_slices
-    )
+    return Reactant.Sharding.ShardInfo(sharding, device_to_array_slices)
 end
 
 function create_result(
@@ -794,13 +792,11 @@ function compile_mlir!(
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
     linear_results2 = TracedType[]
-    linear_result_shard_info = []
     results_mask = falses(length(results))
     for (i, op) in enumerate(results)
         if !MLIR.IR.is_block_arg(op)
             push!(nresults, op)
             push!(linear_results2, linear_results[i])
-            push!(linear_result_shard_info, mlir_fn_res.linear_result_shard_info[i])
             results_mask[i] = true
             continue
         end
@@ -848,7 +844,6 @@ function compile_mlir!(
         linear_args,
         in_tys,
         linear_results2,
-        Tuple(linear_result_shard_info),
         mlir_fn_res.num_partitions,
         mlir_fn_res.num_replicas,
         mlir_fn_res.is_sharded,
@@ -1404,7 +1399,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
         # compile MLIR module to XLA executable
         mlir_fn_res.is_sharded && (device = nothing)
         mesh_ids = if mlir_fn_res.is_sharded
-            collect(Int64, vec(mlir_fn_res.sharding_mesh.device_ids))
+            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
         else
             Int64[]
         end
@@ -1460,8 +1455,19 @@ function compile(f, args; sync=false, kwargs...)
         donated_args_mask,
         length(linear_results),
         mlir_fn_res.is_sharded,
-        mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh.device_ids) : Int64[],
+        if mlir_fn_res.is_sharded
+            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
+        else
+            Int64[]
+        end,
     )
+
+    linear_result_shard_info = if mlir_fn_res.is_sharded
+        # Generate a tuple of DeviceToArraySlices and PartitionSpecs
+        error("TODO: generate this from OpSharding")
+    else
+        ntuple(Returns(nothing), length(linear_results))
+    end
 
     unflatten_code = codegen_unflatten!(
         linear_args,
@@ -1472,7 +1478,7 @@ function compile(f, args; sync=false, kwargs...)
         result_stores,
         path_to_shard_info,
         mlir_fn_res.is_sharded,
-        mlir_fn_res.linear_result_shard_info,
+        linear_result_shard_info,
         mlir_fn_res.sharding_mesh,
     )
 

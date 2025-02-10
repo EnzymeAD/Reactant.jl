@@ -36,10 +36,10 @@ end
         Array(cdata_sharded2) ≈
         Array(cdata_sharded3)
 
-    @test cdata_sharded.sharding isa Sharding.FinalizedNamedSharding
-    @test cdata_sharded2.sharding isa Sharding.FinalizedNamedSharding
-    @test cdata_sharded3.sharding isa Sharding.FinalizedNamedSharding
-    @test cdata.sharding isa Sharding.FinalizedNoSharding
+    @test cdata_sharded.sharding isa Sharding.ShardInfo{<:Sharding.NamedSharding}
+    @test cdata_sharded2.sharding isa Sharding.ShardInfo{<:Sharding.NamedSharding}
+    @test cdata_sharded3.sharding isa Sharding.ShardInfo{<:Sharding.NamedSharding}
+    @test cdata.sharding isa Sharding.NoShardInfo
 
     true_res_y, true_res_x, true_res_z = fn_test1(data)
 

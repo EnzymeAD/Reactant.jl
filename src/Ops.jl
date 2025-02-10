@@ -2142,16 +2142,15 @@ end
 )
     return mesh(
         mod,
-        # Don't use `name_to_size` here, we need correct ordering
-        [k => Int64(v) for (k, v) in zip(m.axis_names, size(m.device_ids))],
-        collect(Int64, vec(m.device_ids));
+        [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
+        collect(Int64, m.device_ids);
         location,
     )
 end
 
 @noinline function mesh(
     mod::MLIR.IR.Module,
-    mesh_axes::Vector{Pair{String,Int64}},
+    mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
     device_ids::Vector{Int64};
     sym_name=nothing,
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
@@ -2171,7 +2170,7 @@ end
 
     ctx = MLIR.IR.context()
     mesh_axis_attrs = [
-        MLIR.API.sdyMeshAxisAttrGet(ctx, name, size) for (name, size) in mesh_axes
+        MLIR.API.sdyMeshAxisAttrGet(ctx, String(name), size) for (name, size) in mesh_axes
     ]
     mesh_attr = MLIR.API.sdyMeshAttrGet(
         ctx,

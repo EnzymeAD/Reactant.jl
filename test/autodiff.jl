@@ -18,7 +18,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         )
     )
 
-    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding}}
+    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.NoShardInfo}}
     @test res1[1] ≈ ores1[1]
 
     ores1 = fwd(ForwardWithPrimal, Duplicated, ones(3, 2), 3.1 * ones(3, 2))
@@ -35,8 +35,8 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     )
 
     @test typeof(res1) == Tuple{
-        ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding},
-        ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding},
+        ConcreteRArray{Float64,2,1,Sharding.NoShardInfo},
+        ConcreteRArray{Float64,2,1,Sharding.NoShardInfo},
     }
     @test res1[1] ≈ ores1[1]
     @test res1[2] ≈ ores1[2]
@@ -62,7 +62,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         )
     )
 
-    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding}}
+    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.NoShardInfo}}
     @test res1[1] ≈ ores1[1]
 end
 

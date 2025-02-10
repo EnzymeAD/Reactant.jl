@@ -128,7 +128,7 @@ function transpose_val(val)
 end
 
 mutable struct CompiledMlirFnResult{
-    F,TR,Re,Rt,LA,LR,LRS,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA
+    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA
 }
     fnwrapped::Bool
     f::F
@@ -139,7 +139,6 @@ mutable struct CompiledMlirFnResult{
     linear_args::Vector{LA}
     in_tys::Vector{MLIR.IR.Type}
     linear_results::Vector{LR}
-    linear_result_shard_info::LRS
     num_partitions::Int
     num_replicas::Int
     is_sharded::Bool
@@ -224,7 +223,7 @@ function make_mlir_fn(
     is_sharded = false
     for (k, v) in seen_args
         if k isa Reactant.ConcreteRArray
-            if !(k.sharding isa Reactant.Sharding.FinalizedNoSharding)
+            if Reactant.Sharding.is_sharded(k)
                 is_sharded = true
                 traced_args_to_shardings[v] = k.sharding
                 if !haskey(mesh_cache, k.sharding.mesh)
@@ -239,11 +238,12 @@ function make_mlir_fn(
         unique_meshes = unique([m.mesh for (k, m) in traced_args_to_shardings])
         # TODO: support multiple meshes
         @assert length(unique_meshes) == 1 "Currently we support using a single mesh"
-        sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
-        @assert allequal(sorted_devices) "All meshes must have the same device ids"
-        num_partitions = length(first(sorted_devices))
+        # sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
+        # @assert allequal(sorted_devices) "All meshes must have the same device ids"
+        # num_partitions = length(first(sorted_devices))
         sharding_mesh = first(unique_meshes)
         mesh_op_attrs = mesh_cache[sharding_mesh]
+        num_partitions = length(sharding_mesh)
     else
         sharding_mesh = nothing
     end
@@ -279,17 +279,12 @@ function make_mlir_fn(
                 for (j, name) in enumerate(sharding.partition_spec)
                     if name === nothing
                         axes = MLIR.IR.Attribute[]
-                    elseif name isa String
+                    else
+                        @assert name isa Symbol
                         axes = [
                             MLIR.API.sdyAxisRefAttrGet(
-                                ctx, name, MLIR.API.MlirAttribute(C_NULL)
+                                ctx, String(name), MLIR.API.MlirAttribute(C_NULL)
                             ),
-                        ]
-                    elseif name isa Tuple
-                        axes = [
-                            MLIR.API.sdyAxisRefAttrGet(
-                                ctx, nameᵢ, MLIR.API.MlirAttribute(C_NULL)
-                            ) for nameᵢ in name
                         ]
                     end
                     dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
@@ -443,23 +438,6 @@ function make_mlir_fn(
                 )
             end
         end
-
-        linear_result_shard_info = ntuple(length(linear_results)) do i
-            arg = linear_results[i]
-            if !result_not_replicated[i] || !haskey(traced_args_to_shardings, arg)
-                return (
-                    map(
-                        Returns([1:size(arg, i) for i in 1:ndims(arg)]),
-                        sharding_mesh.device_ids,
-                    ),
-                    ntuple(Returns(nothing), ndims(arg)),
-                )
-            end
-            shard_info = traced_args_to_shardings[arg]
-            return shard_info.device_to_array_slices, shard_info.partition_spec
-        end
-    else
-        linear_result_shard_info = ntuple(Returns(nothing), length(linear_results))
     end
 
     MLIR.API.mlirOperationDestroy(func.operation)
@@ -475,7 +453,6 @@ function make_mlir_fn(
         linear_args,
         in_tys,
         linear_results,
-        linear_result_shard_info,
         num_partitions,
         num_replicas,
         is_sharded,

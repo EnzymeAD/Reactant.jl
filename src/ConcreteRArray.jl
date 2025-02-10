@@ -45,26 +45,25 @@ function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
     data = Array{T,N}(undef, size(X)...)
     XLA.await(X)
 
-    if X.sharding isa Sharding.FinalizedNoSharding
-        buf = only(X.data).buffer
-        GC.@preserve data buf begin
-            XLA.BufferToHost(buf, pointer(data))
-        end
-    elseif X.sharding isa Sharding.FinalizedNamedSharding
+    if Sharding.is_sharded(X)
         # TODO: We can we much more efficient here and only move data from the minimal
         #       slices that populates the array.
         for idx in 1:length(X.data)
             buffer = X.data[idx].buffer
             # We can't use a pointer to a subarray since BufferToHost expects the data to
             # be contiguous.
-            data_slice = data[X.sharding.device_to_array_slices[idx]...]
+            slice = X.sharding.device_to_array_slices[idx]
+            data_slice = data[slice...]
             GC.@preserve data_slice buffer begin
                 XLA.BufferToHost(buffer, pointer(data_slice))
             end
-            data[X.sharding.device_to_array_slices[idx]...] = data_slice
+            data[slice...] = data_slice
         end
     else
-        error("Unknown sharding type: $(typeof(X.sharding))")
+        buf = only(X.data).buffer
+        GC.@preserve data buf begin
+            XLA.BufferToHost(buf, pointer(data))
+        end
     end
 
     return data
@@ -186,7 +185,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     isempty(a) && throw("Cannot getindex from empty buffer")
 
     XLA.await(a)
-    if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
+    if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -213,7 +212,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
     XLA.await(a)
-    if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
+    if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -261,9 +260,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteR
     end
 
     if all(buffer_on_cpu, bc.args) && all(
-        x ->
-            !(x isa ConcreteRArray) ||
-                (x isa ConcreteRArray && x.sharding isa Sharding.FinalizedNoSharding),
+        x -> !(x isa ConcreteRArray) || (x isa ConcreteRArray && !Sharding.is_sharded(x)),
         bc.args,
     )
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
@@ -332,7 +329,7 @@ function Base.fill!(a::ConcreteRArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
     XLA.await(a)
-    if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
+    if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))

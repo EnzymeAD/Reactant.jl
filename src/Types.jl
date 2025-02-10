@@ -80,8 +80,7 @@ end
 ConcreteRNumber(data::T; kwargs...) where {T<:Number} = ConcreteRNumber{T}(data; kwargs...)
 
 ## ConcreteRArray
-# XXX: make data into a tuple of arrays
-mutable struct ConcreteRArray{T,N,D,S<:Sharding.AbstractFinalizedSharding} <: RArray{T,N}
+mutable struct ConcreteRArray{T,N,D,S<:Sharding.ShardInfo} <: RArray{T,N}
     data::NTuple{D,XLA.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::S
@@ -100,8 +99,8 @@ Adapt.parent_type(::Type{ConcreteRArray{T,N,D,S}}) where {T,N,D,S} = ConcreteRAr
 Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kwargs...)
 
 function ConcreteRArray{T,N}(data::XLA.AsyncBuffer, shape::NTuple{N,Int}) where {T,N}
-    return ConcreteRArray{T,N,1,Sharding.FinalizedNoSharding}(
-        (data,), shape, Sharding.FinalizedNoSharding()
+    return ConcreteRArray{T,N,1,Sharding.NoShardInfo}(
+        (data,), shape, Sharding.NoShardInfo()
     )
 end
 
@@ -137,12 +136,12 @@ end
 XLA.await(x::ConcreteRArray) = foreach(XLA.await, x.data)
 XLA.client(x::ConcreteRArray) = XLA.client(x.data)
 function XLA.device(x::ConcreteRArray)
-    x.sharding isa Sharding.FinalizedNoSharding && return XLA.device(only(x.data))
+    x.sharding isa Sharding.NoShardInfo && return XLA.device(only(x.data))
     return nothing # This is intentional to make constructing ConcreteRArrays easier
 end
 
 const ConcreteRScalar{T} = Union{
-    ConcreteRArray{T,0,1,Sharding.FinalizedNoSharding},ConcreteRNumber{T}
+    ConcreteRArray{T,0,1,Sharding.NoShardInfo},ConcreteRNumber{T}
 }
 const WrappedConcreteRArray{T,N,D,S} = WrappedArray{
     T,N,ConcreteRArray,ConcreteRArray{T,N,D,S}
@@ -151,12 +150,12 @@ const AnyConcreteRArray{T,N,D,S} = Union{
     ConcreteRArray{T,N,D,S},WrappedConcreteRArray{T,N,D,S}
 }
 
-const UnshardedConcreteRArray{T,N} = ConcreteRArray{T,N,1,Sharding.FinalizedNoSharding}
+const UnshardedConcreteRArray{T,N} = ConcreteRArray{T,N,1,Sharding.NoShardInfo}
 const UnshardedWrappedConcreteRArray{T,N} = WrappedConcreteRArray{
-    T,N,1,Sharding.FinalizedNoSharding
+    T,N,1,Sharding.NoShardInfo
 }
 const AnyUnshardedConcreteRArray{T,N} = AnyConcreteRArray{
-    T,N,1,Sharding.FinalizedNoSharding
+    T,N,1,Sharding.NoShardInfo
 }
 
 ConcreteRArray(x::AnyConcreteRArray) = ConcreteRArray{eltype(x),ndims(x)}(x)
