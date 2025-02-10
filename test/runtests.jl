@@ -61,6 +61,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         if !Sys.isapple()
             @safetestset "Custom Number Types" include("custom_number_types.jl")
         end
+        @safetestset "Sharding" include("sharding.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"

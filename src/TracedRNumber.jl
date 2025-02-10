@@ -172,6 +172,14 @@ for (jlop, hloop, hlocomp) in (
     end
 end
 
+function Base.ifelse(@nospecialize(pred::TracedRNumber{Bool}), x::Number, y::Number)
+    return ifelse(
+        pred,
+        TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(x)}, x),
+        TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(y)}, y),
+    )
+end
+
 function Base.ifelse(
     @nospecialize(pred::TracedRNumber{Bool}),
     @nospecialize(x::TracedRNumber{T1}),

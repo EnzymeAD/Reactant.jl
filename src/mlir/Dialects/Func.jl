@@ -10,9 +10,8 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes, c
+import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
-using EnumX
 
 """
 `call_indirect`
@@ -34,14 +33,18 @@ Function values can be created with the
 function call_indirect(
     callee::Value,
     callee_operands::Vector{Value};
-    results::Base.AbstractVecOrTuple{IR.Type},
-    location::Location=Location(),
+    results::Vector{IR.Type},
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[callee, callee_operands...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
 
     return create_operation(
         "func.call_indirect",
@@ -71,16 +74,20 @@ symbol reference attribute named \"callee\".
 """
 function call(
     operands::Vector{Value};
-    result::Base.AbstractVecOrTuple{IR.Type},
-    callee::IR.FlatSymbolRefAttribute,
-    no_inline::Union{Bool,Nothing}=nothing,
-    location::Location=Location(),
+    result_0::Vector{IR.Type},
+    callee,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    no_inline=nothing,
+    location=Location(),
 )
-    op_ty_results = IR.Type[result...,]
+    op_ty_results = IR.Type[result_0...,]
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("callee", callee),]
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
 
     return create_operation(
@@ -116,10 +123,8 @@ the compiler is multithreaded, and disallowing SSA values to directly
 reference a function simplifies this
 ([rationale](../Rationale/Rationale.md#multithreading-the-compiler)).
 """
-function constant(;
-    result::IR.Type, value::IR.FlatSymbolRefAttribute, location::Location=Location()
-)
-    op_ty_results = IR.Type[result,]
+function constant(; result_0::IR.Type, value, location=Location())
+    op_ty_results = IR.Type[result_0,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
@@ -177,14 +182,14 @@ func.func private @example_fn_attr() attributes {dialectName.attrName = false}
 ```
 """
 function func_(;
-    sym_name::String,
-    function_type::IR.Type,
-    sym_visibility::Union{String,Nothing}=nothing,
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    no_inline::Union{Bool,Nothing}=nothing,
+    sym_name,
+    function_type,
+    sym_visibility=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    no_inline=nothing,
     body::Region,
-    location::Location=Location(),
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -228,7 +233,7 @@ func.func @foo() -> (i32, f8) {
 }
 ```
 """
-function return_(operands::Vector{Value}; location::Location=Location())
+function return_(operands::Vector{Value}; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operands...,]
     owned_regions = Region[]
