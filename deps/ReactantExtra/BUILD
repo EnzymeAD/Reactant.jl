@@ -355,11 +355,9 @@ platform(
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
-        [
-            "*.cpp",
-        ],
-
+        ["src/**/*.cpp"],
     ) + [
+        "API.cpp",
         "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
@@ -377,7 +375,8 @@ cc_library(
         "@xla//xla/service:buffer_assignment.pb.cc",
         ],
     hdrs = glob([
-        "*.h",
+        "src/*.h",
+        "src/*.hpp",
     ]),
     copts = [
         "-Werror=unused-variable",
@@ -439,6 +438,7 @@ cc_library(
 "-Wl,-exported_symbol,_InitializeRegistry",
 "-Wl,-exported_symbol,_InitializePasses",
 "-Wl,-exported_symbol,_ifrt_*",
+"-Wl,-exported_symbol,_reactant_*",
 "-Wl,-exported_symbol,_RegisterCustomCallTarget",
 "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
 "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
