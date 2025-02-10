@@ -807,6 +807,8 @@ function Base.length(attr::Attribute)
 end
 
 function Base.getindex(attr::DenseElementsAttribute, i)
+    @assert i >= 1
+    i-=1
     attr = Attribute(attr)
     elem_type = julia_type(eltype(type(attr)))
     if elem_type isa Bool
@@ -839,6 +841,8 @@ function Base.getindex(attr::DenseElementsAttribute, i)
 end
 
 function Base.getindex(attr::Attribute, i)
+    @assert i >= 1
+    i-=1
     if isarray(attr)
         Attribute(API.mlirArrayAttrGetElement(attr, i))
     elseif isdict(attr)
