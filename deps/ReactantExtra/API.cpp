@@ -209,7 +209,7 @@ extern "C" void InitializeLogs() {
   const char* binary = "julia";
   int argc = 1;
   const char* argv[] = {binary};
-  tensorflow::port::InitMain(binary, &argc, &argv);
+  tsl::port::InitMain(binary, &argc, &argv);
   absl::InitializeLog();
   LLVMInitializeX86Target();
   LLVMInitializeX86TargetInfo();
