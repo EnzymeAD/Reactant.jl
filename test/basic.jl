@@ -871,7 +871,7 @@ end
 
 @testset "mapreducedim!" begin
     x = reshape(collect(Float32, 1:64), 2, 4, 8) ./ 64
-    x_ra = x |> Reactant.to_rarray
+    x_ra = Reactant.to_rarray(x)
 
     @test Array(@jit(fntest1(x_ra))) ≈ fntest1(x)
     @test Array(@jit(fntest2(x_ra))) ≈ fntest2(x)
