@@ -211,7 +211,6 @@ extern "C" void InitializeLogs() {
   char* argv[] = {(char*)binary};
   char** argv2 = &argv[0];
   tsl::port::InitMain(binary, &argc, &argv2);
-  absl::InitializeLog();
   LLVMInitializeX86Target();
   LLVMInitializeX86TargetInfo();
   LLVMInitializeX86TargetMC();
