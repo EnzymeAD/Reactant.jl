@@ -1007,6 +1007,13 @@ function make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...)
     end
     return prev
 end
+function make_tracer(seen, prev::Memory, @nospecialize(path), mode; kwargs...)
+    if mode == TracedToTypes
+        push!(path, prev)
+        return nothing
+    end
+    return prev
+end
 
 function make_tracer(
     seen,
