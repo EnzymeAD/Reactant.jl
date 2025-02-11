@@ -32,6 +32,10 @@ const default_backend = Ref{Client}()
 const default_device_idx = Ref{Int}(0)
 
 function __init__()
+    # This must be the very first thing initialized (otherwise we can't throw errors)
+    errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
+    unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
+    
     initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
     ccall(initLogs, Cvoid, ())
     # Add most log level
@@ -87,11 +91,6 @@ function __init__()
 
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
-
-    # This wasn't properly exported on macos, we'll remove the try once macOS JLL
-    # has the fix.
-    errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
-    unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
     return nothing
 end
 
