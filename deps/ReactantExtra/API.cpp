@@ -206,11 +206,11 @@ T *unwrap_absl_statusor(absl::StatusOr<T> status, char **error_msg) {
 // int xla::_LayoutProto_default_instance_;
 
 extern "C" void InitializeLogs() {
-  const char* binary = "julia";
+  char* binary = "julia";
   int argc = 1;
-  const char* argv[] = {binary};
-  const char** argv2 = &argv;
-  tsl::port::InitMain(binary, &argc, &argv);
+  char* argv[] = {binary};
+  char** argv2 = &argv[0];
+  tsl::port::InitMain(binary, &argc, &argv2);
   absl::InitializeLog();
   LLVMInitializeX86Target();
   LLVMInitializeX86TargetInfo();
