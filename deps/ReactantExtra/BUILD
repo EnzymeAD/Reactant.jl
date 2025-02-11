@@ -518,6 +518,8 @@ cc_library(
         "@xla//xla:xla_proto_cc_impl",
         "@xla//xla/stream_executor:device_description_proto_cc_impl",
 
+	"@xla//xla/tsl/platform/default:platform_port",
+
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
 
