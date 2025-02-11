@@ -529,10 +529,14 @@ function Base.mapreducedim!(
     @nospecialize(R::TracedRArray),
     A::Base.AbstractArrayOrBroadcasted,
 )
-    tmp = TracedUtils.broadcast_to_size(
-        Base.mapreduce(f, op, A; dims=1), (1, size(R)[2:end]...)
-    )
-    R.mlir_data = broadcast(op, R, tmp).mlir_data
+    @assert length(size(R)) == length(size(A))
+    dims = map(enumerate(zip(size(R), size(A)))) do (i, (sR, sA))
+        sR == sA && return nothing
+        @assert sR == 1
+        return i
+    end
+    tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
+    set_mlir_data!(R, get_mlir_data(tmp))
     return R
 end
 

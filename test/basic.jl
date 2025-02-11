@@ -850,3 +850,30 @@ end
 
     @test @jit(fn(x)) ≈ fn(Array(x))
 end
+
+function fntest1(x)
+    y = similar(x, 1, 1, 8)
+    sum!(y, x)
+    return y
+end
+
+function fntest2(x)
+    y = similar(x, 2, 1, 8)
+    sum!(y, x)
+    return y
+end
+
+function fntest3(x)
+    y = similar(x, 2, 1, 1)
+    sum!(abs2, y, x)
+    return y
+end
+
+@testset "mapreducedim!" begin
+    x = reshape(collect(Float32, 1:64), 2, 4, 8) ./ 64
+    x_ra = x |> Reactant.to_rarray
+
+    @test Array(@jit(fntest1(x_ra))) ≈ fntest1(x)
+    @test Array(@jit(fntest2(x_ra))) ≈ fntest2(x)
+    @test Array(@jit(fntest3(x_ra))) ≈ fntest3(x)
+end
