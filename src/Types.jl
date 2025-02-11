@@ -76,13 +76,17 @@ end
 @leaf ConcreteRNumber
 
 function ConcreteRNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
-    crarry = ConcreteRArray(fill(convert(T, data)); kwargs...)
-    if !Sharding.is_sharded(crarry.sharding)
-        return ConcreteRNumber{T}((crarry.data[1],), crarry.sharding)
+    carray = ConcreteRArray(fill(convert(T, data)); kwargs...)
+    if !Sharding.is_sharded(carray.sharding)
+        return ConcreteRNumber{T,1,typeof(carray.sharding)}(
+            (carray.data[1],), carray.sharding
+        )
     end
     @assert all(isnothing, carray.sharding.partition_spec) "ConcreteRNumber cannot be \
                                                             sharded"
-    return ConcreteRNumber{T}(crarry.data, crarry.sharding)
+    return ConcreteRNumber{T,length(carray.data),typeof(carray.sharding)}(
+        carray.data, carray.sharding
+    )
 end
 ConcreteRNumber(data::T; kwargs...) where {T<:Number} = ConcreteRNumber{T}(data; kwargs...)
 
