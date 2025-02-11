@@ -4,10 +4,12 @@ end
 
 mutable struct LoadedExecutable
     exec::Ptr{Cvoid}
+    num_results::Int64
+    is_sharded::Bool
 
-    function LoadedExecutable(exec::Ptr{Cvoid})
+    function LoadedExecutable(exec::Ptr{Cvoid}, num_results::Int64, is_sharded::Bool)
         @assert exec != C_NULL
-        return finalizer(free_exec, new(exec))
+        return finalizer(free_exec, new(exec, num_results, is_sharded))
     end
 end
 
@@ -85,7 +87,9 @@ end
     for i in 1:n_outs
         push!(
             results,
-            :(AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing)),
+            :((
+                AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing),
+            )),
         )
     end
 
@@ -209,22 +213,41 @@ function Compile(
     is_sharded::Bool=false,
     mesh_ids::Vector{Int64}=Int64[],
     # mesh_shape::Vector{Int64}=Int64[],
+    num_results::Int64,
 )
     device_id = is_sharded ? Int64(-1) : Int64(device_ordinal(client, device))
     mesh_ids = Int64.(device_ordinal.((client,), mesh_ids))
     GC.@preserve client mod begin
-        return LoadedExecutable(
-            @ccall MLIR.API.mlir_c.ClientCompile(
-                client.client::Ptr{Cvoid},
-                mod.module_::MLIR.API.MlirModule,
-                device_id::Clong,
-                is_sharded::Bool,
-                # mesh_shape::Ptr{Clong},
-                # length(mesh_shape)::Clong,
-                mesh_ids::Ptr{Clong},
-                length(mesh_ids)::Clong,
-                CUDA_DATA_DIR[]::Cstring,
-            )::Ptr{Cvoid}
-        )
+        exec = @ccall MLIR.API.mlir_c.ClientCompile(
+            client.client::Ptr{Cvoid},
+            mod.module_::MLIR.API.MlirModule,
+            device_id::Clong,
+            is_sharded::Bool,
+            # mesh_shape::Ptr{Clong},
+            # length(mesh_shape)::Clong,
+            mesh_ids::Ptr{Clong},
+            length(mesh_ids)::Clong,
+            CUDA_DATA_DIR[]::Cstring,
+        )::Ptr{Cvoid}
     end
+    return LoadedExecutable(exec, num_results, is_sharded)
+end
+
+function get_output_shardings(exec::LoadedExecutable)
+    exec.is_sharded || return OpSharding[]
+
+    jl_op_shardings = [Ref{JLOpSharding}() for _ in 1:(exec.num_results)]
+    jl_op_shardings_ptr = [
+        Base.unsafe_convert(Ptr{JLOpSharding}, sharding) for sharding in jl_op_shardings
+    ]
+
+    GC.@preserve jl_op_shardings begin
+        @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetOuputShardings(
+            exec.exec::Ptr{Cvoid},
+            jl_op_shardings_ptr::Ptr{Ptr{JLOpSharding}},
+            exec.num_results::Int32,
+        )::Cvoid
+    end
+
+    return map(OpSharding ∘ getindex, jl_op_shardings)
 end

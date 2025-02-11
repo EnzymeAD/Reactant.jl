@@ -82,7 +82,7 @@ unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
-function aos_to_soa(x::AbstractArray{ConcreteRNumber{T}}) where {T}
+function aos_to_soa(x::AbstractArray{<:ConcreteRNumber{T}}) where {T}
     x_c = ConcreteRArray(zeros(T, size(x)))
     x_c .= x
     return x_c
@@ -148,8 +148,10 @@ function Enzyme.make_zero(
     return res
 end
 
-using .Compiler: @compile, @code_hlo, @jit, traced_getfield, create_result, compile
-export ConcreteRArray, ConcreteRNumber, @compile, @code_hlo, @jit, @trace, within_compile
+using .Compiler:
+    @compile, @code_hlo, @code_mhlo, @jit, traced_getfield, create_result, compile
+export ConcreteRArray,
+    ConcreteRNumber, @compile, @code_hlo, @code_mhlo, @jit, @trace, within_compile
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 

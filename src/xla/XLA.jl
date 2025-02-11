@@ -4,6 +4,7 @@ using ..Reactant: Reactant, MLIR
 using Reactant_jll
 using Libdl
 using Scratch, Downloads
+using EnumX: @enumx
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
@@ -21,6 +22,7 @@ end
 
 include("Client.jl")
 include("Device.jl")
+include("Sharding.jl")
 include("LoadedExecutable.jl")
 include("Future.jl")
 include("Buffer.jl")

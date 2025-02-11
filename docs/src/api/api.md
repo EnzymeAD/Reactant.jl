@@ -25,6 +25,7 @@ within_compile
 
 ```@docs
 @code_hlo
+@code_mhlo
 ```
 
 ## Profile XLA

@@ -1,7 +1,7 @@
-get_buffer(x::ConcreteRNumber) = x.data.buffer
-get_buffer(x::ConcreteRArray{T,0}) where {T} = only(x.data).buffer
-function get_buffer(x::ConcreteRArray{T,N}) where {T,N}
+function get_buffer(x::Union{ConcreteRArray,ConcreteRNumber}; no_error_for_scalar=false)
     if Sharding.is_sharded(x.sharding)
+        # For scalars this is mostly replicated
+        no_error_for_scalar && return first(x.data).buffer
         error("`x` is sharded, so `get_buffer` is not defined")
     end
     return only(x.data).buffer
@@ -21,9 +21,9 @@ Base.strides(x::ConcreteRArray) = Base.size_to_strides(1, size(x)...)
 
 # Ensure the device and client are the same as the input
 function Base.float(x::ConcreteRNumber{T}) where {T}
-    client = XLA.client(x.data)
-    device = XLA.device(x.data)
-    return ConcreteRNumber(float(T)(to_number(x)); client, device)
+    return ConcreteRNumber(
+        float(T)(to_number(x)); client=XLA.client(x), device=XLA.device(x), x.sharding
+    )
 end
 
 # written like this to avoid ambiguity errors
@@ -37,34 +37,34 @@ Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x
 
 Base.size(x::ConcreteRArray) = x.shape
 
-Base.isempty(x::ConcreteRNumber) = x.data == XLA.AsyncEmptyBuffer
-Base.isempty(x::ConcreteRArray) = any(==(XLA.AsyncEmptyBuffer), x.data)
+function Base.isempty(x::Union{ConcreteRArray,ConcreteRNumber})
+    return any(==(XLA.AsyncEmptyBuffer), x.data)
+end
 Base.isempty(x::WrappedConcreteRArray) = isempty(ancestor(x))
 
 function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
     data = Array{T,N}(undef, size(X)...)
     XLA.await(X)
 
-    if X.sharding isa Sharding.FinalizedNoSharding
-        buf = only(X.data).buffer
-        GC.@preserve data buf begin
-            XLA.BufferToHost(buf, pointer(data))
-        end
-    elseif X.sharding isa Sharding.FinalizedNamedSharding
+    if Sharding.is_sharded(X)
         # TODO: We can we much more efficient here and only move data from the minimal
         #       slices that populates the array.
         for idx in 1:length(X.data)
             buffer = X.data[idx].buffer
             # We can't use a pointer to a subarray since BufferToHost expects the data to
             # be contiguous.
-            data_slice = data[X.sharding.device_to_array_slices[idx]...]
+            slice = X.sharding.device_to_array_slices[idx]
+            data_slice = data[slice...]
             GC.@preserve data_slice buffer begin
                 XLA.BufferToHost(buffer, pointer(data_slice))
             end
-            data[X.sharding.device_to_array_slices[idx]...] = data_slice
+            data[slice...] = data_slice
         end
     else
-        error("Unknown sharding type: $(typeof(X.sharding))")
+        buf = only(X.data).buffer
+        GC.@preserve data buf begin
+            XLA.BufferToHost(buf, pointer(data))
+        end
     end
 
     return data
@@ -80,17 +80,20 @@ function synchronize(x::Union{ConcreteRArray,ConcreteRNumber})
     return nothing
 end
 
+to_number(x::Number) = x
 function to_number(X::ConcreteRScalar{T}) where {T}
     data = Ref{T}()
     XLA.await(X)
-    buf = get_buffer(X)
+    buf = get_buffer(X; no_error_for_scalar=true)
     GC.@preserve data buf begin
         XLA.BufferToHost(buf, data)
     end
     return data[]
 end
 
-Base.convert(::Type{T}, x::ConcreteRScalar{T}) where {T} = to_number(x)
+function Base.convert(::Type{T}, x::ConcreteRScalar{T}) where {T}
+    return to_number(x; no_error_for_scalar=true)
+end
 
 for jlop in (:(Base.abs),), T in (ConcreteRNumber,)
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
@@ -121,35 +124,31 @@ for jlop in (:(Base.isnan), :(Base.isfinite)),
 end
 
 for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
-    @eval begin
-        function Base.isapprox(x::$(T), y::Number; kwargs...)
-            return Base.isapprox(to_number(x), y; kwargs...)
-        end
-
-        function Base.isapprox(x::Number, y::$(T); kwargs...)
-            return Base.isapprox(x, to_number(y); kwargs...)
-        end
-
-        function Base.isapprox(x::$(T), y::$(T); kwargs...)
-            return Base.isapprox(to_number(x), to_number(y); kwargs...)
+    for (T1, T2) in ((T, Number), (Number, T), (T, T))
+        @eval begin
+            function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
+                return Base.isapprox(to_number(x), to_number(y); kwargs...)
+            end
+            function Base.isapprox(
+                x::AbstractArray{<:$(T1)}, y::AbstractArray{<:$(T2)}; kwargs...
+            )
+                return Base.isapprox(to_number.(x), to_number.(y); kwargs...)
+            end
         end
     end
 end
 
-function Base.isapprox(x::AnyConcreteRArray, y::AbstractArray; kwargs...)
-    return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
-end
-function Base.isapprox(x::AbstractArray, y::AnyConcreteRArray; kwargs...)
-    return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
-end
-function Base.isapprox(x::AnyConcreteRArray, y::AnyConcreteRArray; kwargs...)
-    return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
-end
-
-Base.:(==)(x::AnyConcreteRArray, y::AbstractArray) = convert(Array, x) == convert(Array, y)
-Base.:(==)(x::AbstractArray, y::AnyConcreteRArray) = convert(Array, x) == convert(Array, y)
-function Base.:(==)(x::AnyConcreteRArray, y::AnyConcreteRArray)
-    return convert(Array, x) == convert(Array, y)
+for (T1, T2) in (
+    (AnyConcreteRArray, AbstractArray),
+    (AbstractArray, AnyConcreteRArray),
+    (AnyConcreteRArray, AnyConcreteRArray),
+)
+    @eval begin
+        function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
+            return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
+        end
+        Base.:(==)(x::$(T1), y::$(T2)) = convert(Array, x) == convert(Array, y)
+    end
 end
 
 function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
@@ -186,7 +185,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     isempty(a) && throw("Cannot getindex from empty buffer")
 
     XLA.await(a)
-    if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
+    if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -213,7 +212,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
     XLA.await(a)
-    if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
+    if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
@@ -261,9 +260,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteR
     end
 
     if all(buffer_on_cpu, bc.args) && all(
-        x ->
-            !(x isa ConcreteRArray) ||
-                (x isa ConcreteRArray && x.sharding isa Sharding.FinalizedNoSharding),
+        x -> !(x isa ConcreteRArray) || (x isa ConcreteRArray && !Sharding.is_sharded(x)),
         bc.args,
     )
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
@@ -332,7 +329,7 @@ function Base.fill!(a::ConcreteRArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
     XLA.await(a)
-    if buffer_on_cpu(a) && a.sharding isa Sharding.FinalizedNoSharding
+    if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
         GC.@preserve buf begin
             ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))

@@ -373,7 +373,7 @@ end
         b = Reactant.to_rarray(_b)
         c = Reactant.to_rarray(_c)
 
-        # vcat test        
+        # vcat test
         y = @jit vcat(a, b)
         @test y == vcat(a, _b)
         @test y isa ConcreteRArray{typeof_a,1}

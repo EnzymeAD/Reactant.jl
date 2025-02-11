@@ -36,16 +36,7 @@ end
     @nospecialize(obj::AbstractArray{T}), field, val
 ) where {T}
     ancestor_obj = ancestor(obj)
-    if isbitstype(T) || ancestor_obj isa RArray
-        if val isa XLA.AsyncBuffer
-            if Reactant.Sharding.is_sharded(ancestor_obj)
-                error("`val` can't be a buffer if `obj` is sharded")
-            else
-                return Base.setfield!(obj, field, (val,))
-            end
-        end
-        return Base.setfield!(obj, field, val)
-    end
+    (isbitstype(T) || ancestor_obj isa RArray) && return Base.setfield!(obj, field, val)
     return Base.setindex!(obj, val, field)
 end
 
@@ -75,27 +66,37 @@ function create_result(
     return Expr(:new, T, elems...)
 end
 
-function create_result(
-    tocopy::ConcreteRNumber{T}, path, result_stores, path_to_shard_info, sharding_mesh
-) where {T}
-    if haskey(result_stores, path)
-        restore = result_stores[path]
-        delete!(result_stores, path)
-        return :(ConcreteRNumber{$T}($restore))
-    end
-    # We will set the data for this later
-    return :(ConcreteRNumber{$T}($(tocopy.data)))
-end
-
-function __construct_sharding_for_carray(
-    ::ConcreteRArray{T,N,D,S}, path, _, path_to_shard_info, sharding_mesh
-) where {T,N,D,S}
+function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
     device_to_array_slices, partition_spec = path_to_shard_info[path]
     delete!(path_to_shard_info, path)
     sharding = Reactant.Sharding.NamedSharding(sharding_mesh, partition_spec)
-    return Reactant.Sharding.FinalizedNamedSharding{typeof(sharding),ndims(sharding_mesh)}(
-        sharding, device_to_array_slices
-    )
+    return Reactant.Sharding.ShardInfo(sharding, device_to_array_slices)
+end
+
+function create_result(
+    tocopy::ConcreteRNumber{T,D,S}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T,D,S}
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing # restore sharding
+            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+            return :(ConcreteRNumber{$T,length($(restore)),$(typeof(sharding))}(
+                ($(restore)...,), $sharding
+            ))
+        else
+            return :(ConcreteRNumber{$T}($restore))
+        end
+    end
+
+    if path_to_shard_info !== nothing # restore sharding
+        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+        return :(ConcreteRNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
+            ($(tocopy.data...,)), $sharding
+        ))
+    end
+    # We will set the data for this later
+    return :(ConcreteRNumber{$T}($(tocopy.data)))
 end
 
 function create_result(
@@ -105,10 +106,8 @@ function create_result(
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
-            sharding = __construct_sharding_for_carray(
-                tocopy, path, result_stores, path_to_shard_info, sharding_mesh
-            )
-            return :(ConcreteRArray{$T,$N,$(ndims(sharding_mesh)),$(typeof(sharding))}(
+            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+            return :(ConcreteRArray{$T,$N,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $(tocopy.shape), $sharding
             ))
         else
@@ -117,10 +116,8 @@ function create_result(
     end
 
     if path_to_shard_info !== nothing # restore sharding
-        sharding = __construct_sharding_for_carray(
-            tocopy, path, result_stores, path_to_shard_info, sharding_mesh
-        )
-        return :(ConcreteRArray{$T,$N,$(ndims(sharding_mesh)),$(typeof(sharding))}(
+        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+        return :(ConcreteRArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
     end
@@ -365,6 +362,7 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "binary_op_transpose_simplify_or",
         "binary_op_transpose_simplify_and",
         "binary_op_transpose_simplify_xor",
+        "associative_binary_op_reordering<1>",
         "transpose_unary_transpose_abs",
         "transpose_unary_transpose_neg",
         "transpose_unary_transpose_sqrt",
@@ -380,12 +378,15 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "transpose_unary_transpose_sine",
         "transpose_unary_transpose_tanh",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
+        "scatter_indices_are_unique",
+        "transpose_reduce_simplify",
         "replace_neg_add_with_subtract",
         "log_const_prop<1>",
         "log_plus_one_const_prop<1>",
         "binop_const_simplify",
         "transpose_broadcast_in_dim_to_broadcast_in_dim",
         "not_select_simplify",
+        "scatter_update_computation_const_prop",
         "common_compare_expression_rewrite",
         "compare_select_simplify",
         "while_simplify<1>",
@@ -794,10 +795,12 @@ function compile_mlir!(
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
     linear_results2 = TracedType[]
+    results_mask = falses(length(results))
     for (i, op) in enumerate(results)
         if !MLIR.IR.is_block_arg(op)
             push!(nresults, op)
             push!(linear_results2, linear_results[i])
+            results_mask[i] = true
             continue
         end
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
@@ -812,11 +815,18 @@ function compile_mlir!(
 
     out_tys2 = [MLIR.IR.type(a) for a in nresults]
 
+    res_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
+    if res_attrs isa MLIR.IR.Attribute
+        res_attrs = [
+            res_attrs[i - 1] for (i, present) in enumerate(results_mask) if present
+        ]
+    end
+
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
         arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
-        res_attrs=MLIR.IR.attr(compiled_f, "res_attrs"),
+        res_attrs,
         no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
         body=MLIR.IR.Region(),
     )
@@ -837,7 +847,6 @@ function compile_mlir!(
         linear_args,
         in_tys,
         linear_results2,
-        mlir_fn_res.linear_result_shard_info,
         mlir_fn_res.num_partitions,
         mlir_fn_res.num_replicas,
         mlir_fn_res.is_sharded,
@@ -857,6 +866,22 @@ macro code_hlo(args...)
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
+    )
+    return esc(:($(compile_expr);
+    $(first)($(compiled))))
+end
+
+"""
+    @code_mhlo [optimize = ...] [no_nan = <true/false>] f(args...)
+
+Similar to `@code_hlo`, but prints the module after running the XLA compiler.
+"""
+macro code_mhlo(args...)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true, :no_nan => false, :client => nothing
+    )
+    compile_expr, (; compiled) = compile_call_expr(
+        __module__, compile_xla, default_options, args...
     )
     return esc(:($(compile_expr);
     $(first)($(compiled))))
@@ -998,7 +1023,7 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
-            if carg isa ConcreteRArray && Reactant.Sharding.is_sharded(carg)
+            if Reactant.Sharding.is_sharded(carg)
                 for j in 1:length(mesh)
                     sbuf = Symbol(:sbuf_, i, "_", j)
                     push!(flatten_names, sbuf)
@@ -1007,17 +1032,11 @@ function codegen_flatten!(
             else
                 # Warn here first and then replicate the input across all devices on the
                 # mesh
-                if carg isa ConcreteRArray
-                    @warn "Input $carg is not sharded, replicating across all devices. It \
-                           is recommended to replicate the input across all devices on the \
-                           mesh manually using `Reactant.Sharding.NamedSharding`" maxlog = 1
-                end
+                @warn "Input $carg is not sharded, replicating across all devices. It \
+                       is recommended to replicate the input across all devices on the \
+                       mesh manually using `Reactant.Sharding.NamedSharding`" maxlog = 1
                 buf = Symbol(:buf_, i)
-                if carg isa ConcreteRArray
-                    push!(flatten_code, :($buf = XLA.synced_buffer(only($usbuf))))
-                else
-                    push!(flatten_code, :($buf = XLA.synced_buffer($usbuf)))
-                end
+                push!(flatten_code, :($buf = XLA.synced_buffer(only($usbuf))))
                 for j in 1:length(mesh)
                     device_id = mesh.device_ids[j]
                     device_ordinal = XLA.device_ordinal(client, device_id)
@@ -1030,9 +1049,7 @@ function codegen_flatten!(
         else
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
-            if arg isa TracedRNumber
-                push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
-            elseif arg isa TracedRArray
+            if arg isa TracedRArray || arg isa TracedRNumber
                 push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
             else
                 error("Unsupported type $(typeof(arg))")
@@ -1061,7 +1078,6 @@ function codegen_unflatten!(
     concrete_result,
     result_stores,
     path_to_shard_info,
-    is_sharded::Bool,
     linear_result_shard_info,
     sharding_mesh,
 )
@@ -1369,26 +1385,28 @@ function compile_xla(f, args; client=nothing, kwargs...)
             mlir_fn_res.is_sharded,
         )
 
-        mlir_fn_res.num_partitions > 1 && (device = nothing)
-
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
         # compile MLIR module to XLA executable
-        is_sharded = mlir_fn_res.num_partitions > 1
-        if is_sharded
-            # mesh_shape = collect(Int64, size(mlir_fn_res.sharding_mesh))
-            mesh_ids = collect(Int64, vec(mlir_fn_res.sharding_mesh.device_ids))
+        mlir_fn_res.is_sharded && (device = nothing)
+        mesh_ids = if mlir_fn_res.is_sharded
+            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
         else
-            # mesh_shape = Int64[]
-            mesh_ids = Int64[]
+            Int64[]
         end
-        # exec = XLA.Compile(client, device, mod; is_sharded, mesh_ids, mesh_shape)
-        exec = XLA.Compile(client, device, mod; is_sharded, mesh_ids)
+        exec = XLA.Compile(
+            client,
+            device,
+            mod;
+            num_results=length(mlir_fn_res.linear_results),
+            mlir_fn_res.is_sharded,
+            mesh_ids,
+        )
 
-        return exec, mlir_fn_res, device, client
+        return mod, exec, mlir_fn_res, device, client
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -1398,7 +1416,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
 end
 
 function compile(f, args; sync=false, kwargs...)
-    exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
+    _, exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
 
@@ -1408,11 +1426,7 @@ function compile(f, args; sync=false, kwargs...)
     end
 
     result_stores = Dict{Tuple,Symbol}()
-    path_to_shard_info = if mlir_fn_res.is_sharded
-        Dict{Tuple,Tuple{Array{Vector{UnitRange{Int}}},Tuple}}()
-    else
-        nothing
-    end
+    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Tuple}() : nothing
 
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(
@@ -1431,8 +1445,24 @@ function compile(f, args; sync=false, kwargs...)
         donated_args_mask,
         length(linear_results),
         mlir_fn_res.is_sharded,
-        mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh.device_ids) : Int64[],
+        if mlir_fn_res.is_sharded
+            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
+        else
+            Int64[]
+        end,
     )
+
+    linear_result_shard_info = if mlir_fn_res.is_sharded
+        # Generate a tuple of DeviceToArraySlices and PartitionSpecs
+        output_shardings = XLA.get_output_shardings(exec)
+        XLA.compute_array_indices_and_partition_spec.(
+            output_shardings,
+            size.(mlir_fn_res.linear_results),
+            (mlir_fn_res.sharding_mesh,),
+        )
+    else
+        ntuple(Returns(nothing), length(linear_results))
+    end
 
     unflatten_code = codegen_unflatten!(
         linear_args,
@@ -1442,8 +1472,7 @@ function compile(f, args; sync=false, kwargs...)
         concrete_result,
         result_stores,
         path_to_shard_info,
-        mlir_fn_res.is_sharded,
-        mlir_fn_res.linear_result_shard_info,
+        linear_result_shard_info,
         mlir_fn_res.sharding_mesh,
     )
 

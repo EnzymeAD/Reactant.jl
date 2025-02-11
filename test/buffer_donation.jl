@@ -18,7 +18,7 @@ end
     @jit(donate_fill_x_with_2(a, b))
     @test convert(Array, a) == 2 * ones(2, 2)
 
-    (; preserved_args) = Reactant.Compiler.compile_xla(donate_fill_x_with_2, (a, b))[2]
+    (; preserved_args) = Reactant.Compiler.compile_xla(donate_fill_x_with_2, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 
@@ -27,7 +27,7 @@ end
     @jit(donate_inplace_mul(a, b))
     @test convert(Array, a) == 6 * ones(2, 2)
 
-    (; preserved_args) = Reactant.Compiler.compile_xla(donate_inplace_mul, (a, b))[2]
+    (; preserved_args) = Reactant.Compiler.compile_xla(donate_inplace_mul, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 end
