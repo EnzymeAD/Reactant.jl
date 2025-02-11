@@ -561,6 +561,12 @@ end
     end
 end
 
+@testset "sign" begin
+    x = collect(Float64, 0:0.01:1) .- 0.5
+    x_ra = Reactant.to_rarray(x)
+    @test Array(@jit(sign.(x_ra))) ≈ sign.(x)
+end
+
 @testset "aos_to_soa" begin
     using ArrayInterface
 
