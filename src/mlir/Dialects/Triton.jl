@@ -588,18 +588,18 @@ function dot_scaled(
     ]
     !isnothing(lhs_scale) && push!(operands, lhs_scale)
     !isnothing(rhs_scale) && push!(operands, rhs_scale)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        if (lhs_scale == nothing)
-            0
-        elseif 1(rhs_scale == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, if (lhs_scale == nothing)
+                0
+            elseif 1(rhs_scale == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
 
     return create_operation(
         "tt.dot_scaled",
@@ -692,7 +692,11 @@ This is an escape hatch and is only there for testing/experimenting. This
 op will be removed in the future.
 """
 function experimental_descriptor_gather(
-    desc::Value, x_offsets::Value, y_offset::Value; result::IR.Type, location=Location()
+    desc::Value,
+    x_offsets::Value,
+    y_offset::Value;
+    result::IR.Type,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[desc, x_offsets, y_offset]
@@ -751,7 +755,11 @@ function experimental_descriptor_load(
 end
 
 function experimental_descriptor_scatter(
-    desc::Value, x_offsets::Value, y_offset::Value, src::Value; location=Location()
+    desc::Value,
+    x_offsets::Value,
+    y_offset::Value,
+    src::Value;
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[desc, x_offsets, y_offset, src]
@@ -1136,16 +1144,16 @@ function load(
     attributes = NamedAttribute[]
     !isnothing(mask) && push!(operands, mask)
     !isnothing(other) && push!(operands, other)
-    push!(attributes, operandsegmentsizes([
-        1,
-        if (mask == nothing)
+    push!(
+        attributes,
+        operandsegmentsizes([1, if (mask == nothing)
             0
         elseif 1(other == nothing)
             0
         else
             1
-        end,
-    ]))
+        end]),
+    )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(boundaryCheck) &&
         push!(attributes, namedattribute("boundaryCheck", boundaryCheck))

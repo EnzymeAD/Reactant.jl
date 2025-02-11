@@ -15,6 +15,32 @@ import ...API
 using EnumX
 
 """
+`MPI_OpClassEnum`
+MPI operation class
+"""
+@enumx MPI_OpClassEnum MPI_OP_NULL MPI_MAX MPI_MIN MPI_SUM MPI_PROD MPI_LAND MPI_BAND MPI_LOR MPI_BOR MPI_LXOR MPI_BXOR MPI_MINLOC MPI_MAXLOC MPI_REPLACE
+MPI_OpClassEnumStorage = [
+    "MPI_OP_NULL",
+    "MPI_MAX",
+    "MPI_MIN",
+    "MPI_SUM",
+    "MPI_PROD",
+    "MPI_LAND",
+    "MPI_BAND",
+    "MPI_LOR",
+    "MPI_BOR",
+    "MPI_LXOR",
+    "MPI_BXOR",
+    "MPI_MINLOC",
+    "MPI_MAXLOC",
+    "MPI_REPLACE",
+]
+
+function IR.Attribute(e::MPI_OpClassEnum.T)
+    return parse(Attribute, "#mpi<opclass <$(MPI_OpClassEnumStorage[Int(e)+1])>>")
+end
+
+"""
 `MPI_ErrorClassEnum`
 MPI error class name
 """
@@ -108,9 +134,9 @@ to check for errors.
 function allreduce(
     sendbuf::Value,
     recvbuf::Value;
-    retval=nothing::Union{Nothing,IR.Type},
-    op,
-    location=Location(),
+    retval::Union{Nothing,IR.Type}=nothing,
+    op::MPI_OpClassEnum.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[sendbuf, recvbuf]
@@ -142,7 +168,7 @@ Communicators other than `MPI_COMM_WORLD` are not supported for now.
 This operation can optionally return an `!mpi.retval` value that can be used
 to check for errors.
 """
-function barrier(; retval=nothing::Union{Nothing,IR.Type}, location=Location())
+function barrier(; retval::Union{Nothing,IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -201,7 +227,7 @@ This operation can optionally return an `!mpi.retval` value that can be used
 to check for errors.
 """
 function comm_size(;
-    retval=nothing::Union{Nothing,IR.Type}, size::IR.Type, location=Location()
+    retval::Union{Nothing,IR.Type}=nothing, size::IR.Type, location::Location=Location()
 )
     op_ty_results = IR.Type[size,]
     operands = Value[]
@@ -294,9 +320,9 @@ function irecv(
     ref::Value,
     tag::Value,
     rank::Value;
-    retval=nothing::Union{Nothing,IR.Type},
+    retval::Union{Nothing,IR.Type}=nothing,
     req::IR.Type,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[req,]
     operands = Value[ref, tag, rank]
@@ -334,9 +360,9 @@ function isend(
     ref::Value,
     tag::Value,
     rank::Value;
-    retval=nothing::Union{Nothing,IR.Type},
+    retval::Union{Nothing,IR.Type}=nothing,
     req::IR.Type,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[req,]
     operands = Value[ref, tag, rank]
@@ -505,7 +531,9 @@ is not yet ported to MLIR.
 This operation can optionally return an `!mpi.retval` value that can be used
 to check for errors.
 """
-function wait(req::Value; retval=nothing::Union{Nothing,IR.Type}, location=Location())
+function wait(
+    req::Value; retval::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[req,]
     owned_regions = Region[]

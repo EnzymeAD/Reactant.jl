@@ -93,10 +93,10 @@ affect the order of the corresponding replica groups.
 """
 function all_reduce(
     tensor::Value;
-    result=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     reduction_axes,
     out_sharding,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[tensor,]
@@ -115,8 +115,8 @@ function all_reduce(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -214,12 +214,12 @@ this inferred sharding.
 """
 function all_to_all(
     tensor::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    src_dim,
-    tgt_dim,
+    result::Union{Nothing,IR.Type}=nothing,
+    src_dim::Int64,
+    tgt_dim::Int64,
     axes,
     out_sharding,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[tensor,]
@@ -240,8 +240,8 @@ function all_to_all(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -275,7 +275,10 @@ sdy.mesh @mesh = <[\"a\"=2, \"b\"=2, \"c\"=4, \"d\"=2, \"e\"=2, \"f\"=2]>
   must match that of the corresponding operand dimension sharding.
 """
 function collective_permute(
-    tensor::Value; result=nothing::Union{Nothing,IR.Type}, out_sharding, location=Location()
+    tensor::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    out_sharding,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[tensor,]
@@ -291,8 +294,8 @@ function collective_permute(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 

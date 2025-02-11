@@ -16,7 +16,6 @@ using EnumX
 
 """
 `AtomicRMWKind`
-
 allowed 64-bit signless integer cases: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
 """
 @enumx AtomicRMWKind addf = 0 addi = 1 assign = 2 maximumf = 3 maxs = 4 maxu = 5 minimumf =
