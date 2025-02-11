@@ -36,16 +36,7 @@ end
     @nospecialize(obj::AbstractArray{T}), field, val
 ) where {T}
     ancestor_obj = ancestor(obj)
-    if isbitstype(T) || ancestor_obj isa RArray
-        if val isa XLA.AsyncBuffer
-            if Reactant.Sharding.is_sharded(ancestor_obj)
-                error("`val` can't be a buffer if `obj` is sharded")
-            else
-                return Base.setfield!(obj, field, (val,))
-            end
-        end
-        return Base.setfield!(obj, field, val)
-    end
+    (isbitstype(T) || ancestor_obj isa RArray) && return Base.setfield!(obj, field, val)
     return Base.setindex!(obj, val, field)
 end
 
@@ -75,25 +66,37 @@ function create_result(
     return Expr(:new, T, elems...)
 end
 
-function create_result(
-    tocopy::ConcreteRNumber{T}, path, result_stores, path_to_shard_info, sharding_mesh
-) where {T}
-    if haskey(result_stores, path)
-        restore = result_stores[path]
-        delete!(result_stores, path)
-        return :(ConcreteRNumber{$T}($restore))
-    end
-    # We will set the data for this later
-    return :(ConcreteRNumber{$T}($(tocopy.data)))
-end
-
-function __construct_sharding_for_carray(
-    ::ConcreteRArray{T,N,D,S}, path, _, path_to_shard_info, sharding_mesh
-) where {T,N,D,S}
+function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
     device_to_array_slices, partition_spec = path_to_shard_info[path]
     delete!(path_to_shard_info, path)
     sharding = Reactant.Sharding.NamedSharding(sharding_mesh, partition_spec)
     return Reactant.Sharding.ShardInfo(sharding, device_to_array_slices)
+end
+
+function create_result(
+    tocopy::ConcreteRNumber{T,D,S}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T,D,S}
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing # restore sharding
+            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+            return :(ConcreteRNumber{$T,length($(restore)),$(typeof(sharding))}(
+                ($(restore)...,), $sharding
+            ))
+        else
+            return :(ConcreteRNumber{$T}($restore))
+        end
+    end
+
+    if path_to_shard_info !== nothing # restore sharding
+        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+        return :(ConcreteRNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
+            ($(tocopy.data...,)), $sharding
+        ))
+    end
+    # We will set the data for this later
+    return :(ConcreteRNumber{$T}($(tocopy.data)))
 end
 
 function create_result(
@@ -103,9 +106,7 @@ function create_result(
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
-            sharding = __construct_sharding_for_carray(
-                tocopy, path, result_stores, path_to_shard_info, sharding_mesh
-            )
+            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
             return :(ConcreteRArray{$T,$N,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $(tocopy.shape), $sharding
             ))
@@ -115,10 +116,8 @@ function create_result(
     end
 
     if path_to_shard_info !== nothing # restore sharding
-        sharding = __construct_sharding_for_carray(
-            tocopy, path, result_stores, path_to_shard_info, sharding_mesh
-        )
-        return :(ConcreteRArray{$T,$N,length($(restore)),$(typeof(sharding))}(
+        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+        return :(ConcreteRArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
     end
@@ -1083,7 +1082,6 @@ function codegen_unflatten!(
     concrete_result,
     result_stores,
     path_to_shard_info,
-    is_sharded::Bool,
     linear_result_shard_info,
     sharding_mesh,
 )
@@ -1432,11 +1430,7 @@ function compile(f, args; sync=false, kwargs...)
     end
 
     result_stores = Dict{Tuple,Symbol}()
-    path_to_shard_info = if mlir_fn_res.is_sharded
-        Dict{Tuple,Tuple{Array{Vector{UnitRange{Int}}},Tuple}}()
-    else
-        nothing
-    end
+    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Tuple}() : nothing
 
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(
@@ -1464,7 +1458,12 @@ function compile(f, args; sync=false, kwargs...)
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
         # Generate a tuple of DeviceToArraySlices and PartitionSpecs
-        error("TODO: generate this from OpSharding")
+        output_shardings = XLA.get_output_shardings(exec)
+        XLA.compute_array_indices_and_partition_spec.(
+            output_shardings,
+            size.(mlir_fn_res.linear_results),
+            (mlir_fn_res.sharding_mesh,),
+        )
     else
         ntuple(Returns(nothing), length(linear_results))
     end
@@ -1477,7 +1476,6 @@ function compile(f, args; sync=false, kwargs...)
         concrete_result,
         result_stores,
         path_to_shard_info,
-        mlir_fn_res.is_sharded,
         linear_result_shard_info,
         mlir_fn_res.sharding_mesh,
     )

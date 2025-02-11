@@ -66,6 +66,7 @@ function OpSharding(sharding::JLOpSharding)
     iota_transpose_perm = unsafe_wrap(
         Array, sharding.iota_transpose_perm, sharding.n_iota_transpose_perm
     )
+    iota_transpose_perm .+= 1
 
     tile_dimensions = unsafe_wrap(
         Array, sharding.tile_dimensions, sharding.n_tile_dimensions
@@ -106,21 +107,107 @@ function int_to_shard_group_type(i::Int32)
     return error("Invalid ShardGroupType $i")
 end
 
-function get_output_shardings(exec::LoadedExecutable)
-    exec.is_sharded || return OpSharding[]
+function generate_device_list(sharding::OpSharding)
+    if !isempty(sharding.iota_reshape_dims)
+        # Generate device IDs using iota
+        num_devices = prod(sharding.iota_reshape_dims)
+        iota_devices = collect(
+            Int64, reshape(0:(num_devices - 1), sharding.iota_reshape_dims...)
+        )
 
-    jl_op_shardings = [Ref{JLOpSharding}() for _ in 1:(exec.num_results)]
-    jl_op_shardings_ptr = [
-        Base.unsafe_convert(Ptr{JLOpSharding}, sharding) for sharding in jl_op_shardings
-    ]
+        # Permute the iota array if iota_transpose_perm is provided
+        if !isempty(sharding.iota_transpose_perm)
+            iota_devices = permutedims(iota_devices, Tuple(sharding.iota_transpose_perm))
+        end
 
-    GC.@preserve jl_op_shardings begin
-        @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetOuputShardings(
-            exec.exec::Ptr{Cvoid},
-            jl_op_shardings_ptr::Ptr{Ptr{JLOpSharding}},
-            exec.num_results::Int32,
-        )::Cvoid
+        # Flatten the permuted iota array to get tile_assignment_devices
+        return vec(iota_devices)
     end
+    return sharding.tile_assignment_devices
+end
 
-    return map(OpSharding ∘ getindex, jl_op_shardings)
+# Function to compute array indices for each device
+function compute_array_indices_and_partition_spec(
+    sharding::OpSharding, array_size::Dims{N}, mesh
+) where {N}
+    if sharding.type == OpShardingType.Replicated
+        # Replicated: All devices have the entire array
+        return (
+            ntuple(Returns(ntuple(i -> 1:array_size[i], N)), length(mesh)),
+            ntuple(Returns(nothing), N),
+        )
+    elseif sharding.type == OpShardingType.Maximal
+        # Maximal: Only one device has the entire array
+        @assert length(mesh) == 1
+        return (
+            ntuple(Returns(ntuple(i -> 1:array_size[i], N)), length(mesh)),
+            ntuple(Returns(nothing), N),
+        )
+    elseif sharding.type == OpShardingType.Other
+        # Other: Tiled sharding
+        # Reshape tile_assignment_devices into tile_assignment_dimensions
+        device_list = generate_device_list(sharding)
+        sorted_mesh_devices = sort(collect(Int64, mesh.device_ids))
+        @assert sort(device_list) == sorted_mesh_devices "Mismatched devices list: \
+                                                          $(device_list) vs \
+                                                          $(mesh.device_ids)"
+        @assert isempty(sharding.tile_dimensions) "Tile dimensions are not supported yet! \
+                                                   Open an issue with an MWE for this case."
+        @assert !sharding.replicate_on_last_tile_dim "Replication on the last tile \
+                                                      dimension is not supported yet! Open \
+                                                      an issue with an MWE for this case."
+
+        tile_assignment = reshape(device_list, sharding.tile_assignment_dimensions...)
+        tile_dimensions = div.(array_size, sharding.tile_assignment_dimensions)
+
+        mesh_devices = reshape([mesh.device_ids...], mesh.shape)
+
+        # Match array dimensions to mesh axes by comparing device sequences
+        used_axes = Set{Int}()
+        partition_spec = ntuple(N) do dim
+            if dim <= length(sharding.tile_assignment_dimensions) &&
+                sharding.tile_assignment_dimensions[dim] > 1
+                tile_seq = __get_device_sequence(tile_assignment, dim)
+
+                # For each unused mesh axis with matching size
+                for (axis_idx, axis_name) in enumerate(mesh.axis_names)
+                    if axis_idx ∉ used_axes && size(mesh_devices, axis_idx) == length(tile_seq)
+                        mesh_seq = __get_device_sequence(mesh_devices, axis_idx)
+
+                        # Check if sequences match (allowing for reversal)
+                        if tile_seq == mesh_seq || tile_seq == reverse(mesh_seq)
+                            push!(used_axes, axis_idx)
+                            return axis_name
+                        end
+                    end
+                end
+            end
+            return nothing
+        end
+
+        device_to_array_indices = map(mesh.device_ids) do device_id
+            tile_index = findfirst(==(device_id), tile_assignment)
+            @assert tile_index !== nothing "Device ID $device_id not found in tile assignment $tile_assignment"
+            tile_start = (tile_index.I .- 1) .* tile_dimensions .+ 1
+            tile_end = tile_index.I .* tile_dimensions
+            ntuple(i -> tile_start[i]:tile_end[i], N)
+        end
+
+        return device_to_array_indices, partition_spec
+    else
+        error("Unsupported sharding type: $(sharding.type)")
+    end
+end
+
+# Helper function to get device sequence along a dimension
+function __get_device_sequence(arr, dim)
+    # Take first index for all other dimensions
+    idx = ones(Int, ndims(arr))
+    # Get sequence along target dimension
+    sequence = Int[]
+    for i in 1:size(arr, dim)
+        idx[dim] = i
+        push!(sequence, arr[idx...])
+    end
+    return sequence
 end

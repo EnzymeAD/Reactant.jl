@@ -1,7 +1,7 @@
-get_buffer(x::ConcreteRNumber) = x.data.buffer
-get_buffer(x::ConcreteRArray{T,0}) where {T} = only(x.data).buffer
-function get_buffer(x::ConcreteRArray{T,N}) where {T,N}
+function get_buffer(x::Union{ConcreteRArray,ConcreteRNumber}; no_error_for_scalar=false)
     if Sharding.is_sharded(x.sharding)
+        # For scalars this is mostly replicated
+        no_error_for_scalar && return first(x.data).buffer
         error("`x` is sharded, so `get_buffer` is not defined")
     end
     return only(x.data).buffer
@@ -37,8 +37,9 @@ Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x
 
 Base.size(x::ConcreteRArray) = x.shape
 
-Base.isempty(x::ConcreteRNumber) = x.data == XLA.AsyncEmptyBuffer
-Base.isempty(x::ConcreteRArray) = any(==(XLA.AsyncEmptyBuffer), x.data)
+function Base.isempty(x::Union{ConcreteRArray,ConcreteRNumber})
+    return any(==(XLA.AsyncEmptyBuffer), x.data)
+end
 Base.isempty(x::WrappedConcreteRArray) = isempty(ancestor(x))
 
 function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
@@ -82,14 +83,16 @@ end
 function to_number(X::ConcreteRScalar{T}) where {T}
     data = Ref{T}()
     XLA.await(X)
-    buf = get_buffer(X)
+    buf = get_buffer(X; no_error_for_scalar=true)
     GC.@preserve data buf begin
         XLA.BufferToHost(buf, data)
     end
     return data[]
 end
 
-Base.convert(::Type{T}, x::ConcreteRScalar{T}) where {T} = to_number(x)
+function Base.convert(::Type{T}, x::ConcreteRScalar{T}) where {T}
+    return to_number(x; no_error_for_scalar=true)
+end
 
 for jlop in (:(Base.abs),), T in (ConcreteRNumber,)
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))

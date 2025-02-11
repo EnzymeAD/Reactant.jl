@@ -230,3 +230,22 @@ function Compile(
     end
     return LoadedExecutable(exec, num_results, is_sharded)
 end
+
+function get_output_shardings(exec::LoadedExecutable)
+    exec.is_sharded || return OpSharding[]
+
+    jl_op_shardings = [Ref{JLOpSharding}() for _ in 1:(exec.num_results)]
+    jl_op_shardings_ptr = [
+        Base.unsafe_convert(Ptr{JLOpSharding}, sharding) for sharding in jl_op_shardings
+    ]
+
+    GC.@preserve jl_op_shardings begin
+        @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetOuputShardings(
+            exec.exec::Ptr{Cvoid},
+            jl_op_shardings_ptr::Ptr{Ptr{JLOpSharding}},
+            exec.num_results::Int32,
+        )::Cvoid
+    end
+
+    return map(OpSharding ∘ getindex, jl_op_shardings)
+end

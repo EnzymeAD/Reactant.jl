@@ -50,7 +50,7 @@ Base.in(axis::Union{String,Symbol}, mesh::Mesh) = Symbol(axis) ∈ mesh.axis_nam
 
 abstract type AbstractSharding end
 
-function (T::AbstractSharding)(::XLA.Client, device, ::AbstractArray)
+function (T::AbstractSharding)(::XLA.Client, device, ::Union{AbstractArray,Number})
     return error("(::$(T))(::XLA.Client, ::AbstractArray) is not implemented")
 end
 
@@ -59,7 +59,7 @@ struct NoSharding <: AbstractSharding end
 # This allows us to mark entire branches as NoSharding
 Base.getproperty(::NoSharding, x) = NoSharding()
 
-function (::NoSharding)(client::XLA.Client, device, x::AbstractArray)
+function (::NoSharding)(client::XLA.Client, device, x::Union{AbstractArray,Number})
     buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, x, device), nothing)
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
@@ -88,6 +88,19 @@ struct NamedSharding{D1,D2,P<:Tuple,D3} <: AbstractSharding
             mesh, partition_spec, is_closed, priority
         )
     end
+end
+
+function (sharding::NamedSharding)(client::XLA.Client, device, x::Number)
+    (; mesh, partition_spec) = sharding
+    @assert length(partition_spec) == 0
+
+    data = map(mesh.device_ids) do device_id
+        return XLA.AsyncBuffer(
+            XLA.ArrayFromHostBuffer(client, fill(x), XLA.device_ordinal(client, device_id)),
+            nothing,
+        )
+    end
+    return data, ShardInfo(sharding, ntuple(Returns(()), length(mesh)))
 end
 
 function (sharding::NamedSharding)(client::XLA.Client, ::Nothing, x::AbstractArray)
@@ -166,7 +179,7 @@ function Base.getproperty(sharding::ShardInfo, name::Symbol)
     return getfield(sharding.sharding, name)
 end
 
-function (sharding::ShardInfo)(client::XLA.Client, device, x::AbstractArray)
+function (sharding::ShardInfo)(client::XLA.Client, device, x::Union{AbstractArray,Number})
     return (sharding.sharding)(client, device, x)
 end
 
@@ -187,6 +200,10 @@ is_sharded(s::ShardInfo) = is_sharded(s.sharding)
 function is_sharded(x::AbstractArray)
     ancestor_x = Reactant.ancestor(x)
     hasfield(typeof(ancestor_x), :sharding) && return is_sharded(ancestor_x.sharding)
+    return false
+end
+function is_sharded(x::Number)
+    hasfield(typeof(x), :sharding) && return is_sharded(x.sharding)
     return false
 end
 
