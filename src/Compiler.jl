@@ -362,6 +362,7 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "binary_op_transpose_simplify_or",
         "binary_op_transpose_simplify_and",
         "binary_op_transpose_simplify_xor",
+        "associative_binary_op_reordering<1>",
         "transpose_unary_transpose_abs",
         "transpose_unary_transpose_neg",
         "transpose_unary_transpose_sqrt",
@@ -377,12 +378,15 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "transpose_unary_transpose_sine",
         "transpose_unary_transpose_tanh",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
+        "scatter_indices_are_unique",
+        "transpose_reduce_simplify",
         "replace_neg_add_with_subtract",
         "log_const_prop<1>",
         "log_plus_one_const_prop<1>",
         "binop_const_simplify",
         "transpose_broadcast_in_dim_to_broadcast_in_dim",
         "not_select_simplify",
+        "scatter_update_computation_const_prop",
         "common_compare_expression_rewrite",
         "compare_select_simplify",
         "while_simplify<1>",
@@ -1019,7 +1023,7 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
-            if carg isa ConcreteRArray && Reactant.Sharding.is_sharded(carg)
+            if Reactant.Sharding.is_sharded(carg)
                 for j in 1:length(mesh)
                     sbuf = Symbol(:sbuf_, i, "_", j)
                     push!(flatten_names, sbuf)
@@ -1028,17 +1032,11 @@ function codegen_flatten!(
             else
                 # Warn here first and then replicate the input across all devices on the
                 # mesh
-                if carg isa ConcreteRArray
-                    @warn "Input $carg is not sharded, replicating across all devices. It \
-                           is recommended to replicate the input across all devices on the \
-                           mesh manually using `Reactant.Sharding.NamedSharding`" maxlog = 1
-                end
+                @warn "Input $carg is not sharded, replicating across all devices. It \
+                       is recommended to replicate the input across all devices on the \
+                       mesh manually using `Reactant.Sharding.NamedSharding`" maxlog = 1
                 buf = Symbol(:buf_, i)
-                if carg isa ConcreteRArray
-                    push!(flatten_code, :($buf = XLA.synced_buffer(only($usbuf))))
-                else
-                    push!(flatten_code, :($buf = XLA.synced_buffer($usbuf)))
-                end
+                push!(flatten_code, :($buf = XLA.synced_buffer(only($usbuf))))
                 for j in 1:length(mesh)
                     device_id = mesh.device_ids[j]
                     device_ordinal = XLA.device_ordinal(client, device_id)
@@ -1051,9 +1049,7 @@ function codegen_flatten!(
         else
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
-            if arg isa TracedRNumber
-                push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
-            elseif arg isa TracedRArray
+            if arg isa TracedRArray || arg isa TracedRNumber
                 push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
             else
                 error("Unsupported type $(typeof(arg))")

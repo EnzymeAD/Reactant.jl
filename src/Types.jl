@@ -69,8 +69,10 @@ mutable struct ConcreteRNumber{T,D,S<:Sharding.ShardInfo} <: RNumber{T}
     sharding::S
 end
 
-function ConcreteRNumber{T}(data::XLA.AsyncBuffer) where {T}
-    return ConcreteRNumber{T,1,Sharding.NoShardInfo}((data,), Sharding.NoShardInfo())
+ConcreteRNumber{T,1,Sharding.NoShardInfo}(x::Number) where {T} = ConcreteRNumber{T}(x)
+
+function ConcreteRNumber{T}(data::Tuple{XLA.AsyncBuffer}) where {T}
+    return ConcreteRNumber{T,1,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
 end
 
 @leaf ConcreteRNumber
@@ -103,10 +105,8 @@ Adapt.parent_type(::Type{ConcreteRArray{T,N,D,S}}) where {T,N,D,S} = ConcreteRAr
 
 Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kwargs...)
 
-function ConcreteRArray{T,N}(data::XLA.AsyncBuffer, shape::NTuple{N,Int}) where {T,N}
-    return ConcreteRArray{T,N,1,Sharding.NoShardInfo}(
-        (data,), shape, Sharding.NoShardInfo()
-    )
+function ConcreteRArray{T,N}(data::Tuple{XLA.AsyncBuffer}, shape::NTuple{N,Int}) where {T,N}
+    return ConcreteRArray{T,N,1,Sharding.NoShardInfo}(data, shape, Sharding.NoShardInfo())
 end
 
 function ConcreteRArray(

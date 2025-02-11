@@ -134,11 +134,7 @@ end
                 (Dict{Int}, Dict{Int}, Dict{Int}),
                 (Dict, Dict, Dict),
                 (
-                    (
-                        Dict{
-                            A,ConcreteRArray{Float64,0,1,Sharding.NoShardInfo}
-                        } where {A}
-                    ),
+                    (Dict{A,ConcreteRArray{Float64,0,1,Sharding.NoShardInfo}} where {A}),
                     (Dict{A,TracedRArray{Float64,0}} where {A}),
                     (Dict{A,TracedRArray{Float64,0}} where {A}),
                 ),
@@ -181,9 +177,7 @@ end
                     Wrapper{TracedRNumber{Float64},Vector{Float64}},
                 ),
                 (
-                    Wrapper{
-                        Float64,ConcreteRArray{Float64,1,1,Sharding.NoShardInfo}
-                    },
+                    Wrapper{Float64,ConcreteRArray{Float64,1,1,Sharding.NoShardInfo}},
                     Wrapper{Float64,TracedRArray{Float64,1}},
                     Wrapper{TracedRNumber{Float64},TracedRArray{Float64,1}},
                 ),

@@ -87,7 +87,9 @@ end
     for i in 1:n_outs
         push!(
             results,
-            :(AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing)),
+            :((
+                AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing),
+            )),
         )
     end
 

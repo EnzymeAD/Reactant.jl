@@ -21,9 +21,9 @@ Base.strides(x::ConcreteRArray) = Base.size_to_strides(1, size(x)...)
 
 # Ensure the device and client are the same as the input
 function Base.float(x::ConcreteRNumber{T}) where {T}
-    client = XLA.client(x.data)
-    device = XLA.device(x.data)
-    return ConcreteRNumber(float(T)(to_number(x)); client, device)
+    return ConcreteRNumber(
+        float(T)(to_number(x)); client=XLA.client(x), device=XLA.device(x), x.sharding
+    )
 end
 
 # written like this to avoid ambiguity errors
@@ -80,6 +80,7 @@ function synchronize(x::Union{ConcreteRArray,ConcreteRNumber})
     return nothing
 end
 
+to_number(x::Number) = x
 function to_number(X::ConcreteRScalar{T}) where {T}
     data = Ref{T}()
     XLA.await(X)
@@ -123,35 +124,31 @@ for jlop in (:(Base.isnan), :(Base.isfinite)),
 end
 
 for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
-    @eval begin
-        function Base.isapprox(x::$(T), y::Number; kwargs...)
-            return Base.isapprox(to_number(x), y; kwargs...)
-        end
-
-        function Base.isapprox(x::Number, y::$(T); kwargs...)
-            return Base.isapprox(x, to_number(y); kwargs...)
-        end
-
-        function Base.isapprox(x::$(T), y::$(T); kwargs...)
-            return Base.isapprox(to_number(x), to_number(y); kwargs...)
+    for (T1, T2) in ((T, Number), (Number, T), (T, T))
+        @eval begin
+            function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
+                return Base.isapprox(to_number(x), to_number(y); kwargs...)
+            end
+            function Base.isapprox(
+                x::AbstractArray{<:$(T1)}, y::AbstractArray{<:$(T2)}; kwargs...
+            )
+                return Base.isapprox(to_number.(x), to_number.(y); kwargs...)
+            end
         end
     end
 end
 
-function Base.isapprox(x::AnyConcreteRArray, y::AbstractArray; kwargs...)
-    return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
-end
-function Base.isapprox(x::AbstractArray, y::AnyConcreteRArray; kwargs...)
-    return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
-end
-function Base.isapprox(x::AnyConcreteRArray, y::AnyConcreteRArray; kwargs...)
-    return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
-end
-
-Base.:(==)(x::AnyConcreteRArray, y::AbstractArray) = convert(Array, x) == convert(Array, y)
-Base.:(==)(x::AbstractArray, y::AnyConcreteRArray) = convert(Array, x) == convert(Array, y)
-function Base.:(==)(x::AnyConcreteRArray, y::AnyConcreteRArray)
-    return convert(Array, x) == convert(Array, y)
+for (T1, T2) in (
+    (AnyConcreteRArray, AbstractArray),
+    (AbstractArray, AnyConcreteRArray),
+    (AnyConcreteRArray, AnyConcreteRArray),
+)
+    @eval begin
+        function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
+            return Base.isapprox(convert(Array, x), convert(Array, y); kwargs...)
+        end
+        Base.:(==)(x::$(T1), y::$(T2)) = convert(Array, x) == convert(Array, y)
+    end
 end
 
 function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}

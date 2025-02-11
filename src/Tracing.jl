@@ -555,8 +555,13 @@ Base.@nospecializeinfer function traced_type_inner(
     subParms = []
     for (i, SST) in enumerate(T.parameters)
         if wrapped_carray && i == 1 && SST isa Type && SST <: ReactantPrimitive
+            # XXX: Sharding???
             TrT = traced_type_inner(
-                ConcreteRNumber{SST}, seen, mode, track_numbers, sharding
+                ConcreteRNumber{SST,1,Sharding.ShardInfo},
+                seen,
+                mode,
+                track_numbers,
+                sharding,
             )
             push!(subParms, TrT)
         elseif wrapped_tracedarray && i == 1 && SST isa Type && SST <: TracedRNumber

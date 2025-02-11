@@ -75,7 +75,9 @@ end
     res = @test_warn r"`Adapt.parent_type` is not implemented for" @jit gw(x)
     # TODO we should probably override https://github.com/EnzymeAD/Enzyme.jl/blob/5e6a82dd08e74666822b9d7b2b46c36b075668ca/src/Enzyme.jl#L2132
     # to make sure this gets merged as a tracedrarray
-    @test typeof(res) == Tuple{Enzyme.TupleArray{ConcreteRNumber{Float64},(2, 2),4,2}}
+    @test typeof(res) == Tuple{
+        Enzyme.TupleArray{ConcreteRNumber{Float64,1,Sharding.NoShardInfo},(2, 2),4,2}
+    }
     @test res[1] ≈ ones(2, 2)
 end
 
