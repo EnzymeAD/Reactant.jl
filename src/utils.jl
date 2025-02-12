@@ -570,8 +570,9 @@ function call_with_reactant_generator(
         result = CC.InferenceResult(mi, CC.typeinf_lattice(interp))
         world = CC.get_inference_world(interp)
         src = CC.retrieve_code_info(result.linfo, world)
-        dico2[mi]=(CC.copy(src), goto_if_not_protection(src))
-        #src = goto_if_not_protection(src)
+        #dico2[mi]=(CC.copy(src), goto_if_not_protection(src))
+        @error src
+        src = goto_if_not_protection(src)
         CC.maybe_validate_code(result.linfo, src, "lowered")
         frame = CC.InferenceState(result, src, :no, interp)
         CC.typeinf(interp, frame)
