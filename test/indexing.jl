@@ -326,3 +326,14 @@ end
     y = Array(y_ra)
     @test res[:, 1, :] ≈ view(y, :, 1:3)
 end
+
+@testset "getindex ambiguity" begin
+    x = collect(Float32, 1:8)
+    x_ra = Reactant.to_rarray(x)
+
+    idx = CartesianIndex(1)
+
+    fn(x, idx) = @allowscalar x[idx]
+
+    @test @jit(fn(x_ra, idx)) ≈ fn(x, idx)
+end
