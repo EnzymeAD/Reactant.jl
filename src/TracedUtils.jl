@@ -67,7 +67,9 @@ function get_ancestor_indices(
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = normalize_indices(x, indices...)
     if any(is_traced, indices)
-        indices, integer_indices, result_size, flattened_size = traced_indices(indices...)
+        indices, integer_indices, result_size, _, flattened_size = traced_indices(
+            indices...
+        )
         linear_indices = mapreduce(+, enumerate(indices)) do (i, idx)
             bcasted_idxs = Ops.broadcast_in_dim(
                 idx, ndims(idx) == 0 ? Int64[] : Int64[i], flattened_size
@@ -704,18 +706,27 @@ end
 function traced_indices(indices...)
     integer_indices = Int64[]
     result_size = Int64[]
+    preddim_result_size = Int64[]
     flattened_size = Int64[length(idx) for idx in indices]
     new_indices = map(enumerate(indices)) do (i, idx)
         if idx isa Number
+            push!(preddim_result_size, 1)
             push!(integer_indices, i)
             idx isa TracedRNumber && return idx
             return promote_to(TracedRNumber{Int}, idx)
         end
+        append!(preddim_result_size, [size(idx)...])
         append!(result_size, [size(idx)...])
         idx isa TracedRArray && return materialize_traced_array(vec(idx))
         return promote_to(TracedRArray{Int,1}, vec(idx))
     end
-    return new_indices, Tuple(integer_indices), result_size, flattened_size
+    return (
+        new_indices,
+        Tuple(integer_indices),
+        result_size,
+        preddim_result_size,
+        flattened_size,
+    )
 end
 
 end
