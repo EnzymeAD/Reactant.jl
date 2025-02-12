@@ -475,6 +475,11 @@ function rewrite_insts!(ir, interp, guaranteed_error)
     return ir, any_changed
 end
 
+include("ext.jl")
+
+global dico = Dict()
+global dico2 = Dict()
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -562,7 +567,17 @@ function call_with_reactant_generator(
         ir = CC.run_passes(frame.src, CC.OptimizationState(frame, interp), result, nothing)
         rt = CC.widenconst(CC.ignorelimited(result.result))
     else
-        ir, rt = CC.typeinf_ircode(interp, mi, nothing)
+        result = CC.InferenceResult(mi, CC.typeinf_lattice(interp))
+        world = CC.get_inference_world(interp)
+        src = CC.retrieve_code_info(result.linfo, world)
+        dico2[mi]=(CC.copy(src), goto_if_not_protection(src))
+        #src = goto_if_not_protection(src)
+        CC.maybe_validate_code(result.linfo, src, "lowered")
+        frame = CC.InferenceState(result, src, :no, interp)
+        CC.typeinf(interp, frame)
+        opt = CC.OptimizationState(frame, interp)
+        ir = CC.run_passes_ipo_safe(opt.src, opt, result)
+        rt = CC.widenconst(CC.ignorelimited(result.result))
     end
 
     if guaranteed_error
@@ -768,3 +783,6 @@ end
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
+
+
+
