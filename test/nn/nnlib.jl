@@ -65,7 +65,7 @@ function ∇conv_data_filter(x, weight, conv_dims)
     return dx, dweight
 end
 
-#=@testset "Convolution" begin
+@testset "Convolution" begin
     @testset for groups in (1, 2, 4)
         weight = randn(Float32, 4, 4, 8 ÷ groups, 4)
         x = randn(Float32, 16, 16, 8, 2)
@@ -122,7 +122,7 @@ end
         @test Reactant.compile(conv_flip, (xx, WW))(xx, WW) ==
             [3*0+2*1+1*2; 3*1+2*2+1*3; 3*2+2*3+1*0;;;]
     end
-end=#
+end
 
 @testset "Batched Matrix Multiplication" begin
     x = rand(Float32, 4, 3, 5)
