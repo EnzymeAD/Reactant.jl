@@ -877,3 +877,27 @@ end
     @test Array(@jit(fntest2(x_ra))) ≈ fntest2(x)
     @test Array(@jit(fntest3(x_ra))) ≈ fntest3(x)
 end
+
+@testset "don't expand ranges by default" begin
+    fn(x) = Reactant.TracedUtils.broadcast_to_size(x, (length(x),))
+
+    hlo = repr(@code_hlo(fn(1:10000)))
+    @test contains(hlo, "stablehlo.iota")
+    @test contains(hlo, "stablehlo.add")
+    @test Array(@jit(fn(1:10000))) ≈ collect(1:10000)
+
+    hlo = repr(@code_hlo(fn(32:10000)))
+    @test contains(hlo, "stablehlo.iota")
+    @test contains(hlo, "stablehlo.add")
+    @test Array(@jit(fn(32:10000))) ≈ collect(32:10000)
+
+    hlo = repr(@code_hlo(fn(0:10000)))
+    @test contains(hlo, "stablehlo.iota")
+    @test !contains(hlo, "stablehlo.add")
+    @test Array(@jit(fn(0:10000))) ≈ collect(0:10000)
+
+    hlo = repr(@code_hlo(fn(Base.OneTo(10000))))
+    @test contains(hlo, "stablehlo.iota")
+    @test contains(hlo, "stablehlo.add")
+    @test Array(@jit(fn(Base.OneTo(10000)))) ≈ collect(Base.OneTo(10000))
+end
