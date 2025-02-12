@@ -45,7 +45,7 @@ end
     @info @__LINE__
     f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
     @info @__LINE__
-    Reactant.Compiler.compile_mlir((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
+    println(Reactant.Compiler.compile_mlir((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))[1])
     @info @__LINE__
 
     comp = f(cmodel, cnoisy, cps, cst)
@@ -67,9 +67,9 @@ end
         gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2)
     )
     @info @__LINE__
-    Reactant.Compiler.compile_mlir(
+    println(Reactant.Compiler.compile_mlir(
         gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2)
-    )
+    )[1])
     @info @__LINE__
 
     res_reactant, dps_reactant = compiled_gradient(cmodel, cnoisy, ctarget, cps, cst2)
