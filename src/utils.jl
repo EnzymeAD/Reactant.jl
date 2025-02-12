@@ -447,8 +447,8 @@ function safe_print(name, x)
     return ccall(:jl_, Cvoid, (Any,), name * " " * string(x))
 end
 
-const DEBUG_INTERP = Ref(false)
-const TRACE_CALLS = Ref(false)
+const DEBUG_INTERP = Ref(true)
+const TRACE_CALLS = Ref(true)
 
 # Rewrite type unstable calls to recurse into call_with_reactant to ensure
 # they continue to use our interpreter. Reset the derived return type
@@ -481,8 +481,12 @@ function temp1(f, args...)
     construct_function_without_args = false
     toscalar = false
     do_transpose = false
+    name = String(Symbol(f))
 
-    name = String(nameof(f))
+    # if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
+    #     error("it shouldn't get to this point.")
+    # end
+
     
     seen_cache = Reactant.OrderedIdDict()
     make_tracer(
@@ -504,6 +508,10 @@ function temp1(f, args...)
     end
     
     N = length(args)
+    # @warn f args mlir_caller_args size.(mlir_caller_args)
+    # if f == Base.materialize
+    #     @info "size" size.(args)
+    # end
     seen_args, traced_args, callee_linear_args = TracedUtils.prepare_args(
         args, concretein, toscalar
     )
@@ -556,16 +564,30 @@ function temp2(
         return_dialect,
     )
     
+    name = TracedUtils.__lookup_unique_name_in_module(mod, name)
     final_func = TracedUtils.final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
+
+    @warn "out_tys:" out_tys
     
     call_op = MLIR.Dialects.func.call(
         mlir_caller_args; result_0=out_tys, callee=MLIR.IR.FlatSymbolRefAttribute(name)
     )
 
     i = 1
-    for (k, v) in seen_result
+    for v in linear_results
         v isa TracedType || continue
+        if i > MLIR.IR.nresults(call_op)
+            @warn "different results" seen_result linear_results traced_result objectid(traced_result)
+            println.(objectid.(linear_results))
+
+            error("Tried accessing result $(i) of $(call_op), but it only has $(MLIR.IR.nresults(call_op)) results.")
+        end
+        if length(v) != prod(size(MLIR.IR.result(call_op, i)))
+            @warn "seen_result" seen_result
+            error("Woah, tried setting traced array of size $(size(v)) to $(size(MLIR.IR.result(call_op, i))) ($(MLIR.IR.result(call_op, i))[$i])")
+        end
         TracedUtils.set_mlir_data!(v, MLIR.IR.result(call_op, i))
+        i += 1
     end
     nres = MLIR.IR.nresults(call_op)
     # mutated args are included as the last ones in the call op results
@@ -575,6 +597,20 @@ function temp2(
         )
     end
     return traced_result
+end
+
+my_f(x) = nothing
+function my_f(b::Base.Broadcast.Broadcasted)
+    mlir_data = []
+    for arg in b.args
+        if arg isa AnyTracedRArray
+            push!(mlir_data, (arg.mlir_data, size(arg.mlir_data)))
+        else
+            push!(mlir_data, missing)
+        end
+    end
+    @warn "ocres is Broadcasted" b mlir_data
+    return nothing
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -835,7 +871,15 @@ function call_with_reactant_generator(
         Core.SSAValue(length(overdubbed_code))
     end
 
-    if TRACE_CALLS[]
+    donttrace = false
+    # Core.println("fn: $fn")
+    # if isabstracttype(fn) || sizeof(fn) != 0 || fn <: Base.BroadcastFunction
+    #     donttrace = true
+    #     Core.println("Disabling tracing!!!\n\tfn: $fn\n\ttypeof(fn): $(typeof(fn))")
+    # end
+
+
+    if TRACE_CALLS[] && !donttrace
         push!(overdubbed_code, Expr(:call, temp1, fn_args...))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         temp1_output = Core.SSAValue(length(overdubbed_code))
@@ -848,13 +892,21 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
     else
         push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
-        push!(overdubbed_codelocs, code_info.codelocs[1])        
+        push!(overdubbed_codelocs, code_info.codelocs[1])
     end
     
     
     ocres = Core.SSAValue(length(overdubbed_code))
+    if DEBUG_INTERP[]
+        push!(overdubbed_code, Expr(:call, safe_print, "ocres before temp2", ocres))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        push!(overdubbed_code, Expr(:call, my_f, ocres))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+    end
 
-    if TRACE_CALLS[]
+
+
+    if TRACE_CALLS[] && !donttrace
         push!(overdubbed_code, Expr(:call, temp2, ocres, temp1_output))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         
@@ -863,6 +915,8 @@ function call_with_reactant_generator(
 
     if DEBUG_INTERP[]
         push!(overdubbed_code, Expr(:call, safe_print, "ocres", ocres))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        push!(overdubbed_code, Expr(:call, my_f, ocres))
         push!(overdubbed_codelocs, code_info.codelocs[1])
     end
 
