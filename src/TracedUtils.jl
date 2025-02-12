@@ -657,8 +657,19 @@ end
 function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
     return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
 end
-broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
+
+broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
+function broadcast_to_size(arg::UnitRange, rsize)
+    # For small inputs this will be automatically optimized away, and for large ranges
+    # helps reduce the IR size
+    x = Ops.add(
+        Ops.iota(eltype(arg), [length(arg)]; iota_dimension=1),
+        Ops.fill(first(arg), [length(arg)]),
+    )
+    return broadcast_to_size(x, rsize)
+end
+broadcast_to_size(arg::Base.OneTo, rsize) = broadcast_to_size(1:last(arg), rsize)
 
 function broadcast_to_size(arg::Base.RefValue, rsize)
     # XXX: don't we want to expand here to rsize?
