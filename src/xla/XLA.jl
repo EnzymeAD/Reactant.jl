@@ -37,7 +37,7 @@ function __init__()
     # This must be the very first thing initialized (otherwise we can't throw errors)
     errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
     unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
-    
+
     initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
     ccall(initLogs, Cvoid, ())
     # Add most log level
