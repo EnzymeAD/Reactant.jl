@@ -18,7 +18,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         )
     )
 
-    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding}}
+    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.NoShardInfo}}
     @test res1[1] ≈ ores1[1]
 
     ores1 = fwd(ForwardWithPrimal, Duplicated, ones(3, 2), 3.1 * ones(3, 2))
@@ -35,8 +35,8 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     )
 
     @test typeof(res1) == Tuple{
-        ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding},
-        ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding},
+        ConcreteRArray{Float64,2,1,Sharding.NoShardInfo},
+        ConcreteRArray{Float64,2,1,Sharding.NoShardInfo},
     }
     @test res1[1] ≈ ores1[1]
     @test res1[2] ≈ ores1[2]
@@ -62,7 +62,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         )
     )
 
-    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding}}
+    @test typeof(res1) == Tuple{ConcreteRArray{Float64,2,1,Sharding.NoShardInfo}}
     @test res1[1] ≈ ores1[1]
 end
 
@@ -75,7 +75,9 @@ end
     res = @test_warn r"`Adapt.parent_type` is not implemented for" @jit gw(x)
     # TODO we should probably override https://github.com/EnzymeAD/Enzyme.jl/blob/5e6a82dd08e74666822b9d7b2b46c36b075668ca/src/Enzyme.jl#L2132
     # to make sure this gets merged as a tracedrarray
-    @test typeof(res) == Tuple{Enzyme.TupleArray{ConcreteRNumber{Float64},(2, 2),4,2}}
+    @test typeof(res) == Tuple{
+        Enzyme.TupleArray{ConcreteRNumber{Float64,1,Sharding.NoShardInfo},(2, 2),4,2}
+    }
     @test res[1] ≈ ones(2, 2)
 end
 

@@ -66,33 +66,39 @@ end
 
 # Concrete Types
 ## ConcreteRNumber
-mutable struct ConcreteRNumber{T} <: RNumber{T}
-    data::XLA.AsyncBuffer
+mutable struct ConcreteRNumber{T,D,S<:Sharding.ShardInfo} <: RNumber{T}
+    data::NTuple{D,XLA.AsyncBuffer}
+    sharding::S
+end
+
+ConcreteRNumber{T,1,Sharding.NoShardInfo}(x::Number) where {T} = ConcreteRNumber{T}(x)
+
+function ConcreteRNumber{T}(data::Tuple{XLA.AsyncBuffer}) where {T}
+    return ConcreteRNumber{T,1,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
 end
 
 @leaf ConcreteRNumber
 
-XLA.await(x::ConcreteRNumber) = XLA.await(x.data)
-XLA.client(x::ConcreteRNumber) = XLA.client(x.data)
-XLA.device(x::ConcreteRNumber) = XLA.device(x.data)
-
 function ConcreteRNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
-    return ConcreteRNumber{T}(ConcreteRArray(fill(convert(T, data)); kwargs...).data[1])
+    carray = ConcreteRArray(fill(convert(T, data)); kwargs...)
+    if !Sharding.is_sharded(carray.sharding)
+        return ConcreteRNumber{T,1,typeof(carray.sharding)}(
+            (carray.data[1],), carray.sharding
+        )
+    end
+    @assert all(isnothing, carray.sharding.partition_spec) "ConcreteRNumber cannot be \
+                                                            sharded"
+    return ConcreteRNumber{T,length(carray.data),typeof(carray.sharding)}(
+        carray.data, carray.sharding
+    )
 end
 ConcreteRNumber(data::T; kwargs...) where {T<:Number} = ConcreteRNumber{T}(data; kwargs...)
 
 ## ConcreteRArray
-# XXX: make data into a tuple of arrays
-mutable struct ConcreteRArray{T,N,D,S<:Sharding.AbstractFinalizedSharding} <: RArray{T,N}
+mutable struct ConcreteRArray{T,N,D,S<:Sharding.ShardInfo} <: RArray{T,N}
     data::NTuple{D,XLA.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::S
-end
-
-# This dispatch is needed when converting a ConcreteRNumber to a 0D ConcreteRArray
-function Base.setproperty!(x::ConcreteRArray, f::Symbol, val::XLA.AsyncBuffer)
-    @assert f === :data
-    return setproperty!(x, :data, (val,))
 end
 
 @leaf ConcreteRArray
@@ -101,10 +107,8 @@ Adapt.parent_type(::Type{ConcreteRArray{T,N,D,S}}) where {T,N,D,S} = ConcreteRAr
 
 Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kwargs...)
 
-function ConcreteRArray{T,N}(data::XLA.AsyncBuffer, shape::NTuple{N,Int}) where {T,N}
-    return ConcreteRArray{T,N,1,Sharding.FinalizedNoSharding}(
-        (data,), shape, Sharding.FinalizedNoSharding()
-    )
+function ConcreteRArray{T,N}(data::Tuple{XLA.AsyncBuffer}, shape::NTuple{N,Int}) where {T,N}
+    return ConcreteRArray{T,N,1,Sharding.NoShardInfo}(data, shape, Sharding.NoShardInfo())
 end
 
 function ConcreteRArray(
@@ -136,29 +140,19 @@ function ConcreteRArray(
     )
 end
 
-XLA.await(x::ConcreteRArray) = foreach(XLA.await, x.data)
-XLA.client(x::ConcreteRArray) = XLA.client(x.data)
-function XLA.device(x::ConcreteRArray)
-    x.sharding isa Sharding.FinalizedNoSharding && return XLA.device(only(x.data))
+XLA.await(x::Union{ConcreteRArray,ConcreteRNumber}) = foreach(XLA.await, x.data)
+XLA.client(x::Union{ConcreteRArray,ConcreteRNumber}) = XLA.client(x.data)
+function XLA.device(x::Union{ConcreteRArray,ConcreteRNumber})
+    x.sharding isa Sharding.NoShardInfo && return XLA.device(only(x.data))
     return nothing # This is intentional to make constructing ConcreteRArrays easier
 end
 
-const ConcreteRScalar{T} = Union{
-    ConcreteRArray{T,0,1,Sharding.FinalizedNoSharding},ConcreteRNumber{T}
-}
+const ConcreteRScalar{T} = Union{ConcreteRArray{T,0},ConcreteRNumber{T}}
 const WrappedConcreteRArray{T,N,D,S} = WrappedArray{
     T,N,ConcreteRArray,ConcreteRArray{T,N,D,S}
 }
 const AnyConcreteRArray{T,N,D,S} = Union{
     ConcreteRArray{T,N,D,S},WrappedConcreteRArray{T,N,D,S}
-}
-
-const UnshardedConcreteRArray{T,N} = ConcreteRArray{T,N,1,Sharding.FinalizedNoSharding}
-const UnshardedWrappedConcreteRArray{T,N} = WrappedConcreteRArray{
-    T,N,1,Sharding.FinalizedNoSharding
-}
-const AnyUnshardedConcreteRArray{T,N} = AnyConcreteRArray{
-    T,N,1,Sharding.FinalizedNoSharding
 }
 
 ConcreteRArray(x::AnyConcreteRArray) = ConcreteRArray{eltype(x),ndims(x)}(x)

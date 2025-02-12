@@ -249,6 +249,7 @@ for (jlop, hloop) in (
     (:(Base.asinh), :asinh),
     (:(Base.atan), :atan),
     (:(Base.atanh), :atanh),
+    (:(Base.sign), :sign),
 )
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
 end

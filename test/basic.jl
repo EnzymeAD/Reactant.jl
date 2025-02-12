@@ -373,7 +373,7 @@ end
         b = Reactant.to_rarray(_b)
         c = Reactant.to_rarray(_c)
 
-        # vcat test        
+        # vcat test
         y = @jit vcat(a, b)
         @test y == vcat(a, _b)
         @test y isa ConcreteRArray{typeof_a,1}
@@ -559,6 +559,12 @@ end
             @test @jit($intop.(ConcreteRNumber.($x))) == $intop.($x)
         end
     end
+end
+
+@testset "sign" begin
+    x = collect(Float64, 0:0.01:1) .- 0.5
+    x_ra = Reactant.to_rarray(x)
+    @test Array(@jit(sign.(x_ra))) ≈ sign.(x)
 end
 
 @testset "aos_to_soa" begin
@@ -843,4 +849,31 @@ end
     fn(x) = x .+ (1:length(x))
 
     @test @jit(fn(x)) ≈ fn(Array(x))
+end
+
+function fntest1(x)
+    y = similar(x, 1, 1, 8)
+    sum!(y, x)
+    return y
+end
+
+function fntest2(x)
+    y = similar(x, 2, 1, 8)
+    sum!(y, x)
+    return y
+end
+
+function fntest3(x)
+    y = similar(x, 2, 1, 1)
+    sum!(abs2, y, x)
+    return y
+end
+
+@testset "mapreducedim!" begin
+    x = reshape(collect(Float32, 1:64), 2, 4, 8) ./ 64
+    x_ra = Reactant.to_rarray(x)
+
+    @test Array(@jit(fntest1(x_ra))) ≈ fntest1(x)
+    @test Array(@jit(fntest2(x_ra))) ≈ fntest2(x)
+    @test Array(@jit(fntest3(x_ra))) ≈ fntest3(x)
 end

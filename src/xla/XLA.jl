@@ -4,6 +4,7 @@ using ..Reactant: Reactant, MLIR
 using Reactant_jll
 using Libdl
 using Scratch, Downloads
+using EnumX: @enumx
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
@@ -21,6 +22,7 @@ end
 
 include("Client.jl")
 include("Device.jl")
+include("Sharding.jl")
 include("LoadedExecutable.jl")
 include("Future.jl")
 include("Buffer.jl")
@@ -35,7 +37,7 @@ function __init__()
     # This must be the very first thing initialized (otherwise we can't throw errors)
     errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
     unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
-    
+
     initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
     ccall(initLogs, Cvoid, ())
     # Add most log level

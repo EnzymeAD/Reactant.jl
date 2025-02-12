@@ -59,6 +59,7 @@
 #include "xla/tsl/profiler/rpc/client/capture_profile.h"
 #include "xla/tsl/profiler/rpc/profiler_server.h"
 #include "xla/python/profiler_utils.h"
+#include "tsl/platform/init_main.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -205,7 +206,11 @@ T *unwrap_absl_statusor(absl::StatusOr<T> status, char **error_msg) {
 // int xla::_LayoutProto_default_instance_;
 
 extern "C" void InitializeLogs() {
-  absl::InitializeLog();
+  const char* binary = "julia";
+  int argc = 1;
+  char* argv[] = {(char*)binary};
+  char** argv2 = &argv[0];
+  tsl::port::InitMain(binary, &argc, &argv2);
   LLVMInitializeX86Target();
   LLVMInitializeX86TargetInfo();
   LLVMInitializeX86TargetMC();
@@ -668,7 +673,9 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
     options.executable_build_options.set_device_assignment(device_assignment);
 
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
-    xla::ExportShardyForHloRoundTrip(cmodop);
+    auto status = xla::ExportShardyForHloRoundTrip(cmodop);
+    if (!status.ok())
+      ReactantThrowError(status.ToString().c_str());
   } else {
     assert(device_id >= 0);
 
@@ -867,8 +874,6 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
                            uint8_t *is_arg_donatable,
                            int num_results, PjRtBuffer **op_results,
                            uint8_t *futures, FutureType **future_results) {
-  auto client = exec->client();
-
   // Ensure argument_handles is structured as num_mesh_ids x num_args
   std::vector<std::vector<PjRtBuffer *>> argument_handles(num_mesh_ids);
   int num_args = op_args_len / num_mesh_ids;

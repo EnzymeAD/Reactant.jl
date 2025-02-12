@@ -79,7 +79,7 @@ end
             y = @jit(bcast_cos(x2))
 
             @test y isa MockTensor{
-                Float64,2,Reactant.ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding}
+                Float64,2,Reactant.ConcreteRArray{Float64,2,1,Sharding.NoShardInfo}
             }
             @test size(y) == (4, 4)
             @test isapprox(parent(y), bcast_cos(parent(x)))
@@ -93,7 +93,7 @@ end
             y = @jit(bcast_cos(x2))
 
             @test y isa MutableMockTensor{
-                Float64,2,Reactant.ConcreteRArray{Float64,2,1,Sharding.FinalizedNoSharding}
+                Float64,2,Reactant.ConcreteRArray{Float64,2,1,Sharding.NoShardInfo}
             }
             @test size(y) == (4, 4)
             @test isapprox(parent(y), bcast_cos(parent(x)))
