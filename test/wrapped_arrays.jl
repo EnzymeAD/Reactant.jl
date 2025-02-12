@@ -243,3 +243,24 @@ end
     x_ra = Reactant.to_rarray(rand(3, 4, 3))
     @test @jit(fn(x_ra)) == fn(Array(x_ra))
 end
+
+function reshape_getindex(x)
+    x = reshape(x, 2, 4, 3)
+    return x[1, :, :]
+end
+
+function permutedims_getindex(x)
+    x = PermutedDimsArray(x, (2, 1))
+    return x[1, :]
+end
+
+@testset "no gather getindex" begin
+    x = ones(8, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    hlo = repr(@code_hlo(reshape_getindex(x_ra)))
+    @test !occursin("stablehlo.gather", hlo)
+
+    hlo = repr(@code_hlo(permutedims_getindex(x_ra)))
+    @test !occursin("stablehlo.gather", hlo)
+end
