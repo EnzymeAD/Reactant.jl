@@ -88,7 +88,7 @@ end
 function generate_index_list(i1, is...)
     list = reshape(i1, :, 1) .- 1
     for i in is
-        i = reshape(i, :, 1)
+        i = TracedUtils.broadcast_to_size(i, (length(i), 1))
         lorig = size(list, 1)
         list = repeat(list, size(i, 1), 1)
         i = repeat(i; inner=(lorig, 1)) .- 1
@@ -197,8 +197,12 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
-        indices, integer_indices, result_size, _ = TracedUtils.traced_indices(indices...)
-        res = Ops.gather_getindex(a, generate_index_list(indices...))
+        indices, integer_indices, result_size, preddim_result_size, _ = TracedUtils.traced_indices(
+            indices...
+        )
+        res = Ops.reshape(
+            Ops.gather_getindex(a, generate_index_list(indices...)), preddim_result_size
+        )
         isempty(integer_indices) ||
             (res = materialize_traced_array(dropdims(res; dims=integer_indices)))
         return Ops.reshape(res, result_size)
