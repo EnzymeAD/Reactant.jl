@@ -42,24 +42,32 @@ end
     cst2 = Reactant.to_rarray(st)
     cnoisy = Reactant.ConcreteRArray(noisy)
 
+    @info @__LINE__
     f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
+    @info @__LINE__
 
     comp = f(cmodel, cnoisy, cps, cst)
+    @info @__LINE__
 
     @test comp ≈ origout atol = 1e-3 rtol = 1e-2
 
     target = onehotbatch(truth, [true, false])                   # 2×1000 OneHotMatrix
+    @info @__LINE__
 
     ctarget = Reactant.ConcreteRArray(Array{Float32}(target))
     # ctarget = Reactant.to_rarray(target)
+    @info @__LINE__
 
     res, dps = gradient_loss_function(model, noisy, target, ps, st)
+    @info @__LINE__
 
     compiled_gradient = Reactant.compile(
         gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2)
     )
+    @info @__LINE__
 
     res_reactant, dps_reactant = compiled_gradient(cmodel, cnoisy, ctarget, cps, cst2)
+    @info @__LINE__
 
     @test res ≈ res_reactant atol = 1e-3 rtol = 1e-2
     for (dps1, dps2) in zip(fleaves(dps), fleaves(dps_reactant))
