@@ -573,6 +573,7 @@ function call_with_reactant_generator(
         #dico2[mi]=(CC.copy(src), goto_if_not_protection(src))
         @error src
         src = goto_if_not_protection(src)
+        @error src
         CC.maybe_validate_code(result.linfo, src, "lowered")
         frame = CC.InferenceState(result, src, :no, interp)
         CC.typeinf(interp, frame)
