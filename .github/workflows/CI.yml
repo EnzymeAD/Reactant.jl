@@ -43,7 +43,9 @@ jobs:
           # - 'nightly'
         os:
           - ubuntu-20.04
-          - ubuntu-24.04-arm
+          # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
+          # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
+          - ubuntu-22.04-arm
           - macOS-latest
         test_group:
           - core
@@ -92,7 +94,7 @@ jobs:
         exclude:
           - os: ubuntu-20.04 # this is x86_64, exclude foreign architecture
             arch: aarch64
-          - os: ubuntu-24.04-arm # this is aarch64, exclude foreign architecture
+          - os: ubuntu-22.04-arm # this is aarch64, exclude foreign architecture
             arch: x64
     steps:
       - uses: actions/checkout@v4
@@ -130,7 +132,7 @@ jobs:
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
           SDKROOT=`xcrun --show-sdk-path` julia --color=yes --project=deps deps/build_local.jl
           cp LocalPreferences.toml test/
-      - name: "Install Dependencies and Run Tests"
+      - name: "Install Dependencies"
         run: |
           import Pkg
           Pkg.Registry.update()
@@ -140,6 +142,15 @@ jobs:
               push!(dev_pks, Pkg.PackageSpec(; path))
           end
           Pkg.develop(dev_pks)
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
+        # Only in Julia v1.10 we need to install `ReactantCore` manually.
+        if: ${{ matrix.version == '1.10' }}
+        env:
+          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+      - name: "Run Tests"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
           Pkg.test(; coverage="user")
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
