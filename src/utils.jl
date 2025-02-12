@@ -555,7 +555,8 @@ function temp2(
         do_transpose,
         return_dialect,
     )
-    
+
+    name = TracedUtils.__lookup_unique_name_in_module(mod, name)
     final_func = TracedUtils.final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
     
     call_op = MLIR.Dialects.func.call(
