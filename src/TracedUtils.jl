@@ -277,7 +277,7 @@ Copy `temp_func` into a new function operation and destroy `temp_func`.
 function final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
     final_func = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
-            sym_name=__lookup_unique_name_in_module(mod, name),
+            sym_name=name,
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
             sym_visibility,
@@ -364,6 +364,7 @@ function make_mlir_fn(
         return_dialect,
     )
 
+    name = __lookup_unique_name_in_module(mod, name)
     final_func = final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
 
     return (
