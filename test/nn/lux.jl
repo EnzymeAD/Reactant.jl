@@ -45,6 +45,8 @@ end
     @info @__LINE__
     f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
     @info @__LINE__
+    Reactant.Compiler.compile_mlir((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
+    @info @__LINE__
 
     comp = f(cmodel, cnoisy, cps, cst)
     @info @__LINE__
@@ -62,6 +64,10 @@ end
     @info @__LINE__
 
     compiled_gradient = Reactant.compile(
+        gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2)
+    )
+    @info @__LINE__
+    Reactant.Compiler.compile_mlir(
         gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2)
     )
     @info @__LINE__
