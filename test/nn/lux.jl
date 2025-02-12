@@ -45,7 +45,9 @@ end
     @info @__LINE__
     f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
     @info @__LINE__
-    println(Reactant.Compiler.compile_mlir((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))[1])
+    f_mlir = Reactant.Compiler.compile_mlir((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))[1]
+    @info @__LINE__
+    println(f_mlir)
     @info @__LINE__
 
     comp = f(cmodel, cnoisy, cps, cst)
@@ -67,16 +69,21 @@ end
         gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2)
     )
     @info @__LINE__
-    println(Reactant.Compiler.compile_mlir(
+    compiled_gradient_mlir = Reactant.Compiler.compile_mlir(
         gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2)
-    )[1])
+    )[1]
+    @info @__LINE__
+
+    println(compiled_gradient_mlir)
     @info @__LINE__
 
     res_reactant, dps_reactant = compiled_gradient(cmodel, cnoisy, ctarget, cps, cst2)
     @info @__LINE__
+    res_reactant_mlir, dps_reactant_mlir = @jit Reactant.Ops.hlo_call(repr(compiled_gradient_mlir), cmodel, cnoisy, ctarget, cps, cst2)
+    @info @__LINE__
 
-    @test res ≈ res_reactant atol = 1e-3 rtol = 1e-2
-    for (dps1, dps2) in zip(fleaves(dps), fleaves(dps_reactant))
+    @test res ≈ res_reactant_mlir atol = 1e-3 rtol = 1e-2
+    for (dps1, dps2) in zip(fleaves(dps), fleaves(dps_reactant_mlir))
         @test dps1 ≈ dps2 atol = 1e-3 rtol = 1e-2
     end
 end
