@@ -42,7 +42,7 @@ jobs:
           - '1.11'
           # - 'nightly'
         os:
-          - ubuntu-20.04
+          - ubuntu-24.04
           # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
           # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
           - ubuntu-22.04-arm
@@ -58,41 +58,41 @@ jobs:
           - false
         libReactant: [packaged]
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-24.04
             arch: x64
             libReactant: packaged
             version: '1.10'
             assertions: true
             test_group: core
-          - os: ubuntu-20.04
+          - os: ubuntu-24.04
             arch: x64
             libReactant: packaged
             version: '1.10'
             assertions: true
             test_group: neural_networks
-          - os: ubuntu-20.04
+          - os: ubuntu-24.04
             arch: x64
             libReactant: packaged
             version: '1.10'
             assertions: true
             test_group: integration
-          # - os: ubuntu-20.04
+          # - os: ubuntu-24.04
           #   arch: x86
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: core
-          # - os: ubuntu-20.04
+          # - os: ubuntu-24.04
           #   arch: x86
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: neural_networks
-          # - os: ubuntu-20.04
+          # - os: ubuntu-24.04
           #   arch: x86
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: integration
         exclude:
-          - os: ubuntu-20.04 # this is x86_64, exclude foreign architecture
+          - os: ubuntu-24.04 # this is x86_64, exclude foreign architecture
             arch: aarch64
           - os: ubuntu-22.04-arm # this is aarch64, exclude foreign architecture
             arch: x64
