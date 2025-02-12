@@ -158,6 +158,21 @@ function Base.getindex(a::TracedRArray{T,N}, indices::CartesianIndex{N}) where {
     return Ops.gather_getindex(a, indices)[1]
 end
 
+# Needed to prevent method ambiguity
+function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {T}
+    indices =
+        materialize_traced_array(
+            reshape(
+                TracedUtils.promote_to(
+                    TracedRArray{Int,1}, collect(Int64, vcat(Tuple(indices)...))
+                ),
+                1,
+                1,
+            ),
+        ) .- 1
+    return Ops.gather_getindex(a, indices)[1]
+end
+
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = TracedUtils.normalize_indices(a, indices...)
 
