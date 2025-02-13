@@ -17,11 +17,11 @@ on:
     tags: '*'
     paths:
       - '.github/workflows/CI.yml'
-      - 'deps/**'
-      - 'ext/**'
-      - 'lib/**'
-      - 'src/**'
-      - 'test/**'
+      - 'deps/**/*.jl'
+      - 'ext/**/*.jl'
+      - 'lib/**/*.jl'
+      - 'src/**/*.jl'
+      - 'test/**/*.jl'
       - 'Project.toml'
 
 concurrency:
