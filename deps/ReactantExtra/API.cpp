@@ -634,21 +634,14 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   return wrap(res);
 }
 
-extern "C" xla::PjRtLoadedExecutable *
-ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
-              bool is_sharded,
-              // const int64_t *mesh_shape,
-              // int64_t num_mesh_shape,
-              const int64_t *mesh_ids, int64_t num_mesh_ids,
-              const char *xla_gpu_cuda_data_dir) {
-  auto program =
-      std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
-
-  CompileOptions options;
+// This is used by both the PjRt and IFRT clients
+xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
+                                           const int64_t *mesh_ids,
+                                           int64_t num_mesh_ids,
+                                           const char *xla_gpu_cuda_data_dir) {
+  xla::CompileOptions options;
   options.executable_build_options.mutable_debug_options()
       ->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
-
-  auto cmodop = cast<ModuleOp>(*unwrap(cmod));
 
   if (is_sharded) {
     assert(device_id < 0);
@@ -674,11 +667,6 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
       device_assignment(0, mesh_id) = i;
     }
     options.executable_build_options.set_device_assignment(device_assignment);
-
-    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
-    auto status = xla::ExportShardyForHloRoundTrip(cmodop);
-    if (!status.ok())
-      ReactantThrowError(status.ToString().c_str());
   } else {
     assert(device_id >= 0);
 
@@ -691,20 +679,26 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     options.executable_build_options.set_device_assignment(device_assignment);
   }
 
-  auto addressable_devices = client->addressable_devices();
-  if (!addressable_devices.empty()) {
-    int device_ordinal = options.executable_build_options.device_ordinal();
-    if (device_ordinal < 0) {
-      device_ordinal = 0;
-    }
-    assert(device_ordinal < addressable_devices.size());
-    auto stats = addressable_devices[device_ordinal]->GetAllocatorStats();
-    if (stats.ok() && stats->bytes_limit) {
-      options.executable_build_options.set_device_memory_size(
-          *stats->bytes_limit);
+  return options;
+}
+
+extern "C" xla::PjRtLoadedExecutable *
+ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
+              bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
+              const char *xla_gpu_cuda_data_dir) {
+  CompileOptions options = GenerateCompileOptions(
+      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+
+  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
+  if (is_sharded) {
+    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
+    auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
+    if (!status.ok()) {
+      ReactantThrowError(status.ToString().c_str());
     }
   }
-  auto exec = MyValueOrThrow(client->Compile(cmodop, options));
+
+  auto exec = MyValueOrThrow(client->Compile(cmod_op, options));
   return exec.release();
 }
 
@@ -1193,18 +1187,27 @@ ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
 extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
 
 extern "C" xla::ifrt::LoadedExecutable *
-ifrt_ClientCompile(ifrt::PjRtClient *client, MlirModule mlir_mod) {
-  mlir::ModuleOp mlir_mod_op = cast<ModuleOp>(*unwrap(mlir_mod));
-  // TODO import sharding config from `ClientCompile`?
-  xla::CompileOptions compile_options;
+ifrt_ClientCompile(ifrt::PjRtClient *client, MlirModule cmod, int64_t device_id,
+                   bool is_sharded, const int64_t *mesh_ids,
+                   int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir) {
+  CompileOptions options = GenerateCompileOptions(
+      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+
+  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
+  if (is_sharded) {
+    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
+    auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
+    if (!status.ok()) {
+      ReactantThrowError(status.ToString().c_str());
+    }
+  }
+
   // TODO can't create LoadedExecutable from mlir::ModuleOp on IFRT-proxy
   // backend
-  return MyValueOrThrow(
-             xla::ifrt::PjRtLoadedExecutable::Create(
-                 client, mlir_mod_op, compile_options,
-                 std::vector<
-                     tsl::RCReference<xla::ifrt::LoadedHostCallback>>()))
-      .release();
+  auto exec = MyValueOrThrow(xla::ifrt::PjRtLoadedExecutable::Create(
+      client, cmod_op, options,
+      std::vector<tsl::RCReference<xla::ifrt::LoadedHostCallback>>()));
+  return exec.release();
 }
 
 extern "C" void
