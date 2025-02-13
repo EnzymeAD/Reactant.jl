@@ -8,9 +8,7 @@ mutable struct HeldBuffer
 end
 
 @inline function release_buffer(held_buffer::HeldBuffer)
-    @ccall MLIR.API.mlir_c.reactant_release_pjrtbuffer(
-        held_buffer.ptr::Ptr{Cvoid}
-    )::Cvoid
+    @ccall MLIR.API.mlir_c.reactant_release_pjrtbuffer(held_buffer.ptr::Ptr{Cvoid})::Cvoid
 end
 
 mutable struct Buffer
