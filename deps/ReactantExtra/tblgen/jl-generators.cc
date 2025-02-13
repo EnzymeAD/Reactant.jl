@@ -481,7 +481,7 @@ end
     ))"; // 0: results, 1: operands, 2: owned_regions, 3: successors, 4:
          // attributes, 5: optionals, 6: opname, 7: results expression, 8:
          // result_inference
-
+         
   std::string moduleContents = "";
   for (const auto *def : opdefs) {
     mlir::tblgen::Operator op(*def);
@@ -491,6 +491,7 @@ end
     std::string optionals = "";
 
     auto opname = op.getOperationName();
+   
     auto functionName = opname.substr(op.getDialectName().str().length() +
                                       1); // get rid of "dialect." prefix.
     functionName = sanitizeName(functionName, moduleName);
