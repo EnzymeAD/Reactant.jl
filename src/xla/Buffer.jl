@@ -1,28 +1,42 @@
 # Buffer
-@inline function free_buffer(buffer)
-    if buffer.holded == C_NULL
-        if buffer.buffer != C_NULL
-            @ccall MLIR.API.mlir_c.PjRtBufferFree(buffer.buffer::Ptr{Cvoid})::Cvoid
-        end
-    else
-        @ccall MLIR.API.mlir_c.reactant_release_pjrtbuffer(buffer.holded::Ptr{Cvoid})::Cvoid
+mutable struct HeldBuffer
+    ptr::Ptr{Cvoid}
+
+    function HeldBuffer(ptr::Ptr{Cvoid})
+        return finalizer(release_buffer, new(ptr))
     end
+end
+
+@inline function release_buffer(held_buffer::HeldBuffer)
+    @ccall MLIR.API.mlir_c.reactant_release_pjrtbuffer(
+        held_buffer.ptr::Ptr{Cvoid}
+    )::Cvoid
 end
 
 mutable struct Buffer
     buffer::Ptr{Cvoid}
-    holded::Ptr{Cvoid}
+    held::Union{Nothing,HeldBuffer}
+
     function Buffer(buffer::Ptr{Cvoid})
-        return finalizer(free_buffer, new(buffer, C_NULL))
+        return finalizer(free_buffer, new(buffer, nothing))
     end
+end
+
+@inline function free_buffer(buffer)
+    if buffer.holded == C_NULL && buffer.buffer != C_NULL
+        @ccall MLIR.API.mlir_c.PjRtBufferFree(buffer.buffer::Ptr{Cvoid})::Cvoid
+    end
+    # else
+    #     @ccall MLIR.API.mlir_c.reactant_release_pjrtbuffer(buffer.holded::Ptr{Cvoid})::Cvoid
+    # end
 end
 
 function hold!(buffer::Buffer)
     if buffer.holded == C_NULL
         sbuffer = buffer.buffer
-        buffer.holded = @ccall MLIR.API.mlir_c.reactant_hold_pjrtbuffer(
-            sbuffer::Ptr{Cvoid}
-        )::Ptr{Cvoid}
+        buffer.holded = HeldBuffer(
+            @ccall MLIR.API.mlir_c.reactant_hold_pjrtbuffer(sbuffer::Ptr{Cvoid})::Ptr{Cvoid}
+        )
     end
     return buffer
 end
