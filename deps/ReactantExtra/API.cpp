@@ -734,10 +734,57 @@ void OpShardingToJLOpSharding(const xla::OpSharding &op_sharding,
   jl_op_sharding->shard_group_type = op_sharding.shard_group_type();
 }
 
-// xla::OpSharding JLOpShardingToOpSharding(const JLOpSharding &jl_op_sharding)
-// {
-//   xla::OpSharding op_sharding;
-// }
+xla::OpSharding JLOpShardingToOpSharding(const JLOpSharding &jl_op_sharding) {
+  xla::OpSharding op_sharding;
+
+  op_sharding.set_type(static_cast<xla::OpSharding_Type>(jl_op_sharding.type));
+  op_sharding.set_replicate_on_last_tile_dim(
+      jl_op_sharding.replicate_on_last_tile_dim);
+
+  xla::ShapeProto *mutable_shape_proto = op_sharding.mutable_tile_shape();
+
+  for (int i = 0; i < jl_op_sharding.n_tile_dimensions; i++) {
+    mutable_shape_proto->add_dimensions(jl_op_sharding.tile_dimensions[i]);
+  }
+
+  if (jl_op_sharding.n_layout_minor_to_major > 0) {
+    auto *mutable_layout = mutable_shape_proto->mutable_layout();
+    for (int i = 0; i < jl_op_sharding.n_layout_minor_to_major; i++) {
+      mutable_layout->add_minor_to_major(
+          jl_op_sharding.layout_minor_to_major[i]);
+    }
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_tile_dimensions; i++) {
+    op_sharding.add_last_tile_dims(
+        static_cast<xla::OpSharding_Type>(jl_op_sharding.last_tile_dims[i]));
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_tile_assignment_dimensions; i++) {
+    op_sharding.add_tile_assignment_dimensions(
+        jl_op_sharding.tile_assignment_dimensions[i]);
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_tile_assignment_devices; i++) {
+    op_sharding.add_tile_assignment_devices(
+        jl_op_sharding.tile_assignment_devices[i]);
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_iota_reshape_dims; i++) {
+    op_sharding.add_iota_reshape_dims(jl_op_sharding.iota_reshape_dims[i]);
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_iota_transpose_perm; i++) {
+    op_sharding.add_iota_transpose_perm(jl_op_sharding.iota_transpose_perm[i]);
+  }
+
+  op_sharding.set_is_shard_group(jl_op_sharding.is_shard_group);
+  op_sharding.set_shard_group_id(jl_op_sharding.shard_group_id);
+  op_sharding.set_shard_group_type(static_cast<xla::OpSharding_ShardGroupType>(
+      jl_op_sharding.shard_group_type));
+
+  return op_sharding;
+}
 
 typedef PjRtFuture<> FutureType;
 extern "C" void FreeFuture(FutureType *Future) { delete Future; }
