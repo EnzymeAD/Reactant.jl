@@ -688,13 +688,13 @@ function Base._typed_hvncat(
     end
 
     for d in 1:N
-        Bs = Array{Any,N - d}(undef, size(As)[2:end]...)
+        Bs = []
 
-        for (i, col) in
-            zip(eachindex(Bs), eachslice(As; dims=Tuple(2:ndims(As)), drop=true))
+        for col in eachslice(As; dims=Tuple(2:ndims(As)), drop=true)
             # TODO row_first affects the flattening?
-            Bs[i] = Base._cat_t(d, T, col...)
+            push!(Bs, Base._cat_t(d, T, col...))
         end
+        Bs = reshape(Bs, size(As)[2:end]...)
 
         As = Bs
     end
