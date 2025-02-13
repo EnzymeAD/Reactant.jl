@@ -6,12 +6,14 @@ on:
       - main
     tags: '*'
     paths:
-      - '.github/workflows/format-check.yml'
-      - '**/*.jl'
+      - '.github/workflows/format-check-cpp.yml'
+      - '**/*.cpp'
+      - '**/*.h'
   pull_request:
     paths:
-      - '.github/workflows/format-check.yml'
-      - '**/*.jl'
+      - '.github/workflows/format-check-cpp.yml'
+      - '**/*.cpp'
+      - '**/*.h'
 
 concurrency:
   # Skip intermediate builds: always.
@@ -20,7 +22,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  code-style-julia:
+  code-style-cpp:
     runs-on: ubuntu-latest
     steps:
-      - uses: julia-actions/julia-format@v3
+      - uses: actions/checkout@v3
+      - uses: DoozyX/clang-format-lint-action@v0.18.2
+        with:
+          source: 'deps'
