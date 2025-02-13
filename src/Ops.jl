@@ -417,6 +417,29 @@ end
     return TracedRArray{T,N}((), res, rsize)
 end
 
+#concat ops
+@noinline function concat(
+    inputs::TracedRArray...;
+    dim::Integer
+)
+    T = unwrapped_eltype(first(inputs))
+    @assert all(unwrapped_eltype.(inputs) .== T) "All inputs must have the same element type"
+    catdims = Base.dims2cat((dim, ))
+    shape = Base.cat_size_shape(catdims, inputs...)
+
+    return TracedRArray{T, length(shape)}(
+        (),
+        MLIR.IR.result(
+            stablehlo.concatenate(
+                collect(Reactant.TracedUtils.get_mlir_data.(inputs));
+                result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(T)),
+                dimension=dim - 1
+            )
+        ),
+        shape,
+    )
+end
+
 # indexing ops
 @noinline function pad(
     x::TracedRArray{T,N},

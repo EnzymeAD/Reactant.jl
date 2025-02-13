@@ -721,20 +721,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
 
     # convert to the target eltype
     X = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{RT,length(shape)}), X)
-
-    return TracedRArray{RT,length(shape)}(
-        (),
-        MLIR.IR.result(
-            # TODO maybe we should do some conversion?
-            MLIR.Dialects.stablehlo.concatenate(
-                collect(TracedUtils.get_mlir_data.(X));
-                result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
-                dimension=dims - 1, # stablehlo expects this to be zero-indexed
-            ),
-            1,
-        ),
-        shape,
-    )
+    return Ops.concat(X...; dim=dims    )
 end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
