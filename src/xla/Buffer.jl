@@ -23,12 +23,9 @@ mutable struct Buffer
 end
 
 @inline function free_buffer(buffer)
-    if buffer.holded == C_NULL && buffer.buffer != C_NULL
+    if isnothing(buffer.holded) && buffer.buffer != C_NULL
         @ccall MLIR.API.mlir_c.PjRtBufferFree(buffer.buffer::Ptr{Cvoid})::Cvoid
     end
-    # else
-    #     @ccall MLIR.API.mlir_c.reactant_release_pjrtbuffer(buffer.holded::Ptr{Cvoid})::Cvoid
-    # end
 end
 
 function hold!(buffer::Buffer)
