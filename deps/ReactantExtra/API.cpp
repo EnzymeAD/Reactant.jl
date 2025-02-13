@@ -634,21 +634,175 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   return wrap(res);
 }
 
-extern "C" xla::PjRtLoadedExecutable *
-ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
-              bool is_sharded,
-              // const int64_t *mesh_shape,
-              // int64_t num_mesh_shape,
-              const int64_t *mesh_ids, int64_t num_mesh_ids,
-              const char *xla_gpu_cuda_data_dir) {
-  auto program =
-      std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
+// Sharding
+struct JLOpSharding {
+  int32_t type;
+  int32_t n_tile_dimensions;
+  int64_t *tile_dimensions;
+  int32_t n_layout_minor_to_major;
+  int64_t *layout_minor_to_major;
+  bool replicate_on_last_tile_dim;
+  int32_t n_last_tile_dims;
+  int32_t *last_tile_dims;
+  int32_t n_tile_assignment_dimensions;
+  int64_t *tile_assignment_dimensions;
+  int32_t n_tile_assignment_devices;
+  int64_t *tile_assignment_devices;
+  int32_t n_iota_reshape_dims;
+  int64_t *iota_reshape_dims;
+  int32_t n_iota_transpose_perm;
+  int32_t *iota_transpose_perm;
+  bool is_shard_group;
+  int64_t shard_group_id;
+  int32_t shard_group_type;
+};
 
-  CompileOptions options;
+void OpShardingToJLOpSharding(const xla::OpSharding &op_sharding,
+                              JLOpSharding *jl_op_sharding) {
+  jl_op_sharding->type = op_sharding.type();
+  jl_op_sharding->replicate_on_last_tile_dim =
+      op_sharding.replicate_on_last_tile_dim();
+
+  auto &shape = op_sharding.tile_shape();
+  jl_op_sharding->n_tile_dimensions = shape.dimensions_size();
+  std::vector<int64_t> dimensions(shape.dimensions().begin(),
+                                  shape.dimensions().end());
+  jl_op_sharding->tile_dimensions = new int64_t[dimensions.size()];
+  std::copy(dimensions.begin(), dimensions.end(),
+            jl_op_sharding->tile_dimensions);
+
+  if (shape.has_layout()) {
+    auto &layout = shape.layout();
+    jl_op_sharding->n_layout_minor_to_major = layout.minor_to_major_size();
+    std::vector<int64_t> minor_to_major(layout.minor_to_major().begin(),
+                                        layout.minor_to_major().end());
+    jl_op_sharding->layout_minor_to_major = new int64_t[minor_to_major.size()];
+    std::copy(minor_to_major.begin(), minor_to_major.end(),
+              jl_op_sharding->layout_minor_to_major);
+  } else {
+    jl_op_sharding->n_layout_minor_to_major = 0;
+    jl_op_sharding->layout_minor_to_major = nullptr;
+  }
+
+  jl_op_sharding->n_last_tile_dims = op_sharding.last_tile_dims_size();
+  std::vector<int> last_tile_dims(op_sharding.last_tile_dims().begin(),
+                                  op_sharding.last_tile_dims().end());
+  jl_op_sharding->last_tile_dims = new int[last_tile_dims.size()];
+  std::copy(last_tile_dims.begin(), last_tile_dims.end(),
+            jl_op_sharding->last_tile_dims);
+
+  jl_op_sharding->n_tile_assignment_dimensions =
+      op_sharding.tile_assignment_dimensions_size();
+  std::vector<int64_t> tile_assignment_dimensions(
+      op_sharding.tile_assignment_dimensions().begin(),
+      op_sharding.tile_assignment_dimensions().end());
+  jl_op_sharding->tile_assignment_dimensions =
+      new int64_t[tile_assignment_dimensions.size()];
+  std::copy(tile_assignment_dimensions.begin(),
+            tile_assignment_dimensions.end(),
+            jl_op_sharding->tile_assignment_dimensions);
+
+  jl_op_sharding->n_tile_assignment_devices =
+      op_sharding.tile_assignment_devices_size();
+  std::vector<int64_t> tile_assignment_devices(
+      op_sharding.tile_assignment_devices().begin(),
+      op_sharding.tile_assignment_devices().end());
+  jl_op_sharding->tile_assignment_devices =
+      new int64_t[tile_assignment_devices.size()];
+  std::copy(tile_assignment_devices.begin(), tile_assignment_devices.end(),
+            jl_op_sharding->tile_assignment_devices);
+
+  jl_op_sharding->n_iota_reshape_dims = op_sharding.iota_reshape_dims_size();
+  std::vector<int64_t> iota_reshape_dims(
+      op_sharding.iota_reshape_dims().begin(),
+      op_sharding.iota_reshape_dims().end());
+  jl_op_sharding->iota_reshape_dims = new int64_t[iota_reshape_dims.size()];
+  std::copy(iota_reshape_dims.begin(), iota_reshape_dims.end(),
+            jl_op_sharding->iota_reshape_dims);
+
+  jl_op_sharding->n_iota_transpose_perm =
+      op_sharding.iota_transpose_perm_size();
+  std::vector<int> iota_transpose_perm(
+      op_sharding.iota_transpose_perm().begin(),
+      op_sharding.iota_transpose_perm().end());
+  jl_op_sharding->iota_transpose_perm = new int[iota_transpose_perm.size()];
+  std::copy(iota_transpose_perm.begin(), iota_transpose_perm.end(),
+            jl_op_sharding->iota_transpose_perm);
+
+  jl_op_sharding->is_shard_group = op_sharding.is_shard_group();
+  jl_op_sharding->shard_group_id = op_sharding.shard_group_id();
+  jl_op_sharding->shard_group_type = op_sharding.shard_group_type();
+}
+
+xla::OpSharding JLOpShardingToOpSharding(const JLOpSharding &jl_op_sharding) {
+  xla::OpSharding op_sharding;
+
+  op_sharding.set_type(static_cast<xla::OpSharding_Type>(jl_op_sharding.type));
+  op_sharding.set_replicate_on_last_tile_dim(
+      jl_op_sharding.replicate_on_last_tile_dim);
+
+  xla::ShapeProto *mutable_shape_proto = op_sharding.mutable_tile_shape();
+
+  for (int i = 0; i < jl_op_sharding.n_tile_dimensions; i++) {
+    mutable_shape_proto->add_dimensions(jl_op_sharding.tile_dimensions[i]);
+  }
+
+  if (jl_op_sharding.n_layout_minor_to_major > 0) {
+    auto *mutable_layout = mutable_shape_proto->mutable_layout();
+    for (int i = 0; i < jl_op_sharding.n_layout_minor_to_major; i++) {
+      mutable_layout->add_minor_to_major(
+          jl_op_sharding.layout_minor_to_major[i]);
+    }
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_tile_dimensions; i++) {
+    op_sharding.add_last_tile_dims(
+        static_cast<xla::OpSharding_Type>(jl_op_sharding.last_tile_dims[i]));
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_tile_assignment_dimensions; i++) {
+    op_sharding.add_tile_assignment_dimensions(
+        jl_op_sharding.tile_assignment_dimensions[i]);
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_tile_assignment_devices; i++) {
+    op_sharding.add_tile_assignment_devices(
+        jl_op_sharding.tile_assignment_devices[i]);
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_iota_reshape_dims; i++) {
+    op_sharding.add_iota_reshape_dims(jl_op_sharding.iota_reshape_dims[i]);
+  }
+
+  for (int i = 0; i < jl_op_sharding.n_iota_transpose_perm; i++) {
+    op_sharding.add_iota_transpose_perm(jl_op_sharding.iota_transpose_perm[i]);
+  }
+
+  op_sharding.set_is_shard_group(jl_op_sharding.is_shard_group);
+  op_sharding.set_shard_group_id(jl_op_sharding.shard_group_id);
+  op_sharding.set_shard_group_type(static_cast<xla::OpSharding_ShardGroupType>(
+      jl_op_sharding.shard_group_type));
+
+  return op_sharding;
+}
+
+typedef PjRtFuture<> FutureType;
+extern "C" void FreeFuture(FutureType *Future) { delete Future; }
+
+extern "C" uint8_t FutureIsReady(FutureType *Future) {
+  return Future->IsReady();
+}
+
+extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
+
+// This is used by both the PjRt and IFRT clients
+xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
+                                           const int64_t *mesh_ids,
+                                           int64_t num_mesh_ids,
+                                           const char *xla_gpu_cuda_data_dir) {
+  xla::CompileOptions options;
   options.executable_build_options.mutable_debug_options()
       ->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
-
-  auto cmodop = cast<ModuleOp>(*unwrap(cmod));
 
   if (is_sharded) {
     assert(device_id < 0);
@@ -674,11 +828,6 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
       device_assignment(0, mesh_id) = i;
     }
     options.executable_build_options.set_device_assignment(device_assignment);
-
-    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
-    auto status = xla::ExportShardyForHloRoundTrip(cmodop);
-    if (!status.ok())
-      ReactantThrowError(status.ToString().c_str());
   } else {
     assert(device_id >= 0);
 
@@ -691,44 +840,28 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     options.executable_build_options.set_device_assignment(device_assignment);
   }
 
-  auto addressable_devices = client->addressable_devices();
-  if (!addressable_devices.empty()) {
-    int device_ordinal = options.executable_build_options.device_ordinal();
-    if (device_ordinal < 0) {
-      device_ordinal = 0;
-    }
-    assert(device_ordinal < addressable_devices.size());
-    auto stats = addressable_devices[device_ordinal]->GetAllocatorStats();
-    if (stats.ok() && stats->bytes_limit) {
-      options.executable_build_options.set_device_memory_size(
-          *stats->bytes_limit);
-    }
-  }
-  auto exec = MyValueOrThrow(client->Compile(cmodop, options));
-  return exec.release();
+  return options;
 }
 
-struct JLOpSharding {
-  int32_t type;
-  int32_t n_tile_dimensions;
-  int64_t *tile_dimensions;
-  int32_t n_layout_minor_to_major;
-  int64_t *layout_minor_to_major;
-  bool replicate_on_last_tile_dim;
-  int32_t n_last_tile_dims;
-  int32_t *last_tile_dims;
-  int32_t n_tile_assignment_dimensions;
-  int64_t *tile_assignment_dimensions;
-  int32_t n_tile_assignment_devices;
-  int64_t *tile_assignment_devices;
-  int32_t n_iota_reshape_dims;
-  int64_t *iota_reshape_dims;
-  int32_t n_iota_transpose_perm;
-  int32_t *iota_transpose_perm;
-  bool is_shard_group;
-  int64_t shard_group_id;
-  int32_t shard_group_type;
-};
+extern "C" xla::PjRtLoadedExecutable *
+ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
+              bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
+              const char *xla_gpu_cuda_data_dir) {
+  CompileOptions options = GenerateCompileOptions(
+      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+
+  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
+  if (is_sharded) {
+    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
+    auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
+    if (!status.ok()) {
+      ReactantThrowError(status.ToString().c_str());
+    }
+  }
+
+  auto exec = MyValueOrThrow(client->Compile(cmod_op, options));
+  return exec.release();
+}
 
 extern "C" void
 PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
@@ -749,92 +882,33 @@ PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
   }
 
   for (int32_t i = 0; i < num_op_shardings; i++) {
-    auto &op_sharding = hlo_op_shardings[i];
-    auto &jl_op_sharding = jl_op_shardings[i];
-
-    jl_op_sharding->type = op_sharding.type();
-    jl_op_sharding->replicate_on_last_tile_dim =
-        op_sharding.replicate_on_last_tile_dim();
-
-    auto &shape = op_sharding.tile_shape();
-    std::vector<int64_t> dimensions(shape.dimensions().begin(),
-                                    shape.dimensions().end());
-    jl_op_sharding->n_tile_dimensions = dimensions.size();
-    jl_op_sharding->tile_dimensions = new int64_t[dimensions.size()];
-    std::copy(dimensions.begin(), dimensions.end(),
-              jl_op_sharding->tile_dimensions);
-
-    if (shape.has_layout()) {
-      auto &layout = shape.layout();
-      std::vector<int64_t> minor_to_major(layout.minor_to_major().begin(),
-                                          layout.minor_to_major().end());
-      jl_op_sharding->n_layout_minor_to_major = minor_to_major.size();
-      jl_op_sharding->layout_minor_to_major =
-          new int64_t[minor_to_major.size()];
-      std::copy(minor_to_major.begin(), minor_to_major.end(),
-                jl_op_sharding->layout_minor_to_major);
-    } else {
-      jl_op_sharding->n_layout_minor_to_major = 0;
-      jl_op_sharding->layout_minor_to_major = nullptr;
-    }
-
-    std::vector<int> last_tile_dims(op_sharding.last_tile_dims().begin(),
-                                    op_sharding.last_tile_dims().end());
-    jl_op_sharding->n_last_tile_dims = last_tile_dims.size();
-    jl_op_sharding->last_tile_dims = new int[last_tile_dims.size()];
-    std::copy(last_tile_dims.begin(), last_tile_dims.end(),
-              jl_op_sharding->last_tile_dims);
-
-    std::vector<int64_t> tile_assignment_dimensions(
-        op_sharding.tile_assignment_dimensions().begin(),
-        op_sharding.tile_assignment_dimensions().end());
-    jl_op_sharding->n_tile_assignment_dimensions =
-        tile_assignment_dimensions.size();
-    jl_op_sharding->tile_assignment_dimensions =
-        new int64_t[tile_assignment_dimensions.size()];
-    std::copy(tile_assignment_dimensions.begin(),
-              tile_assignment_dimensions.end(),
-              jl_op_sharding->tile_assignment_dimensions);
-
-    std::vector<int64_t> tile_assignment_devices(
-        op_sharding.tile_assignment_devices().begin(),
-        op_sharding.tile_assignment_devices().end());
-    jl_op_sharding->n_tile_assignment_devices = tile_assignment_devices.size();
-    jl_op_sharding->tile_assignment_devices =
-        new int64_t[tile_assignment_devices.size()];
-    std::copy(tile_assignment_devices.begin(), tile_assignment_devices.end(),
-              jl_op_sharding->tile_assignment_devices);
-
-    std::vector<int64_t> iota_reshape_dims(
-        op_sharding.iota_reshape_dims().begin(),
-        op_sharding.iota_reshape_dims().end());
-    jl_op_sharding->n_iota_reshape_dims = iota_reshape_dims.size();
-    jl_op_sharding->iota_reshape_dims = new int64_t[iota_reshape_dims.size()];
-    std::copy(iota_reshape_dims.begin(), iota_reshape_dims.end(),
-              jl_op_sharding->iota_reshape_dims);
-
-    std::vector<int> iota_transpose_perm(
-        op_sharding.iota_transpose_perm().begin(),
-        op_sharding.iota_transpose_perm().end());
-    jl_op_sharding->n_iota_transpose_perm = iota_transpose_perm.size();
-    jl_op_sharding->iota_transpose_perm = new int[iota_transpose_perm.size()];
-    std::copy(iota_transpose_perm.begin(), iota_transpose_perm.end(),
-              jl_op_sharding->iota_transpose_perm);
-
-    jl_op_sharding->is_shard_group = op_sharding.is_shard_group();
-    jl_op_sharding->shard_group_id = op_sharding.shard_group_id();
-    jl_op_sharding->shard_group_type = op_sharding.shard_group_type();
+    OpShardingToJLOpSharding(hlo_op_shardings[i], jl_op_shardings[i]);
   }
 }
 
-typedef PjRtFuture<> FutureType;
-extern "C" void FreeFuture(FutureType *Future) { delete Future; }
+extern "C" void
+PjRtLoadedExecutableGetParameterShardings(xla::PjRtLoadedExecutable *exec,
+                                          JLOpSharding **jl_op_shardings,
+                                          int32_t num_op_shardings) {
+  std::optional<std::vector<OpSharding>> shardings =
+      exec->GetParameterShardings();
+  if (!shardings.has_value()) {
+    ReactantThrowError(
+        "No sharding found for the output of the loaded executable");
+  }
 
-extern "C" uint8_t FutureIsReady(FutureType *Future) {
-  return Future->IsReady();
+  std::vector<xla::OpSharding> hlo_op_shardings = shardings.value();
+  if (num_op_shardings != hlo_op_shardings.size()) {
+    ReactantThrowError(("Expected " + std::to_string(num_op_shardings) +
+                        " shardings, got " +
+                        std::to_string(hlo_op_shardings.size()))
+                           .c_str());
+  }
+
+  for (int32_t i = 0; i < num_op_shardings; i++) {
+    OpShardingToJLOpSharding(hlo_op_shardings[i], jl_op_shardings[i]);
+  }
 }
-
-extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 
 extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
                                   PjRtBuffer **op_args, PjRtDevice *device,
@@ -1193,18 +1267,27 @@ ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
 extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
 
 extern "C" xla::ifrt::LoadedExecutable *
-ifrt_ClientCompile(ifrt::PjRtClient *client, MlirModule mlir_mod) {
-  mlir::ModuleOp mlir_mod_op = cast<ModuleOp>(*unwrap(mlir_mod));
-  // TODO import sharding config from `ClientCompile`?
-  xla::CompileOptions compile_options;
+ifrt_ClientCompile(ifrt::PjRtClient *client, MlirModule cmod, int64_t device_id,
+                   bool is_sharded, const int64_t *mesh_ids,
+                   int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir) {
+  CompileOptions options = GenerateCompileOptions(
+      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+
+  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
+  if (is_sharded) {
+    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
+    auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
+    if (!status.ok()) {
+      ReactantThrowError(status.ToString().c_str());
+    }
+  }
+
   // TODO can't create LoadedExecutable from mlir::ModuleOp on IFRT-proxy
   // backend
-  return MyValueOrThrow(
-             xla::ifrt::PjRtLoadedExecutable::Create(
-                 client, mlir_mod_op, compile_options,
-                 std::vector<
-                     tsl::RCReference<xla::ifrt::LoadedHostCallback>>()))
-      .release();
+  auto exec = MyValueOrThrow(xla::ifrt::PjRtLoadedExecutable::Create(
+      client, cmod_op, options,
+      std::vector<tsl::RCReference<xla::ifrt::LoadedHostCallback>>()));
+  return exec.release();
 }
 
 extern "C" void
