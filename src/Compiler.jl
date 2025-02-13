@@ -986,7 +986,13 @@ The name is due to its similarity to the `flatten` function in `jax.tree_util.re
 The _linearized arguments_ do not directly refer to the  are the arguments that have been flattened into a single list.
 """
 function codegen_flatten!(
-    linear_args, seen_args, result_stores, is_sharded::Bool, mesh, client
+    linear_args,
+    seen_args,
+    result_stores,
+    is_sharded::Bool,
+    mesh,
+    linear_parameter_shardings,
+    client,
 )
     flatten_names = Symbol[]
     flatten_code = Expr[]
@@ -1019,34 +1025,38 @@ function codegen_flatten!(
         for p in path[3:end]
             flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
         end
-        push!(flatten_code, :($usbuf = $flatcode.data))
 
         if is_sharded
             carg = inv_seen_args[arg]
             if Reactant.Sharding.is_sharded(carg)
+                push!(flatten_code, :($usbuf = $flatcode.data))
                 for j in 1:length(mesh)
                     sbuf = Symbol(:sbuf_, i, "_", j)
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
                 end
             else
-                # Warn here first and then replicate the input across all devices on the
-                # mesh
-                @warn "Input $carg is not sharded, replicating across all devices. It \
-                       is recommended to replicate the input across all devices on the \
-                       mesh manually using `Reactant.Sharding.NamedSharding`" maxlog = 1
-                buf = Symbol(:buf_, i)
-                push!(flatten_code, :($buf = XLA.synced_buffer(only($usbuf))))
+                push!(flatten_code, :($usbuf = $flatcode))
+                device_to_array_slices, _ = XLA.compute_array_indices_and_partition_spec(
+                    linear_parameter_shardings[i], size(carg), mesh
+                )
                 for j in 1:length(mesh)
+                    buf = Symbol(:buf_, i, :_, j)
                     device_id = mesh.device_ids[j]
+                    slice = device_to_array_slices[j]
+                    push!(
+                        flatten_code,
+                        :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
+                    )
                     device_ordinal = XLA.device_ordinal(client, device_id)
-                    sbuf = Symbol(:sbuf_, i, "_", j)
+                    sbuf = Symbol(:sbuf_, i, :_, j)
                     device = XLA.ClientGetAddressableDevice(client, device_ordinal)
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.CopyBufferToDevice($buf, $device)))
                 end
             end
         else
+            push!(flatten_code, :($usbuf = $flatcode.data))
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
             if arg isa TracedRArray || arg isa TracedRNumber
@@ -1401,7 +1411,8 @@ function compile_xla(f, args; client=nothing, kwargs...)
             client,
             device,
             mod;
-            num_results=length(mlir_fn_res.linear_results),
+            num_outputs=length(mlir_fn_res.linear_results),
+            num_parameters=length(mlir_fn_res.linear_args),
             mlir_fn_res.is_sharded,
             mesh_ids,
         )
@@ -1428,6 +1439,14 @@ function compile(f, args; sync=false, kwargs...)
     result_stores = Dict{Tuple,Symbol}()
     path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Tuple}() : nothing
 
+    linear_parameter_shardings = if mlir_fn_res.is_sharded
+        # The sharding info here is exclusively used for the parameters that weren't sharded
+        # before hand
+        XLA.get_parameter_shardings(exec)
+    else
+        nothing
+    end
+
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(
         linear_args,
@@ -1435,6 +1454,7 @@ function compile(f, args; sync=false, kwargs...)
         result_stores,
         mlir_fn_res.is_sharded,
         mlir_fn_res.sharding_mesh,
+        linear_parameter_shardings,
         client,
     )
 

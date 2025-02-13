@@ -77,14 +77,14 @@ function OpSharding(sharding::JLOpSharding)
 
     return OpSharding(
         int_to_op_sharding_type(sharding.type),
-        reverse(tile_dimensions),
+        tile_dimensions,
         layout_minor_to_major,
         sharding.replicate_on_last_tile_dim,
-        reverse(last_tile_dims),
-        reverse(tile_assignment_dimensions),
-        reverse(tile_assignment_devices),
-        reverse(iota_reshape_dims),
-        reverse(iota_transpose_perm),
+        last_tile_dims,
+        tile_assignment_dimensions,
+        tile_assignment_devices,
+        iota_reshape_dims,
+        iota_transpose_perm,
         sharding.is_shard_group,
         sharding.shard_group_id,
         int_to_shard_group_type(sharding.shard_group_type),
@@ -153,21 +153,29 @@ function compute_array_indices_and_partition_spec(
                                                           $(mesh.device_ids)"
         @assert isempty(sharding.tile_dimensions) "Tile dimensions are not supported yet! \
                                                    Open an issue with an MWE for this case."
-        @assert !sharding.replicate_on_last_tile_dim "Replication on the last tile \
-                                                      dimension is not supported yet! Open \
-                                                      an issue with an MWE for this case."
 
-        tile_assignment = reshape(device_list, sharding.tile_assignment_dimensions...)
-        tile_dimensions = div.(array_size, sharding.tile_assignment_dimensions)
+        tile_assignment = permutedims(
+            reshape(device_list, sharding.tile_assignment_dimensions...),
+            reverse(1:(length(sharding.tile_assignment_dimensions))),
+        )
 
+        if sharding.replicate_on_last_tile_dim
+            actual_tile_assignment_dimensions = size(tile_assignment)[2:end]
+        else
+            actual_tile_assignment_dimensions = size(tile_assignment)
+        end
+
+        tile_dimensions = div.(array_size, actual_tile_assignment_dimensions)
         mesh_devices = reshape([mesh.device_ids...], mesh.shape)
 
         # Match array dimensions to mesh axes by comparing device sequences
         used_axes = Set{Int}()
         partition_spec = ntuple(N) do dim
-            if dim <= length(sharding.tile_assignment_dimensions) &&
-                sharding.tile_assignment_dimensions[dim] > 1
-                tile_seq = __get_device_sequence(tile_assignment, dim)
+            if dim <= length(actual_tile_assignment_dimensions) &&
+                actual_tile_assignment_dimensions[dim] > 1
+                tile_seq = __get_device_sequence(
+                    tile_assignment, dim + sharding.replicate_on_last_tile_dim
+                )
 
                 # For each unused mesh axis with matching size
                 for (axis_idx, axis_name) in enumerate(mesh.axis_names)
@@ -187,10 +195,16 @@ function compute_array_indices_and_partition_spec(
 
         device_to_array_indices = map(mesh.device_ids) do device_id
             tile_index = findfirst(==(device_id), tile_assignment)
-            @assert tile_index !== nothing "Device ID $device_id not found in tile assignment $tile_assignment"
-            tile_start = (tile_index.I .- 1) .* tile_dimensions .+ 1
-            tile_end = tile_index.I .* tile_dimensions
-            ntuple(i -> tile_start[i]:tile_end[i], N)
+            @assert tile_index !== nothing "Device ID $device_id not found in tile \
+                                            assignment $tile_assignment"
+            index_tup = if !sharding.replicate_on_last_tile_dim
+                Tuple(tile_index.I)
+            else
+                Tuple(tile_index.I[2:end])
+            end
+            tile_start = (index_tup .- 1) .* tile_dimensions .+ 1
+            tile_end = index_tup .* tile_dimensions
+            return ntuple(i -> tile_start[i]:tile_end[i], N)
         end
 
         return device_to_array_indices, partition_spec

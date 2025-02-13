@@ -72,12 +72,15 @@ predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
     samples_sharding = Sharding.NamedSharding(mesh, (nothing, "data"))
     w1_sharding = Sharding.NamedSharding(mesh, ("model", nothing))
 
-    samples = ConcreteRArray(rand(Float32, 3, 12); sharding=samples_sharding)
-    w1 = ConcreteRArray(rand(Float32, 4, 3); sharding=w1_sharding)
-    w2 = ConcreteRArray(rand(Float32, 2, 4))
+    samples = reshape(collect(Float32, 1:84), 7, 12)
+    w1 = reshape(collect(Float32, 1:28), 4, 7)
+    w2 = reshape(collect(Float32, 1:32), 8, 4)
+
+    samples_ra = Reactant.to_rarray(samples; sharding=samples_sharding)
+    w1_ra = Reactant.to_rarray(w1; sharding=w1_sharding)
+    w2_ra = Reactant.to_rarray(w2)
 
     if !fake_run
-        @test Array(@jit(predict(samples, w1, w2))) ≈
-            predict(Array(samples), Array(w1), Array(w2))
+        @test Array(@jit(predict(samples_ra, w1_ra, w2_ra))) ≈ predict(samples, w1, w2)
     end
 end
