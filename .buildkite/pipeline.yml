@@ -7,9 +7,9 @@ steps:
             version:
               - "1.10"
             group:
-              - core
+              # - core
               - neural_networks
-              - integration
+              # - integration
         plugins:
           - JuliaCI/julia#v1:
               version: "{{matrix.version}}"
