@@ -721,7 +721,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
 
     # convert to the target eltype
     X = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{RT,length(shape)}), X)
-    return Ops.concat(X...; dim=dims    )
+    return Ops.concat(X...; dim=dims)
 end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))

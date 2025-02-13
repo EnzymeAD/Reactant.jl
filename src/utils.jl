@@ -482,7 +482,7 @@ function temp1(f, args...)
     toscalar = false
     do_transpose = false
 
-    name = String(nameof(f))
+    name = String(Symbol(f))
     
     seen_cache = Reactant.OrderedIdDict()
     make_tracer(
@@ -526,7 +526,6 @@ function temp1(f, args...)
 end
 
 @inline get_traced_args_from_temp1((mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name)) = traced_args
-@inline call_splatted(f, args) = f(args...)
 
 function temp2(
     result, (mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name)
@@ -846,7 +845,7 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
         traced_args = Core.SSAValue(length(overdubbed_code))
         
-        push!(overdubbed_code, Expr(:call, call_splatted, oc, traced_args))
+        push!(overdubbed_code, Expr(:call, Core._apply_iterate, Base.iterate, oc, traced_args))
         push!(overdubbed_codelocs, code_info.codelocs[1])
     else
         push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
