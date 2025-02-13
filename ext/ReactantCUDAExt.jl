@@ -828,7 +828,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapfunc = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.llvm.func(;
             sym_name,
-            sym_visibility=MLIR.IR.Attribute("private"),
+            sym_visibility="private",
             function_type=wrapftype,
             body=MLIR.IR.Region(),
             CConv,
@@ -884,10 +884,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 1,
             )
             alloc = MLIR.IR.result(
-                MLIR.Dialects.llvm.alloca(
-                    c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
-                ),
-                1,
+                MLIR.Dialects.llvm.alloca(c1; elem_type=argty, res=llvmptr), 1
             )
             push!(allocs, (alloc, argty))
 
@@ -948,7 +945,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                         MLIR.IR.Value[];
                         res=llvmptr,
                         elem_type=i8,
-                        rawConstantIndices=MLIR.IR.Attribute([Int32(offset)]),
+                        rawConstantIndices=[Int32(offset)],
                     ),
                     1,
                 )
@@ -971,12 +968,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             wrapargs,
             MLIR.IR.Value[];
             callee=MLIR.IR.FlatSymbolRefAttribute(Base.String(fname)),
-            op_bundle_sizes=MLIR.IR.Attribute(Int32[]),
+            op_bundle_sizes=Int32[],
         )
         MLIR.Dialects.llvm.return_(nothing)
     end
-
-    output_operand_aliases = MLIR.IR.Attribute(aliases)
 
     blk_operands = MLIR.IR.Value[]
     for idx in
@@ -992,9 +987,9 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     call = MLIR.Dialects.enzymexla.kernel_call(
         blk_operands...,
         mlir_args;
-        result_0=restys,
+        result=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
-        output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
+        output_operand_aliases=aliases,
     )
 
     argidx = 1
