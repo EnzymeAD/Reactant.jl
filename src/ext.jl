@@ -7,6 +7,13 @@ EnzymeInter = Enzyme.Compiler.Interpreter.EnzymeInterpreter
 shift_off(s, _) = s
 shift_off(s::Core.SSAValue, new_index::Vector) = Core.SSAValue(new_index[s.id])
 
+
+apply(c::Expr, new_index) = begin
+    return Expr(c.head, (shift_off(apply(a, new_index), new_index) for a in c.args)...)
+end
+
+apply(c, _new_index) = c
+
 #add a conversion to Bool before a lowered if
 goto_if_not_protection(src::Core.CodeInfo) = begin
     new_index = []
@@ -30,7 +37,7 @@ goto_if_not_protection(src::Core.CodeInfo) = begin
         elseif c isa Core.ReturnNode
             v = Core.ReturnNode(shift_off(c.val, new_index))
         elseif c isa Expr
-            v = Expr(c.head, (shift_off(a, new_index) for a in c.args)...)
+            v = apply(c, new_index)
         else
             v = c
         end
