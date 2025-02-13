@@ -54,12 +54,12 @@
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/status_casters.h"
 
+#include "tsl/platform/init_main.h"
 #include "tsl/profiler/lib/profiler_session.h"
 #include "tsl/profiler/lib/traceme.h"
+#include "xla/python/profiler_utils.h"
 #include "xla/tsl/profiler/rpc/client/capture_profile.h"
 #include "xla/tsl/profiler/rpc/profiler_server.h"
-#include "xla/python/profiler_utils.h"
-#include "tsl/platform/init_main.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -166,7 +166,8 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
 // wrap(complex::NumberAttr::getTypeID()); }
 
 extern "C" void ReactantFuncSetResultAttr(MlirOperation op, intptr_t pos,
-                                          MlirStringRef name, MlirAttribute attr) {
+                                          MlirStringRef name,
+                                          MlirAttribute attr) {
   llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
       .setResultAttr(pos, unwrap(name), unwrap(attr));
 }
@@ -206,10 +207,10 @@ T *unwrap_absl_statusor(absl::StatusOr<T> status, char **error_msg) {
 // int xla::_LayoutProto_default_instance_;
 
 extern "C" void InitializeLogs() {
-  const char* binary = "julia";
+  const char *binary = "julia";
   int argc = 1;
-  char* argv[] = {(char*)binary};
-  char** argv2 = &argv[0];
+  char *argv[] = {(char *)binary};
+  char **argv2 = &argv[0];
   tsl::port::InitMain(binary, &argc, &argv2);
   LLVMInitializeX86Target();
   LLVMInitializeX86TargetInfo();
@@ -459,7 +460,7 @@ extern "C" PjRtClient *BufferToClient(PjRtBuffer *Buffer) {
   return Buffer->client();
 }
 
-extern "C" const int64_t* BufferShape(PjRtBuffer *Buffer) {
+extern "C" const int64_t *BufferShape(PjRtBuffer *Buffer) {
   return Buffer->dimensions().data();
 }
 
@@ -477,7 +478,8 @@ extern "C" PjRtClient *DeviceToClient(PjRtDevice *Device) {
   return Device->client();
 }
 
-extern "C" PjRtClient *PjRtLoadedExecutableGetClient(PjRtLoadedExecutable *exec) {
+extern "C" PjRtClient *
+PjRtLoadedExecutableGetClient(PjRtLoadedExecutable *exec) {
   return exec->client();
 }
 
@@ -540,10 +542,10 @@ extern "C" PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
   // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
   // &layout));
-  const xla::Layout* layout = nullptr;
-  auto buffer = MyValueOrThrow(
-      client->BufferFromHostBuffer(data, primtype, shape, /*byte_strides*/ {},
-                                   semantics, /*ondone*/ {}, *device->default_memory_space(), layout));
+  const xla::Layout *layout = nullptr;
+  auto buffer = MyValueOrThrow(client->BufferFromHostBuffer(
+      data, primtype, shape, /*byte_strides*/ {}, semantics, /*ondone*/ {},
+      *device->default_memory_space(), layout));
   auto bres = buffer.release();
   return bres;
 }
@@ -552,7 +554,8 @@ extern "C" uint8_t BufferOnCPU(PjRtBuffer *buffer) { return buffer->IsOnCpu(); }
 
 extern "C" PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
                                           PjRtDevice *dst_device) {
-  auto res = MyValueOrThrow(buffer->CopyToMemorySpace(*dst_device->default_memory_space()));
+  auto res = MyValueOrThrow(
+      buffer->CopyToMemorySpace(*dst_device->default_memory_space()));
   return res.release();
 }
 
@@ -631,20 +634,19 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   return wrap(res);
 }
 
-extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
-                                                    MlirModule cmod,
-                                                    int64_t device_id,
-                                                    bool is_sharded,
-                                                    // const int64_t *mesh_shape,
-                                                    // int64_t num_mesh_shape,
-                                                    const int64_t *mesh_ids,
-                                                    int64_t num_mesh_ids,
-                                                    const char* xla_gpu_cuda_data_dir) {
+extern "C" xla::PjRtLoadedExecutable *
+ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
+              bool is_sharded,
+              // const int64_t *mesh_shape,
+              // int64_t num_mesh_shape,
+              const int64_t *mesh_ids, int64_t num_mesh_ids,
+              const char *xla_gpu_cuda_data_dir) {
   auto program =
       std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
 
   CompileOptions options;
-  options.executable_build_options.mutable_debug_options()->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
+  options.executable_build_options.mutable_debug_options()
+      ->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
 
   auto cmodop = cast<ModuleOp>(*unwrap(cmod));
 
@@ -659,7 +661,8 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
 
     // auto partitioning for GPUs is not available in open source version of XLA
     // options.executable_build_options.set_use_auto_spmd_partitioning(true);
-    // std::vector<int64_t> mesh_shape_vec(mesh_shape, mesh_shape + num_mesh_shape);
+    // std::vector<int64_t> mesh_shape_vec(mesh_shape, mesh_shape +
+    // num_mesh_shape);
     // options.executable_build_options.set_auto_spmd_partitioning_mesh_shape(mesh_shape_vec);
     // std::vector<int64_t> mesh_ids_vec(mesh_ids, mesh_ids + num_mesh_ids);
     // options.executable_build_options.set_auto_spmd_partitioning_mesh_ids(mesh_ids_vec);
@@ -697,7 +700,8 @@ extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
     assert(device_ordinal < addressable_devices.size());
     auto stats = addressable_devices[device_ordinal]->GetAllocatorStats();
     if (stats.ok() && stats->bytes_limit) {
-      options.executable_build_options.set_device_memory_size(*stats->bytes_limit);
+      options.executable_build_options.set_device_memory_size(
+          *stats->bytes_limit);
     }
   }
   auto exec = MyValueOrThrow(client->Compile(cmodop, options));
@@ -726,19 +730,22 @@ struct JLOpSharding {
   int32_t shard_group_type;
 };
 
-extern "C" void PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
-                                                      JLOpSharding **jl_op_shardings,
-                                                      int32_t num_op_shardings) {
+extern "C" void
+PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
+                                      JLOpSharding **jl_op_shardings,
+                                      int32_t num_op_shardings) {
   std::optional<std::vector<OpSharding>> shardings = exec->GetOutputShardings();
   if (!shardings.has_value()) {
-    ReactantThrowError("No sharding found for the output of the loaded executable");
+    ReactantThrowError(
+        "No sharding found for the output of the loaded executable");
   }
 
   std::vector<xla::OpSharding> hlo_op_shardings = shardings.value();
   if (num_op_shardings != hlo_op_shardings.size()) {
     ReactantThrowError(("Expected " + std::to_string(num_op_shardings) +
                         " shardings, got " +
-                        std::to_string(hlo_op_shardings.size())).c_str());
+                        std::to_string(hlo_op_shardings.size()))
+                           .c_str());
   }
 
   for (int32_t i = 0; i < num_op_shardings; i++) {
@@ -746,65 +753,73 @@ extern "C" void PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable 
     auto &jl_op_sharding = jl_op_shardings[i];
 
     jl_op_sharding->type = op_sharding.type();
-    jl_op_sharding->replicate_on_last_tile_dim = op_sharding.replicate_on_last_tile_dim();
+    jl_op_sharding->replicate_on_last_tile_dim =
+        op_sharding.replicate_on_last_tile_dim();
 
     auto &shape = op_sharding.tile_shape();
-    std::vector<int64_t> dimensions(
-        shape.dimensions().begin(), shape.dimensions().end());
+    std::vector<int64_t> dimensions(shape.dimensions().begin(),
+                                    shape.dimensions().end());
     jl_op_sharding->n_tile_dimensions = dimensions.size();
     jl_op_sharding->tile_dimensions = new int64_t[dimensions.size()];
-    std::copy(dimensions.begin(), dimensions.end(), jl_op_sharding->tile_dimensions);
+    std::copy(dimensions.begin(), dimensions.end(),
+              jl_op_sharding->tile_dimensions);
 
     if (shape.has_layout()) {
       auto &layout = shape.layout();
-      std::vector<int64_t> minor_to_major(
-          layout.minor_to_major().begin(), layout.minor_to_major().end());
+      std::vector<int64_t> minor_to_major(layout.minor_to_major().begin(),
+                                          layout.minor_to_major().end());
       jl_op_sharding->n_layout_minor_to_major = minor_to_major.size();
-      jl_op_sharding->layout_minor_to_major = new int64_t[minor_to_major.size()];
-      std::copy(
-          minor_to_major.begin(), minor_to_major.end(),
-          jl_op_sharding->layout_minor_to_major);
+      jl_op_sharding->layout_minor_to_major =
+          new int64_t[minor_to_major.size()];
+      std::copy(minor_to_major.begin(), minor_to_major.end(),
+                jl_op_sharding->layout_minor_to_major);
     } else {
       jl_op_sharding->n_layout_minor_to_major = 0;
       jl_op_sharding->layout_minor_to_major = nullptr;
     }
 
     std::vector<int> last_tile_dims(op_sharding.last_tile_dims().begin(),
-        op_sharding.last_tile_dims().end());
+                                    op_sharding.last_tile_dims().end());
     jl_op_sharding->n_last_tile_dims = last_tile_dims.size();
     jl_op_sharding->last_tile_dims = new int[last_tile_dims.size()];
-    std::copy(last_tile_dims.begin(), last_tile_dims.end(), jl_op_sharding->last_tile_dims);
+    std::copy(last_tile_dims.begin(), last_tile_dims.end(),
+              jl_op_sharding->last_tile_dims);
 
     std::vector<int64_t> tile_assignment_dimensions(
         op_sharding.tile_assignment_dimensions().begin(),
         op_sharding.tile_assignment_dimensions().end());
-    jl_op_sharding->n_tile_assignment_dimensions = tile_assignment_dimensions.size();
-    jl_op_sharding->tile_assignment_dimensions = new int64_t[
-        tile_assignment_dimensions.size()];
-    std::copy(tile_assignment_dimensions.begin(), tile_assignment_dimensions.end(),
-        jl_op_sharding->tile_assignment_dimensions);
+    jl_op_sharding->n_tile_assignment_dimensions =
+        tile_assignment_dimensions.size();
+    jl_op_sharding->tile_assignment_dimensions =
+        new int64_t[tile_assignment_dimensions.size()];
+    std::copy(tile_assignment_dimensions.begin(),
+              tile_assignment_dimensions.end(),
+              jl_op_sharding->tile_assignment_dimensions);
 
     std::vector<int64_t> tile_assignment_devices(
         op_sharding.tile_assignment_devices().begin(),
         op_sharding.tile_assignment_devices().end());
     jl_op_sharding->n_tile_assignment_devices = tile_assignment_devices.size();
-    jl_op_sharding->tile_assignment_devices = new int64_t[tile_assignment_devices.size()];
+    jl_op_sharding->tile_assignment_devices =
+        new int64_t[tile_assignment_devices.size()];
     std::copy(tile_assignment_devices.begin(), tile_assignment_devices.end(),
-        jl_op_sharding->tile_assignment_devices);
+              jl_op_sharding->tile_assignment_devices);
 
-    std::vector<int64_t> iota_reshape_dims(op_sharding.iota_reshape_dims().begin(),
+    std::vector<int64_t> iota_reshape_dims(
+        op_sharding.iota_reshape_dims().begin(),
         op_sharding.iota_reshape_dims().end());
     jl_op_sharding->n_iota_reshape_dims = iota_reshape_dims.size();
     jl_op_sharding->iota_reshape_dims = new int64_t[iota_reshape_dims.size()];
     std::copy(iota_reshape_dims.begin(), iota_reshape_dims.end(),
-        jl_op_sharding->iota_reshape_dims);
+              jl_op_sharding->iota_reshape_dims);
 
-    std::vector<int> iota_transpose_perm(op_sharding.iota_transpose_perm().begin(),
+    std::vector<int> iota_transpose_perm(
+        op_sharding.iota_transpose_perm().begin(),
         op_sharding.iota_transpose_perm().end());
     jl_op_sharding->n_iota_transpose_perm = iota_transpose_perm.size();
     jl_op_sharding->iota_transpose_perm = new int[iota_transpose_perm.size()];
     std::copy(iota_transpose_perm.begin(), iota_transpose_perm.end(),
-        jl_op_sharding->iota_transpose_perm);
+              jl_op_sharding->iota_transpose_perm);
 
     jl_op_sharding->is_shard_group = op_sharding.is_shard_group();
     jl_op_sharding->shard_group_id = op_sharding.shard_group_id();
@@ -841,9 +856,9 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
   // Optional future to hold asynchronous execution results.
   std::optional<PjRtFuture<>> returned_future;
 
-  auto results = MyValueOrThrow(
-      exec->ExecuteSharded(argument_handles,
-          device, options, returned_future, /*fill_future=*/true));
+  auto results = MyValueOrThrow(exec->ExecuteSharded(argument_handles, device,
+                                                     options, returned_future,
+                                                     /*fill_future=*/true));
 
   // Validate the number of results.
   if (results.size() != num_results) {
@@ -869,9 +884,8 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
 }
 
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
-                           PjRtBuffer **op_args,
-                           const int64_t *mesh_ids, int64_t num_mesh_ids,
-                           uint8_t *is_arg_donatable,
+                           PjRtBuffer **op_args, const int64_t *mesh_ids,
+                           int64_t num_mesh_ids, uint8_t *is_arg_donatable,
                            int num_results, PjRtBuffer **op_results,
                            uint8_t *futures, FutureType **future_results) {
   // Ensure argument_handles is structured as num_mesh_ids x num_args
@@ -884,15 +898,17 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
 
     // Validate mesh_id
     if (mesh_id < 0 || mesh_id >= num_mesh_ids) {
-      ReactantThrowError(("Invalid mesh_id " + std::to_string(mesh_id) + " at device_idx " +
-                          std::to_string(device_idx)).c_str());
+      ReactantThrowError(("Invalid mesh_id " + std::to_string(mesh_id) +
+                          " at device_idx " + std::to_string(device_idx))
+                             .c_str());
     }
 
     argument_handles[mesh_id].reserve(num_args);
     for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
       // Assuming op_args is a flat array of size num_devices * num_args
       // where arguments for each device are contiguous
-      argument_handles[mesh_id].push_back(op_args[mesh_id * num_args + arg_idx]);
+      argument_handles[mesh_id].push_back(
+          op_args[mesh_id * num_args + arg_idx]);
     }
   }
 
@@ -904,7 +920,8 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
   }
   options.untuple_result = true;
 
-  std::optional<std::vector<FutureType>> returned_futures = std::vector<FutureType>();
+  std::optional<std::vector<FutureType>> returned_futures =
+      std::vector<FutureType>();
   auto results = MyValueOrThrow(
       exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
                         argument_handles),
@@ -915,7 +932,8 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
   for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
     int64_t mesh_id = mesh_ids[device_idx];
     if (results[mesh_id].size() != num_results) {
-      llvm::errs() << " results[" << mesh_id << "].size()=" << results[mesh_id].size()
+      llvm::errs() << " results[" << mesh_id
+                   << "].size()=" << results[mesh_id].size()
                    << " num_results=" << num_results << "\n";
     }
     assert(results[mesh_id].size() == num_results);
@@ -936,7 +954,8 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
       int flat_index = mesh_id * num_results + result_idx;
       op_results[flat_index] = results[mesh_id][result_idx].release();
       if (returned_futures.has_value()) {
-        future_results[flat_index] = new FutureType((*returned_futures)[mesh_id]);
+        future_results[flat_index] =
+            new FutureType((*returned_futures)[mesh_id]);
       }
     }
   }
@@ -1016,7 +1035,6 @@ extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
   mlir::registerLLVMDialectImport(registry);
   mlir::registerNVVMDialectImport(registry);
   mlir::LLVM::registerInlinerInterface(registry);
-
 }
 
 /// Returns an unused symbol in `module` for `oldSymbolName` by trying numeric
@@ -1109,84 +1127,112 @@ extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
 
 namespace reactant {
 
-template <typename T> struct unwrap_type { typedef T type; };
-template <typename T> struct unwrap_type<std::shared_ptr<T>> { typedef T type; };
-template <typename T> struct unwrap_type<tsl::RCReference<T>> { typedef T type; };
+template <typename T> struct unwrap_type {
+  typedef T type;
+};
+template <typename T> struct unwrap_type<std::shared_ptr<T>> {
+  typedef T type;
+};
+template <typename T> struct unwrap_type<tsl::RCReference<T>> {
+  typedef T type;
+};
 
 template <typename T> using unwrap_type_t = typename unwrap_type<T>::type;
 
-template<typename T>
-struct HeldValue {
- public:
-    HeldValue(T& obj) : holded(obj) {}
-    ~HeldValue() = default;
+template <typename T> struct HeldValue {
+public:
+  HeldValue(T &obj) : holded(obj) {}
+  ~HeldValue() = default;
 
-    unwrap_type_t<T>* ptr() const {
-        return holded.get();
-    }
+  unwrap_type_t<T> *ptr() const { return holded.get(); }
 
-    T obj() const {
-        return holded;
-    }
+  T obj() const { return holded; }
 
-    T value() const {
-        return holded;
-    }
+  T value() const { return holded; }
 
-    unwrap_type_t<T>* operator->() const {
-        return ptr();
-    }
+  unwrap_type_t<T> *operator->() const { return ptr(); }
 
- private:
-    T holded;
+private:
+  T holded;
 };
 
-template <typename T>
-HeldValue<T>* capture(T obj) {
-    return new HeldValue<T>(obj);
+template <typename T> HeldValue<T> *capture(T obj) {
+  return new HeldValue<T>(obj);
 }
 
 } // namespace reactant
 
 using reactant::HeldValue;
 
-extern "C" HeldValue<std::shared_ptr<PjRtClient>>* reactant_hold_pjrtclient(xla::PjRtClient* client) {
+extern "C" HeldValue<std::shared_ptr<PjRtClient>> *
+reactant_hold_pjrtclient(xla::PjRtClient *client) {
   return reactant::capture(std::shared_ptr<PjRtClient>(client));
 }
 
-extern "C" void reactant_release_pjrtclient(HeldValue<std::shared_ptr<PjRtClient>>* client) { delete client; }
+extern "C" void
+reactant_release_pjrtclient(HeldValue<std::shared_ptr<PjRtClient>> *client) {
+  delete client;
+}
 
-extern "C" HeldValue<std::shared_ptr<xla::PjRtBuffer>>* reactant_hold_pjrtbuffer(xla::PjRtBuffer* buffer) {
+extern "C" HeldValue<std::shared_ptr<xla::PjRtBuffer>> *
+reactant_hold_pjrtbuffer(xla::PjRtBuffer *buffer) {
   return reactant::capture(std::shared_ptr<xla::PjRtBuffer>(buffer));
 }
 
-extern "C" void reactant_release_pjrtbuffer(HeldValue<std::shared_ptr<PjRtBuffer>>* buffer) { delete buffer; }
+extern "C" void
+reactant_release_pjrtbuffer(HeldValue<std::shared_ptr<PjRtBuffer>> *buffer) {
+  delete buffer;
+}
 
-extern "C" ifrt::Client* ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>>* pjrt_client) {
+extern "C" ifrt::Client *
+ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
   xla::ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
 }
 
-extern "C" void ifrt_FreeClient(ifrt::Client* client) { delete client; }
+extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
 
-extern "C" xla::ifrt::LoadedExecutable* ifrt_ClientCompile(ifrt::PjRtClient* client, MlirModule mlir_mod) {
+extern "C" xla::ifrt::LoadedExecutable *
+ifrt_ClientCompile(ifrt::PjRtClient *client, MlirModule mlir_mod) {
   mlir::ModuleOp mlir_mod_op = cast<ModuleOp>(*unwrap(mlir_mod));
   // TODO import sharding config from `ClientCompile`?
   xla::CompileOptions compile_options;
-  // TODO can't create LoadedExecutable from mlir::ModuleOp on IFRT-proxy backend
-  return MyValueOrThrow(xla::ifrt::PjRtLoadedExecutable::Create(client, mlir_mod_op, compile_options, std::vector<tsl::RCReference<xla::ifrt::LoadedHostCallback>>())).release();
+  // TODO can't create LoadedExecutable from mlir::ModuleOp on IFRT-proxy
+  // backend
+  return MyValueOrThrow(
+             xla::ifrt::PjRtLoadedExecutable::Create(
+                 client, mlir_mod_op, compile_options,
+                 std::vector<
+                     tsl::RCReference<xla::ifrt::LoadedHostCallback>>()))
+      .release();
 }
 
-extern "C" void ifrt_pjrt_FreeLoadedExecutable(xla::ifrt::PjRtLoadedExecutable* exec) { delete exec; }
-
-// TODO replace with `Client::MakeArrayFromHostBuffer` and generalize to `ifrt::Client`
-extern "C" HeldValue<tsl::RCReference<xla::ifrt::Array>>* ifrt_pjrt_ArrayFromHostBuffer(ifrt::PjRtClient* client, HeldValue<std::shared_ptr<xla::PjRtBuffer>>* buffer) {
-  return reactant::capture(tsl::RCReference<ifrt::Array>(MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj()))));
+extern "C" void
+ifrt_pjrt_FreeLoadedExecutable(xla::ifrt::PjRtLoadedExecutable *exec) {
+  delete exec;
 }
 
-extern "C" void reactant_release_ifrt_array(HeldValue<tsl::RCReference<xla::ifrt::Array>>* array) { delete array; }
+// TODO replace with `Client::MakeArrayFromHostBuffer` and generalize to
+// `ifrt::Client`
+extern "C" HeldValue<tsl::RCReference<xla::ifrt::Array>> *
+ifrt_pjrt_ArrayFromHostBuffer(
+    ifrt::PjRtClient *client,
+    HeldValue<std::shared_ptr<xla::PjRtBuffer>> *buffer) {
+  return reactant::capture(tsl::RCReference<ifrt::Array>(
+      MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj()))));
+}
 
-extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, HeldValue<tsl::RCReference<ifrt::Array>>** op_args, uint8_t* is_arg_donatable, int num_results, HeldValue<tsl::RCReference<ifrt::Array>>** op_results, uint8_t *futures, FutureType** status) {
+extern "C" void reactant_release_ifrt_array(
+    HeldValue<tsl::RCReference<xla::ifrt::Array>> *array) {
+  delete array;
+}
+
+extern "C" void
+ifrt_Execute(ifrt::LoadedExecutable *exec, int num_args,
+             HeldValue<tsl::RCReference<ifrt::Array>> **op_args,
+             uint8_t *is_arg_donatable, int num_results,
+             HeldValue<tsl::RCReference<ifrt::Array>> **op_results,
+             uint8_t *futures, FutureType **status) {
   std::vector<tsl::RCReference<xla::ifrt::Array>> args;
   for (int i = 0; i < num_args; i++) {
     args.emplace_back(op_args[i]->obj());
@@ -1199,8 +1245,10 @@ extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, HeldVal
     }
   }
   options.fill_status = true;
-  
-  auto result = MyValueOrThrow(exec->Execute(static_cast<absl::Span<tsl::RCReference<xla::ifrt::Array>>>(args), options, /* devices */ std::nullopt));
+
+  auto result = MyValueOrThrow(exec->Execute(
+      static_cast<absl::Span<tsl::RCReference<xla::ifrt::Array>>>(args),
+      options, /* devices */ std::nullopt));
 
   if (result.outputs.size() != num_results) {
     llvm::errs() << "Error: results.size()=" << result.outputs.size()
@@ -1208,7 +1256,8 @@ extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, HeldVal
     std::abort(); // Terminate if the number of results is incorrect.
   }
 
-  // there is only 1 status and is valid because we set `options.fill_status = true`
+  // there is only 1 status and is valid because we set `options.fill_status =
+  // true`
   *futures = true;
   *status = new FutureType(result.status);
 
@@ -1218,6 +1267,9 @@ extern "C" void ifrt_Execute(ifrt::LoadedExecutable* exec, int num_args, HeldVal
 }
 
 // in principle, use ArrayCopySemantics::kAlwaysCopy (=0)
-extern "C" FutureType* ifrt_CopyArrayToHostBuffer(HeldValue<tsl::RCReference<xla::ifrt::Array>>* array, void* data, ifrt::ArrayCopySemantics semantics) {
-  return new FutureType((*array)->CopyToHostBuffer(data, std::nullopt, semantics));
+extern "C" FutureType *
+ifrt_CopyArrayToHostBuffer(HeldValue<tsl::RCReference<xla::ifrt::Array>> *array,
+                           void *data, ifrt::ArrayCopySemantics semantics) {
+  return new FutureType(
+      (*array)->CopyToHostBuffer(data, std::nullopt, semantics));
 }
