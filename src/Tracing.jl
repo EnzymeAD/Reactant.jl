@@ -1234,6 +1234,68 @@ end
 
 function make_tracer(
     seen,
+    @nospecialize(prev::Dict{Key,Value}),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+) where {Key,Value}
+    RT = Core.Typeof(prev)
+    # XXX: If someone wants to shard the same array with different shardings, we need to
+    #      somehow handle this correctly... Right now we just use the first sharding.
+    if mode != NoStopTracedTrack && haskey(seen, prev)
+        if mode == TracedToTypes
+            visited = seen[prev]
+            push!(path, visited)
+            return nothing
+        end
+        return seen[prev]
+    end
+    if eltype(RT) <: ReactantPrimitive
+        if mode == ArrayToConcrete && return seen[prev] = ConcreteRArray(prev; sharding)
+        elseif mode == TracedToTypes
+            # Original array can get mutated so we store a copy:
+            push!(path, copy(prev))
+            seen[prev] = VisitedObject(length(seen) + 1)
+            return nothing
+        end
+    elseif mode == TracedToTypes
+        push!(path, RT)
+        for (k, v) in prev
+            make_tracer(seen, k, path, mode; track_numbers, sharding, kwargs...)
+            make_tracer(seen, v, path, mode; track_numbers, sharding, kwargs...)
+        end
+        return nothing
+    end
+    Value2 = traced_type(Value, Val(mode), track_numbers, sharding)
+    newa = Dict{Key,Value2}()
+    seen[prev] = newa
+    same = true
+    for (k, v) in prev
+        nv = make_tracer(
+            seen,
+            v,
+            append_path(path, k),
+            mode;
+            track_numbers,
+            sharding=Base.getproperty(sharding, k),
+            kwargs...,
+        )
+        if v !== nv
+            same = false
+        end
+        newa[k] = nv
+    end
+    if same
+        seen[prev] = prev
+        return prev
+    end
+    return newa
+end
+
+function make_tracer(
+    seen,
     @nospecialize(prev::Tuple),
     @nospecialize(path),
     mode;
