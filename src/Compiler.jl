@@ -22,6 +22,10 @@ import ..Reactant:
 
 import ..ReactantCore: correct_maybe_bcast_call
 
+@inline function traced_getfield(@nospecialize(obj::Dict), field)
+    return Base.getindex(obj, field)
+end
+
 @inline function traced_getfield(@nospecialize(obj), field)
     return Base.getfield(obj, field)
 end
@@ -38,6 +42,11 @@ end
     ancestor_obj = ancestor(obj)
     (isbitstype(T) || ancestor_obj isa RArray) && return Base.setfield!(obj, field, val)
     return Base.setindex!(obj, val, field)
+end
+
+@inline function traced_setfield!(
+    @nospecialize(obj::Dict), field, val)
+    return Base.setindex!(obj, field, val)
 end
 
 function create_result(

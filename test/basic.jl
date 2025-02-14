@@ -901,3 +901,21 @@ end
     @test contains(hlo, "stablehlo.add")
     @test Array(@jit(fn(Base.OneTo(10000)))) ≈ collect(Base.OneTo(10000))
 end
+
+	function dip!(x)
+		x[:c] = x[:a] .* x[:b]
+		x[:a] .= 2
+		nothing
+	end
+
+@testset "Dict" begin
+	x = Dict{Symbol,Vector{Float32}}()
+	x[:a] = 2.7*ones(4)
+	x[:b] = 3.1*ones(4)
+
+	ra = Reactant.to_rarray(x)
+	Reactant.@jit dip!(ra)
+	ra[:c] isa ConcreteRArray
+	ra[:c] ≈ (2.7*3.1)*ones(4)
+	ra[:a] ≈ (2.7*2)*ones(4)
+end
