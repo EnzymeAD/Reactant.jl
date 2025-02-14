@@ -16,6 +16,17 @@ mutable struct LoadedExecutable
     end
 end
 
+for (jlop, xlaop) in (
+    (:num_replicas, :PjRtLoadedExecutableNumReplicas),
+    (:num_partitions, :PjRtLoadedExecutableNumPartitions),
+)
+    @eval function $(jlop)(exec::LoadedExecutable)
+        GC.@preserve exec begin
+            return @ccall MLIR.API.mlir_c.$(xlaop)(exec.exec::Ptr{Cvoid})::Cint
+        end
+    end
+end
+
 function client(exec::LoadedExecutable)
     GC.@preserve exec begin
         return Client(
@@ -215,7 +226,6 @@ function Compile(
     mod::MLIR.IR.Module;
     is_sharded::Bool=false,
     mesh_ids::Vector{Int64}=Int64[],
-    # mesh_shape::Vector{Int64}=Int64[],
     num_outputs::Int64,
     num_parameters::Int64,
 )
@@ -257,4 +267,20 @@ for (jlop, xlaop, field) in (
 
         return map(OpSharding ∘ getindex, jl_op_shardings)
     end
+end
+
+function get_hlo_modules(exec::LoadedExecutable)
+    # If we had compiled with MPMD then we would need all the partitions to get hlo_modules
+    # but if we used SPMD we get only 1 module. To be safe we allocate for all the modules
+    # and use the ones assigned to by XLA
+    hlo_modules = Ref{NTuple{Int64(num_partitions(exec)),Ptr{Cvoid}}}()
+    nmodules = Ref{Int32}(0)
+    GC.@preserve exec hlo_modules begin
+        @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetHloModules(
+            exec.exec::Ptr{Cvoid},
+            hlo_modules::Ptr{Ptr{Cvoid}},
+            nmodules::Ptr{Cint},
+        )::Cvoid
+    end
+    return map(HloModule, hlo_modules[][1:Int(nmodules[])])
 end

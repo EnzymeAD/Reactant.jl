@@ -883,8 +883,48 @@ macro code_mhlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
     )
-    return esc(:($(compile_expr);
-    $(first)($(compiled))))
+    #! format: off
+    return esc(
+        :(
+            $(compile_expr);
+            $(first)($(compiled))
+        )
+    )
+    #! format: on
+end
+
+"""
+    @code_xla [optimize = ...] [no_nan = <true/false>] f(args...)
+
+Similar to `@code_hlo`, but prints the HLO module.
+"""
+macro code_xla(args...)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true, :no_nan => false, :client => nothing
+    )
+    compile_expr, (; compiled) = compile_call_expr(
+        __module__, compile_xla, default_options, args...
+    )
+    #! format: off
+    return esc(
+        :(
+            $(compile_expr);
+            exec = $(compiled)[2];
+            hlo_modules = $(XLA.get_hlo_modules)(exec);
+            if length(hlo_modules) == 1
+                hlo_module = only(hlo_modules)
+                println(hlo_module)
+            else
+                println("HLO modules:")
+                for (i, hlo_module) in enumerate(hlo_modules)
+                    println("Partition $i:")
+                    println(hlo_module)
+                    println()
+                end
+            end
+        )
+    )
+    #! format: on
 end
 
 """
