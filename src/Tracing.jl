@@ -492,7 +492,7 @@ Base.@nospecializeinfer function traced_type_inner(
 
     # unknown number of fields
     if Base.inferencebarrier(T) isa UnionAll
-        if T.var.lb === Union{} && T.var.ub === Any
+        if T.var.lb === Union{} && T.var.ub === Any || T <: Type
             return UnionAll(
                 T.var, traced_type_inner(T.body, seen, mode, track_numbers, sharding)
             )
@@ -502,7 +502,7 @@ Base.@nospecializeinfer function traced_type_inner(
             throw(TracedTypeError("Unhandled type $T"))
         end
         if isnothing(Base.datatype_fieldcount(aT))
-            throw(TracedTypeError("Unhandled type $T"))
+            throw(TracedTypeError("Unhandled type $T, aT=$aT"))
         end
         return T
     end
@@ -516,7 +516,7 @@ Base.@nospecializeinfer function traced_type_inner(
 
     # if abstract it must be by reference
     if Base.isabstracttype(T)
-        if !(T isa UnionAll) && length(T.parameters) == 0
+        if !(T isa UnionAll) && length(T.parameters) == 0 || T <: Type
             return T
         end
         throw(TracedTypeError("Unhandled abstract type $T"))
