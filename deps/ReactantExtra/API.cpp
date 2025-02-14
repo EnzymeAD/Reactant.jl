@@ -1035,6 +1035,14 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
   }
 }
 
+extern "C" int PjRtLoadedExecutableNumReplicas(PjRtLoadedExecutable *exec) {
+  return exec->num_replicas();
+}
+
+extern "C" int PjRtLoadedExecutableNumPartitions(PjRtLoadedExecutable *exec) {
+  return exec->num_partitions();
+}
+
 void prepareRegistry(mlir::DialectRegistry &registry);
 
 extern "C" void RegisterDialects(MlirContext cctx) {
@@ -1355,4 +1363,24 @@ ifrt_CopyArrayToHostBuffer(HeldValue<tsl::RCReference<xla::ifrt::Array>> *array,
                            void *data, ifrt::ArrayCopySemantics semantics) {
   return new FutureType(
       (*array)->CopyToHostBuffer(data, std::nullopt, semantics));
+}
+
+extern "C" void
+PjRtLoadedExecutableGetHloModules(xla::PjRtLoadedExecutable *exec,
+                                  void **hlo_modules, int32_t *nmodules) {
+  auto hlo_modules_vec = MyValueOrThrow(exec->GetHloModules());
+  *nmodules = hlo_modules_vec.size();
+  for (int i = 0; i < *nmodules; i++) {
+    hlo_modules[i] = reactant::capture(hlo_modules_vec[i]);
+  }
+}
+
+extern "C" const char *
+HloModuleToString(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+  return cstr_from_string(hlo_module->obj()->ToString());
+}
+
+extern "C" void
+FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+  delete hlo_module;
 }

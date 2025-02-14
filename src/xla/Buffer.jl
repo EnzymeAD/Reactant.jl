@@ -70,6 +70,12 @@ function ArrayFromHostBuffer(client::Client, array::Array{T,N}, device) where {T
     return Buffer(buffer)
 end
 
+function Base.convert(::Type{<:Array{T}}, buffer::Buffer) where {T}
+    arr = zeros(T, reverse(size(buffer))...)
+    BufferToHost(buffer, arr)
+    return arr
+end
+
 function BufferToHost(buffer::Buffer, data)
     GC.@preserve buffer begin
         @ccall MLIR.API.mlir_c.BufferToHost(
@@ -96,6 +102,11 @@ mutable struct AsyncBuffer
 end
 
 const AsyncEmptyBuffer = AsyncBuffer(Buffer(C_NULL), nothing)
+
+function Base.convert(::Type{<:Array{T}}, buffer::AsyncBuffer) where {T}
+    await(buffer)
+    return convert(Array{T}, buffer.buffer)
+end
 
 for op in (:(Base.ndims), :(Base.size), :device, :client)
     @eval $op(buffer::AsyncBuffer) = $op(buffer.buffer)
