@@ -1062,7 +1062,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     T = eltype(A)
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
-        if !Sharding.is_sharded(sharding)
+        if !Reactant.Sharding.is_sharded(sharding)
             return Reactant.ConcreteRArray{T,N,1,Reactant.Sharding.NoShardInfo}
         else
             error("TODO: implement sharding")
