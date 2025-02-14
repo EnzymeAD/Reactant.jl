@@ -828,6 +828,11 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
       device_assignment(0, mesh_id) = i;
     }
     options.executable_build_options.set_device_assignment(device_assignment);
+
+    options.executable_build_options
+        .set_allow_spmd_sharding_propagation_to_parameters({false});
+    options.executable_build_options
+        .set_allow_spmd_sharding_propagation_to_output({false});
   } else {
     assert(device_id >= 0);
 
@@ -936,25 +941,45 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
 
   // Validate the number of results.
   if (results.size() != num_results) {
-    llvm::errs() << "Error: results.size()=" << results.size()
-                 << " does not match num_results=" << num_results << "\n";
-    std::abort(); // Terminate if the number of results is incorrect.
+    ReactantThrowError(
+        ("Error: results.size()=" + std::to_string(results.size()) +
+         " does not match num_results=" + std::to_string(num_results) + "\n")
+            .c_str());
   }
 
   // Handle futures if they are returned.
-  if (returned_future.has_value()) {
-    *futures = true;
+  *futures = returned_future.has_value();
+  if (*futures) {
     for (size_t i = 0; i < num_results; i++) {
       future_results[i] = new FutureType(*returned_future);
     }
-  } else {
-    *futures = false;
   }
 
   // Release the results into the output array.
   for (size_t i = 0; i < num_results; i++) {
     op_results[i] = results[i].release();
   }
+}
+
+// This isn't exposed to julia, but leaving it here since it is very useful for
+// debugging sharding (and generally for the execute workflow)
+void PrintPjRtBuffer(PjRtBuffer *buffer) {
+  if (buffer) {
+    xla::Shape shape = MyValueOrThrow(buffer->HostShape());
+    auto dims = shape.dimensions();
+    auto nelems = std::accumulate(dims.begin(), dims.end(), 1,
+                                  std::multiplies<int64_t>());
+    std::vector<float> host_data(nelems);
+    BufferToHost(buffer, host_data.data());
+
+    for (int i = 0; i < nelems; ++i) {
+      std::cout << host_data[i] << " ";
+    }
+    std::cout << std::endl;
+  } else {
+    std::cout << "    Buffer is nullptr" << std::endl;
+  }
+  return;
 }
 
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
@@ -996,29 +1021,38 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
 
   std::optional<std::vector<FutureType>> returned_futures =
       std::vector<FutureType>();
-  auto results = MyValueOrThrow(
-      exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
-                        argument_handles),
-                    options, returned_futures));
+  std::vector<std::vector<std::unique_ptr<PjRtBuffer>>> results =
+      MyValueOrThrow(exec->Execute(
+          static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
+              argument_handles),
+          options, returned_futures));
 
-  assert(results.size() == num_mesh_ids);
+  if (results.size() != num_mesh_ids) {
+    ReactantThrowError((" results.size()=" + std::to_string(results.size()) +
+                        " num_mesh_ids=" + std::to_string(num_mesh_ids) + "\n")
+                           .c_str());
+  }
 
   for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
     int64_t mesh_id = mesh_ids[device_idx];
     if (results[mesh_id].size() != num_results) {
-      llvm::errs() << " results[" << mesh_id
-                   << "].size()=" << results[mesh_id].size()
-                   << " num_results=" << num_results << "\n";
+      ReactantThrowError((" results[" + std::to_string(mesh_id) + "].size()=" +
+                          std::to_string(results[mesh_id].size()) +
+                          " num_results=" + std::to_string(num_results) + "\n")
+                             .c_str());
     }
-    assert(results[mesh_id].size() == num_results);
   }
 
   // Handle returned futures
-  if (returned_futures.has_value()) {
-    *futures = true;
-    assert(returned_futures->size() == num_mesh_ids);
-  } else {
-    *futures = false;
+  *futures = returned_futures.has_value();
+  if (*futures) {
+    if (returned_futures->size() != num_mesh_ids) {
+      ReactantThrowError((" returned_futures->size()=" +
+                          std::to_string(returned_futures->size()) +
+                          " num_mesh_ids=" + std::to_string(num_mesh_ids) +
+                          "\n")
+                             .c_str());
+    }
   }
 
   // Copy results into the output buffers
@@ -1026,13 +1060,21 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
     int64_t mesh_id = mesh_ids[device_idx];
     for (int result_idx = 0; result_idx < num_results; ++result_idx) {
       int flat_index = mesh_id * num_results + result_idx;
-      op_results[flat_index] = results[mesh_id][result_idx].release();
-      if (returned_futures.has_value()) {
+      if (*futures) {
         future_results[flat_index] =
-            new FutureType((*returned_futures)[mesh_id]);
+            new FutureType(std::move((*returned_futures)[mesh_id]));
       }
+      op_results[flat_index] = results[mesh_id][result_idx].release();
     }
   }
+}
+
+extern "C" int PjRtLoadedExecutableNumReplicas(PjRtLoadedExecutable *exec) {
+  return exec->num_replicas();
+}
+
+extern "C" int PjRtLoadedExecutableNumPartitions(PjRtLoadedExecutable *exec) {
+  return exec->num_partitions();
 }
 
 void prepareRegistry(mlir::DialectRegistry &registry);
@@ -1355,4 +1397,24 @@ ifrt_CopyArrayToHostBuffer(HeldValue<tsl::RCReference<xla::ifrt::Array>> *array,
                            void *data, ifrt::ArrayCopySemantics semantics) {
   return new FutureType(
       (*array)->CopyToHostBuffer(data, std::nullopt, semantics));
+}
+
+extern "C" void
+PjRtLoadedExecutableGetHloModules(xla::PjRtLoadedExecutable *exec,
+                                  void **hlo_modules, int32_t *nmodules) {
+  auto hlo_modules_vec = MyValueOrThrow(exec->GetHloModules());
+  *nmodules = hlo_modules_vec.size();
+  for (int i = 0; i < *nmodules; i++) {
+    hlo_modules[i] = reactant::capture(hlo_modules_vec[i]);
+  }
+}
+
+extern "C" const char *
+HloModuleToString(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+  return cstr_from_string(hlo_module->obj()->ToString());
+}
+
+extern "C" void
+FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+  delete hlo_module;
 }
