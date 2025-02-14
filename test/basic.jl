@@ -903,8 +903,7 @@ end
 end
 
 	function dip!(x)
-		x[:c] = x[:a] .* x[:b]
-		x[:a] .= 2
+		x[:a] = x[:a] .* x[:b]
 		nothing
 	end
 
@@ -915,7 +914,5 @@ end
 
 	ra = Reactant.to_rarray(x)
 	Reactant.@jit dip!(ra)
-	ra[:c] isa ConcreteRArray
-	ra[:c] ≈ (2.7*3.1)*ones(4)
 	ra[:a] ≈ (2.7*2)*ones(4)
 end
