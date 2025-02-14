@@ -1240,7 +1240,7 @@ function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
-) where {Key, Value}
+) where {Key,Value}
     RT = Core.Typeof(prev)
     # XXX: If someone wants to shard the same array with different shardings, we need to
     #      somehow handle this correctly... Right now we just use the first sharding.
@@ -1262,7 +1262,7 @@ function make_tracer(
         end
     elseif mode == TracedToTypes
         push!(path, RT)
-	for (k, v) in prev
+        for (k, v) in prev
             make_tracer(seen, k, path, mode; track_numbers, sharding, kwargs...)
             make_tracer(seen, v, path, mode; track_numbers, sharding, kwargs...)
         end
@@ -1273,18 +1273,18 @@ function make_tracer(
     seen[prev] = newa
     same = true
     for (k, v) in prev
-         nv = make_tracer(
-                seen,
-                v,
-                append_path(path, k),
-                mode;
-                track_numbers,
-                sharding=Base.getproperty(sharding, k),
-                kwargs...,
-            )
-            if v !== nv
-                same = false
-            end
+        nv = make_tracer(
+            seen,
+            v,
+            append_path(path, k),
+            mode;
+            track_numbers,
+            sharding=Base.getproperty(sharding, k),
+            kwargs...,
+        )
+        if v !== nv
+            same = false
+        end
         newa[k] = nv
     end
     if same

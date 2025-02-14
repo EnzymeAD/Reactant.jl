@@ -44,8 +44,7 @@ end
     return Base.setindex!(obj, val, field)
 end
 
-@inline function traced_setfield!(
-    @nospecialize(obj::Dict), field, val)
+@inline function traced_setfield!(@nospecialize(obj::Dict), field, val)
     return Base.setindex!(obj, field, val)
 end
 
