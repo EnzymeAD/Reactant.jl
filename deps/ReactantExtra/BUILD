@@ -466,6 +466,7 @@ cc_library(
 "-Wl,-exported_symbol,_BufferNDimensions",
 "-Wl,-exported_symbol,_BufferPrimitiveType",
 "-Wl,-exported_symbol,_PjRtLoadedExecutableGetOuputShardings",
+"-Wl,-exported_symbol,_PjRtLoadedExecutableGetParameterShardings",
 "-Wl,-exported_symbol,_ifrt_*",
 "-Wl,-exported_symbol,_reactant_*",
     ]}),
