@@ -10,8 +10,9 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
 
 """
 `module_`
@@ -33,7 +34,10 @@ module {
 ```
 """
 function module_(;
-    sym_name=nothing, sym_visibility=nothing, bodyRegion::Region, location=Location()
+    sym_name::Union{String,Nothing}=nothing,
+    sym_visibility::Union{String,Nothing}=nothing,
+    bodyRegion::Region,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -91,7 +95,9 @@ operands of arity 0-N.
 ```
 """
 function unrealized_conversion_cast(
-    inputs::Vector{Value}; outputs::Vector{IR.Type}, location=Location()
+    inputs::Vector{Value};
+    outputs::Base.AbstractVecOrTuple{IR.Type},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
     operands = Value[inputs...,]

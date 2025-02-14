@@ -1,5 +1,6 @@
 using Reactant, Test
 using Reactant: Ops
+using Reactant.MLIR.Dialects: stablehlo
 using LinearAlgebra
 using SpecialFunctions: SpecialFunctions
 
@@ -274,8 +275,8 @@ end
 end
 
 @testset "fft" begin
-    grfft(x) = Ops.fft(x; type="RFFT", length=[4])
-    gfft(x) = Ops.fft(x; type="FFT", length=[4])
+    grfft(x) = Ops.fft(x; type=stablehlo.FftType.RFFT, length=[4])
+    gfft(x) = Ops.fft(x; type=stablehlo.FftType.FFT, length=[4])
 
     x = ConcreteRArray([1.0, 1.0, 1.0, 1.0])
     @test ComplexF64[4.0, 0.0, 0.0] ≈ @jit grfft(x)
