@@ -1,5 +1,6 @@
 module ReactantMPIExt
 
+using Reactant
 using Reactant: Reactant, Distributed
 using MPI: MPI
 
@@ -31,6 +32,24 @@ end
 function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
     new_comm = MPI.Comm_split_type(MPI.COMM_WORLD, MPI.COMM_TYPE_SHARED, 0)
     return Int(MPI.Comm_rank(new_comm))
+end
+
+function __init__()
+    for name in (
+        "MPI_Init",
+        "MPI_Finalize",
+        "MPI_Comm_rank",
+        "MPI_Comm_size",
+        "MPI_Send",
+        "MPI_Recv",
+        "MPI_Isend",
+        "MPI_Irecv",
+        "MPI_Wait",
+        "MPI_Request_free",
+    )
+        sym = Libdl.dlsym(MPI.API.libmpi, name)
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+    end
 end
 
 end
