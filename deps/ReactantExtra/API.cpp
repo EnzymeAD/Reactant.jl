@@ -948,8 +948,9 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
   }
 
   // Handle futures if they are returned.
-  *futures = returned_future.has_value();
-  if (*futures) {
+  auto future_val = returned_future.has_value();
+  *futures = future_val;
+  if (future_val) {
     for (size_t i = 0; i < num_results; i++) {
       future_results[i] = new FutureType(*returned_future);
     }
