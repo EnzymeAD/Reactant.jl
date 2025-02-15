@@ -65,6 +65,9 @@ function (::NoSharding)(client::XLA.Client, device, x::Union{AbstractArray,Numbe
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
 
+# TODO: At the core create a DimSharding Type. We can convert the other sharding types to
+#       this type
+
 # XXX: multiple axes partitioning -- supported by shardy (not in Jax I think)
 struct NamedSharding{D1,D2,P<:Tuple,D3} <: AbstractSharding
     mesh::Mesh{D1,D2}
