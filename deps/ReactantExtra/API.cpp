@@ -104,6 +104,10 @@
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
+// IFRT - Proxy (RPC)
+#include "xla/python/ifrt_proxy/server/grpc_server.h"
+#include "xla/python/ifrt_proxy/client/registry.h"
+
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
@@ -1422,7 +1426,9 @@ FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
 
 // right now only making it available for TPU
 // in the future, we would like this for CPU and GPU PjRt backends too
-extern "C" ifrt::proxy::GrpcServer* ifrt_proxy_grpc_server_create_from_ifrt_client_factory_tpu(const char* tpu_path, const char **error) {
+extern "C" ifrt::proxy::GrpcServer* ifrt_proxy_grpc_server_create_from_ifrt_client_factory_tpu(const char* c_address, const char* tpu_path, const char **error) {
+  std::string address = c_address;
+
   // taken from `MakeTPUClient`
   std::string tpu_library_path;
   if (auto path = llvm::sys::Process::GetEnv(kEnvTpuLibraryPath)) {
@@ -1446,9 +1452,9 @@ extern "C" ifrt::proxy::GrpcServer* ifrt_proxy_grpc_server_create_from_ifrt_clie
     xla::ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
       address,
       []() -> absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> {
-        xla::PjRtClient* pjrt_client = GetCApiClient("TPU");
+        auto pjrt_client = std::shared_ptr<xla::PjRtClient>(GetCApiClient("TPU"));
         return std::shared_ptr<xla::ifrt::Client>(
-          xla::ifrt::PjRtClient::Create(std::move(pjrt_cpu_client)).release()
+          xla::ifrt::PjRtClient::Create(pjrt_client).release()
         );
       }
     )
@@ -1464,11 +1470,12 @@ extern "C" const char* ifrt_proxy_grpc_server_address(ifrt::proxy::GrpcServer* s
 extern "C" const char* ifrt_proxy_grpc_server_wait(ifrt::proxy::GrpcServer* server) { server->Wait(); }
 
 // `c_proxy_server_address` must be of the form `<backend-transport>:<backend-address>`; e.g. "grpc:localhost"
-// by default, set `connection_timemout_in_minutes` to 2
+// NOTE not sure if we must pass the port, but probably yes
+// by default, set `connection_timeout_in_minutes` to 2
 extern "C" ifrt::Client* ifrt_proxy_create_client(const char* c_proxy_server_address, int connection_timeout_in_minutes) {
   std::string proxy_server_address = c_proxy_server_address;
   ifrt::proxy::ClientConnectionOptions options = {
-    absl::Minutes(connection_timemout_in_minutes),
+    absl::Minutes(connection_timeout_in_minutes),
     nullptr, // callback `on_disconnect`
     nullptr, // callback `on_connection_update`
   };
