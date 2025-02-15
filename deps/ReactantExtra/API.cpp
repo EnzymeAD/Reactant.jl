@@ -1045,7 +1045,7 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
   }
 
   // Handle returned futures
-  auto future_val = returned_future.has_value();
+  auto future_val = returned_futures.has_value();
   *futures = future_val;
   if (future_val) {
     if (returned_futures->size() != num_mesh_ids) {
@@ -1062,11 +1062,11 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
     int64_t mesh_id = mesh_ids[device_idx];
     for (int result_idx = 0; result_idx < num_results; ++result_idx) {
       int flat_index = mesh_id * num_results + result_idx;
+      op_results[flat_index] = results[mesh_id][result_idx].release();
       if (future_val) {
         future_results[flat_index] =
-            new FutureType(std::move((*returned_futures)[mesh_id]));
+            new FutureType((*returned_futures)[mesh_id]);
       }
-      op_results[flat_index] = results[mesh_id][result_idx].release();
     }
   }
 }

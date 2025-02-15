@@ -154,22 +154,13 @@ function compute_array_indices_and_partition_spec(
                                                           $(mesh.device_ids)"
         @assert isempty(sharding.tile_dimensions) "Tile dimensions are not supported yet! \
                                                    Open an issue with an MWE for this case."
-        # Handle layout transformation
-        dims_order = if !isempty(sharding.layout_minor_to_major)
-            sharding.layout_minor_to_major
-        else
-            collect(1:length(sharding.tile_assignment_dimensions))
-        end
+        @assert isempty(sharding.layout_minor_to_major) "Layout transformation is not \
+                                                         supported yet!"
 
-        # Reshape considering column-major order and layout
-        tile_assignment = reshape(
-            device_list, reverse(sharding.tile_assignment_dimensions)...
+        tile_assignment = reshape(device_list, sharding.tile_assignment_dimensions...)
+        tile_assignment = permutedims(
+            tile_assignment, reverse(collect(Int64, 1:ndims(tile_assignment)))
         )
-
-        # Apply layout transformation
-        if !isempty(dims_order)
-            tile_assignment = permutedims(tile_assignment, dims_order)
-        end
 
         # Handle replication dimension
         tile_dims = size(tile_assignment)[(1 + sharding.replicate_on_last_tile_dim):end]

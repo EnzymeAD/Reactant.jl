@@ -163,6 +163,10 @@ function named_sharding_to_opsharding(sharding::NamedSharding, shape::Dims)
         tile_assignment[indices] = devices[device_index...]
     end
 
+    tile_assignment = permutedims(
+        tile_assignment, reverse(collect(Int64, 1:ndims(tile_assignment)))
+    )
+
     return XLA.OpSharding(
         XLA.OpShardingType.Other,
         Int64[],
