@@ -91,6 +91,7 @@
 #include "xla/python/ifrt/topology.h"
 #include "xla/python/ifrt/tuple.h"
 #include "xla/python/ifrt/value.h"
+#include "xla/python/ifrt/ir/ifrt_ir_program.h"
 
 // IFRT - PJRT
 #include "xla/python/pjrt_ifrt/pjrt_array.h"
@@ -1582,7 +1583,7 @@ extern "C" xla::ifrt::LoadedExecutable* ifrt_compile(
     }
   }
 
-  auto program = std::make_unique<xla::ifrt::Program>(xla::ifrt::HloProgram(cmod_op));
+  auto program = std::make_unique<xla::ifrt::Program>(xla::ifrt::IfrtIRProgram(cmod_op));
   auto compiler = client->GetDefaultCompiler();
 
   return MyValueOrThrow(compiler->Compile(program, options)).release();
