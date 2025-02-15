@@ -1468,19 +1468,6 @@ extern "C" HeldIfrtArray* ifrt_client_make_array_from_host_buffer(
   )));
 }
 
-// TODO
-// extern "C" HeldIfrtArray* ifrt_client_make_single_shard_array_from_pjrt_buffer(
-//   ifrt::Client* client,
-//   HeldPjRtBuffer* buffer
-// ) {
-//   auto device_ptr = buffer->ptr()->device();
-//   auto 
-//   auto sharding = reactant::capture(std::shared_ptr<ifrt::SingleDeviceSharding>(
-//     ifrt::SingleDeviceSharding::Create(device, mem_kind).release()
-//   ));
-//   return ifrt_client_make_array_from_host_buffer()
-// }
-
 extern "C" HeldIfrtArray* ifrt_client_make_single_shard_array_from_host_buffer(
   ifrt::Client* client,
   void* data,
@@ -1532,6 +1519,8 @@ extern "C" HeldIfrtArray* ifrt_client_assemble_array_from_single_shards(
   ));
 }
 
+// we should deprecate this because is IFRT-PjRt specific
+// try use `ifrt_client_make_single_shard_array_from_host_buffer` instead
 extern "C" HeldIfrtArray* ifrt_pjrt_array_create(
     ifrt::PjRtClient *client,
     HeldValue<std::shared_ptr<xla::PjRtBuffer>> *buffer
@@ -1570,17 +1559,6 @@ extern "C" void
 ifrt_pjrt_loaded_executable_dtor(xla::ifrt::PjRtLoadedExecutable *exec) {
   delete exec;
 }
-
-// TODO replace with `Client::MakeArrayFromHostBuffer` and generalize to
-// `ifrt::Client`
-// extern "C" HeldIfrtArray *
-// ifrt_pjrt_ArrayFromHostBuffer(
-//     ifrt::PjRtClient *client,
-//     HeldValue<std::shared_ptr<xla::PjRtBuffer>> *buffer
-// ) {
-//   return reactant::capture(tsl::RCReference<ifrt::Array>(
-//       MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj()))));
-// }
 
 extern "C" void ifrt_array_dtor(HeldIfrtArray *array) { delete array; }
 
