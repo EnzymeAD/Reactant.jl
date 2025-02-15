@@ -58,6 +58,7 @@ struct NoSharding <: AbstractSharding end
 
 # This allows us to mark entire branches as NoSharding
 Base.getproperty(::NoSharding, x) = NoSharding()
+Base.getproperty(::NoSharding, x::Symbol) = NoSharding()
 
 function (::NoSharding)(client::XLA.Client, device, x::Union{AbstractArray,Number})
     buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, x, device), nothing)
