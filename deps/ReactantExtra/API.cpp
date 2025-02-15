@@ -1482,7 +1482,8 @@ ifrt_proxy_grpc_server_wait(ifrt::proxy::GrpcServer *server) {
 // by default, set `connection_timeout_in_minutes` to 2
 extern "C" ifrt::Client *
 ifrt_proxy_create_client(const char *c_proxy_server_address,
-                         int connection_timeout_in_minutes) {  std::string proxy_server_address = c_proxy_server_address;
+                         int connection_timeout_in_minutes) {
+  std::string proxy_server_address = c_proxy_server_address;
   ifrt::proxy::ClientConnectionOptions options = {
       absl::Minutes(connection_timeout_in_minutes),
       nullptr, // callback `on_disconnect`
@@ -1492,4 +1493,3 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
              ifrt::proxy::CreateClient(c_proxy_server_address, options))
       .release();
 }
-
