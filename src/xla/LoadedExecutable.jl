@@ -213,9 +213,12 @@ end
         ntuple(Val(K)) do i
             Base.@_inline_meta
             idx = (i - 1) * n_outs + j
-            return AsyncBuffer(
+            zzz = AsyncBuffer(
                 Buffer(outputs[idx]), future ? Future(future_res[idx]) : nothing
             )
+            @show convert(Array{Float32}, zzz)
+            @show i, j, zzz
+            return zzz
         end
     end
 end
@@ -277,9 +280,7 @@ function get_hlo_modules(exec::LoadedExecutable)
     nmodules = Ref{Int32}(0)
     GC.@preserve exec hlo_modules begin
         @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetHloModules(
-            exec.exec::Ptr{Cvoid},
-            hlo_modules::Ptr{Ptr{Cvoid}},
-            nmodules::Ptr{Cint},
+            exec.exec::Ptr{Cvoid}, hlo_modules::Ptr{Ptr{Cvoid}}, nmodules::Ptr{Cint}
         )::Cvoid
     end
     return map(HloModule, hlo_modules[][1:Int(nmodules[])])

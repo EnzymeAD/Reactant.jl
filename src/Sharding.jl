@@ -90,67 +90,101 @@ struct NamedSharding{D1,D2,P<:Tuple,D3} <: AbstractSharding
     end
 end
 
-function (sharding::NamedSharding)(client::XLA.Client, device, x::Number)
+function named_sharding_to_opsharding(sharding::NamedSharding, shape::Dims)
     (; mesh, partition_spec) = sharding
-    @assert length(partition_spec) == 0
-
-    data = map(mesh.device_ids) do device_id
-        return XLA.AsyncBuffer(
-            XLA.ArrayFromHostBuffer(client, fill(x), XLA.device_ordinal(client, device_id)),
-            nothing,
-        )
-    end
-    return data, ShardInfo(sharding, ntuple(Returns(()), length(mesh)))
-end
-
-function (sharding::NamedSharding)(client::XLA.Client, ::Nothing, x::AbstractArray)
-    (; mesh, partition_spec) = sharding
-    @assert length(partition_spec) == ndims(x)
+    @assert length(partition_spec) == length(shape)
 
     # Fast Path for replicating the input across all devices
     if all(Base.Fix2(===, nothing), partition_spec)
-        data = map(mesh.device_ids) do device_id
-            return XLA.AsyncBuffer(
-                XLA.ArrayFromHostBuffer(
-                    client,
-                    x,
-                    XLA.ClientGetAddressableDevice(
-                        client, XLA.device_ordinal(client, device_id)
-                    ),
-                ),
-                nothing,
-            )
-        end
-        device_to_array_slices = ntuple(
-            Returns(ntuple(i -> 1:size(x, i), ndims(x))), length(mesh)
-        )
-        return data, ShardInfo(sharding, device_to_array_slices)
-    end
-
-    ndevices = map(Base.Fix1(size, mesh), partition_spec)
-    for (sz, ndevice) in zip(size(x), ndevices)
-        @assert sz % ndevice == 0 "$(size(x)) must be divisible by $(ndevices)"
-    end
-    strides = size(x) .÷ ndevices
-
-    slices = Array{NTuple{ndims(x),UnitRange{Int64}},ndims(x)}(undef, ndevices)
-    for idx in CartesianIndices(slices)
-        idx_tup = Tuple(idx)
-        slices[idx] = Tuple(
-            (i1 + 1):i2 for (i1, i2) in zip((idx_tup .- 1) .* strides, idx_tup .* strides)
+        return XLA.OpSharding(
+            XLA.OpShardingType.Replicated,
+            Int64[],
+            Int64[],
+            false,
+            XLA.OpShardingType.T[],
+            Int64[],
+            Int64[],
+            Int64[],
+            Int32[],
+            false,
+            -1,
+            XLA.ShardGroupType.As,
         )
     end
 
-    device_to_array_slices = Array{eltype(slices),ndims(mesh)}(undef, size(mesh))
-    for idx in CartesianIndices(device_to_array_slices)
-        idx_tup = Tuple(idx)
-        slice_idx = ones(Int, ndims(slices))
-        for (axis_name, idxᵢ) in zip(mesh.axis_names, idx_tup)
-            dim = findfirst(==(axis_name), sharding.partition_spec)
-            dim !== nothing && (slice_idx[dim] = idxᵢ)
+    tile_dims = map(Base.Fix1(size, mesh), partition_spec)
+    num_tiles_before_replication = prod(tile_dims)
+    total_devices = length(mesh.device_ids)
+    replication_factor = cld(total_devices, num_tiles_before_replication)
+    replicate_on_last_tile_dim = replication_factor > 1
+    replicate_on_last_tile_dim && (tile_dims = (replication_factor, tile_dims...))
+
+    # Create tile assignment array
+    tile_assignment = Array{Int}(undef, tile_dims...)
+    devices = reshape(collect(mesh.device_ids), size(mesh))
+
+    # Find axes not used in partition_spec for replication
+    unused_axes = filter(axis -> axis ∉ partition_spec, mesh.axis_names)
+    unused_dims = map(axis -> size(mesh, axis), unused_axes)
+    replication_indices = CartesianIndices(Tuple(unused_dims))
+
+    # Fill tile assignment array
+    for indices in CartesianIndices(tile_assignment)
+        index_tuple = Tuple(indices)
+        actual_indices = replicate_on_last_tile_dim ? index_tuple[2:end] : index_tuple
+        repl_idx = replicate_on_last_tile_dim ? index_tuple[1] : 1
+
+        # Initialize device index array
+        device_index = ones(Int, ndims(mesh))
+
+        # Map partition dimensions to device indices
+        for (tile_idx, (pspec, dim_size)) in enumerate(zip(partition_spec, shape))
+            if pspec !== nothing
+                mesh_axis = findfirst(==(Symbol(pspec)), mesh.axis_names)
+                if mesh_axis !== nothing
+                    device_index[mesh_axis] = actual_indices[tile_idx]
+                end
+            end
         end
-        device_to_array_slices[idx] = slices[CartesianIndex(slice_idx...)]
+
+        # Handle replication for unused axes
+        for (i, axis) in enumerate(unused_axes)
+            axis_idx = findfirst(==(axis), mesh.axis_names)
+            if axis_idx !== nothing
+                device_index[axis_idx] = replication_indices[repl_idx][i]
+            end
+        end
+
+        # Assign device to tile
+        tile_assignment[indices] = devices[device_index...]
     end
+
+    return XLA.OpSharding(
+        XLA.OpShardingType.Other,
+        Int64[],
+        Int64[],
+        replicate_on_last_tile_dim,
+        XLA.OpShardingType.T[],
+        collect(Int64, size(tile_assignment)),
+        vec(tile_assignment),
+        Int64[],
+        Int32[],
+        false,
+        -1,
+        XLA.ShardGroupType.As,
+    )
+end
+
+function (sharding::NamedSharding)(
+    client::XLA.Client, ::Nothing, x::Union{AbstractArray,Number}
+)
+    (; mesh, partition_spec) = sharding
+    @assert length(partition_spec) == ndims(x)
+
+    opsharding = named_sharding_to_opsharding(sharding, size(x))
+    device_to_array_slices, _ = XLA.compute_array_indices_and_partition_spec(
+        opsharding, size(x), mesh
+    )
 
     data = ntuple(length(mesh)) do i
         XLA.AsyncBuffer(
@@ -165,7 +199,7 @@ function (sharding::NamedSharding)(client::XLA.Client, ::Nothing, x::AbstractArr
         )
     end
 
-    return data, ShardInfo(sharding, Tuple(vec(device_to_array_slices)))
+    return data, ShardInfo(sharding, device_to_array_slices)
 end
 
 # Given Sharding + Array --> ShardInfo

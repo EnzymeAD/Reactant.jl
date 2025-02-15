@@ -112,12 +112,14 @@ function generate_device_list(sharding::OpSharding)
         # Generate device IDs using iota
         num_devices = prod(sharding.iota_reshape_dims)
         iota_devices = collect(
-            Int64, reshape(0:(num_devices - 1), sharding.iota_reshape_dims...)
+            Int64, reshape(0:(num_devices - 1), reverse(sharding.iota_reshape_dims)...)
         )
 
         # Permute the iota array if iota_transpose_perm is provided
         if !isempty(sharding.iota_transpose_perm)
-            iota_devices = permutedims(iota_devices, Tuple(sharding.iota_transpose_perm))
+            iota_devices = permutedims(
+                iota_devices, reverse(Tuple(sharding.iota_transpose_perm))
+            )
         end
 
         # Flatten the permuted iota array to get tile_assignment_devices
@@ -199,13 +201,12 @@ function compute_array_indices_and_partition_spec(
 
         device_to_array_indices = map(mesh.device_ids) do device_id
             tile_index = findfirst(==(device_id), tile_assignment)
-            @assert tile_index !== nothing "Device ID $device_id not found in tile \
-                                            assignment $tile_assignment"
-            index_tup = if !sharding.replicate_on_last_tile_dim
-                Tuple(tile_index.I)
-            else
-                Tuple(tile_index.I[2:end])
+            if tile_index === nothing
+                error("Device ID $device_id not found in tile assignment \
+                        $tile_assignment")
             end
+            index_tup = Tuple(tile_index.I)
+            sharding.replicate_on_last_tile_dim && (index_tup = index_tup[2:end])
             tile_start = (index_tup .- 1) .* tile_sizes .+ 1
             tile_end = index_tup .* tile_sizes
             return ntuple(i -> tile_start[i]:tile_end[i], N)

@@ -58,6 +58,8 @@ end
 
 predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
 
+fn_test2(x) = x .+ x'
+
 @testset "Sharding Across 8 Devices" begin
     if length(addressable_devices) ≥ 8
         mesh = Sharding.Mesh(reshape(collect(Int64, 0:7), (4, 2)), ("data", "model"))
@@ -67,6 +69,13 @@ predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
                pretend test for testing purposes"
         mesh = Sharding.Mesh(reshape([0], 1, 1), ("data", "model"))
         fake_run = true
+    end
+
+    x = reshape(collect(Float32, 1:16), 4, 4)
+    x_ra = Reactant.to_rarray(x; sharding=Sharding.NamedSharding(mesh, ("data", "model")))
+
+    if !fake_run
+        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
     end
 
     samples_sharding = Sharding.NamedSharding(mesh, (nothing, "data"))
