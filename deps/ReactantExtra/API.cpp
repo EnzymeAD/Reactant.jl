@@ -1506,6 +1506,32 @@ extern "C" HeldIfrtArray* ifrt_client_make_single_shard_array_from_host_buffer(
   );
 }
 
+// all arrays are assumed to have same DType
+extern "C" HeldIfrtArray* ifrt_client_assemble_array_from_single_shards(
+  ifrt::Client* client,
+  int ndims,
+  const int64_t* c_shape,
+  HeldValue<std::shared_ptr<const ifrt::Sharding>>* sharding,
+  int narrays,
+  HeldIfrtArray** c_arrays,
+  int c_semantics
+) {
+  auto shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
+  std::vector<tsl::RCReference<ifrt::Array>> arrays;
+  for (int i = 0; i < narrays; i++) {
+    arrays.emplace_back(c_arrays[i]->obj());
+  }
+  auto semantics = static_cast<ifrt::ArrayCopySemantics>(c_semantics);
+  return reactant::capture(MyValueOrThrow(
+    client->AssembleArrayFromSingleDeviceArrays(
+      shape,
+      sharding->obj(),
+      static_cast<absl::Span<tsl::RCReference<xla::ifrt::Array>>>(arrays),
+      semantics
+    )
+  ));
+}
+
 extern "C" HeldIfrtArray* ifrt_pjrt_array_create(
     ifrt::PjRtClient *client,
     HeldValue<std::shared_ptr<xla::PjRtBuffer>> *buffer
