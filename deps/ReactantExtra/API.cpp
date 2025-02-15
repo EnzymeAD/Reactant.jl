@@ -1419,3 +1419,59 @@ extern "C" void
 FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
   delete hlo_module;
 }
+
+// right now only making it available for TPU
+// in the future, we would like this for CPU and GPU PjRt backends too
+extern "C" ifrt::proxy::GrpcServer* ifrt_proxy_grpc_server_create_from_ifrt_client_factory_tpu(const char* tpu_path, const char **error) {
+  // taken from `MakeTPUClient`
+  std::string tpu_library_path;
+  if (auto path = llvm::sys::Process::GetEnv(kEnvTpuLibraryPath)) {
+    tpu_library_path = *path;
+  } else if (tpu_path) {
+    tpu_library_path = std::string(tpu_path);
+  } else {
+    *error = "Could not find TPU path";
+    return nullptr;
+  }
+
+  const PJRT_Api *pluginLoad =
+  LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
+  if (pluginLoad == nullptr)
+    return nullptr;
+  auto tpu_status = InitializePjrtPlugin("tpu", error);
+  if (tpu_status)
+    return nullptr;
+
+  return MyValueOrThrow(
+    xla::ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
+      address,
+      []() -> absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> {
+        xla::PjRtClient* pjrt_client = GetCApiClient("TPU");
+        return std::shared_ptr<xla::ifrt::Client>(
+          xla::ifrt::PjRtClient::Create(std::move(pjrt_cpu_client)).release()
+        );
+      }
+    )
+  ).release();
+}
+
+extern "C" void ifrt_proxy_grpc_server_dtor(ifrt::proxy::GrpcServer* server) { delete server; }
+
+extern "C" const char* ifrt_proxy_grpc_server_address(ifrt::proxy::GrpcServer* server) {
+  return cstr_from_string(server->address());
+}
+
+extern "C" const char* ifrt_proxy_grpc_server_wait(ifrt::proxy::GrpcServer* server) { server->Wait(); }
+
+// `c_proxy_server_address` must be of the form `<backend-transport>:<backend-address>`; e.g. "grpc:localhost"
+// by default, set `connection_timemout_in_minutes` to 2
+extern "C" ifrt::Client* ifrt_proxy_create_client(const char* c_proxy_server_address, int connection_timeout_in_minutes) {
+  std::string proxy_server_address = c_proxy_server_address;
+  ifrt::proxy::ClientConnectionOptions options = {
+    absl::Minutes(connection_timemout_in_minutes),
+    nullptr, // callback `on_disconnect`
+    nullptr, // callback `on_connection_update`
+  };
+  return MyValueOrThrow(ifrt::proxy::CreateClient(c_proxy_server_address, options)).release();
+}
+
