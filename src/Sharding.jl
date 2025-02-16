@@ -2,11 +2,6 @@ module Sharding
 
 using ..Reactant: Reactant, XLA
 
-# NOTE: PjRt doesn't provide a native sharding mechanism, so this file implements sharding
-#       at the julia level. With our migration to IFRt, we should be able to rewrite this
-#       logic to directly use the sharded arrays from IFRt. This would also simplify our
-#       logic of storing multiple arrays in ConcreteRArray struct
-
 struct Mesh{D,ND}
     device_ids::NTuple{ND,Int}
     shape::Dims{D}
@@ -34,6 +29,15 @@ struct Mesh{D,ND}
         @assert allunique(device_ids)
         return new{D,D1}(device_ids, shape, Symbol.(axis_names))
     end
+end
+
+Base.vec(mesh::Mesh) = vec(device_ids(mesh))
+
+function device_ids(mesh::Mesh)
+    # XXX: Do we need to permute the device ids?
+    return permutedims(
+        reshape(collect(Int64, mesh.device_ids), size(mesh)...), reverse(1:ndims(mesh))
+    )
 end
 
 Base.length(::Mesh{D,ND}) where {D,ND} = ND
@@ -65,8 +69,8 @@ function (::NoSharding)(client::XLA.Client, device, x::Union{AbstractArray,Numbe
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
 
-# TODO: At the core create a DimSharding Type. We can convert the other sharding types to
-#       this type
+# TODO: At the core we should have an HloSharding Type that doesn't need to store the
+#       partition spec and other details
 
 # XXX: multiple axes partitioning -- supported by shardy (not in Jax I think)
 struct NamedSharding{D1,D2,P<:Tuple,D3} <: AbstractSharding
@@ -94,105 +98,16 @@ struct NamedSharding{D1,D2,P<:Tuple,D3} <: AbstractSharding
     end
 end
 
-function named_sharding_to_opsharding(sharding::NamedSharding, shape::Dims)
-    (; mesh, partition_spec) = sharding
-    @assert length(partition_spec) == length(shape)
-
-    # Fast Path for replicating the input across all devices
-    if all(Base.Fix2(===, nothing), partition_spec)
-        return XLA.OpSharding(
-            XLA.OpShardingType.Replicated,
-            Int64[],
-            Int64[],
-            false,
-            XLA.OpShardingType.T[],
-            Int64[],
-            Int64[],
-            Int64[],
-            Int32[],
-            false,
-            -1,
-            XLA.ShardGroupType.As,
-        )
-    end
-
-    tile_dims = map(Base.Fix1(size, mesh), partition_spec)
-    num_tiles_before_replication = prod(tile_dims)
-    total_devices = length(mesh.device_ids)
-    replication_factor = cld(total_devices, num_tiles_before_replication)
-    replicate_on_last_tile_dim = replication_factor > 1
-    replicate_on_last_tile_dim && (tile_dims = (replication_factor, tile_dims...))
-
-    # Create tile assignment array
-    tile_assignment = Array{Int}(undef, tile_dims...)
-    devices = reshape(collect(mesh.device_ids), size(mesh))
-
-    # Find axes not used in partition_spec for replication
-    unused_axes = filter(axis -> axis ∉ partition_spec, mesh.axis_names)
-    unused_dims = map(axis -> size(mesh, axis), unused_axes)
-    replication_indices = CartesianIndices(Tuple(unused_dims))
-
-    # Fill tile assignment array
-    for indices in CartesianIndices(tile_assignment)
-        index_tuple = Tuple(indices)
-        actual_indices = replicate_on_last_tile_dim ? index_tuple[2:end] : index_tuple
-        repl_idx = replicate_on_last_tile_dim ? index_tuple[1] : 1
-
-        # Initialize device index array
-        device_index = ones(Int, ndims(mesh))
-
-        # Map partition dimensions to device indices
-        for (tile_idx, (pspec, dim_size)) in enumerate(zip(partition_spec, shape))
-            if pspec !== nothing
-                mesh_axis = findfirst(==(Symbol(pspec)), mesh.axis_names)
-                if mesh_axis !== nothing
-                    device_index[mesh_axis] = actual_indices[tile_idx]
-                end
-            end
-        end
-
-        # Handle replication for unused axes
-        for (i, axis) in enumerate(unused_axes)
-            axis_idx = findfirst(==(axis), mesh.axis_names)
-            if axis_idx !== nothing
-                device_index[axis_idx] = replication_indices[repl_idx][i]
-            end
-        end
-
-        # Assign device to tile
-        tile_assignment[indices] = devices[device_index...]
-    end
-
-    tile_assignment = permutedims(
-        tile_assignment, reverse(collect(Int64, 1:ndims(tile_assignment)))
-    )
-
-    return XLA.OpSharding(
-        XLA.OpShardingType.Other,
-        Int64[],
-        Int64[],
-        replicate_on_last_tile_dim,
-        XLA.OpShardingType.T[],
-        collect(Int64, size(tile_assignment)),
-        vec(tile_assignment),
-        Int64[],
-        Int32[],
-        false,
-        -1,
-        XLA.ShardGroupType.As,
-    )
-end
-
 function (sharding::NamedSharding)(
     client::XLA.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
     (; mesh, partition_spec) = sharding
     @assert length(partition_spec) == ndims(x)
 
-    opsharding = named_sharding_to_opsharding(sharding, size(x))
     device_to_array_slices, _ = XLA.compute_array_indices_and_partition_spec(
-        opsharding, size(x), mesh
+        XLA.CondensedOpSharding(ShardingWithShape(sharding, size(x))), size(x), mesh
     )
+    devices_list = vec(mesh)
 
     data = ntuple(length(mesh)) do i
         XLA.AsyncBuffer(
@@ -200,7 +115,7 @@ function (sharding::NamedSharding)(
                 client,
                 x[device_to_array_slices[i]...],
                 XLA.ClientGetAddressableDevice(
-                    client, XLA.device_ordinal(client, mesh.device_ids[i])
+                    client, XLA.device_ordinal(client, devices_list[i])
                 ),
             ),
             nothing,
@@ -210,10 +125,79 @@ function (sharding::NamedSharding)(
     return data, ShardInfo(sharding, device_to_array_slices)
 end
 
+struct ShardingWithShape{S,D} <: AbstractSharding
+    sharding::S
+    shape::D
+end
+
+# XXX: we need to make the performance of this function better
+function XLA.CondensedOpSharding(sharding_and_shape::ShardingWithShape{<:NamedSharding})
+    (; sharding, shape) = sharding_and_shape
+    (; mesh, partition_spec) = sharding
+    @assert length(partition_spec) == length(shape)
+
+    partition_spec = reverse(partition_spec)
+    shape = reverse(shape)
+
+    array_mapping = __get_array_mapping(partition_spec)
+    mesh_axis_position = Dict(name => i for (i, name) in enumerate(mesh.axis_names))
+
+    replicated_mesh_axes = Tuple{Int64,Int64}[]
+    for (i, axis_name) in enumerate(mesh.axis_names)
+        if !haskey(array_mapping, axis_name)
+            push!(replicated_mesh_axes, (i, size(mesh, axis_name)))
+        end
+    end
+
+    tile_assignment = device_ids(mesh)
+
+    # Fast Path for replicating the input across all devices
+    if length(replicated_mesh_axes) == ndims(mesh)
+        return XLA.CondensedOpSharding{ndims(tile_assignment)}(
+            XLA.OpShardingType.Replicated, false, tile_assignment
+        )
+    end
+
+    # Calculate new mesh shape and permutation
+    mesh_permutation = Int[]
+    new_mesh_shape = ones(Int, length(shape))
+
+    # Sort array mapping by position to ensure consistent order
+    for (name, pos) in sort(collect(array_mapping); by=x -> x[2])
+        new_mesh_shape[pos] *= size(mesh, name)
+        push!(mesh_permutation, mesh_axis_position[name])
+    end
+
+    # Handle replicated dimensions at the end
+    replicate_on_last_tile_dim = false
+    if !isempty(replicated_mesh_axes)
+        replicated_size = prod(last(axis) for axis in replicated_mesh_axes)
+        push!(new_mesh_shape, replicated_size)
+        append!(mesh_permutation, first.(replicated_mesh_axes))
+
+        tile_assignment = reshape(tile_assignment, new_mesh_shape...)
+        push!(mesh_permutation, length(mesh_permutation) + 1)
+        replicate_on_last_tile_dim = true
+    end
+
+    permuted = permutedims(tile_assignment, mesh_permutation)
+    final_assignment = reshape(permuted, new_mesh_shape...)
+
+    return XLA.CondensedOpSharding{ndims(final_assignment)}(
+        XLA.OpShardingType.Other, replicate_on_last_tile_dim, final_assignment
+    )
+end
+
 # Given Sharding + Array --> ShardInfo
 struct ShardInfo{S,D} <: AbstractSharding
     sharding::S
     device_to_array_slices::D
+end
+
+function XLA.CondensedOpSharding(sharding_and_shape::ShardingWithShape{<:ShardInfo})
+    return XLA.CondensedOpSharding(
+        ShardingWithShape(sharding_and_shape.sharding.sharding, sharding_and_shape.shape)
+    )
 end
 
 function Base.getproperty(sharding::ShardInfo, name::Symbol)
@@ -247,6 +231,18 @@ end
 function is_sharded(x::Number)
     hasfield(typeof(x), :sharding) && return is_sharded(x.sharding)
     return false
+end
+
+function __get_array_mapping(partition_spec)
+    mapping = Dict{Symbol,Int64}()
+    for (i, axis) in enumerate(partition_spec)
+        axis === nothing && continue
+        axis isa Symbol && (axis = (axis,))
+        for axis_name in axis
+            mapping[axis_name] = i
+        end
+    end
+    return mapping
 end
 
 end

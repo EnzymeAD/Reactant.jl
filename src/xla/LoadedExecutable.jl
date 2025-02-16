@@ -225,12 +225,12 @@ function Compile(
     device::Union{Device,Nothing},
     mod::MLIR.IR.Module;
     is_sharded::Bool=false,
-    mesh_ids::Vector{Int64}=Int64[],
+    device_ids::Vector{Int64}=Int64[],
     num_outputs::Int64,
     num_parameters::Int64,
 )
     device_id = is_sharded ? Int64(-1) : Int64(device_ordinal(client, device))
-    mesh_ids = Int64.(device_ordinal.((client,), mesh_ids))
+    mesh_ids = Int64.(device_ordinal.((client,), device_ids))
     GC.@preserve client mod begin
         exec = @ccall MLIR.API.mlir_c.ClientCompile(
             client.client::Ptr{Cvoid},

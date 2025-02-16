@@ -78,18 +78,33 @@ fn_test2(x) = x .+ x'
         @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
     end
 
-    samples_sharding = Sharding.NamedSharding(mesh, (nothing, "data"))
-    w1_sharding = Sharding.NamedSharding(mesh, ("model", nothing))
-
-    samples = reshape(collect(Float32, 1:84), 7, 12)
-    w1 = reshape(collect(Float32, 1:28), 4, 7)
+    samples = reshape(collect(Float32, 1:48), 4, 12)
+    w1 = reshape(collect(Float32, 1:16), 4, 4)
     w2 = reshape(collect(Float32, 1:32), 8, 4)
 
-    samples_ra = Reactant.to_rarray(samples; sharding=samples_sharding)
-    w1_ra = Reactant.to_rarray(w1; sharding=w1_sharding)
-    w2_ra = Reactant.to_rarray(w2)
+    for (samples_sharding, w1_sharding, w2_sharding) in zip(
+        (
+            Sharding.NamedSharding(mesh, ("model", "data")),
+            Sharding.NamedSharding(mesh, ("model", nothing)),
+            Sharding.NamedSharding(mesh, (nothing, "data")),
+        ),
+        (
+            Sharding.NamedSharding(mesh, ("model", "data")),
+            Sharding.NamedSharding(mesh, (nothing, "data")),
+            Sharding.NoSharding(),
+        ),
+        (
+            Sharding.NamedSharding(mesh, ("model", "data")),
+            Sharding.NoSharding(),
+            Sharding.NoSharding(),
+        ),
+    )
+        samples_ra = Reactant.to_rarray(samples; sharding=samples_sharding)
+        w1_ra = Reactant.to_rarray(w1; sharding=w1_sharding)
+        w2_ra = Reactant.to_rarray(w2; sharding=w2_sharding)
 
-    if !fake_run
-        @test Array(@jit(predict(samples_ra, w1_ra, w2_ra))) ≈ predict(samples, w1, w2)
+        if !fake_run
+            @test Array(@jit(predict(samples_ra, w1_ra, w2_ra))) ≈ predict(samples, w1, w2)
+        end
     end
 end

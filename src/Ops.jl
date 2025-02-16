@@ -2143,7 +2143,7 @@ end
     return mesh(
         mod,
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
-        collect(Int64, m.device_ids);
+        vec(m);
         location,
     )
 end

@@ -1076,7 +1076,21 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
+            condensed_op_sharding = Reactant.Sharding.XLA.CondensedOpSharding(
+                linear_parameter_shardings[i]
+            )
             if Reactant.Sharding.is_sharded(carg)
+                # Check if the sharding provided is same as the one we have
+                arg_condensed_op_sharding = Reactant.Sharding.XLA.CondensedOpSharding(
+                    Reactant.Sharding.ShardingWithShape(carg.sharding, size(carg))
+                )
+
+                # XXX: Change to error
+                if arg_condensed_op_sharding != condensed_op_sharding
+                    @warn "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                end
+                # @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+
                 push!(flatten_code, :($usbuf = $flatcode.data))
                 for j in 1:length(mesh)
                     sbuf = Symbol(:sbuf_, i, "_", j)
@@ -1085,12 +1099,13 @@ function codegen_flatten!(
                 end
             else
                 push!(flatten_code, :($usbuf = $flatcode))
-                device_to_array_slices, _ = XLA.compute_array_indices_and_partition_spec(
-                    linear_parameter_shardings[i], size(carg), mesh
+                device_to_array_slices = XLA.sharding_to_concrete_array_indices(
+                    condensed_op_sharding, size(carg), mesh
                 )
+                device_ids = vec(mesh)
                 for j in 1:length(mesh)
                     buf = Symbol(:buf_, i, :_, j)
-                    device_id = mesh.device_ids[j]
+                    device_id = device_ids[j]
                     slice = device_to_array_slices[j]
                     push!(
                         flatten_code,
@@ -1449,12 +1464,9 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # compile MLIR module to XLA executable
+        device_ids = mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh) : Int64[]
         mlir_fn_res.is_sharded && (device = nothing)
-        mesh_ids = if mlir_fn_res.is_sharded
-            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
-        else
-            Int64[]
-        end
+
         exec = XLA.Compile(
             client,
             device,
@@ -1462,7 +1474,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
             num_outputs=length(mlir_fn_res.linear_results),
             num_parameters=length(mlir_fn_res.linear_args),
             mlir_fn_res.is_sharded,
-            mesh_ids,
+            device_ids,
         )
 
         return mod, exec, mlir_fn_res, device, client
@@ -1487,14 +1499,6 @@ function compile(f, args; sync=false, kwargs...)
     result_stores = Dict{Tuple,Symbol}()
     path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Tuple}() : nothing
 
-    linear_parameter_shardings = if mlir_fn_res.is_sharded
-        # The sharding info here is exclusively used for the parameters that weren't sharded
-        # before hand
-        XLA.get_parameter_shardings(exec)
-    else
-        nothing
-    end
-
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(
         linear_args,
@@ -1502,7 +1506,7 @@ function compile(f, args; sync=false, kwargs...)
         result_stores,
         mlir_fn_res.is_sharded,
         mlir_fn_res.sharding_mesh,
-        linear_parameter_shardings,
+        XLA.get_parameter_shardings(exec),
         client,
     )
 
@@ -1513,15 +1517,10 @@ function compile(f, args; sync=false, kwargs...)
         donated_args_mask,
         length(linear_results),
         mlir_fn_res.is_sharded,
-        if mlir_fn_res.is_sharded
-            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
-        else
-            Int64[]
-        end,
+        mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh) : Int64[],
     )
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
-        # Generate a tuple of DeviceToArraySlices and PartitionSpecs
         output_shardings = XLA.get_output_shardings(exec)
         XLA.compute_array_indices_and_partition_spec.(
             output_shardings,

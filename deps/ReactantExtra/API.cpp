@@ -1003,11 +1003,11 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
                              .c_str());
     }
 
-    argument_handles[mesh_id].reserve(num_args);
+    argument_handles[device_idx].reserve(num_args);
     for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
       // Assuming op_args is a flat array of size num_devices * num_args
       // where arguments for each device are contiguous
-      argument_handles[mesh_id].push_back(
+      argument_handles[device_idx].push_back(
           op_args[mesh_id * num_args + arg_idx]);
     }
   }
@@ -1062,10 +1062,10 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
     int64_t mesh_id = mesh_ids[device_idx];
     for (int result_idx = 0; result_idx < num_results; ++result_idx) {
       int flat_index = mesh_id * num_results + result_idx;
-      op_results[flat_index] = results[mesh_id][result_idx].release();
+      op_results[flat_index] = results[device_idx][result_idx].release();
       if (future_val) {
         future_results[flat_index] =
-            new FutureType((*returned_futures)[mesh_id]);
+            new FutureType((*returned_futures)[device_idx]);
       }
     }
   }
