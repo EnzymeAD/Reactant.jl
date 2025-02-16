@@ -229,25 +229,10 @@ function make_mlir_fn(
                 is_sharded = true
                 traced_args_to_shardings[v] = k.sharding
                 if !haskey(mesh_cache, k.sharding.mesh)
-                    mesh_op_attrs = Reactant.Ops.mesh(mod, k.sharding.mesh)
-                    mesh_cache[k.sharding.mesh] = mesh_op_attrs
+                    mesh_cache[k.sharding.mesh] = Reactant.Ops.mesh(mod, k.sharding.mesh)
                 end
             end
         end
-    end
-
-    if is_sharded
-        unique_meshes = unique([m.mesh for (k, m) in traced_args_to_shardings])
-        # TODO: support multiple meshes
-        @assert length(unique_meshes) == 1 "Currently we support using a single mesh"
-        # sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
-        # @assert allequal(sorted_devices) "All meshes must have the same device ids"
-        # num_partitions = length(first(sorted_devices))
-        sharding_mesh = first(unique_meshes)
-        mesh_op_attrs = mesh_cache[sharding_mesh]
-        num_partitions = length(sharding_mesh)
-    else
-        sharding_mesh = nothing
     end
 
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
@@ -260,59 +245,6 @@ function make_mlir_fn(
 
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
-
-    if is_sharded
-        # Here we construct tensor sharding annotations for the function arguments
-        linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
-        for (i, arg) in enumerate(linear_args)
-            if haskey(traced_args_to_shardings, arg)
-                if ndims(arg) == 0
-                    throw(
-                        ErrorException(
-                            "Sharding annotations are not supported for scalar arguments"
-                        ),
-                    )
-                end
-                sharding = traced_args_to_shardings[arg]
-                mesh_op_attrs = mesh_cache[sharding.mesh]
-                @assert length(sharding.partition_spec) == ndims(arg)
-
-                dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(undef, ndims(arg))
-                for (j, name) in enumerate(sharding.partition_spec)
-                    if name === nothing
-                        axes = MLIR.IR.Attribute[]
-                    else
-                        @assert name isa Symbol
-                        axes = [
-                            MLIR.API.sdyAxisRefAttrGet(
-                                ctx, String(name), MLIR.API.MlirAttribute(C_NULL)
-                            ),
-                        ]
-                    end
-                    dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
-                        ctx, length(axes), axes, sharding.is_closed[j], sharding.priority[j]
-                    )
-                end
-
-                # Currently we don't support replicated axes from user input, we do
-                # implicitly via shardy
-                linear_arg_shardings[i] = MLIR.IR.Attribute(
-                    MLIR.API.sdyTensorShardingAttrGet(
-                        ctx,
-                        mesh_op_attrs.sym_name,
-                        length(dimension_sharding_attrs),
-                        if do_transpose
-                            reverse(dimension_sharding_attrs)
-                        else
-                            dimension_sharding_attrs
-                        end,
-                        0,
-                        MLIR.API.MlirAttribute[],
-                    ),
-                )
-            end
-        end
-    end
 
     @assert MLIR.IR._has_block()
 
@@ -412,9 +344,26 @@ function make_mlir_fn(
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
     if is_sharded
+        unique_meshes = unique([m.mesh for (k, m) in traced_args_to_shardings])
+
+        # TODO: support multiple meshes
+        if length(unique_meshes) > 1
+            error("Currently we support using a single mesh")
+            sorted_devices = [sort(vec(m)) for m in unique_meshes]
+            @assert allequal(sorted_devices) "All meshes must have the same device ids"
+        end
+        sharding_mesh = first(unique_meshes)
+        num_partitions = length(sharding_mesh)
+
+        linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
+
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
+                sharding = traced_args_to_shardings[arg]
+                linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
+                    ctx, sharding, mesh_cache[sharding.mesh].sym_name; do_transpose
+                )
                 MLIR.API.mlirFuncSetArgAttr(
                     func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
                 )
@@ -426,20 +375,16 @@ function make_mlir_fn(
         for i in mutated_args
             arg = linear_args[i]
             if has_residx(arg) && haskey(traced_args_to_shardings, arg)
-                residx = -1
-                for (j, res) in enumerate(linear_results)
-                    if res === arg
-                        residx = j
-                        break
-                    end
-                end
-                @assert residx > 0
+                residx = findfirst(Base.Fix1(===, arg), linear_results)
+                @assert residx !== nothing
                 result_not_replicated[residx] = true
                 MLIR.API.mlirFuncSetResultAttr(
                     func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
                 )
             end
         end
+    else
+        sharding_mesh = nothing
     end
 
     MLIR.API.mlirOperationDestroy(func.operation)

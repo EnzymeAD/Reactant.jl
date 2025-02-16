@@ -110,18 +110,26 @@ end
 function generate_device_list(sharding::OpSharding)
     if !isempty(sharding.iota_reshape_dims)
         # Generate device IDs using iota
-        num_devices = prod(sharding.iota_reshape_dims)
-        iota_devices = collect(
-            Int64, reshape(0:(num_devices - 1), sharding.iota_reshape_dims...)
-        )
+        num_devices = prod(sharding.tile_assignment_dimensions)
 
         # Permute the iota array if iota_transpose_perm is provided
+        # We need to ensure that we account for the col-major ordering in julia. See the
+        # unit tests for examples.
         if !isempty(sharding.iota_transpose_perm)
-            iota_devices = permutedims(iota_devices, Tuple(sharding.iota_transpose_perm))
-        end
+            # XXX: Simplify the permutedims
+            iota_devices = collect(
+                Int64, reshape(0:(num_devices - 1), reverse(sharding.iota_reshape_dims)...)
+            )
 
-        # Flatten the permuted iota array to get tile_assignment_devices
-        return vec(iota_devices)
+            iota_devices = permutedims(iota_devices, reverse(1:ndims(iota_devices)))
+            iota_devices = permutedims(iota_devices, sharding.iota_transpose_perm)
+            iota_devices = permutedims(iota_devices, reverse(1:ndims(iota_devices)))
+
+            return vec(iota_devices)
+        else
+            @assert num_devices == prod(sharding.iota_reshape_dims)
+            return collect(0:(num_devices - 1))
+        end
     end
     return sharding.tile_assignment_devices
 end
@@ -167,6 +175,8 @@ function Base.:(==)(a::CondensedOpSharding, b::CondensedOpSharding)
 end
 
 function CondensedOpSharding(sharding::OpSharding)
+    @show sharding
+
     @assert isempty(sharding.last_tile_dims) "Last Tile dimensions are not supported \
                                               yet!"
     @assert isempty(sharding.tile_dimensions) "Tile dimensions are not supported yet! \
@@ -213,32 +223,28 @@ function sharding_to_concrete_array_indices(
 
         # Calculate indices for each dimension
         axis_indices = map(zip(shape, partitions)) do (dim, n_shards)
-            if n_shards == 1
-                [Colon()]
-            elseif n_shards > 1
-                shard_size, remainder = divrem(dim, n_shards)
-                @assert remainder == 0 "Dimension $dim not evenly divisible by $n_shards \
-                                        shards"
-                [(i * shard_size + 1):((i + 1) * shard_size) for i in 0:(n_shards - 1)]
-            else
-                error("Invalid number of shards: $n_shards")
-            end
+            @assert dim > 0 "Invalid dimension: $dim"
+            @assert n_shards > 0 "Invalid number of shards: $n_shards"
+            n_shards == 1 && return [1:dim]
+            shard_size, remainder = divrem(dim, n_shards)
+            @assert remainder == 0 "Dimension $dim not evenly divisible by $n_shards shards"
+            return [(i * shard_size + 1):((i + 1) * shard_size) for i in 0:(n_shards - 1)]
         end
 
-        # XXX: Fix performance of this
-        indices = Vector{NTuple{length(shape),Any}}(undef, length(mesh))
-        tile_assignment = sharding.tile_assignment
-        device_iter = Iterators.Stateful(tile_assignment)
+        @show vec(sharding.tile_assignment)
 
+        indices = Dict{Int,NTuple{N,UnitRange{Int}}}()
+        device_idx = 1
         for idx_tuple in Iterators.product(axis_indices...)
             for _ in 1:num_replicas
-                device = popfirst!(device_iter)
-                # XXX: incorrect if devices are not contiguous
-                indices[device + 1] = reverse(idx_tuple)
+                indices[sharding.tile_assignment[device_idx]] = reverse(idx_tuple)
+                device_idx += 1
             end
         end
 
-        return Tuple(indices)
+        @show sort(collect(indices); by=x -> x[1])
+
+        return map(Base.Fix1(getindex, indices), mesh.device_ids)
     else
         error("Unsupported sharding type: $(sharding.type)")
     end

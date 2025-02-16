@@ -1080,15 +1080,12 @@ function codegen_flatten!(
                 linear_parameter_shardings[i]
             )
             if Reactant.Sharding.is_sharded(carg)
-                # Check if the sharding provided is same as the one we have
-                arg_condensed_op_sharding = Reactant.Sharding.XLA.CondensedOpSharding(
-                    Reactant.Sharding.ShardingWithShape(carg.sharding, size(carg))
-                )
-
-                # XXX: Change to error
-                if arg_condensed_op_sharding != condensed_op_sharding
-                    @warn "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
-                end
+                # Currently disabling the error since we roundtrip from MHLO to generate
+                # the shardings
+                # # Check if the sharding provided is same as the one we have
+                # arg_condensed_op_sharding = Reactant.Sharding.XLA.CondensedOpSharding(
+                #     Reactant.Sharding.ShardingWithShape(carg.sharding, size(carg))
+                # )
                 # @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 
                 push!(flatten_code, :($usbuf = $flatcode.data))
@@ -1522,6 +1519,11 @@ function compile(f, args; sync=false, kwargs...)
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
         output_shardings = XLA.get_output_shardings(exec)
+        # XXX: remove
+        for (i, sd) in enumerate(output_shardings)
+            @info("i: $i \t", sd)
+        end
+        # XXX: remove
         XLA.compute_array_indices_and_partition_spec.(
             output_shardings,
             size.(mlir_fn_res.linear_results),

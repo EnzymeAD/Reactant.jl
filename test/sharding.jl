@@ -108,3 +108,58 @@ fn_test2(x) = x .+ x'
         end
     end
 end
+
+# Tests from the examples in
+# https://github.com/openxla/xla/blob/96d6678053d867099a42be9001c49b2ed7111afd/xla/hlo/ir/tile_assignment.h#L53-L68
+@testset "Device List from Iota Tile" begin
+    @test Reactant.XLA.generate_device_list(
+        Reactant.XLA.OpSharding(
+            Reactant.XLA.OpShardingType.Other,
+            Int64[],
+            Int64[],
+            true,
+            Reactant.XLA.OpShardingType.T[],
+            [4, 4, 1],
+            Int64[],
+            [4, 2, 2],
+            Int32[1, 2, 3],
+            false,
+            0,
+            Reactant.XLA.ShardGroupType.As,
+        ),
+    ) == collect(0:15)
+
+    @test Reactant.XLA.generate_device_list(
+        Reactant.XLA.OpSharding(
+            Reactant.XLA.OpShardingType.Other,
+            Int64[],
+            Int64[],
+            true,
+            Reactant.XLA.OpShardingType.T[],
+            [4, 4, 1],
+            Int64[],
+            [4, 2, 2],
+            Int32[2, 1, 3],
+            false,
+            0,
+            Reactant.XLA.ShardGroupType.As,
+        ),
+    ) == [0, 1, 4, 5, 8, 9, 12, 13, 2, 3, 6, 7, 10, 11, 14, 15]
+
+    @test Reactant.XLA.generate_device_list(
+        Reactant.XLA.OpSharding(
+            Reactant.XLA.OpShardingType.Other,
+            Int64[],
+            Int64[],
+            true,
+            Reactant.XLA.OpShardingType.T[],
+            [2, 4],
+            Int64[],
+            [4, 2],
+            Int32[2, 1],
+            false,
+            0,
+            Reactant.XLA.ShardGroupType.As,
+        ),
+    ) == [0, 2, 4, 6, 1, 3, 5, 7]
+end

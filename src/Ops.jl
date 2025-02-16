@@ -1960,8 +1960,6 @@ end
             tr
         else
             if typeof(tr) != typeof(fr)
-                @show tr.mlir_data
-                @show fr.mlir_data
                 @assert typeof(tr) == typeof(fr) "$(typeof(tr)) vs $(typeof(fr))"
             end
             tr

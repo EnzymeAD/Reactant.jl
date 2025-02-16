@@ -1,6 +1,6 @@
 module Sharding
 
-using ..Reactant: Reactant, XLA
+using ..Reactant: Reactant, XLA, MLIR
 
 struct Mesh{D,ND}
     device_ids::NTuple{ND,Int}
@@ -33,12 +33,7 @@ end
 
 Base.vec(mesh::Mesh) = vec(device_ids(mesh))
 
-function device_ids(mesh::Mesh)
-    # XXX: Do we need to permute the device ids?
-    return permutedims(
-        reshape(collect(Int64, mesh.device_ids), size(mesh)...), reverse(1:ndims(mesh))
-    )
-end
+device_ids(mesh::Mesh) = reshape(collect(Int64, mesh.device_ids), size(mesh)...)
 
 Base.length(::Mesh{D,ND}) where {D,ND} = ND
 Base.ndims(::Mesh{D}) where {D} = D
@@ -125,67 +120,92 @@ function (sharding::NamedSharding)(
     return data, ShardInfo(sharding, device_to_array_slices)
 end
 
+function get_shardy_tensor_sharding_attribute(
+    ctx, N::Int, sharding::NamedSharding, mesh_name; do_transpose=true
+)
+    dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(undef, N)
+    for (j, name) in enumerate(sharding.partition_spec)
+        if name === nothing
+            axes = MLIR.IR.Attribute[]
+        else
+            @assert name isa Symbol
+            axes = [
+                MLIR.API.sdyAxisRefAttrGet(
+                    ctx, String(name), MLIR.API.MlirAttribute(C_NULL)
+                ),
+            ]
+        end
+        dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
+            ctx, length(axes), axes, sharding.is_closed[j], sharding.priority[j]
+        )
+    end
+
+    return MLIR.IR.Attribute(
+        MLIR.API.sdyTensorShardingAttrGet(
+            ctx,
+            mesh_name,
+            length(dimension_sharding_attrs),
+            do_transpose ? reverse(dimension_sharding_attrs) : dimension_sharding_attrs,
+            0,
+            MLIR.API.MlirAttribute[],
+        ),
+    )
+end
+
+# An internal abstraction to allow defining `convert` to XLA sharding
 struct ShardingWithShape{S,D} <: AbstractSharding
     sharding::S
     shape::D
 end
 
-# XXX: we need to make the performance of this function better
+internal_simple_op(x) = Reactant.Ops.negate(x)
+
+# XXX: We do a fake compile here to get the mhlo sharding. Ideally we should be able to use
+#      some API to convert shardy annotations to mhlo annotations.
+# XXX: We should cache the CondensedOpSharding else we will end up calling this function
+#      multiple times.
 function XLA.CondensedOpSharding(sharding_and_shape::ShardingWithShape{<:NamedSharding})
-    (; sharding, shape) = sharding_and_shape
-    (; mesh, partition_spec) = sharding
-    @assert length(partition_spec) == length(shape)
-
-    partition_spec = reverse(partition_spec)
-    shape = reverse(shape)
-
-    array_mapping = __get_array_mapping(partition_spec)
-    mesh_axis_position = Dict(name => i for (i, name) in enumerate(mesh.axis_names))
-
-    replicated_mesh_axes = Tuple{Int64,Int64}[]
-    for (i, axis_name) in enumerate(mesh.axis_names)
-        if !haskey(array_mapping, axis_name)
-            push!(replicated_mesh_axes, (i, size(mesh, axis_name)))
-        end
-    end
-
-    tile_assignment = device_ids(mesh)
-
-    # Fast Path for replicating the input across all devices
-    if length(replicated_mesh_axes) == ndims(mesh)
-        return XLA.CondensedOpSharding{ndims(tile_assignment)}(
-            XLA.OpShardingType.Replicated, false, tile_assignment
-        )
-    end
-
-    # Calculate new mesh shape and permutation
-    mesh_permutation = Int[]
-    new_mesh_shape = ones(Int, length(shape))
-
-    # Sort array mapping by position to ensure consistent order
-    for (name, pos) in sort(collect(array_mapping); by=x -> x[2])
-        new_mesh_shape[pos] *= size(mesh, name)
-        push!(mesh_permutation, mesh_axis_position[name])
-    end
-
-    # Handle replicated dimensions at the end
-    replicate_on_last_tile_dim = false
-    if !isempty(replicated_mesh_axes)
-        replicated_size = prod(last(axis) for axis in replicated_mesh_axes)
-        push!(new_mesh_shape, replicated_size)
-        append!(mesh_permutation, first.(replicated_mesh_axes))
-
-        tile_assignment = reshape(tile_assignment, new_mesh_shape...)
-        push!(mesh_permutation, length(mesh_permutation) + 1)
-        replicate_on_last_tile_dim = true
-    end
-
-    permuted = permutedims(tile_assignment, mesh_permutation)
-    final_assignment = reshape(permuted, new_mesh_shape...)
-
-    return XLA.CondensedOpSharding{ndims(final_assignment)}(
-        XLA.OpShardingType.Other, replicate_on_last_tile_dim, final_assignment
+    tmp = Reactant.ConcreteRArray(
+        ones(sharding_and_shape.shape); sharding=LazySharding(sharding_and_shape.sharding)
     )
+    _, exec, _, _, _ = Reactant.Compiler.compile_xla(internal_simple_op, (tmp,))
+    return XLA.CondensedOpSharding(only(XLA.get_parameter_shardings(exec)))
+end
+
+# Lazy Sharding. ConcreteArrays with this annotation is not really sharded but we can use it
+# to compile the executable.
+struct LazySharding{S} <: AbstractSharding
+    sharding::S
+end
+
+function get_shardy_tensor_sharding_attribute(
+    ctx, N::Int, sharding::LazySharding, mesh_name; do_transpose=true
+)
+    return get_shardy_tensor_sharding_attribute(
+        ctx, N, sharding.sharding, mesh_name; do_transpose
+    )
+end
+
+function (sharding::LazySharding)(
+    client::XLA.Client, ::Nothing, x::Union{AbstractArray,Number}
+)
+    data = XLA.AsyncBuffer(
+        XLA.ArrayFromHostBuffer(
+            client,
+            x,
+            XLA.ClientGetAddressableDevice(
+                client, XLA.device_ordinal(client, vec(sharding.sharding.mesh)[1])
+            ),
+        ),
+        nothing,
+    )
+
+    return (data,), ShardInfo(sharding, (ntuple(i -> 1:size(x, i), ndims(x)),))
+end
+
+function Base.getproperty(sharding::LazySharding, name::Symbol)
+    name ∈ (:sharding, :device_to_array_slices) && return getfield(sharding, name)
+    return getproperty(sharding.sharding, name)
 end
 
 # Given Sharding + Array --> ShardInfo
@@ -202,7 +222,19 @@ end
 
 function Base.getproperty(sharding::ShardInfo, name::Symbol)
     name ∈ (:sharding, :device_to_array_slices) && return getfield(sharding, name)
-    return getfield(sharding.sharding, name)
+    return getproperty(sharding.sharding, name)
+end
+
+function get_shardy_tensor_sharding_attribute(
+    ctx, sharding::ShardInfo, mesh_name; do_transpose=true
+)
+    return get_shardy_tensor_sharding_attribute(
+        ctx,
+        length(first(sharding.device_to_array_slices)),
+        sharding.sharding,
+        mesh_name;
+        do_transpose,
+    )
 end
 
 function (sharding::ShardInfo)(client::XLA.Client, device, x::Union{AbstractArray,Number})
@@ -221,6 +253,7 @@ Checks whether the given sharding refers to no sharding.
 """
 is_sharded(::NoSharding) = false
 is_sharded(::NamedSharding) = true
+is_sharded(s::LazySharding) = is_sharded(s.sharding)
 is_sharded(s::ShardInfo) = is_sharded(s.sharding)
 
 function is_sharded(x::AbstractArray)
