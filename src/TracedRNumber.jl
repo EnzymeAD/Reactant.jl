@@ -97,10 +97,20 @@ for (jlop, hloop) in (
     (:(Base.mod), :remainder),
     (:(Base.rem), :remainder),
 )
-    @eval function $(jlop)(
-        @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
-    ) where {T}
-        return Ops.$(hloop)(lhs, rhs)
+    @eval begin
+        function $(jlop)(
+            @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
+        ) where {T}
+            return Ops.$(hloop)(lhs, rhs)
+        end
+
+        function $(jlop)(@nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs)) where {T}
+            return Ops.$(hloop)(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+        end
+
+        function $(jlop)(@nospecialize(lhs), @nospecialize(rhs::TracedRNumber{T})) where {T}
+            return Ops.$(hloop)(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
+        end
     end
 end
 
