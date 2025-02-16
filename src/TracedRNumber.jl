@@ -224,6 +224,12 @@ for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
+        function Base.xor(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+            return Ops.xor(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
         Base.:!(x::TracedRNumber{<:$(T1)}) = Ops.not(x)
     end
 end

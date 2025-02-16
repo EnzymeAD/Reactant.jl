@@ -843,6 +843,12 @@ end
     @test Reactant.@jit(rem.(Reactant.to_rarray(a), b)) ≈ expected_rem
 end
 
+@testset "xor" begin
+    for a in (true, false), b in (true, false)
+        @test @jit(xor(ConcreteRNumber(a), ConcreteRNumber(b))) == xor(a, b)
+    end
+end
+
 @testset "reduce integers" begin
     x = rand(Bool, 100)
     x_ra = Reactant.to_rarray(x)
