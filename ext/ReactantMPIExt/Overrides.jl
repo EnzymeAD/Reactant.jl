@@ -5,7 +5,7 @@
     return Ops.init()
 end
 
-@reactant_overlay @noinline function MPI.Init(; kwargs...)
+@reactant_overlay @noinline function MPI.Finalize(; kwargs...)
     return Ops.finalize()
 end
 
