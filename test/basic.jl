@@ -825,13 +825,22 @@ end
     @test !isfinite(Reactant.to_rarray(Inf; track_numbers=Number))
 end
 
-@testset "rem" begin
+@testset "mod and rem" begin
     a = [-1.1, 7.7, -3.3, 9.9, -5.5]
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
-    expected = rem.(a, b)
-    @test Reactant.@jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected
-    @test Reactant.@jit(rem.(a, Reactant.to_rarray(b))) ≈ expected
-    @test Reactant.@jit(rem.(Reactant.to_rarray(a), b)) ≈ expected
+
+    # Currently broken because `mod` is JIT-ed to an HLO operator with same semantic as
+    # Julia's `rem`, rather than `mod`.
+    expected_mod = mod.(a, b)
+    @test_broken Reactant.@jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈
+        expected_mod
+    @test_broken Reactant.@jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
+    @test_broken Reactant.@jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
+
+    expected_rem = rem.(a, b)
+    @test Reactant.@jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
+    @test Reactant.@jit(rem.(a, Reactant.to_rarray(b))) ≈ expected_rem
+    @test Reactant.@jit(rem.(Reactant.to_rarray(a), b)) ≈ expected_rem
 end
 
 @testset "reduce integers" begin
