@@ -266,16 +266,4 @@ function is_sharded(x::Number)
     return false
 end
 
-function __get_array_mapping(partition_spec)
-    mapping = Dict{Symbol,Int64}()
-    for (i, axis) in enumerate(partition_spec)
-        axis === nothing && continue
-        axis isa Symbol && (axis = (axis,))
-        for axis_name in axis
-            mapping[axis_name] = i
-        end
-    end
-    return mapping
-end
-
 end
