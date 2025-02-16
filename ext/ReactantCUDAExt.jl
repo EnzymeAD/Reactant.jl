@@ -342,9 +342,10 @@ Adapt.adapt_storage(to::KA.ConstAdaptor, a::CuTracedArray) = Base.Experimental.C
 struct ReactantRefValue{T} <: Ref{T}
     val::T
 end
-Base.getindex(r::ReactantRefValue{T}) where T = r.val
-Adapt.adapt_structure(to::ReactantKernelAdaptor, ref::Base.RefValue) =
-    ReactantRefValue(adapt(to, ref[]))
+Base.getindex(r::ReactantRefValue{T}) where {T} = r.val
+function Adapt.adapt_structure(to::ReactantKernelAdaptor, ref::Base.RefValue)
+    return ReactantRefValue(adapt(to, ref[]))
+end
 
 function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
