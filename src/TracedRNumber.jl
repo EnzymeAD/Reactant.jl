@@ -97,25 +97,23 @@ for (jlop, hloop) in (
     (:(Base.mod), :remainder),
     (:(Base.rem), :remainder),
 )
-    @eval begin
-        function $(jlop)(
-            @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
-        ) where {T}
-            return Ops.$(hloop)(lhs, rhs)
-        end
-
-        function $(jlop)(
-            @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
-        ) where {T}
-            return Ops.$(hloop)(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
-        end
-
-        function $(jlop)(
-            @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
-        ) where {T}
-            return Ops.$(hloop)(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
-        end
+    @eval function $(jlop)(
+        @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
+    ) where {T}
+        return Ops.$(hloop)(lhs, rhs)
     end
+end
+
+function Base.rem(
+    @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+) where {T}
+    return Ops.remainder(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+end
+
+function Base.rem(
+    @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
+) where {T}
+    return Ops.remainder(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
 end
 
 function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T<:Integer}
