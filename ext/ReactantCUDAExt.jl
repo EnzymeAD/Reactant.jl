@@ -256,9 +256,6 @@ end
 function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::Array)
     return Adapt.adapt_storage(ka, Reactant.Ops.constant(xs))
 end
-function Adapt.adapt_structure(to::ReactantKernelAdaptor, ref::Base.RefValue)
-    return error("Cannot convert RefValue argument of Reactant Kernel")
-end
 function Adapt.adapt_structure(
     to::ReactantKernelAdaptor, bc::Broadcast.Broadcasted{Style,<:Any,Type{T}}
 ) where {Style,T}
