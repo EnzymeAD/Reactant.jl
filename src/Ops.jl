@@ -548,6 +548,18 @@ end
 #     )
 #     return TracedRArray{T,N}((), res, size(x))
 # end
+@noinline function bitcast_convert(
+    ::Type{U},
+    x::TracedRNumber{T};
+    location=mlir_stacktrace("bitcast_convert", @__FILE__, @__LINE__),
+) where {T,U}
+    res = MLIR.IR.result(
+        stablehlo.bitcast_convert(
+            x.mlir_data; result_0=mlir_type(TracedRArray{U,0}, ()), location
+        ),
+    )
+    return TracedRNumber{U}((), res)
+end
 
 @noinline function fft(
     x::TracedRArray{T,N};
