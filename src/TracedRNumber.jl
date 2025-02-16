@@ -397,4 +397,12 @@ function Base.typed_hvncat(
     return Base.typed_hvncat(T, dims, row_first, xs...)
 end
 
+for (Ti, Tf) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
+    @eval begin
+        Base.signbit(x::TracedRNumber{$(Ti)}) = x < 0
+        Base.signbit(x::TracedRNumber{$(Tf)}) = signbit(Ops.bitcast_convert($(Ti), x))
+    end
+end
+Base.signbit(::TracedRNumber{<:Unsigned}) = ConcreteRNumber(false)
+
 end

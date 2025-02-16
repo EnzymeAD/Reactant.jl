@@ -849,6 +849,12 @@ end
     end
 end
 
+@testset "signbit" begin
+    for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
+        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
+    end
+end
+
 @testset "reduce integers" begin
     x = rand(Bool, 100)
     x_ra = Reactant.to_rarray(x)
