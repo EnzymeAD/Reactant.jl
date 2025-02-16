@@ -104,11 +104,15 @@ for (jlop, hloop) in (
             return Ops.$(hloop)(lhs, rhs)
         end
 
-        function $(jlop)(@nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs)) where {T}
+        function $(jlop)(
+            @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+        ) where {T}
             return Ops.$(hloop)(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
         end
 
-        function $(jlop)(@nospecialize(lhs), @nospecialize(rhs::TracedRNumber{T})) where {T}
+        function $(jlop)(
+            @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
+        ) where {T}
             return Ops.$(hloop)(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
         end
     end
