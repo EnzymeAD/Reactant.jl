@@ -94,7 +94,6 @@ for (jlop, hloop) in (
     (:(Base.:*), :multiply),
     (:(Base.:/), :divide),
     (:(Base.:^), :power),
-    (:(Base.mod), :remainder),
     (:(Base.rem), :remainder),
 )
     @eval function $(jlop)(
@@ -109,11 +108,28 @@ function Base.rem(
 ) where {T}
     return Ops.remainder(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
-
 function Base.rem(
     @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
 ) where {T}
     return Ops.remainder(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
+end
+
+# Based on https://github.com/JuliaLang/julia/blob/39255d47db7657950ff1c82137ecec5a70bae622/base/float.jl#L608-L617
+function Base.mod(
+    @nospecialize(x::Reactant.TracedRNumber{T}), @nospecialize(y::Reactant.TracedRNumber{T})
+) where {T}
+    r = rem(x, y)
+    return ifelse(r == 0, copysign(r, y), ifelse((r > 0) ⊻ (y > 0), r + y, r))
+end
+function Base.mod(
+    @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+) where {T}
+    return mod(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+end
+function Base.mod(
+    @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
+) where {T}
+    return mod(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
 end
 
 function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T<:Integer}
