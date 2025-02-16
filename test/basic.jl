@@ -855,6 +855,14 @@ end
     end
 end
 
+@testset "copysign" begin
+    for a in (-3.14, -2, 0.0, 2.71, 42), b in (-7, -0.57, -0.0, 1, 3.14)
+        # Make sure also the return type is correct
+        @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ===
+            copysign(a, b)
+    end
+end
+
 @testset "reduce integers" begin
     x = rand(Bool, 100)
     x_ra = Reactant.to_rarray(x)

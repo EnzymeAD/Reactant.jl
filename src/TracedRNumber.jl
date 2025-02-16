@@ -405,4 +405,12 @@ for (Ti, Tf) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
 end
 Base.signbit(::TracedRNumber{<:Unsigned}) = ConcreteRNumber(false)
 
+Base.copysign(x::TracedRNumber, y::TracedRNumber) = ifelse(signbit(y), -1, 1) * abs(x)
+function Base.copysign(x::TracedRNumber{T}, y::S) where {T,S<:Number}
+    return copysign(x, TracedUtils.promote_to(TracedRNumber{S}, y))
 end
+function Base.copysign(x::S, y::TracedRNumber{T}) where {S<:Number,T}
+    return copysign(TracedUtils.promote_to(TracedRNumber{S}, x), y)
+end
+
+end # module TracedRNumberOverrides
