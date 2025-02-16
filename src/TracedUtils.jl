@@ -196,13 +196,6 @@ function prepare_results(
 )
     N = length(traced_args)
     # check which arguments have been mutated
-    mutated_args = Int[]
-    for (i, arg) in enumerate(linear_args)
-        if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
-            # mutation occured!
-            push!(mutated_args, i)
-        end
-    end
 
     seen_results = OrderedIdDict()
 
@@ -210,17 +203,38 @@ function prepare_results(
         seen_results,
         result,
         (:result,),
-        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath,
+        true ? Reactant.TracedTrack : Reactant.TracedSetPath,
     )
+    already_prepared = false
+    for (k, v) in seen_results
+        v isa Reactant.TracedType || continue
+        nresultpaths = count(p->length(p)>0 && p[1]==:result, get_paths(v))
+        if nresultpaths > 1
+            already_prepared = true
+            break
+        end
+    end
 
-    # marks buffers to be donated
-    for i in 1:N
-        Reactant.make_tracer(
-            seen_results,
-            traced_args[i],
-            concretein ? (:resargs, i) : (),
-            Reactant.TracedTrack,
-        )
+    if !already_prepared
+        # marks buffers to be donated
+        for i in 1:N
+            Reactant.make_tracer(
+                seen_results,
+                traced_args[i],
+                true ? (:resargs, i) : (),
+                Reactant.TracedTrack,
+            )
+        end
+    else
+        # TODO: here we only push tracedtypes which isn't exactly the same as properly tracing the
+        # args, perhaps this should be fixed if seen_results is used later on.
+        Core.println("$(linear_args)")
+        for arg in linear_args
+            @assert has_resargidx(arg) "Expected the arg to have a :resargidx already, but it doesn't."
+            if !haskey(seen_results, arg)
+                seen_results[arg] = arg
+            end
+        end
     end
 
     linear_results = Reactant.TracedType[]
@@ -229,9 +243,6 @@ function prepare_results(
         (args_in_result != :all && has_argidx(v)) && continue
         push!(linear_results, v)
     end
-    if args_in_result == :mutated
-        append!(linear_results, linear_args[mutated_args])
-    end
 
     out_tys = if do_transpose
         [transpose_ty(Ops.mlir_type(arg)) for arg in linear_results]
@@ -239,7 +250,7 @@ function prepare_results(
         [Ops.mlir_type(arg) for arg in linear_results]
     end
 
-    return seen_results, traced_result, linear_results, out_tys, mutated_args
+    return seen_results, traced_result, linear_results, out_tys
 end
 
 function create_return!(
@@ -346,7 +357,7 @@ function make_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    _, traced_result, linear_results, out_tys, mutated_args = prepare_results(
+    _, traced_result, linear_results, out_tys = prepare_results(
         result,
         traced_args,
         linear_args,
@@ -367,6 +378,9 @@ function make_mlir_fn(
     name = __lookup_unique_name_in_module(mod, name)
     final_func = final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
 
+    Core.println("\nOverview of make_mlir_fn for $f [$name]:\nlinear_args: $linear_args")
+    Core.println("linear_results: $linear_results\n")
+
     return (
         false,
         final_func,
@@ -377,7 +391,6 @@ function make_mlir_fn(
         linear_args,
         in_tys,
         linear_results,
-        mutated_args,
     )
 end
 
@@ -448,6 +461,18 @@ function has_argidx(x)
     return false
 end
 
+function has_resargidx(x)
+    for path in get_paths(x)
+        if length(path) == 0
+            continue
+        end
+        if path[1] == :resargs
+            return true
+        end
+    end
+    return false
+end
+
 function set!(x, path, tostore; emptypath=false)
     for p in path
         x = Reactant.Compiler.traced_getfield(x, p)
@@ -490,7 +515,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         return f(scalar_args...)
     end
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results, _ = make_mlir_fn(
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
         f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
     )
 

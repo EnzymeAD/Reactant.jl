@@ -450,8 +450,10 @@ function compile_mlir!(
         @NamedTuple{
             f_name::String,
             mlir_result_types::Vector{MLIR.IR.Type},
+            linear_args::Vector{TracedType},
             traced_result::Any,
-            mutated::Vector{Int},
+            linear_results::Vector{TracedType},
+            ret::MLIR.IR.Operation,
         }
     }();
     optimize::Union{Bool,Symbol}=true,
@@ -467,9 +469,7 @@ function compile_mlir!(
     fnwrapped,
     func2, traced_result, result, seen_args, ret, linear_args, in_tys,
     linear_results = try
-        callcache!(callcache) do # TODO: don't create a closure here either.
           Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
-        end
     finally
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
@@ -1094,6 +1094,8 @@ function compile(f, args; sync=false, kwargs...)
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code = codegen_flatten!(linear_args, result_stores)
 
+    Core.println("linear_results in `compile`: $(linear_results)")
+
     concretized_res_names, xla_call_code = codegen_xla_call(
         exec, flatten_arg_names, donated_args_mask, length(linear_results)
     )
@@ -1126,6 +1128,10 @@ function compile(f, args; sync=false, kwargs...)
         $(unflatten_code...)
         return result
     end
+    @warn "compiling $f"
+    display(body)
+    println("##############################################")
+
 
     return register_thunk(fname, Tuple{map(Core.Typeof, args)...}, body, f, isclosure)
 end
