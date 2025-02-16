@@ -1960,8 +1960,6 @@ end
             tr
         else
             if typeof(tr) != typeof(fr)
-                @show tr.mlir_data
-                @show fr.mlir_data
                 @assert typeof(tr) == typeof(fr) "$(typeof(tr)) vs $(typeof(fr))"
             end
             tr
@@ -2141,10 +2139,7 @@ end
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     return mesh(
-        mod,
-        [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
-        collect(Int64, m.device_ids);
-        location,
+        mod, [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))], vec(m); location
     )
 end
 
