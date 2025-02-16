@@ -175,8 +175,6 @@ function Base.:(==)(a::CondensedOpSharding, b::CondensedOpSharding)
 end
 
 function CondensedOpSharding(sharding::OpSharding)
-    @show sharding
-
     @assert isempty(sharding.last_tile_dims) "Last Tile dimensions are not supported \
                                               yet!"
     @assert isempty(sharding.tile_dimensions) "Tile dimensions are not supported yet! \
@@ -187,8 +185,12 @@ function CondensedOpSharding(sharding::OpSharding)
     if sharding.type == OpShardingType.Replicated || sharding.type == OpShardingType.Maximal
         tile_assignment = generate_device_list(sharding)
     elseif sharding.type == OpShardingType.Other
-        tile_assignment = reshape(
-            generate_device_list(sharding), sharding.tile_assignment_dimensions...
+        tile_assignment = permutedims(
+            reshape(
+                generate_device_list(sharding),
+                reverse(sharding.tile_assignment_dimensions)...,
+            ),
+            reverse(1:length(sharding.tile_assignment_dimensions)),
         )
     else
         error("Invalid sharding type: $(sharding.type)")
@@ -231,18 +233,14 @@ function sharding_to_concrete_array_indices(
             return [(i * shard_size + 1):((i + 1) * shard_size) for i in 0:(n_shards - 1)]
         end
 
-        @show vec(sharding.tile_assignment)
-
         indices = Dict{Int,NTuple{N,UnitRange{Int}}}()
         device_idx = 1
-        for idx_tuple in Iterators.product(axis_indices...)
-            for _ in 1:num_replicas
+        for _ in 1:num_replicas
+            for idx_tuple in Iterators.product(axis_indices...)
                 indices[sharding.tile_assignment[device_idx]] = reverse(idx_tuple)
                 device_idx += 1
             end
         end
-
-        @show sort(collect(indices); by=x -> x[1])
 
         return map(Base.Fix1(getindex, indices), mesh.device_ids)
     else

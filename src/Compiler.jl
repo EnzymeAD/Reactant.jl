@@ -1519,11 +1519,6 @@ function compile(f, args; sync=false, kwargs...)
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
         output_shardings = XLA.get_output_shardings(exec)
-        # XXX: remove
-        for (i, sd) in enumerate(output_shardings)
-            @info("i: $i \t", sd)
-        end
-        # XXX: remove
         XLA.compute_array_indices_and_partition_spec.(
             output_shardings,
             size.(mlir_fn_res.linear_results),

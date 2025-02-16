@@ -2139,10 +2139,7 @@ end
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     return mesh(
-        mod,
-        [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
-        vec(m);
-        location,
+        mod, [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))], vec(m); location
     )
 end
 

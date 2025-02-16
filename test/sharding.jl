@@ -60,6 +60,8 @@ predict(samples, w1, w2) = sin.(w2 * (w1 * tanh.(samples)))
 
 fn_test2(x) = x .+ x'
 
+fn_test3(x) = sum(x; dims=1)
+
 @testset "Sharding Across 8 Devices" begin
     if length(addressable_devices) ≥ 8
         mesh = Sharding.Mesh(reshape(collect(Int64, 0:7), (4, 2)), ("data", "model"))
@@ -76,6 +78,8 @@ fn_test2(x) = x .+ x'
 
     if !fake_run
         @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
+
+        @test Array(@jit fn_test3(x_ra)) ≈ fn_test3(x)
     end
 
     samples = reshape(collect(Float32, 1:48), 4, 12)
