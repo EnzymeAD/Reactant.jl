@@ -104,6 +104,18 @@ for (jlop, hloop) in (
     end
 end
 
+function Base.rem(
+    @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+) where {T}
+    return Ops.remainder(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+end
+
+function Base.rem(
+    @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
+) where {T}
+    return Ops.remainder(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
+end
+
 function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T<:Integer}
     return Ops.divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
