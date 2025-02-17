@@ -22,7 +22,7 @@ mutable struct Client <: XLA.AbstractClient
         for (i, device) in enumerate(devices)
             global_ordinals[local_ids[i]] = i - 1
         end
-        return client
+        return finalizer(free_client, client)
     end
 end
 
@@ -79,4 +79,23 @@ function XLA.platform_name(client::Client)
     str_jl = unsafe_string(str)
     @ccall free(str::Cstring)::Cvoid
     return str_jl
+end
+
+# Different Backends
+const cpu_client_count = Ref(0)
+const gpu_client_count = Ref(0)
+const tpu_client_count = Ref(0)
+
+for (backend, fname, counter) in (
+    (:CPUClient, "MakeCPUClient", :cpu_client_count),
+    (:GPUClient, "MakeGPUClient", :gpu_client_count),
+    (:TPUClient, "MakeTPUClient", :tpu_client_count),
+)
+    @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
+        if checkcount
+            @assert $(counter)[] == 0
+            $(counter)[] += 1
+        end
+        return Client(XLA.$(backend)($(fname), args...; kwargs...))
+    end
 end

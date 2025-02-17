@@ -34,12 +34,8 @@ include("PJRT/PJRT.jl")
 
 include("IFRT/IFRT.jl")
 
-const PjRtClient = PJRT.Client
-const PjRtDevice = PJRT.Device
-const PjRtFuture = PJRT.Future
-
-const backends = Dict{String,PjRtClient}()
-const default_backend = Ref{PjRtClient}()
+const backends = Dict{String,PJRT.Client}()
+const default_backend = Ref{PJRT.Client}()
 const default_device_idx = Ref{Int}(0)
 
 function __init__()
@@ -51,7 +47,7 @@ function __init__()
     ccall(initLogs, Cvoid, ())
     # Add most log level
     # SetLogLevel(0)
-    cpu = CPUPjRtClient()
+    cpu = PJRT.CPUClient()
     backends["cpu"] = cpu
     default_backend[] = cpu
 
@@ -81,7 +77,7 @@ function __init__()
                 rm(dataset_dir * "/tpu.zip"; recursive=true)
             end
             try
-                tpu = TPUPjRtClient(dataset_dir * "/libtpu.so")
+                tpu = PJRT.TPUClient(dataset_dir * "/libtpu.so")
                 backends["tpu"] = tpu
                 default_backend[] = tpu
             catch e
@@ -90,7 +86,7 @@ function __init__()
         else
             if !Reactant.precompiling()
                 try
-                    gpu = GPUPjRtClient()
+                    gpu = PJRT.GPUClient()
                     backends["gpu"] = gpu
                     default_backend[] = gpu
                 catch e
