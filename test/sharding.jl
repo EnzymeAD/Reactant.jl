@@ -99,6 +99,20 @@ fn_test3(x) = sum(x; dims=1)
     end
 end
 
+@testset "Sharding with non-iota mesh" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape([4, 6, 0, 2, 7, 3, 1, 5], 4, 2), ("data", "model"))
+        x = reshape(collect(Float32, 1:16), 4, 4)
+        x_ra = Reactant.to_rarray(
+            x; sharding=Sharding.NamedSharding(mesh, ("data", nothing))
+        )
+        # XXX: This needs to be fixed
+        @test_broken Array(@jit sum(x_ra)) ≈ sum(x)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
 # Tests from the examples in
 # https://github.com/openxla/xla/blob/96d6678053d867099a42be9001c49b2ed7111afd/xla/hlo/ir/tile_assignment.h#L53-L68
 @testset "Device List from Iota Tile" begin

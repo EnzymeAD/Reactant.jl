@@ -1480,19 +1480,23 @@ hlo_sharding_to_string(const xla::HloSharding *hlo_sharding) {
 }
 
 // extern "C" void
-// ifrt_hlo_sharding_from_xla_hlo_sharding(xla::HloSharding *xla_hlo_sharding,
-//                                         ifrt::HloSharding *hlo_sharding) {
-// static std::unique_ptr<HloSharding> Create(
-//     tsl::RCReference<DeviceList> devices, MemoryKind memory_kind,
-//     xla::HloSharding xla_hlo_sharding);
-// return ifrt::HloSharding();
+// ifrt_hlo_sharding_from_xla_hlo_sharding(xla::HloSharding *xla_hlo_sharding) {
+  // static std::unique_ptr<HloSharding> Create(
+  //     tsl::RCReference<DeviceList> devices, MemoryKind memory_kind,
+  //     xla::HloSharding xla_hlo_sharding);
+  // return ifrt::HloSharding();
 // }
 
-// extern "C" void
-// ifrt_hlo_sharding_to_xla_hlo_sharding(ifrt::HloSharding *hlo_sharding,
-//                                       xla::HloSharding *xla_hlo_sharding) {
-//   *xla_hlo_sharding = hlo_sharding->xla_hlo_sharding();
-//   return;
-// }
+extern "C" xla::HloSharding *
+ifrt_hlo_sharding_to_xla_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
+  xla::HloSharding *xla_hlo_sharding =
+      new xla::HloSharding(hlo_sharding->xla_hlo_sharding());
+  return xla_hlo_sharding;
+}
+
+extern "C" const char *
+ifrt_hlo_sharding_to_string(ifrt::HloSharding *hlo_sharding) {
+  return cstr_from_string(hlo_sharding->DebugString());
+}
 
 #pragma endregion

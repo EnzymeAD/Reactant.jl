@@ -357,6 +357,6 @@ function Base.show(io::IO, ::MIME"text/plain", hlo_sharding::HloSharding)
     end
     str_jl = unsafe_string(str)
     @ccall free(str::Cstring)::Cvoid
-    print(io, "HloSharding(\"", str_jl, "\")")
+    print(io, "XLA.HloSharding(\"", str_jl, "\")")
     return nothing
 end

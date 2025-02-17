@@ -1076,8 +1076,8 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
-            condensed_op_sharding = Reactant.Sharding.XLA.CondensedOpSharding(
-                linear_parameter_shardings[i]
+            condensed_op_sharding = convert(
+                Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
             )
             if Reactant.Sharding.is_sharded(carg)
                 # Currently disabling the error since we roundtrip from MHLO to generate
