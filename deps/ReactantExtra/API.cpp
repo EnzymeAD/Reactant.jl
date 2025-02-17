@@ -103,6 +103,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_memory.h"
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
+#include "xla/python/pjrt_ifrt/xla_sharding.h"
 
 // IFRT - Proxy (RPC)
 #include "xla/python/ifrt_proxy/client/registry.h"
@@ -659,6 +660,7 @@ struct JLOpSharding {
   bool is_shard_group;
   int64_t shard_group_id;
   int32_t shard_group_type;
+  const void *op_sharding;
 };
 
 void OpShardingToJLOpSharding(const xla::OpSharding &op_sharding,
@@ -736,58 +738,8 @@ void OpShardingToJLOpSharding(const xla::OpSharding &op_sharding,
   jl_op_sharding->is_shard_group = op_sharding.is_shard_group();
   jl_op_sharding->shard_group_id = op_sharding.shard_group_id();
   jl_op_sharding->shard_group_type = op_sharding.shard_group_type();
-}
 
-xla::OpSharding JLOpShardingToOpSharding(const JLOpSharding &jl_op_sharding) {
-  xla::OpSharding op_sharding;
-
-  op_sharding.set_type(static_cast<xla::OpSharding_Type>(jl_op_sharding.type));
-  op_sharding.set_replicate_on_last_tile_dim(
-      jl_op_sharding.replicate_on_last_tile_dim);
-
-  xla::ShapeProto *mutable_shape_proto = op_sharding.mutable_tile_shape();
-
-  for (int i = 0; i < jl_op_sharding.n_tile_dimensions; i++) {
-    mutable_shape_proto->add_dimensions(jl_op_sharding.tile_dimensions[i]);
-  }
-
-  if (jl_op_sharding.n_layout_minor_to_major > 0) {
-    auto *mutable_layout = mutable_shape_proto->mutable_layout();
-    for (int i = 0; i < jl_op_sharding.n_layout_minor_to_major; i++) {
-      mutable_layout->add_minor_to_major(
-          jl_op_sharding.layout_minor_to_major[i]);
-    }
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_tile_dimensions; i++) {
-    op_sharding.add_last_tile_dims(
-        static_cast<xla::OpSharding_Type>(jl_op_sharding.last_tile_dims[i]));
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_tile_assignment_dimensions; i++) {
-    op_sharding.add_tile_assignment_dimensions(
-        jl_op_sharding.tile_assignment_dimensions[i]);
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_tile_assignment_devices; i++) {
-    op_sharding.add_tile_assignment_devices(
-        jl_op_sharding.tile_assignment_devices[i]);
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_iota_reshape_dims; i++) {
-    op_sharding.add_iota_reshape_dims(jl_op_sharding.iota_reshape_dims[i]);
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_iota_transpose_perm; i++) {
-    op_sharding.add_iota_transpose_perm(jl_op_sharding.iota_transpose_perm[i]);
-  }
-
-  op_sharding.set_is_shard_group(jl_op_sharding.is_shard_group);
-  op_sharding.set_shard_group_id(jl_op_sharding.shard_group_id);
-  op_sharding.set_shard_group_type(static_cast<xla::OpSharding_ShardGroupType>(
-      jl_op_sharding.shard_group_type));
-
-  return op_sharding;
+  jl_op_sharding->op_sharding = new xla::OpSharding(op_sharding);
 }
 
 typedef PjRtFuture<> FutureType;
@@ -1494,3 +1446,53 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
              ifrt::proxy::CreateClient(c_proxy_server_address, options))
       .release();
 }
+
+#pragma region HloSharding
+
+extern "C" void free_op_sharding(xla::OpSharding *op_sharding) {
+  delete op_sharding;
+}
+
+extern "C" void free_hlo_sharding(xla::HloSharding *hlo_sharding) {
+  delete hlo_sharding;
+}
+
+extern "C" void free_ifrt_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
+  delete hlo_sharding;
+}
+
+extern "C" xla::HloSharding *
+hlo_sharding_from_op_sharding(xla::OpSharding *op_sharding) {
+  xla::HloSharding *hlo_sharding = new xla::HloSharding(
+      MyValueOrThrow(xla::HloSharding::FromProto(*op_sharding)));
+  return hlo_sharding;
+}
+
+extern "C" xla::OpSharding *
+hlo_sharding_to_op_sharding(xla::HloSharding *hlo_sharding) {
+  xla::OpSharding *op_sharding = new xla::OpSharding(hlo_sharding->ToProto());
+  return op_sharding;
+}
+
+extern "C" const char *
+hlo_sharding_to_string(const xla::HloSharding *hlo_sharding) {
+  return cstr_from_string(hlo_sharding->ToString(true));
+}
+
+// extern "C" void
+// ifrt_hlo_sharding_from_xla_hlo_sharding(xla::HloSharding *xla_hlo_sharding,
+//                                         ifrt::HloSharding *hlo_sharding) {
+// static std::unique_ptr<HloSharding> Create(
+//     tsl::RCReference<DeviceList> devices, MemoryKind memory_kind,
+//     xla::HloSharding xla_hlo_sharding);
+// return ifrt::HloSharding();
+// }
+
+// extern "C" void
+// ifrt_hlo_sharding_to_xla_hlo_sharding(ifrt::HloSharding *hlo_sharding,
+//                                       xla::HloSharding *xla_hlo_sharding) {
+//   *xla_hlo_sharding = hlo_sharding->xla_hlo_sharding();
+//   return;
+// }
+
+#pragma endregion

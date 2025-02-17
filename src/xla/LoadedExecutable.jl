@@ -265,7 +265,7 @@ for (jlop, xlaop, field) in (
             )::Cvoid
         end
 
-        return map(OpSharding ∘ getindex, jl_op_shardings)
+        return map(Base.Fix1(convert, OpSharding) ∘ getindex, jl_op_shardings)
     end
 end
 
