@@ -59,7 +59,7 @@ end
 
 @setup_workload begin
     initialize_dialect()
-    client = XLA.CPUClient(; checkcount=false)
+    client = XLA.CPUPjRtClient(; checkcount=false)
     @compile_workload begin
         @static if precompilation_supported()
             x = ConcreteRNumber(2.0; client)

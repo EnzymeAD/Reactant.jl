@@ -54,7 +54,7 @@ Return an [`AllocatorStats`](@ref) instance with information about the device sp
     This method is currently not implemented for the CPU device.
 """
 function allocatorstats(
-    device::Device=ClientGetAddressableDevice(default_backend[], default_device_idx[])
+    device::AbstractDevice=get_addressable_device(default_backend[], default_device_idx[])
 )
     ref = Ref{JLAllocatorStats}()
     @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(

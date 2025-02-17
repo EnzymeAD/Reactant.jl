@@ -1264,6 +1264,28 @@ ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
 }
 
+extern "C" ifrt::Client *MakeCPUIfrtClient(uint8_t asynchronous, int node_id,
+                                           int num_nodes) {
+  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
+      MakeCPUClient(asynchronous, node_id, num_nodes)));
+}
+
+extern "C" ifrt::Client *
+MakeGPUIfrtClient(int node_id, int num_nodes, int *allowed_devices,
+                  int num_allowed_devices, double memory_fraction,
+                  bool preallocate, const char *platform_name,
+                  const char **error) {
+  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
+      MakeGPUClient(node_id, num_nodes, allowed_devices, num_allowed_devices,
+                    memory_fraction, preallocate, platform_name, error)));
+}
+
+extern "C" ifrt::Client *MakeTPUIfrtClient(const char *tpu_path,
+                                           const char **error) {
+  return ifrt_pjrt_MakeClient(
+      reactant_hold_pjrtclient(MakeTPUClient(tpu_path, error)));
+}
+
 extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
 
 extern "C" xla::ifrt::LoadedExecutable *
@@ -1481,10 +1503,10 @@ hlo_sharding_to_string(const xla::HloSharding *hlo_sharding) {
 
 // extern "C" void
 // ifrt_hlo_sharding_from_xla_hlo_sharding(xla::HloSharding *xla_hlo_sharding) {
-  // static std::unique_ptr<HloSharding> Create(
-  //     tsl::RCReference<DeviceList> devices, MemoryKind memory_kind,
-  //     xla::HloSharding xla_hlo_sharding);
-  // return ifrt::HloSharding();
+// static std::unique_ptr<HloSharding> Create(
+//     tsl::RCReference<DeviceList> devices, MemoryKind memory_kind,
+//     xla::HloSharding xla_hlo_sharding);
+// return ifrt::HloSharding();
 // }
 
 extern "C" xla::HloSharding *

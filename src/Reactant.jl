@@ -221,7 +221,7 @@ function __init__()
     return initialize_dialect()
 end
 
-function set_default_backend(backend::XLA.Client)
+function set_default_backend(backend::XLA.AbstractClient)
     return XLA.default_backend[] = backend
 end
 

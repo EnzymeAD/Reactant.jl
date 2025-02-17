@@ -7,12 +7,14 @@ struct Mesh{D,ND}
     shape::Dims{D}
     axis_names::NTuple{D,Symbol}
 
-    function Mesh(devices::AbstractArray{XLA.Device}, axis_names)
-        return Mesh(XLA.DeviceGetLocalDeviceId.(devices), axis_names)
+    function Mesh(devices::AbstractArray{XLA.AbstractDevice}, axis_names)
+        return Mesh(XLA.get_local_device_id.(devices), axis_names)
     end
 
-    function Mesh(devices::NTuple{D,XLA.Device}, shape::Dims{D}, axis_names) where {D}
-        return Mesh(XLA.DeviceGetLocalDeviceId.(devices), shape, axis_names)
+    function Mesh(
+        devices::NTuple{D,XLA.AbstractDevice}, shape::Dims{D}, axis_names
+    ) where {D}
+        return Mesh(XLA.get_local_device_id.(devices), shape, axis_names)
     end
 
     function Mesh(
@@ -49,8 +51,8 @@ Base.in(axis::Union{String,Symbol}, mesh::Mesh) = Symbol(axis) ∈ mesh.axis_nam
 
 abstract type AbstractSharding end
 
-function (T::AbstractSharding)(::XLA.Client, device, ::Union{AbstractArray,Number})
-    return error("(::$(T))(::XLA.Client, ::AbstractArray) is not implemented")
+function (T::AbstractSharding)(::XLA.AbstractClient, device, ::Union{AbstractArray,Number})
+    return error("(::$(T))(::XLA.AbstractClient, ::AbstractArray) is not implemented")
 end
 
 struct NoSharding <: AbstractSharding end
@@ -59,8 +61,8 @@ struct NoSharding <: AbstractSharding end
 Base.getproperty(::NoSharding, x) = NoSharding()
 Base.getproperty(::NoSharding, x::Symbol) = NoSharding()
 
-function (::NoSharding)(client::XLA.Client, device, x::Union{AbstractArray,Number})
-    buffer = XLA.AsyncBuffer(XLA.ArrayFromHostBuffer(client, x, device), nothing)
+function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,Number})
+    buffer = XLA.PJRT.AsyncBuffer(client, x, device)
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
 
@@ -94,7 +96,7 @@ struct NamedSharding{D1,D2,P<:Tuple,D3} <: AbstractSharding
 end
 
 function (sharding::NamedSharding)(
-    client::XLA.Client, ::Nothing, x::Union{AbstractArray,Number}
+    client::XLA.PJRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
     (; mesh, partition_spec) = sharding
     @assert length(partition_spec) == ndims(x)
@@ -107,15 +109,10 @@ function (sharding::NamedSharding)(
     devices_list = vec(mesh)
 
     data = ntuple(length(mesh)) do i
-        XLA.AsyncBuffer(
-            XLA.ArrayFromHostBuffer(
-                client,
-                x[device_to_array_slices[i]...],
-                XLA.ClientGetAddressableDevice(
-                    client, XLA.device_ordinal(client, devices_list[i])
-                ),
-            ),
-            nothing,
+        XLA.PJRT.AsyncBuffer(
+            client,
+            x[device_to_array_slices[i]...],
+            XLA.get_addressable_device(client, XLA.device_ordinal(client, devices_list[i])),
         )
     end
 
@@ -197,17 +194,14 @@ function get_shardy_tensor_sharding_attribute(
 end
 
 function (sharding::LazySharding)(
-    client::XLA.Client, ::Nothing, x::Union{AbstractArray,Number}
+    client::XLA.PJRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
-    data = XLA.AsyncBuffer(
-        XLA.ArrayFromHostBuffer(
-            client,
-            x,
-            XLA.ClientGetAddressableDevice(
-                client, XLA.device_ordinal(client, vec(sharding.sharding.mesh)[1])
-            ),
+    data = XLA.PJRT.AsyncBuffer(
+        client,
+        x,
+        XLA.get_addressable_device(
+            client, XLA.device_ordinal(client, vec(sharding.sharding.mesh)[1])
         ),
-        nothing,
     )
 
     return (data,), ShardInfo(sharding, (ntuple(i -> 1:size(x, i), ndims(x)),))
@@ -250,7 +244,9 @@ function get_shardy_tensor_sharding_attribute(
     )
 end
 
-function (sharding::ShardInfo)(client::XLA.Client, device, x::Union{AbstractArray,Number})
+function (sharding::ShardInfo)(
+    client::XLA.PJRT.Client, device, x::Union{AbstractArray,Number}
+)
     return (sharding.sharding)(client, device, x)
 end
 

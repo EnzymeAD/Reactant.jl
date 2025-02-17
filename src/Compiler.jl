@@ -478,9 +478,9 @@ function compile_mlir(f, args; client=nothing, kwargs...)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     if client !== nothing
-        backend = XLA.ClientGetPlatformName(client)
+        backend = XLA.platform_name(client)
     else
-        backend = XLA.ClientGetPlatformName(XLA.default_backend[])
+        backend = XLA.platform_name(XLA.default_backend[])
     end
     if backend == "CUDA"
         backend = "GPU"
@@ -1110,9 +1110,9 @@ function codegen_flatten!(
                     )
                     device_ordinal = XLA.device_ordinal(client, device_id)
                     sbuf = Symbol(:sbuf_, i, :_, j)
-                    device = XLA.ClientGetAddressableDevice(client, device_ordinal)
+                    device = XLA.get_addressable_device(client, device_ordinal)
                     push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.CopyBufferToDevice($buf, $device)))
+                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
                 end
             end
         else
@@ -1325,7 +1325,7 @@ function codegen_xla_call(
         if is_sharded
             quote
                 GC.@preserve $(flatten_names...) begin
-                    linearized_results = XLA.ExecutableCall(
+                    linearized_results = XLA.execute(
                         $exec,
                         $(mesh_ids),
                         ($(flatten_buffer_refs...),),
@@ -1339,7 +1339,7 @@ function codegen_xla_call(
         else
             quote
                 GC.@preserve $(flatten_names...) begin
-                    linearized_results = XLA.ExecutableCallSharded(
+                    linearized_results = XLA.execute_sharded(
                         $exec,
                         $(device),
                         ($(flatten_buffer_refs...),),
@@ -1393,7 +1393,7 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
             if !allequal(devices_list)
                 msg = "Expected all arguments to be on the same device, got:\n"
                 for (i, device) in enumerate(devices_list)
-                    msg *= "    Device $(i): $(XLA.DeviceToString(device))\n"
+                    msg *= "    Device $(i): $(string(device))\n"
                 end
                 throw(ArgumentError(msg))
             end
@@ -1407,7 +1407,7 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
             client = XLA.client(device)
         else
             client = XLA.default_backend[]
-            device = XLA.ClientGetAddressableDevice(
+            device = XLA.get_addressable_device(
                 client, XLA.device_ordinal(client, XLA.default_device_idx[])
             )
         end
@@ -1415,7 +1415,7 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
         if device !== nothing
             @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
         else
-            device = XLA.ClientGetAddressableDevice(
+            device = XLA.get_addressable_device(
                 client, XLA.device_ordinal(client, XLA.default_device_idx[])
             )
         end
@@ -1431,9 +1431,9 @@ function compile_xla(f, args; client=nothing, kwargs...)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     if client !== nothing
-        backend = XLA.ClientGetPlatformName(client)
+        backend = XLA.platform_name(client)
     else
-        backend = XLA.ClientGetPlatformName(XLA.default_backend[])
+        backend = XLA.platform_name(XLA.default_backend[])
     end
     if backend == "CUDA"
         backend = "GPU"
@@ -1464,7 +1464,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
         device_ids = mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh) : Int64[]
         mlir_fn_res.is_sharded && (device = nothing)
 
-        exec = XLA.Compile(
+        exec = XLA.compile(
             client,
             device,
             mod;
