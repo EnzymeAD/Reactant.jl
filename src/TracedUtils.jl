@@ -125,8 +125,8 @@ end
 function transpose_val(val)
     val_size = size(MLIR.IR.type(val))
     val_size == () && return val
-    attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
-    return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
+    permutation = Int64[reverse(0:(length(val_size) - 1))...]
+    return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation), 1)
 end
 
 mutable struct CompiledMlirFnResult{
@@ -210,10 +210,7 @@ function make_mlir_fn(
         [Ops.mlir_type(arg) for arg in linear_args]
     end
 
-    sym_visibility = nothing
-    if !concretein
-        sym_visibility = MLIR.IR.Attribute("private")
-    end
+    sym_visibility = concretein ? nothing : "private"
 
     ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
@@ -561,10 +558,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     end
 
     res = MLIR.Dialects.enzyme.batch(
-        batch_inputs;
-        outputs=out_tys2,
-        fn=fname,
-        batch_shape=MLIR.IR.DenseArrayAttribute([Int64(i) for i in OutShape]),
+        batch_inputs; outputs=out_tys2, fn=fname, batch_shape=[Int64(i) for i in OutShape]
     )
 
     residx = 1

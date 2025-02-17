@@ -1,5 +1,5 @@
 module ReactantAbstractFFTsExt
-
+using Reactant.MLIR.Dialects: stablehlo
 using AbstractFFTs: AbstractFFTs
 using Reactant: Reactant, MLIR, Ops, TracedRArray
 
@@ -31,58 +31,62 @@ function compute_correct_pdims(x::AbstractArray, dims)
     end
 end
 
-for op in (:rfft, :fft, :ifft)
-    mode = uppercase(string(op))
-    @eval function AbstractFFTs.$(op)(x::TracedRArray, dims)
+for op in (stablehlo.FftType.RFFT, stablehlo.FftType.FFT, stablehlo.FftType.IFFT)
+    name = Symbol(lowercase(string(op)))
+    @eval function AbstractFFTs.$(name)(x::TracedRArray, dims)
         @assert maximum(dims) ≤ ndims(x) "dims out of range"
         if dims isa Integer
             if dims != 1
                 pdims = compute_correct_pdims(x, dims)
                 return permutedims(
-                    AbstractFFTs.$(op)(permutedims(x, pdims), 1), invperm(pdims)
+                    AbstractFFTs.$(name)(permutedims(x, pdims), 1), invperm(pdims)
                 )
             end
-            return generalized_fft(x, $(mode), nothing, length(dims))
+            return generalized_fft(x, $(op), nothing, length(dims))
         end
         if !check_contiguous_innermost_dims(dims, ndims(x))
             pdims = compute_correct_pdims(x, dims)
             return permutedims(
-                AbstractFFTs.$(op)(permutedims(x, pdims), 1:length(dims)), invperm(pdims)
+                AbstractFFTs.$(name)(permutedims(x, pdims), 1:length(dims)), invperm(pdims)
             )
         end
-        return generalized_fft(x, $(mode), nothing, length(dims))
+        return generalized_fft(x, $(op), nothing, length(dims))
     end
 end
 
-for op in (:irfft,)
-    mode = uppercase(string(op))
-    @eval function AbstractFFTs.$(op)(x::TracedRArray, d::Int, dims)
+for op in (stablehlo.FftType.IRFFT,)
+    name = Symbol(lowercase(string(op)))
+    @eval function AbstractFFTs.$(name)(x::TracedRArray, d::Int, dims)
         @assert maximum(dims) ≤ ndims(x) "dims out of range"
         if dims isa Integer
             if dims != 1
                 pdims = compute_correct_pdims(x, dims)
                 return permutedims(
-                    AbstractFFTs.$(op)(permutedims(x, pdims), d, 1), invperm(pdims)
+                    AbstractFFTs.$(name)(permutedims(x, pdims), d, 1), invperm(pdims)
                 )
             end
-            return generalized_fft(x, $(mode), d, length(dims))
+            return generalized_fft(x, $(op), d, length(dims))
         end
         if !check_contiguous_innermost_dims(dims, ndims(x))
             pdims = compute_correct_pdims(x, dims)
             return permutedims(
-                AbstractFFTs.$(op)(permutedims(x, pdims), d, 1:length(dims)), invperm(pdims)
+                AbstractFFTs.$(name)(permutedims(x, pdims), d, 1:length(dims)),
+                invperm(pdims),
             )
         end
-        return generalized_fft(x, $(mode), d, length(dims))
+        return generalized_fft(x, $(op), d, length(dims))
     end
 end
 
-function generalized_fft(x::TracedRArray{T,N}, mode::String, d, first_n::Int) where {T,N}
+function generalized_fft(
+    x::TracedRArray{T,N}, mode::stablehlo.FftType.T, d, first_n::Int
+) where {T,N}
     if d === nothing
-        @assert mode ∈ ("RFFT", "FFT", "IFFT")
+        @assert mode ∈
+            (stablehlo.FftType.RFFT, stablehlo.FftType.FFT, stablehlo.FftType.IFFT)
         fft_length = [size(x, i) for i in 1:first_n]
     else
-        @assert mode == "IRFFT"
+        @assert mode == stablehlo.FftType.IRFFT
         fft_length = [i == 1 ? d : size(x, i) for i in 1:first_n]
     end
 
