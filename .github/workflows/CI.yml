@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ matrix.libReactant }} libReactant - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
+    name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.libReactant }} libReactant - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -46,63 +46,49 @@ jobs:
           # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
           # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
           - ubuntu-22.04-arm
+          - macOS-13
           - macOS-latest
         test_group:
           - core
           - neural_networks
           - integration
-        arch:
-          - x64
-          - aarch64
         assertions:
           - false
         libReactant: [packaged]
         include:
           - os: ubuntu-24.04
-            arch: x64
             libReactant: packaged
             version: '1.10'
             assertions: true
             test_group: core
           - os: ubuntu-24.04
-            arch: x64
             libReactant: packaged
             version: '1.10'
             assertions: true
             test_group: neural_networks
           - os: ubuntu-24.04
-            arch: x64
             libReactant: packaged
             version: '1.10'
             assertions: true
             test_group: integration
           # - os: ubuntu-24.04
-          #   arch: x86
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: core
           # - os: ubuntu-24.04
-          #   arch: x86
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: neural_networks
           # - os: ubuntu-24.04
-          #   arch: x86
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: integration
-        exclude:
-          - os: ubuntu-24.04 # this is x86_64, exclude foreign architecture
-            arch: aarch64
-          - os: ubuntu-22.04-arm # this is aarch64, exclude foreign architecture
-            arch: x64
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         if: ${{ ! matrix.assertions }}
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v2
       - uses: actions/checkout@v4
         if: ${{ matrix.assertions }}
@@ -117,7 +103,7 @@ jobs:
           make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
           echo $PWD/julia/usr/bin >> $GITHUB_PATH
       - name: Build libReactant
-        if: ${{ matrix.libReactant == 'local' && matrix.os != 'macOS-latest'}}
+        if: ${{ matrix.libReactant == 'local' && !startsWith(matrix.os, 'macOS-') }}
         id: build_libreactant
         run: |
           python -m pip install numpy
@@ -125,7 +111,7 @@ jobs:
           julia --color=yes --project=deps deps/build_local.jl
           cp LocalPreferences.toml test/
       - name: Build libReactant MacOS
-        if: ${{ matrix.libReactant == 'local' && matrix.os == 'macOS-latest'}}
+        if: ${{ matrix.libReactant == 'local' && !startsWith(matrix.os, 'macOS-') }}
         id: build_libreactant_mac
         run: |
           python -m pip install numpy
