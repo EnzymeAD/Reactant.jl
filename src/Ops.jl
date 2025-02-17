@@ -534,6 +534,18 @@ end
 #     )
 #     return TracedRArray{T,N}((), res, size(x))
 # end
+@noinline function bitcast_convert(
+    ::Type{U},
+    x::TracedRNumber{T};
+    location=mlir_stacktrace("bitcast_convert", @__FILE__, @__LINE__),
+) where {T,U}
+    res = MLIR.IR.result(
+        stablehlo.bitcast_convert(
+            x.mlir_data; result_0=mlir_type(TracedRArray{U,0}, ()), location
+        ),
+    )
+    return TracedRNumber{U}((), res)
+end
 
 @noinline function fft(
     x::TracedRArray{T,N};
@@ -1904,8 +1916,6 @@ end
             tr
         else
             if typeof(tr) != typeof(fr)
-                @show tr.mlir_data
-                @show fr.mlir_data
                 @assert typeof(tr) == typeof(fr) "$(typeof(tr)) vs $(typeof(fr))"
             end
             tr
@@ -2085,10 +2095,7 @@ end
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     return mesh(
-        mod,
-        [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
-        collect(Int64, m.device_ids);
-        location,
+        mod, [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))], vec(m); location
     )
 end
 

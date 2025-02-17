@@ -256,9 +256,6 @@ end
 function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::Array)
     return Adapt.adapt_storage(ka, Reactant.Ops.constant(xs))
 end
-function Adapt.adapt_structure(to::ReactantKernelAdaptor, ref::Base.RefValue)
-    return error("Cannot convert RefValue argument of Reactant Kernel")
-end
 function Adapt.adapt_structure(
     to::ReactantKernelAdaptor, bc::Broadcast.Broadcasted{Style,<:Any,Type{T}}
 ) where {Style,T}
@@ -338,6 +335,14 @@ Reactant.@reactant_overlay @noinline function (obj::KA.Kernel{ReactantBackend})(
 end
 
 Adapt.adapt_storage(to::KA.ConstAdaptor, a::CuTracedArray) = Base.Experimental.Const(a)
+
+struct ReactantRefValue{T} <: Ref{T}
+    val::T
+end
+Base.getindex(r::ReactantRefValue{T}) where {T} = r.val
+function Adapt.adapt_structure(to::ReactantKernelAdaptor, ref::Base.RefValue)
+    return ReactantRefValue(adapt(to, ref[]))
+end
 
 function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)

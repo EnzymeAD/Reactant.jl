@@ -44,24 +44,20 @@ Base.isempty(x::WrappedConcreteRArray) = isempty(ancestor(x))
 
 function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
     data = Array{T,N}(undef, size(X)...)
-    XLA.await(X)
 
     if Sharding.is_sharded(X)
-        # TODO: We can we much more efficient here and only move data from the minimal
-        #       slices that populates the array.
+        completed = Set{eltype(X.sharding.device_to_array_slices)}()
         for idx in 1:length(X.data)
-            buffer = X.data[idx].buffer
-            # We can't use a pointer to a subarray since BufferToHost expects the data to
-            # be contiguous.
             slice = X.sharding.device_to_array_slices[idx]
-            data_slice = data[slice...]
-            GC.@preserve data_slice buffer begin
-                XLA.BufferToHost(buffer, pointer(data_slice))
+            if slice ∉ completed
+                push!(completed, slice)
+            else
+                continue
             end
-            data[slice...] = data_slice
+            data[slice...] = convert(Array{T}, X.data[idx])
         end
     else
-        buf = only(X.data).buffer
+        buf = XLA.synced_buffer(only(X.data))
         GC.@preserve data buf begin
             XLA.BufferToHost(buf, pointer(data))
         end

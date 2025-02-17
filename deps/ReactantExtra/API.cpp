@@ -104,6 +104,10 @@
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
 
+// IFRT - Proxy (RPC)
+#include "xla/python/ifrt_proxy/client/registry.h"
+#include "xla/python/ifrt_proxy/server/grpc_server.h"
+
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
@@ -828,6 +832,11 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
       device_assignment(0, mesh_id) = i;
     }
     options.executable_build_options.set_device_assignment(device_assignment);
+
+    options.executable_build_options
+        .set_allow_spmd_sharding_propagation_to_parameters({false});
+    options.executable_build_options
+        .set_allow_spmd_sharding_propagation_to_output({false});
   } else {
     assert(device_id >= 0);
 
@@ -936,25 +945,46 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
 
   // Validate the number of results.
   if (results.size() != num_results) {
-    llvm::errs() << "Error: results.size()=" << results.size()
-                 << " does not match num_results=" << num_results << "\n";
-    std::abort(); // Terminate if the number of results is incorrect.
+    ReactantThrowError(
+        ("Error: results.size()=" + std::to_string(results.size()) +
+         " does not match num_results=" + std::to_string(num_results) + "\n")
+            .c_str());
   }
 
   // Handle futures if they are returned.
-  if (returned_future.has_value()) {
-    *futures = true;
+  auto future_val = returned_future.has_value();
+  *futures = future_val;
+  if (future_val) {
     for (size_t i = 0; i < num_results; i++) {
       future_results[i] = new FutureType(*returned_future);
     }
-  } else {
-    *futures = false;
   }
 
   // Release the results into the output array.
   for (size_t i = 0; i < num_results; i++) {
     op_results[i] = results[i].release();
   }
+}
+
+// This isn't exposed to julia, but leaving it here since it is very useful for
+// debugging sharding (and generally for the execute workflow)
+void PrintPjRtBuffer(PjRtBuffer *buffer) {
+  if (buffer) {
+    xla::Shape shape = MyValueOrThrow(buffer->HostShape());
+    auto dims = shape.dimensions();
+    auto nelems = std::accumulate(dims.begin(), dims.end(), 1,
+                                  std::multiplies<int64_t>());
+    std::vector<float> host_data(nelems);
+    BufferToHost(buffer, host_data.data());
+
+    for (int i = 0; i < nelems; ++i) {
+      std::cout << host_data[i] << " ";
+    }
+    std::cout << std::endl;
+  } else {
+    std::cout << "    Buffer is nullptr" << std::endl;
+  }
+  return;
 }
 
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
@@ -977,11 +1007,11 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
                              .c_str());
     }
 
-    argument_handles[mesh_id].reserve(num_args);
+    argument_handles[device_idx].reserve(num_args);
     for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
       // Assuming op_args is a flat array of size num_devices * num_args
       // where arguments for each device are contiguous
-      argument_handles[mesh_id].push_back(
+      argument_handles[device_idx].push_back(
           op_args[mesh_id * num_args + arg_idx]);
     }
   }
@@ -996,29 +1026,39 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
 
   std::optional<std::vector<FutureType>> returned_futures =
       std::vector<FutureType>();
-  auto results = MyValueOrThrow(
-      exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
-                        argument_handles),
-                    options, returned_futures));
+  std::vector<std::vector<std::unique_ptr<PjRtBuffer>>> results =
+      MyValueOrThrow(exec->Execute(
+          static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
+              argument_handles),
+          options, returned_futures));
 
-  assert(results.size() == num_mesh_ids);
+  if (results.size() != num_mesh_ids) {
+    ReactantThrowError((" results.size()=" + std::to_string(results.size()) +
+                        " num_mesh_ids=" + std::to_string(num_mesh_ids) + "\n")
+                           .c_str());
+  }
 
   for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
     int64_t mesh_id = mesh_ids[device_idx];
     if (results[mesh_id].size() != num_results) {
-      llvm::errs() << " results[" << mesh_id
-                   << "].size()=" << results[mesh_id].size()
-                   << " num_results=" << num_results << "\n";
+      ReactantThrowError((" results[" + std::to_string(mesh_id) + "].size()=" +
+                          std::to_string(results[mesh_id].size()) +
+                          " num_results=" + std::to_string(num_results) + "\n")
+                             .c_str());
     }
-    assert(results[mesh_id].size() == num_results);
   }
 
   // Handle returned futures
-  if (returned_futures.has_value()) {
-    *futures = true;
-    assert(returned_futures->size() == num_mesh_ids);
-  } else {
-    *futures = false;
+  auto future_val = returned_futures.has_value();
+  *futures = future_val;
+  if (future_val) {
+    if (returned_futures->size() != num_mesh_ids) {
+      ReactantThrowError((" returned_futures->size()=" +
+                          std::to_string(returned_futures->size()) +
+                          " num_mesh_ids=" + std::to_string(num_mesh_ids) +
+                          "\n")
+                             .c_str());
+    }
   }
 
   // Copy results into the output buffers
@@ -1026,13 +1066,21 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
     int64_t mesh_id = mesh_ids[device_idx];
     for (int result_idx = 0; result_idx < num_results; ++result_idx) {
       int flat_index = mesh_id * num_results + result_idx;
-      op_results[flat_index] = results[mesh_id][result_idx].release();
-      if (returned_futures.has_value()) {
+      op_results[flat_index] = results[device_idx][result_idx].release();
+      if (future_val) {
         future_results[flat_index] =
-            new FutureType((*returned_futures)[mesh_id]);
+            new FutureType((*returned_futures)[device_idx]);
       }
     }
   }
+}
+
+extern "C" int PjRtLoadedExecutableNumReplicas(PjRtLoadedExecutable *exec) {
+  return exec->num_replicas();
+}
+
+extern "C" int PjRtLoadedExecutableNumPartitions(PjRtLoadedExecutable *exec) {
+  return exec->num_partitions();
 }
 
 void prepareRegistry(mlir::DialectRegistry &registry);
@@ -1355,4 +1403,94 @@ ifrt_CopyArrayToHostBuffer(HeldValue<tsl::RCReference<xla::ifrt::Array>> *array,
                            void *data, ifrt::ArrayCopySemantics semantics) {
   return new FutureType(
       (*array)->CopyToHostBuffer(data, std::nullopt, semantics));
+}
+
+extern "C" void
+PjRtLoadedExecutableGetHloModules(xla::PjRtLoadedExecutable *exec,
+                                  void **hlo_modules, int32_t *nmodules) {
+  auto hlo_modules_vec = MyValueOrThrow(exec->GetHloModules());
+  *nmodules = hlo_modules_vec.size();
+  for (int i = 0; i < *nmodules; i++) {
+    hlo_modules[i] = reactant::capture(hlo_modules_vec[i]);
+  }
+}
+
+extern "C" const char *
+HloModuleToString(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+  return cstr_from_string(hlo_module->obj()->ToString());
+}
+
+extern "C" void
+FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+  delete hlo_module;
+}
+
+// right now only making it available for TPU
+// in the future, we would like this for CPU and GPU PjRt backends too
+extern "C" ifrt::proxy::GrpcServer *
+ifrt_proxy_grpc_server_create_from_ifrt_client_factory_tpu(
+    const char *c_address, const char *tpu_path, const char **error) {
+  std::string address = c_address;
+
+  // taken from `MakeTPUClient`
+  std::string tpu_library_path;
+  if (auto path = llvm::sys::Process::GetEnv(kEnvTpuLibraryPath)) {
+    tpu_library_path = *path;
+  } else if (tpu_path) {
+    tpu_library_path = std::string(tpu_path);
+  } else {
+    *error = "Could not find TPU path";
+    return nullptr;
+  }
+
+  const PJRT_Api *pluginLoad =
+      LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
+  if (pluginLoad == nullptr)
+    return nullptr;
+  auto tpu_status = InitializePjrtPlugin("tpu", error);
+  if (tpu_status)
+    return nullptr;
+
+  return MyValueOrThrow(
+             xla::ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
+                 address,
+                 []() -> absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> {
+                   auto pjrt_client =
+                       std::shared_ptr<xla::PjRtClient>(GetCApiClient("TPU"));
+                   return std::shared_ptr<xla::ifrt::Client>(
+                       xla::ifrt::PjRtClient::Create(pjrt_client).release());
+                 }))
+      .release();
+}
+
+extern "C" void ifrt_proxy_grpc_server_dtor(ifrt::proxy::GrpcServer *server) {
+  delete server;
+}
+
+extern "C" const char *
+ifrt_proxy_grpc_server_address(ifrt::proxy::GrpcServer *server) {
+  return cstr_from_string(server->address());
+}
+
+extern "C" const char *
+ifrt_proxy_grpc_server_wait(ifrt::proxy::GrpcServer *server) {
+  server->Wait();
+}
+
+// `c_proxy_server_address` must be of the form
+// `<backend-transport>:<backend-address>`; e.g. "grpc:localhost"
+// NOTE not sure if we must pass the port, but probably yes
+// by default, set `connection_timeout_in_minutes` to 2
+extern "C" ifrt::Client *
+ifrt_proxy_create_client(const char *c_proxy_server_address,
+                         int connection_timeout_in_minutes) {
+  std::string proxy_server_address = c_proxy_server_address;
+  ifrt::proxy::ClientConnectionOptions options = {
+      absl::Minutes(connection_timeout_in_minutes),
+      nullptr, // callback `on_disconnect`
+      nullptr, // callback `on_connection_update`
+  };
+  return MyValueOrThrow(
+             ifrt::proxy::CreateClient(c_proxy_server_address, options))
+      .release();
 }

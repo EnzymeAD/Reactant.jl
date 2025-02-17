@@ -22,6 +22,10 @@ import ..Reactant:
 
 import ..ReactantCore: correct_maybe_bcast_call
 
+@inline function traced_getfield(@nospecialize(obj::Dict), field)
+    return Base.getindex(obj, field)
+end
+
 @inline function traced_getfield(@nospecialize(obj), field)
     return Base.getfield(obj, field)
 end
@@ -38,6 +42,10 @@ end
     ancestor_obj = ancestor(obj)
     (isbitstype(T) || ancestor_obj isa RArray) && return Base.setfield!(obj, field, val)
     return Base.setindex!(obj, val, field)
+end
+
+@inline function traced_setfield!(@nospecialize(obj::Dict), field, val)
+    return Base.setindex!(obj, field, val)
 end
 
 function create_result(
@@ -883,8 +891,48 @@ macro code_mhlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
     )
-    return esc(:($(compile_expr);
-    $(first)($(compiled))))
+    #! format: off
+    return esc(
+        :(
+            $(compile_expr);
+            $(first)($(compiled))
+        )
+    )
+    #! format: on
+end
+
+"""
+    @code_xla [optimize = ...] [no_nan = <true/false>] f(args...)
+
+Similar to `@code_hlo`, but prints the HLO module.
+"""
+macro code_xla(args...)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true, :no_nan => false, :client => nothing
+    )
+    compile_expr, (; compiled) = compile_call_expr(
+        __module__, compile_xla, default_options, args...
+    )
+    #! format: off
+    return esc(
+        :(
+            $(compile_expr);
+            exec = $(compiled)[2];
+            hlo_modules = $(XLA.get_hlo_modules)(exec);
+            if length(hlo_modules) == 1
+                hlo_module = only(hlo_modules)
+                println(hlo_module)
+            else
+                println("HLO modules:")
+                for (i, hlo_module) in enumerate(hlo_modules)
+                    println("Partition $i:")
+                    println(hlo_module)
+                    println()
+                end
+            end
+        )
+    )
+    #! format: on
 end
 
 """
@@ -986,7 +1034,13 @@ The name is due to its similarity to the `flatten` function in `jax.tree_util.re
 The _linearized arguments_ do not directly refer to the  are the arguments that have been flattened into a single list.
 """
 function codegen_flatten!(
-    linear_args, seen_args, result_stores, is_sharded::Bool, mesh, client
+    linear_args,
+    seen_args,
+    result_stores,
+    is_sharded::Bool,
+    mesh,
+    linear_parameter_shardings,
+    client,
 )
     flatten_names = Symbol[]
     flatten_code = Expr[]
@@ -1019,34 +1073,50 @@ function codegen_flatten!(
         for p in path[3:end]
             flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
         end
-        push!(flatten_code, :($usbuf = $flatcode.data))
 
         if is_sharded
             carg = inv_seen_args[arg]
+            condensed_op_sharding = Reactant.Sharding.XLA.CondensedOpSharding(
+                linear_parameter_shardings[i]
+            )
             if Reactant.Sharding.is_sharded(carg)
+                # Currently disabling the error since we roundtrip from MHLO to generate
+                # the shardings
+                # # Check if the sharding provided is same as the one we have
+                # arg_condensed_op_sharding = Reactant.Sharding.XLA.CondensedOpSharding(
+                #     Reactant.Sharding.ShardingWithShape(carg.sharding, size(carg))
+                # )
+                # @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+
+                push!(flatten_code, :($usbuf = $flatcode.data))
                 for j in 1:length(mesh)
                     sbuf = Symbol(:sbuf_, i, "_", j)
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
                 end
             else
-                # Warn here first and then replicate the input across all devices on the
-                # mesh
-                @warn "Input $carg is not sharded, replicating across all devices. It \
-                       is recommended to replicate the input across all devices on the \
-                       mesh manually using `Reactant.Sharding.NamedSharding`" maxlog = 1
-                buf = Symbol(:buf_, i)
-                push!(flatten_code, :($buf = XLA.synced_buffer(only($usbuf))))
+                push!(flatten_code, :($usbuf = $flatcode))
+                device_to_array_slices = XLA.sharding_to_concrete_array_indices(
+                    condensed_op_sharding, size(carg), mesh
+                )
+                device_ids = vec(mesh)
                 for j in 1:length(mesh)
-                    device_id = mesh.device_ids[j]
+                    buf = Symbol(:buf_, i, :_, j)
+                    device_id = device_ids[j]
+                    slice = device_to_array_slices[j]
+                    push!(
+                        flatten_code,
+                        :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
+                    )
                     device_ordinal = XLA.device_ordinal(client, device_id)
-                    sbuf = Symbol(:sbuf_, i, "_", j)
+                    sbuf = Symbol(:sbuf_, i, :_, j)
                     device = XLA.ClientGetAddressableDevice(client, device_ordinal)
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.CopyBufferToDevice($buf, $device)))
                 end
             end
         else
+            push!(flatten_code, :($usbuf = $flatcode.data))
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
             if arg isa TracedRArray || arg isa TracedRNumber
@@ -1391,19 +1461,17 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # compile MLIR module to XLA executable
+        device_ids = mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh) : Int64[]
         mlir_fn_res.is_sharded && (device = nothing)
-        mesh_ids = if mlir_fn_res.is_sharded
-            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
-        else
-            Int64[]
-        end
+
         exec = XLA.Compile(
             client,
             device,
             mod;
-            num_results=length(mlir_fn_res.linear_results),
+            num_outputs=length(mlir_fn_res.linear_results),
+            num_parameters=length(mlir_fn_res.linear_args),
             mlir_fn_res.is_sharded,
-            mesh_ids,
+            device_ids,
         )
 
         return mod, exec, mlir_fn_res, device, client
@@ -1435,6 +1503,7 @@ function compile(f, args; sync=false, kwargs...)
         result_stores,
         mlir_fn_res.is_sharded,
         mlir_fn_res.sharding_mesh,
+        XLA.get_parameter_shardings(exec),
         client,
     )
 
@@ -1445,15 +1514,10 @@ function compile(f, args; sync=false, kwargs...)
         donated_args_mask,
         length(linear_results),
         mlir_fn_res.is_sharded,
-        if mlir_fn_res.is_sharded
-            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
-        else
-            Int64[]
-        end,
+        mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh) : Int64[],
     )
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
-        # Generate a tuple of DeviceToArraySlices and PartitionSpecs
         output_shardings = XLA.get_output_shardings(exec)
         XLA.compute_array_indices_and_partition_spec.(
             output_shardings,
