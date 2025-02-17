@@ -550,6 +550,7 @@ cc_library(
         # "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
         # "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "@xla//xla/python/ifrt/hlo:hlo_program",
+        "@xla//xla/python/ifrt/ir:ifrt_ir_program",
         "@xla//xla/ffi:call_frame",
         "@com_google_protobuf//:protobuf",
 
