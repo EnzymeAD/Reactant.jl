@@ -30,6 +30,8 @@ include("Stats.jl")
 include("Utils.jl")
 include("HloModule.jl")
 
+include("IFRT/IFRT.jl")
+
 const backends = Dict{String,Client}()
 const default_backend = Ref{Client}()
 const default_device_idx = Ref{Int}(0)

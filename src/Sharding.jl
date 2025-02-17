@@ -100,7 +100,9 @@ function (sharding::NamedSharding)(
     @assert length(partition_spec) == ndims(x)
 
     device_to_array_slices, _ = XLA.compute_array_indices_and_partition_spec(
-        XLA.CondensedOpSharding(ShardingWithShape(sharding, size(x))), size(x), mesh
+        convert(XLA.CondensedOpSharding, ShardingWithShape(sharding, size(x))),
+        size(x),
+        mesh,
     )
     devices_list = vec(mesh)
 
@@ -164,12 +166,20 @@ internal_simple_op(x) = Reactant.Ops.negate(x)
 #      some API to convert shardy annotations to mhlo annotations.
 # XXX: We should cache the CondensedOpSharding else we will end up calling this function
 #      multiple times.
-function XLA.CondensedOpSharding(sharding_and_shape::ShardingWithShape{<:NamedSharding})
+function Base.convert(
+    ::Type{XLA.CondensedOpSharding}, sharding_and_shape::ShardingWithShape{<:NamedSharding}
+)
+    return convert(XLA.CondensedOpSharding, convert(XLA.OpSharding, sharding_and_shape))
+end
+
+function Base.convert(
+    ::Type{XLA.OpSharding}, sharding_and_shape::ShardingWithShape{<:NamedSharding}
+)
     tmp = Reactant.ConcreteRArray(
         ones(sharding_and_shape.shape); sharding=LazySharding(sharding_and_shape.sharding)
     )
     _, exec, _, _, _ = Reactant.Compiler.compile_xla(internal_simple_op, (tmp,))
-    return XLA.CondensedOpSharding(only(XLA.get_parameter_shardings(exec)))
+    return only(XLA.get_parameter_shardings(exec))
 end
 
 # Lazy Sharding. ConcreteArrays with this annotation is not really sharded but we can use it
@@ -214,9 +224,12 @@ struct ShardInfo{S,D} <: AbstractSharding
     device_to_array_slices::D
 end
 
-function XLA.CondensedOpSharding(sharding_and_shape::ShardingWithShape{<:ShardInfo})
-    return XLA.CondensedOpSharding(
-        ShardingWithShape(sharding_and_shape.sharding.sharding, sharding_and_shape.shape)
+function Base.convert(
+    ::Type{XLA.CondensedOpSharding}, sharding_and_shape::ShardingWithShape{<:ShardInfo}
+)
+    return convert(
+        XLA.CondensedOpSharding,
+        ShardingWithShape(sharding_and_shape.sharding.sharding, sharding_and_shape.shape),
     )
 end
 

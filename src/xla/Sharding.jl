@@ -7,12 +7,29 @@
     Unknown
 end
 
+function Base.convert(::Type{OpShardingType.T}, i::Integer)
+    i == 0 && return OpShardingType.Replicated
+    i == 1 && return OpShardingType.Maximal
+    i == 2 && return OpShardingType.Tuple
+    i == 3 && return OpShardingType.Other
+    i == 4 && return OpShardingType.Manual
+    i == 5 && return OpShardingType.Unknown
+    return error("Invalid OpShardingType $i")
+end
+
 @enumx ShardGroupType begin
     As
     Like
 end
 
-# TODO: tuple sharding / op metadata
+function Base.convert(::Type{ShardGroupType.T}, i::Integer)
+    i == 0 && return ShardGroupType.As
+    i == 1 && return ShardGroupType.Like
+    return error("Invalid ShardGroupType $i")
+end
+
+## TODO: tuple sharding / op metadata
+## Keep this in sync with JLOpSharding in API.cpp
 struct JLOpSharding
     type::Int32
     n_tile_dimensions::Int32
@@ -33,9 +50,12 @@ struct JLOpSharding
     is_shard_group::Bool
     shard_group_id::Int64
     shard_group_type::Int32
+    op_sharding::Ptr{Cvoid}
 end
 
-struct OpSharding
+# xla::OpSharding
+mutable struct OpSharding
+    ptr::Ptr{Cvoid}
     type::OpShardingType.T
     tile_dimensions::Vector{Int64}
     layout_minor_to_major::Vector{Int64}
@@ -48,9 +68,18 @@ struct OpSharding
     is_shard_group::Bool
     shard_group_id::Int64
     shard_group_type::ShardGroupType.T
+
+    function OpSharding(ptr::Ptr{Cvoid}, args...)
+        @assert ptr != C_NULL
+        return finalizer(free_op_sharding, new(ptr, args...))
+    end
 end
 
-function OpSharding(sharding::JLOpSharding)
+function free_op_sharding(op_sharding::OpSharding)
+    @ccall MLIR.API.mlir_c.free_op_sharding(op_sharding.ptr::Ptr{Cvoid})::Cvoid
+end
+
+function Base.convert(::Type{OpSharding}, sharding::JLOpSharding)
     @assert sharding.type != 2 "Tuple sharding is not supported yet!"
 
     last_tile_dims = unsafe_wrap(Array, sharding.last_tile_dims, sharding.n_last_tile_dims)
@@ -76,7 +105,8 @@ function OpSharding(sharding::JLOpSharding)
     )
 
     return OpSharding(
-        int_to_op_sharding_type(sharding.type),
+        sharding.op_sharding,
+        convert(OpShardingType.T, sharding.type),
         tile_dimensions,
         layout_minor_to_major,
         sharding.replicate_on_last_tile_dim,
@@ -87,24 +117,8 @@ function OpSharding(sharding::JLOpSharding)
         iota_transpose_perm,
         sharding.is_shard_group,
         sharding.shard_group_id,
-        int_to_shard_group_type(sharding.shard_group_type),
+        convert(ShardGroupType.T, sharding.shard_group_type),
     )
-end
-
-function int_to_op_sharding_type(i::Int32)
-    i == 0 && return OpShardingType.Replicated
-    i == 1 && return OpShardingType.Maximal
-    i == 2 && return OpShardingType.Tuple
-    i == 3 && return OpShardingType.Other
-    i == 4 && return OpShardingType.Manual
-    i == 5 && return OpShardingType.Unknown
-    return error("Invalid OpShardingType $i")
-end
-
-function int_to_shard_group_type(i::Int32)
-    i == 0 && return ShardGroupType.As
-    i == 1 && return ShardGroupType.Like
-    return error("Invalid ShardGroupType $i")
 end
 
 function generate_device_list(sharding::OpSharding)
@@ -149,14 +163,16 @@ end
 function sharding_to_concrete_array_indices(
     sharding::OpSharding, shape::Dims{N}, mesh
 ) where {N}
-    return sharding_to_concrete_array_indices(CondensedOpSharding(sharding), shape, mesh)
+    return sharding_to_concrete_array_indices(
+        convert(CondensedOpSharding, sharding), shape, mesh
+    )
 end
 
 function compute_array_indices_and_partition_spec(
     sharding::OpSharding, array_size::Dims{N}, mesh
 ) where {N}
     return compute_array_indices_and_partition_spec(
-        CondensedOpSharding(sharding), array_size, mesh
+        convert(CondensedOpSharding, sharding), array_size, mesh
     )
 end
 
@@ -174,7 +190,7 @@ function Base.:(==)(a::CondensedOpSharding, b::CondensedOpSharding)
            a.tile_assignment == b.tile_assignment
 end
 
-function CondensedOpSharding(sharding::OpSharding)
+function Base.convert(::Type{CondensedOpSharding}, sharding::OpSharding)
     @assert isempty(sharding.last_tile_dims) "Last Tile dimensions are not supported \
                                               yet!"
     @assert isempty(sharding.tile_dimensions) "Tile dimensions are not supported yet! \
@@ -307,4 +323,40 @@ function __get_device_sequence(arr, dim)
         push!(sequence, arr[idx...])
     end
     return sequence
+end
+
+# xla::HloSharding
+mutable struct HloSharding
+    ptr::Ptr{Cvoid}
+
+    function HloSharding(ptr::Ptr{Cvoid})
+        @assert ptr != C_NULL
+        return finalizer(free_hlo_sharding, new(ptr))
+    end
+end
+
+function free_hlo_sharding(hlo_sharding::HloSharding)
+    @ccall MLIR.API.mlir_c.free_hlo_sharding(hlo_sharding.ptr::Ptr{Cvoid})::Cvoid
+end
+
+function Base.convert(::Type{HloSharding}, op_sharding::OpSharding)
+    GC.@preserve op_sharding begin
+        return HloSharding(
+            @ccall MLIR.API.mlir_c.hlo_sharding_from_op_sharding(
+                op_sharding.ptr::Ptr{Cvoid}
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        str = @ccall MLIR.API.mlir_c.hlo_sharding_to_string(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Cstring
+    end
+    str_jl = unsafe_string(str)
+    @ccall free(str::Cstring)::Cvoid
+    print(io, "HloSharding(\"", str_jl, "\")")
+    return nothing
 end
