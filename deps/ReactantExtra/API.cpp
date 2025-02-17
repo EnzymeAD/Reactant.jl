@@ -663,7 +663,7 @@ struct JLOpSharding {
   const void *op_sharding;
 };
 
-void OpShardingToJLOpSharding(const xla::OpSharding &op_sharding,
+void OpShardingToJLOpSharding(const xla::OpSharding op_sharding,
                               JLOpSharding *jl_op_sharding) {
   jl_op_sharding->type = op_sharding.type();
   jl_op_sharding->replicate_on_last_tile_dim =
@@ -739,7 +739,7 @@ void OpShardingToJLOpSharding(const xla::OpSharding &op_sharding,
   jl_op_sharding->shard_group_id = op_sharding.shard_group_id();
   jl_op_sharding->shard_group_type = op_sharding.shard_group_type();
 
-  jl_op_sharding->op_sharding = new xla::OpSharding(op_sharding);
+  jl_op_sharding->op_sharding = new xla::OpSharding(std::move(op_sharding));
 }
 
 typedef PjRtFuture<> FutureType;

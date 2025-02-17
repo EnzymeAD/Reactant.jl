@@ -5,9 +5,7 @@ end
 function XLA.client(device::Device)
     GC.@preserve device begin
         return Client(
-            @ccall MLIR.API.mlir_c.DeviceToClient(
-                device.device::Ptr{Cvoid}
-            )::Ptr{Cvoid}
+            @ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
         )
     end
 end

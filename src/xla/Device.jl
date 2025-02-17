@@ -1,8 +1,7 @@
 abstract type AbstractDevice end
 
-function Base.show(io::IO, ::MIME"text/plain", device::AbstractDevice)
-    mod = parentmodule(device)
-    print(io, "$(mod).Device($(device.device), name=\"$(string(device))\")")
+function Base.show(io::IO, ::MIME"text/plain", device::D) where {D <: AbstractDevice}
+    print(io, "$(parentmodule(D)).Device($(device.device), name=\"$(string(device))\")")
     return nothing
 end
 
