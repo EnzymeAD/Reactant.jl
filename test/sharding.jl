@@ -118,6 +118,7 @@ end
 @testset "Device List from Iota Tile" begin
     @test Reactant.XLA.generate_device_list(
         Reactant.XLA.OpSharding(
+            convert(Ptr{Nothing}, pointer([1])), # dummy pointer that isn't used here
             Reactant.XLA.OpShardingType.Other,
             Int64[],
             Int64[],
@@ -135,6 +136,7 @@ end
 
     @test Reactant.XLA.generate_device_list(
         Reactant.XLA.OpSharding(
+            convert(Ptr{Nothing}, pointer([1])), # dummy pointer that isn't used here
             Reactant.XLA.OpShardingType.Other,
             Int64[],
             Int64[],
@@ -152,6 +154,7 @@ end
 
     @test Reactant.XLA.generate_device_list(
         Reactant.XLA.OpSharding(
+            convert(Ptr{Nothing}, pointer([1])), # dummy pointer that isn't used here
             Reactant.XLA.OpShardingType.Other,
             Int64[],
             Int64[],
