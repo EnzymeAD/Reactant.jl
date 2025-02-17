@@ -421,6 +421,10 @@ extern "C" const char *ClientGetPlatformName(PjRtClient *client) {
   return cstr_from_string(client->platform_name());
 }
 
+extern "C" const char *DeviceGetKind(PjRtDevice *device) {
+  return cstr_from_string(device->device_kind());
+}
+
 // To keep in sync with JLAllocatorStats in src/XLA.jl
 struct JLAllocatorStats {
   int64_t num_allocs;
@@ -1258,36 +1262,6 @@ reactant_release_pjrtbuffer(HeldValue<std::shared_ptr<PjRtBuffer>> *buffer) {
   delete buffer;
 }
 
-extern "C" ifrt::Client *
-ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
-  xla::ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
-  return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
-}
-
-extern "C" ifrt::Client *MakeCPUIfrtClient(uint8_t asynchronous, int node_id,
-                                           int num_nodes) {
-  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
-      MakeCPUClient(asynchronous, node_id, num_nodes)));
-}
-
-extern "C" ifrt::Client *
-MakeGPUIfrtClient(int node_id, int num_nodes, int *allowed_devices,
-                  int num_allowed_devices, double memory_fraction,
-                  bool preallocate, const char *platform_name,
-                  const char **error) {
-  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
-      MakeGPUClient(node_id, num_nodes, allowed_devices, num_allowed_devices,
-                    memory_fraction, preallocate, platform_name, error)));
-}
-
-extern "C" ifrt::Client *MakeTPUIfrtClient(const char *tpu_path,
-                                           const char **error) {
-  return ifrt_pjrt_MakeClient(
-      reactant_hold_pjrtclient(MakeTPUClient(tpu_path, error)));
-}
-
-extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
-
 extern "C" xla::ifrt::LoadedExecutable *
 ifrt_ClientCompile(ifrt::PjRtClient *client, MlirModule cmod, int64_t device_id,
                    bool is_sharded, const int64_t *mesh_ids,
@@ -1399,6 +1373,8 @@ FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
   delete hlo_module;
 }
 
+#pragma region IfRtClient
+
 // right now only making it available for TPU
 // in the future, we would like this for CPU and GPU PjRt backends too
 extern "C" ifrt::proxy::GrpcServer *
@@ -1468,6 +1444,79 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
              ifrt::proxy::CreateClient(c_proxy_server_address, options))
       .release();
 }
+
+extern "C" ifrt::Client *
+ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
+  xla::ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
+  return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
+}
+
+extern "C" ifrt::Client *MakeCPUIfrtClient(uint8_t asynchronous, int node_id,
+                                           int num_nodes) {
+  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
+      MakeCPUClient(asynchronous, node_id, num_nodes)));
+}
+
+extern "C" ifrt::Client *
+MakeGPUIfrtClient(int node_id, int num_nodes, int *allowed_devices,
+                  int num_allowed_devices, double memory_fraction,
+                  bool preallocate, const char *platform_name,
+                  const char **error) {
+  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
+      MakeGPUClient(node_id, num_nodes, allowed_devices, num_allowed_devices,
+                    memory_fraction, preallocate, platform_name, error)));
+}
+
+extern "C" ifrt::Client *MakeTPUIfrtClient(const char *tpu_path,
+                                           const char **error) {
+  return ifrt_pjrt_MakeClient(
+      reactant_hold_pjrtclient(MakeTPUClient(tpu_path, error)));
+}
+
+extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
+
+extern "C" int ifrt_ClientNumDevices(ifrt::Client *client) {
+  return client->device_count();
+}
+
+extern "C" int ifrt_ClientNumAddressableDevices(ifrt::Client *client) {
+  return client->addressable_device_count();
+}
+
+extern "C" int ifrt_ClientProcessIndex(ifrt::Client *client) {
+  return client->process_index();
+}
+
+extern "C" const char *ifrt_ClientGetPlatformName(ifrt::Client *client) {
+  return cstr_from_string(client->platform_name());
+}
+
+extern "C" ifrt::Device *ifrt_ClientGetDevice(ifrt::Client *client, int idx) {
+  return MyValueOrThrow(client->LookupDevice(ifrt::DeviceId(idx)));
+}
+
+extern "C" ifrt::Device *ifrt_ClientGetAddressableDevice(ifrt::Client *client,
+                                                         int idx) {
+  return MyValueOrThrow(client->LookupAddressableDevice(idx));
+}
+
+#pragma endregion
+
+#pragma region IfRtDevice
+
+extern "C" int64_t ifrt_DeviceGetGlobalDeviceId(ifrt::Device *device) {
+  return device->Id().value();
+}
+
+extern "C" const char *ifrt_DeviceGetKind(ifrt::Device *device) {
+  return cstr_from_string(device->Kind());
+}
+
+extern "C" ifrt::Client *ifrt_DeviceToClient(ifrt::Device *device) {
+  return device->client();
+}
+
+#pragma endregion
 
 #pragma region HloSharding
 

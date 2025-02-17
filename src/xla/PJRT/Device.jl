@@ -10,7 +10,6 @@ function XLA.client(device::Device)
     end
 end
 
-# TODO: Can be defined on the AbstractDevice?
 function XLA.device_ordinal(client::Client, device::Device)
     return XLA.device_ordinal(client, XLA.get_local_device_id(device))
 end
@@ -18,10 +17,13 @@ function XLA.device_ordinal(client::Client, local_device_id::Integer)
     return client.global_ordinals[local_device_id + 1]
 end
 
-function Base.string(device::Device)
-    client = XLA.client(device)
-    platform_name = XLA.platform_name(client)
-    return "$(uppercase(platform_name)):$(XLA.device_ordinal(client, device))"
+function XLA.device_kind(device::Device)
+    GC.@preserve device begin
+        str = @ccall MLIR.API.mlir_c.DeviceGetKind(device.device::Ptr{Cvoid})::Cstring
+    end
+    str_jl = unsafe_string(str)
+    @ccall free(str::Cstring)::Cvoid
+    return str_jl
 end
 
 function XLA.get_local_device_id(device::Device)

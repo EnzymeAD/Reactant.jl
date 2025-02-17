@@ -3,9 +3,65 @@ mutable struct Client <: XLA.AbstractClient
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        # TODO: Finalizer
-        return new(client)
+        return finalizer(XLA.free_client, new(client))
     end
+end
+
+function XLA.free_client(client::Client)
+    @ccall MLIR.API.mlir_c.ifrt_FreeClient(client.client::Ptr{Cvoid})::Cvoid
+end
+
+function XLA.num_devices(client::Client)
+    GC.@preserve client begin
+        return @ccall MLIR.API.mlir_c.ifrt_ClientNumDevices(client.client::Ptr{Cvoid})::Cint
+    end
+end
+
+function XLA.num_addressable_devices(client::Client)
+    GC.@preserve client begin
+        return @ccall MLIR.API.mlir_c.ifrt_ClientNumAddressableDevices(
+            client.client::Ptr{Cvoid}
+        )::Cint
+    end
+end
+
+function XLA.process_index(client::Client)
+    GC.@preserve client begin
+        return @ccall MLIR.API.mlir_c.ifrt_ClientProcessIndex(
+            client.client::Ptr{Cvoid}
+        )::Cint
+    end
+end
+
+function XLA.get_device(client::Client, idx)
+    GC.@preserve client begin
+        return Device(
+            @ccall MLIR.API.mlir_c.ifrt_ClientGetDevice(
+                client.client::Ptr{Cvoid}, idx::Cint
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+function XLA.get_addressable_device(client::Client, idx)
+    GC.@preserve client begin
+        return Device(
+            @ccall MLIR.API.mlir_c.ifrt_ClientGetAddressableDevice(
+                client.client::Ptr{Cvoid}, idx::Cint
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+function XLA.platform_name(client::Client)
+    GC.@preserve client begin
+        str = @ccall MLIR.API.mlir_c.ifrt_ClientGetPlatformName(
+            client.client::Ptr{Cvoid}
+        )::Cstring
+    end
+    str_jl = unsafe_string(str)
+    @ccall free(str::Cstring)::Cvoid
+    return str_jl
 end
 
 # Different Backends
