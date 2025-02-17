@@ -22,7 +22,7 @@ mutable struct Client <: XLA.AbstractClient
         for (i, device) in enumerate(devices)
             global_ordinals[local_ids[i]] = i - 1
         end
-        return finalizer(free_client, client)
+        return finalizer(XLA.free_client, client)
     end
 end
 
