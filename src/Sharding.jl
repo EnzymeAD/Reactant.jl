@@ -112,7 +112,7 @@ function (sharding::NamedSharding)(
         XLA.PJRT.AsyncBuffer(
             client,
             x[device_to_array_slices[i]...],
-            XLA.get_addressable_device(client, XLA.device_ordinal(client, devices_list[i])),
+            XLA.get_addressable_device(client, devices_list[i]),
         )
     end
 
@@ -197,11 +197,7 @@ function (sharding::LazySharding)(
     client::XLA.PJRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
     data = XLA.PJRT.AsyncBuffer(
-        client,
-        x,
-        XLA.get_addressable_device(
-            client, XLA.device_ordinal(client, vec(sharding.sharding.mesh)[1])
-        ),
+        client, x, XLA.get_addressable_device(client, vec(sharding.sharding.mesh)[1])
     )
 
     return (data,), ShardInfo(sharding, (ntuple(i -> 1:size(x, i), ndims(x)),))

@@ -12,15 +12,12 @@ function XLA.client(device::Device)
     end
 end
 
-function XLA.device_ordinal(::Client, device::Device)
+function XLA.device_ordinal(device::Device)
     GC.@preserve device begin
         return @ccall MLIR.API.mlir_c.ifrt_DeviceGetGlobalDeviceId(
             device.device::Ptr{Cvoid}
         )::Int64
     end
-end
-function XLA.device_ordinal(client::Client, device_id::Integer)
-    return XLA.device_ordinal(client, XLA.get_addressable_device(client, device_id))
 end
 
 function XLA.device_kind(device::Device)

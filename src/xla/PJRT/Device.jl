@@ -10,11 +10,12 @@ function XLA.client(device::Device)
     end
 end
 
-function XLA.device_ordinal(client::Client, device::Device)
-    return XLA.device_ordinal(client, XLA.get_local_device_id(device))
-end
-function XLA.device_ordinal(client::Client, local_device_id::Integer)
-    return client.global_ordinals[local_device_id + 1]
+function XLA.device_ordinal(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
+            device.device::Ptr{Cvoid}
+        )::Int64
+    end
 end
 
 function XLA.device_kind(device::Device)

@@ -1102,15 +1102,14 @@ function codegen_flatten!(
                 device_ids = vec(mesh)
                 for j in 1:length(mesh)
                     buf = Symbol(:buf_, i, :_, j)
-                    device_id = device_ids[j]
+                    local_device_id = device_ids[j]
                     slice = device_to_array_slices[j]
                     push!(
                         flatten_code,
                         :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
                     )
-                    device_ordinal = XLA.device_ordinal(client, device_id)
                     sbuf = Symbol(:sbuf_, i, :_, j)
-                    device = XLA.get_addressable_device(client, device_ordinal)
+                    device = XLA.get_addressable_device(client, local_device_id)
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
                 end
@@ -1407,17 +1406,13 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
             client = XLA.client(device)
         else
             client = XLA.default_backend[]
-            device = XLA.get_addressable_device(
-                client, XLA.device_ordinal(client, XLA.default_device_idx[])
-            )
+            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
         end
     else
         if device !== nothing
             @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
         else
-            device = XLA.get_addressable_device(
-                client, XLA.device_ordinal(client, XLA.default_device_idx[])
-            )
+            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
         end
     end
 

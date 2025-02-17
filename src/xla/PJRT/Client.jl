@@ -1,28 +1,9 @@
 mutable struct Client <: XLA.AbstractClient
     client::Ptr{Cvoid}
-    global_ordinals::Vector{Cint}
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        global_ordinals = Cint[]
-
-        client = new(client, global_ordinals)
-
-        # https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L127
-        devices = [
-            XLA.get_addressable_device(client, i - 1) for
-            i in 1:XLA.num_addressable_devices(client)
-        ]
-        sort!(devices; lt=(a, b) -> XLA.get_local_device_id(a) < XLA.get_local_device_id(b))
-
-        local_ids = [XLA.get_local_device_id(device) + 1 for device in devices]
-        max_local_id = maximum(local_ids)
-        resize!(global_ordinals, max_local_id)
-        global_ordinals .= -1
-        for (i, device) in enumerate(devices)
-            global_ordinals[local_ids[i]] = i - 1
-        end
-        return finalizer(XLA.free_client, client)
+        return finalizer(free_client, new(client))
     end
 end
 
