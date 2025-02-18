@@ -216,7 +216,7 @@ std::string emitEnum(llvm::Record def, std::string dialect) {
   auto mlirAttributeDef = "IR.Attribute(e::" + enumJuliaType + ") = ";
   auto isSpecialized = e.genSpecializedAttr();
   if (!isSpecialized) { // parse the attribute using the name
-    auto juliaNameArray = juliaStorage + " = [";
+    auto juliaNameArray = "const " + juliaStorage + " = [";
     auto mnemonic = def.getValueAsString("mnemonic");
     for (auto c : e.getAllCases()) {
       juliaEnum += sanitizeName(c.getSymbol().str()) + ' ';

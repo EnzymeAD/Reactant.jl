@@ -541,7 +541,7 @@ end
 ) where {T,U}
     res = MLIR.IR.result(
         stablehlo.bitcast_convert(
-            x.mlir_data; result_0=mlir_type(TracedRArray{U,0}, ()), location
+            x.mlir_data; result=mlir_type(TracedRArray{U,0}, ()), location
         ),
     )
     return TracedRNumber{U}((), res)
