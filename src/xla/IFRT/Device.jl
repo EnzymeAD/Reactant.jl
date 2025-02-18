@@ -98,3 +98,12 @@ function Base.string(device_list::BasicDeviceList)
     end
     return XLA.unsafe_string_and_free(str)
 end
+
+function XLA.default_memory(device_list::AbstractVector{Device})
+    default_memories = XLA.default_memory.(device_list)
+    default_memory_kinds = convert.(MemoryKind, default_memories)
+    if !allequal(default_memory_kinds)
+        error("All devices must have the same default memory")
+    end
+    return first(default_memories)
+end

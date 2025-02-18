@@ -1448,8 +1448,8 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
 
 extern "C" ifrt::Client *
 ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
-  xla::ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
-  return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
+  ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
+  return MyValueOrThrow(ifrt::PjRtClient::Create(options)).release();
 }
 
 extern "C" ifrt::Client *MakeCPUIfrtClient(uint8_t asynchronous, int node_id,
@@ -1517,7 +1517,7 @@ extern "C" ifrt::Client *ifrt_DeviceToClient(ifrt::Device *device) {
   return device->client();
 }
 
-extern "C" HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *
+extern "C" HeldValue<tsl::RCReference<ifrt::DeviceList>> *
 ifrt_CreateBasicDeviceListFromDevices(ifrt::Device **device_list,
                                       int32_t num_devices) {
   absl::Span<ifrt::Device *const> devices(device_list, num_devices);
@@ -1525,18 +1525,17 @@ ifrt_CreateBasicDeviceListFromDevices(ifrt::Device **device_list,
 }
 
 extern "C" const char *ifrt_BasicDeviceListToString(
-    HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *device_list) {
+    HeldValue<tsl::RCReference<ifrt::DeviceList>> *device_list) {
   return cstr_from_string(device_list->obj()->DebugString());
 }
 
 extern "C" int ifrt_BasicDeviceListSize(
-    HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *device_list) {
+    HeldValue<tsl::RCReference<ifrt::DeviceList>> *device_list) {
   return device_list->obj()->size();
 }
 
 extern "C" ifrt::Device *const ifrt_BasicDeviceListGetDevice(
-    HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *device_list,
-    int32_t index) {
+    HeldValue<tsl::RCReference<ifrt::DeviceList>> *device_list, int32_t index) {
   return device_list->obj()->devices()[index];
 }
 
@@ -1606,14 +1605,13 @@ hlo_sharding_to_string(const xla::HloSharding *hlo_sharding) {
   return cstr_from_string(hlo_sharding->ToString(true));
 }
 
-// extern "C" void ifrt_hlo_sharding_from_xla_hlo_sharding(
-//     HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *device_list,
-//     xla::HloSharding *xla_hlo_sharding) {
-// static std::unique_ptr<HloSharding> Create(
-//     tsl::RCReference<DeviceList> devices, MemoryKind memory_kind,
-//     xla::HloSharding xla_hlo_sharding);
-// return ifrt::HloSharding();
-// }
+extern "C" ifrt::HloSharding *ifrt_hlo_sharding_from_xla_hlo_sharding(
+    HeldValue<tsl::RCReference<ifrt::DeviceList>> *device_list,
+    ifrt::MemoryKind *memory_kind, xla::HloSharding *xla_hlo_sharding) {
+  return ifrt::HloSharding::Create(device_list->obj(), *memory_kind,
+                                   *xla_hlo_sharding)
+      .release();
+}
 
 extern "C" xla::HloSharding *
 ifrt_hlo_sharding_to_xla_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
