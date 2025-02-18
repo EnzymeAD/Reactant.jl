@@ -28,8 +28,6 @@ function Base.show(io::IO, ::MIME"text/plain", hlo_sharding::HloSharding)
             hlo_sharding.ptr::Ptr{Cvoid}
         )::Cstring
     end
-    str_jl = unsafe_string(str)
-    @ccall free(str::Cstring)::Cvoid
-    print(io, "XLA.IFRT.HloSharding(\"", str_jl, "\")")
+    print(io, "XLA.IFRT.HloSharding(\"", XLA.unsafe_string_and_free(str), "\")")
     return nothing
 end

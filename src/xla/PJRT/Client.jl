@@ -3,12 +3,16 @@ mutable struct Client <: XLA.AbstractClient
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        return finalizer(XLA.free_client, new(client))
+        # TODO: add finalizer, but I am getting segfaults
+        # return finalizer(XLA.free_client, new(client))
+        return new(client)
     end
 end
 
 function XLA.free_client(client::Client)
-    @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
+    GC.@preserve client begin
+        @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
+    end
 end
 
 function XLA.num_devices(client::Client)
@@ -57,9 +61,7 @@ function XLA.platform_name(client::Client)
             client.client::Ptr{Cvoid}
         )::Cstring
     end
-    str_jl = unsafe_string(str)
-    @ccall free(str::Cstring)::Cvoid
-    return str_jl
+    return XLA.unsafe_string_and_free(str)
 end
 
 # Different Backends

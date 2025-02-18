@@ -22,9 +22,7 @@ function XLA.device_kind(device::Device)
     GC.@preserve device begin
         str = @ccall MLIR.API.mlir_c.DeviceGetKind(device.device::Ptr{Cvoid})::Cstring
     end
-    str_jl = unsafe_string(str)
-    @ccall free(str::Cstring)::Cvoid
-    return str_jl
+    return XLA.unsafe_string_and_free(str)
 end
 
 function XLA.get_local_device_id(device::Device)

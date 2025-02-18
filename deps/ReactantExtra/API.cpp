@@ -79,6 +79,7 @@
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/compiler.h"
 #include "xla/python/ifrt/device.h"
+#include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/dtype.h"
 #include "xla/python/ifrt/executable.h"
 #include "xla/python/ifrt/hlo/hlo_program.h"
@@ -1514,6 +1515,29 @@ extern "C" const char *ifrt_DeviceGetKind(ifrt::Device *device) {
 
 extern "C" ifrt::Client *ifrt_DeviceToClient(ifrt::Device *device) {
   return device->client();
+}
+
+extern "C" HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *
+ifrt_CreateBasicDeviceListFromDevices(ifrt::Device **device_list,
+                                      int32_t num_devices) {
+  absl::Span<ifrt::Device *const> devices(device_list, num_devices);
+  return reactant::capture(ifrt::BasicDeviceList::Create(devices));
+}
+
+extern "C" const char *ifrt_BasicDeviceListToString(
+    HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *device_list) {
+  return cstr_from_string(device_list->obj()->DebugString());
+}
+
+extern "C" int ifrt_BasicDeviceListSize(
+    HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *device_list) {
+  return device_list->obj()->size();
+}
+
+extern "C" ifrt::Device *const ifrt_BasicDeviceListGetDevice(
+    HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *device_list,
+    int32_t index) {
+  return device_list->obj()->devices()[index];
 }
 
 #pragma endregion
