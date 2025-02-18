@@ -85,7 +85,7 @@ function XLA.compile(
     num_outputs::Int64,
     num_parameters::Int64,
 )
-    device_id = is_sharded ? Int64(-1) : Int64(XLA.local_device_id(device))
+    device_id = is_sharded ? Int64(-1) : Int64(XLA.device_ordinal(device))
     mesh_ids = Int64.(XLA.device_ordinal.((client,), device_ids))
     GC.@preserve client mod begin
         exec = @ccall MLIR.API.mlir_c.ClientCompile(
