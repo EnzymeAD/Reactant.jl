@@ -5,6 +5,7 @@ using ..XLA: XLA
 
 include("Client.jl")
 include("Device.jl")
+include("Memory.jl")
 include("Sharding.jl")
 
 end

@@ -29,6 +29,7 @@ include("Buffer.jl")
 include("Stats.jl")
 include("Utils.jl")
 include("HloModule.jl")
+include("Memory.jl")
 
 include("PJRT/PJRT.jl")
 

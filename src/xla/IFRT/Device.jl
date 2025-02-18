@@ -31,6 +31,30 @@ function XLA.get_local_device_id(::Device)
     return error("Not implemented for ifrt devices")
 end
 
+function XLA.default_memory(device::Device)
+    GC.@preserve device begin
+        return Memory(
+            @ccall MLIR.API.mlir_c.ifrt_DeviceGetDefaultMemory(
+                device.device::Ptr{Cvoid}
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+function XLA.memories(device::Device)
+    memories_size = Ref{Int32}(0)
+    GC.@preserve device memories_size begin
+        ptr = @ccall MLIR.API.mlir_c.ifrt_DeviceGetMemories(
+            device.device::Ptr{Cvoid}, memories_size::Ptr{Int32}
+        )::Ptr{Ptr{Cvoid}}
+    end
+    memories = Vector{Memory}(undef, memories_size[])
+    for i in 1:memories_size[]
+        memories[i] = Memory(unsafe_load(ptr, i))
+    end
+    return memories
+end
+
 # Device List
 struct BasicDeviceList <: AbstractVector{Device}
     ptr::Ptr{Cvoid}

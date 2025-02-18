@@ -8,6 +8,8 @@ end
 function device end
 function get_local_device_id end
 function device_kind end
+function default_memory end
+function memories end
 
 """
     device_ordinal(device::Device)

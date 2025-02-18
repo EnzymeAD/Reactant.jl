@@ -1540,6 +1540,38 @@ extern "C" ifrt::Device *const ifrt_BasicDeviceListGetDevice(
   return device_list->obj()->devices()[index];
 }
 
+extern "C" ifrt::Memory *ifrt_DeviceGetDefaultMemory(ifrt::Device *device) {
+  return MyValueOrThrow(device->DefaultMemory());
+}
+
+extern "C" ifrt::Memory **ifrt_DeviceGetMemories(ifrt::Device *device,
+                                                 int32_t *size) {
+  auto memory_list = device->Memories();
+  *size = memory_list.size();
+  return const_cast<ifrt::Memory **>(memory_list.data());
+}
+
+extern "C" ifrt::MemoryKind *ifrt_MemoryGetMemoryKind(ifrt::Memory *memory) {
+  ifrt::MemoryKind *memory_kind = new ifrt::MemoryKind(memory->Kind());
+  return memory_kind;
+}
+
+extern "C" const char *ifrt_MemoryToString(ifrt::Memory *memory) {
+  return cstr_from_string(memory->ToString());
+}
+
+extern "C" const char *ifrt_MemoryKindToString(ifrt::MemoryKind *memory_kind) {
+  auto memkind = memory_kind->memory_kind();
+  if (!memkind.has_value())
+    return "";
+  return cstr_from_string(memkind.value());
+}
+
+extern "C" bool ifrt_MemoryKindsAreEqual(ifrt::MemoryKind *a,
+                                         ifrt::MemoryKind *b) {
+  return *a == *b;
+}
+
 #pragma endregion
 
 #pragma region HloSharding
@@ -1574,8 +1606,9 @@ hlo_sharding_to_string(const xla::HloSharding *hlo_sharding) {
   return cstr_from_string(hlo_sharding->ToString(true));
 }
 
-// extern "C" void
-// ifrt_hlo_sharding_from_xla_hlo_sharding(xla::HloSharding *xla_hlo_sharding) {
+// extern "C" void ifrt_hlo_sharding_from_xla_hlo_sharding(
+//     HeldValue<tsl::RCReference<xla::ifrt::DeviceList>> *device_list,
+//     xla::HloSharding *xla_hlo_sharding) {
 // static std::unique_ptr<HloSharding> Create(
 //     tsl::RCReference<DeviceList> devices, MemoryKind memory_kind,
 //     xla::HloSharding xla_hlo_sharding);

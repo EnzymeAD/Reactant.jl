@@ -1155,7 +1155,7 @@ end
 @static if !Sys.isapple()
     Reactant.PrecompileTools.@setup_workload begin
         Reactant.initialize_dialect()
-        client = Reactant.XLA.PjRt.CPUClient(; checkcount=false)
+        client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
         Reactant.PrecompileTools.@compile_workload begin
             @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
                 function square_kernel!(x)
