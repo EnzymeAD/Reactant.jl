@@ -10,3 +10,11 @@ more details.
 ```@autodocs
 Modules = [Reactant.MLIR.Dialects.tpu]
 ```
+
+```@docs
+Reactant.MLIR.Dialects.tpu.ContractPrecision
+Reactant.MLIR.Dialects.tpu.CoreType
+Reactant.MLIR.Dialects.tpu.PackFormat
+Reactant.MLIR.Dialects.tpu.ReductionKind
+Reactant.MLIR.Dialects.tpu.RoundingMode
+```

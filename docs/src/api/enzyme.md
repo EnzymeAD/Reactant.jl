@@ -7,3 +7,7 @@ CollapsedDocStrings = true
 ```@autodocs
 Modules = [Reactant.MLIR.Dialects.enzyme]
 ```
+
+```@docs
+Reactant.MLIR.Dialects.enzyme.Activity
+```

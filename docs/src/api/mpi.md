@@ -10,3 +10,8 @@ more details.
 ```@autodocs
 Modules = [Reactant.MLIR.Dialects.mpi]
 ```
+
+```@docs
+Reactant.MLIR.Dialects.mpi.MPI_ErrorClassEnum
+Reactant.MLIR.Dialects.mpi.MPI_OpClassEnum
+```
