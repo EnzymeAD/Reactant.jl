@@ -3,7 +3,7 @@ mutable struct Client <: XLA.AbstractClient
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        return finalizer(free_client, new(client))
+        return finalizer(XLA.free_client, new(client))
     end
 end
 
