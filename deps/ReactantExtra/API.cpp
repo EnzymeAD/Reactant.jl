@@ -1536,48 +1536,49 @@ extern "C" HeldIfrtArray* ifrt_pjrt_array_create(
 }
 
 // TODO how do we compile for other backends?
-// extern "C" xla::ifrt::LoadedExecutable* ifrt_pjrt_compile(
-//   ifrt::PjRtClient *client, MlirModule cmod, int64_t device_id,
-//   bool is_sharded, const int64_t *mesh_ids,
-//   int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir
-// ) {
-//   CompileOptions options = GenerateCompileOptions(
-//       device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+extern "C" xla::ifrt::LoadedExecutable* ifrt_pjrt_compile(
+  ifrt::PjRtClient *client, MlirModule cmod, int64_t device_id,
+  bool is_sharded, const int64_t *mesh_ids,
+  int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir
+) {
+  CompileOptions options = GenerateCompileOptions(
+      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
 
-//   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-//   if (is_sharded) {
-//     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
-//     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
-//     if (!status.ok()) {
-//       ReactantThrowError(status.ToString().c_str());
-//     }
-//   }
+  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
+  if (is_sharded) {
+    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
+    auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
+    if (!status.ok()) {
+      ReactantThrowError(status.ToString().c_str());
+    }
+  }
 
-//   // TODO can't create LoadedExecutable from mlir::ModuleOp on IFRT-proxy
-//   // backend
-//   auto exec = MyValueOrThrow(xla::ifrt::PjRtLoadedExecutable::Create(
-//       client, cmod_op, options,
-//       std::vector<tsl::RCReference<xla::ifrt::LoadedHostCallback>>()));
-//   return exec.release();
-// }
+  // TODO can't create LoadedExecutable from mlir::ModuleOp on IFRT-proxy
+  // backend
+  auto exec = MyValueOrThrow(xla::ifrt::PjRtLoadedExecutable::Create(
+      client, cmod_op, options,
+      std::vector<tsl::RCReference<xla::ifrt::LoadedHostCallback>>()));
+  return exec.release();
+}
 
-// we might me interested in the `Compiler::Compile` method variant that
-// accepts `Topology`
+// TODO we need a `xla::ifrt::CompileOptions` but this is `xla::CompileOptions`
+// we might me interested in the `Compiler::Compile` method variant that accepts `Topology`
 extern "C" xla::ifrt::LoadedExecutable* ifrt_compile(
   ifrt::Client *client, MlirModule cmod, int64_t device_id,
   bool is_sharded, const int64_t *mesh_ids,
   int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir
 ) {
   // TODO we need a `xla::ifrt::CompileOptions` but this is `xla::CompileOptions`
-  auto options = std::make_unique<CompileOptions>(
-    GenerateCompileOptions(
-      device_id,
-      is_sharded,
-      mesh_ids,
-      num_mesh_ids,
-      xla_gpu_cuda_data_dir
-    )
-  );
+  // auto options = std::make_unique<CompileOptions>(
+  //   GenerateCompileOptions(
+  //     device_id,
+  //     is_sharded,
+  //     mesh_ids,
+  //     num_mesh_ids,
+  //     xla_gpu_cuda_data_dir
+  //   )
+  // );
+  auto options = std::make_unique<CompileOptions>();
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
   if (is_sharded) {
