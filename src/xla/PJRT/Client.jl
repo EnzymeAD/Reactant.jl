@@ -3,9 +3,7 @@ mutable struct Client <: XLA.AbstractClient
 
     function Client(client::Ptr{Cvoid})
         @assert client != C_NULL
-        # TODO: add finalizer, but I am getting segfaults
-        # return finalizer(XLA.free_client, new(client))
-        return new(client)
+        return finalizer(XLA.free_client, new(client))
     end
 end
 
