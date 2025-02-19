@@ -481,9 +481,6 @@ cc_library(
 "-Wl,-exported_symbol,_hlo_sharding_to_op_sharding",
 "-Wl,-exported_symbol,_hlo_sharding_to_string",
 "-Wl,-exported_symbol,_DeviceGetKind",
-"-Wl,-exported_symbol,_MakeCPUIfrtClient",
-"-Wl,-exported_symbol,_MakeGPUIfrtClient",
-"-Wl,-exported_symbol,_MakeTPUIfrtClient",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",

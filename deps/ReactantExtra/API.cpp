@@ -1235,12 +1235,6 @@ using HeldPjRtClient = HeldValue<std::shared_ptr<xla::PjRtClient>>;
 using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
 using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
 
-// deprecated
-// extern "C" HeldPjRtClient * reactant_hold_pjrtclient(xla::PjRtClient *client)
-// {
-//   return reactant::capture(std::shared_ptr<PjRtClient>(client));
-// }
-
 extern "C" HeldPjRtClient *
 pjrt_make_cpu_client_shared(uint8_t asynchronous, int node_id, int num_nodes) {
   PjRtClient *client = MakeCPUClient(asynchronous, node_id, num_nodes);
@@ -1394,49 +1388,6 @@ extern "C" HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
           shape, sharding->obj(),
           static_cast<absl::Span<tsl::RCReference<xla::ifrt::Array>>>(arrays),
           semantics)));
-}
-
-extern "C" int ifrt_client_device_count(ifrt::Client *client) {
-  return client->device_count();
-}
-
-extern "C" int ifrt_client_addressable_device_count(ifrt::Client *client) {
-  return client->addressable_device_count();
-}
-
-extern "C" void ifrt_client_devices(ifrt::Client *client,
-                                    ifrt::Device **out_devices) {
-  auto span = client->devices();
-  for (int i = 0; i < span.size(); i++) {
-    out_devices[i] = span[i];
-  }
-}
-
-extern "C" void ifrt_client_addressable_devices(ifrt::Client *client,
-                                                ifrt::Device **out_devices) {
-  auto span = client->addressable_devices();
-  for (int i = 0; i < span.size(); i++) {
-    out_devices[i] = span[i];
-  }
-}
-
-extern "C" void ifrt_client_all_devices(ifrt::Client *client,
-                                        ifrt::Device **out_devices) {
-  auto span = client->GetAllDevices();
-  for (int i = 0; i < span.size(); i++) {
-    out_devices[i] = span[i];
-  }
-}
-
-extern "C" ifrt::Device *ifrt_client_lookup_device(ifrt::Client *client,
-                                                   int dev_id) {
-  return MyValueOrThrow(
-      client->LookupDevice(static_cast<ifrt::DeviceId>(dev_id)));
-}
-
-extern "C" ifrt::Device *
-ifrt_client_lookup_addressable_device(ifrt::Client *client, int local_hw_id) {
-  return MyValueOrThrow(client->LookupAddressableDevice(local_hw_id));
 }
 
 // we should deprecate this because is IFRT-PjRt specific
@@ -1655,42 +1606,70 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
       .release();
 }
 
-extern "C" ifrt::Client *
-ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
-  ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
-  return MyValueOrThrow(ifrt::PjRtClient::Create(options)).release();
-}
-
-extern "C" ifrt::Client *MakeCPUIfrtClient(uint8_t asynchronous, int node_id,
-                                           int num_nodes) {
-  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
-      MakeCPUClient(asynchronous, node_id, num_nodes)));
+extern "C" ifrt::Client *ifrt_make_cpu_client(uint8_t asynchronous, int node_id,
+                                              int num_nodes) {
+  return ifrt_pjrt_make_client(
+      pjrt_make_cpu_client_shared(asynchronous, node_id, num_nodes));
 }
 
 extern "C" ifrt::Client *
-MakeGPUIfrtClient(int node_id, int num_nodes, int *allowed_devices,
-                  int num_allowed_devices, double memory_fraction,
-                  bool preallocate, const char *platform_name,
-                  const char **error) {
-  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
-      MakeGPUClient(node_id, num_nodes, allowed_devices, num_allowed_devices,
-                    memory_fraction, preallocate, platform_name, error)));
+ifrt_make_gpu_client(int node_id, int num_nodes, int *allowed_devices,
+                     int num_allowed_devices, double memory_fraction,
+                     bool preallocate, const char *platform_name,
+                     const char **error) {
+  return ifrt_pjrt_make_client(pjrt_make_gpu_client_shared(
+      node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
+      preallocate, platform_name, error));
 }
 
-extern "C" ifrt::Client *MakeTPUIfrtClient(const char *tpu_path,
-                                           const char **error) {
-  return ifrt_pjrt_MakeClient(
-      reactant_hold_pjrtclient(MakeTPUClient(tpu_path, error)));
+extern "C" ifrt::Client *ifrt_make_tpu_client(const char *tpu_path,
+                                              const char **error) {
+  return ifrt_pjrt_make_client(pjrt_make_tpu_client_shared(tpu_path, error));
 }
 
 extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
 
-extern "C" int ifrt_ClientNumDevices(ifrt::Client *client) {
+extern "C" int ifrt_client_device_count(ifrt::Client *client) {
   return client->device_count();
 }
 
-extern "C" int ifrt_ClientNumAddressableDevices(ifrt::Client *client) {
+extern "C" int ifrt_client_addressable_device_count(ifrt::Client *client) {
   return client->addressable_device_count();
+}
+
+extern "C" void ifrt_client_devices(ifrt::Client *client,
+                                    ifrt::Device **out_devices) {
+  auto span = client->devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
+}
+
+extern "C" void ifrt_client_addressable_devices(ifrt::Client *client,
+                                                ifrt::Device **out_devices) {
+  auto span = client->addressable_devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
+}
+
+extern "C" void ifrt_client_all_devices(ifrt::Client *client,
+                                        ifrt::Device **out_devices) {
+  auto span = client->GetAllDevices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
+}
+
+extern "C" ifrt::Device *ifrt_client_lookup_device(ifrt::Client *client,
+                                                   int dev_id) {
+  return MyValueOrThrow(
+      client->LookupDevice(static_cast<ifrt::DeviceId>(dev_id)));
+}
+
+extern "C" ifrt::Device *
+ifrt_client_lookup_addressable_device(ifrt::Client *client, int local_hw_id) {
+  return MyValueOrThrow(client->LookupAddressableDevice(local_hw_id));
 }
 
 extern "C" int ifrt_ClientProcessIndex(ifrt::Client *client) {
