@@ -5,6 +5,15 @@ function buffer_on_cpu end
 function to_host end
 function unsafe_buffer_pointer end
 function copy_buffer_to_device end
+function sharding end
+
+Base.convert(::Type{Array}, buffer::AbstractBuffer) = convert(Array{eltype(buffer)}, buffer)
+
+function Base.convert(::Type{<:Array{T}}, buffer::AbstractBuffer) where {T}
+    arr = zeros(T, reverse(size(buffer))...)
+    XLA.to_host(buffer, arr)
+    return arr
+end
 
 @inline function client(
     buffers::Union{Array{<:AbstractBuffer},NTuple{<:Any,AbstractBuffer}}
@@ -19,3 +28,42 @@ end
 )
     return map(synced_buffer, buffers)
 end
+
+# Async Buffers
+abstract type AbstractAsyncBuffer <: AbstractBuffer end
+
+Base.isempty(buffer::AbstractAsyncBuffer) = buffer.buffer.buffer == C_NULL
+
+function Base.convert(T::Type{Array}, buffer::AbstractAsyncBuffer)
+    XLA.await(buffer)
+    return convert(T, buffer.buffer)
+end
+
+function Base.convert(T::Type{<:Array{T1}}, buffer::AbstractAsyncBuffer) where {T1}
+    XLA.await(buffer)
+    return convert(T, buffer.buffer)
+end
+
+for op in (:(Base.ndims), :(Base.size), :(Base.eltype), :device, :client, :sharding)
+    @eval $op(buffer::AbstractAsyncBuffer) = $op(buffer.buffer)
+end
+
+function XLA.synced_buffer(buffer::AbstractAsyncBuffer)
+    XLA.await(buffer)
+    return buffer.buffer
+end
+
+function XLA.await(buffer::AbstractAsyncBuffer)
+    buffer.future === nothing && return nothing
+    future = buffer.future
+    buffer.future = nothing
+    XLA.await(future)
+    return nothing
+end
+
+function XLA.is_ready(buffer::AbstractAsyncBuffer)
+    buffer.future === nothing && return true
+    return XLA.is_ready(buffer.future)
+end
+
+XLA.buffer_on_cpu(buffer::AbstractAsyncBuffer) = XLA.buffer_on_cpu(buffer.buffer)

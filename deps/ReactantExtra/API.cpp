@@ -1814,4 +1814,68 @@ ifrt_hlo_sharding_to_string(ifrt::HloSharding *hlo_sharding) {
   return cstr_from_string(hlo_sharding->DebugString());
 }
 
+extern "C" void
+free_ifrt_sharding(HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+  delete sharding;
+}
+
+extern "C" HeldValue<std::shared_ptr<ifrt::Sharding>> *
+ifrt_sharding_from_ifrt_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
+  return reactant::capture(std::shared_ptr<ifrt::Sharding>(hlo_sharding));
+}
+
+extern "C" HeldValue<std::shared_ptr<ifrt::Sharding>> *
+ifrt_sharding_from_hlo_sharding(
+    HeldValue<tsl::RCReference<ifrt::DeviceList>> *device_list,
+    ifrt::MemoryKind *memory_kind, xla::HloSharding *xla_hlo_sharding) {
+  return ifrt_sharding_from_ifrt_hlo_sharding(
+      ifrt_hlo_sharding_from_xla_hlo_sharding(device_list, memory_kind,
+                                              xla_hlo_sharding));
+}
+
+extern "C" const char *
+ifrt_sharding_to_string(HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+  return cstr_from_string(sharding->obj()->DebugString());
+}
+
+#pragma endregion
+
+typedef ifrt::Future<> IfRtFutureType;
+
+extern "C" void ifrt_free_future(IfRtFutureType *Future) { delete Future; }
+
+extern "C" uint8_t ifrt_future_is_ready(IfRtFutureType *Future) {
+  return Future->IsReady();
+}
+
+extern "C" void ifrt_future_await(IfRtFutureType *Future) { Future->Await(); }
+
+#pragma region IfRtArray
+
+extern "C" void ifrt_free_array(HeldIfrtArray *array) { delete array; }
+
+extern "C" int64_t *ifrt_array_shape(HeldIfrtArray *array) {
+  absl::Span<const long> dims = array->obj()->shape().dims();
+  int64_t *dims_ptr = new int64_t[dims.size()];
+  std::copy(dims.begin(), dims.end(), dims_ptr);
+  return dims_ptr;
+}
+
+extern "C" int64_t ifrt_array_ndims(HeldIfrtArray *array) {
+  return array->obj()->shape().dims().size();
+}
+
+extern "C" ifrt::DType ifrt_array_eltype(HeldIfrtArray *array) {
+  return array->obj()->dtype();
+}
+
+extern "C" ifrt::Client *ifrt_array_to_client(HeldIfrtArray *array) {
+  return array->obj()->client();
+}
+
+extern "C" HeldValue<std::shared_ptr<const ifrt::Sharding>> *
+ifrt_array_to_sharding(HeldIfrtArray *array) {
+  return reactant::capture(array->obj()->shared_ptr_sharding());
+}
+
 #pragma endregion
