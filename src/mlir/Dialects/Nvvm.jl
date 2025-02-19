@@ -19,7 +19,7 @@ using EnumX
 NVVM TMA redux kind
 """
 @enumx TMAReduxKind ADD MAX MIN INC DEC AND OR XOR
-TMAReduxKindStorage = ["add", "max", "min", "inc", "dec", "and", "or", "xor"]
+const TMAReduxKindStorage = ["add", "max", "min", "inc", "dec", "and", "or", "xor"]
 
 function IR.Attribute(e::TMAReduxKind.T)
     return parse(Attribute, "#nvvm<tma_redux_kind <$(TMAReduxKindStorage[Int(e)+1])>>")
@@ -30,7 +30,7 @@ end
 NVVM TMA Store Mode
 """
 @enumx TMAStoreMode TILE IM2COL
-TMAStoreModeStorage = ["tile", "im2col"]
+const TMAStoreModeStorage = ["tile", "im2col"]
 
 function IR.Attribute(e::TMAStoreMode.T)
     return parse(Attribute, "#nvvm<tma_store_mode <$(TMAStoreModeStorage[Int(e)+1])>>")
@@ -41,7 +41,7 @@ end
 NVVM load cache modifier kind
 """
 @enumx LoadCacheModifierKind CA CG CS LU CV
-LoadCacheModifierKindStorage = ["ca", "cg", "cs", "lu", "cv"]
+const LoadCacheModifierKindStorage = ["ca", "cg", "cs", "lu", "cv"]
 
 function IR.Attribute(e::LoadCacheModifierKind.T)
     return parse(
@@ -54,7 +54,7 @@ end
 NVVM FPRoundingMode kind
 """
 @enumx FPRoundingMode NONE RN RM RP RZ RNA
-FPRoundingModeStorage = ["none", "rn", "rm", "rp", "rz", "rna"]
+const FPRoundingModeStorage = ["none", "rn", "rm", "rp", "rz", "rna"]
 
 function IR.Attribute(e::FPRoundingMode.T)
     return parse(Attribute, "#nvvm<fp_rnd_mode <$(FPRoundingModeStorage[Int(e)+1])>>")
@@ -65,7 +65,7 @@ end
 NVVM SaturationMode kind
 """
 @enumx SaturationMode NONE SATFINITE
-SaturationModeStorage = ["none", "satfinite"]
+const SaturationModeStorage = ["none", "satfinite"]
 
 function IR.Attribute(e::SaturationMode.T)
     return parse(Attribute, "#nvvm<sat_mode <$(SaturationModeStorage[Int(e)+1])>>")
@@ -76,7 +76,7 @@ end
 NVVM Memory Scope kind
 """
 @enumx MemScopeKind CTA CLUSTER GPU SYS
-MemScopeKindStorage = ["cta", "cluster", "gpu", "sys"]
+const MemScopeKindStorage = ["cta", "cluster", "gpu", "sys"]
 
 function IR.Attribute(e::MemScopeKind.T)
     return parse(Attribute, "#nvvm<mem_scope <$(MemScopeKindStorage[Int(e)+1])>>")
@@ -87,7 +87,7 @@ end
 Proxy kind
 """
 @enumx ProxyKind alias async async_global async_shared TENSORMAP GENERIC
-ProxyKindStorage = [
+const ProxyKindStorage = [
     "alias", "async", "async.global", "async.shared", "tensormap", "generic"
 ]
 
@@ -100,7 +100,7 @@ end
 Shared memory space
 """
 @enumx SharedSpace shared_cta shared_cluster
-SharedSpaceStorage = ["cta", "cluster"]
+const SharedSpaceStorage = ["cta", "cluster"]
 
 function IR.Attribute(e::SharedSpace.T)
     return parse(Attribute, "#nvvm<shared_space <$(SharedSpaceStorage[Int(e)+1])>>")
@@ -111,7 +111,7 @@ end
 NVVM MMA layout
 """
 @enumx MMALayout row col
-MMALayoutStorage = ["row", "col"]
+const MMALayoutStorage = ["row", "col"]
 
 function IR.Attribute(e::MMALayout.T)
     return parse(Attribute, "#nvvm<mma_layout <$(MMALayoutStorage[Int(e)+1])>>")
@@ -122,7 +122,7 @@ end
 MMA binary operations
 """
 @enumx MMAB1Op none xor_popc and_popc
-MMAB1OpStorage = ["none", "xor_popc", "and_popc"]
+const MMAB1OpStorage = ["none", "xor_popc", "and_popc"]
 
 function IR.Attribute(e::MMAB1Op.T)
     return parse(Attribute, "#nvvm<mma_b1op <$(MMAB1OpStorage[Int(e)+1])>>")
@@ -133,7 +133,7 @@ end
 MMA overflow options
 """
 @enumx MMAIntOverflow satfinite wrapped
-MMAIntOverflowStorage = ["satfinite", "wrapped"]
+const MMAIntOverflowStorage = ["satfinite", "wrapped"]
 
 function IR.Attribute(e::MMAIntOverflow.T)
     return parse(Attribute, "#nvvm<mma_int_overflow <$(MMAIntOverflowStorage[Int(e)+1])>>")
@@ -144,7 +144,9 @@ end
 NVVM MMA types
 """
 @enumx MMATypes f16 f32 tf32 bf16 s8 u8 s32 s4 u4 b1 f64
-MMATypesStorage = ["f16", "f32", "tf32", "bf16", "s8", "u8", "s32", "s4", "u4", "b1", "f64"]
+const MMATypesStorage = [
+    "f16", "f32", "tf32", "bf16", "s8", "u8", "s32", "s4", "u4", "b1", "f64"
+]
 
 function IR.Attribute(e::MMATypes.T)
     return parse(Attribute, "#nvvm<mma_type <$(MMATypesStorage[Int(e)+1])>>")
@@ -155,7 +157,7 @@ end
 NVVM redux kind
 """
 @enumx ReduxKind ADD AND MAX MIN OR UMAX UMIN XOR
-ReduxKindStorage = ["add", "and", "max", "min", "or", "umax", "umin", "xor"]
+const ReduxKindStorage = ["add", "and", "max", "min", "or", "umax", "umin", "xor"]
 
 function IR.Attribute(e::ReduxKind.T)
     return parse(Attribute, "#nvvm<redux_kind $(ReduxKindStorage[Int(e)+1])>")
@@ -166,7 +168,7 @@ end
 NVVM set max register action
 """
 @enumx SetMaxRegisterAction decrease increase
-SetMaxRegisterActionStorage = ["decrease", "increase"]
+const SetMaxRegisterActionStorage = ["decrease", "increase"]
 
 function IR.Attribute(e::SetMaxRegisterAction.T)
     return parse(Attribute, "#nvvm<action $(SetMaxRegisterActionStorage[Int(e)+1])>")
@@ -177,7 +179,7 @@ end
 NVVM shuffle kind
 """
 @enumx ShflKind bfly up down idx
-ShflKindStorage = ["bfly", "up", "down", "idx"]
+const ShflKindStorage = ["bfly", "up", "down", "idx"]
 
 function IR.Attribute(e::ShflKind.T)
     return parse(Attribute, "#nvvm<shfl_kind $(ShflKindStorage[Int(e)+1])>")
@@ -188,7 +190,7 @@ end
 NVVM Tcgen05 group kind
 """
 @enumx Tcgen05GroupKind CTA_1 CTA_2
-Tcgen05GroupKindStorage = ["cta_1", "cta_2"]
+const Tcgen05GroupKindStorage = ["cta_1", "cta_2"]
 
 function IR.Attribute(e::Tcgen05GroupKind.T)
     return parse(Attribute, "#nvvm<tcgen05_group <$(Tcgen05GroupKindStorage[Int(e)+1])>>")
@@ -199,7 +201,7 @@ end
 NVVM MMA frag type
 """
 @enumx MMAFrag a b c
-MMAFragStorage = ["a", "b", "c"]
+const MMAFragStorage = ["a", "b", "c"]
 
 function IR.Attribute(e::MMAFrag.T)
     return parse(Attribute, "#nvvm<mma_frag <$(MMAFragStorage[Int(e)+1])>>")
@@ -210,7 +212,9 @@ end
 NVVM WGMMA types
 """
 @enumx WGMMATypes f16 tf32 u8 s8 b1 bf16 e4m3 e5m2 f32 s32
-WGMMATypesStorage = ["f16", "tf32", "u8", "s8", "b1", "bf16", "e4m3", "e5m2", "f32", "s32"]
+const WGMMATypesStorage = [
+    "f16", "tf32", "u8", "s8", "b1", "bf16", "e4m3", "e5m2", "f32", "s32"
+]
 
 function IR.Attribute(e::WGMMATypes.T)
     return parse(Attribute, "#nvvm<wgmma_type <$(WGMMATypesStorage[Int(e)+1])>>")
@@ -221,7 +225,7 @@ end
 WGMMA input predicate
 """
 @enumx WGMMAScaleOut zero one
-WGMMAScaleOutStorage = ["zero", "one"]
+const WGMMAScaleOutStorage = ["zero", "one"]
 
 function IR.Attribute(e::WGMMAScaleOut.T)
     return parse(Attribute, "#nvvm<wgmma_scale_out <$(WGMMAScaleOutStorage[Int(e)+1])>>")
@@ -232,7 +236,7 @@ end
 WGMMA overflow options
 """
 @enumx WGMMAScaleIn one neg
-WGMMAScaleInStorage = ["one", "neg"]
+const WGMMAScaleInStorage = ["one", "neg"]
 
 function IR.Attribute(e::WGMMAScaleIn.T)
     return parse(Attribute, "#nvvm<wgmma_scale_in <$(WGMMAScaleInStorage[Int(e)+1])>>")

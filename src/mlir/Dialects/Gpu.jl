@@ -19,7 +19,7 @@ using EnumX
 built-in reduction operations supported by gpu.allreduce.
 """
 @enumx AllReduceOperation ADD MUL MINUI MINSI MINNUMF MAXUI MAXSI MAXNUMF AND OR XOR MINIMUMF MAXIMUMF
-AllReduceOperationStorage = [
+const AllReduceOperationStorage = [
     "add",
     "mul",
     "minui",
@@ -44,7 +44,7 @@ end
 a dimension, either \'x\', \'y\', or \'z\'
 """
 @enumx Dimension x y z
-DimensionStorage = ["x", "y", "z"]
+const DimensionStorage = ["x", "y", "z"]
 
 IR.Attribute(e::Dimension.T) = parse(Attribute, "#gpu<dim $(DimensionStorage[Int(e)+1])>")
 
@@ -53,7 +53,7 @@ IR.Attribute(e::Dimension.T) = parse(Attribute, "#gpu<dim $(DimensionStorage[Int
 pruning strategy for 2:4 sparse matrix
 """
 @enumx Prune2To4SpMatFlag NONE PRUNE_ONLY PRUNE_AND_CHECK
-Prune2To4SpMatFlagStorage = ["NONE", "PRUNE_ONLY", "PRUNE_AND_CHECK"]
+const Prune2To4SpMatFlagStorage = ["NONE", "PRUNE_ONLY", "PRUNE_AND_CHECK"]
 
 function IR.Attribute(e::Prune2To4SpMatFlag.T)
     return parse(
@@ -66,7 +66,7 @@ end
 transpose mode of sparse matrix supported by sparse tensor ops
 """
 @enumx TransposeMode NON_TRANSPOSE TRANSPOSE CONJUGATE_TRANSPOSE
-TransposeModeStorage = ["NON_TRANSPOSE", "TRANSPOSE", "CONJUGATE_TRANSPOSE"]
+const TransposeModeStorage = ["NON_TRANSPOSE", "TRANSPOSE", "CONJUGATE_TRANSPOSE"]
 
 function IR.Attribute(e::TransposeMode.T)
     return parse(Attribute, "#gpu<mat_transpose_mode $(TransposeModeStorage[Int(e)+1])>")
@@ -77,7 +77,7 @@ end
 Indexing modes supported by gpu.shuffle.
 """
 @enumx ShuffleMode XOR UP DOWN IDX
-ShuffleModeStorage = ["xor", "up", "down", "idx"]
+const ShuffleModeStorage = ["xor", "up", "down", "idx"]
 
 function IR.Attribute(e::ShuffleMode.T)
     return parse(Attribute, "#gpu<shuffle_mode $(ShuffleModeStorage[Int(e)+1])>")
@@ -88,7 +88,7 @@ end
 choose whether spgemm_work_estimation_or_compute does work estimation or compute
 """
 @enumx SpGEMMWorkEstimationOrComputeKind WORK_ESTIMATION COMPUTE
-SpGEMMWorkEstimationOrComputeKindStorage = ["WORK_ESTIMATION", "COMPUTE"]
+const SpGEMMWorkEstimationOrComputeKindStorage = ["WORK_ESTIMATION", "COMPUTE"]
 
 function IR.Attribute(e::SpGEMMWorkEstimationOrComputeKind.T)
     return parse(
@@ -102,7 +102,7 @@ end
 elementwise operation to apply to mma matrix
 """
 @enumx MMAElementwiseOp ADDF MULF SUBF MAXF MINF DIVF ADDI MULI SUBI DIVS DIVU NEGATEF NEGATES EXTF
-MMAElementwiseOpStorage = [
+const MMAElementwiseOpStorage = [
     "addf",
     "mulf",
     "subf",
@@ -1212,10 +1212,10 @@ attribution.
 """
 function func(;
     function_type::IR.Type,
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    workgroup_attrib_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    private_attrib_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    arg_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    workgroup_attrib_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    private_attrib_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     known_block_size::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
     known_grid_size::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
     body::Region,

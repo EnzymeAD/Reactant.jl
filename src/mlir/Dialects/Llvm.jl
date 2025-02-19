@@ -54,7 +54,7 @@ IR.Attribute(e::AtomicBinOp.T) = Int(e)
 LLVM fastmath flags
 """
 @enumx FastmathFlags none nnan ninf nsz arcp contract afn reassoc fast
-FastmathFlagsStorage = [
+const FastmathFlagsStorage = [
     "none", "nnan", "ninf", "nsz", "arcp", "contract", "afn", "reassoc", "fast"
 ]
 
@@ -365,10 +365,10 @@ function cmpxchg(
     alignment::Union{Int64,Nothing}=nothing,
     weak::Union{Bool,Nothing}=nothing,
     volatile_::Union{Bool,Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    access_groups::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    alias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    noalias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    tbaa::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -413,10 +413,10 @@ function atomicrmw(
     syncscope::Union{String,Nothing}=nothing,
     alignment::Union{Int64,Nothing}=nothing,
     volatile_::Union{Bool,Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    access_groups::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    alias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    noalias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    tbaa::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -592,12 +592,12 @@ function call(
     will_return::Union{Bool,Nothing}=nothing,
     op_bundle_sizes::IR.DenseAttribute{Int32},
     op_bundle_tags::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    arg_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    access_groups::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    alias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    noalias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    tbaa::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1447,7 +1447,7 @@ function mlir_global(;
     unnamed_addr::Union{UnnamedAddr.T,Nothing}=nothing,
     section::Union{String,Nothing}=nothing,
     comdat=nothing,
-    dbg_exprs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    dbg_exprs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     visibility_::Union{Visibility.T,Nothing}=nothing,
     initializer::Region,
     location::Location=Location(),
@@ -1643,8 +1643,8 @@ function invoke(
     result::Union{Nothing,IR.Type}=nothing,
     var_callee_type=nothing,
     callee::Union{IR.FlatSymbolRefAttribute,Nothing}=nothing,
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    arg_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     branch_weights::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
     CConv=nothing,
     op_bundle_sizes::IR.DenseAttribute{Int32},
@@ -1737,8 +1737,8 @@ function func(;
     personality::Union{IR.FlatSymbolRefAttribute,Nothing}=nothing,
     garbageCollector::Union{String,Nothing}=nothing,
     passthrough::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    arg_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     function_entry_count::Union{Int64,Nothing}=nothing,
     memory_effects=nothing,
     visibility_::Union{Visibility.T,Nothing}=nothing,
@@ -1998,10 +1998,10 @@ function load(
     invariantGroup::Union{Bool,Nothing}=nothing,
     ordering::Union{AtomicOrdering.T,Nothing}=nothing,
     syncscope::Union{String,Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    access_groups::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    alias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    noalias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    tbaa::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[res,]
@@ -2420,10 +2420,10 @@ function store(
     invariantGroup::Union{Bool,Nothing}=nothing,
     ordering::Union{AtomicOrdering.T,Nothing}=nothing,
     syncscope::Union{String,Nothing}=nothing,
-    access_groups::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    alias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    noalias_scopes::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    tbaa::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    access_groups::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    alias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    noalias_scopes::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    tbaa::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[]

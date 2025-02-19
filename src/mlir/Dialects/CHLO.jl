@@ -19,7 +19,7 @@ using EnumX
 Which comparison operation to perform.
 """
 @enumx ComparisonDirection EQ NE GE GT LE LT
-ComparisonDirectionStorage = ["EQ", "NE", "GE", "GT", "LE", "LT"]
+const ComparisonDirectionStorage = ["EQ", "NE", "GE", "GT", "LE", "LT"]
 
 function IR.Attribute(e::ComparisonDirection.T)
     return parse(
@@ -32,7 +32,7 @@ end
 Which comparison type to use.
 """
 @enumx ComparisonType NOTYPE FLOAT TOTALORDER SIGNED UNSIGNED
-ComparisonTypeStorage = ["NOTYPE", "FLOAT", "TOTALORDER", "SIGNED", "UNSIGNED"]
+const ComparisonTypeStorage = ["NOTYPE", "FLOAT", "TOTALORDER", "SIGNED", "UNSIGNED"]
 
 function IR.Attribute(e::ComparisonType.T)
     return parse(Attribute, "#chlo<comparison_type $(ComparisonTypeStorage[Int(e)+1])>")
@@ -63,7 +63,7 @@ end
 XLA precision for an operand. Has backend specific meaning.
 """
 @enumx Precision DEFAULT HIGH HIGHEST
-PrecisionStorage = ["DEFAULT", "HIGH", "HIGHEST"]
+const PrecisionStorage = ["DEFAULT", "HIGH", "HIGHEST"]
 
 function IR.Attribute(e::Precision.T)
     return parse(Attribute, "#chlo<precision $(PrecisionStorage[Int(e)+1])>")

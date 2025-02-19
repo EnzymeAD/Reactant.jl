@@ -35,8 +35,8 @@ function call_indirect(
     callee::Value,
     callee_operands::Vector{Value};
     results::Base.AbstractVecOrTuple{IR.Type},
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    arg_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -77,8 +77,8 @@ function call(
     operands::Vector{Value};
     result::Base.AbstractVecOrTuple{IR.Type},
     callee::IR.FlatSymbolRefAttribute,
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    arg_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     no_inline::Union{Bool,Nothing}=nothing,
     location::Location=Location(),
 )
@@ -188,8 +188,8 @@ function func_(;
     sym_name::String,
     function_type::IR.Type,
     sym_visibility::Union{String,Nothing}=nothing,
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    arg_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     no_inline::Union{Bool,Nothing}=nothing,
     body::Region,
     location::Location=Location(),

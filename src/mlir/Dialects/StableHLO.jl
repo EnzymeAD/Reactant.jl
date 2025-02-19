@@ -34,7 +34,7 @@ end
 Which comparison operation to perform.
 """
 @enumx ComparisonDirection EQ NE GE GT LE LT
-ComparisonDirectionStorage = ["EQ", "NE", "GE", "GT", "LE", "LT"]
+const ComparisonDirectionStorage = ["EQ", "NE", "GE", "GT", "LE", "LT"]
 
 function IR.Attribute(e::ComparisonDirection.T)
     return parse(
@@ -48,7 +48,7 @@ end
 Which comparison type to use.
 """
 @enumx ComparisonType NOTYPE FLOAT TOTALORDER SIGNED UNSIGNED
-ComparisonTypeStorage = ["NOTYPE", "FLOAT", "TOTALORDER", "SIGNED", "UNSIGNED"]
+const ComparisonTypeStorage = ["NOTYPE", "FLOAT", "TOTALORDER", "SIGNED", "UNSIGNED"]
 
 function IR.Attribute(e::ComparisonType.T)
     return parse(
@@ -61,7 +61,7 @@ end
 XLA precision for an operand. Has backend specific meaning.
 """
 @enumx Precision DEFAULT HIGH HIGHEST
-PrecisionStorage = ["DEFAULT", "HIGH", "HIGHEST"]
+const PrecisionStorage = ["DEFAULT", "HIGH", "HIGHEST"]
 
 function IR.Attribute(e::Precision.T)
     return parse(Attribute, "#stablehlo<precision $(PrecisionStorage[Int(e)+1])>")
@@ -157,7 +157,7 @@ end
 XLA fast fourier transform type.
 """
 @enumx FftType FFT IFFT RFFT IRFFT
-FftTypeStorage = ["FFT", "IFFT", "RFFT", "IRFFT"]
+const FftTypeStorage = ["FFT", "IFFT", "RFFT", "IRFFT"]
 
 function IR.Attribute(e::FftType.T)
     return parse(Attribute, "#stablehlo<fft_type $(FftTypeStorage[Int(e)+1])>")
@@ -168,7 +168,7 @@ end
 XLA PRNG algorithm to be used.
 """
 @enumx RngAlgorithm DEFAULT THREE_FRY PHILOX
-RngAlgorithmStorage = ["DEFAULT", "THREE_FRY", "PHILOX"]
+const RngAlgorithmStorage = ["DEFAULT", "THREE_FRY", "PHILOX"]
 
 function IR.Attribute(e::RngAlgorithm.T)
     return parse(Attribute, "#stablehlo<rng_algorithm $(RngAlgorithmStorage[Int(e)+1])>")
@@ -179,7 +179,7 @@ end
 XLA PRNG distribution to be used.
 """
 @enumx RngDistribution UNIFORM NORMAL
-RngDistributionStorage = ["UNIFORM", "NORMAL"]
+const RngDistributionStorage = ["UNIFORM", "NORMAL"]
 
 function IR.Attribute(e::RngDistribution.T)
     return parse(
@@ -212,7 +212,7 @@ end
 Transpose options
 """
 @enumx Transpose TRANSPOSE_INVALID NO_TRANSPOSE TRANSPOSE ADJOINT
-TransposeStorage = ["TRANSPOSE_INVALID", "NO_TRANSPOSE", "TRANSPOSE", "ADJOINT"]
+const TransposeStorage = ["TRANSPOSE_INVALID", "NO_TRANSPOSE", "TRANSPOSE", "ADJOINT"]
 
 function IR.Attribute(e::Transpose.T)
     return parse(Attribute, "#stablehlo<transpose $(TransposeStorage[Int(e)+1])>")

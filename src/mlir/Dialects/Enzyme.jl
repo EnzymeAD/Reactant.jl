@@ -19,7 +19,7 @@ using EnumX
 Possible activity states for variables
 """
 @enumx Activity enzyme_active enzyme_dup enzyme_const enzyme_dupnoneed enzyme_activenoneed enzyme_constnoneed
-ActivityStorage = [
+const ActivityStorage = [
     "enzyme_active",
     "enzyme_dup",
     "enzyme_const",
@@ -183,7 +183,7 @@ function genericAdjoint(
     inputs::Vector{Value},
     outputs::Vector{Value};
     result_tensors::Base.AbstractVecOrTuple{IR.Type},
-    indexing_maps::IR.DenseAttribute{Any},
+    indexing_maps::IR.DenseAttribute{<:Any},
     iterator_types::Vector{<:IR.AbstractAttribute},
     doc::Union{String,Nothing}=nothing,
     library_call::Union{String,Nothing}=nothing,

@@ -12,6 +12,7 @@ function getattribute(attr::Attribute)
         return DenseElementsAttribute(attr)
     end
     isflatsymbolref(attr) && return FlatSymbolRefAttribute(attr)
+    isarray(attr) && return [API.mlirArrayAttrGetElement(attr, i) for i in 1:length(attr)]
     return attr
 end
 
@@ -979,4 +980,8 @@ end
 
 function DenseArrayAttribute(values::Vector{<:Enum})
     return Attribute([Attribute(value) for value in values])
+end
+
+function DenseArrayAttribute(values::Vector{API.MlirAttribute})
+    return Attribute([value for value in values])
 end

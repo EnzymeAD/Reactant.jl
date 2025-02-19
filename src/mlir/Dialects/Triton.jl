@@ -184,8 +184,8 @@ function func(;
     sym_name::String,
     function_type::IR.Type,
     sym_visibility::Union{String,Nothing}=nothing,
-    arg_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
-    res_attrs::Union{IR.DenseAttribute{Any},Nothing}=nothing,
+    arg_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
     body::Region,
     location::Location=Location(),
 )

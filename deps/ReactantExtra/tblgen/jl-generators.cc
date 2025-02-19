@@ -251,7 +251,7 @@ const llvm::StringMap<std::string> cppToJuliaTypeMap = {
     {"int32_t", "Int32"},
     {"int64_t", "Int64"},
     {"uint32_t",
-     "Int32"}, // TODO: both are handled strangly => Int are working...
+     "Int32"}, // TODO: both are handled strangly => Int is working...
     {"uint64_t", "Int64"},
     {"bool", "Bool"},
     {"Type", "IR.Type"},
@@ -629,7 +629,7 @@ end
 
       std::string VarName = sanitizeName(attributeName);
       std::string pushedExpression = VarName;
-      std::string varType = "Any";
+      std::string varType = "<:Any";
 
       attr = optional ? attr.getBaseAttr() : attr;
       std::function<void(Attribute)> closure_ =
@@ -684,7 +684,7 @@ end
       };
       closure_(attr);
 
-      auto isAny = varType == "Any";
+      auto isAny = varType == "<:Any";
 
       if (optional) {
         optionals += llvm::formatv(

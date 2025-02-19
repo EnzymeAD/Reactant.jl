@@ -19,7 +19,7 @@ using EnumX
 Reduction kind
 """
 @enumx ReductionKind SUM MAX MIN
-ReductionKindStorage = ["sum", "max", "min"]
+const ReductionKindStorage = ["sum", "max", "min"]
 
 function IR.Attribute(e::ReductionKind.T)
     return parse(Attribute, "#tpu<reduction_kind <$(ReductionKindStorage[Int(e)+1])>>")
@@ -30,7 +30,7 @@ end
 Rounding mode
 """
 @enumx RoundingMode kTowardsZero kToNearestEven
-RoundingModeStorage = ["towards_zero", "to_nearest_even"]
+const RoundingModeStorage = ["towards_zero", "to_nearest_even"]
 
 function IR.Attribute(e::RoundingMode.T)
     return parse(Attribute, "#tpu<rounding_mode <$(RoundingModeStorage[Int(e)+1])>>")
@@ -41,7 +41,7 @@ end
 Contraction precision
 """
 @enumx ContractPrecision kBF16 kFP32
-ContractPrecisionStorage = ["bf16", "fp32"]
+const ContractPrecisionStorage = ["bf16", "fp32"]
 
 function IR.Attribute(e::ContractPrecision.T)
     return parse(
@@ -54,7 +54,7 @@ end
 Pack format
 """
 @enumx PackFormat kCompressed kInterleaved
-PackFormatStorage = ["compressed", "interleaved"]
+const PackFormatStorage = ["compressed", "interleaved"]
 
 function IR.Attribute(e::PackFormat.T)
     return parse(Attribute, "#tpu<pack_format <$(PackFormatStorage[Int(e)+1])>>")
@@ -65,7 +65,7 @@ end
 Core type
 """
 @enumx CoreType kTc kScScalarSubcore kScVectorSubcore
-CoreTypeStorage = ["tc", "sc_scalar_subcore", "sc_vector_subcore"]
+const CoreTypeStorage = ["tc", "sc_scalar_subcore", "sc_vector_subcore"]
 
 function IR.Attribute(e::CoreType.T)
     return parse(Attribute, "#tpu<core_type <$(CoreTypeStorage[Int(e)+1])>>")

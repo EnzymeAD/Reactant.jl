@@ -19,7 +19,7 @@ using EnumX
 Floating point fast math flags
 """
 @enumx FastMathFlags none reassoc nnan ninf nsz arcp contract afn fast
-FastMathFlagsStorage = [
+const FastMathFlagsStorage = [
     "none", "reassoc", "nnan", "ninf", "nsz", "arcp", "contract", "afn", "fast"
 ]
 
@@ -32,7 +32,7 @@ end
 Integer overflow arith flags
 """
 @enumx IntegerOverflowFlags none nsw nuw
-IntegerOverflowFlagsStorage = ["none", "nsw", "nuw"]
+const IntegerOverflowFlagsStorage = ["none", "nsw", "nuw"]
 
 function IR.Attribute(e::IntegerOverflowFlags.T)
     return parse(Attribute, "#arith<overflow <$(IntegerOverflowFlagsStorage[Int(e)+1])>>")
