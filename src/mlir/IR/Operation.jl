@@ -189,7 +189,7 @@ function attr(operation::Operation, name::AbstractString)
     if mlirIsNull(raw_attr)
         return nothing
     end
-    return Attribute(raw_attr)
+    return getattribute(raw_attr)
 end
 
 """

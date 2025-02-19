@@ -4,6 +4,15 @@ struct Attribute <: AbstractAttribute
     attr::API.MlirAttribute
 end
 
+
+getattribute(attr::API.MlirAttribute)=getattribute(Attribute(attr))
+
+getattribute(attr::Attribute) = begin
+    isdenseelements(attr) && return DenseElementsAttribute(attr)
+    issplat(attr) && return SplatAttribute(attr)
+    return attr
+end
+
 Attribute(f::AbstractAttribute) = f.attr
 
 Base.convert(::Core.Type{API.MlirAttribute}, attribute::AbstractAttribute) = attribute.attr
@@ -436,27 +445,27 @@ DenseAttribute{T} = Union{Vector{T},AbstractDenseElementsAttribute{T}}
 
 struct DenseElementsAttribute{T} <: AbstractDenseElementsAttribute{T}
     attr::API.MlirAttribute
-    function DenseElementsAttribute{T}(a::API.MlirAttribute) where {T}
-        if !API.mlirAttributeIsADenseElements(a)
-            throw("$a is not a dense elements attribute.")
+    function DenseElementsAttribute{T}(attr::API.MlirAttribute) where {T}
+        if !API.mlirAttributeIsADenseElements(attr)
+            throw("$attr is not a dense elements attribute.")
         end
-        return new{T}(a)
+        return new{T}(attr)
     end
 
     DenseElementsAttribute(a::Attribute) = DenseElementsAttribute(a.attr)
 
-    function DenseElementsAttribute(a::API.MlirAttribute)
-        if !API.mlirAttributeIsADenseElements(a)
-            throw("$a is not a dense elements attribute.")
+    function DenseElementsAttribute(attr::API.MlirAttribute)
+        if !API.mlirAttributeIsADenseElements(attr)
+            throw("$attr is not a dense elements attribute.")
         end
-        e = julia_type(eltype(type(Attribute(a))))
-        return new{e}(a)
+        e = julia_type(eltype(type(Attribute(attr))))
+        return new{e}(attr)
     end
 end
 
 struct SplatAttribute{T} <: AbstractDenseElementsAttribute{T}
     attr::API.MlirAttribute
-    SplatAttribute(attr) = begin
+    SplatAttribute(attr::API.MlirAttribute) = begin
         if !issplat(Attribute(attr))
             throw("$attr is not a splat attribute.")
         end
@@ -464,7 +473,9 @@ struct SplatAttribute{T} <: AbstractDenseElementsAttribute{T}
         return new{e}(attr)
     end
 
-    SplatAttribute{T}(attr) where {T} = begin
+    SplatAttribute(a::Attribute) = SplatAttribute(a.attr)
+
+    SplatAttribute{T}(attr::API.MlirAttribute) where {T} = begin
         if !issplat(Attribute(attr))
             throw("$attr is not a splat attribute.")
         end
