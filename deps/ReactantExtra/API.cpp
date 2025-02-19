@@ -1525,6 +1525,53 @@ extern "C" HeldIfrtArray* ifrt_client_assemble_array_from_single_shards(
   ));
 }
 
+extern "C" int ifrt_client_device_count(ifrt::Client* client) {
+  return client->device_count();
+}
+
+extern "C" int ifrt_client_addressable_device_count(ifrt::Client* client) {
+  return client->addressable_device_count();
+}
+
+extern "C" void ifrt_client_devices(
+  ifrt::Client* client, ifrt::Device** out_devices
+) {
+  auto span = client->devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
+}
+
+extern "C" void ifrt_client_addressable_devices(
+  ifrt::Client* client, ifrt::Device** out_devices
+) {
+  auto span = client->addressable_devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
+}
+
+extern "C" void ifrt_client_all_devices(
+  ifrt::Client* client, ifrt::Device** out_devices
+) {
+  auto span = client->GetAllDevices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
+}
+
+extern "C" ifrt::Device* ifrt_client_lookup_device(
+  ifrt::Client* client, int dev_id
+) {
+  return MyValueOrThrow(client->LookupDevice(static_cast<ifrt::DeviceId>(dev_id)));
+}
+
+extern "C" ifrt::Device* ifrt_client_lookup_addressable_device(
+  ifrt::Client* client, int local_hw_id
+) {
+  return MyValueOrThrow(client->LookupAddressableDevice(local_hw_id));
+}
+
 // we should deprecate this because is IFRT-PjRt specific
 // try use `ifrt_client_make_single_shard_array_from_host_buffer` instead
 extern "C" HeldIfrtArray* ifrt_pjrt_array_create(
