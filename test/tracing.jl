@@ -242,4 +242,9 @@ end
         st_traced = Reactant.to_rarray(st; track_numbers=Number)
         @test st_traced.training isa Val{true}
     end
+
+    @testset "no trace VersionNumber" begin
+        @test Reactant.to_rarray(VersionNumber(1)) isa VersionNumber
+        @test @inferred Reactant.to_rarray(VersionNumber(1)) isa VersionNumber
+    end
 end
