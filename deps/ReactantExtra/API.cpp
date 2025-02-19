@@ -1561,7 +1561,6 @@ extern "C" xla::ifrt::LoadedExecutable* ifrt_pjrt_compile(
   return exec.release();
 }
 
-// TODO we need a `xla::ifrt::CompileOptions` but this is `xla::CompileOptions`
 // we might me interested in the `Compiler::Compile` method variant that accepts `Topology`
 extern "C" xla::ifrt::LoadedExecutable* ifrt_compile(
   ifrt::Client *client, MlirModule cmod, int64_t device_id,
@@ -1578,7 +1577,7 @@ extern "C" xla::ifrt::LoadedExecutable* ifrt_compile(
   //     xla_gpu_cuda_data_dir
   //   )
   // );
-  auto options = std::make_unique<CompileOptions>();
+  auto options = std::make_unique<ifrt::CompileOptions>();
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
   if (is_sharded) {
@@ -1592,7 +1591,7 @@ extern "C" xla::ifrt::LoadedExecutable* ifrt_compile(
   auto program = std::make_unique<xla::ifrt::Program>(xla::ifrt::IfrtIRProgram(cmod_op));
   auto compiler = client->GetDefaultCompiler();
 
-  return MyValueOrThrow(compiler->Compile(program, options)).release();
+  return MyValueOrThrow(compiler->Compile(std::move(program), std::move(options))).release();
 }
 
 extern "C" void
