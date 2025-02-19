@@ -1307,12 +1307,17 @@ Generate Julia code to call the XLA executable.
 - `nresults`: The number of results to expect.
 """
 function codegen_xla_call(
-    exec, device, flatten_names, donated_args_mask, nresults, is_sharded::Bool, mesh_ids
+    exec,
+    device,
+    flatten_names,
+    donated_args_mask,
+    nresults,
+    is_sharded::Bool,
+    ndevices::Int,
 )
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
-    base_symbol_name =
-        is_sharded ? Symbol(:result_buffer_m, length(mesh_ids), :_) : :result_buffer_
+    base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
     concretized_res_names = Symbol[Symbol(base_symbol_name, i) for i in 1:nresults]
     concretized_res_code = map(enumerate(concretized_res_names)) do (i, varname)
         :($varname = linearized_results[$i])
@@ -1326,11 +1331,10 @@ function codegen_xla_call(
                 GC.@preserve $(flatten_names...) begin
                     linearized_results = XLA.execute(
                         $exec,
-                        $(mesh_ids),
                         ($(flatten_buffer_refs...),),
                         $(Tuple(donated_args_mask)),
                         Val($nresults),
-                        Val($(length(mesh_ids))),
+                        Val($ndevices),
                     )
                 end
                 $(concretized_res_code...)
@@ -1509,7 +1513,7 @@ function compile(f, args; sync=false, kwargs...)
         donated_args_mask,
         length(linear_results),
         mlir_fn_res.is_sharded,
-        mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh) : Int64[],
+        mlir_fn_res.is_sharded ? length(mlir_fn_res.sharding_mesh) : 1,
     )
 
     linear_result_shard_info = if mlir_fn_res.is_sharded

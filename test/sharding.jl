@@ -104,10 +104,9 @@ end
         mesh = Sharding.Mesh(reshape([4, 6, 0, 2, 7, 3, 1, 5], 4, 2), ("data", "model"))
         x = reshape(collect(Float32, 1:16), 4, 4)
         x_ra = Reactant.to_rarray(
-            x; sharding=Sharding.NamedSharding(mesh, ("data", nothing))
+            x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
         )
-        # XXX: This needs to be fixed
-        @test_broken Array(@jit sum(x_ra)) ≈ sum(x)
+        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end

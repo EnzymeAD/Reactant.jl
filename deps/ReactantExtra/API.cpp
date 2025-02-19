@@ -786,7 +786,7 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
     for (int64_t i = 0; i < num_mesh_ids; ++i) {
       int64_t mesh_id = mesh_ids[i];
       assert(mesh_id >= 0);
-      device_assignment(0, mesh_id) = i;
+      device_assignment(0, i) = mesh_id;
     }
     options.executable_build_options.set_device_assignment(device_assignment);
 
@@ -945,31 +945,20 @@ void PrintPjRtBuffer(PjRtBuffer *buffer) {
 }
 
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
-                           PjRtBuffer **op_args, const int64_t *mesh_ids,
-                           int64_t num_mesh_ids, uint8_t *is_arg_donatable,
-                           int num_results, PjRtBuffer **op_results,
-                           uint8_t *futures, FutureType **future_results) {
-  // Ensure argument_handles is structured as num_mesh_ids x num_args
-  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_mesh_ids);
-  int num_args = op_args_len / num_mesh_ids;
+                           PjRtBuffer **op_args, int64_t num_devices,
+                           uint8_t *is_arg_donatable, int num_results,
+                           PjRtBuffer **op_results, uint8_t *futures,
+                           FutureType **future_results) {
+  // Ensure argument_handles is structured as num_devices x num_args
+  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_devices);
+  int num_args = op_args_len / num_devices;
 
   // Distribute arguments across devices
-  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
-    int64_t mesh_id = mesh_ids[device_idx];
-
-    // Validate mesh_id
-    if (mesh_id < 0 || mesh_id >= num_mesh_ids) {
-      ReactantThrowError(("Invalid mesh_id " + std::to_string(mesh_id) +
-                          " at device_idx " + std::to_string(device_idx))
-                             .c_str());
-    }
-
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
     argument_handles[device_idx].reserve(num_args);
     for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
-      // Assuming op_args is a flat array of size num_devices * num_args
-      // where arguments for each device are contiguous
       argument_handles[device_idx].push_back(
-          op_args[mesh_id * num_args + arg_idx]);
+          op_args[device_idx * num_args + arg_idx]);
     }
   }
 
@@ -989,19 +978,20 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
               argument_handles),
           options, returned_futures));
 
-  if (results.size() != num_mesh_ids) {
+  if (results.size() != num_devices) {
     ReactantThrowError((" results.size()=" + std::to_string(results.size()) +
-                        " num_mesh_ids=" + std::to_string(num_mesh_ids) + "\n")
+                        " num_devices=" + std::to_string(num_devices) + "\n")
                            .c_str());
   }
 
-  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
-    int64_t mesh_id = mesh_ids[device_idx];
-    if (results[mesh_id].size() != num_results) {
-      ReactantThrowError((" results[" + std::to_string(mesh_id) + "].size()=" +
-                          std::to_string(results[mesh_id].size()) +
-                          " num_results=" + std::to_string(num_results) + "\n")
-                             .c_str());
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    // Remove mesh_id lookup since we're using device_idx ordering
+    if (results[device_idx].size() != num_results) {
+      ReactantThrowError(
+          (" results[" + std::to_string(device_idx) +
+           "].size()=" + std::to_string(results[device_idx].size()) +
+           " num_results=" + std::to_string(num_results) + "\n")
+              .c_str());
     }
   }
 
@@ -1009,20 +999,19 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
   auto future_val = returned_futures.has_value();
   *futures = future_val;
   if (future_val) {
-    if (returned_futures->size() != num_mesh_ids) {
+    if (returned_futures->size() != num_devices) {
       ReactantThrowError((" returned_futures->size()=" +
                           std::to_string(returned_futures->size()) +
-                          " num_mesh_ids=" + std::to_string(num_mesh_ids) +
+                          " num_devices=" + std::to_string(num_devices) +
                           "\n")
                              .c_str());
     }
   }
 
   // Copy results into the output buffers
-  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
-    int64_t mesh_id = mesh_ids[device_idx];
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
     for (int result_idx = 0; result_idx < num_results; ++result_idx) {
-      int flat_index = mesh_id * num_results + result_idx;
+      int flat_index = device_idx * num_results + result_idx;
       op_results[flat_index] = results[device_idx][result_idx].release();
       if (future_val) {
         future_results[flat_index] =
