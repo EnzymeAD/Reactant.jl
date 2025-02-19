@@ -478,9 +478,9 @@ function compile_mlir(f, args; client=nothing, kwargs...)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     if client !== nothing
-        backend = XLA.ClientGetPlatformName(client)
+        backend = XLA.platform_name(client)
     else
-        backend = XLA.ClientGetPlatformName(XLA.default_backend[])
+        backend = XLA.platform_name(XLA.default_backend[])
     end
     if backend == "CUDA"
         backend = "GPU"
@@ -1076,8 +1076,8 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
-            condensed_op_sharding = Reactant.Sharding.XLA.CondensedOpSharding(
-                linear_parameter_shardings[i]
+            condensed_op_sharding = convert(
+                Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
             )
             if Reactant.Sharding.is_sharded(carg)
                 # Currently disabling the error since we roundtrip from MHLO to generate
@@ -1102,17 +1102,16 @@ function codegen_flatten!(
                 device_ids = vec(mesh)
                 for j in 1:length(mesh)
                     buf = Symbol(:buf_, i, :_, j)
-                    device_id = device_ids[j]
+                    local_device_id = device_ids[j]
                     slice = device_to_array_slices[j]
                     push!(
                         flatten_code,
                         :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
                     )
-                    device_ordinal = XLA.device_ordinal(client, device_id)
                     sbuf = Symbol(:sbuf_, i, :_, j)
-                    device = XLA.ClientGetAddressableDevice(client, device_ordinal)
+                    device = XLA.get_addressable_device(client, local_device_id)
                     push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.CopyBufferToDevice($buf, $device)))
+                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
                 end
             end
         else
@@ -1308,12 +1307,17 @@ Generate Julia code to call the XLA executable.
 - `nresults`: The number of results to expect.
 """
 function codegen_xla_call(
-    exec, device, flatten_names, donated_args_mask, nresults, is_sharded::Bool, mesh_ids
+    exec,
+    device,
+    flatten_names,
+    donated_args_mask,
+    nresults,
+    is_sharded::Bool,
+    ndevices::Int,
 )
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
-    base_symbol_name =
-        is_sharded ? Symbol(:result_buffer_m, length(mesh_ids), :_) : :result_buffer_
+    base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
     concretized_res_names = Symbol[Symbol(base_symbol_name, i) for i in 1:nresults]
     concretized_res_code = map(enumerate(concretized_res_names)) do (i, varname)
         :($varname = linearized_results[$i])
@@ -1325,13 +1329,12 @@ function codegen_xla_call(
         if is_sharded
             quote
                 GC.@preserve $(flatten_names...) begin
-                    linearized_results = XLA.ExecutableCall(
+                    linearized_results = XLA.execute(
                         $exec,
-                        $(mesh_ids),
                         ($(flatten_buffer_refs...),),
                         $(Tuple(donated_args_mask)),
                         Val($nresults),
-                        Val($(length(mesh_ids))),
+                        Val($ndevices),
                     )
                 end
                 $(concretized_res_code...)
@@ -1339,7 +1342,7 @@ function codegen_xla_call(
         else
             quote
                 GC.@preserve $(flatten_names...) begin
-                    linearized_results = XLA.ExecutableCallSharded(
+                    linearized_results = XLA.execute_sharded(
                         $exec,
                         $(device),
                         ($(flatten_buffer_refs...),),
@@ -1393,7 +1396,7 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
             if !allequal(devices_list)
                 msg = "Expected all arguments to be on the same device, got:\n"
                 for (i, device) in enumerate(devices_list)
-                    msg *= "    Device $(i): $(XLA.DeviceToString(device))\n"
+                    msg *= "    Device $(i): $(string(device))\n"
                 end
                 throw(ArgumentError(msg))
             end
@@ -1407,17 +1410,13 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
             client = XLA.client(device)
         else
             client = XLA.default_backend[]
-            device = XLA.ClientGetAddressableDevice(
-                client, XLA.device_ordinal(client, XLA.default_device_idx[])
-            )
+            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
         end
     else
         if device !== nothing
             @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
         else
-            device = XLA.ClientGetAddressableDevice(
-                client, XLA.device_ordinal(client, XLA.default_device_idx[])
-            )
+            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
         end
     end
 
@@ -1431,9 +1430,9 @@ function compile_xla(f, args; client=nothing, kwargs...)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     if client !== nothing
-        backend = XLA.ClientGetPlatformName(client)
+        backend = XLA.platform_name(client)
     else
-        backend = XLA.ClientGetPlatformName(XLA.default_backend[])
+        backend = XLA.platform_name(XLA.default_backend[])
     end
     if backend == "CUDA"
         backend = "GPU"
@@ -1464,7 +1463,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
         device_ids = mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh) : Int64[]
         mlir_fn_res.is_sharded && (device = nothing)
 
-        exec = XLA.Compile(
+        exec = XLA.compile(
             client,
             device,
             mod;
@@ -1514,7 +1513,7 @@ function compile(f, args; sync=false, kwargs...)
         donated_args_mask,
         length(linear_results),
         mlir_fn_res.is_sharded,
-        mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh) : Int64[],
+        mlir_fn_res.is_sharded ? length(mlir_fn_res.sharding_mesh) : 1,
     )
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
