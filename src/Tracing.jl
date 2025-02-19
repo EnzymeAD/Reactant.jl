@@ -60,7 +60,7 @@ Base.@nospecializeinfer function traced_type_inner(
         else
             error("TODO: implement sharding")
         end
-    elseif (mode == NoStopTracedTrack || mode == TracedTrack) && T <: track_numbers
+    elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) && T <: track_numbers
         return TracedRNumber{T}
     end
     return T
