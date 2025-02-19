@@ -983,5 +983,5 @@ function DenseArrayAttribute(values::Vector{<:Enum})
 end
 
 function DenseArrayAttribute(values::Vector{API.MlirAttribute})
-    return Attribute([value for value in values])
+    return Attribute([Attribute(value) for value in values])
 end
