@@ -1878,4 +1878,13 @@ ifrt_array_to_sharding(HeldIfrtArray *array) {
   return reactant::capture(array->obj()->shared_ptr_sharding());
 }
 
+extern "C" void ifrt_array_copy_to_host_buffer(HeldIfrtArray *array,
+                                               void *data) {
+  std::optional<absl::Span<const int64_t>> byte_strides;
+  auto future = array->obj()->CopyToHostBuffer(
+      data, byte_strides, static_cast<ifrt::ArrayCopySemantics>(0));
+  future.Await();
+  return;
+}
+
 #pragma endregion

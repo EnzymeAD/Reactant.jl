@@ -60,7 +60,7 @@ function Base.size(buffer::Array)
     GC.@preserve buffer begin
         sz = @ccall MLIR.API.mlir_c.ifrt_array_shape(buffer.buffer::Ptr{Cvoid})::Ptr{Int64}
     end
-    return Tuple(unsafe_wrap(Array, sz, ndims(buffer)))
+    return Tuple(unsafe_wrap(Base.Array, sz, ndims(buffer)))
 end
 
 function Base.eltype(buffer::Array)
@@ -93,12 +93,12 @@ function XLA.buffer_on_cpu(::Array)
 end
 
 function XLA.to_host(buffer::Array, data)
-    error("TODO: not implemented")
-    # GC.@preserve buffer begin
-    #     @ccall MLIR.API.mlir_c.BufferToHost(
-    #         buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
-    #     )::Cvoid
-    # end
+    GC.@preserve buffer data begin
+        @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
+            buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
+        )::Cvoid
+    end
+    return nothing
 end
 
 function XLA.unsafe_buffer_pointer(buffer::Array)
