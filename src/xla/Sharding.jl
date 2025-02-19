@@ -258,7 +258,7 @@ function sharding_to_concrete_array_indices(
             end
         end
 
-        return map(Base.Fix1(getindex, indices), mesh.device_ids)
+        return map(Base.Fix1(getindex, indices), mesh.sorted_device_ids)
     else
         error("Unsupported sharding type: $(sharding.type)")
     end

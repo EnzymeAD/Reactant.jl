@@ -4,6 +4,7 @@ using ..Reactant: Reactant, XLA, MLIR
 
 struct Mesh{D,ND}
     device_ids::NTuple{ND,Int}
+    sorted_device_ids::NTuple{ND,Int}
     shape::Dims{D}
     axis_names::NTuple{D,Symbol}
 
@@ -29,7 +30,9 @@ struct Mesh{D,ND}
         axis_names::NTuple{D,Union{String,Symbol}},
     ) where {D,D1}
         @assert allunique(device_ids)
-        return new{D,D1}(device_ids, shape, Symbol.(axis_names))
+        return new{D,D1}(
+            device_ids, Tuple(sort([device_ids...])), shape, Symbol.(axis_names)
+        )
     end
 end
 
@@ -106,13 +109,12 @@ function (sharding::NamedSharding)(
         size(x),
         mesh,
     )
-    devices_list = vec(mesh)
 
     data = ntuple(length(mesh)) do i
         XLA.PJRT.AsyncBuffer(
             client,
             x[device_to_array_slices[i]...],
-            XLA.get_addressable_device(client, devices_list[i]),
+            XLA.get_addressable_device(client, mesh.sorted_device_ids[i]),
         )
     end
 

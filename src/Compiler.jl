@@ -1076,9 +1076,7 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
-            condensed_op_sharding = convert(
-                Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
-            )
+            device_ids = mesh.sorted_device_ids
             if Reactant.Sharding.is_sharded(carg)
                 # Currently disabling the error since we roundtrip from MHLO to generate
                 # the shardings
@@ -1090,25 +1088,27 @@ function codegen_flatten!(
 
                 push!(flatten_code, :($usbuf = $flatcode.data))
                 for j in 1:length(mesh)
-                    sbuf = Symbol(:sbuf_, i, "_", j)
+                    sbuf = Symbol(:sbuf_, i, "_", device_ids[j])
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
                 end
             else
+                condensed_op_sharding = convert(
+                    Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
+                )
                 push!(flatten_code, :($usbuf = $flatcode))
                 device_to_array_slices = XLA.sharding_to_concrete_array_indices(
                     condensed_op_sharding, size(carg), mesh
                 )
-                device_ids = vec(mesh)
                 for j in 1:length(mesh)
-                    buf = Symbol(:buf_, i, :_, j)
                     local_device_id = device_ids[j]
+                    buf = Symbol(:buf_, i, :_, local_device_id)
                     slice = device_to_array_slices[j]
                     push!(
                         flatten_code,
                         :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
                     )
-                    sbuf = Symbol(:sbuf_, i, :_, j)
+                    sbuf = Symbol(:sbuf_, i, :_, local_device_id)
                     device = XLA.get_addressable_device(client, local_device_id)
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
@@ -1460,7 +1460,11 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # compile MLIR module to XLA executable
-        device_ids = mlir_fn_res.is_sharded ? vec(mlir_fn_res.sharding_mesh) : Int64[]
+        local_device_ids = if mlir_fn_res.is_sharded
+            collect(Int64, mlir_fn_res.sharding_mesh.sorted_device_ids)
+        else
+            Int64[]
+        end
         mlir_fn_res.is_sharded && (device = nothing)
 
         exec = XLA.compile(
@@ -1470,7 +1474,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
             num_outputs=length(mlir_fn_res.linear_results),
             num_parameters=length(mlir_fn_res.linear_args),
             mlir_fn_res.is_sharded,
-            device_ids,
+            local_device_ids,
         )
 
         return mod, exec, mlir_fn_res, device, client
