@@ -1002,8 +1002,7 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
     if (returned_futures->size() != num_devices) {
       ReactantThrowError((" returned_futures->size()=" +
                           std::to_string(returned_futures->size()) +
-                          " num_devices=" + std::to_string(num_devices) +
-                          "\n")
+                          " num_devices=" + std::to_string(num_devices) + "\n")
                              .c_str());
     }
   }
