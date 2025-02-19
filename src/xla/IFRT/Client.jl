@@ -17,7 +17,9 @@ end
 
 function XLA.num_devices(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ifrt_client_device_count(client.client::Ptr{Cvoid})::Cint
+        return @ccall MLIR.API.mlir_c.ifrt_client_device_count(
+            client.client::Ptr{Cvoid}
+        )::Cint
     end
 end
 
