@@ -43,13 +43,26 @@ jobs:
           - '1.11'
         os:
           - ubuntu-24.04
-          - macOS-13
+          - macOS-latest
+        exclude:
+          - os: macOS-latest
+            version: '1.10'
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
+      - uses: bazel-contrib/setup-bazel@0.13.0
+        name: Set up Bazel
+        with:
+          # Avoid downloading Bazel every time.
+          bazelisk-cache: true
+          # Store build cache per workflow.
+          disk-cache: ${{ github.workflow }}-${{ matrix.os }}-${{ matrix.version }}
+          # Share repository cache between workflows.
+          repository-cache: true
+          bazelisk-version: 1.x
       - name: Build libReactant
         if: ${{ !startsWith(matrix.os, 'macOS-') }}
         id: build_libreactant
