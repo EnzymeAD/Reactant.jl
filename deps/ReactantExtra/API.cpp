@@ -79,6 +79,7 @@
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/compiler.h"
 #include "xla/python/ifrt/device.h"
+#include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/dtype.h"
 #include "xla/python/ifrt/executable.h"
 #include "xla/python/ifrt/hlo/hlo_program.h"
@@ -103,6 +104,7 @@
 #include "xla/python/pjrt_ifrt/pjrt_memory.h"
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
+#include "xla/python/pjrt_ifrt/xla_sharding.h"
 
 // IFRT - Proxy (RPC)
 #include "xla/python/ifrt_proxy/client/registry.h"
@@ -420,6 +422,10 @@ extern "C" const char *ClientGetPlatformName(PjRtClient *client) {
   return cstr_from_string(client->platform_name());
 }
 
+extern "C" const char *DeviceGetKind(PjRtDevice *device) {
+  return cstr_from_string(device->device_kind());
+}
+
 // To keep in sync with JLAllocatorStats in src/XLA.jl
 struct JLAllocatorStats {
   int64_t num_allocs;
@@ -659,9 +665,10 @@ struct JLOpSharding {
   bool is_shard_group;
   int64_t shard_group_id;
   int32_t shard_group_type;
+  const void *op_sharding;
 };
 
-void OpShardingToJLOpSharding(const xla::OpSharding &op_sharding,
+void OpShardingToJLOpSharding(const xla::OpSharding op_sharding,
                               JLOpSharding *jl_op_sharding) {
   jl_op_sharding->type = op_sharding.type();
   jl_op_sharding->replicate_on_last_tile_dim =
@@ -736,58 +743,8 @@ void OpShardingToJLOpSharding(const xla::OpSharding &op_sharding,
   jl_op_sharding->is_shard_group = op_sharding.is_shard_group();
   jl_op_sharding->shard_group_id = op_sharding.shard_group_id();
   jl_op_sharding->shard_group_type = op_sharding.shard_group_type();
-}
 
-xla::OpSharding JLOpShardingToOpSharding(const JLOpSharding &jl_op_sharding) {
-  xla::OpSharding op_sharding;
-
-  op_sharding.set_type(static_cast<xla::OpSharding_Type>(jl_op_sharding.type));
-  op_sharding.set_replicate_on_last_tile_dim(
-      jl_op_sharding.replicate_on_last_tile_dim);
-
-  xla::ShapeProto *mutable_shape_proto = op_sharding.mutable_tile_shape();
-
-  for (int i = 0; i < jl_op_sharding.n_tile_dimensions; i++) {
-    mutable_shape_proto->add_dimensions(jl_op_sharding.tile_dimensions[i]);
-  }
-
-  if (jl_op_sharding.n_layout_minor_to_major > 0) {
-    auto *mutable_layout = mutable_shape_proto->mutable_layout();
-    for (int i = 0; i < jl_op_sharding.n_layout_minor_to_major; i++) {
-      mutable_layout->add_minor_to_major(
-          jl_op_sharding.layout_minor_to_major[i]);
-    }
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_tile_dimensions; i++) {
-    op_sharding.add_last_tile_dims(
-        static_cast<xla::OpSharding_Type>(jl_op_sharding.last_tile_dims[i]));
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_tile_assignment_dimensions; i++) {
-    op_sharding.add_tile_assignment_dimensions(
-        jl_op_sharding.tile_assignment_dimensions[i]);
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_tile_assignment_devices; i++) {
-    op_sharding.add_tile_assignment_devices(
-        jl_op_sharding.tile_assignment_devices[i]);
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_iota_reshape_dims; i++) {
-    op_sharding.add_iota_reshape_dims(jl_op_sharding.iota_reshape_dims[i]);
-  }
-
-  for (int i = 0; i < jl_op_sharding.n_iota_transpose_perm; i++) {
-    op_sharding.add_iota_transpose_perm(jl_op_sharding.iota_transpose_perm[i]);
-  }
-
-  op_sharding.set_is_shard_group(jl_op_sharding.is_shard_group);
-  op_sharding.set_shard_group_id(jl_op_sharding.shard_group_id);
-  op_sharding.set_shard_group_type(static_cast<xla::OpSharding_ShardGroupType>(
-      jl_op_sharding.shard_group_type));
-
-  return op_sharding;
+  jl_op_sharding->op_sharding = new xla::OpSharding(std::move(op_sharding));
 }
 
 typedef PjRtFuture<> FutureType;
@@ -829,7 +786,7 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
     for (int64_t i = 0; i < num_mesh_ids; ++i) {
       int64_t mesh_id = mesh_ids[i];
       assert(mesh_id >= 0);
-      device_assignment(0, mesh_id) = i;
+      device_assignment(0, i) = mesh_id;
     }
     options.executable_build_options.set_device_assignment(device_assignment);
 
@@ -988,31 +945,20 @@ void PrintPjRtBuffer(PjRtBuffer *buffer) {
 }
 
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
-                           PjRtBuffer **op_args, const int64_t *mesh_ids,
-                           int64_t num_mesh_ids, uint8_t *is_arg_donatable,
-                           int num_results, PjRtBuffer **op_results,
-                           uint8_t *futures, FutureType **future_results) {
-  // Ensure argument_handles is structured as num_mesh_ids x num_args
-  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_mesh_ids);
-  int num_args = op_args_len / num_mesh_ids;
+                           PjRtBuffer **op_args, int64_t num_devices,
+                           uint8_t *is_arg_donatable, int num_results,
+                           PjRtBuffer **op_results, uint8_t *futures,
+                           FutureType **future_results) {
+  // Ensure argument_handles is structured as num_devices x num_args
+  std::vector<std::vector<PjRtBuffer *>> argument_handles(num_devices);
+  int num_args = op_args_len / num_devices;
 
   // Distribute arguments across devices
-  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
-    int64_t mesh_id = mesh_ids[device_idx];
-
-    // Validate mesh_id
-    if (mesh_id < 0 || mesh_id >= num_mesh_ids) {
-      ReactantThrowError(("Invalid mesh_id " + std::to_string(mesh_id) +
-                          " at device_idx " + std::to_string(device_idx))
-                             .c_str());
-    }
-
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
     argument_handles[device_idx].reserve(num_args);
     for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
-      // Assuming op_args is a flat array of size num_devices * num_args
-      // where arguments for each device are contiguous
       argument_handles[device_idx].push_back(
-          op_args[mesh_id * num_args + arg_idx]);
+          op_args[device_idx * num_args + arg_idx]);
     }
   }
 
@@ -1032,19 +978,20 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
               argument_handles),
           options, returned_futures));
 
-  if (results.size() != num_mesh_ids) {
+  if (results.size() != num_devices) {
     ReactantThrowError((" results.size()=" + std::to_string(results.size()) +
-                        " num_mesh_ids=" + std::to_string(num_mesh_ids) + "\n")
+                        " num_devices=" + std::to_string(num_devices) + "\n")
                            .c_str());
   }
 
-  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
-    int64_t mesh_id = mesh_ids[device_idx];
-    if (results[mesh_id].size() != num_results) {
-      ReactantThrowError((" results[" + std::to_string(mesh_id) + "].size()=" +
-                          std::to_string(results[mesh_id].size()) +
-                          " num_results=" + std::to_string(num_results) + "\n")
-                             .c_str());
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    // Remove mesh_id lookup since we're using device_idx ordering
+    if (results[device_idx].size() != num_results) {
+      ReactantThrowError(
+          (" results[" + std::to_string(device_idx) +
+           "].size()=" + std::to_string(results[device_idx].size()) +
+           " num_results=" + std::to_string(num_results) + "\n")
+              .c_str());
     }
   }
 
@@ -1052,20 +999,19 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
   auto future_val = returned_futures.has_value();
   *futures = future_val;
   if (future_val) {
-    if (returned_futures->size() != num_mesh_ids) {
+    if (returned_futures->size() != num_devices) {
       ReactantThrowError((" returned_futures->size()=" +
                           std::to_string(returned_futures->size()) +
-                          " num_mesh_ids=" + std::to_string(num_mesh_ids) +
+                          " num_devices=" + std::to_string(num_devices) +
                           "\n")
                              .c_str());
     }
   }
 
   // Copy results into the output buffers
-  for (int device_idx = 0; device_idx < num_mesh_ids; ++device_idx) {
-    int64_t mesh_id = mesh_ids[device_idx];
+  for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
     for (int result_idx = 0; result_idx < num_results; ++result_idx) {
-      int flat_index = mesh_id * num_results + result_idx;
+      int flat_index = device_idx * num_results + result_idx;
       op_results[flat_index] = results[device_idx][result_idx].release();
       if (future_val) {
         future_results[flat_index] =
@@ -1306,14 +1252,6 @@ reactant_release_pjrtbuffer(HeldValue<std::shared_ptr<PjRtBuffer>> *buffer) {
   delete buffer;
 }
 
-extern "C" ifrt::Client *
-ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
-  xla::ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
-  return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
-}
-
-extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
-
 extern "C" xla::ifrt::LoadedExecutable *
 ifrt_ClientCompile(ifrt::PjRtClient *client, MlirModule cmod, int64_t device_id,
                    bool is_sharded, const int64_t *mesh_ids,
@@ -1425,6 +1363,8 @@ FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
   delete hlo_module;
 }
 
+#pragma region IfRtClient
+
 // right now only making it available for TPU
 // in the future, we would like this for CPU and GPU PjRt backends too
 extern "C" ifrt::proxy::GrpcServer *
@@ -1494,3 +1434,184 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
              ifrt::proxy::CreateClient(c_proxy_server_address, options))
       .release();
 }
+
+extern "C" ifrt::Client *
+ifrt_pjrt_MakeClient(HeldValue<std::shared_ptr<PjRtClient>> *pjrt_client) {
+  ifrt::PjRtClient::CreateOptions options = {pjrt_client->obj()};
+  return MyValueOrThrow(ifrt::PjRtClient::Create(options)).release();
+}
+
+extern "C" ifrt::Client *MakeCPUIfrtClient(uint8_t asynchronous, int node_id,
+                                           int num_nodes) {
+  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
+      MakeCPUClient(asynchronous, node_id, num_nodes)));
+}
+
+extern "C" ifrt::Client *
+MakeGPUIfrtClient(int node_id, int num_nodes, int *allowed_devices,
+                  int num_allowed_devices, double memory_fraction,
+                  bool preallocate, const char *platform_name,
+                  const char **error) {
+  return ifrt_pjrt_MakeClient(reactant_hold_pjrtclient(
+      MakeGPUClient(node_id, num_nodes, allowed_devices, num_allowed_devices,
+                    memory_fraction, preallocate, platform_name, error)));
+}
+
+extern "C" ifrt::Client *MakeTPUIfrtClient(const char *tpu_path,
+                                           const char **error) {
+  return ifrt_pjrt_MakeClient(
+      reactant_hold_pjrtclient(MakeTPUClient(tpu_path, error)));
+}
+
+extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
+
+extern "C" int ifrt_ClientNumDevices(ifrt::Client *client) {
+  return client->device_count();
+}
+
+extern "C" int ifrt_ClientNumAddressableDevices(ifrt::Client *client) {
+  return client->addressable_device_count();
+}
+
+extern "C" int ifrt_ClientProcessIndex(ifrt::Client *client) {
+  return client->process_index();
+}
+
+extern "C" const char *ifrt_ClientGetPlatformName(ifrt::Client *client) {
+  return cstr_from_string(client->platform_name());
+}
+
+extern "C" ifrt::Device *ifrt_ClientGetDevice(ifrt::Client *client, int idx) {
+  return MyValueOrThrow(client->LookupDevice(ifrt::DeviceId(idx)));
+}
+
+extern "C" ifrt::Device *ifrt_ClientGetAddressableDevice(ifrt::Client *client,
+                                                         int idx) {
+  return MyValueOrThrow(client->LookupAddressableDevice(idx));
+}
+
+#pragma endregion
+
+#pragma region IfRtDevice
+
+extern "C" int64_t ifrt_DeviceGetGlobalDeviceId(ifrt::Device *device) {
+  return device->Id().value();
+}
+
+extern "C" const char *ifrt_DeviceGetKind(ifrt::Device *device) {
+  return cstr_from_string(device->Kind());
+}
+
+extern "C" ifrt::Client *ifrt_DeviceToClient(ifrt::Device *device) {
+  return device->client();
+}
+
+extern "C" HeldValue<tsl::RCReference<ifrt::DeviceList>> *
+ifrt_CreateBasicDeviceListFromDevices(ifrt::Device **device_list,
+                                      int32_t num_devices) {
+  absl::Span<ifrt::Device *const> devices(device_list, num_devices);
+  return reactant::capture(ifrt::BasicDeviceList::Create(devices));
+}
+
+extern "C" const char *ifrt_BasicDeviceListToString(
+    HeldValue<tsl::RCReference<ifrt::DeviceList>> *device_list) {
+  return cstr_from_string(device_list->obj()->DebugString());
+}
+
+extern "C" int ifrt_BasicDeviceListSize(
+    HeldValue<tsl::RCReference<ifrt::DeviceList>> *device_list) {
+  return device_list->obj()->size();
+}
+
+extern "C" ifrt::Device *const ifrt_BasicDeviceListGetDevice(
+    HeldValue<tsl::RCReference<ifrt::DeviceList>> *device_list, int32_t index) {
+  return device_list->obj()->devices()[index];
+}
+
+extern "C" ifrt::Memory *ifrt_DeviceGetDefaultMemory(ifrt::Device *device) {
+  return MyValueOrThrow(device->DefaultMemory());
+}
+
+extern "C" ifrt::Memory **ifrt_DeviceGetMemories(ifrt::Device *device,
+                                                 int32_t *size) {
+  auto memory_list = device->Memories();
+  *size = memory_list.size();
+  return const_cast<ifrt::Memory **>(memory_list.data());
+}
+
+extern "C" ifrt::MemoryKind *ifrt_MemoryGetMemoryKind(ifrt::Memory *memory) {
+  ifrt::MemoryKind *memory_kind = new ifrt::MemoryKind(memory->Kind());
+  return memory_kind;
+}
+
+extern "C" const char *ifrt_MemoryToString(ifrt::Memory *memory) {
+  return cstr_from_string(memory->ToString());
+}
+
+extern "C" const char *ifrt_MemoryKindToString(ifrt::MemoryKind *memory_kind) {
+  auto memkind = memory_kind->memory_kind();
+  if (!memkind.has_value())
+    return "";
+  return cstr_from_string(memkind.value());
+}
+
+extern "C" bool ifrt_MemoryKindsAreEqual(ifrt::MemoryKind *a,
+                                         ifrt::MemoryKind *b) {
+  return *a == *b;
+}
+
+#pragma endregion
+
+#pragma region HloSharding
+
+extern "C" void free_op_sharding(xla::OpSharding *op_sharding) {
+  delete op_sharding;
+}
+
+extern "C" void free_hlo_sharding(xla::HloSharding *hlo_sharding) {
+  delete hlo_sharding;
+}
+
+extern "C" void free_ifrt_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
+  delete hlo_sharding;
+}
+
+extern "C" xla::HloSharding *
+hlo_sharding_from_op_sharding(xla::OpSharding *op_sharding) {
+  xla::HloSharding *hlo_sharding = new xla::HloSharding(
+      MyValueOrThrow(xla::HloSharding::FromProto(*op_sharding)));
+  return hlo_sharding;
+}
+
+extern "C" xla::OpSharding *
+hlo_sharding_to_op_sharding(xla::HloSharding *hlo_sharding) {
+  xla::OpSharding *op_sharding = new xla::OpSharding(hlo_sharding->ToProto());
+  return op_sharding;
+}
+
+extern "C" const char *
+hlo_sharding_to_string(const xla::HloSharding *hlo_sharding) {
+  return cstr_from_string(hlo_sharding->ToString(true));
+}
+
+extern "C" ifrt::HloSharding *ifrt_hlo_sharding_from_xla_hlo_sharding(
+    HeldValue<tsl::RCReference<ifrt::DeviceList>> *device_list,
+    ifrt::MemoryKind *memory_kind, xla::HloSharding *xla_hlo_sharding) {
+  return ifrt::HloSharding::Create(device_list->obj(), *memory_kind,
+                                   *xla_hlo_sharding)
+      .release();
+}
+
+extern "C" xla::HloSharding *
+ifrt_hlo_sharding_to_xla_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
+  xla::HloSharding *xla_hlo_sharding =
+      new xla::HloSharding(hlo_sharding->xla_hlo_sharding());
+  return xla_hlo_sharding;
+}
+
+extern "C" const char *
+ifrt_hlo_sharding_to_string(ifrt::HloSharding *hlo_sharding) {
+  return cstr_from_string(hlo_sharding->DebugString());
+}
+
+#pragma endregion
