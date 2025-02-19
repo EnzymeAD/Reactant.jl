@@ -17,10 +17,10 @@ on:
     tags: '*'
     paths:
       - '.github/workflows/CI.yml'
-      - 'ext/**/*.jl'
-      - 'lib/**/*.jl'
-      - 'src/**/*.jl'
-      - 'test/**/*.jl'
+      - 'ext/**'
+      - 'lib/**'
+      - 'src/**'
+      - 'test/**'
       - 'Project.toml'
 
 concurrency:
@@ -125,8 +125,6 @@ jobs:
           REACTANT_TEST_GROUP: ${{ matrix.test_group }}
           XLA_FLAGS: "--xla_force_host_platform_device_count=8"
       - uses: julia-actions/julia-processcoverage@v1
-        if: steps.run_tests.outcome == 'success'
       - uses: codecov/codecov-action@v5
-        if: steps.run_tests.outcome == 'success'
         with:
           files: lcov.info
