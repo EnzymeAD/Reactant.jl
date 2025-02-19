@@ -30,6 +30,7 @@ end
                 (Char, Char, Char),
                 (AbstractString, AbstractString, AbstractString),
                 (String, String, String),
+                (VersionNumber, VersionNumber, VersionNumber),
 
                 # Numeric types
                 (AbstractFloat, AbstractFloat, AbstractFloat),
