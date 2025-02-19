@@ -757,7 +757,6 @@ extern "C" uint8_t FutureIsReady(FutureType *Future) {
 
 extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 
-// This is used by both the PjRt and IFRT clients
 xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
                                            const int64_t *mesh_ids,
                                            int64_t num_mesh_ids,
@@ -946,10 +945,12 @@ void PrintPjRtBuffer(PjRtBuffer *buffer) {
 }
 
 extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
-                           PjRtBuffer **op_args, int64_t num_devices,
-                           uint8_t *is_arg_donatable, int num_results,
-                           PjRtBuffer **op_results, uint8_t *futures,
-                           FutureType **future_results) {
+                           PjRtBuffer **op_args, uint8_t *is_arg_donatable,
+                           int num_results, PjRtBuffer **op_results,
+                           uint8_t *futures, FutureType **future_results) {
+  xla::DeviceAssignment device_assignment = exec->device_assignment();
+  int num_devices = device_assignment.computation_count();
+
   // Ensure argument_handles is structured as num_devices x num_args
   std::vector<std::vector<PjRtBuffer *>> argument_handles(num_devices);
   int num_args = op_args_len / num_devices;

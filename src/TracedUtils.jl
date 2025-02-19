@@ -349,7 +349,7 @@ function make_mlir_fn(
         # TODO: support multiple meshes
         if length(unique_meshes) > 1
             error("Currently we support using a single mesh")
-            sorted_devices = [sort(vec(m)) for m in unique_meshes]
+            sorted_devices = [m.sorted_device_ids for m in unique_meshes]
             @assert allequal(sorted_devices) "All meshes must have the same device ids"
         end
         sharding_mesh = first(unique_meshes)

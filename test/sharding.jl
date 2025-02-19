@@ -107,6 +107,7 @@ end
             x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
         )
         @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit sum(x_ra)) ≈ sum(x)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
