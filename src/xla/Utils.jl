@@ -44,3 +44,9 @@ end
 
 @inline primitive_type(::Type{Complex{Float32}}) = 15
 @inline primitive_type(::Type{Complex{Float64}}) = 18
+
+function unsafe_string_and_free(str::Cstring, args...)
+    str_jl = unsafe_string(str, args...)
+    @ccall free(str::Cstring)::Cvoid
+    return str_jl
+end

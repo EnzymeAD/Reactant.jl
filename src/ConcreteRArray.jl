@@ -37,15 +37,13 @@ Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x
 
 Base.size(x::ConcreteRArray) = x.shape
 
-function Base.isempty(x::Union{ConcreteRArray,ConcreteRNumber})
-    return any(==(XLA.AsyncEmptyBuffer), x.data)
-end
+Base.isempty(x::Union{ConcreteRArray,ConcreteRNumber}) = any(isempty, x.data)
 Base.isempty(x::WrappedConcreteRArray) = isempty(ancestor(x))
 
 function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
-    data = Array{T,N}(undef, size(X)...)
-
     if Sharding.is_sharded(X)
+        data = Array{T,N}(undef, size(X)...)
+
         completed = Set{eltype(X.sharding.device_to_array_slices)}()
         for idx in 1:length(X.data)
             slice = X.sharding.device_to_array_slices[idx]
@@ -56,14 +54,14 @@ function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
             end
             data[slice...] = convert(Array{T}, X.data[idx])
         end
+
+        return data
     else
         buf = XLA.synced_buffer(only(X.data))
-        GC.@preserve data buf begin
-            XLA.BufferToHost(buf, pointer(data))
+        GC.@preserve buf begin
+            return convert(Array{T}, buf)
         end
     end
-
-    return data
 end
 function Base.convert(::Type{<:Array}, X::WrappedConcreteRArray)
     fn = compile(TracedUtils.materialize_traced_array, (X,))
@@ -82,7 +80,7 @@ function to_number(X::ConcreteRScalar{T}) where {T}
     XLA.await(X)
     buf = get_buffer(X; no_error_for_scalar=true)
     GC.@preserve data buf begin
-        XLA.BufferToHost(buf, data)
+        XLA.to_host(buf, data)
     end
     return data[]
 end
@@ -184,7 +182,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
     if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
         GC.@preserve buf begin
-            ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
+            ptr = Base.unsafe_convert(Ptr{T}, XLA.unsafe_buffer_pointer(buf))
             start = 0
             for i in 1:N
                 start *= size(a, N - i + 1)
@@ -211,7 +209,7 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
     if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
         GC.@preserve buf begin
-            ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
+            ptr = Base.unsafe_convert(Ptr{T}, XLA.unsafe_buffer_pointer(buf))
             start = 0
             for i in 1:N
                 start *= size(a, N - i + 1)
@@ -303,9 +301,7 @@ end
 (f::CallMapReduce)(A) = Base.mapreduce(f.f, f.op, A; f.dims, f.init)
 
 buffer_on_cpu(::Any) = true
-function buffer_on_cpu(x::ConcreteRArray)
-    return all(XLA.BufferOnCPU ∘ Base.Fix2(getproperty, :buffer), x.data)
-end
+buffer_on_cpu(x::ConcreteRArray) = all(XLA.buffer_on_cpu, x.data)
 
 function Ops.constant(x::ConcreteRArray; kwargs...)
     return Ops.constant(Base.convert(Array, x); kwargs...)
@@ -328,7 +324,7 @@ function Base.fill!(a::ConcreteRArray{T,N}, val) where {T,N}
     if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
         GC.@preserve buf begin
-            ptr = Base.unsafe_convert(Ptr{T}, XLA.UnsafeBufferPointer(buf))
+            ptr = Base.unsafe_convert(Ptr{T}, XLA.unsafe_buffer_pointer(buf))
             for start in 1:length(a)
                 unsafe_store!(ptr, val, start)
             end
