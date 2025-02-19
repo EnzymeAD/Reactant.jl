@@ -35,6 +35,7 @@ for T in (
     Integer,
     RNumber,
     Val,
+    VersionNumber,
 )
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(T::Type{<:$T}),
