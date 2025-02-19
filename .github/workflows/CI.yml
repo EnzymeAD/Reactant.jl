@@ -17,7 +17,6 @@ on:
     tags: '*'
     paths:
       - '.github/workflows/CI.yml'
-      - 'deps/**/*.jl'
       - 'ext/**/*.jl'
       - 'lib/**/*.jl'
       - 'src/**/*.jl'
