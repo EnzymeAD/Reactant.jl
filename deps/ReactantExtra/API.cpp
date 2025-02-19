@@ -1607,24 +1607,24 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
       .release();
 }
 
-extern "C" ifrt::Client *ifrt_make_cpu_client(uint8_t asynchronous, int node_id,
-                                              int num_nodes) {
+extern "C" ifrt::Client *ifrt_make_pjrt_cpu_client(uint8_t asynchronous,
+                                                   int node_id, int num_nodes) {
   return ifrt_pjrt_make_client(
       pjrt_make_cpu_client_shared(asynchronous, node_id, num_nodes));
 }
 
 extern "C" ifrt::Client *
-ifrt_make_gpu_client(int node_id, int num_nodes, int *allowed_devices,
-                     int num_allowed_devices, double memory_fraction,
-                     bool preallocate, const char *platform_name,
-                     const char **error) {
+ifrt_make_pjrt_gpu_client(int node_id, int num_nodes, int *allowed_devices,
+                          int num_allowed_devices, double memory_fraction,
+                          bool preallocate, const char *platform_name,
+                          const char **error) {
   return ifrt_pjrt_make_client(pjrt_make_gpu_client_shared(
       node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
       preallocate, platform_name, error));
 }
 
-extern "C" ifrt::Client *ifrt_make_tpu_client(const char *tpu_path,
-                                              const char **error) {
+extern "C" ifrt::Client *ifrt_make_pjrt_tpu_client(const char *tpu_path,
+                                                   const char **error) {
   return ifrt_pjrt_make_client(pjrt_make_tpu_client_shared(tpu_path, error));
 }
 

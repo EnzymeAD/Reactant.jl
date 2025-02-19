@@ -71,10 +71,11 @@ const cpu_client_count = Ref(0)
 const gpu_client_count = Ref(0)
 const tpu_client_count = Ref(0)
 
+# XXX: We need other backends to support sharding
 for (backend, fname, counter) in (
-    (:CPUClient, "ifrt_make_cpu_client", :cpu_client_count),
-    (:GPUClient, "ifrt_make_gpu_client", :gpu_client_count),
-    (:TPUClient, "ifrt_make_tpu_client", :tpu_client_count),
+    (:CPUClient, "ifrt_make_pjrt_cpu_client", :cpu_client_count),
+    (:GPUClient, "ifrt_make_pjrt_gpu_client", :gpu_client_count),
+    (:TPUClient, "ifrt_make_pjrt_tpu_client", :tpu_client_count),
 )
     @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
         if checkcount

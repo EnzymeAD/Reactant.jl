@@ -32,12 +32,16 @@ function Base.:(==)(a::MemoryKind, b::MemoryKind)
     end
 end
 
-function Base.show(io::IO, memory_kind::MemoryKind)
+function Base.string(memory_kind::MemoryKind)
     GC.@preserve memory_kind begin
         str = @ccall MLIR.API.mlir_c.ifrt_MemoryKindToString(
             memory_kind.ptr::Ptr{Cvoid}
         )::Cstring
     end
-    print(io, "XLA.IFRT.MemoryKind(\"", XLA.unsafe_string_and_free(str), "\")")
+    return XLA.unsafe_string_and_free(str)
+end
+
+function Base.show(io::IO, memory_kind::MemoryKind)
+    print(io, "XLA.IFRT.MemoryKind(\"", string(memory_kind), "\")")
     return nothing
 end
