@@ -11,6 +11,7 @@ function getattribute(attr::Attribute)
         issplat(attr) && return SplatAttribute(attr)
         return DenseElementsAttribute(attr)
     end
+    isflatsymbolref(attr) && return FlatSymbolRefAttribute(attr)
     return attr
 end
 
@@ -372,6 +373,11 @@ struct FlatSymbolRefAttribute <: AbstractAttribute
     function FlatSymbolRefAttribute(symbol::String; context::Context=context())
         return new(API.mlirFlatSymbolRefAttrGet(context, symbol))
     end
+
+    function FlatSymbolRefAttribute(attr::Attribute)
+        @assert isflatsymbolref(attr) "attribute $(attr) is not a flat symbol reference attribute"
+        return new(attr)
+    end
 end
 
 Base.show(io::IO, f::FlatSymbolRefAttribute) = print(io, "@$(flatsymbol(f.attr))")
@@ -480,7 +486,7 @@ struct SplatAttribute{T} <: AbstractDenseElementsAttribute{T}
         if !issplat(Attribute(attr))
             throw("$attr is not a splat attribute.")
         end
-        new{T}(attr)
+        return new{T}(attr)
     end
 end
 
