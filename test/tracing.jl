@@ -30,6 +30,7 @@ end
                 (Char, Char, Char),
                 (AbstractString, AbstractString, AbstractString),
                 (String, String, String),
+                (VersionNumber, VersionNumber, VersionNumber),
 
                 # Numeric types
                 (AbstractFloat, AbstractFloat, AbstractFloat),
@@ -241,10 +242,5 @@ end
         st = (; a=1, training=Val(true))
         st_traced = Reactant.to_rarray(st; track_numbers=Number)
         @test st_traced.training isa Val{true}
-    end
-
-    @testset "no trace VersionNumber" begin
-        @test Reactant.to_rarray(VersionNumber(1)) isa VersionNumber
-        @test @inferred Reactant.to_rarray(VersionNumber(1)) isa VersionNumber
     end
 end
