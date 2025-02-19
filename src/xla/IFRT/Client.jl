@@ -17,13 +17,13 @@ end
 
 function XLA.num_devices(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ifrt_ClientNumDevices(client.client::Ptr{Cvoid})::Cint
+        return @ccall MLIR.API.mlir_c.ifrt_client_device_count(client.client::Ptr{Cvoid})::Cint
     end
 end
 
 function XLA.num_addressable_devices(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ifrt_ClientNumAddressableDevices(
+        return @ccall MLIR.API.mlir_c.ifrt_client_addressable_device_count(
             client.client::Ptr{Cvoid}
         )::Cint
     end
@@ -40,7 +40,7 @@ end
 function XLA.get_device(client::Client, idx)
     GC.@preserve client begin
         return Device(
-            @ccall MLIR.API.mlir_c.ifrt_ClientGetDevice(
+            @ccall MLIR.API.mlir_c.ifrt_client_lookup_device(
                 client.client::Ptr{Cvoid}, idx::Cint
             )::Ptr{Cvoid}
         )
@@ -50,7 +50,7 @@ end
 function XLA.get_addressable_device(client::Client, idx)
     GC.@preserve client begin
         return Device(
-            @ccall MLIR.API.mlir_c.ifrt_ClientGetAddressableDevice(
+            @ccall MLIR.API.mlir_c.ifrt_client_lookup_addressable_device(
                 client.client::Ptr{Cvoid}, idx::Cint
             )::Ptr{Cvoid}
         )
@@ -72,9 +72,9 @@ const gpu_client_count = Ref(0)
 const tpu_client_count = Ref(0)
 
 for (backend, fname, counter) in (
-    (:CPUClient, "MakeCPUIfrtClient", :cpu_client_count),
-    (:GPUClient, "MakeGPUIfrtClient", :gpu_client_count),
-    (:TPUClient, "MakeTPUIfrtClient", :tpu_client_count),
+    (:CPUClient, "ifrt_make_cpu_client", :cpu_client_count),
+    (:GPUClient, "ifrt_make_gpu_client", :gpu_client_count),
+    (:TPUClient, "ifrt_make_tpu_client", :tpu_client_count),
 )
     @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
         if checkcount

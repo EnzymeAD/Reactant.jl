@@ -56,6 +56,8 @@ function XLA.memories(device::Device)
 end
 
 # Device List
+## TODO: This is semi-deprecated in openxla. At some point we want to just replace this with
+##       a simple vector of devices
 struct BasicDeviceList <: AbstractVector{Device}
     ptr::Ptr{Cvoid}
 
