@@ -4,10 +4,9 @@ struct Attribute <: AbstractAttribute
     attr::API.MlirAttribute
 end
 
+getattribute(attr::API.MlirAttribute) = getattribute(Attribute(attr))
 
-getattribute(attr::API.MlirAttribute)=getattribute(Attribute(attr))
-
-getattribute(attr::Attribute) = begin
+function getattribute(attr::Attribute)
     isdenseelements(attr) && return DenseElementsAttribute(attr)
     issplat(attr) && return SplatAttribute(attr)
     return attr
@@ -465,7 +464,7 @@ end
 
 struct SplatAttribute{T} <: AbstractDenseElementsAttribute{T}
     attr::API.MlirAttribute
-    SplatAttribute(attr::API.MlirAttribute) = begin
+    function SplatAttribute(attr::API.MlirAttribute)
         if !issplat(Attribute(attr))
             throw("$attr is not a splat attribute.")
         end
@@ -475,7 +474,7 @@ struct SplatAttribute{T} <: AbstractDenseElementsAttribute{T}
 
     SplatAttribute(a::Attribute) = SplatAttribute(a.attr)
 
-    SplatAttribute{T}(attr::API.MlirAttribute) where {T} = begin
+    function SplatAttribute{T}(attr::API.MlirAttribute) where {T}
         if !issplat(Attribute(attr))
             throw("$attr is not a splat attribute.")
         end
