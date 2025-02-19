@@ -7,8 +7,10 @@ end
 getattribute(attr::API.MlirAttribute) = getattribute(Attribute(attr))
 
 function getattribute(attr::Attribute)
-    isdenseelements(attr) && return DenseElementsAttribute(attr)
-    issplat(attr) && return SplatAttribute(attr)
+    if isdenseelements(attr)
+        issplat(attr) && return SplatAttribute(attr)
+        return DenseElementsAttribute(attr)
+    end
     return attr
 end
 
