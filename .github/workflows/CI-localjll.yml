@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   test:
-    timeout-minutes: 90
+    timeout-minutes: 3600
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - local libReactant - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     strategy:
