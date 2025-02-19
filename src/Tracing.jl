@@ -977,7 +977,7 @@ function make_tracer(
         end
         if !Sharding.is_sharded(sharding)
             res = ConcreteRArray{T,N,1,Sharding.NoShardInfo}(
-                (XLA.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
+                (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
             )
         else
             error("TODO: implement sharding")
@@ -1041,7 +1041,7 @@ function make_tracer(
         end
         if !Sharding.is_sharded(sharding)
             res = ConcreteRNumber{T,1,Sharding.NoShardInfo}(
-                (XLA.AsyncEmptyBuffer,), Sharding.NoShardInfo()
+                (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
             )
         else
             error("TODO: implement sharding")

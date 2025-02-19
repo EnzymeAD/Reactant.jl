@@ -99,11 +99,26 @@ fn_test3(x) = sum(x; dims=1)
     end
 end
 
+@testset "Sharding with non-iota mesh" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape([4, 6, 0, 2, 7, 3, 1, 5], 4, 2), ("data", "model"))
+        x = reshape(collect(Float32, 1:16), 4, 4)
+        x_ra = Reactant.to_rarray(
+            x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
+        )
+        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit sum(x_ra)) ≈ sum(x)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
 # Tests from the examples in
 # https://github.com/openxla/xla/blob/96d6678053d867099a42be9001c49b2ed7111afd/xla/hlo/ir/tile_assignment.h#L53-L68
 @testset "Device List from Iota Tile" begin
     @test Reactant.XLA.generate_device_list(
         Reactant.XLA.OpSharding(
+            convert(Ptr{Nothing}, pointer([1])), # dummy pointer that isn't used here
             Reactant.XLA.OpShardingType.Other,
             Int64[],
             Int64[],
@@ -121,6 +136,7 @@ end
 
     @test Reactant.XLA.generate_device_list(
         Reactant.XLA.OpSharding(
+            convert(Ptr{Nothing}, pointer([1])), # dummy pointer that isn't used here
             Reactant.XLA.OpShardingType.Other,
             Int64[],
             Int64[],
@@ -138,6 +154,7 @@ end
 
     @test Reactant.XLA.generate_device_list(
         Reactant.XLA.OpSharding(
+            convert(Ptr{Nothing}, pointer([1])), # dummy pointer that isn't used here
             Reactant.XLA.OpShardingType.Other,
             Int64[],
             Int64[],

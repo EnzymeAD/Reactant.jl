@@ -15,6 +15,6 @@ function Base.show(io::IO, hlo_module::HloModule)
     GC.@preserve hlo_module begin
         str = @ccall MLIR.API.mlir_c.HloModuleToString(hlo_module.ptr::Ptr{Cvoid})::Cstring
     end
-    print(io, unsafe_string(str))
+    print(io, unsafe_string_and_free(str))
     return nothing
 end

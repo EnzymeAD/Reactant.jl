@@ -65,13 +65,13 @@ end
 # Concrete Types
 ## ConcreteRNumber
 mutable struct ConcreteRNumber{T,D,S<:Sharding.ShardInfo} <: RNumber{T}
-    data::NTuple{D,XLA.AsyncBuffer}
+    data::NTuple{D,XLA.PJRT.AsyncBuffer}
     sharding::S
 end
 
 ConcreteRNumber{T,1,Sharding.NoShardInfo}(x::Number) where {T} = ConcreteRNumber{T}(x)
 
-function ConcreteRNumber{T}(data::Tuple{XLA.AsyncBuffer}) where {T}
+function ConcreteRNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
     return ConcreteRNumber{T,1,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
 end
 
@@ -94,7 +94,7 @@ ConcreteRNumber(data::T; kwargs...) where {T<:Number} = ConcreteRNumber{T}(data;
 
 ## ConcreteRArray
 mutable struct ConcreteRArray{T,N,D,S<:Sharding.ShardInfo} <: RArray{T,N}
-    data::NTuple{D,XLA.AsyncBuffer}
+    data::NTuple{D,XLA.PJRT.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::S
 end
@@ -105,27 +105,28 @@ Adapt.parent_type(::Type{ConcreteRArray{T,N,D,S}}) where {T,N,D,S} = ConcreteRAr
 
 Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kwargs...)
 
-function ConcreteRArray{T,N}(data::Tuple{XLA.AsyncBuffer}, shape::NTuple{N,Int}) where {T,N}
+function ConcreteRArray{T,N}(
+    data::Tuple{XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}
+) where {T,N}
     return ConcreteRArray{T,N,1,Sharding.NoShardInfo}(data, shape, Sharding.NoShardInfo())
 end
 
 function ConcreteRArray(
     data::Array{T,N};
-    client::XLA.Client=XLA.default_backend[],
+    client::XLA.AbstractClient=XLA.default_backend[],
     idx::Union{Int,Nothing}=nothing,
-    device::Union{Nothing,XLA.Device}=nothing,
+    device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
     if !Sharding.is_sharded(sharding)
         if device === nothing
             idx = idx === nothing ? XLA.default_device_idx[] : idx
-            device = XLA.ClientGetAddressableDevice(client, XLA.device_ordinal(client, idx))
+            device = XLA.get_addressable_device(client, idx)
         else
             if idx !== nothing
-                device_from_idx = XLA.ClientGetAddressableDevice(
-                    client, XLA.device_ordinal(client, idx)
-                )
-                @assert device_from_idx == device "If both `idx` and `device` are specified, `idx` must match `device`"
+                device_from_idx = XLA.get_addressable_device(client, idx)
+                @assert device_from_idx == device "If both `idx` and `device` are \
+                                                   specified, `idx` must match `device`"
             end
         end
         sdata, sharding = sharding(client, device, data)
