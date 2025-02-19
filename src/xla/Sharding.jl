@@ -71,7 +71,8 @@ mutable struct OpSharding
 
     function OpSharding(ptr::Ptr{Cvoid}, args...)
         @assert ptr != C_NULL
-        return finalizer(free_op_sharding, new(ptr, args...))
+        # return finalizer(free_op_sharding, new(ptr, args...))
+        return new(ptr, args...)
     end
 end
 
