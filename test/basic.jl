@@ -635,17 +635,12 @@ end
         ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     )
     @test @jit(
-        ifelse(
-            ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0)
-        )
+        ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     ) isa ConcretePJRTNumber{Float64}
-    @test 0.0f0 == @jit ifelse(
-        ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0)
-    )
+    @test 0.0f0 ==
+        @jit ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     @test @jit(
-        ifelse(
-            ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0)
-        )
+        ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
     ) isa ConcretePJRTNumber{Float32}
 
     cond = ConcreteRNumber(true)
@@ -860,9 +855,8 @@ end
 @testset "copysign" begin
     for a in (-3.14, -2, 0.0, 2.71, 42), b in (-7, -0.57, -0.0, 1, 3.14)
         # Make sure also the return type is correct
-        @test Reactant.to_number(
-            @jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))
-        ) === copysign(a, b)
+        @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ===
+            copysign(a, b)
     end
 end
 

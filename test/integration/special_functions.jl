@@ -7,8 +7,7 @@ macro ≈(a, b)
 end
 
 @testset "gamma" begin
-    @test SpecialFunctions.gamma(0.5) ≈
-        @jit(SpecialFunctions.gamma(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.gamma(0.5) ≈ @jit(SpecialFunctions.gamma(ConcreteRNumber(0.5)))
     @test SpecialFunctions.gamma(2) ≈ @jit(SpecialFunctions.gamma(ConcreteRNumber(2)))
 end
 
@@ -22,15 +21,13 @@ end
 @testset "digamma" begin
     @test SpecialFunctions.digamma(0.5) ≈
         @jit(SpecialFunctions.digamma(ConcreteRNumber(0.5)))
-    @test SpecialFunctions.digamma(2) ≈
-        @jit(SpecialFunctions.digamma(ConcreteRNumber(2)))
+    @test SpecialFunctions.digamma(2) ≈ @jit(SpecialFunctions.digamma(ConcreteRNumber(2)))
 end
 
 @testset "trigamma" begin
     @test SpecialFunctions.trigamma(0.5) ≈
         @jit(SpecialFunctions.trigamma(ConcreteRNumber(0.5)))
-    @test SpecialFunctions.trigamma(2) ≈
-        @jit(SpecialFunctions.trigamma(ConcreteRNumber(2)))
+    @test SpecialFunctions.trigamma(2) ≈ @jit(SpecialFunctions.trigamma(ConcreteRNumber(2)))
 end
 
 @testset "beta" begin
@@ -72,23 +69,20 @@ end
 end
 
 @testset "erfcx" begin
-    @test SpecialFunctions.erfcx(0.5) ≈
-        @jit(SpecialFunctions.erfcx(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.erfcx(0.5) ≈ @jit(SpecialFunctions.erfcx(ConcreteRNumber(0.5)))
     @test SpecialFunctions.erfcx(2) ≈ @jit(SpecialFunctions.erfcx(ConcreteRNumber(2)))
 end
 
 @testset "logerfc" begin
     @test SpecialFunctions.logerfc(0.5) ≈
         @jit(SpecialFunctions.logerfc(ConcreteRNumber(0.5)))
-    @test SpecialFunctions.logerfc(2) ≈
-        @jit(SpecialFunctions.logerfc(ConcreteRNumber(2)))
+    @test SpecialFunctions.logerfc(2) ≈ @jit(SpecialFunctions.logerfc(ConcreteRNumber(2)))
 end
 
 @testset "logerfcx" begin
     @test SpecialFunctions.logerfcx(0.5) ≈
         @jit(SpecialFunctions.logerfcx(ConcreteRNumber(0.5)))
-    @test SpecialFunctions.logerfcx(2) ≈
-        @jit(SpecialFunctions.logerfcx(ConcreteRNumber(2)))
+    @test SpecialFunctions.logerfcx(2) ≈ @jit(SpecialFunctions.logerfcx(ConcreteRNumber(2)))
 end
 
 @testset "loggamma1p" begin
