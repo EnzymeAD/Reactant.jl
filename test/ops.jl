@@ -259,8 +259,8 @@ end
         @test reshape(kron(Array(b), Array(a)), 4, 4) ≈
             @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f2(a, b)
 
-        x = Reactant.TracedUtils.materialize_traced_array(reshape(a, (2, 2)))
-        y = Reactant.TracedUtils.materialize_traced_array(reshape(b, (2, 2)))
+        x = ConcreteRArray(reshape(a, (2, 2)))
+        y = ConcreteRArray(reshape(b, (2, 2)))
         @test x .* y ≈
             @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f3(x, y)
         @test Array(x) * Array(y) ≈
