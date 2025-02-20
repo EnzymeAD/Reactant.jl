@@ -376,22 +376,22 @@ end
         # vcat test
         y = @jit vcat(a, b)
         @test y == vcat(a, _b)
-        @test y isa Reactant.to_rarray{typeof_a,1}
+        @test y isa ConcreteRArray{typeof_a,1}
 
         ## vcat test - adjoint
         y1 = @jit vcat(a, c')
         @test y1 == vcat(a, _c')
-        @test y1 isa Reactant.to_rarray{typeof_a,2}
+        @test y1 isa ConcreteRArray{typeof_a,2}
 
         # hcat test
         z = @jit hcat(a, c)
         @test z == hcat(a, _c)
-        @test z isa Reactant.to_rarray{typeof_a,2}
+        @test z isa ConcreteRArray{typeof_a,2}
 
         ## hcat test - adjoint
         z1 = @jit hcat(a, b')
         @test z1 == hcat(a, _b')
-        @test z1 isa Reactant.to_rarray{typeof_a,2}
+        @test z1 isa ConcreteRArray{typeof_a,2}
     end
 end
 
@@ -487,14 +487,14 @@ end
         f2 = @compile f1(x_ra)
         res2 = f2(Reactant.to_rarray((5, [3.14]); track_numbers=Number))
         @test @allowscalar(only(res2)) ≈ 5 * 3.14
-        @test res2 isa Reactant.to_rarray
+        @test res2 isa ConcreteRArray
 
         x_ra = Reactant.to_rarray(x)
 
         f3 = @compile f1(x_ra)
         res3 = f3(Reactant.to_rarray((5, [3.14])))
         @test @allowscalar(only(res3)) ≈ only(f1(x))
-        @test res3 isa Reactant.to_rarray
+        @test res3 isa ConcreteRArray
     end
 end
 
@@ -575,11 +575,11 @@ end
 
     y_ca1 = @allowscalar ArrayInterface.aos_to_soa(x_ca)
     @test y_ca1 ≈ x_res
-    @test y_ca1 isa Reactant.to_rarray
+    @test y_ca1 isa ConcreteRArray
 
     y_ca2 = @jit(ArrayInterface.aos_to_soa(x_ca))
     @test y_ca2 ≈ x_res
-    @test y_ca2 isa Reactant.to_rarray
+    @test y_ca2 isa ConcreteRArray
 end
 
 @testset "collect" begin
@@ -608,7 +608,7 @@ end
 
     @testset "TracedRArray" begin
         y = @jit(collect(x_ra))
-        @test y isa Reactant.to_rarray{Int,0}
+        @test y isa ConcreteRArray{Int,0}
         @test y == x
     end
 end
@@ -655,7 +655,7 @@ end
     x_ra = Reactant.to_rarray(rand(3, 4))
 
     z = zero(x_ra)
-    @test z isa Reactant.to_rarray
+    @test z isa ConcreteRArray
     @test size(z) == size(x_ra)
     @test all(iszero, Array(z))
 
@@ -699,7 +699,7 @@ end
 
     res = @jit test_convert(Reactant.to_rarray(rand(4, 2)), ConcreteRNumber(3.0f0))
 
-    @test res[1] isa Reactant.to_rarray{Float64,2}
+    @test res[1] isa ConcreteRArray{Float64,2}
     @test res[2] isa ConcretePJRTNumber{Float64}
 end
 
@@ -783,7 +783,7 @@ end
 
     @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
         @test @jit(fn.(x_ra)) ≈ fn.(x)
-        @test @jit(fn.(x_ra)) isa Reactant.to_rarray{Float32,2}
+        @test @jit(fn.(x_ra)) isa ConcreteRArray{Float32,2}
     end
 
     x = 0.235f0

@@ -576,35 +576,35 @@ end
         res = @jit genInt32(seed)
         @test res.output_state !== seed
         @test size(res.output_state) == (sz,)
-        @test res.output isa Reactant.to_rarray{Int32,2}
+        @test res.output isa ConcreteRArray{Int32,2}
         @test size(res.output) == (2, 4)
 
         seed = res.output_state
         res = @jit genInt64(seed)
         @test res.output_state !== seed
         @test size(res.output_state) == (sz,)
-        @test res.output isa Reactant.to_rarray{Int64,2}
+        @test res.output isa ConcreteRArray{Int64,2}
         @test size(res.output) == (2, 4)
 
         seed = res.output_state
         res = @jit genUInt64(seed)
         @test res.output_state !== seed
         @test size(res.output_state) == (sz,)
-        @test res.output isa Reactant.to_rarray{UInt64,2}
+        @test res.output isa ConcreteRArray{UInt64,2}
         @test size(res.output) == (2, 4)
 
         seed = res.output_state
         res = @jit genFloat32(seed)
         @test res.output_state !== seed
         @test size(res.output_state) == (sz,)
-        @test res.output isa Reactant.to_rarray{Float32,2}
+        @test res.output isa ConcreteRArray{Float32,2}
         @test size(res.output) == (2, 4)
 
         seed = res.output_state
         res = @jit genFloat64(seed)
         @test res.output_state !== seed
         @test size(res.output_state) == (sz,)
-        @test res.output isa Reactant.to_rarray{Float64,2}
+        @test res.output isa ConcreteRArray{Float64,2}
         @test size(res.output) == (2, 4)
     end
 end
