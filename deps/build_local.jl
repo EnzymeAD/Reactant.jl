@@ -21,7 +21,7 @@ s = ArgParseSettings()
         default = "/usr/bin/gcc"
         arg_type = String
     "--cc"
-        default = "/home/wmoses/llvms/llvm16-r/clang+llvm-16.0.2-x86_64-linux-gnu-ubuntu-22.04/bin/clang"
+        default = "/usr/bin/cc"
         arg_type = String
     "--hermetic_python_version"
         help = "Hermetic Python version."

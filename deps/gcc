@@ -1,3 +1,0 @@
-#!/bin/bash
-# /usr/local/cuda/bin/nvcc "$@"
-/home/wmoses/llvms/llvm16/install/bin/clang -Xclang -fcuda-allow-variadic-functions -I/usr/include/c++/11 -I/usr/include/x86_64-linux-gnu/c++/11 -Wno-unused-command-line-argument -L/usr/lib/gcc/x86_64-linux-gnu/11 -static-libstdc++ "$@" || /home/wmoses/llvms/llvm16/install/bin/clang -Xclang -fcuda-allow-variadic-functions -I/usr/include/c++/11 -I/usr/include/x86_64-linux-gnu/c++/11 -Wno-unused-command-line-argument -L/usr/lib/gcc/x86_64-linux-gnu/11 -static-libstdc++ -g0 "$@" -g0 
