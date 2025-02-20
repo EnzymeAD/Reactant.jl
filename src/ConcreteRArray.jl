@@ -1,4 +1,6 @@
-function get_buffer(x::Union{ConcretePJRTArray,ConcretePJRTNumber}; no_error_for_scalar=false)
+function get_buffer(
+    x::Union{ConcretePJRTArray,ConcretePJRTNumber}; no_error_for_scalar=false
+)
     if Sharding.is_sharded(x.sharding)
         # For scalars this is mostly replicated
         no_error_for_scalar && return first(x.data).buffer
@@ -254,14 +256,16 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
     end
 
     if all(buffer_on_cpu, bc.args) && all(
-        x -> !(x isa ConcretePJRTArray) || (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
+        x ->
+            !(x isa ConcretePJRTArray) ||
+                (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
         bc.args,
     )
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
         if !Base.isconcretetype(ElType)
             throw(
                 ErrorException(
-                    "`copy` on `ConcretePJRTArray` for non-concrete eltype is not implemented"
+                    "`copy` on `ConcretePJRTArray` for non-concrete eltype is not implemented",
                 ),
             )
         end

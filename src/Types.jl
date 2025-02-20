@@ -90,7 +90,9 @@ function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
         carray.data, carray.sharding
     )
 end
-ConcretePJRTNumber(data::T; kwargs...) where {T<:Number} = ConcretePJRTNumber{T}(data; kwargs...)
+function ConcretePJRTNumber(data::T; kwargs...) where {T<:Number}
+    return ConcretePJRTNumber{T}(data; kwargs...)
+end
 
 ## ConcretePJRTArray
 mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: RArray{T,N}
@@ -101,14 +103,20 @@ end
 
 @leaf ConcretePJRTArray
 Adapt.parent_type(::Type{<:ConcretePJRTArray{T,N}}) where {T,N} = ConcretePJRTArray{T,N}
-Adapt.parent_type(::Type{ConcretePJRTArray{T,N,D,S}}) where {T,N,D,S} = ConcretePJRTArray{T,N,D,S}
+function Adapt.parent_type(::Type{ConcretePJRTArray{T,N,D,S}}) where {T,N,D,S}
+    return ConcretePJRTArray{T,N,D,S}
+end
 
-Base.@deprecate ConcretePJRTArray(data::Number; kwargs...) ConcretePJRTNumber(data; kwargs...)
+Base.@deprecate ConcretePJRTArray(data::Number; kwargs...) ConcretePJRTNumber(
+    data; kwargs...
+)
 
 function ConcretePJRTArray{T,N}(
     data::Tuple{XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}
 ) where {T,N}
-    return ConcretePJRTArray{T,N,1,Sharding.NoShardInfo}(data, shape, Sharding.NoShardInfo())
+    return ConcretePJRTArray{T,N,1,Sharding.NoShardInfo}(
+        data, shape, Sharding.NoShardInfo()
+    )
 end
 
 function ConcretePJRTArray(
@@ -168,7 +176,7 @@ function ConcretePJRTArray{T,N}(x::AnyConcretePJRTArray) where {T,N}
 end
 
 ## ConcreteRNG
-mutable struct ConcreteRNG{S <: ConcretePJRTArray{UInt64,1,D,S}} <: Random.AbstractRNG
+mutable struct ConcreteRNG{S<:ConcretePJRTArray{UInt64,1,D,S}} <: Random.AbstractRNG
     seed::S
     const algorithm::String
 end

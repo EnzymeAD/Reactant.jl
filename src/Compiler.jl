@@ -82,7 +82,11 @@ function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
 end
 
 function create_result(
-    tocopy::ConcretePJRTNumber{T,D,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcretePJRTNumber{T,D,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    sharding_mesh,
 ) where {T,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -108,7 +112,11 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcretePJRTArray{T,N,D,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcretePJRTArray{T,N,D,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    sharding_mesh,
 ) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]

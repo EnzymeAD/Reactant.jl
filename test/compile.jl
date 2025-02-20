@@ -10,8 +10,9 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
             x2 = Reactant.to_rarray(x)
 
             res = @jit sum(x2)
-            @test res isa
-                @NamedTuple{a::Reactant.ConcretePJRTNumber{Float64,1,Sharding.NoShardInfo}}
+            @test res isa @NamedTuple{
+                a::Reactant.ConcretePJRTNumber{Float64,1,Sharding.NoShardInfo}
+            }
             @test isapprox(res.a, sum(x.a))
         end
 

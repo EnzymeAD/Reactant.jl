@@ -181,7 +181,10 @@ end
     @test Array(a) .÷ Array(b) ≈ @jit Ops.divide(a, b)
 
     for (a, b) in [
-        (ConcretePJRTArray([1.1, 2.2, 3.3, 4.4]), ConcretePJRTArray([5.5, 6.6, -7.7, -8.8])),
+        (
+            ConcretePJRTArray([1.1, 2.2, 3.3, 4.4]),
+            ConcretePJRTArray([5.5, 6.6, -7.7, -8.8]),
+        ),
         (
             ConcretePJRTArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im]),
             ConcretePJRTArray([
@@ -207,7 +210,10 @@ end
 
     for (a, b) in [
         (ConcretePJRTArray([1, 2, 3, 4]), ConcretePJRTArray([5, 6, -7, -8])),
-        (ConcretePJRTArray([1.0, 2.0, 3.0, 4.0]), ConcretePJRTArray([5.0, 6.0, -7.0, -8.0])),
+        (
+            ConcretePJRTArray([1.0, 2.0, 3.0, 4.0]),
+            ConcretePJRTArray([5.0, 6.0, -7.0, -8.0]),
+        ),
         (
             ConcretePJRTArray([1.0, 2.0im, 3.0, 4.0im]),
             ConcretePJRTArray([5.0, 6.0im, -7.0im, -8.0]),
@@ -233,7 +239,10 @@ end
 
     for (a, b) in [
         (ConcretePJRTArray([1, 2, 3, 4]), ConcretePJRTArray([5, 6, -7, -8])),
-        (ConcretePJRTArray([1.0, 2.0, 3.0, 4.0]), ConcretePJRTArray([5.0, 6.0, -7.0, -8.0])),
+        (
+            ConcretePJRTArray([1.0, 2.0, 3.0, 4.0]),
+            ConcretePJRTArray([5.0, 6.0, -7.0, -8.0]),
+        ),
         (
             ConcretePJRTArray([1.0 + 1im, 2.0 + 2im, 3.0 - 3im, 4.0 - 4im]),
             ConcretePJRTArray([5.0 + 5im, 6.0 + 6im, -7.0 - 7im, -8.0 - 8im]),
@@ -400,7 +409,10 @@ end
 
     for (a, b) in [
         (ConcretePJRTArray([5, 6, -7, -8]), ConcretePJRTArray([1, 2, 3, 4])),
-        (ConcretePJRTArray([1.1, 2.2, 3.3, 4.4]), ConcretePJRTArray([5.5, 6.6, -7.7, -8.8])),
+        (
+            ConcretePJRTArray([1.1, 2.2, 3.3, 4.4]),
+            ConcretePJRTArray([5.5, 6.6, -7.7, -8.8]),
+        ),
         (
             ConcretePJRTArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im]),
             ConcretePJRTArray([
@@ -512,7 +524,10 @@ end
 @testset "remainder" begin
     for (a, b) in [
         (ConcretePJRTArray([1, 2, 3, 4]), ConcretePJRTArray([5, 6, -7, -8])),
-        (ConcretePJRTArray([1.1, 2.2, 3.3, 4.4]), ConcretePJRTArray([5.5, 6.6, -7.7, -8.8])),
+        (
+            ConcretePJRTArray([1.1, 2.2, 3.3, 4.4]),
+            ConcretePJRTArray([5.5, 6.6, -7.7, -8.8]),
+        ),
     ]
         @test Array(a) .% Array(b) ≈ @jit Ops.remainder(a, b)
     end
@@ -724,7 +739,10 @@ end
 @testset "subtract" begin
     for (a, b) in [
         (ConcretePJRTArray([1, 2, 3, 4]), ConcretePJRTArray([5, 6, -7, -8])),
-        (ConcretePJRTArray([1.1, 2.2, 3.3, 4.4]), ConcretePJRTArray([5.5, 6.6, -7.7, -8.8])),
+        (
+            ConcretePJRTArray([1.1, 2.2, 3.3, 4.4]),
+            ConcretePJRTArray([5.5, 6.6, -7.7, -8.8]),
+        ),
         (
             ConcretePJRTArray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im]),
             ConcretePJRTArray([

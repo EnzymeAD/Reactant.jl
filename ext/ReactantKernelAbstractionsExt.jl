@@ -26,7 +26,9 @@ KA.allocate(n::ReactantBackend, ::Type{T}, dims::Tuple) where {T} = KA.zeros(b, 
 function KA.zeros(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
     return ConcretePJRTArray(zeros(T, dims))
 end
-KA.ones(::ReactantBackend, ::Type{T}, dims::Tuple) where {T} = ConcretePJRTArray(ones(T, dims))
+function KA.ones(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
+    return ConcretePJRTArray(ones(T, dims))
+end
 
 KA.get_backend(::Reactant.AnyTracedRArray) = ReactantBackend()
 KA.get_backend(::Reactant.AnyConcretePJRTArray) = ReactantBackend()

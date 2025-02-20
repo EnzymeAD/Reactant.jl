@@ -45,7 +45,12 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     @test typeof(ores1) == Tuple{}
 
     res1 = @jit(
-        fwd(Forward, Const, ConcretePJRTArray(ones(3, 2)), ConcretePJRTArray(3.1 * ones(3, 2)))
+        fwd(
+            Forward,
+            Const,
+            ConcretePJRTArray(ones(3, 2)),
+            ConcretePJRTArray(3.1 * ones(3, 2)),
+        )
     )
 
     @test typeof(res1) == Tuple{}
