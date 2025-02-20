@@ -224,7 +224,7 @@ function make_mlir_fn(
     # Detect if any of the arguments are sharded
     is_sharded = false
     for (k, v) in seen_args
-        if k isa Reactant.ConcreteRArray
+        if k isa Reactant.ConcretePJRTArray
             if Reactant.Sharding.is_sharded(k)
                 is_sharded = true
                 traced_args_to_shardings[v] = k.sharding

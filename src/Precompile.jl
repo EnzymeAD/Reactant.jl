@@ -62,10 +62,10 @@ end
     client = XLA.PJRT.CPUClient(; checkcount=false)
     @compile_workload begin
         @static if precompilation_supported()
-            x = ConcreteRNumber(2.0; client)
+            x = ConcretePJRTNumber(2.0; client)
             Reactant.compile(sin, (x,); client, optimize=:all)
 
-            y = ConcreteRArray([2.0]; client)
+            y = ConcretePJRTArray([2.0]; client)
             Reactant.compile(Base.sum, (y,); client, optimize=:all)
         end
     end

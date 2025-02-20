@@ -4,7 +4,7 @@ using Test
 @testset "Layout" begin
     x = reshape([1.0, 2.0, 3.0, 4.0], (2, 2))
 
-    y = Reactant.ConcreteRArray(x)
+    y = Reactant.ConcretePJRTArray(x)
 
     y2 = convert(Array{Float64,2}, y)
 

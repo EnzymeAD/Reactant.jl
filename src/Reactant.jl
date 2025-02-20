@@ -82,8 +82,8 @@ unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
-function aos_to_soa(x::AbstractArray{<:ConcreteRNumber{T}}) where {T}
-    x_c = ConcreteRArray(zeros(T, size(x)))
+function aos_to_soa(x::AbstractArray{<:ConcretePJRTNumber{T}}) where {T}
+    x_c = ConcretePJRTArray(zeros(T, size(x)))
     x_c .= x
     return x_c
 end
@@ -102,7 +102,7 @@ include("TracedUtils.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 
-include("ConcreteRArray.jl")
+include("ConcretePJRTArray.jl")
 
 use_overlayed_version(iter) = any(use_overlayed_version, iter)
 
@@ -159,6 +159,8 @@ using .Compiler:
     compile
 export ConcreteRArray,
     ConcreteRNumber,
+    ConcretePJRTArray,
+    ConcretePJRTNumber,
     @compile,
     @code_hlo,
     @code_mhlo,

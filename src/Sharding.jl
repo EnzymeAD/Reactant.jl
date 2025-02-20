@@ -174,7 +174,7 @@ end
 function Base.convert(
     ::Type{XLA.OpSharding}, sharding_and_shape::ShardingWithShape{<:NamedSharding}
 )
-    tmp = Reactant.ConcreteRArray(
+    tmp = Reactant.ConcretePJRTArray(
         ones(sharding_and_shape.shape); sharding=LazySharding(sharding_and_shape.sharding)
     )
     _, exec, _, _, _ = Reactant.Compiler.compile_xla(internal_simple_op, (tmp,))

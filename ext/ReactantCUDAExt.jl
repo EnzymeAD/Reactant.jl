@@ -2,7 +2,7 @@ module ReactantCUDAExt
 
 using CUDA
 using Reactant:
-    Reactant, TracedRArray, AnyTracedRArray, AnyConcreteRArray, MLIR, TracedRNumber
+    Reactant, TracedRArray, AnyTracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
 using ReactantCore: @trace
 using GPUCompiler: GPUCompiler
 using KernelAbstractions: KernelAbstractions
@@ -1073,7 +1073,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         if !Reactant.Sharding.is_sharded(sharding)
-            return Reactant.ConcreteRArray{T,N,1,Reactant.Sharding.NoShardInfo}
+            return Reactant.ConcretePJRTArray{T,N,1,Reactant.Sharding.NoShardInfo}
         else
             error("TODO: implement sharding")
         end
@@ -1108,7 +1108,7 @@ function Reactant.make_tracer(
         return seen[prev]
     end
     if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
-        return seen[prev] = Reactant.ConcreteRArray(Array(prev); sharding)
+        return seen[prev] = Reactant.ConcretePJRTArray(Array(prev); sharding)
     end
     TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding)
     if TT === eltype(RT)
@@ -1168,7 +1168,7 @@ end
                     CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
                     return nothing
                 end
-                y = Reactant.ConcreteRArray([2.0]; client)
+                y = Reactant.ConcretePJRTArray([2.0]; client)
                 Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
             end
         end

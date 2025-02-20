@@ -26,8 +26,8 @@ using LuxLib, Reactant, Enzyme, NNlib
         x = randn(Float32, 10, 12)
         bias = has_bias ? randn(Float32, 9) : nothing
 
-        weight_ra = Reactant.ConcreteRArray(weight)
-        x_ra = Reactant.ConcreteRArray(x)
+        weight_ra = Reactant.ConcretePJRTArray(weight)
+        x_ra = Reactant.ConcretePJRTArray(x)
         bias_ra = Reactant.to_rarray(bias)
 
         f_compile = Reactant.compile(
@@ -93,8 +93,8 @@ end
         x = randn(Float32, 10, 10)
         b = randn(Float32, 10)
 
-        x_ra = Reactant.ConcreteRArray(x)
-        b_ra = Reactant.ConcreteRArray(b)
+        x_ra = Reactant.ConcretePJRTArray(x)
+        b_ra = Reactant.ConcretePJRTArray(b)
 
         f_compile = Reactant.compile(biasact, (act, x_ra, b_ra))
         f_compile!! = Reactant.compile(biasact!!, (act, x_ra, b_ra))
@@ -145,7 +145,7 @@ end
     end
 
     x_act = randn(Float32, 10, 10)
-    x_act_ca = Reactant.ConcreteRArray(x_act)
+    x_act_ca = Reactant.ConcretePJRTArray(x_act)
 
     @testset "Activation: $act" for act in (
         identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2
@@ -187,8 +187,8 @@ end
         x = randn(Float32, 16, 16, 8, 2)
         bias = has_bias ? randn(Float32, 4) : nothing
 
-        weight_reactant = Reactant.ConcreteRArray(weight)
-        x_reactant = Reactant.ConcreteRArray(x)
+        weight_reactant = Reactant.ConcretePJRTArray(weight)
+        x_reactant = Reactant.ConcretePJRTArray(x)
         bias_reactant = Reactant.to_rarray(bias)
 
         @testset for stride in ((1, 1), (2, 2), (3, 3)),

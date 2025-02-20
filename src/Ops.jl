@@ -1071,11 +1071,11 @@ end
         @assert 0 < dimension <= ndims(x) "$x invalid dimension"
     end
 
-    sample_inputs = Vector{Reactant.ConcreteRNumber}(undef, length(xs) * 2)
+    sample_inputs = Vector{Reactant.ConcretePJRTNumber}(undef, length(xs) * 2)
     for i in eachindex(xs)
         T = Reactant.unwrapped_eltype(xs[i])
-        sample_inputs[2i - 1] = Reactant.ConcreteRNumber(T(0))
-        sample_inputs[2i] = Reactant.ConcreteRNumber(T(0))
+        sample_inputs[2i - 1] = Reactant.ConcretePJRTNumber(T(0))
+        sample_inputs[2i] = Reactant.ConcretePJRTNumber(T(0))
     end
     func =
         Reactant.TracedUtils.make_mlir_fn(
@@ -1455,7 +1455,7 @@ julia> Reactant.@jit(
               Reactant.to_rarray(Float32[1, 2, 3]),
           )
        )
-(ConcreteRArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
+(ConcretePJRTArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
 ```
 """
 @noinline function hlo_call(
