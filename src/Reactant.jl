@@ -102,7 +102,7 @@ include("TracedUtils.jl")
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 
-include("ConcretePJRTArray.jl")
+include("ConcreteRArray.jl")
 
 use_overlayed_version(iter) = any(use_overlayed_version, iter)
 

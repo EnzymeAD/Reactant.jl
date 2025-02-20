@@ -13,13 +13,13 @@ function Base.collect(x::ConcretePJRTNumber{T}) where {T}
     return collect(ConcretePJRTArray{T,0}(copy(x).data, ()))
 end
 
-Base.size(::ConcretePJRTNumber) = ()
-Base.real(x::ConcretePJRTNumber{<:Real}) = x
-function Base.rtoldefault(::Type{ConcretePJRTNumber{T}}) where {T}
-    return ConcretePJRTNumber(Base.rtoldefault(T))
+Base.size(::AbstractConcreteNumber) = ()
+Base.real(x::AbstractConcreteNumber{<:Real}) = x
+function Base.rtoldefault(T::Type{<:AbstractConcreteNumber})
+    return T(Base.rtoldefault(unwrapped_eltype(T)))
 end
 
-Base.strides(x::ConcretePJRTArray) = Base.size_to_strides(1, size(x)...)
+Base.strides(x::AbstractConcreteArray) = Base.size_to_strides(1, size(x)...)
 
 # Ensure the device and client are the same as the input
 function Base.float(x::ConcretePJRTNumber{T}) where {T}
@@ -30,16 +30,19 @@ end
 
 # written like this to avoid ambiguity errors
 for T in Base.uniontypes(ReactantPrimitive)
-    @eval (::Type{$(T)})(x::ConcretePJRTNumber) = convert($T, x)
+    @eval (::Type{$(T)})(x::AbstractConcreteNumber) = convert($T, x)
 end
 
-Base.convert(::Type{T}, x::ConcretePJRTNumber) where {T<:Number} = convert(T, to_number(x))
+function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
+    return convert(T, to_number(x))
+end
 
-Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcretePJRTArray} = T(x)
+Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
 
-Base.size(x::ConcretePJRTArray) = x.shape
+Base.size(x::AbstractConcreteArray) = x.shape
 
-Base.isempty(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = any(isempty, x.data)
+Base.isempty(x::Union{AbstractConcreteArray,AbstractConcreteNumber}) = any(isempty, x.data)
+
 Base.isempty(x::WrappedConcretePJRTArray) = isempty(ancestor(x))
 
 function Base.convert(::Type{<:Array}, X::ConcretePJRTArray{T,N}) where {T,N}
@@ -77,7 +80,7 @@ function synchronize(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
 end
 
 to_number(x::Number) = x
-function to_number(X::ConcreteRScalar{T}) where {T}
+function to_number(X::ConcretePJRTScalar{T}) where {T}
     data = Ref{T}()
     XLA.await(X)
     buf = get_buffer(X; no_error_for_scalar=true)
@@ -87,11 +90,9 @@ function to_number(X::ConcreteRScalar{T}) where {T}
     return data[]
 end
 
-function Base.convert(::Type{T}, x::ConcreteRScalar{T}) where {T}
-    return to_number(x; no_error_for_scalar=true)
-end
+Base.convert(::Type{T}, x::ConcretePJRTScalar{T}) where {T} = to_number(x)
 
-for jlop in (:(Base.abs),), T in (ConcretePJRTNumber,)
+for jlop in (:(Base.abs),), T in (AbstractConcreteNumber,)
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
@@ -104,7 +105,7 @@ for jlop in (
         :(Base.:^),
         :(Base.:(==)),
     ),
-    T in (ConcretePJRTNumber, ConcretePJRTArray{<:Any,0})
+    T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
 
     @eval begin
         $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
@@ -114,12 +115,12 @@ for jlop in (
 end
 
 for jlop in (:(Base.isnan), :(Base.isfinite)),
-    T in (ConcretePJRTNumber, ConcretePJRTArray{<:Any,0})
+    T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
 
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
-for T in (ConcretePJRTNumber, ConcretePJRTArray{<:Any,0})
+for T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
     for (T1, T2) in ((T, Number), (Number, T), (T, T))
         @eval begin
             function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
@@ -147,7 +148,7 @@ for (T1, T2) in (
     end
 end
 
-function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
+function Base.show(io::IO, X::ConcretePJRTScalar{T}) where {T}
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
@@ -277,17 +278,17 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
     return fn(bc.args...)
 end
 
-function Base.copyto!(dest::ConcretePJRTArray, src::ConcretePJRTArray)
+function Base.copyto!(dest::AbstractConcreteArray, src::AbstractConcreteArray)
     dest.data = src.data
     return dest
 end
 
-Base.collect(x::AnyConcretePJRTArray) = convert(Array, x)
+Base.collect(x::AbstractConcreteArray) = convert(Array, x)
 
 function Base.mapreduce(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(A::ConcretePJRTArray{T,N});
+    @nospecialize(A::AbstractConcreteArray{T,N});
     dims=:,
     init=nothing,
 ) where {T,N}
@@ -307,11 +308,11 @@ end
 buffer_on_cpu(::Any) = true
 buffer_on_cpu(x::ConcretePJRTArray) = all(XLA.buffer_on_cpu, x.data)
 
-function Ops.constant(x::ConcretePJRTArray; kwargs...)
+function Ops.constant(x::AbstractConcreteArray; kwargs...)
     return Ops.constant(Base.convert(Array, x); kwargs...)
 end
 
-function Ops.constant(x::ConcretePJRTNumber{T}; kwargs...) where {T}
+function Ops.constant(x::AbstractConcreteNumber{T}; kwargs...) where {T}
     return Ops.constant(Base.convert(T, x); kwargs...)
 end
 

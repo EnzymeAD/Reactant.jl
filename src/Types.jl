@@ -1,6 +1,10 @@
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
+abstract type AbstractConcreteNumber{T} <: RNumber{T} end
+
 abstract type RArray{T,N} <: AbstractArray{T,N} end
+
+abstract type AbstractConcreteArray{T,N} <: RArray{T,N} end
 
 # Traced Types
 
@@ -64,7 +68,7 @@ end
 
 # Concrete Types
 ## ConcretePJRTNumber
-mutable struct ConcretePJRTNumber{T,D,S<:Sharding.ShardInfo} <: RNumber{T}
+mutable struct ConcretePJRTNumber{T,D,S<:Sharding.ShardInfo} <: AbstractConcreteNumber{T}
     data::NTuple{D,XLA.PJRT.AsyncBuffer}
     sharding::S
 end
@@ -95,7 +99,7 @@ function ConcretePJRTNumber(data::T; kwargs...) where {T<:Number}
 end
 
 ## ConcretePJRTArray
-mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: RArray{T,N}
+mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: AbstractConcreteArray{T,N}
     data::NTuple{D,XLA.PJRT.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::S
@@ -154,7 +158,7 @@ function XLA.device(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
     return nothing # This is intentional to make constructing ConcretePJRTArrays easier
 end
 
-const ConcreteRScalar{T} = Union{ConcretePJRTArray{T,0},ConcretePJRTNumber{T}}
+const ConcretePJRTScalar{T} = Union{ConcretePJRTArray{T,0},ConcretePJRTNumber{T}}
 const WrappedConcretePJRTArray{T,N,D,S} = WrappedArray{
     T,N,ConcretePJRTArray,ConcretePJRTArray{T,N,D,S}
 }
@@ -176,7 +180,7 @@ function ConcretePJRTArray{T,N}(x::AnyConcretePJRTArray) where {T,N}
 end
 
 ## ConcreteRNG
-mutable struct ConcreteRNG{S<:ConcretePJRTArray{UInt64,1,D,S}} <: Random.AbstractRNG
+mutable struct ConcreteRNG{S<:ConcretePJRTArray} <: Random.AbstractRNG
     seed::S
     const algorithm::String
 end
