@@ -186,5 +186,5 @@ mutable struct ConcreteRNG{S<:ConcretePJRTArray} <: Random.AbstractRNG
 end
 
 ## Aliases to prevent breaking changes
-const ConcreteRArray{T,N,D,S} = ConcretePJRTArray{T,N,D,S}
-const ConcreteRNumber{T,D,S} = ConcretePJRTNumber{T,D,S}
+const ConcreteRArray = ConcretePJRTArray
+const ConcreteRNumber = ConcretePJRTNumber
