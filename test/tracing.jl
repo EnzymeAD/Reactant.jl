@@ -1,6 +1,7 @@
 using Reactant
 using Reactant:
     traced_type,
+    TracedRNumber,
     ConcreteToTraced,
     ArrayToConcrete,
     NoFieldMatchError,
