@@ -90,7 +90,7 @@ function to_number(X::ConcretePJRTScalar{T}) where {T}
     return data[]
 end
 
-Base.convert(::Type{T}, x::ConcretePJRTScalar{T}) where {T} = to_number(x)
+Base.convert(::Type{T}, x::ConcretePJRTScalar{T}) where {T <: Number} = to_number(x)
 
 for jlop in (:(Base.abs),), T in (AbstractConcreteNumber,)
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
