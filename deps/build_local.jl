@@ -43,6 +43,10 @@ s = ArgParseSettings()
         help = "Extra options to be passed to Bazel.  Can be used multiple times."
         action = :append_arg
         arg_type = String
+    "--color"
+        help = "Set to `yes` to enable color output, or `no` to disable it. Defaults to same color setting as the Julia process."
+        default = something(Base.have_color, false) ? "yes" : "no"
+        arg_type = String
 end
 #! format: on
 parsed_args = parse_args(ARGS, s)
@@ -154,6 +158,7 @@ if cc_is_gcc && build_backend == "cuda"
         end
     end
 end
+push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
 
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))
