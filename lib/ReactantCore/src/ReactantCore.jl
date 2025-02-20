@@ -94,9 +94,9 @@ You need to ensure that all branches have the same type.
 Another example is the following for loop which changes the type of `x` between iterations.
 
 ```julia
-x = ... # ConcretePJRTArray{Int64, 1}
+x = ... # ConcreteRArray{Int64, 1}
 for i in 1f0:0.5f0:10f0
-    x = x .+ i # ConcretePJRTArray{Float32, 1}
+    x = x .+ i # ConcreteRArray{Float32, 1}
 end
 ```
 

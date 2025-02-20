@@ -148,7 +148,7 @@ end
         ("Transpose", write_to_transposed_array!),
         ("Adjoint", write_to_adjoint_array!),
     ]
-        x = ConcretePJRTArray(rand(3, 2))
+        x = Reactant.to_rarray(rand(3, 2))
         y = @jit fn(x)
         @test all(isone, Array(y))
     end
@@ -227,7 +227,7 @@ end
         @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx2_ra)) ≈
         @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Array(idx2_ra)))
 
-    idx3 = ConcretePJRTNumber(2)
+    idx3 = Reactant.to_rarray(2; track_numbers=true)
 
     @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra), Int64(idx3)) ≈
         @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx3)) ≈

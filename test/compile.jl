@@ -11,7 +11,7 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
 
             res = @jit sum(x2)
             @test res isa @NamedTuple{
-                a::Reactant.ConcretePJRTNumber{Float64,1,Sharding.NoShardInfo}
+                a::ConcreteRNumber{Float64,1,Sharding.NoShardInfo}
             }
             @test isapprox(res.a, sum(x.a))
         end
@@ -32,8 +32,8 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
     @testset "world-age" begin
         a = ones(2, 10)
         b = ones(10, 2)
-        a_ra = Reactant.ConcretePJRTArray(a)
-        b_ra = Reactant.ConcretePJRTArray(b)
+        a_ra = Reactant.to_rarray(a)
+        b_ra = Reactant.to_rarray(b)
 
         fworld(x, y) = @jit(x * y)
 
@@ -42,7 +42,7 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
 
     @testset "type casting & optimized out returns" begin
         a = ones(2, 10)
-        a_ra = Reactant.ConcretePJRTArray(a)
+        a_ra = Reactant.to_rarray(a)
 
         ftype1(x) = Float64.(x)
         ftype2(x) = Float32.(x)

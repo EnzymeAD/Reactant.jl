@@ -89,7 +89,7 @@ end
 
 @testset "promote_to Complex" begin
     x = 1.0 + 2.0im
-    y = Reactant.ConcretePJRTNumber(x)
+    y = ConcreteRNumber(x)
 
     f = Reactant.compile((y,)) do z
         z + Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{ComplexF64}, 1.0 - 3.0im)
@@ -100,6 +100,6 @@ end
 
 @testset "complex reduction" begin
     x = randn(ComplexF32, 10, 10)
-    x_ra = Reactant.ConcretePJRTArray(x)
+    x_ra = Reactant.to_rarray(x)
     @test @jit(sum(abs2, x_ra)) ≈ sum(abs2, x)
 end

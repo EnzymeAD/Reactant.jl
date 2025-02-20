@@ -13,8 +13,8 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         fwd(
             Forward,
             Duplicated,
-            ConcretePJRTArray(ones(3, 2)),
-            ConcretePJRTArray(3.1 * ones(3, 2)),
+            Reactant.to_rarray(ones(3, 2)),
+            Reactant.to_rarray(3.1 * ones(3, 2)),
         )
     )
 
@@ -29,8 +29,8 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         fwd(
             set_abi(ForwardWithPrimal, Reactant.ReactantABI),
             Duplicated,
-            ConcretePJRTArray(ones(3, 2)),
-            ConcretePJRTArray(3.1 * ones(3, 2)),
+            Reactant.to_rarray(ones(3, 2)),
+            Reactant.to_rarray(3.1 * ones(3, 2)),
         )
     )
 
@@ -48,8 +48,8 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         fwd(
             Forward,
             Const,
-            ConcretePJRTArray(ones(3, 2)),
-            ConcretePJRTArray(3.1 * ones(3, 2)),
+            Reactant.to_rarray(ones(3, 2)),
+            Reactant.to_rarray(3.1 * ones(3, 2)),
         )
     )
 
@@ -62,8 +62,8 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         fwd(
             set_abi(ForwardWithPrimal, Reactant.ReactantABI),
             Const,
-            ConcretePJRTArray(ones(3, 2)),
-            ConcretePJRTArray(3.1 * ones(3, 2)),
+            Reactant.to_rarray(ones(3, 2)),
+            Reactant.to_rarray(3.1 * ones(3, 2)),
         )
     )
 
@@ -76,7 +76,7 @@ function gw(z)
 end
 
 @testset "Forward Gradient" begin
-    x = Reactant.ConcretePJRTArray(3.1 * ones(2, 2))
+    x = Reactant.Reactant.to_rarray(3.1 * ones(2, 2))
     res = @test_warn r"`Adapt.parent_type` is not implemented for" @jit gw(x)
     # TODO we should probably override https://github.com/EnzymeAD/Enzyme.jl/blob/5e6a82dd08e74666822b9d7b2b46c36b075668ca/src/Enzyme.jl#L2132
     # to make sure this gets merged as a tracedrarray
@@ -132,7 +132,7 @@ end
 end
 
 @testset "Nested AD" begin
-    x = ConcretePJRTNumber(3.1)
+    x = ConcreteRNumber(3.1)
     f(x) = x * x * x * x
     df(x) = Enzyme.gradient(Reverse, f, x)[1]
     res1 = @jit df(x)

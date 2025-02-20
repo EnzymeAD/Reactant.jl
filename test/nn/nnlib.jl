@@ -10,7 +10,7 @@ using NNlib, Reactant, Enzyme
     end
 
     x_act = randn(Float32, 10, 10)
-    x_act_ca = Reactant.ConcretePJRTArray(x_act)
+    x_act_ca = Reactant.to_rarray(x_act)
 
     @testset "Activation: $act" for act in (
         identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2, relu6
@@ -35,7 +35,7 @@ end
 @testset "Pooling" begin
     @testset for f in (NNlib.meanpool, NNlib.maxpool)
         x = randn(Float32, 32, 32, 3, 2)
-        x_reactant = Reactant.ConcretePJRTArray(x)
+        x_reactant = Reactant.to_rarray(x)
 
         @testset for window in ((2, 2), (3, 3), (4, 4)),
             stride in ((1, 1), (2, 2)),
@@ -70,8 +70,8 @@ end
         weight = randn(Float32, 4, 4, 8 ÷ groups, 4)
         x = randn(Float32, 16, 16, 8, 2)
 
-        weight_reactant = Reactant.ConcretePJRTArray(weight)
-        x_reactant = Reactant.ConcretePJRTArray(x)
+        weight_reactant = Reactant.to_rarray(weight)
+        x_reactant = Reactant.to_rarray(x)
 
         @testset for stride in ((1, 1), (2, 2), (3, 3)),
             padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0), (0, 1), (1, 0)),
@@ -113,8 +113,8 @@ end
     @testset "conv 1d: flip" begin
         x = [1.0f0; 2.0f0; 3.0f0;;;]
         W = [1.0f0; 2.0f0; 3.0f0;;;]
-        xx = Reactant.ConcretePJRTArray(x)
-        WW = Reactant.ConcretePJRTArray(W)
+        xx = Reactant.to_rarray(x)
+        WW = Reactant.to_rarray(W)
         conv_noflip(x, W) = NNlib.conv(x, W; pad=1, flipped=true)
         conv_flip(x, W) = NNlib.conv(x, W; pad=1, flipped=false)
         @test Reactant.compile(conv_noflip, (xx, WW))(xx, WW) ==
@@ -128,31 +128,31 @@ end
     x = rand(Float32, 4, 3, 5)
     y = rand(Float32, 3, 2, 5)
 
-    x_ra = Reactant.ConcretePJRTArray(x)
-    y_ra = Reactant.ConcretePJRTArray(y)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
 
     @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
     x = rand(Float32, 4, 3, 1)
     y = rand(Float32, 3, 2, 5)
 
-    x_ra = Reactant.ConcretePJRTArray(x)
-    y_ra = Reactant.ConcretePJRTArray(y)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
 
     @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
     x = rand(Float32, 4, 3, 5)
     y = rand(Float32, 3, 2, 1)
 
-    x_ra = Reactant.ConcretePJRTArray(x)
-    y_ra = Reactant.ConcretePJRTArray(y)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
 
     @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 end
 
 @testset "Constant Padding: NNlib.pad_constant" begin
     x = rand(Float32, 4, 4)
-    x_ra = Reactant.ConcretePJRTArray(x)
+    x_ra = Reactant.to_rarray(x)
 
     # Symmetric Padding
     @test @jit(NNlib.pad_constant(x_ra, (1, 1))) ≈ NNlib.pad_constant(x, (1, 1))
@@ -191,14 +191,14 @@ end
     @test @jit(∇sumabs2(pad_fn2, x_ra)) ≈ ∇sumabs2(pad_fn2, x)
 
     x = rand(ComplexF32, 4, 4)
-    x_ra = Reactant.ConcretePJRTArray(x)
+    x_ra = Reactant.to_rarray(x)
 
     @test @jit(NNlib.pad_constant(x_ra, (1, 1))) ≈ NNlib.pad_constant(x, (1, 1))
 end
 
 @testset "make_causal_mask" begin
     x = rand(2, 10)
-    x_ra = Reactant.ConcretePJRTArray(x)
+    x_ra = Reactant.to_rarray(x)
 
     @test @jit(NNlib.make_causal_mask(x_ra)) ≈ NNlib.make_causal_mask(x)
 
@@ -419,7 +419,7 @@ end
 
 @testset "Upsampling" begin
     x = randn(Float32, 4, 4, 3, 2)
-    x_ra = Reactant.ConcretePJRTArray(x)
+    x_ra = Reactant.to_rarray(x)
 
     @test @jit(NNlib.upsample_nearest(x_ra, (2, 2))) ≈ NNlib.upsample_nearest(x, (2, 2))
 end
