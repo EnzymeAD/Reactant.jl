@@ -66,8 +66,8 @@ end
 # distributions
 @testset "Uniform Random" begin
     @testset "Deterministic Seed" begin
-        seed1 = ConcreteRArray(UInt64[1, 3])
-        seed2 = ConcreteRArray(UInt64[1, 5])
+        seed1 = ConcretePJRTArray(UInt64[1, 3])
+        seed2 = ConcretePJRTArray(UInt64[1, 5])
 
         fn(seed) = begin
             rng = Random.default_rng()
@@ -110,8 +110,8 @@ end
 
 @testset "Normal Distribution" begin
     @testset "Deterministic Seed" begin
-        seed1 = ConcreteRArray(UInt64[1, 3])
-        seed2 = ConcreteRArray(UInt64[1, 5])
+        seed1 = ConcretePJRTArray(UInt64[1, 3])
+        seed2 = ConcretePJRTArray(UInt64[1, 5])
 
         fn(seed) = begin
             rng = Random.default_rng()
@@ -147,8 +147,8 @@ end
 
 @testset "Exponential Distribution" begin
     @testset "Deterministic Seed" begin
-        seed1 = ConcreteRArray(UInt64[1, 3])
-        seed2 = ConcreteRArray(UInt64[1, 5])
+        seed1 = ConcretePJRTArray(UInt64[1, 3])
+        seed2 = ConcretePJRTArray(UInt64[1, 5])
 
         fn(seed) = begin
             rng = Random.default_rng()

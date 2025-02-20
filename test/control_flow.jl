@@ -664,7 +664,7 @@ end
 
 @testset "call: rnumber" begin
     a = 10
-    a_rn = Reactant.ConcreteRNumber(a)
+    a_rn = Reactant.ConcretePJRTNumber(a)
 
     @test @jit(call2(a_rn)) == call2(a)
 end

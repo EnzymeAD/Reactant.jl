@@ -2,12 +2,12 @@ using FFTW, Reactant
 
 @testset "fft" begin
     x = rand(ComplexF32, 2, 2, 3, 4)
-    x_ra = Reactant.ConcreteRArray(x)
+    x_ra = Reactant.ConcretePJRTArray(x)
 
     @test_throws AssertionError @jit(fft(x_ra))
 
     x = rand(ComplexF32, 2, 3, 4)
-    x_ra = Reactant.ConcreteRArray(x)
+    x_ra = Reactant.ConcretePJRTArray(x)
 
     @test @jit(fft(x_ra)) ≈ fft(x)
     @test @jit(fft(x_ra, (1, 2))) ≈ fft(x, (1, 2))
@@ -24,12 +24,12 @@ end
 
 @testset "rfft" begin
     x = rand(2, 2, 3, 4)
-    x_ra = Reactant.ConcreteRArray(x)
+    x_ra = Reactant.ConcretePJRTArray(x)
 
     @test_throws AssertionError @jit(rfft(x_ra))
 
     x = rand(2, 3, 4)
-    x_ra = Reactant.ConcreteRArray(x)
+    x_ra = Reactant.ConcretePJRTArray(x)
 
     @test @jit(rfft(x_ra)) ≈ rfft(x)
     @test @jit(rfft(x_ra, (1, 2))) ≈ rfft(x, (1, 2))
