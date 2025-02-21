@@ -630,14 +630,14 @@ function compile_mlir!(
         @assert curesulthandler !== nothing
         curesulthandler = Base.reinterpret(UInt, curesulthandler)
         kern = if Raise[]
-            "lower-kernel{backend=cpu},canonicalize"
+            "lower-kernel{backend=cpu},symbol-dce,canonicalize"
         else
             "lower-kernel,canonicalize"
         end
         jit = "lower-jit{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     else
         kern = if Raise[]
-            "lower-kernel{backend=cpu},canonicalize"
+            "lower-kernel{backend=cpu},symbol-dce,canonicalize"
         else
             "lower-kernel,canonicalize"
         end
@@ -645,7 +645,7 @@ function compile_mlir!(
     end
 
     raise = if Raise[]
-        "convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,llvm-to-affine-access,canonicalize"
+        "llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,int-range-optimizations,canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize"
     else
         "canonicalize"
     end
