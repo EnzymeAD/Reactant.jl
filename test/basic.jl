@@ -951,3 +951,10 @@ end
     Reactant.@jit dip!(ra)
     ra[:a] ≈ (2.7 * 2) * ones(4)
 end
+
+@testset "@code_xla" begin
+    x_ra = Reactant.to_rarray(ones(4))
+    hlo = repr(@code_xla(sin.(x_ra)))
+    @test contains(hlo, "HloModule")
+    @test contains(hlo, "sine")
+end

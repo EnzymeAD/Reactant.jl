@@ -867,6 +867,8 @@ end
 
 """
     @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
+
+See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     default_options = Dict{Symbol,Any}(
@@ -875,14 +877,22 @@ macro code_hlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
     )
-    return esc(:($(compile_expr);
-    $(first)($(compiled))))
+    #! format: off
+    return esc(
+        :(
+            $(compile_expr);
+            $(first)($(compiled))
+        )
+    )
+    #! format: on
 end
 
 """
     @code_mhlo [optimize = ...] [no_nan = <true/false>] f(args...)
 
 Similar to `@code_hlo`, but prints the module after running the XLA compiler.
+
+See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
     default_options = Dict{Symbol,Any}(
@@ -905,6 +915,8 @@ end
     @code_xla [optimize = ...] [no_nan = <true/false>] f(args...)
 
 Similar to `@code_hlo`, but prints the HLO module.
+
+See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
     default_options = Dict{Symbol,Any}(
@@ -919,17 +931,7 @@ macro code_xla(args...)
             $(compile_expr);
             exec = $(compiled)[2];
             hlo_modules = $(XLA.get_hlo_modules)(exec);
-            if length(hlo_modules) == 1
-                hlo_module = only(hlo_modules)
-                println(hlo_module)
-            else
-                println("HLO modules:")
-                for (i, hlo_module) in enumerate(hlo_modules)
-                    println("Partition $i:")
-                    println(hlo_module)
-                    println()
-                end
-            end
+            length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         )
     )
     #! format: on
