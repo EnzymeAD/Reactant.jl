@@ -47,12 +47,6 @@
 
 #include "xla/mlir/utils/type_util.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
-#include "xla/pjrt/cpu/cpu_client.h"
-#include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
-#include "xla/pjrt/pjrt_api.h"
-#include "xla/pjrt/pjrt_c_api_client.h"
-#include "xla/pjrt/pjrt_executable.h"
-#include "xla/pjrt/status_casters.h"
 
 #include "tsl/platform/init_main.h"
 #include "tsl/profiler/lib/profiler_session.h"
@@ -69,6 +63,17 @@
 
 #include "llvm-c/TargetMachine.h"
 
+// PJRT
+#include "xla/pjrt/cpu/cpu_client.h"
+#include "xla/pjrt/distributed/client.h"
+#include "xla/pjrt/distributed/distributed.h"
+#include "xla/pjrt/distributed/service.h"
+#include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
+#include "xla/pjrt/pjrt_api.h"
+#include "xla/pjrt/pjrt_c_api_client.h"
+#include "xla/pjrt/pjrt_executable.h"
+#include "xla/pjrt/status_casters.h"
+
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
 #include "shardy/integrations/c/attributes.h"
@@ -76,11 +81,11 @@
 
 // IFRT
 #include "xla/python/ifrt/array.h"
+#include "xla/python/ifrt/basic_device_list.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/compiler.h"
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device_list.h"
-#include "xla/python/ifrt/basic_device_list.h"
 #include "xla/python/ifrt/dtype.h"
 #include "xla/python/ifrt/executable.h"
 #include "xla/python/ifrt/hlo/hlo_program.h"
@@ -128,6 +133,48 @@ void registerRemoveTransformPass();
 void registerGenerateApplyPatternsPass();
 } // namespace enzyme
 } // namespace mlir
+
+namespace reactant {
+
+template <typename T> struct unwrap_type {
+  typedef T type;
+};
+template <typename T> struct unwrap_type<std::shared_ptr<T>> {
+  typedef T type;
+};
+template <typename T> struct unwrap_type<tsl::RCReference<T>> {
+  typedef T type;
+};
+
+template <typename T> using unwrap_type_t = typename unwrap_type<T>::type;
+
+template <typename T> struct HeldValue {
+public:
+  HeldValue(T &obj) : holded(obj) {}
+  ~HeldValue() = default;
+
+  unwrap_type_t<T> *ptr() const { return holded.get(); }
+
+  T obj() const { return holded; }
+
+  T value() const { return holded; }
+
+  unwrap_type_t<T> *operator->() const { return ptr(); }
+
+private:
+  T holded;
+};
+
+template <typename T> HeldValue<T> *capture(T obj) {
+  return new HeldValue<T>(obj);
+}
+
+} // namespace reactant
+
+using reactant::HeldValue;
+using HeldPjRtClient = HeldValue<std::shared_ptr<xla::PjRtClient>>;
+using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
+using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
 
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -312,9 +359,23 @@ extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
 extern "C" PjRtClient *
 MakeGPUClient(int node_id, int num_nodes, int *allowed_devices,
               int num_allowed_devices, double memory_fraction, bool preallocate,
-              const char *platform_name, const char **error) {
+              const char *platform_name, const char **error,
+              void *distributed_runtime_client) {
   GpuClientOptions options;
-  // options.kv_store = "etcd";
+
+  if (num_nodes > 1) {
+    if (distributed_runtime_client == nullptr) {
+      *error =
+          "`distributed_runtime_client` must be non-null if `num_nodes` > 1";
+      return nullptr;
+    }
+    auto typed_distributed_runtime_client = static_cast<
+        HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *>(
+        distributed_runtime_client);
+    options.kv_store = GetDistributedKeyValueStore(
+        typed_distributed_runtime_client->obj(), /*key_prefix=*/"");
+  }
+
   // options.allocator_config =
   options.allocator_config.preallocate = preallocate;
   options.allocator_config.memory_fraction = memory_fraction;
@@ -427,6 +488,21 @@ extern "C" const char *ClientGetPlatformName(PjRtClient *client) {
 
 extern "C" const char *DeviceGetKind(PjRtDevice *device) {
   return cstr_from_string(device->device_kind());
+}
+
+extern "C" void ClientGetDevices(PjRtClient *client, PjRtDevice **out_devices) {
+  auto span = client->devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
+}
+
+extern "C" void ClientGetAddressableDevices(PjRtClient *client,
+                                            PjRtDevice **out_devices) {
+  auto span = client->addressable_devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
 }
 
 // To keep in sync with JLAllocatorStats in src/XLA.jl
@@ -1196,62 +1272,19 @@ extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
   return wrap(entryFn);
 }
 
-namespace reactant {
-
-template <typename T> struct unwrap_type {
-  typedef T type;
-};
-template <typename T> struct unwrap_type<std::shared_ptr<T>> {
-  typedef T type;
-};
-template <typename T> struct unwrap_type<tsl::RCReference<T>> {
-  typedef T type;
-};
-
-template <typename T> using unwrap_type_t = typename unwrap_type<T>::type;
-
-template <typename T> struct HeldValue {
-public:
-  HeldValue(T &obj) : holded(obj) {}
-  ~HeldValue() = default;
-
-  unwrap_type_t<T> *ptr() const { return holded.get(); }
-
-  T obj() const { return holded; }
-
-  T value() const { return holded; }
-
-  unwrap_type_t<T> *operator->() const { return ptr(); }
-
-private:
-  T holded;
-};
-
-template <typename T> HeldValue<T> *capture(T obj) {
-  return new HeldValue<T>(obj);
-}
-
-} // namespace reactant
-
-using reactant::HeldValue;
-using HeldPjRtClient = HeldValue<std::shared_ptr<xla::PjRtClient>>;
-using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
-using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
-
 extern "C" HeldPjRtClient *
 pjrt_make_cpu_client_shared(uint8_t asynchronous, int node_id, int num_nodes) {
   PjRtClient *client = MakeCPUClient(asynchronous, node_id, num_nodes);
   return reactant::capture(std::shared_ptr<PjRtClient>(client));
 }
 
-extern "C" HeldPjRtClient *
-pjrt_make_gpu_client_shared(int node_id, int num_nodes, int *allowed_devices,
-                            int num_allowed_devices, double memory_fraction,
-                            bool preallocate, const char *platform_name,
-                            const char **error) {
-  PjRtClient *client =
-      MakeGPUClient(node_id, num_nodes, allowed_devices, num_allowed_devices,
-                    memory_fraction, preallocate, platform_name, error);
+extern "C" HeldPjRtClient *pjrt_make_gpu_client_shared(
+    int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
+    double memory_fraction, bool preallocate, const char *platform_name,
+    const char **error, void *distributed_runtime_client) {
+  PjRtClient *client = MakeGPUClient(
+      node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
+      preallocate, platform_name, error, distributed_runtime_client);
   return reactant::capture(std::shared_ptr<PjRtClient>(client));
 }
 
@@ -1617,10 +1650,10 @@ extern "C" ifrt::Client *
 ifrt_make_gpu_client(int node_id, int num_nodes, int *allowed_devices,
                      int num_allowed_devices, double memory_fraction,
                      bool preallocate, const char *platform_name,
-                     const char **error) {
+                     const char **error, void *distributed_runtime_client) {
   return ifrt_pjrt_make_client(pjrt_make_gpu_client_shared(
       node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
-      preallocate, platform_name, error));
+      preallocate, platform_name, error, distributed_runtime_client));
 }
 
 extern "C" ifrt::Client *ifrt_make_tpu_client(const char *tpu_path,
@@ -1812,6 +1845,78 @@ ifrt_hlo_sharding_to_xla_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
 extern "C" const char *
 ifrt_hlo_sharding_to_string(ifrt::HloSharding *hlo_sharding) {
   return cstr_from_string(hlo_sharding->DebugString());
+}
+
+#pragma endregion
+
+#pragma region PjRtDistributed
+
+extern "C" HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *
+GetDistributedRuntimeClient(char *c_address, int32_t node_id,
+                            int32_t rpc_timeout_in_seconds,
+                            // int32_t init_timeout,
+                            int32_t shutdown_timeout_in_minutes,
+                            int32_t heartbeat_interval_in_seconds,
+                            int max_missing_heartbeats, bool use_compression) {
+  xla::DistributedRuntimeClient::Options options;
+  options.node_id = node_id;
+  options.rpc_timeout = absl::Seconds(rpc_timeout_in_seconds);
+  // options.init_timeout = absl::Seconds(init_timeout);
+  options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
+  options.heartbeat_interval = absl::Seconds(heartbeat_interval_in_seconds);
+  options.max_missing_heartbeats = max_missing_heartbeats;
+
+  std::string address = c_address;
+
+  return reactant::capture(
+      xla::GetDistributedRuntimeClient(address, options, use_compression));
+}
+
+extern "C" void free_distributed_runtime_client(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+  delete client;
+}
+
+extern "C" void distributed_runtime_client_connect(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+  auto status = client->obj()->Connect();
+  if (!status.ok())
+    ReactantThrowError(status.ToString().c_str());
+}
+
+extern "C" void distributed_runtime_client_shutdown(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+  auto status = client->obj()->Shutdown();
+  if (!status.ok())
+    ReactantThrowError(status.ToString().c_str());
+}
+
+extern "C" xla::DistributedRuntimeService *GetDistributedRuntimeService(
+    char *c_address, int num_nodes, int32_t heartbeat_interval_in_seconds,
+    int max_missing_heartbeats, int32_t cluster_register_timeout_in_minutes,
+    int32_t shutdown_timeout_in_minutes) {
+  xla::CoordinationServiceImpl::Options options;
+  options.num_nodes = num_nodes;
+  options.heartbeat_interval = absl::Seconds(heartbeat_interval_in_seconds);
+  options.max_missing_heartbeats = max_missing_heartbeats;
+  options.cluster_register_timeout =
+      absl::Minutes(cluster_register_timeout_in_minutes);
+  options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
+
+  std::string address = c_address;
+
+  return MyValueOrThrow(xla::GetDistributedRuntimeService(address, options))
+      .release();
+}
+
+extern "C" void free_distributed_runtime_service(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeService>> *service) {
+  delete service;
+}
+
+extern "C" void distributed_runtime_service_shutdown(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeService>> *service) {
+  service->obj()->Shutdown();
 }
 
 #pragma endregion
