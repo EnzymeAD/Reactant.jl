@@ -52,7 +52,6 @@
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
-#include "xla/pjrt/status_casters.h"
 
 #include "tsl/platform/init_main.h"
 #include "tsl/profiler/lib/profiler_session.h"
@@ -133,15 +132,10 @@ extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
 // Utilities for `StatusOr`.
 template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
-  if (ReactantThrowError) {
     if (!v.ok()) {
       ReactantThrowError(v.status().ToString().c_str());
-      throw xla::XlaRuntimeError(v.status().ToString().c_str());
     }
     return std::move(v).value();
-  } else {
-    return xla::ValueOrThrow(std::move(v));
-  }
 }
 
 extern "C" void ReactantHandleCuResult(uint32_t curesult) {
