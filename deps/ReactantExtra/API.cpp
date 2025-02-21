@@ -1585,8 +1585,7 @@ ifrt_proxy_grpc_server_address(ifrt::proxy::GrpcServer *server) {
   return cstr_from_string(server->address());
 }
 
-extern "C" const char *
-ifrt_proxy_grpc_server_wait(ifrt::proxy::GrpcServer *server) {
+extern "C" void ifrt_proxy_grpc_server_wait(ifrt::proxy::GrpcServer *server) {
   server->Wait();
 }
 
