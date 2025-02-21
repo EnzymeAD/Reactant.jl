@@ -126,16 +126,17 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-function prepare_args(args, concretein, toscalar)
+function prepare_args(args, concretein, toscalar, mutate_traced_args)
     N = length(args)
     seen_args = OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
+    mode = concretein ? Reactant.ConcreteToTraced : (mutate_traced_args ? Reactant.TracedSetPathInPlace : Reactant.TracedSetPath)
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
             seen_args,
             args[i],
             (:args, i),
-            concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
+            mode;
             toscalar,
         )
     end
@@ -193,6 +194,7 @@ function prepare_results(
     concretein,
     args_in_result,
     do_transpose,
+    mutate_traced_args,
 )
     N = length(traced_args)
     # check which arguments have been mutated
@@ -203,38 +205,15 @@ function prepare_results(
         seen_results,
         result,
         (:result,),
-        true ? Reactant.TracedTrack : Reactant.TracedSetPath,
+        (concretein || mutate_traced_args) ? Reactant.TracedTrack : Reactant.TracedSetPath,
     )
-    already_prepared = false
-    for (k, v) in seen_results
-        v isa Reactant.TracedType || continue
-        nresultpaths = count(p->length(p)>0 && p[1]==:result, get_paths(v))
-        if nresultpaths > 1
-            already_prepared = true
-            break
-        end
-    end
-
-    if !already_prepared
-        # marks buffers to be donated
-        for i in 1:N
-            Reactant.make_tracer(
-                seen_results,
-                traced_args[i],
-                true ? (:resargs, i) : (),
-                Reactant.TracedTrack,
-            )
-        end
-    else
-        # TODO: here we only push tracedtypes which isn't exactly the same as properly tracing the
-        # args, perhaps this should be fixed if seen_results is used later on.
-        Core.println("$(linear_args)")
-        for arg in linear_args
-            @assert has_resargidx(arg) "Expected the arg to have a :resargidx already, but it doesn't."
-            if !haskey(seen_results, arg)
-                seen_results[arg] = arg
-            end
-        end
+    for i in 1:N
+        Reactant.make_tracer(
+            seen_results,
+            traced_args[i],
+            (concretein || mutate_traced_args) ? (:resargs, i) : (),
+            Reactant.TracedTrack,
+        )
     end
 
     linear_results = Reactant.TracedType[]
@@ -311,6 +290,7 @@ function make_mlir_fn(
     return_dialect=:func,
     args_in_result::Symbol=:all,
     do_transpose=true,
+    mutate_traced_args=false,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         return (
@@ -325,13 +305,14 @@ function make_mlir_fn(
                 return_dialect,
                 args_in_result,
                 do_transpose,
+                mutate_traced_args
             )[2:end]...,
         )
     end
 
     N = length(args)
     seen_args, traced_args, linear_args = prepare_args(
-        args, concretein, toscalar
+        args, concretein, toscalar, mutate_traced_args
     )
 
     mod, temp_func, fnbody, in_tys, sym_visibility = placeholder_func(
@@ -365,6 +346,7 @@ function make_mlir_fn(
         concretein,
         args_in_result,
         do_transpose,
+        mutate_traced_args
     )
 
     ret = create_return!(

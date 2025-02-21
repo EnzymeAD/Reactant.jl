@@ -1128,9 +1128,6 @@ function compile(f, args; sync=false, kwargs...)
         $(unflatten_code...)
         return result
     end
-    @warn "compiling $f"
-    display(body)
-    println("##############################################")
 
 
     return register_thunk(fname, Tuple{map(Core.Typeof, args)...}, body, f, isclosure)

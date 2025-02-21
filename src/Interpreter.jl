@@ -255,7 +255,7 @@ function overload_autodiff(
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results, _ = TracedUtils.make_mlir_fn(
+    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = TracedUtils.make_mlir_fn(
         primf, primargs, (), string(f) * "_autodiff", false
     )
 

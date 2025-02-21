@@ -5,6 +5,7 @@
     ArrayToConcrete = 4
     TracedSetPath = 5
     TracedToTypes = 6
+    TracedSetPathInPlace = 8
     NoStopTracedTrack = 7
 end
 
@@ -52,7 +53,7 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     if Mode == ArrayToConcrete && T <: track_numbers
         return ConcreteRNumber{T}
-    elseif (mode == NoStopTracedTrack || mode == TracedTrack) && T <: track_numbers
+    elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPathInPlace) && T <: track_numbers
         return TracedRNumber{T}
     end
     return T
@@ -273,7 +274,7 @@ Base.@nospecializeinfer function traced_type_inner(
         throw("TracedRArray $T cannot be traced")
     elseif mode == TracedToConcrete
         return base_typec(T)
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedSetPathInPlace
         return T
     else
         throw("Abstract RArray $T cannot be made concrete in mode $mode")
@@ -290,7 +291,7 @@ Base.@nospecializeinfer function traced_type_inner(
         throw("TracedRNG cannot be traced")
     elseif mode == TracedToConcrete
         return ConcreteRNG
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedSetPathInPlace
         return T
     else
         throw("Unsupported mode: $mode")
@@ -816,11 +817,19 @@ function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == TracedToTypes
-        push!(path, MLIR.IR.type(prev.mlir_data))
+        # for TracedRArrays, we check for objectid equality because make_mlir_fn gets rid of duplicate TracedRArrays.
+        # i.e. (a, a) should hash differently than (a, b) when a and b are different TracedRArrays.
+        if haskey(seen, objectid(prev))
+            push!(path, seen[objectid(prev)])
+        else
+            push!(path, MLIR.IR.type(prev.mlir_data))
+            seen[objectid(prev)] = VisitedObject(length(seen) + 1)
+        end
         return nothing
     end
-    if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+    if mode == TracedTrack || mode == TracedSetPathInPlace
+        newpaths = mode == TracedSetPathInPlace ? (path, ) : (TracedUtils.get_paths(prev)..., path)
+        TracedUtils.set_paths!(prev, newpaths)
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -873,11 +882,19 @@ function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == TracedToTypes
-        push!(path, MLIR.IR.type(prev.mlir_data))
+        # for TracedRArrays, we check for objectid equality because make_mlir_fn gets rid of duplicate TracedRArrays.
+        # i.e. (a, a) should hash differently than (a, b) when a and b are different TracedRArrays.
+        if haskey(seen, objectid(prev))
+            push!(path, seen[objectid(prev)])
+        else
+            push!(path, MLIR.IR.type(prev.mlir_data))
+            seen[objectid(prev)] = VisitedObject(length(seen) + 1)
+        end
         return nothing
     end
-    if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+    if mode == TracedTrack || mode == TracedSetPathInPlace
+        newpaths = mode == TracedSetPathInPlace ? (path, ) : (TracedUtils.get_paths(prev)..., path)
+        TracedUtils.set_paths!(prev, newpaths)
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -926,8 +943,9 @@ function make_tracer(
     if mode == TracedToTypes
         throw("Cannot have MissingTracedValue as function call argument.")
     end
-    if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+    if mode == TracedTrack || mode == TracedSetPathInPlace
+        newpaths = mode == TracedSetPathInPlace ? (path, ) : (TracedUtils.get_paths(prev)..., path)
+        TracedUtils.set_paths!(prev, newpaths)
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -970,7 +988,7 @@ function make_tracer(
         if mode == ArrayToConcrete
             return ConcreteRNumber(prev)
         else
-            if mode == TracedTrack || mode == NoStopTracedTrack
+            if mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPathInPlace
                 res = TracedRNumber{RT}(
                     (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
                 )

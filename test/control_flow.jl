@@ -645,7 +645,7 @@ end
     # check whether the func for _call1 was only generated once:
     ir = @code_hlo optimize = false call1(a_ra, b_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
-    @test length(ops) == 2 # call1, _call1
+    @test length(ops) == 3 # call1, _call1, and _call1 for two identical args.
 
     # With different operand sizes, different functions need to be generated:
     c = rand(4, 5)

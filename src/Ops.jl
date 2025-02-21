@@ -2102,8 +2102,7 @@ end
         # make tracer inserted `()` into the path, here we remove it:
         v.paths = v.paths[1:(end - 1)]
     end
-    Core.println("$(objectid.(args)) args in call($f, ...)")
-    Core.println("$(objectid.(caller_linear_args)) caller_linear_args in call($f, ...)")
+    original_paths = [Reactant.TracedUtils.get_paths(arg) for arg in caller_linear_args]
 
     seen = Dict()
     cache_key = []
@@ -2115,7 +2114,7 @@ end
     else
         f_name = String(gensym(Symbol(f)))
         temp = Reactant.TracedUtils.make_mlir_fn(
-            f, args, (), f_name, false; args_in_result=:all, do_transpose=false
+            f, args, (), f_name, false; args_in_result=:all, do_transpose=false, mutate_traced_args=true
         )
         final_func = temp[2]
         traced_result, ret, linear_args, linear_results = temp[[3, 6, 7, 9]]
@@ -2125,18 +2124,12 @@ end
         cache[cache_key] = (; f_name, mlir_result_types, linear_args, traced_result, linear_results, ret)
     end
 
-    Core.println("$(objectid.(linear_args)) linear_args in call($f, ...)")
 
     call_op = MLIR.Dialects.func.call(
         mlir_caller_args;
         result_0=mlir_result_types,
         callee=MLIR.IR.FlatSymbolRefAttribute(f_name),
     )
-    Core.println("\t• call operation: $call_op")
-    # Core.println("\t• generated function:\n$(final_func)")
-    Core.println("\t• linear results: $linear_results")
-    Core.println("\t• linear arguments: $linear_args")
-    Core.println("\t• original arguments: $args")
 
     mlir_results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     for (i, v) in enumerate(linear_results)
@@ -2144,20 +2137,16 @@ end
         # this mutates `traced_result`, which is what we want:
         Reactant.TracedUtils.set_mlir_data!(v, MLIR.IR.result(call_op, i))
         for p in Reactant.TracedUtils.get_paths(v)
-            if length(p) > 0 && p[1] == :resargs && !MLIR.IR.is_block_arg(mlir_results[i])
-                arg_i = p[2]
-                @warn "Changing arg $arg_i to call result $i"
-                Reactant.TracedUtils.set_mlir_data!(
-                    caller_linear_args[arg_i], MLIR.IR.result(call_op, i)
-                )
+            if length(p) > 0
+                if p[1] == :resargs && !MLIR.IR.is_block_arg(mlir_results[i])
+                    Reactant.TracedUtils.set!(args, p[2:end], MLIR.IR.result(call_op, i))
+                end
             end
         end
-        # # reset paths before returning to `make_mlir_fn` from the caller.
-        # Reactant.TracedUtils.set_paths!(v, ())
+        Reactant.TracedUtils.set_paths!(v, ())
     end
-    for (caller_arg, arg) in zip(caller_linear_args, linear_args)
-        Reactant.TracedUtils.set_paths!(caller_arg, Reactant.TracedUtils.get_paths(arg))
-        # Reactant.TracedUtils.set_mlir_data!(caller_arg, Reactant.TracedUtils.get_mlir_data(arg))
+    for (arg, paths) in zip(caller_linear_args, original_paths)
+        Reactant.TracedUtils.set_paths!(arg, paths)
     end
     return traced_result
 end
