@@ -94,6 +94,7 @@
 #include "xla/python/ifrt/topology.h"
 #include "xla/python/ifrt/tuple.h"
 #include "xla/python/ifrt/value.h"
+#include "xla/python/ifrt/attribute_map.h"
 
 // IFRT - PJRT
 #include "xla/python/pjrt_ifrt/pjrt_array.h"
@@ -1567,11 +1568,10 @@ ifrt_proxy_grpc_server_create_from_ifrt_client_factory_tpu(
   return MyValueOrThrow(
              xla::ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
                  address,
-                 []() -> absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> {
+                 [](xla::ifrt::AttributeMap initialization_data) -> absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> {
                    auto pjrt_client =
                        std::shared_ptr<xla::PjRtClient>(GetCApiClient("TPU"));
-                   return std::shared_ptr<xla::ifrt::Client>(
-                       xla::ifrt::PjRtClient::Create(pjrt_client).release());
+                   return xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
                  }))
       .release();
 }
