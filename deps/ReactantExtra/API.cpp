@@ -1062,7 +1062,7 @@ extern "C" void InitializePasses(MlirDialectRegistry creg) {
 
   // Register the standard passes we want.
   mlir::registerCSEPass();
-  mlir::registerConvertAffineToStandardPass();
+  mlir::registerLowerAffinePass();
   mlir::registerSCCPPass();
   mlir::registerInlinerPass();
   mlir::registerCanonicalizerPass();
@@ -1070,7 +1070,7 @@ extern "C" void InitializePasses(MlirDialectRegistry creg) {
   mlir::registerLoopInvariantCodeMotionPass();
   mlir::registerConvertSCFToOpenMPPass();
   mlir::affine::registerAffinePasses();
-  mlir::registerReconcileUnrealizedCasts();
+  mlir::registerReconcileUnrealizedCastsPass();
 
   /*
     registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
