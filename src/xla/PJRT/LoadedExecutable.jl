@@ -73,7 +73,7 @@ function XLA.get_hlo_modules(exec::LoadedExecutable)
             exec.exec::Ptr{Cvoid}, hlo_modules::Ptr{Ptr{Cvoid}}, nmodules::Ptr{Cint}
         )::Cvoid
     end
-    return map(HloModule, hlo_modules[][1:Int(nmodules[])])
+    return map(XLA.HloModule, hlo_modules[][1:Int(nmodules[])])
 end
 
 function XLA.compile(
