@@ -669,7 +669,7 @@ function compile_mlir!(
                     opt_passes2,
                     kern,
                     raise,
-		    jit
+                    jit,
                 ],
                 ',',
             ),
