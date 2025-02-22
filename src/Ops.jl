@@ -1781,11 +1781,24 @@ end
     true_fn_body = MLIR.IR.Block()
     push!(MLIR.IR.region(true_func_tmp, 1), true_fn_body)
 
+    true_fn_args = true_fn_names[1]
+
     MLIR.IR.activate!(true_fn_body)
     tb_result = try
         for (i, arg) in enumerate(tb_linear_args)
+            # find the right path to index the traced arg.
+            path = nothing
+            for p in Reactant.TracedUtils.get_paths(arg)
+                if length(p) > 0 && p[1] == true_fn_args
+                    path = p[2:end]
+                end
+                Core.println(p)
+            end
+            if isnothing(path)
+                error("if_condition: could not find path for linear arg $i")
+            end
             Reactant.TracedUtils.set_mlir_data!(
-                arg, Reactant.TracedUtils.get_mlir_data(tb_traced_args[i])
+                arg, only(Reactant.TracedUtils.push_val!([], tb_traced_args[path[1]], path[2:end]))
             )
         end
         Reactant.call_with_reactant(true_fn, tb_traced_args...)
@@ -1828,11 +1841,22 @@ end
     false_fn_body = MLIR.IR.Block()
     push!(MLIR.IR.region(false_func_tmp, 1), false_fn_body)
 
+    false_fn_args = false_fn_names[1]
     MLIR.IR.activate!(false_fn_body)
     fb_result = try
         for (i, arg) in enumerate(fb_linear_args)
+            # find the right path to index the traced arg.
+            path = nothing
+            for p in Reactant.TracedUtils.get_paths(arg)
+                if length(p) > 0 && p[1] == false_fn_args
+                    path = p[2:end]
+                end
+            end
+            if isnothing(path)
+                error("if_condition: could not find path for linear arg $i")
+            end
             Reactant.TracedUtils.set_mlir_data!(
-                arg, Reactant.TracedUtils.get_mlir_data(fb_traced_args[i])
+                arg, only(Reactant.TracedUtils.push_val!([], fb_traced_args[path[1]], path[2:end]))
             )
         end
         Reactant.call_with_reactant(false_fn, fb_traced_args...)
@@ -2058,15 +2082,19 @@ end
         end
     end
 
+    results = map(x->x.value, MLIR.IR.results(if_compiled))
+    @warn all_paths corrected_traced_results args results
+
     for (residx, path) in enumerate(all_paths)
         if path[1] == :result
             Reactant.TracedUtils.set!(
                 corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
             )
         else
-            Reactant.TracedUtils.set!(
-                args, path[2:end], MLIR.IR.result(if_compiled, residx)
-            )
+            # properly fix. paths here seem to be resargs...
+            # Reactant.TracedUtils.set!(
+            #     args, path[2:end], MLIR.IR.result(if_compiled, residx)
+            # )
         end
     end
 
