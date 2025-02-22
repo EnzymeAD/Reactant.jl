@@ -130,7 +130,7 @@ http_archive(
 )
 
 # load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
-XLA_COMMIT = "b34ff92fce1c51bf895a80fb1a3672b1301eb7aa"
+XLA_COMMIT = "610bf0cda8acc144fc843a6580282c39fd537824"
 XLA_SHA256 = ""
 
 http_archive(
