@@ -1798,7 +1798,12 @@ end
                 error("if_condition: could not find path for linear arg $i")
             end
             Reactant.TracedUtils.set_mlir_data!(
-                arg, only(Reactant.TracedUtils.push_val!([], tb_traced_args[path[1]], path[2:end]))
+                arg,
+                only(
+                    Reactant.TracedUtils.push_val!(
+                        [], tb_traced_args[path[1]], path[2:end]
+                    ),
+                ),
             )
         end
         Reactant.call_with_reactant(true_fn, tb_traced_args...)
@@ -1856,7 +1861,12 @@ end
                 error("if_condition: could not find path for linear arg $i")
             end
             Reactant.TracedUtils.set_mlir_data!(
-                arg, only(Reactant.TracedUtils.push_val!([], fb_traced_args[path[1]], path[2:end]))
+                arg,
+                only(
+                    Reactant.TracedUtils.push_val!(
+                        [], fb_traced_args[path[1]], path[2:end]
+                    ),
+                ),
             )
         end
         Reactant.call_with_reactant(false_fn, fb_traced_args...)
@@ -2082,7 +2092,7 @@ end
         end
     end
 
-    results = map(x->x.value, MLIR.IR.results(if_compiled))
+    results = map(x -> x.value, MLIR.IR.results(if_compiled))
     @warn all_paths corrected_traced_results args results
 
     for (residx, path) in enumerate(all_paths)

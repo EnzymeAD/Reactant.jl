@@ -611,7 +611,10 @@ function compile_mlir!(
 
     concrete_result = []
     for i in 1:length(traced_result)
-        push!(concrete_result, make_tracer(concrete_seen, traced_result[i], ("result", i), TracedToConcrete))
+        push!(
+            concrete_result,
+            make_tracer(concrete_seen, traced_result[i], ("result", i), TracedToConcrete),
+        )
     end
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
