@@ -52,7 +52,7 @@ function MPI.Isend(buf::TracedRArray, dest::Number, tag::Number, comm::MPI.Comm)
         Ops.constant(tag)
     end
 
-    return dest = if !(dest isa TracedRNumber)
+    dest = if !(dest isa TracedRNumber)
         Ops.constant(dest)
     end
 
