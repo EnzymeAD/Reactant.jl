@@ -77,9 +77,11 @@
 #include "shardy/dialect/sdy/ir/dialect.h"
 #include "shardy/integrations/c/attributes.h"
 #include "xla/pjrt/mlir_to_hlo.h"
+#include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
 
 // IFRT
 #include "xla/python/ifrt/array.h"
+#include "xla/python/ifrt/attribute_map.h"
 #include "xla/python/ifrt/basic_device_list.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/compiler.h"
@@ -98,7 +100,6 @@
 #include "xla/python/ifrt/topology.h"
 #include "xla/python/ifrt/tuple.h"
 #include "xla/python/ifrt/value.h"
-#include "xla/python/ifrt/attribute_map.h"
 
 // IFRT - PJRT
 #include "xla/python/pjrt_ifrt/pjrt_array.h"
@@ -179,10 +180,10 @@ extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
 // Utilities for `StatusOr`.
 template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
-    if (!v.ok()) {
-      ReactantThrowError(v.status().ToString().c_str());
-    }
-    return std::move(v).value();
+  if (!v.ok()) {
+    ReactantThrowError(v.status().ToString().c_str());
+  }
+  return std::move(v).value();
 }
 
 extern "C" void ReactantHandleCuResult(uint32_t curesult) {
@@ -717,109 +718,6 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   return wrap(res);
 }
 
-// Sharding
-struct JLOpSharding {
-  int32_t type;
-  int32_t n_tile_dimensions;
-  int64_t *tile_dimensions;
-  int32_t n_layout_minor_to_major;
-  int64_t *layout_minor_to_major;
-  bool replicate_on_last_tile_dim;
-  int32_t n_last_tile_dims;
-  int32_t *last_tile_dims;
-  int32_t n_tile_assignment_dimensions;
-  int64_t *tile_assignment_dimensions;
-  int32_t n_tile_assignment_devices;
-  int64_t *tile_assignment_devices;
-  int32_t n_iota_reshape_dims;
-  int64_t *iota_reshape_dims;
-  int32_t n_iota_transpose_perm;
-  int32_t *iota_transpose_perm;
-  bool is_shard_group;
-  int64_t shard_group_id;
-  int32_t shard_group_type;
-  const void *op_sharding;
-};
-
-void OpShardingToJLOpSharding(const xla::OpSharding op_sharding,
-                              JLOpSharding *jl_op_sharding) {
-  jl_op_sharding->type = op_sharding.type();
-  jl_op_sharding->replicate_on_last_tile_dim =
-      op_sharding.replicate_on_last_tile_dim();
-
-  auto &shape = op_sharding.tile_shape();
-  jl_op_sharding->n_tile_dimensions = shape.dimensions_size();
-  std::vector<int64_t> dimensions(shape.dimensions().begin(),
-                                  shape.dimensions().end());
-  jl_op_sharding->tile_dimensions = new int64_t[dimensions.size()];
-  std::copy(dimensions.begin(), dimensions.end(),
-            jl_op_sharding->tile_dimensions);
-
-  if (shape.has_layout()) {
-    auto &layout = shape.layout();
-    jl_op_sharding->n_layout_minor_to_major = layout.minor_to_major_size();
-    std::vector<int64_t> minor_to_major(layout.minor_to_major().begin(),
-                                        layout.minor_to_major().end());
-    jl_op_sharding->layout_minor_to_major = new int64_t[minor_to_major.size()];
-    std::copy(minor_to_major.begin(), minor_to_major.end(),
-              jl_op_sharding->layout_minor_to_major);
-  } else {
-    jl_op_sharding->n_layout_minor_to_major = 0;
-    jl_op_sharding->layout_minor_to_major = nullptr;
-  }
-
-  jl_op_sharding->n_last_tile_dims = op_sharding.last_tile_dims_size();
-  std::vector<int> last_tile_dims(op_sharding.last_tile_dims().begin(),
-                                  op_sharding.last_tile_dims().end());
-  jl_op_sharding->last_tile_dims = new int[last_tile_dims.size()];
-  std::copy(last_tile_dims.begin(), last_tile_dims.end(),
-            jl_op_sharding->last_tile_dims);
-
-  jl_op_sharding->n_tile_assignment_dimensions =
-      op_sharding.tile_assignment_dimensions_size();
-  std::vector<int64_t> tile_assignment_dimensions(
-      op_sharding.tile_assignment_dimensions().begin(),
-      op_sharding.tile_assignment_dimensions().end());
-  jl_op_sharding->tile_assignment_dimensions =
-      new int64_t[tile_assignment_dimensions.size()];
-  std::copy(tile_assignment_dimensions.begin(),
-            tile_assignment_dimensions.end(),
-            jl_op_sharding->tile_assignment_dimensions);
-
-  jl_op_sharding->n_tile_assignment_devices =
-      op_sharding.tile_assignment_devices_size();
-  std::vector<int64_t> tile_assignment_devices(
-      op_sharding.tile_assignment_devices().begin(),
-      op_sharding.tile_assignment_devices().end());
-  jl_op_sharding->tile_assignment_devices =
-      new int64_t[tile_assignment_devices.size()];
-  std::copy(tile_assignment_devices.begin(), tile_assignment_devices.end(),
-            jl_op_sharding->tile_assignment_devices);
-
-  jl_op_sharding->n_iota_reshape_dims = op_sharding.iota_reshape_dims_size();
-  std::vector<int64_t> iota_reshape_dims(
-      op_sharding.iota_reshape_dims().begin(),
-      op_sharding.iota_reshape_dims().end());
-  jl_op_sharding->iota_reshape_dims = new int64_t[iota_reshape_dims.size()];
-  std::copy(iota_reshape_dims.begin(), iota_reshape_dims.end(),
-            jl_op_sharding->iota_reshape_dims);
-
-  jl_op_sharding->n_iota_transpose_perm =
-      op_sharding.iota_transpose_perm_size();
-  std::vector<int> iota_transpose_perm(
-      op_sharding.iota_transpose_perm().begin(),
-      op_sharding.iota_transpose_perm().end());
-  jl_op_sharding->iota_transpose_perm = new int[iota_transpose_perm.size()];
-  std::copy(iota_transpose_perm.begin(), iota_transpose_perm.end(),
-            jl_op_sharding->iota_transpose_perm);
-
-  jl_op_sharding->is_shard_group = op_sharding.is_shard_group();
-  jl_op_sharding->shard_group_id = op_sharding.shard_group_id();
-  jl_op_sharding->shard_group_type = op_sharding.shard_group_type();
-
-  jl_op_sharding->op_sharding = new xla::OpSharding(std::move(op_sharding));
-}
-
 typedef PjRtFuture<> FutureType;
 extern "C" void FreeFuture(FutureType *Future) { delete Future; }
 
@@ -903,7 +801,7 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
 
 extern "C" void
 PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
-                                      JLOpSharding **jl_op_shardings,
+                                      xla::OpSharding **op_shardings,
                                       int32_t num_op_shardings) {
   std::optional<std::vector<OpSharding>> shardings = exec->GetOutputShardings();
   if (!shardings.has_value()) {
@@ -920,13 +818,13 @@ PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
   }
 
   for (int32_t i = 0; i < num_op_shardings; i++) {
-    OpShardingToJLOpSharding(hlo_op_shardings[i], jl_op_shardings[i]);
+    op_shardings[i] = new xla::OpSharding(hlo_op_shardings[i]);
   }
 }
 
 extern "C" void
 PjRtLoadedExecutableGetParameterShardings(xla::PjRtLoadedExecutable *exec,
-                                          JLOpSharding **jl_op_shardings,
+                                          xla::OpSharding **op_shardings,
                                           int32_t num_op_shardings) {
   std::optional<std::vector<OpSharding>> shardings =
       exec->GetParameterShardings();
@@ -944,7 +842,7 @@ PjRtLoadedExecutableGetParameterShardings(xla::PjRtLoadedExecutable *exec,
   }
 
   for (int32_t i = 0; i < num_op_shardings; i++) {
-    OpShardingToJLOpSharding(hlo_op_shardings[i], jl_op_shardings[i]);
+    op_shardings[i] = new xla::OpSharding(hlo_op_shardings[i]);
   }
 }
 
@@ -1595,7 +1493,8 @@ ifrt_proxy_grpc_server_create_from_ifrt_client_factory_tpu(
   return MyValueOrThrow(
              xla::ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
                  address,
-                 [](xla::ifrt::AttributeMap initialization_data) -> absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> {
+                 [](xla::ifrt::AttributeMap initialization_data)
+                     -> absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> {
                    auto pjrt_client =
                        std::shared_ptr<xla::PjRtClient>(GetCApiClient("TPU"));
                    return xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
@@ -1789,11 +1688,138 @@ extern "C" bool ifrt_MemoryKindsAreEqual(ifrt::MemoryKind *a,
 
 #pragma endregion
 
-#pragma region HloSharding
+#pragma region OpSharding
 
 extern "C" void free_op_sharding(xla::OpSharding *op_sharding) {
   delete op_sharding;
 }
+
+extern "C" int32_t
+op_sharding_to_op_sharding_type(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->type());
+}
+
+extern "C" int32_t
+op_sharding_to_shard_group_type(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->shard_group_type());
+}
+
+extern "C" int32_t op_sharding_to_shard_group_id(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->shard_group_id());
+}
+
+extern "C" bool op_sharding_is_shard_group(xla::OpSharding *op_sharding) {
+  return op_sharding->is_shard_group();
+}
+
+extern "C" bool
+op_sharding_replicate_on_last_tile_dim(xla::OpSharding *op_sharding) {
+  return op_sharding->replicate_on_last_tile_dim();
+}
+
+extern "C" bool op_sharding_has_last_tile_dims(xla::OpSharding *op_sharding) {
+  return op_sharding->last_tile_dims_size() > 0;
+}
+
+extern "C" int32_t
+op_sharding_last_tile_dims_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->last_tile_dims_size());
+}
+
+extern "C" void op_sharding_last_tile_dims(xla::OpSharding *op_sharding,
+                                           int32_t *last_tile_dims) {
+  std::vector<int32_t> last_tile_dims_vec(op_sharding->last_tile_dims().begin(),
+                                          op_sharding->last_tile_dims().end());
+  std::copy(last_tile_dims_vec.begin(), last_tile_dims_vec.end(),
+            last_tile_dims);
+  return;
+}
+
+extern "C" bool
+op_sharding_has_iota_reshape_dims(xla::OpSharding *op_sharding) {
+  return op_sharding->iota_reshape_dims_size() > 0;
+}
+
+extern "C" int32_t
+op_sharding_iota_reshape_dims_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->iota_reshape_dims_size());
+}
+
+extern "C" void op_sharding_iota_reshape_dims(xla::OpSharding *op_sharding,
+                                              int32_t *iota_reshape_dims) {
+  std::vector<int32_t> iota_reshape_dims_vec(
+      op_sharding->iota_reshape_dims().begin(),
+      op_sharding->iota_reshape_dims().end());
+  std::copy(iota_reshape_dims_vec.begin(), iota_reshape_dims_vec.end(),
+            iota_reshape_dims);
+  return;
+}
+
+extern "C" bool
+op_sharding_has_iota_transpose_perm(xla::OpSharding *op_sharding) {
+  return op_sharding->iota_transpose_perm_size() > 0;
+}
+
+extern "C" int32_t
+op_sharding_iota_transpose_perm_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->iota_transpose_perm_size());
+}
+
+extern "C" void op_sharding_iota_transpose_perm(xla::OpSharding *op_sharding,
+                                                int32_t *iota_transpose_perm) {
+  std::vector<int32_t> iota_transpose_perm_vec(
+      op_sharding->iota_transpose_perm().begin(),
+      op_sharding->iota_transpose_perm().end());
+  std::copy(iota_transpose_perm_vec.begin(), iota_transpose_perm_vec.end(),
+            iota_transpose_perm);
+  return;
+}
+
+extern "C" bool
+op_sharding_has_tile_assignment_dimensions(xla::OpSharding *op_sharding) {
+  return op_sharding->tile_assignment_dimensions_size() > 0;
+}
+
+extern "C" int32_t
+op_sharding_tile_assignment_dimensions_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->tile_assignment_dimensions_size());
+}
+
+extern "C" void
+op_sharding_tile_assignment_dimensions(xla::OpSharding *op_sharding,
+                                       int32_t *tile_assignment_dimensions) {
+  std::vector<int32_t> tile_assignment_dimensions_vec(
+      op_sharding->tile_assignment_dimensions().begin(),
+      op_sharding->tile_assignment_dimensions().end());
+  std::copy(tile_assignment_dimensions_vec.begin(),
+            tile_assignment_dimensions_vec.end(), tile_assignment_dimensions);
+  return;
+}
+
+extern "C" bool
+op_sharding_has_tile_assignment_devices(xla::OpSharding *op_sharding) {
+  return op_sharding->tile_assignment_devices_size() > 0;
+}
+
+extern "C" int32_t
+op_sharding_tile_assignment_devices_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->tile_assignment_devices_size());
+}
+
+extern "C" void
+op_sharding_tile_assignment_devices(xla::OpSharding *op_sharding,
+                                    int32_t *tile_assignment_devices) {
+  std::vector<int32_t> tile_assignment_devices_vec(
+      op_sharding->tile_assignment_devices().begin(),
+      op_sharding->tile_assignment_devices().end());
+  std::copy(tile_assignment_devices_vec.begin(),
+            tile_assignment_devices_vec.end(), tile_assignment_devices);
+  return;
+}
+
+#pragma endregion
+
+#pragma region HloSharding
 
 extern "C" void free_hlo_sharding(xla::HloSharding *hlo_sharding) {
   delete hlo_sharding;
@@ -1911,6 +1937,23 @@ extern "C" void free_distributed_runtime_service(
 extern "C" void distributed_runtime_service_shutdown(
     HeldValue<std::shared_ptr<xla::DistributedRuntimeService>> *service) {
   service->obj()->Shutdown();
+}
+
+#pragma endregion
+
+#pragma region Shardy
+
+extern "C" xla::HloSharding *
+hloShardingFromTensorShardingAttr(mlir::sdy::TensorShardingAttr attr,
+                                  mlir::sdy::MeshAttr meshAttr) {
+  mlir::ArrayRef<mlir::StringAttr> manual_axes = {};
+  std::function<mlir::sdy::MeshAttr(mlir::sdy::TensorShardingAttr)>
+      get_mesh_attr = [meshAttr](mlir::sdy::TensorShardingAttr local_attr) {
+        return meshAttr;
+      };
+
+  return new xla::HloSharding(
+      xla::sdy::convertToHloSharding(attr, get_mesh_attr, manual_axes));
 }
 
 #pragma endregion
