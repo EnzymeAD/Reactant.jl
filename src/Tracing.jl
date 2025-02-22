@@ -324,7 +324,7 @@ Base.@nospecializeinfer function traced_type_inner(
     elseif mode == TracedToConcrete
         if !Sharding.is_sharded(sharding)
             if T isa UnionAll
-                return UnionAll(T.var, ConcreteRNumber{T.var, 1, Sharding.NoShardInfo})
+                return UnionAll(T.var, ConcreteRNumber{T.var,1,Sharding.NoShardInfo})
             end
             return ConcreteRNumber{T.parameters[1],1,Sharding.NoShardInfo}
         else
