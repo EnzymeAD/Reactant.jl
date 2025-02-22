@@ -644,15 +644,15 @@ function compile_mlir!(
         jit = "lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
+    opt_passes = optimization_passes(; no_nan, sroa=true)
+    opt_passes2 = optimization_passes(; no_nan, sroa=false)
+
     raise = if Raise[]
-        # "llvm-to-memref-access" # ,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize"
-        "canonicalize"
+        "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,raise-affine-to-stablehlo,arith-raise{stablehlo=true}," *
+        opt_passes2
     else
         "canonicalize"
     end
-
-    opt_passes = optimization_passes(; no_nan, sroa=true)
-    opt_passes2 = optimization_passes(; no_nan, sroa=false)
 
     if optimize === :all
         run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
@@ -669,7 +669,7 @@ function compile_mlir!(
                     opt_passes2,
                     kern,
                     raise,
-                    jit,
+		    jit
                 ],
                 ',',
             ),
