@@ -490,6 +490,8 @@ cc_library(
 "-Wl,-exported_symbol,_distributed_runtime_service_shutdown",
 "-Wl,-exported_symbol,_ClientGetDevices",
 "-Wl,-exported_symbol,_ClientGetAddressableDevices",
+"-Wl,-exported_symbol,_hloShardingFromTensorShardingAttr",
+"-Wl,-exported_symbol,_op_sharding_*",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -538,12 +540,13 @@ cc_library(
         "@xla//xla/pjrt/distributed:distributed",
         "@xla//xla/pjrt/distributed:client",
         "@xla//xla/pjrt/distributed:service",
+        "@xla//xla/service/spmd/shardy/stablehlo_round_trip:export_shardings",
 
         "@xla//xla:xla_proto_cc",
         "@xla//xla:xla_proto_cc_impl",
         "@xla//xla/stream_executor:device_description_proto_cc_impl",
 
-	"@xla//xla/tsl/platform/default:platform_port",
+        "@xla//xla/tsl/platform/default:platform_port",
 
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
@@ -557,7 +560,7 @@ cc_library(
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
 
-	"@xla//xla/tsl/protobuf:protos_all_cc_impl",
+        "@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
 
         "@xla//xla/pjrt:status_casters",
