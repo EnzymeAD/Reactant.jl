@@ -78,6 +78,7 @@
 #include "shardy/integrations/c/attributes.h"
 #include "xla/pjrt/mlir_to_hlo.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
+#include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_import.h"
 
 // IFRT
 #include "xla/python/ifrt/array.h"
@@ -1954,6 +1955,33 @@ hloShardingFromTensorShardingAttr(mlir::sdy::TensorShardingAttr attr,
 
   return new xla::HloSharding(
       xla::sdy::convertToHloSharding(attr, get_mesh_attr, manual_axes));
+}
+
+extern "C" mlir::sdy::TensorShardingAttr
+hloShardingToTensorShardingAttr(const xla::HloSharding *hloSharding,
+                                mlir::sdy::MeshAttr meshAttr, int64_t rank,
+                                const bool *isClosed, const int64_t *priority) {
+  const SmallDenseMap<int64_t, StringRef> deviceIdToMaximalMeshName =
+      SmallDenseMap<int64_t, StringRef>();
+  mlir::sdy::TensorShardingAttr tensorShardingAttr =
+      xla::sdy::convertToSdySharding(*hloSharding, meshAttr,
+                                     deviceIdToMaximalMeshName, rank,
+                                     /*openDims=*/true);
+
+  for (int64_t i = 0; i < rank; i++) {
+    auto oldDimSharding = tensorShardingAttr.getDimSharding(i);
+
+    std::optional<int64_t> dimPriority;
+    if (priority[i] > 0)
+      dimPriority = priority[i];
+
+    tensorShardingAttr = tensorShardingAttr.replaceDimSharding(
+        i, mlir::sdy::DimensionShardingAttr::get(oldDimSharding.getContext(),
+                                                 oldDimSharding.getAxes(),
+                                                 isClosed[i], dimPriority));
+  }
+
+  return tensorShardingAttr;
 }
 
 #pragma endregion

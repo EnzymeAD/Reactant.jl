@@ -492,6 +492,7 @@ cc_library(
 "-Wl,-exported_symbol,_ClientGetAddressableDevices",
 "-Wl,-exported_symbol,_hloShardingFromTensorShardingAttr",
 "-Wl,-exported_symbol,_op_sharding_*",
+"-Wl,-exported_symbol,_hloShardingToTensorShardingAttr",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -541,6 +542,7 @@ cc_library(
         "@xla//xla/pjrt/distributed:client",
         "@xla//xla/pjrt/distributed:service",
         "@xla//xla/service/spmd/shardy/stablehlo_round_trip:export_shardings",
+        "@xla//xla/service/spmd/shardy/stablehlo_round_trip:stablehlo_import",
 
         "@xla//xla:xla_proto_cc",
         "@xla//xla:xla_proto_cc_impl",
