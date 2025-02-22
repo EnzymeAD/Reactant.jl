@@ -1,3 +1,5 @@
+using Reactant.MLIR.Dialects: stablehlo
+
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
 abstract type RArray{T,N} <: AbstractArray{T,N} end
@@ -59,7 +61,7 @@ const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 ## TracedRNG
 mutable struct TracedRNG <: Random.AbstractRNG
     seed::TracedRArray{UInt64,1}
-    const algorithm::String
+    const algorithm::stablehlo.RngAlgorithm.T
 end
 
 # Concrete Types
@@ -170,5 +172,5 @@ end
 ## ConcreteRNG
 mutable struct ConcreteRNG{D,S} <: Random.AbstractRNG
     seed::ConcreteRArray{UInt64,1,D,S}
-    const algorithm::String
+    const algorithm::stablehlo.RngAlgorithm.T
 end

@@ -10,3 +10,9 @@ for more details.
 ```@autodocs
 Modules = [Reactant.MLIR.Dialects.chlo]
 ```
+
+```@docs
+Reactant.MLIR.Dialects.chlo.ComparisonDirection
+Reactant.MLIR.Dialects.chlo.ComparisonType
+Reactant.MLIR.Dialects.chlo.Precision
+```

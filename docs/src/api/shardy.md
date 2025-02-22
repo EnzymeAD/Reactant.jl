@@ -9,3 +9,7 @@ Refer to the [official documentation](https://openxla.org/shardy) for more detai
 ```@autodocs
 Modules = [Reactant.MLIR.Dialects.sdy]
 ```
+
+```@docs
+Reactant.MLIR.Dialects.sdy.PropagationDirection
+```

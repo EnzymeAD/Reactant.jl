@@ -10,3 +10,7 @@ details.
 ```@autodocs
 Modules = [Reactant.MLIR.Dialects.affine]
 ```
+
+```@docs
+Reactant.MLIR.Dialects.affine.AtomicRMWKind
+```

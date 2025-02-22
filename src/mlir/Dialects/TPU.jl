@@ -10,11 +10,73 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
+
+"""
+`ReductionKind`
+Reduction kind
+"""
+@enumx ReductionKind SUM MAX MIN
+const ReductionKindStorage = ["sum", "max", "min"]
+
+function IR.Attribute(e::ReductionKind.T)
+    return parse(Attribute, "#tpu<reduction_kind <$(ReductionKindStorage[Int(e)+1])>>")
+end
+
+"""
+`RoundingMode`
+Rounding mode
+"""
+@enumx RoundingMode kTowardsZero kToNearestEven
+const RoundingModeStorage = ["towards_zero", "to_nearest_even"]
+
+function IR.Attribute(e::RoundingMode.T)
+    return parse(Attribute, "#tpu<rounding_mode <$(RoundingModeStorage[Int(e)+1])>>")
+end
+
+"""
+`ContractPrecision`
+Contraction precision
+"""
+@enumx ContractPrecision kBF16 kFP32
+const ContractPrecisionStorage = ["bf16", "fp32"]
+
+function IR.Attribute(e::ContractPrecision.T)
+    return parse(
+        Attribute, "#tpu<contract_precision <$(ContractPrecisionStorage[Int(e)+1])>>"
+    )
+end
+
+"""
+`PackFormat`
+Pack format
+"""
+@enumx PackFormat kCompressed kInterleaved
+const PackFormatStorage = ["compressed", "interleaved"]
+
+function IR.Attribute(e::PackFormat.T)
+    return parse(Attribute, "#tpu<pack_format <$(PackFormatStorage[Int(e)+1])>>")
+end
+
+"""
+`CoreType`
+Core type
+"""
+@enumx CoreType kTc kScScalarSubcore kScVectorSubcore
+const CoreTypeStorage = ["tc", "sc_scalar_subcore", "sc_vector_subcore"]
+
+function IR.Attribute(e::CoreType.T)
+    return parse(Attribute, "#tpu<core_type <$(CoreTypeStorage[Int(e)+1])>>")
+end
 
 function all_reduce(
-    input::Value; output=nothing::Union{Nothing,IR.Type}, dim, kind, location=Location()
+    input::Value;
+    output::Union{Nothing,IR.Type}=nothing,
+    dim::Int64,
+    kind::ReductionKind.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[input,]
@@ -30,12 +92,12 @@ function all_reduce(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
-function sem_alloc(; result::IR.Type, location=Location())
+function sem_alloc(; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
@@ -54,7 +116,7 @@ function sem_alloc(; result::IR.Type, location=Location())
     )
 end
 
-function assume_layout(input::Value; result::IR.Type, location=Location())
+function assume_layout(input::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -74,7 +136,10 @@ function assume_layout(input::Value; result::IR.Type, location=Location())
 end
 
 function assume_multiple(
-    value::Value; result=nothing::Union{Nothing,IR.Type}, multiple, location=Location()
+    value::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    multiple::Int32,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value,]
@@ -90,12 +155,12 @@ function assume_multiple(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
-function bitcast(input::Value; output::IR.Type, location=Location())
+function bitcast(input::Value; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -114,7 +179,7 @@ function bitcast(input::Value; output::IR.Type, location=Location())
     )
 end
 
-function bitcast_vreg(input::Value; output::IR.Type, location=Location())
+function bitcast_vreg(input::Value; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -140,7 +205,9 @@ For each sublane `i`, broadcasts the value in lane `lane + i` along the entire
 sublane. If `lane + i` is not in [0, lane_count), then the value in sublane `i`
 is not defined (can be anything).
 """
-function broadcast_in_sublanes(source::Value; output::IR.Type, lane, location=Location())
+function broadcast_in_sublanes(
+    source::Value; output::IR.Type, lane::Int32, location::Location=Location()
+)
     op_ty_results = IR.Type[output,]
     operands = Value[source,]
     owned_regions = Region[]
@@ -160,7 +227,7 @@ function broadcast_in_sublanes(source::Value; output::IR.Type, lane, location=Lo
 end
 
 function concatenate(
-    sources::Vector{Value}; output::IR.Type, dimension, location=Location()
+    sources::Vector{Value}; output::IR.Type, dimension::Int32, location::Location=Location()
 )
     op_ty_results = IR.Type[output,]
     operands = Value[sources...,]
@@ -181,7 +248,7 @@ function concatenate(
 end
 
 function create_mask(
-    low::Vector{Value}, high::Vector{Value}; output::IR.Type, location=Location()
+    low::Vector{Value}, high::Vector{Value}; output::IR.Type, location::Location=Location()
 )
     op_ty_results = IR.Type[output,]
     operands = Value[low..., high...]
@@ -229,7 +296,9 @@ It is currently only supported:
 - In TPU v4, for `num_subelems` of 1 and 2.
 - In TPU v5, for `num_subelems` of 1, 2, and 4.
 """
-function create_subelement_mask(; output::IR.Type, from, to, location=Location())
+function create_subelement_mask(;
+    output::IR.Type, from::Int32, to::Int32, location::Location=Location()
+)
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -248,7 +317,7 @@ function create_subelement_mask(; output::IR.Type, from, to, location=Location()
     )
 end
 
-function delay(nanos::Value; location=Location())
+function delay(nanos::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[nanos,]
     owned_regions = Region[]
@@ -267,7 +336,7 @@ function delay(nanos::Value; location=Location())
     )
 end
 
-function device_id(; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function device_id(; result::Union{Nothing,IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -282,13 +351,17 @@ function device_id(; result=nothing::Union{Nothing,IR.Type}, location=Location()
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
 function dynamic_gather(
-    source::Value, indices::Value; output::IR.Type, dimension, location=Location()
+    source::Value,
+    indices::Value;
+    output::IR.Type,
+    dimension::Int32,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[output,]
     operands = Value[source, indices]
@@ -312,10 +385,10 @@ function dynamic_rotate(
     value::Value,
     amount::Value;
     result::IR.Type,
-    dimension,
-    stride=nothing,
-    stride_dimension=nothing,
-    location=Location(),
+    dimension::Int32,
+    stride::Union{Int32,Nothing}=nothing,
+    stride_dimension::Union{Int32,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[value, amount]
@@ -340,12 +413,12 @@ end
 
 function enqueue_dma(
     source::Value,
-    source_semaphore=nothing::Union{Nothing,Value};
+    source_semaphore::Union{Nothing,Value}=nothing;
     target::Value,
     target_semaphore::Value,
-    device_id=nothing::Union{Nothing,Value},
-    core_id=nothing::Union{Nothing,Value},
-    location=Location(),
+    device_id::Union{Nothing,Value}=nothing,
+    core_id::Union{Nothing,Value}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[source, target, target_semaphore]
@@ -383,7 +456,7 @@ function enqueue_dma(
     )
 end
 
-function erase_memref_layout(operand::Value; result::IR.Type, location=Location())
+function erase_memref_layout(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -402,7 +475,12 @@ function erase_memref_layout(operand::Value; result::IR.Type, location=Location(
     )
 end
 
-function fptosi(input::Value; output::IR.Type, rounding_mode, location=Location())
+function fptosi(
+    input::Value;
+    output::IR.Type,
+    rounding_mode::RoundingMode.T,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[output,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -421,7 +499,13 @@ function fptosi(input::Value; output::IR.Type, rounding_mode, location=Location(
     )
 end
 
-function gather(source::Value; output::IR.Type, indices, dimension, location=Location())
+function gather(
+    source::Value;
+    output::IR.Type,
+    indices::IR.DenseAttribute{Int32},
+    dimension::Int32,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[output,]
     operands = Value[source,]
     owned_regions = Region[]
@@ -442,7 +526,7 @@ function gather(source::Value; output::IR.Type, indices, dimension, location=Loc
     )
 end
 
-function sem_barrier(; semaphore::IR.Type, location=Location())
+function sem_barrier(; semaphore::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[semaphore,]
     operands = Value[]
     owned_regions = Region[]
@@ -461,7 +545,7 @@ function sem_barrier(; semaphore::IR.Type, location=Location())
     )
 end
 
-function internal_scratch(; result::IR.Type, location=Location())
+function internal_scratch(; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
     owned_regions = Region[]
@@ -480,7 +564,9 @@ function internal_scratch(; result::IR.Type, location=Location())
     )
 end
 
-function iteration_bound(; result=nothing::Union{Nothing,IR.Type}, dim, location=Location())
+function iteration_bound(;
+    result::Union{Nothing,IR.Type}=nothing, dim::Int32, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -495,12 +581,14 @@ function iteration_bound(; result=nothing::Union{Nothing,IR.Type}, dim, location
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
-function iota(; output::IR.Type, dimension=nothing, location=Location())
+function iota(;
+    output::IR.Type, dimension::Union{Int32,Nothing}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -524,9 +612,9 @@ function load(
     base::Value,
     indices::Vector{Value};
     result::IR.Type,
-    sublane_mask,
-    sublane_stride=nothing,
-    location=Location(),
+    sublane_mask::IR.DenseAttribute{Bool},
+    sublane_stride::Union{Int32,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[base, indices...]
@@ -548,7 +636,12 @@ function load(
     )
 end
 
-function log_buffer(input::Value; shape, tag, location=Location())
+function log_buffer(
+    input::Value;
+    shape::IR.DenseAttribute{Int64},
+    tag::String,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[input,]
     owned_regions = Region[]
@@ -567,7 +660,12 @@ function log_buffer(input::Value; shape, tag, location=Location())
     )
 end
 
-function log(inputs::Vector{Value}; tag, formatted=nothing, location=Location())
+function log(
+    inputs::Vector{Value};
+    tag::String,
+    formatted::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[inputs...,]
     owned_regions = Region[]
@@ -587,7 +685,7 @@ function log(inputs::Vector{Value}; tag, formatted=nothing, location=Location())
     )
 end
 
-function mask_cast(input::Value; result::IR.Type, location=Location())
+function mask_cast(input::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -611,11 +709,11 @@ function matmul(
     rhs::Value,
     acc::Value;
     result::IR.Type,
-    transpose_lhs=nothing,
-    transpose_rhs=nothing,
-    precision=nothing,
+    transpose_lhs::Union{Bool,Nothing}=nothing,
+    transpose_rhs::Union{Bool,Nothing}=nothing,
+    precision::Union{ContractPrecision.T,Nothing}=nothing,
     dimension_numbers=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs, acc]
@@ -642,7 +740,7 @@ function matmul(
     )
 end
 
-function memref_bitcast(input::Value; result::IR.Type, location=Location())
+function memref_bitcast(input::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -661,7 +759,7 @@ function memref_bitcast(input::Value; result::IR.Type, location=Location())
     )
 end
 
-function memref_reshape(input::Value; result::IR.Type, location=Location())
+function memref_reshape(input::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -685,7 +783,7 @@ function memref_slice(
     base_idx::Vector{Value},
     dynamic_sizes::Vector{Value};
     result::IR.Type,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[mem_ref, base_idx..., dynamic_sizes...]
@@ -706,7 +804,7 @@ function memref_slice(
     )
 end
 
-function memref_squeeze(input::Value; result::IR.Type, location=Location())
+function memref_squeeze(input::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -725,7 +823,7 @@ function memref_squeeze(input::Value; result::IR.Type, location=Location())
     )
 end
 
-function prng_random_bits(; output::IR.Type, location=Location())
+function prng_random_bits(; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -744,7 +842,7 @@ function prng_random_bits(; output::IR.Type, location=Location())
     )
 end
 
-function prng_set_seed_32(seeds::Vector{Value}; location=Location())
+function prng_set_seed_32(seeds::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[seeds...,]
     owned_regions = Region[]
@@ -763,7 +861,7 @@ function prng_set_seed_32(seeds::Vector{Value}; location=Location())
     )
 end
 
-function pack_vmsk(low::Value, high::Value; output::IR.Type, location=Location())
+function pack_vmsk(low::Value, high::Value; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[low, high]
     owned_regions = Region[]
@@ -783,7 +881,11 @@ function pack_vmsk(low::Value, high::Value; output::IR.Type, location=Location()
 end
 
 function pack_subelements(
-    sources::Vector{Value}; output::IR.Type, positions, pack_format, location=Location()
+    sources::Vector{Value};
+    output::IR.Type,
+    positions::IR.DenseAttribute{Int32},
+    pack_format::PackFormat.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[output,]
     operands = Value[sources...,]
@@ -805,7 +907,9 @@ function pack_subelements(
     )
 end
 
-function region(; results::Vector{IR.Type}, region::Region, location=Location())
+function region(;
+    results::Base.AbstractVecOrTuple{IR.Type}, region::Region, location::Location=Location()
+)
     op_ty_results = IR.Type[results...,]
     operands = Value[]
     owned_regions = Region[region,]
@@ -824,7 +928,7 @@ function region(; results::Vector{IR.Type}, region::Region, location=Location())
     )
 end
 
-function reinterpret_cast(input::Value; result::IR.Type, location=Location())
+function reinterpret_cast(input::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -843,7 +947,9 @@ function reinterpret_cast(input::Value; result::IR.Type, location=Location())
     )
 end
 
-function relayout(input::Value; output=nothing::Union{Nothing,IR.Type}, location=Location())
+function relayout(
+    input::Value; output::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[input,]
     owned_regions = Region[]
@@ -858,12 +964,18 @@ function relayout(input::Value; output=nothing::Union{Nothing,IR.Type}, location
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
-function repeat(source::Value; output::IR.Type, dimension, times, location=Location())
+function repeat(
+    source::Value;
+    output::IR.Type,
+    dimension::Int32,
+    times::Int32,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[output,]
     operands = Value[source,]
     owned_regions = Region[]
@@ -884,7 +996,7 @@ function repeat(source::Value; output::IR.Type, dimension, times, location=Locat
     )
 end
 
-function roll_vectors(input::Vector{Value}; output::IR.Type, location=Location())
+function roll_vectors(input::Vector{Value}; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[input...,]
     owned_regions = Region[]
@@ -905,12 +1017,12 @@ end
 
 function rotate(
     value::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    amount,
-    dimension,
-    stride=nothing,
-    stride_dimension=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    amount::Int32,
+    dimension::Int32,
+    stride::Union{Int32,Nothing}=nothing,
+    stride_dimension::Union{Int32,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value,]
@@ -931,13 +1043,13 @@ function rotate(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
 function sem_read(
-    semaphore::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    semaphore::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[semaphore,]
@@ -953,18 +1065,18 @@ function sem_read(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
 function sem_signal(
     semaphore::Value,
     amount::Value,
-    device_id=nothing::Union{Nothing,Value};
-    core_id=nothing::Union{Nothing,Value},
-    core_type=nothing,
-    location=Location(),
+    device_id::Union{Nothing,Value}=nothing;
+    core_id::Union{Nothing,Value}=nothing,
+    core_type::Union{CoreType.T,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[semaphore, amount]
@@ -998,7 +1110,7 @@ function sem_signal(
     )
 end
 
-function sem_wait(semaphore::Value, amount::Value; location=Location())
+function sem_wait(semaphore::Value, amount::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[semaphore, amount]
     owned_regions = Region[]
@@ -1021,9 +1133,9 @@ function shuffled_load(
     base::Value,
     indices::Vector{Value};
     result::IR.Type,
-    sublane_mask,
-    sublane_offsets,
-    location=Location(),
+    sublane_mask::IR.DenseAttribute{Bool},
+    sublane_offsets::IR.DenseAttribute{Int32},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[base, indices...]
@@ -1050,9 +1162,9 @@ function shuffled_store(
     valueToStore::Value,
     base::Value,
     indices::Vector{Value};
-    sublane_mask,
-    sublane_offsets,
-    location=Location(),
+    sublane_mask::IR.DenseAttribute{Bool},
+    sublane_offsets::IR.DenseAttribute{Int32},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[valueToStore, base, indices...]
@@ -1079,10 +1191,10 @@ function store(
     valueToStore::Value,
     base::Value,
     indices::Vector{Value},
-    mask=nothing::Union{Nothing,Value};
-    sublane_mask,
-    sublane_stride=nothing,
-    location=Location(),
+    mask::Union{Nothing,Value}=nothing;
+    sublane_mask::IR.DenseAttribute{Bool},
+    sublane_stride::Union{Int32,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[valueToStore, base, indices...]
@@ -1109,7 +1221,11 @@ function store(
 end
 
 function strided_load(
-    base::Value, indices::Vector{Value}; result::IR.Type, strides, location=Location()
+    base::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    strides::IR.DenseAttribute{Int32},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[base, indices...]
@@ -1130,7 +1246,11 @@ function strided_load(
 end
 
 function strided_store(
-    valueToStore::Value, base::Value, indices::Vector{Value}; strides, location=Location()
+    valueToStore::Value,
+    base::Value,
+    indices::Vector{Value};
+    strides::IR.DenseAttribute{Int32},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[valueToStore, base, indices...]
@@ -1151,7 +1271,11 @@ function strided_store(
 end
 
 function trace(;
-    results::Vector{IR.Type}, message, level, region::Region, location=Location()
+    results::Base.AbstractVecOrTuple{IR.Type},
+    message::String,
+    level::Int32,
+    region::Region,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[]
@@ -1173,7 +1297,7 @@ function trace(;
     )
 end
 
-function trace_start(; message, level, location=Location())
+function trace_start(; message::String, level::Int32, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1194,7 +1318,7 @@ function trace_start(; message, level, location=Location())
     )
 end
 
-function trace_stop(; location=Location())
+function trace_stop(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1214,7 +1338,11 @@ function trace_stop(; location=Location())
 end
 
 function unpack_subelements(
-    source::Value; output::IR.Type, index, pack_format, location=Location()
+    source::Value;
+    output::IR.Type,
+    index::Int32,
+    pack_format::PackFormat.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[output,]
     operands = Value[source,]
@@ -1236,7 +1364,9 @@ function unpack_subelements(
     )
 end
 
-function unroll_vectors(input::Value; output::Vector{IR.Type}, location=Location())
+function unroll_vectors(
+    input::Value; output::Base.AbstractVecOrTuple{IR.Type}, location::Location=Location()
+)
     op_ty_results = IR.Type[output...,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -1259,9 +1389,9 @@ function vector_store(
     valueToStore::Value,
     base::Value,
     indices::Vector{Value},
-    mask=nothing::Union{Nothing,Value};
-    strides,
-    location=Location(),
+    mask::Union{Nothing,Value}=nothing;
+    strides::IR.DenseAttribute{Int32},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[valueToStore, base, indices...]
@@ -1285,7 +1415,7 @@ function vector_store(
     )
 end
 
-function wait_dma(semaphore::Value, ref::Value; location=Location())
+function wait_dma(semaphore::Value, ref::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[semaphore, ref]
     owned_regions = Region[]
@@ -1304,7 +1434,7 @@ function wait_dma(semaphore::Value, ref::Value; location=Location())
     )
 end
 
-function weird(input::Value; output::IR.Type, location=Location())
+function weird(input::Value; output::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[input,]
     owned_regions = Region[]
@@ -1323,7 +1453,7 @@ function weird(input::Value; output::IR.Type, location=Location())
     )
 end
 
-function yield(results::Vector{Value}; location=Location())
+function yield(results::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[results...,]
     owned_regions = Region[]

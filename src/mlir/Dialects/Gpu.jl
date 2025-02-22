@@ -10,8 +10,118 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
+
+"""
+`AllReduceOperation`
+built-in reduction operations supported by gpu.allreduce.
+"""
+@enumx AllReduceOperation ADD MUL MINUI MINSI MINNUMF MAXUI MAXSI MAXNUMF AND OR XOR MINIMUMF MAXIMUMF
+const AllReduceOperationStorage = [
+    "add",
+    "mul",
+    "minui",
+    "minsi",
+    "minnumf",
+    "maxui",
+    "maxsi",
+    "maxnumf",
+    "and",
+    "or",
+    "xor",
+    "minimumf",
+    "maximumf",
+]
+
+function IR.Attribute(e::AllReduceOperation.T)
+    return parse(Attribute, "#gpu<all_reduce_op $(AllReduceOperationStorage[Int(e)+1])>")
+end
+
+"""
+`Dimension`
+a dimension, either \'x\', \'y\', or \'z\'
+"""
+@enumx Dimension x y z
+const DimensionStorage = ["x", "y", "z"]
+
+IR.Attribute(e::Dimension.T) = parse(Attribute, "#gpu<dim $(DimensionStorage[Int(e)+1])>")
+
+"""
+`Prune2To4SpMatFlag`
+pruning strategy for 2:4 sparse matrix
+"""
+@enumx Prune2To4SpMatFlag NONE PRUNE_ONLY PRUNE_AND_CHECK
+const Prune2To4SpMatFlagStorage = ["NONE", "PRUNE_ONLY", "PRUNE_AND_CHECK"]
+
+function IR.Attribute(e::Prune2To4SpMatFlag.T)
+    return parse(
+        Attribute, "#gpu<prune_2to4_spmat_flag $(Prune2To4SpMatFlagStorage[Int(e)+1])>"
+    )
+end
+
+"""
+`TransposeMode`
+transpose mode of sparse matrix supported by sparse tensor ops
+"""
+@enumx TransposeMode NON_TRANSPOSE TRANSPOSE CONJUGATE_TRANSPOSE
+const TransposeModeStorage = ["NON_TRANSPOSE", "TRANSPOSE", "CONJUGATE_TRANSPOSE"]
+
+function IR.Attribute(e::TransposeMode.T)
+    return parse(Attribute, "#gpu<mat_transpose_mode $(TransposeModeStorage[Int(e)+1])>")
+end
+
+"""
+`ShuffleMode`
+Indexing modes supported by gpu.shuffle.
+"""
+@enumx ShuffleMode XOR UP DOWN IDX
+const ShuffleModeStorage = ["xor", "up", "down", "idx"]
+
+function IR.Attribute(e::ShuffleMode.T)
+    return parse(Attribute, "#gpu<shuffle_mode $(ShuffleModeStorage[Int(e)+1])>")
+end
+
+"""
+`SpGEMMWorkEstimationOrComputeKind`
+choose whether spgemm_work_estimation_or_compute does work estimation or compute
+"""
+@enumx SpGEMMWorkEstimationOrComputeKind WORK_ESTIMATION COMPUTE
+const SpGEMMWorkEstimationOrComputeKindStorage = ["WORK_ESTIMATION", "COMPUTE"]
+
+function IR.Attribute(e::SpGEMMWorkEstimationOrComputeKind.T)
+    return parse(
+        Attribute,
+        "#gpu<spgemm_work_estimation_or_compute_kind $(SpGEMMWorkEstimationOrComputeKindStorage[Int(e)+1])>",
+    )
+end
+
+"""
+`MMAElementwiseOp`
+elementwise operation to apply to mma matrix
+"""
+@enumx MMAElementwiseOp ADDF MULF SUBF MAXF MINF DIVF ADDI MULI SUBI DIVS DIVU NEGATEF NEGATES EXTF
+const MMAElementwiseOpStorage = [
+    "addf",
+    "mulf",
+    "subf",
+    "maxf",
+    "minf",
+    "divf",
+    "addi",
+    "muli",
+    "subi",
+    "divs",
+    "divu",
+    "negatef",
+    "negates",
+    "extf",
+]
+
+function IR.Attribute(e::MMAElementwiseOp.T)
+    return parse(Attribute, "#gpu<mma_element_wise $(MMAElementwiseOpStorage[Int(e)+1])>")
+end
 
 """
 `all_reduce`
@@ -43,11 +153,11 @@ need to execute this op in convergence.
 """
 function all_reduce(
     value::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    op=nothing,
-    uniform=nothing,
+    result::Union{Nothing,IR.Type}=nothing,
+    op::Union{AllReduceOperation.T,Nothing}=nothing,
+    uniform::Union{Bool,Nothing}=nothing,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value,]
@@ -65,8 +175,8 @@ function all_reduce(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -97,9 +207,9 @@ function alloc(
     dynamicSizes::Vector{Value},
     symbolOperands::Vector{Value};
     memref::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    hostShared=nothing,
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    hostShared::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[memref,]
     operands = Value[asyncDependencies..., dynamicSizes..., symbolOperands...]
@@ -146,7 +256,7 @@ in-between these accesses.
 Either none or all work items of a workgroup need to execute this op
 in convergence.
 """
-function barrier(; location=Location())
+function barrier(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -191,7 +301,12 @@ Examples:
   gpu.binary @myobject <#gpu.select_object<#rocdl.target>> [#gpu.object<...>, #gpu.object<#rocdl.target, ...>]
 ```
 """
-function binary(; sym_name, offloadingHandler=nothing, objects, location=Location())
+function binary(;
+    sym_name::String,
+    offloadingHandler::Union{IR.AbstractAttribute,Nothing}=nothing,
+    objects::Vector{<:IR.AbstractAttribute},
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -240,17 +355,17 @@ exceeds `upper_bound` cause undefined behavior.
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
 function block_dim(;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Dimension.T,
     upper_bound=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
 
     return create_operation(
@@ -260,8 +375,8 @@ function block_dim(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -285,17 +400,17 @@ takes priority over bounds inferrable from context.
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
 function block_id(;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Dimension.T,
     upper_bound=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
 
     return create_operation(
@@ -305,8 +420,8 @@ function block_id(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -328,17 +443,17 @@ is greater than `upper_bound` causes undefined behavior.
 There is an implicit upper bound of `kMaxClusterDim` (currently 8).
 """
 function cluster_block_id(;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Dimension.T,
     upper_bound=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
 
     return create_operation(
@@ -348,8 +463,8 @@ function cluster_block_id(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -372,17 +487,17 @@ causes undefined behavior.
 There is an implicit upper bound of `kMaxClusterDim` (currently 8).
 """
 function cluster_dim_blocks(;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Dimension.T,
     upper_bound=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
 
     return create_operation(
@@ -392,8 +507,8 @@ function cluster_dim_blocks(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -416,17 +531,17 @@ undefined behavior.
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
 function cluster_dim(;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Dimension.T,
     upper_bound=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
 
     return create_operation(
@@ -436,8 +551,8 @@ function cluster_dim(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -460,17 +575,17 @@ greater than `upper_bound` causes undefined behavior.
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
 function cluster_id(;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Dimension.T,
     upper_bound=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
 
     return create_operation(
@@ -480,8 +595,8 @@ function cluster_id(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -510,9 +625,9 @@ function create_2to4_spmat(
     cols::Value,
     memref::Value;
     spMat::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    pruneFlag=nothing,
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    pruneFlag::Union{Prune2To4SpMatFlag.T,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[spMat,]
     operands = Value[asyncDependencies..., rows, cols, memref]
@@ -571,8 +686,8 @@ function create_bsr(
     bColIdxs::Value,
     values::Value;
     spmat::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[spmat,]
     operands = Value[
@@ -633,8 +748,8 @@ function create_coo_aos(
     idxs::Value,
     values::Value;
     spmat::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[spmat,]
     operands = Value[asyncDependencies..., rows, cols, nnz, idxs, values]
@@ -684,8 +799,8 @@ function create_coo(
     colIdxs::Value,
     values::Value;
     spmat::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[spmat,]
     operands = Value[asyncDependencies..., rows, cols, nnz, rowIdxs, colIdxs, values]
@@ -738,8 +853,8 @@ function create_csc(
     rowIdxs::Value,
     values::Value;
     spmat::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[spmat,]
     operands = Value[asyncDependencies..., rows, cols, nnz, colPos, rowIdxs, values]
@@ -792,8 +907,8 @@ function create_csr(
     colIdxs::Value,
     values::Value;
     spmat::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[spmat,]
     operands = Value[asyncDependencies..., rows, cols, nnz, rowPos, colIdxs, values]
@@ -837,8 +952,8 @@ function create_dn_tensor(
     memref::Value,
     dims::Vector{Value};
     dnTensor::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[dnTensor,]
     operands = Value[asyncDependencies..., memref, dims...]
@@ -883,8 +998,8 @@ that case, it returns a !gpu.async.token.
 function dealloc(
     asyncDependencies::Vector{Value},
     memref::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., memref]
@@ -925,8 +1040,8 @@ that case, it returns a !gpu.async.token in addition to the environment.
 function destroy_dn_tensor(
     asyncDependencies::Vector{Value},
     dnTensor::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., dnTensor]
@@ -967,8 +1082,8 @@ that case, it returns a !gpu.async.token in addition to the environment.
 function destroy_sp_mat(
     asyncDependencies::Vector{Value},
     spmat::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., spmat]
@@ -1007,7 +1122,7 @@ Examples:
                         to memref<32x64xf32, #gpu.address_space<workgroup>>
 ```
 """
-function dynamic_shared_memory(; resultMemref::IR.Type, location=Location())
+function dynamic_shared_memory(; resultMemref::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[resultMemref,]
     operands = Value[]
     owned_regions = Region[]
@@ -1096,15 +1211,15 @@ Note the non-default memory spaces used in memref types in memory
 attribution.
 """
 function func(;
-    function_type,
-    arg_attrs=nothing,
-    res_attrs=nothing,
-    workgroup_attrib_attrs=nothing,
-    private_attrib_attrs=nothing,
-    known_block_size=nothing,
-    known_grid_size=nothing,
+    function_type::IR.Type,
+    arg_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    res_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    workgroup_attrib_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    private_attrib_attrs::Union{IR.DenseAttribute{<:Any},Nothing}=nothing,
+    known_block_size::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
+    known_grid_size::Union{IR.DenseAttribute{Int32},Nothing}=nothing,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -1174,11 +1289,11 @@ gpu.module @symbol_name2 <#gpu.select_object<1>> [
 ```
 """
 function module_(;
-    sym_name,
-    targets=nothing,
-    offloadingHandler=nothing,
+    sym_name::String,
+    targets::Union{IR.DenseAttribute{IR.AbstractAttribute},Nothing}=nothing,
+    offloadingHandler::Union{IR.AbstractAttribute,Nothing}=nothing,
     bodyRegion::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -1220,17 +1335,17 @@ The `upper_bound` attribute defines an upper bound analogously to the ones on
 a combination of `known_block_size` and `known_grid_size`-type annotations.
 """
 function global_id(;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Dimension.T,
     upper_bound=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
 
     return create_operation(
@@ -1240,8 +1355,8 @@ function global_id(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1272,17 +1387,17 @@ exceed `upper_bound` cause undefined behavior.
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
 function grid_dim(;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Dimension.T,
     upper_bound=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
 
     return create_operation(
@@ -1292,8 +1407,8 @@ function grid_dim(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1309,7 +1424,7 @@ Writes from the host are guaranteed to be visible to device kernels that are
 launched afterwards. Writes from the device are guaranteed to be visible on
 the host after synchronizing with the device kernel completion.
 """
-function host_register(value::Value; location=Location())
+function host_register(value::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[value,]
     owned_regions = Region[]
@@ -1336,7 +1451,7 @@ This op unmaps the provided host buffer from the device address space.
 This operation may not be supported in every environment, there is not yet a
     way to check at runtime whether this feature is supported.
 """
-function host_unregister(value::Value; location=Location())
+function host_unregister(value::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[value,]
     owned_regions = Region[]
@@ -1371,7 +1486,9 @@ the lane id is still assumed to be non-negative and less than the
 target-independent `kMaxSubgroupSize` (currently 128).
 """
 function lane_id(;
-    result=nothing::Union{Nothing,IR.Type}, upper_bound=nothing, location=Location()
+    result::Union{Nothing,IR.Type}=nothing,
+    upper_bound=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -1388,8 +1505,8 @@ function lane_id(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1498,15 +1615,15 @@ function launch_func(
     blockSizeX::Value,
     blockSizeY::Value,
     blockSizeZ::Value,
-    clusterSizeX=nothing::Union{Nothing,Value};
-    clusterSizeY=nothing::Union{Nothing,Value},
-    clusterSizeZ=nothing::Union{Nothing,Value},
-    dynamicSharedMemorySize=nothing::Union{Nothing,Value},
+    clusterSizeX::Union{Nothing,Value}=nothing;
+    clusterSizeY::Union{Nothing,Value}=nothing,
+    clusterSizeZ::Union{Nothing,Value}=nothing,
+    dynamicSharedMemorySize::Union{Nothing,Value}=nothing,
     kernelOperands::Vector{Value},
-    asyncObject=nothing::Union{Nothing,Value},
-    asyncToken=nothing::Union{Nothing,IR.Type},
+    asyncObject::Union{Nothing,Value}=nothing,
+    asyncToken::Union{Nothing,IR.Type}=nothing,
     kernel,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[
@@ -1681,15 +1798,15 @@ function launch(
     blockSizeX::Value,
     blockSizeY::Value,
     blockSizeZ::Value,
-    clusterSizeX=nothing::Union{Nothing,Value};
-    clusterSizeY=nothing::Union{Nothing,Value},
-    clusterSizeZ=nothing::Union{Nothing,Value},
-    dynamicSharedMemorySize=nothing::Union{Nothing,Value},
-    asyncToken=nothing::Union{Nothing,IR.Type},
+    clusterSizeX::Union{Nothing,Value}=nothing;
+    clusterSizeY::Union{Nothing,Value}=nothing,
+    clusterSizeZ::Union{Nothing,Value}=nothing,
+    dynamicSharedMemorySize::Union{Nothing,Value}=nothing,
+    asyncToken::Union{Nothing,IR.Type}=nothing,
     kernelFunc=nothing,
     kernelModule=nothing,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[
@@ -1770,8 +1887,8 @@ function memcpy(
     asyncDependencies::Vector{Value},
     dst::Value,
     src::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., dst, src]
@@ -1814,8 +1931,8 @@ function memset(
     asyncDependencies::Vector{Value},
     dst::Value,
     value::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., dst, value]
@@ -1852,7 +1969,9 @@ per workgroup cause undefined behavior. There is a default upper bound of
 `kMaxDim` (currently uint32_t::max).
 """
 function num_subgroups(;
-    result=nothing::Union{Nothing,IR.Type}, upper_bound=nothing, location=Location()
+    result::Union{Nothing,IR.Type}=nothing,
+    upper_bound=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -1869,8 +1988,8 @@ function num_subgroups(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1883,7 +2002,7 @@ scalar arguments that should be printed.
 The format string is a C-style printf string, subject to any restrictions
 imposed by one\'s target platform.
 """
-function printf(args::Vector{Value}; format, location=Location())
+function printf(args::Vector{Value}; format::String, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[args...,]
     owned_regions = Region[]
@@ -1909,7 +2028,7 @@ A terminator operation for regions that appear in the body of  `gpu.func`
 functions. The operands to the `gpu.return` are the result values returned
 by an invocation of the `gpu.func`.
 """
-function return_(operands::Vector{Value}; location=Location())
+function return_(operands::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operands...,]
     owned_regions = Region[]
@@ -1956,11 +2075,11 @@ function sddmm_buffer_size(
     dnmatB::Value,
     spmatC::Value;
     bufferSz::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    modeA=nothing,
-    modeB=nothing,
-    computeType,
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    modeA::Union{TransposeMode.T,Nothing}=nothing,
+    modeB::Union{TransposeMode.T,Nothing}=nothing,
+    computeType::IR.Type,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[bufferSz,]
     operands = Value[asyncDependencies..., dnmatA, dnmatB, spmatC]
@@ -2011,11 +2130,11 @@ function sddmm(
     dnmatB::Value,
     spmatC::Value,
     buffer::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    modeA=nothing,
-    modeB=nothing,
-    computeType,
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    modeA::Union{TransposeMode.T,Nothing}=nothing,
+    modeB::Union{TransposeMode.T,Nothing}=nothing,
+    computeType::IR.Type,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., dnmatA, dnmatB, spmatC, buffer]
@@ -2062,8 +2181,8 @@ function set_csr_pointers(
     positions::Value,
     coordinates::Value,
     values::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., spmat, positions, coordinates, values]
@@ -2091,7 +2210,7 @@ Operation that sets the current default GPU, using a zero-based index
 into the set of GPUs on the system. The default GPU setting may be
 thread-local.
 """
-function set_default_device(devIndex::Value; location=Location())
+function set_default_device(devIndex::Value; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[devIndex,]
     owned_regions = Region[]
@@ -2165,10 +2284,10 @@ function shuffle(
     value::Value,
     offset::Value,
     width::Value;
-    shuffleResult=nothing::Union{Nothing,IR.Type},
-    valid=nothing::Union{Nothing,IR.Type},
-    mode,
-    location=Location(),
+    shuffleResult::Union{Nothing,IR.Type}=nothing,
+    valid::Union{Nothing,IR.Type}=nothing,
+    mode::ShuffleMode.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value, offset, width]
@@ -2185,8 +2304,8 @@ function shuffle(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2216,11 +2335,11 @@ function spgemm_copy(
     spmatA::Value,
     spmatB::Value,
     spmatC::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    modeA=nothing,
-    modeB=nothing,
-    computeType,
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    modeA::Union{TransposeMode.T,Nothing}=nothing,
+    modeB::Union{TransposeMode.T,Nothing}=nothing,
+    computeType::IR.Type,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., desc, spmatA, spmatB, spmatC]
@@ -2264,8 +2383,8 @@ that case, it returns a `!gpu.async.token` in addition to the environment.
 function spgemm_create_descr(
     asyncDependencies::Vector{Value};
     desc::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[desc,]
     operands = Value[asyncDependencies...,]
@@ -2304,8 +2423,8 @@ that case, it returns a `!gpu.async.token` in addition to the environment.
 function spgemm_destroy_descr(
     asyncDependencies::Vector{Value},
     desc::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., desc]
@@ -2364,12 +2483,12 @@ function spgemm_work_estimation_or_compute(
     bufferSz::Value,
     buffer::Value;
     bufferSzNew::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    modeA=nothing,
-    modeB=nothing,
-    computeType,
-    kind,
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    modeA::Union{TransposeMode.T,Nothing}=nothing,
+    modeB::Union{TransposeMode.T,Nothing}=nothing,
+    computeType::IR.Type,
+    kind::SpGEMMWorkEstimationOrComputeKind.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[bufferSzNew,]
     operands = Value[asyncDependencies..., desc, spmatA, spmatB, spmatC, bufferSz, buffer]
@@ -2421,12 +2540,12 @@ function spmm_buffer_size(
     spmatA::Value,
     dnmatB::Value,
     dnmatC::Value;
-    bufferSzs::Vector{IR.Type},
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    modeA=nothing,
-    modeB=nothing,
-    computeType,
-    location=Location(),
+    bufferSzs::Base.AbstractVecOrTuple{IR.Type},
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    modeA::Union{TransposeMode.T,Nothing}=nothing,
+    modeB::Union{TransposeMode.T,Nothing}=nothing,
+    computeType::IR.Type,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[bufferSzs...,]
     operands = Value[asyncDependencies..., spmatA, dnmatB, dnmatC]
@@ -2477,11 +2596,11 @@ function spmm(
     dnmatB::Value,
     dnmatC::Value,
     buffers::Vector{Value};
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    modeA=nothing,
-    modeB=nothing,
-    computeType,
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    modeA::Union{TransposeMode.T,Nothing}=nothing,
+    modeB::Union{TransposeMode.T,Nothing}=nothing,
+    computeType::IR.Type,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., spmatA, dnmatB, dnmatC, buffers...]
@@ -2536,10 +2655,10 @@ function spmv_buffer_size(
     dnX::Value,
     dnY::Value;
     bufferSz::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    modeA=nothing,
-    computeType,
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    modeA::Union{TransposeMode.T,Nothing}=nothing,
+    computeType::IR.Type,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[bufferSz,]
     operands = Value[asyncDependencies..., spmatA, dnX, dnY]
@@ -2589,10 +2708,10 @@ function spmv(
     dnX::Value,
     dnY::Value,
     buffer::Value;
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    modeA=nothing,
-    computeType,
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    modeA::Union{TransposeMode.T,Nothing}=nothing,
+    computeType::IR.Type,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies..., spmatA, dnX, dnY, buffer]
@@ -2636,8 +2755,8 @@ function spmat_get_size(
     rows::IR.Type,
     cols::IR.Type,
     nnz::IR.Type,
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[rows, cols, nnz]
     operands = Value[asyncDependencies..., spmat]
@@ -2675,7 +2794,9 @@ cause undefined behavior. There is an implicit upper bound of `kMaxDim`
 (currently uint32_t::max).
 """
 function subgroup_id(;
-    result=nothing::Union{Nothing,IR.Type}, upper_bound=nothing, location=Location()
+    result::Union{Nothing,IR.Type}=nothing,
+    upper_bound=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -2692,8 +2813,8 @@ function subgroup_id(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2732,10 +2853,10 @@ function subgroup_mma_compute(
     opA::Value,
     opB::Value,
     opC::Value;
-    res=nothing::Union{Nothing,IR.Type},
-    a_transpose=nothing,
-    b_transpose=nothing,
-    location=Location(),
+    res::Union{Nothing,IR.Type}=nothing,
+    a_transpose::Union{Bool,Nothing}=nothing,
+    b_transpose::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[opA, opB, opC]
@@ -2753,8 +2874,8 @@ function subgroup_mma_compute(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2781,7 +2902,9 @@ This op is meant to be used along with `gpu.subgroup_mma_compute`.
    !gpu.mma_matrix<16x16xf32, \"COp\">
 ```
 """
-function subgroup_mma_constant_matrix(value::Value; res::IR.Type, location=Location())
+function subgroup_mma_constant_matrix(
+    value::Value; res::IR.Type, location::Location=Location()
+)
     op_ty_results = IR.Type[res,]
     operands = Value[value,]
     owned_regions = Region[]
@@ -2821,7 +2944,10 @@ This op is meant to be used along with `gpu.subgroup_mma_compute`.
 ```
 """
 function subgroup_mma_elementwise(
-    args::Vector{Value}; res::IR.Type, opType, location=Location()
+    args::Vector{Value};
+    res::IR.Type,
+    opType::MMAElementwiseOp.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[res,]
     operands = Value[args...,]
@@ -2874,8 +3000,8 @@ function subgroup_mma_load_matrix(
     indices::Vector{Value};
     res::IR.Type,
     leadDimension,
-    transpose=nothing,
-    location=Location(),
+    transpose::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[res,]
     operands = Value[srcMemref, indices...]
@@ -2924,8 +3050,8 @@ function subgroup_mma_store_matrix(
     dstMemref::Value,
     indices::Vector{Value};
     leadDimension,
-    transpose=nothing,
-    location=Location(),
+    transpose::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[src, dstMemref, indices...]
@@ -2982,12 +3108,12 @@ The reduction operation must be one of:
 """
 function subgroup_reduce(
     value::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    op,
-    uniform=nothing,
-    cluster_size=nothing,
-    cluster_stride=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    op::AllReduceOperation.T,
+    uniform::Union{Bool,Nothing}=nothing,
+    cluster_size::Union{Int32,Nothing}=nothing,
+    cluster_stride::Union{Int32,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value,]
@@ -3008,8 +3134,8 @@ function subgroup_reduce(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3030,7 +3156,9 @@ similar machinery assume the default bound of `kMaxSubgroupSize`, currently
 128.
 """
 function subgroup_size(;
-    result=nothing::Union{Nothing,IR.Type}, upper_bound=nothing, location=Location()
+    result::Union{Nothing,IR.Type}=nothing,
+    upper_bound=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -3047,8 +3175,8 @@ function subgroup_size(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3059,7 +3187,7 @@ A terminator operation for regions that appear in the body of `gpu.launch`
 operation.  These regions are not expected to return any value so the
 terminator takes no operands.
 """
-function terminator(; location=Location())
+function terminator(; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -3097,17 +3225,17 @@ than or equal to that bound cause undefined behavior.
 There is an implicit upper bound of `kMaxDim` (currently uint32_t::max).
 """
 function thread_id(;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Dimension.T,
     upper_bound=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
 
     return create_operation(
@@ -3117,8 +3245,8 @@ function thread_id(;
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3157,8 +3285,8 @@ gpu.wait [%t0, %t1]
 """
 function wait(
     asyncDependencies::Vector{Value};
-    asyncToken=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    asyncToken::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[asyncDependencies...,]
@@ -3284,10 +3412,10 @@ some_synchronization_primitive
 function warp_execute_on_lane_0(
     laneid::Value,
     args::Vector{Value};
-    results::Vector{IR.Type},
-    warp_size,
+    results::Base.AbstractVecOrTuple{IR.Type},
+    warp_size::Int64,
     warpRegion::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[laneid, args...]
@@ -3319,7 +3447,7 @@ in gpu ops. It returns values to the immediately enclosing gpu op.
 gpu.yield %f0, %f1 : f32, f32
 ```
 """
-function yield(values::Vector{Value}; location=Location())
+function yield(values::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[values...,]
     owned_regions = Region[]

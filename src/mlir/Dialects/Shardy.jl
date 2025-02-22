@@ -10,8 +10,17 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
+
+"""
+`PropagationDirection`
+propagation direction enum
+"""
+@enumx PropagationDirection NONE = 0 FORWARD = 1 BACKWARD = 2 BOTH = 3
+
+IR.Attribute(e::PropagationDirection.T) = Int(e)
 
 """
 `all_gather`
@@ -43,10 +52,10 @@ inferred sharding.
 """
 function all_gather(
     tensor::Value;
-    result=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     gathering_axes,
     out_sharding,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[tensor,]
@@ -65,8 +74,8 @@ function all_gather(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -84,10 +93,10 @@ affect the order of the corresponding replica groups.
 """
 function all_reduce(
     tensor::Value;
-    result=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     reduction_axes,
     out_sharding,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[tensor,]
@@ -106,8 +115,8 @@ function all_reduce(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -142,10 +151,10 @@ inferred sharding.
 """
 function all_slice(
     tensor::Value;
-    result=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     slicing_axes,
     out_sharding,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[tensor,]
@@ -164,8 +173,8 @@ function all_slice(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -205,12 +214,12 @@ this inferred sharding.
 """
 function all_to_all(
     tensor::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    src_dim,
-    tgt_dim,
+    result::Union{Nothing,IR.Type}=nothing,
+    src_dim::Int64,
+    tgt_dim::Int64,
     axes,
     out_sharding,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[tensor,]
@@ -231,8 +240,8 @@ function all_to_all(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -266,7 +275,10 @@ sdy.mesh @mesh = <[\"a\"=2, \"b\"=2, \"c\"=4, \"d\"=2, \"e\"=2, \"f\"=2]>
   must match that of the corresponding operand dimension sharding.
 """
 function collective_permute(
-    tensor::Value; result=nothing::Union{Nothing,IR.Type}, out_sharding, location=Location()
+    tensor::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    out_sharding,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[tensor,]
@@ -282,8 +294,8 @@ function collective_permute(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -306,7 +318,11 @@ is done between constants (or constant expressions).
 %output = sdy.constant dense<[[0.0, 1.0], [2.0, 3.0]]> : tensor<2x2xf32>
 ```
 """
-function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Location())
+function constant(;
+    output::Union{Nothing,IR.Type}=nothing,
+    value::IR.AbstractDenseElementsAttribute,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -321,8 +337,8 @@ function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Loca
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -384,9 +400,9 @@ responsible for providing this information.
 """
 function data_flow_edge(
     input::Value;
-    result=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     sharding=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[input,]
@@ -403,8 +419,8 @@ function data_flow_edge(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -428,12 +444,12 @@ the body on any free axes - those not in the manual_axes list.
 """
 function manual_computation(
     tensors::Vector{Value};
-    results::Vector{IR.Type},
+    results::Base.AbstractVecOrTuple{IR.Type},
     in_shardings,
     out_shardings,
     manual_axes,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[results...,]
     operands = Value[tensors...,]
@@ -465,7 +481,7 @@ of devices (except for meshes with a single device_id).
 The mesh is a `Symbol` operation that appears in the module\'s
 `SymbolTable` and can be referenced by its `name`.
 """
-function mesh(; sym_name, mesh, location=Location())
+function mesh(; sym_name::String, mesh, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -510,14 +526,14 @@ the same as the type of the operands and results type of the op.
 """
 function named_computation(
     operands::Vector{Value};
-    result_0::Vector{IR.Type},
-    name,
+    result::Base.AbstractVecOrTuple{IR.Type},
+    name::String,
     in_shardings=nothing,
     out_shardings=nothing,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[operands...,]
     owned_regions = Region[body,]
     successors = Block[]
@@ -556,9 +572,9 @@ of the barrier op and its operand.
 """
 function propagation_barrier(
     input::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    allowed_direction,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    allowed_direction::PropagationDirection.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[input,]
@@ -574,8 +590,8 @@ function propagation_barrier(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -598,7 +614,10 @@ lifespan is:
   // reshard ops.
 """
 function reshard(
-    input::Value; result=nothing::Union{Nothing,IR.Type}, sharding, location=Location()
+    input::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    sharding,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[input,]
@@ -614,12 +633,12 @@ function reshard(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
-function return_(results::Vector{Value}; location=Location())
+function return_(results::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[results...,]
     owned_regions = Region[]
@@ -657,7 +676,10 @@ This op can either:
   uses then the behavior is the same as the no uses case).
 """
 function sharding_constraint(
-    input::Value; result=nothing::Union{Nothing,IR.Type}, sharding, location=Location()
+    input::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    sharding,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[input,]
@@ -673,8 +695,8 @@ function sharding_constraint(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -689,7 +711,7 @@ argument group ID and returns no result, but instead modifies the internal
 sharding group representation to add the input tensor to the group with the
 given ID.
 """
-function sharding_group(input::Value; group_id, location=Location())
+function sharding_group(input::Value; group_id::Int64, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[input,]
     owned_regions = Region[]
@@ -703,8 +725,8 @@ function sharding_group(input::Value; group_id, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 

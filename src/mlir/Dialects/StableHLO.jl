@@ -10,8 +10,213 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, c
 import ...API
+using EnumX
+
+"""
+`channel_handle`
+two 64-bit integers \'handle\' and \'type\'
+"""
+struct ChannelHandle
+    handle::Int64
+    type::Int64
+end
+
+function IR.Attribute(s::ChannelHandle)
+    return parse(
+        Attribute, "#stablehlo.channel_handle<handle = $(c(s.handle)), type = $(c(s.type))>"
+    )
+end
+
+"""
+`ComparisonDirection`
+Which comparison operation to perform.
+"""
+@enumx ComparisonDirection EQ NE GE GT LE LT
+const ComparisonDirectionStorage = ["EQ", "NE", "GE", "GT", "LE", "LT"]
+
+function IR.Attribute(e::ComparisonDirection.T)
+    return parse(
+        Attribute,
+        "#stablehlo<comparison_direction $(ComparisonDirectionStorage[Int(e)+1])>",
+    )
+end
+
+"""
+`ComparisonType`
+Which comparison type to use.
+"""
+@enumx ComparisonType NOTYPE FLOAT TOTALORDER SIGNED UNSIGNED
+const ComparisonTypeStorage = ["NOTYPE", "FLOAT", "TOTALORDER", "SIGNED", "UNSIGNED"]
+
+function IR.Attribute(e::ComparisonType.T)
+    return parse(
+        Attribute, "#stablehlo<comparison_type $(ComparisonTypeStorage[Int(e)+1])>"
+    )
+end
+
+"""
+`Precision`
+XLA precision for an operand. Has backend specific meaning.
+"""
+@enumx Precision DEFAULT HIGH HIGHEST
+const PrecisionStorage = ["DEFAULT", "HIGH", "HIGHEST"]
+
+function IR.Attribute(e::Precision.T)
+    return parse(Attribute, "#stablehlo<precision $(PrecisionStorage[Int(e)+1])>")
+end
+
+"""
+`CustomCallApiVersion`
+Custom call API version
+"""
+@enumx CustomCallApiVersion API_VERSION_UNSPECIFIED = 0 API_VERSION_ORIGINAL = 1 API_VERSION_STATUS_RETURNING =
+    2 API_VERSION_STATUS_RETURNING_UNIFIED = 3 API_VERSION_TYPED_FFI = 4
+
+IR.Attribute(e::CustomCallApiVersion.T) = Int(e)
+
+"""
+`output_operand_alias`
+Attribute that models the alias relationship of output and operand of a CustomCall op
+"""
+struct OutputOperandAlias
+    output_tuple_indices::IR.DenseAttribute{Int64}
+    operand_index::Int64
+    operand_tuple_indices::IR.DenseAttribute{Int64}
+end
+
+function IR.Attribute(s::OutputOperandAlias)
+    return parse(
+        Attribute,
+        "#stablehlo.output_operand_alias<output_tuple_indices = $(c(s.output_tuple_indices)), operand_index = $(c(s.operand_index)), operand_tuple_indices = $(c(s.operand_tuple_indices))>",
+    )
+end
+
+"""
+`dot`
+Attribute that models the dimension information for dot.
+"""
+struct Dot
+    lhs_batching_dimensions::IR.DenseAttribute{Int64}
+    rhs_batching_dimensions::IR.DenseAttribute{Int64}
+    lhs_contracting_dimensions::IR.DenseAttribute{Int64}
+    rhs_contracting_dimensions::IR.DenseAttribute{Int64}
+end
+
+function IR.Attribute(s::Dot)
+    return parse(
+        Attribute,
+        "#stablehlo.dot<lhs_batching_dimensions = $(c(s.lhs_batching_dimensions)), rhs_batching_dimensions = $(c(s.rhs_batching_dimensions)), lhs_contracting_dimensions = $(c(s.lhs_contracting_dimensions)), rhs_contracting_dimensions = $(c(s.rhs_contracting_dimensions))>",
+    )
+end
+
+"""
+`dot_algorithm`
+Attribute that models the algorithm constraints to use for computing dot.
+"""
+struct DotAlgorithm
+    lhs_precision_type::IR.Type
+    rhs_precision_type::IR.Type
+    accumulation_type::IR.Type
+    lhs_component_count::Int64
+    rhs_component_count::Int64
+    num_primitive_operations::Int64
+    allow_imprecise_accumulation::Bool
+end
+
+function IR.Attribute(s::DotAlgorithm)
+    return parse(
+        Attribute,
+        "#stablehlo.dot_algorithm<lhs_precision_type = $(c(s.lhs_precision_type)), rhs_precision_type = $(c(s.rhs_precision_type)), accumulation_type = $(c(s.accumulation_type)), lhs_component_count = $(c(s.lhs_component_count)), rhs_component_count = $(c(s.rhs_component_count)), num_primitive_operations = $(c(s.num_primitive_operations)), allow_imprecise_accumulation = $(c(s.allow_imprecise_accumulation))>",
+    )
+end
+
+"""
+`gather`
+Attribute that models the dimension information for gather
+"""
+struct Gather
+    offset_dims::IR.DenseAttribute{Int64}
+    collapsed_slice_dims::IR.DenseAttribute{Int64}
+    operand_batching_dims::IR.DenseAttribute{Int64}
+    start_indices_batching_dims::IR.DenseAttribute{Int64}
+    start_index_map::IR.DenseAttribute{Int64}
+    index_vector_dim::Int64
+end
+
+function IR.Attribute(s::Gather)
+    return parse(
+        Attribute,
+        "#stablehlo.gather<offset_dims = $(c(s.offset_dims)), collapsed_slice_dims = $(c(s.collapsed_slice_dims)), operand_batching_dims = $(c(s.operand_batching_dims)), start_indices_batching_dims = $(c(s.start_indices_batching_dims)), start_index_map = $(c(s.start_index_map)), index_vector_dim = $(c(s.index_vector_dim))>",
+    )
+end
+
+"""
+`FftType`
+XLA fast fourier transform type.
+"""
+@enumx FftType FFT IFFT RFFT IRFFT
+const FftTypeStorage = ["FFT", "IFFT", "RFFT", "IRFFT"]
+
+function IR.Attribute(e::FftType.T)
+    return parse(Attribute, "#stablehlo<fft_type $(FftTypeStorage[Int(e)+1])>")
+end
+
+"""
+`RngAlgorithm`
+XLA PRNG algorithm to be used.
+"""
+@enumx RngAlgorithm DEFAULT THREE_FRY PHILOX
+const RngAlgorithmStorage = ["DEFAULT", "THREE_FRY", "PHILOX"]
+
+function IR.Attribute(e::RngAlgorithm.T)
+    return parse(Attribute, "#stablehlo<rng_algorithm $(RngAlgorithmStorage[Int(e)+1])>")
+end
+
+"""
+`RngDistribution`
+XLA PRNG distribution to be used.
+"""
+@enumx RngDistribution UNIFORM NORMAL
+const RngDistributionStorage = ["UNIFORM", "NORMAL"]
+
+function IR.Attribute(e::RngDistribution.T)
+    return parse(
+        Attribute, "#stablehlo<rng_distribution $(RngDistributionStorage[Int(e)+1])>"
+    )
+end
+
+"""
+`scatter`
+Attribute that models the dimension information for scatter
+"""
+struct Scatter
+    update_window_dims::IR.DenseAttribute{Int64}
+    inserted_window_dims::IR.DenseAttribute{Int64}
+    input_batching_dims::IR.DenseAttribute{Int64}
+    scatter_indices_batching_dims::IR.DenseAttribute{Int64}
+    scatter_dims_to_operand_dims::IR.DenseAttribute{Int64}
+    index_vector_dim::Int64
+end
+
+function IR.Attribute(s::Scatter)
+    return parse(
+        Attribute,
+        "#stablehlo.scatter<update_window_dims = $(c(s.update_window_dims)), inserted_window_dims = $(c(s.inserted_window_dims)), input_batching_dims = $(c(s.input_batching_dims)), scatter_indices_batching_dims = $(c(s.scatter_indices_batching_dims)), scatter_dims_to_operand_dims = $(c(s.scatter_dims_to_operand_dims)), index_vector_dim = $(c(s.index_vector_dim))>",
+    )
+end
+
+"""
+`Transpose`
+Transpose options
+"""
+@enumx Transpose TRANSPOSE_INVALID NO_TRANSPOSE TRANSPOSE ADJOINT
+const TransposeStorage = ["TRANSPOSE_INVALID", "NO_TRANSPOSE", "TRANSPOSE", "ADJOINT"]
+
+function IR.Attribute(e::Transpose.T)
+    return parse(Attribute, "#stablehlo<transpose $(TransposeStorage[Int(e)+1])>")
+end
 
 """
 `abs`
@@ -27,7 +232,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#abs
 %result = stablehlo.abs %operand : tensor<3xi32>
 ```
 """
-function abs(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function abs(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -42,8 +249,8 @@ function abs(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Lo
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -62,7 +269,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#add
 ```
 """
 function add(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -78,8 +288,8 @@ function add(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -98,7 +308,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#after_all
 ```
 """
 function after_all(
-    inputs::Vector{Value}; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    inputs::Vector{Value};
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[inputs...,]
@@ -114,8 +326,8 @@ function after_all(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -140,14 +352,14 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_gather
 """
 function all_gather(
     operands::Vector{Value};
-    result_0::Vector{IR.Type},
-    all_gather_dim,
-    replica_groups,
-    channel_handle=nothing,
-    use_global_device_ids=nothing,
-    location=Location(),
+    result::Base.AbstractVecOrTuple{IR.Type},
+    all_gather_dim::Int64,
+    replica_groups::IR.AbstractDenseElementsAttribute{Int64},
+    channel_handle::Union{ChannelHandle,Nothing}=nothing,
+    use_global_device_ids::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
@@ -196,14 +408,14 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_reduce
 """
 function all_reduce(
     operands::Vector{Value};
-    result_0::Vector{IR.Type},
-    replica_groups,
-    channel_handle=nothing,
-    use_global_device_ids=nothing,
+    result::Base.AbstractVecOrTuple{IR.Type},
+    replica_groups::IR.AbstractDenseElementsAttribute{Int64},
+    channel_handle::Union{ChannelHandle,Nothing}=nothing,
+    use_global_device_ids::Union{Bool,Nothing}=nothing,
     computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[operands...,]
     owned_regions = Region[computation,]
     successors = Block[]
@@ -248,13 +460,13 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_to_all
 """
 function all_to_all(
     operands::Vector{Value};
-    result_0=nothing::Union{Nothing,Vector{IR.Type}},
-    split_dimension,
-    concat_dimension,
-    split_count,
-    replica_groups,
-    channel_handle=nothing,
-    location=Location(),
+    result::Union{Nothing,Base.AbstractVecOrTuple{IR.Type}}=nothing,
+    split_dimension::Int64,
+    concat_dimension::Int64,
+    split_count::Int64,
+    replica_groups::IR.AbstractDenseElementsAttribute{Int64},
+    channel_handle::Union{ChannelHandle,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operands...,]
@@ -266,7 +478,7 @@ function all_to_all(
         namedattribute("split_count", split_count),
         namedattribute("replica_groups", replica_groups),
     ]
-    !isnothing(result_0) && push!(op_ty_results, result_0...)
+    !isnothing(result) && push!(op_ty_results, result...)
     !isnothing(channel_handle) &&
         push!(attributes, namedattribute("channel_handle", channel_handle))
 
@@ -277,8 +489,8 @@ function all_to_all(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -297,7 +509,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#and
 ```
 """
 function and(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -313,8 +528,8 @@ function and(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -333,7 +548,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#atan2
 ```
 """
 function atan2(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -349,8 +567,8 @@ function atan2(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -380,12 +598,12 @@ function batch_norm_grad(
     mean::Value,
     variance::Value,
     grad_output::Value;
-    grad_operand=nothing::Union{Nothing,IR.Type},
-    grad_scale=nothing::Union{Nothing,IR.Type},
-    grad_offset=nothing::Union{Nothing,IR.Type},
-    epsilon,
-    feature_index,
-    location=Location(),
+    grad_operand::Union{Nothing,IR.Type}=nothing,
+    grad_scale::Union{Nothing,IR.Type}=nothing,
+    grad_offset::Union{Nothing,IR.Type}=nothing,
+    epsilon::Float32,
+    feature_index::Int64,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand, scale, mean, variance, grad_output]
@@ -405,8 +623,8 @@ function batch_norm_grad(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -433,10 +651,10 @@ function batch_norm_inference(
     offset::Value,
     mean::Value,
     variance::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    epsilon,
-    feature_index,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    epsilon::Float32,
+    feature_index::Int64,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand, scale, offset, mean, variance]
@@ -454,8 +672,8 @@ function batch_norm_inference(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -482,12 +700,12 @@ function batch_norm_training(
     operand::Value,
     scale::Value,
     offset::Value;
-    output=nothing::Union{Nothing,IR.Type},
-    batch_mean=nothing::Union{Nothing,IR.Type},
-    batch_var=nothing::Union{Nothing,IR.Type},
-    epsilon,
-    feature_index,
-    location=Location(),
+    output::Union{Nothing,IR.Type}=nothing,
+    batch_mean::Union{Nothing,IR.Type}=nothing,
+    batch_var::Union{Nothing,IR.Type}=nothing,
+    epsilon::Float32,
+    feature_index::Int64,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand, scale, offset]
@@ -507,8 +725,8 @@ function batch_norm_training(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -527,8 +745,8 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#bitcast_convert
 %result = stablehlo.bitcast_convert %operand : (tensor<f64>) -> tensor<4xf16>
 ```
 """
-function bitcast_convert(operand::Value; result_0::IR.Type, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function bitcast_convert(operand::Value; result::IR.Type, location::Location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
@@ -561,9 +779,12 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#broadcast_in_dim
 ```
 """
 function broadcast_in_dim(
-    operand::Value; result_0::IR.Type, broadcast_dimensions, location=Location()
+    operand::Value;
+    result::IR.Type,
+    broadcast_dimensions::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
@@ -599,16 +820,16 @@ https://www.tensorflow.org/xla/operation_semantics#broadcast
 """
 function broadcast(
     operand::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    broadcast_sizes,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    broadcast_sizes::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("broadcast_sizes", broadcast_sizes),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.broadcast",
@@ -617,8 +838,8 @@ function broadcast(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -641,9 +862,12 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#case
 ```
 """
 function case(
-    index::Value; result_0::Vector{IR.Type}, branches::Vector{Region}, location=Location()
+    index::Value;
+    result::Base.AbstractVecOrTuple{IR.Type},
+    branches::Vector{Region},
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[index,]
     owned_regions = Region[branches...,]
     successors = Block[]
@@ -675,7 +899,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#cbrt
 %result = stablehlo.cbrt %operand : tensor<4xf64>
 ```
 """
-function cbrt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function cbrt(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -690,8 +916,8 @@ function cbrt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -708,7 +934,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#ceil
 %result = stablehlo.ceil %operand : tensor<5xf32>
 ```
 """
-function ceil(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function ceil(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -723,8 +951,8 @@ function ceil(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -742,7 +970,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#cholesky
 ```
 """
 function cholesky(
-    a::Value; result=nothing::Union{Nothing,IR.Type}, lower=nothing, location=Location()
+    a::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    lower::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[a,]
@@ -759,8 +990,8 @@ function cholesky(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -782,8 +1013,8 @@ function clamp(
     min::Value,
     operand::Value,
     max::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[min, operand, max]
@@ -799,8 +1030,8 @@ function clamp(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -819,7 +1050,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#count_leading_zeros
 ```
 """
 function count_leading_zeros(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -835,8 +1066,8 @@ function count_leading_zeros(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -860,17 +1091,17 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_broadcast
 """
 function collective_broadcast(
     operand::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    replica_groups,
-    channel_handle=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    replica_groups::IR.AbstractDenseElementsAttribute{Int64},
+    channel_handle::Union{ChannelHandle,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("replica_groups", replica_groups),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(channel_handle) &&
         push!(attributes, namedattribute("channel_handle", channel_handle))
 
@@ -881,8 +1112,8 @@ function collective_broadcast(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -906,17 +1137,17 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_permute
 """
 function collective_permute(
     operand::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    source_target_pairs,
-    channel_handle=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    source_target_pairs::IR.AbstractDenseElementsAttribute{Int64},
+    channel_handle::Union{ChannelHandle,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("source_target_pairs", source_target_pairs),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(channel_handle) &&
         push!(attributes, namedattribute("channel_handle", channel_handle))
 
@@ -927,8 +1158,8 @@ function collective_permute(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -949,10 +1180,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#compare
 function compare(
     lhs::Value,
     rhs::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    comparison_direction,
-    compare_type=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    comparison_direction::ComparisonDirection.T,
+    compare_type::Union{ComparisonType.T,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -961,7 +1192,7 @@ function compare(
     attributes = NamedAttribute[namedattribute(
         "comparison_direction", comparison_direction
     ),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(compare_type) &&
         push!(attributes, namedattribute("compare_type", compare_type))
 
@@ -972,8 +1203,8 @@ function compare(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -990,7 +1221,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#complex
 ```
 """
 function complex(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1006,8 +1240,8 @@ function complex(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1040,14 +1274,14 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#composite
 """
 function composite(
     inputs::Vector{Value};
-    result_0::Vector{IR.Type},
-    name,
+    result::Base.AbstractVecOrTuple{IR.Type},
+    name::String,
     composite_attributes=nothing,
-    decomposition,
-    version=nothing,
-    location=Location(),
+    decomposition::IR.FlatSymbolRefAttribute,
+    version::Union{Int32,Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
@@ -1087,16 +1321,16 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#concatenate
 """
 function concatenate(
     inputs::Vector{Value};
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Int64,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.concatenate",
@@ -1105,8 +1339,8 @@ function concatenate(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1123,7 +1357,11 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#constant
 %output = stablehlo.constant dense<[[0.0, 1.0], [2.0, 3.0]]> : tensor<2x2xf32>
 ```
 """
-function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Location())
+function constant(;
+    output::Union{Nothing,IR.Type}=nothing,
+    value::IR.AbstractDenseElementsAttribute,
+    location::Location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1138,8 +1376,8 @@ function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Loca
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1157,7 +1395,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#convert
 %result = stablehlo.convert %operand : (tensor<3xi64>) -> tensor<3xcomplex<f64>>
 ```
 """
-function convert(operand::Value; result::IR.Type, location=Location())
+function convert(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1206,19 +1444,19 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#convolution
 function convolution(
     lhs::Value,
     rhs::Value;
-    result_0::IR.Type,
-    window_strides=nothing,
-    padding=nothing,
-    lhs_dilation=nothing,
-    rhs_dilation=nothing,
-    window_reversal=nothing,
+    result::IR.Type,
+    window_strides::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    padding::Union{IR.AbstractDenseElementsAttribute{Int64},Nothing}=nothing,
+    lhs_dilation::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    rhs_dilation::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    window_reversal::Union{IR.DenseAttribute{Bool},Nothing}=nothing,
     dimension_numbers,
-    feature_group_count,
-    batch_group_count,
-    precision_config=nothing,
-    location=Location(),
+    feature_group_count::Int64,
+    batch_group_count::Int64,
+    precision_config::Union{IR.DenseAttribute{Precision.T},Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
@@ -1265,7 +1503,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#cosine
 %result = stablehlo.cosine %operand : tensor<2xf32>
 ```
 """
-function cosine(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function cosine(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -1280,8 +1520,8 @@ function cosine(operand::Value; result=nothing::Union{Nothing,IR.Type}, location
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1299,7 +1539,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#after_all
 %output = stablehlo.create_token : !stablehlo.token
 ```
 """
-function create_token(; output=nothing::Union{Nothing,IR.Type}, location=Location())
+function create_token(;
+    output::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -1314,8 +1556,8 @@ function create_token(; output=nothing::Union{Nothing,IR.Type}, location=Locatio
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1339,16 +1581,16 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_reduce
 """
 function cross_replica_sum(
     operand::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    replica_groups,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    replica_groups::IR.AbstractDenseElementsAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("replica_groups", replica_groups),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.cross-replica-sum",
@@ -1357,8 +1599,8 @@ function cross_replica_sum(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1387,18 +1629,22 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#custom_call
 """
 function custom_call(
     inputs::Vector{Value};
-    result_0::Vector{IR.Type},
-    call_target_name,
-    has_side_effect=nothing,
-    backend_config=nothing,
-    api_version=nothing,
-    called_computations=nothing,
-    operand_layouts=nothing,
-    result_layouts=nothing,
-    output_operand_aliases=nothing,
-    location=Location(),
+    result::Base.AbstractVecOrTuple{IR.Type},
+    call_target_name::String,
+    has_side_effect::Union{Bool,Nothing}=nothing,
+    backend_config::Union{IR.AbstractAttribute,Nothing}=nothing,
+    api_version::Union{CustomCallApiVersion.T,Nothing}=nothing,
+    called_computations::Union{IR.DenseAttribute{IR.FlatSymbolRefAttribute},Nothing}=nothing,
+    operand_layouts::Union{
+        IR.DenseAttribute{IR.AbstractDenseElementsAttribute{Int64}},Nothing
+    }=nothing,
+    result_layouts::Union{
+        IR.DenseAttribute{IR.AbstractDenseElementsAttribute{Int64}},Nothing
+    }=nothing,
+    output_operand_aliases::Union{IR.DenseAttribute{OutputOperandAlias},Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
@@ -1444,7 +1690,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#divide
 ```
 """
 function divide(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1460,8 +1709,8 @@ function divide(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1487,13 +1736,13 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#dot_general
 function dot_general(
     lhs::Value,
     rhs::Value;
-    result_0::IR.Type,
-    dot_dimension_numbers,
-    precision_config=nothing,
-    algorithm=nothing,
-    location=Location(),
+    result::IR.Type,
+    dot_dimension_numbers::Dot,
+    precision_config::Union{IR.DenseAttribute{Precision.T},Nothing}=nothing,
+    algorithm::Union{DotAlgorithm,Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
@@ -1531,9 +1780,13 @@ https://www.tensorflow.org/xla/operation_semantics#dot
 ```
 """
 function dot(
-    lhs::Value, rhs::Value; result_0::IR.Type, precision_config=nothing, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::IR.Type,
+    precision_config::Union{IR.DenseAttribute{Precision.T},Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
@@ -1582,13 +1835,13 @@ See: https://github.com/openxla/stablehlo/blob/main/docs/spec.md#dynamic_broadca
 function dynamic_broadcast_in_dim(
     operand::Value,
     output_dimensions::Value;
-    result_0::IR.Type,
-    broadcast_dimensions,
-    known_expanding_dimensions=nothing,
-    known_nonexpanding_dimensions=nothing,
-    location=Location(),
+    result::IR.Type,
+    broadcast_dimensions::IR.DenseAttribute{Int64},
+    known_expanding_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    known_nonexpanding_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[operand, output_dimensions]
     owned_regions = Region[]
     successors = Block[]
@@ -1642,18 +1895,18 @@ function dynamic_conv(
     lhs::Value,
     rhs::Value,
     padding::Value;
-    result_0::IR.Type,
-    window_strides=nothing,
-    lhs_dilation=nothing,
-    rhs_dilation=nothing,
-    window_reversal=nothing,
-    dimension_numbers,
-    feature_group_count,
-    batch_group_count,
-    precision_config=nothing,
-    location=Location(),
+    result::IR.Type,
+    window_strides::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    lhs_dilation::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    rhs_dilation::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    window_reversal::Union{IR.DenseAttribute{Bool},Nothing}=nothing,
+    dimension_numbers::Attribute,
+    feature_group_count::Int64,
+    batch_group_count::Int64,
+    precision_config::Union{IR.DenseAttribute{Precision.T},Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs, padding]
     owned_regions = Region[]
     successors = Block[]
@@ -1709,17 +1962,17 @@ function dynamic_gather(
     operand::Value,
     start_indices::Value,
     slice_sizes::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension_numbers,
-    indices_are_sorted=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension_numbers::Gather,
+    indices_are_sorted::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand, start_indices, slice_sizes]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension_numbers", dimension_numbers),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(indices_are_sorted) &&
         push!(attributes, namedattribute("indices_are_sorted", indices_are_sorted))
 
@@ -1730,8 +1983,8 @@ function dynamic_gather(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1752,7 +2005,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#dynamic_iota
 ```
 """
 function dynamic_iota(
-    output_shape::Value; result::IR.Type, iota_dimension, location=Location()
+    output_shape::Value;
+    result::IR.Type,
+    iota_dimension::Int64,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[output_shape,]
@@ -1800,7 +2056,7 @@ function dynamic_pad(
     edge_padding_high::Value,
     interior_padding::Value;
     result::IR.Type,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[
@@ -1839,7 +2095,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#dynamic_reshape
 ```
 """
 function dynamic_reshape(
-    operand::Value, output_shape::Value; result::IR.Type, location=Location()
+    operand::Value, output_shape::Value; result::IR.Type, location::Location=Location()
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, output_shape]
@@ -1877,9 +2133,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#dynamic_slice
 function dynamic_slice(
     operand::Value,
     start_indices::Vector{Value};
-    result=nothing::Union{Nothing,IR.Type},
-    slice_sizes,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    slice_sizes::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand, start_indices...]
@@ -1895,8 +2151,8 @@ function dynamic_slice(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1920,8 +2176,8 @@ function dynamic_update_slice(
     operand::Value,
     update::Value,
     start_indices::Vector{Value};
-    result=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand, update, start_indices...]
@@ -1937,8 +2193,8 @@ function dynamic_update_slice(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -1959,9 +2215,13 @@ https://www.tensorflow.org/api_docs/python/tf/einsum
 ```
 """
 function einsum(
-    lhs::Value, rhs::Value; result_0::IR.Type, einsum_config, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::IR.Type,
+    einsum_config::String,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
@@ -1995,9 +2255,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#exponential
 """
 function exponential(
     operand::Value;
-    result=nothing::Union{Nothing,IR.Type},
+    result::Union{Nothing,IR.Type}=nothing,
     result_accuracy=nothing,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -2015,8 +2275,8 @@ function exponential(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2035,7 +2295,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#exponential_minus_on
 ```
 """
 function exponential_minus_one(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -2051,8 +2311,8 @@ function exponential_minus_one(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2072,10 +2332,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#fft
 """
 function fft(
     operand::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    fft_type,
-    fft_length,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    fft_type::FftType.T,
+    fft_length::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -2084,7 +2344,7 @@ function fft(
     attributes = NamedAttribute[
         namedattribute("fft_type", fft_type), namedattribute("fft_length", fft_length)
     ]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.fft",
@@ -2093,8 +2353,8 @@ function fft(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2112,7 +2372,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#floor
 %result = stablehlo.floor %operand : tensor<2xf32>
 ```
 """
-function floor(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function floor(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2127,8 +2389,8 @@ function floor(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2159,11 +2421,11 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#gather
 function gather(
     operand::Value,
     start_indices::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    dimension_numbers,
-    slice_sizes,
-    indices_are_sorted=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension_numbers::Gather,
+    slice_sizes::IR.DenseAttribute{Int64},
+    indices_are_sorted::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand, start_indices]
@@ -2184,8 +2446,8 @@ function gather(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2203,14 +2465,17 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#get_dimension_size
 ```
 """
 function get_dimension_size(
-    operand::Value; result_0=nothing::Union{Nothing,IR.Type}, dimension, location=Location()
+    operand::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Int64,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.get_dimension_size",
@@ -2219,8 +2484,8 @@ function get_dimension_size(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2239,14 +2504,17 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#get_tuple_element
 ```
 """
 function get_tuple_element(
-    operand::Value; result_0=nothing::Union{Nothing,IR.Type}, index, location=Location()
+    operand::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    index::Int32,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("index", index),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.get_tuple_element",
@@ -2255,8 +2523,8 @@ function get_tuple_element(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2278,12 +2546,12 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#if
 """
 function if_(
     pred::Value;
-    result_0::Vector{IR.Type},
+    result::Base.AbstractVecOrTuple{IR.Type},
     true_branch::Region,
     false_branch::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[pred,]
     owned_regions = Region[true_branch, false_branch]
     successors = Block[]
@@ -2315,7 +2583,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#imag
 %result = stablehlo.imag %operand : (tensor<2xcomplex<f32>>) -> tensor<2xf32>
 ```
 """
-function imag(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function imag(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2330,8 +2600,8 @@ function imag(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2351,12 +2621,12 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#infeed
 """
 function infeed(
     token::Value;
-    result_0::Vector{IR.Type},
-    infeed_config=nothing,
-    layout=nothing,
-    location=Location(),
+    result::Base.AbstractVecOrTuple{IR.Type},
+    infeed_config::Union{String,Nothing}=nothing,
+    layout::Union{Vector{<:IR.AbstractAttribute},Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[token,]
     owned_regions = Region[]
     successors = Block[]
@@ -2391,7 +2661,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#iota
 %output = stablehlo.iota dim = 0 : tensor<4x5xi32>
 ```
 """
-function iota(; output::IR.Type, iota_dimension, location=Location())
+function iota(; output::IR.Type, iota_dimension::Int64, location::Location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
@@ -2424,7 +2694,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#is_finite
 %y = stablehlo.is_finite %x : (tensor<7xf64>) -> tensor<7xi1>
 ```
 """
-function is_finite(x::Value; y=nothing::Union{Nothing,IR.Type}, location=Location())
+function is_finite(
+    x::Value; y::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[x,]
     owned_regions = Region[]
@@ -2439,8 +2711,8 @@ function is_finite(x::Value; y=nothing::Union{Nothing,IR.Type}, location=Locatio
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2459,7 +2731,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#log_plus_one
 ```
 """
 function log_plus_one(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -2475,8 +2747,8 @@ function log_plus_one(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2494,7 +2766,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#log
 %result = stablehlo.log %operand : tensor<2x2xf64>
 ```
 """
-function log(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function log(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2509,8 +2783,8 @@ function log(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Lo
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2529,7 +2803,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#logistic
 ```
 """
 function logistic(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -2545,8 +2819,8 @@ function logistic(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2572,12 +2846,12 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#map
 """
 function map(
     inputs::Vector{Value};
-    result_0::IR.Type,
-    dimensions,
+    result::IR.Type,
+    dimensions::IR.DenseAttribute{Int64},
     computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[inputs...,]
     owned_regions = Region[computation,]
     successors = Block[]
@@ -2610,7 +2884,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#maximum
 ```
 """
 function maximum(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2626,8 +2903,8 @@ function maximum(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2646,7 +2923,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#minimum
 ```
 """
 function minimum(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2662,8 +2942,8 @@ function minimum(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2682,7 +2962,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#multiply
 ```
 """
 function multiply(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2698,8 +2981,8 @@ function multiply(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2717,7 +3000,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#negate
 %result = stablehlo.negate %operand : tensor<2x3xi32>
 ```
 """
-function negate(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function negate(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2732,8 +3017,8 @@ function negate(operand::Value; result=nothing::Union{Nothing,IR.Type}, location
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2751,7 +3036,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#not
 %result = stablehlo.not %operand : tensor<5x3x1xi1>
 ```
 """
-function not(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function not(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2766,8 +3053,8 @@ function not(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Lo
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2789,8 +3076,8 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#optimization_barrier
 """
 function optimization_barrier(
     operand::Vector{Value};
-    result=nothing::Union{Nothing,Vector{IR.Type}},
-    location=Location(),
+    result::Union{Nothing,Base.AbstractVecOrTuple{IR.Type}}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand...,]
@@ -2806,8 +3093,8 @@ function optimization_barrier(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2826,7 +3113,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#or
 ```
 """
 function or(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -2842,8 +3132,8 @@ function or(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2864,16 +3154,16 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#outfeed
 function outfeed(
     inputs::Vector{Value},
     token::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    outfeed_config=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    outfeed_config::Union{String,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[inputs..., token]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(outfeed_config) &&
         push!(attributes, namedattribute("outfeed_config", outfeed_config))
 
@@ -2884,8 +3174,8 @@ function outfeed(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2907,11 +3197,11 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#pad
 function pad(
     operand::Value,
     padding_value::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    edge_padding_low,
-    edge_padding_high,
-    interior_padding,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    edge_padding_low::IR.DenseAttribute{Int64},
+    edge_padding_high::IR.DenseAttribute{Int64},
+    interior_padding::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand, padding_value]
@@ -2922,7 +3212,7 @@ function pad(
         namedattribute("edge_padding_high", edge_padding_high),
         namedattribute("interior_padding", interior_padding),
     ]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.pad",
@@ -2931,8 +3221,8 @@ function pad(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2949,13 +3239,15 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#partition_id
 %result = stablehlo.partition_id : tensor<ui32>
 ```
 """
-function partition_id(; result_0=nothing::Union{Nothing,IR.Type}, location=Location())
+function partition_id(;
+    result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.partition_id",
@@ -2964,8 +3256,8 @@ function partition_id(; result_0=nothing::Union{Nothing,IR.Type}, location=Locat
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -2983,7 +3275,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#popcnt
 %result = stablehlo.popcnt %operand : tensor<4xi64>
 ```
 """
-function popcnt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function popcnt(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -2998,8 +3292,8 @@ function popcnt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3018,7 +3312,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#power
 ```
 """
 function power(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -3034,8 +3331,8 @@ function power(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3062,7 +3359,7 @@ function real_dynamic_slice(
     limit_indices::Value,
     strides::Value;
     result::IR.Type,
-    location=Location(),
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[operand, start_indices, limit_indices, strides]
@@ -3096,7 +3393,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#real
 %result = stablehlo.real %operand : (tensor<2xcomplex<f32>>) -> tensor<2xf32>
 ```
 """
-function real(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function real(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -3111,8 +3410,8 @@ function real(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3134,12 +3433,12 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#recv
 """
 function recv(
     token::Value;
-    result_0::Vector{IR.Type},
-    channel_handle,
-    is_host_transfer=nothing,
-    location=Location(),
+    result::Base.AbstractVecOrTuple{IR.Type},
+    channel_handle::ChannelHandle,
+    is_host_transfer::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[token,]
     owned_regions = Region[]
     successors = Block[]
@@ -3182,12 +3481,12 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#reduce
 function reduce(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    result_0::Vector{IR.Type},
-    dimensions,
+    result::Base.AbstractVecOrTuple{IR.Type},
+    dimensions::IR.DenseAttribute{Int64},
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[inputs..., init_values...]
     owned_regions = Region[body,]
     successors = Block[]
@@ -3222,10 +3521,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#reduce_precision
 """
 function reduce_precision(
     operand::Value;
-    output=nothing::Union{Nothing,IR.Type},
-    exponent_bits,
-    mantissa_bits,
-    location=Location(),
+    output::Union{Nothing,IR.Type}=nothing,
+    exponent_bits::Int32,
+    mantissa_bits::Int32,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -3244,8 +3543,8 @@ function reduce_precision(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3275,15 +3574,15 @@ scatters the split parts between the processes to produce the `result`.
 """
 function reduce_scatter(
     operand::Value;
-    result_0::IR.Type,
-    scatter_dimension,
-    replica_groups,
-    channel_handle=nothing,
-    use_global_device_ids=nothing,
+    result::IR.Type,
+    scatter_dimension::Int64,
+    replica_groups::IR.AbstractDenseElementsAttribute{Int64},
+    channel_handle::Union{ChannelHandle,Nothing}=nothing,
+    use_global_device_ids::Union{Bool,Nothing}=nothing,
     computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[computation,]
     successors = Block[]
@@ -3335,16 +3634,16 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#reduce_window
 function reduce_window(
     inputs::Vector{Value},
     init_values::Vector{Value};
-    result_0::Vector{IR.Type},
-    window_dimensions,
-    window_strides=nothing,
-    base_dilations=nothing,
-    window_dilations=nothing,
-    padding=nothing,
+    result::Base.AbstractVecOrTuple{IR.Type},
+    window_dimensions::IR.DenseAttribute{Int64},
+    window_strides::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    base_dilations::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    window_dilations::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    padding::Union{IR.AbstractDenseElementsAttribute{Int64},Nothing}=nothing,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[inputs..., init_values...]
     owned_regions = Region[body,]
     successors = Block[]
@@ -3384,7 +3683,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#remainder
 ```
 """
 function remainder(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -3400,8 +3702,8 @@ function remainder(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3418,13 +3720,13 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#replica_id
 %result = stablehlo.replica_id : tensor<ui32>
 ```
 """
-function replica_id(; result_0=nothing::Union{Nothing,IR.Type}, location=Location())
+function replica_id(; result::Union{Nothing,IR.Type}=nothing, location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.replica_id",
@@ -3433,8 +3735,8 @@ function replica_id(; result_0=nothing::Union{Nothing,IR.Type}, location=Locatio
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3451,8 +3753,8 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#reshape
 %result = stablehlo.reshape %operand : (tensor<2xf32>) -> tensor<1x2xf32>
 ```
 """
-function reshape(operand::Value; result_0::IR.Type, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function reshape(operand::Value; result::IR.Type, location::Location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
@@ -3470,7 +3772,7 @@ function reshape(operand::Value; result_0::IR.Type, location=Location())
     )
 end
 
-function return_(results::Vector{Value}; location=Location())
+function return_(results::Vector{Value}; location::Location=Location())
     op_ty_results = IR.Type[]
     operands = Value[results...,]
     owned_regions = Region[]
@@ -3504,7 +3806,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#reverse
 ```
 """
 function reverse(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, dimensions, location=Location()
+    operand::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    dimensions::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -3520,8 +3825,8 @@ function reverse(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3544,8 +3849,8 @@ function rng_bit_generator(
     initial_state::Value;
     output_state::IR.Type,
     output::IR.Type,
-    rng_algorithm,
-    location=Location(),
+    rng_algorithm::RngAlgorithm.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[output_state, output]
     operands = Value[initial_state,]
@@ -3583,9 +3888,9 @@ function rng(
     a::Value,
     b::Value,
     shape::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    rng_distribution,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    rng_distribution::RngDistribution.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[a, b, shape]
@@ -3601,8 +3906,8 @@ function rng(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3622,7 +3927,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#round_nearest_even
 ```
 """
 function round_nearest_even(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -3638,8 +3943,8 @@ function round_nearest_even(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3658,7 +3963,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#round_nearest_afz
 ```
 """
 function round_nearest_afz(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -3674,8 +3979,8 @@ function round_nearest_afz(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3694,7 +3999,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#rsqrt
 %result = stablehlo.rsqrt %operand : tensor<2x2xf32>
 ```
 """
-function rsqrt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function rsqrt(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -3709,8 +4016,8 @@ function rsqrt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3747,14 +4054,14 @@ function scatter(
     inputs::Vector{Value},
     scatter_indices::Value,
     updates::Vector{Value};
-    result_0::Vector{IR.Type},
-    scatter_dimension_numbers,
-    indices_are_sorted=nothing,
-    unique_indices=nothing,
+    result::Base.AbstractVecOrTuple{IR.Type},
+    scatter_dimension_numbers::Scatter,
+    indices_are_sorted::Union{Bool,Nothing}=nothing,
+    unique_indices::Union{Bool,Nothing}=nothing,
     update_computation::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[inputs..., scatter_indices, updates...]
     owned_regions = Region[update_computation,]
     successors = Block[]
@@ -3809,15 +4116,15 @@ function select_and_scatter(
     operand::Value,
     source::Value,
     init_value::Value;
-    result_0::IR.Type,
-    window_dimensions=nothing,
-    window_strides=nothing,
-    padding=nothing,
+    result::IR.Type,
+    window_dimensions::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    window_strides::Union{IR.DenseAttribute{Int64},Nothing}=nothing,
+    padding::Union{IR.AbstractDenseElementsAttribute{Int64},Nothing}=nothing,
     select::Region,
     scatter::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[operand, source, init_value]
     owned_regions = Region[select, scatter]
     successors = Block[]
@@ -3858,8 +4165,8 @@ function select(
     pred::Value,
     on_true::Value,
     on_false::Value;
-    result=nothing::Union{Nothing,IR.Type},
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[pred, on_true, on_false]
@@ -3875,8 +4182,8 @@ function select(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3899,17 +4206,17 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#send
 function send(
     inputs::Vector{Value},
     token::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    channel_handle,
-    is_host_transfer=nothing,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    channel_handle::ChannelHandle,
+    is_host_transfer::Union{Bool,Nothing}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[inputs..., token]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("channel_handle", channel_handle),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(is_host_transfer) &&
         push!(attributes, namedattribute("is_host_transfer", is_host_transfer))
 
@@ -3920,8 +4227,8 @@ function send(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3942,16 +4249,16 @@ https://www.tensorflow.org/xla/operation_semantics#setdimensionsize
 function set_dimension_size(
     operand::Value,
     size::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    dimension,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    dimension::Int64,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand, size]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.set_dimension_size",
@@ -3960,8 +4267,8 @@ function set_dimension_size(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -3980,7 +4287,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#shift_left
 ```
 """
 function shift_left(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -3996,8 +4306,8 @@ function shift_left(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4016,7 +4326,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#shift_right_arithmet
 ```
 """
 function shift_right_arithmetic(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -4032,8 +4345,8 @@ function shift_right_arithmetic(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4052,7 +4365,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#shift_right_logical
 ```
 """
 function shift_right_logical(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -4068,8 +4384,8 @@ function shift_right_logical(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4087,7 +4403,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#sign
 %result = stablehlo.sign %operand : tensor<5xf64>
 ```
 """
-function sign(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function sign(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -4102,8 +4420,8 @@ function sign(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4121,7 +4439,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#sine
 %result = stablehlo.sine %operand : tensor<2xf32>
 ```
 """
-function sine(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function sine(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -4136,8 +4456,8 @@ function sine(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4168,11 +4488,11 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#slice
 """
 function slice(
     operand::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    start_indices,
-    limit_indices,
-    strides,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    start_indices::IR.DenseAttribute{Int64},
+    limit_indices::IR.DenseAttribute{Int64},
+    strides::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -4183,7 +4503,7 @@ function slice(
         namedattribute("limit_indices", limit_indices),
         namedattribute("strides", strides),
     ]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.slice",
@@ -4192,8 +4512,8 @@ function slice(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4220,13 +4540,13 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#sort
 """
 function sort(
     inputs::Vector{Value};
-    result_0::Vector{IR.Type},
-    dimension=nothing,
-    is_stable=nothing,
+    result::Base.AbstractVecOrTuple{IR.Type},
+    dimension::Union{Int64,Nothing}=nothing,
+    is_stable::Union{Bool,Nothing}=nothing,
     comparator::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[inputs...,]
     owned_regions = Region[comparator,]
     successors = Block[]
@@ -4260,7 +4580,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#sqrt
 %result = stablehlo.sqrt %operand : tensor<2x2xf32>
 ```
 """
-function sqrt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function sqrt(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -4275,8 +4597,8 @@ function sqrt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4295,7 +4617,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#subtract
 ```
 """
 function subtract(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -4311,8 +4636,8 @@ function subtract(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4330,7 +4655,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#tan
 %result = stablehlo.tan %operand : tensor<2x2xf64>
 ```
 """
-function tan(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function tan(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -4345,8 +4672,8 @@ function tan(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Lo
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4364,7 +4691,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#tanh
 %result = stablehlo.tanh %operand : tensor<2xf32>
 ```
 """
-function tanh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function tanh(
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -4379,8 +4708,8 @@ function tanh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4407,9 +4736,14 @@ the index.
 ```
 """
 function torch_index_select(
-    operand::Value, index::Value; result_0::IR.Type, dim, batch_dims, location=Location()
+    operand::Value,
+    index::Value;
+    result::IR.Type,
+    dim::Int64,
+    batch_dims::Int64,
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0,]
+    op_ty_results = IR.Type[result,]
     operands = Value[operand, index]
     owned_regions = Region[]
     successors = Block[]
@@ -4444,7 +4778,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#transpose
 ```
 """
 function transpose(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, permutation, location=Location()
+    operand::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    permutation::IR.DenseAttribute{Int64},
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -4460,8 +4797,8 @@ function transpose(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4487,12 +4824,12 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#triangular_solve
 function triangular_solve(
     a::Value,
     b::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
-    left_side,
-    lower,
-    unit_diagonal,
-    transpose_a,
-    location=Location(),
+    result::Union{Nothing,IR.Type}=nothing,
+    left_side::Bool,
+    lower::Bool,
+    unit_diagonal::Bool,
+    transpose_a::Transpose.T,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[a, b]
@@ -4504,7 +4841,7 @@ function triangular_solve(
         namedattribute("unit_diagonal", unit_diagonal),
         namedattribute("transpose_a", transpose_a),
     ]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "stablehlo.triangular_solve",
@@ -4513,8 +4850,8 @@ function triangular_solve(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4532,7 +4869,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#tuple
 ```
 """
 function tuple(
-    val::Vector{Value}; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    val::Vector{Value};
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[val...,]
@@ -4548,8 +4887,8 @@ function tuple(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4569,8 +4908,10 @@ https://www.tensorflow.org/api_docs/python/tf/einsum
 } : (tensor<4x16xf32>) -> tensor<4xf32>
 ```
 """
-function unary_einsum(operand::Value; result_0::IR.Type, einsum_config, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function unary_einsum(
+    operand::Value; result::IR.Type, einsum_config::String, location::Location=Location()
+)
+    op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
@@ -4604,7 +4945,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#uniform_dequantize
 ```
 """
 function uniform_dequantize(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value; result::Union{Nothing,IR.Type}=nothing, location::Location=Location()
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -4620,8 +4961,8 @@ function uniform_dequantize(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
@@ -4640,7 +4981,7 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#uniform_quantize
 %result = stablehlo.uniform_quantize %operand : (tensor<2xf32>) -> tensor<2x!quant.uniform<i8:f32:0, {0.1:-30,0.5:-20}>>
 ```
 """
-function uniform_quantize(operand::Value; result::IR.Type, location=Location())
+function uniform_quantize(operand::Value; result::IR.Type, location::Location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
     owned_regions = Region[]
@@ -4683,12 +5024,12 @@ cond {
 """
 function while_(
     operand::Vector{Value};
-    result_0::Vector{IR.Type},
+    result::Base.AbstractVecOrTuple{IR.Type},
     cond::Region,
     body::Region,
-    location=Location(),
+    location::Location=Location(),
 )
-    op_ty_results = IR.Type[result_0...,]
+    op_ty_results = IR.Type[result...,]
     operands = Value[operand...,]
     owned_regions = Region[cond, body]
     successors = Block[]
@@ -4721,7 +5062,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#xor
 ```
 """
 function xor(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result::Union{Nothing,IR.Type}=nothing,
+    location::Location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -4737,8 +5081,8 @@ function xor(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=(isempty(op_ty_results) ? nothing : op_ty_results),
+        result_inference=isempty(op_ty_results),
     )
 end
 
