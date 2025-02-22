@@ -251,6 +251,7 @@ function make_mlir_fn(
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
     MLIR.IR.activate!(fnbody)
+
     result = try
         for (i, arg) in enumerate(linear_args)
             raw_arg = MLIR.IR.argument(fnbody, i)
@@ -258,7 +259,11 @@ function make_mlir_fn(
             set_mlir_data!(arg, row_maj_arg)
         end
 
-        Reactant.call_with_reactant(f, traced_args...)
+        if isempty(kwargs)
+            Reactant.call_with_reactant(f, traced_args...)
+        else
+            Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
+        end
     finally
         MLIR.IR.deactivate!(fnbody)
     end

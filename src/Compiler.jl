@@ -588,6 +588,7 @@ function compile_mlir!(
     optimize::Union{Bool,Symbol}=true,
     no_nan::Bool=false,
     backend="gpu",
+    fn_kwargs=(),
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -597,7 +598,7 @@ function compile_mlir!(
     activate_callcache!(callcache)
 
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+        Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true)
     finally
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
@@ -984,6 +985,7 @@ function compile_call_expr(mod, compiler, options, args...)
     call = only(args)
     f_symbol = gensym(:f)
     args_symbol = gensym(:args)
+    kwargs_symbol = gensym(:kwargs)
     compiled_symbol = gensym(:compiled)
 
     if Meta.isexpr(call, :call)
@@ -999,10 +1001,24 @@ function compile_call_expr(mod, compiler, options, args...)
         else
             :($(fname))
         end
-        args_rhs = Expr(:tuple, call.args[2:end]...)
+        args_rhs = call.args[2:end]
+
+        # if (;) is used, we need to extract the kwargs
+        if length(args_rhs) ≥ 1 && Meta.isexpr(args_rhs[1], :parameters)
+            kwargs_rhs = args_rhs[1].args
+            args_rhs = args_rhs[2:end]
+        else
+            kwargs_rhs = ()
+        end
+        kw_idxs = findall(Base.Fix2(Meta.isexpr, :kw), args_rhs)
+        arg_idxs = setdiff(1:length(args_rhs), kw_idxs)
+
+        kwargs_rhs = (kwargs_rhs..., args_rhs[kw_idxs]...)
+        args_rhs = Expr(:tuple, args_rhs[arg_idxs]...)
     elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
         fname = :($(Base.Broadcast.BroadcastFunction)($(call.args[1])))
         args_rhs = only(call.args[2:end])
+        kwargs_rhs = ()
     else
         error("Invalid function call: $(call)")
     end
@@ -1010,8 +1026,12 @@ function compile_call_expr(mod, compiler, options, args...)
     return quote
         $(f_symbol) = $(fname)
         $(args_symbol) = $(args_rhs)
+        $(kwargs_symbol) = (; $(kwargs_rhs...))
         $(compiled_symbol) = $(compiler)(
-            $(f_symbol), $(args_symbol); $(Expr.(:kw, keys(options), values(options))...)
+            $(f_symbol),
+            $(args_symbol);
+            fn_kwargs=$(kwargs_symbol),
+            $(Expr.(:kw, keys(options), values(options))...),
         )
     end,
     (; compiled=compiled_symbol, args=args_symbol)
