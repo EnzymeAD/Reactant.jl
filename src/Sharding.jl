@@ -189,7 +189,7 @@ function (sharding::NamedSharding)(
 end
 
 function get_shardy_tensor_sharding_attribute(
-    sharding::NamedSharding, ctx, mesh_name, mesh_attr
+    sharding::NamedSharding, ctx, mesh_name, mesh_attr; do_transpose=true
 )
     dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(
         undef, length(sharding.partition_spec)
@@ -215,7 +215,7 @@ function get_shardy_tensor_sharding_attribute(
             ctx,
             mesh_name,
             length(dimension_sharding_attrs),
-            reverse(dimension_sharding_attrs),
+            do_transpose ? reverse(dimension_sharding_attrs) : dimension_sharding_attrs,
             0,
             MLIR.API.MlirAttribute[],
         ),
@@ -253,7 +253,7 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
         mesh_op = Reactant.Ops.mesh(mod, sharding.mesh)
 
         tensor_sharding_attr = get_shardy_tensor_sharding_attribute(
-            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr
+            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr; do_transpose=true
         )
 
         return HloSharding(

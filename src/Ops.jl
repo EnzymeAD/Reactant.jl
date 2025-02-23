@@ -2287,33 +2287,34 @@ end
 end
 
 """
-    reshard(
+    sharding_constraint(
         input::Union{TracedRArray,TracedRNumber},
         sharding::Reactant.Sharding.AbstractSharding;
-        location=mlir_stacktrace("reshard", @__FILE__, @__LINE__)
+        location=mlir_stacktrace("sharding_constraint", @__FILE__, @__LINE__)
     )
 
-Produces a [`Reactant.MLIR.Dialects.sdy.reshard`](@ref) operation with the given `input`
-and `sharding`.
+Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation with the given
+`input` and `sharding`.
 """
-@noinline function reshard(
+@noinline function sharding_constraint(
     input::Union{TracedRArray,TracedRNumber},
     sharding::Reactant.Sharding.AbstractSharding;
-    location=mlir_stacktrace("reshard", @__FILE__, @__LINE__),
+    location=mlir_stacktrace("sharding_constraint", @__FILE__, @__LINE__),
 )
     cache = Reactant.Compiler.sdycache()
     if !haskey(cache, sharding.mesh)
         # If reshard is the first shardy operation, we need to register the mesh
         # XXX: This isn't correct. We need to register the mesh outside of any block
+        error("TODO: this correctly")
         mod = MLIR.IR.mmodule()
         Ops.mesh(mod, sharding.mesh; location)
     end
     (; sym_name, mesh_attr) = cache[sharding.mesh]
     tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-        sharding, MLIR.IR.context(), sym_name, mesh_attr
+        sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=false
     )
     resharded_value = MLIR.IR.result(
-        MLIR.Dialects.sdy.reshard(input.mlir_data; sharding=tensor_sharding_attr, location),
+        MLIR.Dialects.sdy.sharding_constraint(input.mlir_data; sharding=tensor_sharding_attr, location),
         1,
     )
     if input isa TracedRNumber
