@@ -323,6 +323,9 @@ Base.@nospecializeinfer function traced_type_inner(
         throw("TracedRNumber cannot be traced")
     elseif mode == TracedToConcrete
         if !Sharding.is_sharded(sharding)
+            if T isa UnionAll
+                return UnionAll(T.var, ConcretePJRTNumber{T.var,1,Sharding.NoShardInfo})
+            end
             return ConcretePJRTNumber{T.parameters[1],1,Sharding.NoShardInfo}
         else
             error("TODO: implement sharding")
