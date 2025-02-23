@@ -6247,6 +6247,10 @@ function mlirLoadIRDLDialects(_module)
     @ccall mlir_c.mlirLoadIRDLDialects(_module::MlirModule)::MlirLogicalResult
 end
 
+function mlirGetDialectHandle__index__()
+    @ccall mlir_c.mlirGetDialectHandle__index__()::MlirDialectHandle
+end
+
 function mlirGetDialectHandle__llvm__()
     @ccall mlir_c.mlirGetDialectHandle__llvm__()::MlirDialectHandle
 end
@@ -10112,6 +10116,8 @@ function sdyOpShardingRuleAttrGet(
     reductionFactors,
     nNeedReplicationFactors,
     needReplicationFactors,
+    nPermutationFactors,
+    permutationFactors,
     isCustomRule,
 )
     @ccall mlir_c.sdyOpShardingRuleAttrGet(
@@ -10126,6 +10132,8 @@ function sdyOpShardingRuleAttrGet(
         reductionFactors::Ptr{Int64},
         nNeedReplicationFactors::intptr_t,
         needReplicationFactors::Ptr{Int64},
+        nPermutationFactors::intptr_t,
+        permutationFactors::Ptr{Int64},
         isCustomRule::Bool,
     )::MlirAttribute
 end
@@ -10184,6 +10192,18 @@ end
 
 function sdyOpShardingRuleAttrGetNeedReplicationFactorsElem(attr, pos)
     @ccall mlir_c.sdyOpShardingRuleAttrGetNeedReplicationFactorsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::Int64
+end
+
+function sdyOpShardingRuleAttrGetPermutationFactorsSize(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetPermutationFactorsSize(
+        attr::MlirAttribute
+    )::intptr_t
+end
+
+function sdyOpShardingRuleAttrGetPermutationFactorsElem(attr, pos)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetPermutationFactorsElem(
         attr::MlirAttribute, pos::intptr_t
     )::Int64
 end
