@@ -2201,7 +2201,8 @@ end
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
 
-Produces a `sdy.mesh` operation with the given `mesh` and `device_ids`.
+Produces a [`Reactant.MLIR.Dialects.sdy.mesh`](@ref) operation with the given `mesh` and
+`device_ids`.
 
 Based on the provided `sym_name``, we generate a unique name for the mesh in the module's
 `SymbolTable`. Note that users shouldn't use this sym_name directly, instead they should
@@ -2278,6 +2279,24 @@ end
         sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx),
         mesh_attr=MLIR.IR.Attribute(mesh_attr),
     )
+end
+
+"""
+    reshard(
+        input::Union{TracedRArray,TracedRNumber},
+        sharding::Reactant.Sharding.AbstractSharding;
+        location=mlir_stacktrace("reshard", @__FILE__, @__LINE__)
+    )
+
+Produces a [`Reactant.MLIR.Dialects.sdy.reshard`](@ref) operation with the given `input`
+and `sharding`.
+"""
+@noinline function reshard(
+    input::Union{TracedRArray,TracedRNumber},
+    sharding::Reactant.Sharding.AbstractSharding;
+    location=mlir_stacktrace("reshard", @__FILE__, @__LINE__),
+)
+    error("TODO: implement reshard")
 end
 
 end # module Ops

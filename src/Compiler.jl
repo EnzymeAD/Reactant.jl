@@ -835,7 +835,7 @@ function compile_mlir!(
 
     res_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
     if res_attrs isa MLIR.IR.Attribute
-        res_attrs = [
+        res_attrs = MLIR.IR.Attribute[
             res_attrs[i - 1] for (i, present) in enumerate(results_mask) if present
         ]
     end

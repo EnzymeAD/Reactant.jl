@@ -189,7 +189,7 @@ function (sharding::NamedSharding)(
 end
 
 function get_shardy_tensor_sharding_attribute(
-    sharding::NamedSharding, ctx, ::Integer, mesh_name, mesh_attr
+    sharding::NamedSharding, ctx, mesh_name, mesh_attr
 )
     dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(
         undef, length(sharding.partition_spec)
@@ -253,11 +253,7 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
         mesh_op = Reactant.Ops.mesh(mod, sharding.mesh)
 
         tensor_sharding_attr = get_shardy_tensor_sharding_attribute(
-            sharding,
-            ctx,
-            length(sharding.partition_spec),
-            mesh_op.sym_name,
-            mesh_op.mesh_attr,
+            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr
         )
 
         return HloSharding(
@@ -295,14 +291,14 @@ function (sharding::HloSharding)(
 end
 
 function get_shardy_tensor_sharding_attribute(
-    sharding::HloSharding, ctx, N::Integer, mesh_name, mesh_attr; kwargs...
+    sharding::HloSharding, ctx, mesh_name, mesh_attr; kwargs...
 )
     GC.@preserve sharding begin
         return MLIR.IR.Attribute(
             @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
                 sharding.hlo_sharding.ptr::Ptr{Cvoid},
                 mesh_attr.attribute::MLIR.API.MlirAttribute,
-                Int64(N)::Int64,
+                Int64(length(sharding.is_closed))::Int64,
                 Bool[sharding.is_closed...]::Ptr{Bool},
                 Int64[sharding.priority...]::Ptr{Int64},
             )::MLIR.API.MlirAttribute
