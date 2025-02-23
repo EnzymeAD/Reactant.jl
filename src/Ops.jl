@@ -2189,15 +2189,48 @@ end
 end
 
 # Shardy Ops
+"""
+    mesh(
+        mod::MLIR.IR.Module, mesh::Reactant.Sharding.Mesh;
+        sym_name::String="mesh",
+        location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
+    )
+    mesh(
+        mod::MLIR.IR.Module, mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
+        device_ids::Vector{Int64}; sym_name::String="mesh",
+        location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
+    )
+
+Produces a `sdy.mesh` operation with the given `mesh` and `device_ids`.
+
+Based on the provided `sym_name``, we generate a unique name for the mesh in the module's
+`SymbolTable`. Note that users shouldn't use this sym_name directly, instead they should
+use the returned `sym_name` to refer to the mesh in the module.
+
+!!! warning
+
+    The `device_ids` argument are the logical device ids, not the physical device ids.
+    For example, if the physical device ids are `[2, 4, 123, 293]`, the corresponding
+    logical device ids are `[0, 1, 2, 3]`.
+
+## Returned Value
+
+We return a NamedTuple with the following fields:
+
+- `sym_name`: The unique name of the mesh in the module's `SymbolTable`.
+- `mesh_attr`: `sdy::mlir::MeshAttr` representing the mesh.
+"""
 @noinline function mesh(
     mod::MLIR.IR.Module,
     m::Reactant.Sharding.Mesh;
+    sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     return mesh(
         mod,
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
         collect(Int64, m.logical_device_ids);
+        sym_name,
         location,
     )
 end
@@ -2205,8 +2238,8 @@ end
 @noinline function mesh(
     mod::MLIR.IR.Module,
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-    device_ids::Vector{Int64}; # logical device ids not the physical device ids
-    sym_name=nothing,
+    device_ids::Vector{Int64};
+    sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     # See https://github.com/openxla/shardy/blob/f9d83e779a58b811b848c4edfaf68e88b636787d/shardy/dialect/sdy/ir/verifiers.cc#L647-L699 for the checks
@@ -2234,10 +2267,7 @@ end
         device_ids,
     )
 
-    sym_name === nothing && (sym_name = "mesh")
-    if sym_name isa String
-        sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
-    end
+    sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
     MLIR.IR.mmodule!(mod) do
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
