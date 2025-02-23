@@ -613,6 +613,12 @@ function compile_mlir!(
     activate_callcache!(callcache)
     activate_sdycache!(sdycache)
 
+    # Save in the TLS whether we are raising.  We identify that condition by
+    # checking whether the user set an explicit list of passes, or chose
+    # `raise=true` to use the default passes.
+    is_raising = raise isa String || raise
+    task_local_storage(:reactant_is_raising, is_raising)
+
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true)
     finally
@@ -647,14 +653,14 @@ function compile_mlir!(
         )
         @assert curesulthandler !== nothing
         curesulthandler = Base.reinterpret(UInt, curesulthandler)
-        kern = if raise isa String || raise
+        kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
         else
             "lower-kernel,canonicalize"
         end
         jit = "lower-jit{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     else
-        kern = if raise isa String || raise
+        kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
         else
             "lower-kernel,canonicalize"
