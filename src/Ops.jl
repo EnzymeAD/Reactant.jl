@@ -2113,9 +2113,7 @@ end
             if isnothing(argpath)
                 error("if_condition: could not find path for resarg $path")
             end
-            Reactant.TracedUtils.set!(
-                args, argpath, MLIR.IR.result(if_compiled, residx)
-            )
+            Reactant.TracedUtils.set!(args, argpath, MLIR.IR.result(if_compiled, residx))
         end
     end
 
