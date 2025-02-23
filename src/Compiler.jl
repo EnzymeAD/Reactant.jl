@@ -595,7 +595,11 @@ function compile_mlir!(
     }(),
     sdycache=IdDict{
         Reactant.Sharding.Mesh,
-        @NamedTuple{sym_name::MLIR.IR.Attribute, mesh_attr::MLIR.IR.Attribute}
+        @NamedTuple{
+            sym_name::MLIR.IR.Attribute,
+            mesh_attr::MLIR.IR.Attribute,
+            mesh_op::MLIR.IR.Operation,
+        }
     }();
     optimize::Union{Bool,Symbol}=true,
     no_nan::Bool=false,

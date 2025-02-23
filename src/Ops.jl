@@ -2192,13 +2192,15 @@ end
 # Shardy Ops
 """
     mesh(
-        mod::MLIR.IR.Module, mesh::Reactant.Sharding.Mesh;
+        mesh::Reactant.Sharding.Mesh; mod::MLIR.IR.Module=MLIR.IR.mmodule(),
         sym_name::String="mesh",
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
     mesh(
-        mod::MLIR.IR.Module, mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-        device_ids::Vector{Int64}; sym_name::String="mesh",
+        mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
+        device_ids::Vector{Int64};
+        sym_name::String="mesh",
+        mod::MLIR.IR.Module=MLIR.IR.mmodule(),
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
 
@@ -2221,19 +2223,20 @@ We return a NamedTuple with the following fields:
 
 - `sym_name`: The unique name of the mesh in the module's `SymbolTable`.
 - `mesh_attr`: `sdy::mlir::MeshAttr` representing the mesh.
+- `mesh_op`: The `sdy.mesh` operation.
 """
 @noinline function mesh(
-    mod::MLIR.IR.Module,
     m::Reactant.Sharding.Mesh;
+    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
     cache !== nothing && haskey(cache, m) && return cache[m]
     result = mesh(
-        mod,
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
         collect(Int64, m.logical_device_ids);
+        mod,
         sym_name,
         location,
     )
@@ -2242,9 +2245,9 @@ We return a NamedTuple with the following fields:
 end
 
 @noinline function mesh(
-    mod::MLIR.IR.Module,
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
     device_ids::Vector{Int64};
+    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
@@ -2275,14 +2278,20 @@ end
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    MLIR.IR.mmodule!(mod) do
+    mesh_op = MLIR.IR.mmodule!(mod) do
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
+
+    # mesh_op needs to be moved to the beginning of the module
+    mesh_op = MLIR.IR.rmfromparent!(mesh_op)
+    mod_body = MLIR.IR.body(mod)
+    pushfirst!(mod_body, mesh_op)
 
     # We return the name of the mesh, since the operation is a Symbol op
     return (;
         sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx),
         mesh_attr=MLIR.IR.Attribute(mesh_attr),
+        mesh_op=mesh_op,
     )
 end
 
@@ -2302,19 +2311,15 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     location=mlir_stacktrace("sharding_constraint", @__FILE__, @__LINE__),
 )
     cache = Reactant.Compiler.sdycache()
-    if !haskey(cache, sharding.mesh)
-        # If reshard is the first shardy operation, we need to register the mesh
-        # XXX: This isn't correct. We need to register the mesh outside of any block
-        error("TODO: this correctly")
-        mod = MLIR.IR.mmodule()
-        Ops.mesh(mod, sharding.mesh; location)
-    end
+    haskey(cache, sharding.mesh) || Ops.mesh(sharding.mesh; location)
     (; sym_name, mesh_attr) = cache[sharding.mesh]
     tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
         sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=false
     )
     resharded_value = MLIR.IR.result(
-        MLIR.Dialects.sdy.sharding_constraint(input.mlir_data; sharding=tensor_sharding_attr, location),
+        MLIR.Dialects.sdy.sharding_constraint(
+            input.mlir_data; sharding=tensor_sharding_attr, location
+        ),
         1,
     )
     if input isa TracedRNumber

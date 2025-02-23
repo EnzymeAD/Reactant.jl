@@ -228,7 +228,7 @@ function make_mlir_fn(
             if Reactant.Sharding.is_sharded(k)
                 is_sharded = true
                 traced_args_to_shardings[v] = k.sharding
-                Reactant.Ops.mesh(mod, k.sharding.mesh)
+                Reactant.Ops.mesh(k.sharding.mesh)
             end
         end
     end

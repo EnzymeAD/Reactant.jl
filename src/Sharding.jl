@@ -247,10 +247,11 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
         ctx = MLIR.IR.Context(Reactant.registry[], false)
         @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     end
-    mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
 
     MLIR.IR.context!(ctx) do
-        mesh_op = Reactant.Ops.mesh(mod, sharding.mesh)
+        mesh_op = Reactant.Ops.mesh(
+            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+        )
 
         tensor_sharding_attr = get_shardy_tensor_sharding_attribute(
             sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr; do_transpose=true
