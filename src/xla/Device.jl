@@ -10,18 +10,14 @@ function get_local_device_id end
 function device_kind end
 function default_memory end
 function memories end
+function is_addressable end
 
 """
     device_ordinal(device::Device)
-    device_ordinal(client::XLA.AbstractClient, local_device_id::Int)
 
-Given the device or local device id, return the corresponding global device ordinal in the client.
+Given the device, return the corresponding global device ordinal in the client.
 """
 function device_ordinal end
-
-function device_ordinal(client::AbstractClient, local_device_id::Integer)
-    return device_ordinal(get_addressable_device(client, local_device_id))
-end
 
 function Base.string(device::AbstractDevice)
     client = XLA.client(device)
