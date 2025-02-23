@@ -74,10 +74,12 @@ function create_result(
     return Expr(:new, T, elems...)
 end
 
-function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-    device_to_array_slices, partition_spec = path_to_shard_info[path]
+function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh, N::Integer)
+    device_to_array_slices, hlo_sharding = path_to_shard_info[path]
     delete!(path_to_shard_info, path)
-    sharding = Reactant.Sharding.NamedSharding(sharding_mesh, partition_spec)
+    sharding = Reactant.Sharding.HloSharding(
+        hlo_sharding, sharding_mesh, ntuple(Returns(true), N), ntuple(Returns(-1), N)
+    )
     return Reactant.Sharding.ShardInfo(sharding, device_to_array_slices)
 end
 
@@ -88,7 +90,9 @@ function create_result(
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
             return :(ConcreteRNumber{$T,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $sharding
             ))
@@ -98,7 +102,9 @@ function create_result(
     end
 
     if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
         return :(ConcreteRNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data...,)), $sharding
         ))
@@ -114,7 +120,9 @@ function create_result(
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
             return :(ConcreteRArray{$T,$N,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $(tocopy.shape), $sharding
             ))
@@ -124,7 +132,9 @@ function create_result(
     end
 
     if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
         return :(ConcreteRArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
@@ -477,11 +487,8 @@ function compile_mlir(f, args; client=nothing, kwargs...)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    if client !== nothing
-        backend = XLA.platform_name(client)
-    else
-        backend = XLA.platform_name(XLA.default_backend[])
-    end
+    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+
     if backend == "CUDA"
         backend = "GPU"
     elseif backend == "CPU"
@@ -492,13 +499,6 @@ function compile_mlir(f, args; client=nothing, kwargs...)
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         mlir_fn_res = compile_mlir!(mod, f, args; backend, kwargs...)
-
-        client, _ = __resolve_device_and_client(
-            client,
-            mlir_fn_res.seen_args,
-            mlir_fn_res.linear_args,
-            mlir_fn_res.is_sharded,
-        )
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
@@ -1079,7 +1079,6 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
-            device_ids = mesh.sorted_device_ids
             if Reactant.Sharding.is_sharded(carg)
                 # Currently disabling the error since we roundtrip from MHLO to generate
                 # the shardings
@@ -1091,7 +1090,7 @@ function codegen_flatten!(
 
                 push!(flatten_code, :($usbuf = $flatcode.data))
                 for j in 1:length(mesh)
-                    sbuf = Symbol(:sbuf_, i, "_", device_ids[j])
+                    sbuf = Symbol(:sbuf_, i, "_", mesh.device_ids[j])
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
                 end
@@ -1101,18 +1100,18 @@ function codegen_flatten!(
                 )
                 push!(flatten_code, :($usbuf = $flatcode))
                 device_to_array_slices = XLA.sharding_to_concrete_array_indices(
-                    condensed_op_sharding, size(carg), mesh
+                    condensed_op_sharding, size(carg), mesh.device_ids
                 )
                 for j in 1:length(mesh)
-                    local_device_id = device_ids[j]
-                    buf = Symbol(:buf_, i, :_, local_device_id)
+                    device_id = mesh.device_ids[j]
+                    buf = Symbol(:buf_, i, :_, device_id)
                     slice = device_to_array_slices[j]
                     push!(
                         flatten_code,
                         :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
                     )
-                    sbuf = Symbol(:sbuf_, i, :_, local_device_id)
-                    device = XLA.get_addressable_device(client, local_device_id)
+                    sbuf = Symbol(:s, buf)
+                    device = XLA.get_device(client, device_id)
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
                 end
@@ -1386,7 +1385,7 @@ end
 
 function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     if is_sharded
-        client === nothing && (client = XLA.default_backend[])
+        client === nothing && (client = XLA.default_backend())
         return client, nothing
     end
 
@@ -1412,14 +1411,14 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
         if device !== nothing
             client = XLA.client(device)
         else
-            client = XLA.default_backend[]
-            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
+            client = XLA.default_backend()
+            device = XLA.default_device(client)
         end
     else
         if device !== nothing
             @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
         else
-            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
+            device = XLA.default_device(client)
         end
     end
 
@@ -1432,11 +1431,8 @@ function compile_xla(f, args; client=nothing, kwargs...)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    if client !== nothing
-        backend = XLA.platform_name(client)
-    else
-        backend = XLA.platform_name(XLA.default_backend[])
-    end
+    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+
     if backend == "CUDA"
         backend = "GPU"
     elseif backend == "CPU"
@@ -1463,8 +1459,8 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # compile MLIR module to XLA executable
-        local_device_ids = if mlir_fn_res.is_sharded
-            collect(Int64, mlir_fn_res.sharding_mesh.sorted_device_ids)
+        global_device_ids = if mlir_fn_res.is_sharded
+            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
         else
             Int64[]
         end
@@ -1477,7 +1473,9 @@ function compile_xla(f, args; client=nothing, kwargs...)
             num_outputs=length(mlir_fn_res.linear_results),
             num_parameters=length(mlir_fn_res.linear_args),
             mlir_fn_res.is_sharded,
-            local_device_ids,
+            global_device_ids,
+            mlir_fn_res.num_replicas,
+            mlir_fn_res.num_partitions,
         )
 
         return mod, exec, mlir_fn_res, device, client
@@ -1525,10 +1523,10 @@ function compile(f, args; sync=false, kwargs...)
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
         output_shardings = XLA.get_output_shardings(exec)
-        XLA.compute_array_indices_and_partition_spec.(
+        XLA.compute_array_indices_and_hlo_sharding.(
             output_shardings,
             size.(mlir_fn_res.linear_results),
-            (mlir_fn_res.sharding_mesh,),
+            (mlir_fn_res.sharding_mesh.logical_device_ids,),
         )
     else
         ntuple(Returns(nothing), length(linear_results))

@@ -2151,14 +2151,17 @@ end
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     return mesh(
-        mod, [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))], vec(m); location
+        mod,
+        [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
+        collect(Int64, m.logical_device_ids);
+        location,
     )
 end
 
 @noinline function mesh(
     mod::MLIR.IR.Module,
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-    device_ids::Vector{Int64};
+    device_ids::Vector{Int64}; # logical device ids not the physical device ids
     sym_name=nothing,
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
@@ -2197,7 +2200,10 @@ end
     end
 
     # We return the name of the mesh, since the operation is a Symbol op
-    return (; sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx), mesh_attr)
+    return (;
+        sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx),
+        mesh_attr=MLIR.IR.Attribute(mesh_attr),
+    )
 end
 
 end # module Ops
