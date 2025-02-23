@@ -1,5 +1,6 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
+load("@xla//xla/tsl:tsl.default.bzl", "tsl_grpc_cc_dependencies")
 # load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
 licenses(["notice"])
 
@@ -541,6 +542,7 @@ cc_library(
         "@xla//xla/pjrt/distributed:distributed",
         "@xla//xla/pjrt/distributed:client",
         "@xla//xla/pjrt/distributed:service",
+        "@xla//xla/python/ifrt_proxy/common:grpc_credentials",
         "@xla//xla/service/spmd/shardy/stablehlo_round_trip:export_shardings",
         "@xla//xla/service/spmd/shardy/stablehlo_round_trip:stablehlo_import",
 
@@ -646,7 +648,7 @@ cc_library(
             "@xla//xla/backends/cpu/collectives:gloo_kv_store",
             "@gloo//:transport_tcp",
         ],
-    }),
+    }) + tsl_grpc_cc_dependencies(),
 )
 
 # cc_shared_library(

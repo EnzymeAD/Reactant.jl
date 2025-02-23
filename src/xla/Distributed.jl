@@ -26,6 +26,7 @@ function DistributedRuntimeClient(
             Int32(heartbeat_interval_in_seconds)::Int32,
             Cint(max_missing_heartbeats)::Cint,
             use_compression::Bool,
+            false::Bool,            #=use_secure_credentials=#
         )::Ptr{Cvoid}
     end
     return DistributedRuntimeClient(client)
@@ -81,6 +82,7 @@ function DistributedRuntimeService(
             Cint(max_missing_heartbeats)::Cint,
             Int32(cluster_register_timeout_in_minutes)::Int32,
             Int32(shutdown_timeout_in_minutes)::Int32,
+            false::Bool,            #=use_secure_credentials=#
         )::Ptr{Cvoid}
     end
     return DistributedRuntimeService(service)

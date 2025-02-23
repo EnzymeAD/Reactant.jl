@@ -98,23 +98,30 @@ for (backend, counter) in (
     (:GPUClient, :gpu_client_count),
     (:TPUClient, :tpu_client_count),
 )
-    main_fn = Symbol(:MakeIFRTPJRT, backend)
-    @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
-        if checkcount
-            @assert $(counter)[] == 0
+    pjrt_fn = Symbol(:MakePJRT, backend)
+    proxy_fn = Symbol(:MakeProxy, backend)
+
+    # XXX: call it something other than `version`??
+    @eval function $(backend)(
+        args...; checkcount::Bool=true, version::Symbol=:PJRT, num_nodes=1, kwargs...
+    )
+        checkcount && (@assert iszero($(counter)[]))
+        if version == :PJRT
+            client, refstr = $(pjrt_fn)(args...; num_nodes, kwargs...)
+        elseif version == :Proxy
+            client, refstr = $(proxy_fn)(args...; num_nodes, kwargs...)
+        else
+            error("Invalid version: $version")
         end
-        client, refstr = $(main_fn)(args...; kwargs...)
         client == C_NULL && throw(AssertionError(unsafe_string(refstr[])))
         XLA.LLVMclopts("-nvptx-fma-level=1")
-        if checkcount
-            # Only increment the counter if we successfully created a client
-            $(counter)[] += 1
-        end
+        # Only increment the counter if we successfully created a client
+        checkcount && ($(counter)[] += 1)
         return Client(client)
     end
 end
 
-function MakeIFRTPJRTCPUClient(;
+function MakePJRTCPUClient(;
     node_id::Integer=0,
     num_nodes::Integer=1,
     asynchronous::Bool=true,
@@ -137,7 +144,36 @@ function MakeIFRTPJRTCPUClient(;
     return client, refstr
 end
 
-function MakeIFRTPJRTGPUClient(;
+function MakeProxyCPUClient(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    asynchronous::Bool=true,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+    coordinator_address::String=XLA.global_state.coordinator_address,
+)
+    refstr = Ref{Cstring}()
+    distributed_runtime_client =
+        distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
+
+    GC.@preserve refstr distributed_runtime_client begin
+        @ccall MLIR.API.mlir_c.ifrt_proxy_grpc_server_create_from_ifrt_client_factory_cpu(
+            coordinator_address::Cstring,
+            asynchronous::UInt8,
+            node_id::Cint,
+            num_nodes::Cint,
+            distributed_runtime_client::Ptr{Cvoid},
+            refstr::Ptr{Cstring},
+        )::Ptr{Cvoid}
+
+        client = @ccall MLIR.API.mlir_c.ifrt_proxy_create_client(
+            coordinator_address::Cstring, 12::Cint
+        )::Ptr{Cvoid}
+    end
+
+    return client, refstr
+end
+
+function MakePJRTGPUClient(;
     node_id::Integer=0,
     num_nodes::Integer=1,
     platform::String="gpu",
@@ -168,7 +204,9 @@ function MakeIFRTPJRTGPUClient(;
     return client, refstr
 end
 
-function MakeIFRTPJRTTPUClient(;
+# TODO: Proxy GPU client
+
+function MakePJRTTPUClient(;
     tpu_path::String,
     node_id::Integer=0,
     num_nodes::Integer=1,
@@ -190,3 +228,5 @@ function MakeIFRTPJRTTPUClient(;
 
     return client, refstr
 end
+
+# TODO: Proxy TPU client

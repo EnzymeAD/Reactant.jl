@@ -65,13 +65,18 @@
 
 // PJRT
 #include "xla/pjrt/cpu/cpu_client.h"
-#include "xla/pjrt/distributed/client.h"
-#include "xla/pjrt/distributed/distributed.h"
-#include "xla/pjrt/distributed/service.h"
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
+
+// Distributed
+#include "grpcpp/channel.h"
+#include "grpcpp/create_channel.h"
+#include "xla/pjrt/distributed/client.h"
+#include "xla/pjrt/distributed/distributed.h"
+#include "xla/pjrt/distributed/service.h"
+#include "xla/python/ifrt_proxy/common/grpc_credentials.h"
 
 // CPU collectives
 #include "xla/backends/cpu/collectives/mpi_collectives.h"
@@ -1388,66 +1393,6 @@ FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
 
 #pragma region IfRtClient
 
-// XXX: Bring back with the correct API
-// extern "C" ifrt::proxy::GrpcServer *
-// ifrt_proxy_grpc_server_create_from_ifrt_client_factory_cpu(
-//     const char *c_address, uint8_t asynchronous, int node_id) {
-//   std::string address = c_address;
-
-//   return MyValueOrThrow(
-//              ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
-//                  address,
-//                  [asynchronous,
-//                   node_id]() -> absl::StatusOr<std::shared_ptr<ifrt::Client>>
-//                   {
-//                    auto pjrt_client = std::shared_ptr<PjRtClient>(
-//                        MakeCPUClient(asynchronous, node_id));
-//                    return std::shared_ptr<ifrt::Client>(
-//                        xla::ifrt::PjRtClient::Create(pjrt_client).release());
-//                  }))
-//       .release();
-// }
-
-// extern "C" ifrt::proxy::GrpcServer *
-// ifrt_proxy_grpc_server_create_from_ifrt_client_factory_gpu(
-//     int node_id, int num_nodes, int *allowed_devices, int
-//     num_allowed_devices, double memory_fraction, bool preallocate, const char
-//     *platform_name, const char **error) {
-//   return MyValueOrThrow(
-//              ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
-//                  std::string(),
-//                  [node_id, num_nodes, allowed_devices, num_allowed_devices,
-//                   memory_fraction, preallocate, platform_name,
-//                   error]() -> absl::StatusOr<std::shared_ptr<ifrt::Client>> {
-//                    auto pjrt_client =
-//                    std::shared_ptr<PjRtClient>(MakeGPUClient(
-//                        node_id, num_nodes, allowed_devices,
-//                        num_allowed_devices, memory_fraction, preallocate,
-//                        platform_name, error));
-//                    return std::shared_ptr<ifrt::Client>(
-//                        xla::ifrt::PjRtClient::Create(pjrt_client).release());
-//                  }))
-//       .release();
-// }
-
-// extern "C" ifrt::proxy::GrpcServer *
-// ifrt_proxy_grpc_server_create_from_ifrt_client_factory_tpu(
-//     const char *c_address, const char *tpu_path, const char **error) {
-//   std::string address = c_address;
-//
-//   return MyValueOrThrow(
-//              xla::ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
-//                  address,
-//                  [](xla::ifrt::AttributeMap initialization_data) ->
-//                  absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> {
-//                    auto pjrt_client =
-//                        std::shared_ptr<xla::PjRtClient>(GetCApiClient("TPU"));
-//                    return
-//                    xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
-//                  }))
-//       .release();
-// }
-
 extern "C" void ifrt_proxy_grpc_server_dtor(ifrt::proxy::GrpcServer *server) {
   delete server;
 }
@@ -1462,8 +1407,8 @@ extern "C" void ifrt_proxy_grpc_server_wait(ifrt::proxy::GrpcServer *server) {
 }
 
 // `c_proxy_server_address` must be of the form
-// `<backend-transport>:<backend-address>`; e.g. "grpc:localhost"
-// NOTE not sure if we must pass the port, but probably yes
+// `<backend-address>`; e.g. "localhost:12345". We add "grpc://" to the address
+// to make it consistent with the rest of the API.
 // by default, set `connection_timeout_in_minutes` to 2
 extern "C" ifrt::Client *
 ifrt_proxy_create_client(const char *c_proxy_server_address,
@@ -1474,8 +1419,13 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
       nullptr, // callback `on_disconnect`
       nullptr, // callback `on_connection_update`
   };
+  // TODO: check that if ALTS isn't setup correctly, then we use insecure
+  // credentials
   return MyValueOrThrow(
-             ifrt::proxy::CreateClient(proxy_server_address, options))
+             ifrt::proxy::CreateClient(
+                 absl::StrCat("grpc://",
+                              static_cast<std::string>(c_proxy_server_address)),
+                 options))
       .release();
 }
 
@@ -1571,6 +1521,28 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
                                kv_store);
 }
 
+extern "C" ifrt::proxy::GrpcServer *
+ifrt_proxy_grpc_server_create_from_ifrt_client_factory_cpu(
+    const char *c_address, uint8_t asynchronous, int node_id, int num_nodes,
+    void *distributed_runtime_client, const char **error) {
+  return MyValueOrThrow(
+             ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
+                 static_cast<std::string>(c_address),
+                 [asynchronous, node_id, num_nodes, distributed_runtime_client,
+                  error](ifrt::AttributeMap initialization_data)
+                     -> absl::StatusOr<std::shared_ptr<ifrt::Client>> {
+                   auto ifrt_client = ifrt_make_pjrt_cpu_client(
+                       asynchronous, node_id, num_nodes,
+                       distributed_runtime_client, error);
+                   if (ifrt_client == nullptr) {
+                     return absl::InternalError(absl::StrCat(
+                         "Failed to create IFRT CPU client: ", *error));
+                   }
+                   return std::shared_ptr<ifrt::Client>(ifrt_client);
+                 }))
+      .release();
+}
+
 extern "C" HeldPjRtClient *pjrt_make_gpu_client_shared(
     int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
     double memory_fraction, bool preallocate, const char *platform_name,
@@ -1596,6 +1568,34 @@ extern "C" ifrt::Client *ifrt_make_pjrt_gpu_client(
                                kv_store);
 }
 
+extern "C" ifrt::proxy::GrpcServer *
+ifrt_proxy_grpc_server_create_from_ifrt_client_factory_gpu(
+    const char *c_address, int node_id, int num_nodes, int *allowed_devices,
+    int num_allowed_devices, double memory_fraction, bool preallocate,
+    const char *platform_name, const char **error,
+    void *distributed_runtime_client) {
+
+  return MyValueOrThrow(
+             ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
+                 static_cast<std::string>(c_address),
+                 [node_id, num_nodes, allowed_devices, num_allowed_devices,
+                  memory_fraction, preallocate, platform_name, error,
+                  distributed_runtime_client](
+                     ifrt::AttributeMap initialization_data)
+                     -> absl::StatusOr<std::shared_ptr<ifrt::Client>> {
+                   auto ifrt_client = ifrt_make_pjrt_gpu_client(
+                       node_id, num_nodes, allowed_devices, num_allowed_devices,
+                       memory_fraction, preallocate, platform_name, error,
+                       distributed_runtime_client);
+                   if (ifrt_client == nullptr) {
+                     return absl::InternalError(absl::StrCat(
+                         "Failed to create IFRT GPU client: ", *error));
+                   }
+                   return std::shared_ptr<ifrt::Client>(ifrt_client);
+                 }))
+      .release();
+}
+
 extern "C" HeldPjRtClient *pjrt_make_tpu_client_shared(const char *tpu_path,
                                                        const char **error) {
   PjRtClient *client = MakeTPUClient(tpu_path, error);
@@ -1612,6 +1612,29 @@ ifrt_make_pjrt_tpu_client(const char *tpu_path, const char **error, int node_id,
   return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
                                distributed_runtime_client, error, "tpu",
                                kv_store);
+}
+
+extern "C" ifrt::proxy::GrpcServer *
+ifrt_proxy_grpc_server_create_from_ifrt_client_factory_tpu(
+    const char *c_address, const char *tpu_path, const char **error,
+    int node_id, int num_nodes, void *distributed_runtime_client) {
+  return MyValueOrThrow(
+             ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
+                 static_cast<std::string>(c_address),
+                 [tpu_path, error, node_id, num_nodes,
+                  distributed_runtime_client](
+                     ifrt::AttributeMap initialization_data)
+                     -> absl::StatusOr<std::shared_ptr<ifrt::Client>> {
+                   auto ifrt_client = ifrt_make_pjrt_tpu_client(
+                       tpu_path, error, node_id, num_nodes,
+                       distributed_runtime_client);
+                   if (ifrt_client == nullptr) {
+                     return absl::InternalError(absl::StrCat(
+                         "Failed to create IFRT TPU client: ", *error));
+                   }
+                   return std::shared_ptr<ifrt::Client>(ifrt_client);
+                 }))
+      .release();
 }
 
 extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
@@ -2054,7 +2077,8 @@ GetDistributedRuntimeClient(char *c_address, int32_t node_id,
                             // int32_t init_timeout,
                             int32_t shutdown_timeout_in_minutes,
                             int32_t heartbeat_interval_in_seconds,
-                            int max_missing_heartbeats, bool use_compression) {
+                            int max_missing_heartbeats, bool use_compression,
+                            bool use_secure_credentials) {
   xla::DistributedRuntimeClient::Options options;
   options.node_id = node_id;
   options.rpc_timeout = absl::Seconds(rpc_timeout_in_seconds);
@@ -2063,10 +2087,18 @@ GetDistributedRuntimeClient(char *c_address, int32_t node_id,
   options.heartbeat_interval = absl::Seconds(heartbeat_interval_in_seconds);
   options.max_missing_heartbeats = max_missing_heartbeats;
 
-  std::string address = c_address;
+  if (!use_secure_credentials)
+    return reactant::capture(xla::GetDistributedRuntimeClient(
+        static_cast<std::string>(c_address), options, use_compression));
 
+  auto channel = xla::GetDistributedRuntimeClientChannel(
+      static_cast<std::string>(c_address),
+      xla::ifrt::proxy::GetClientCredentials(), use_compression);
+
+  std::unique_ptr<xla::DistributedRuntimeClient> client =
+      xla::GetDistributedRuntimeClient(channel, options);
   return reactant::capture(
-      xla::GetDistributedRuntimeClient(address, options, use_compression));
+      std::shared_ptr<xla::DistributedRuntimeClient>(client.release()));
 }
 
 extern "C" void free_distributed_runtime_client(
@@ -2091,7 +2123,7 @@ extern "C" void distributed_runtime_client_shutdown(
 extern "C" xla::DistributedRuntimeService *GetDistributedRuntimeService(
     char *c_address, int num_nodes, int32_t heartbeat_interval_in_seconds,
     int max_missing_heartbeats, int32_t cluster_register_timeout_in_minutes,
-    int32_t shutdown_timeout_in_minutes) {
+    int32_t shutdown_timeout_in_minutes, bool use_secure_credentials) {
   xla::CoordinationServiceImpl::Options options;
   options.num_nodes = num_nodes;
   options.heartbeat_interval = absl::Seconds(heartbeat_interval_in_seconds);
@@ -2100,9 +2132,14 @@ extern "C" xla::DistributedRuntimeService *GetDistributedRuntimeService(
       absl::Minutes(cluster_register_timeout_in_minutes);
   options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
 
-  std::string address = c_address;
+  if (!use_secure_credentials)
+    return MyValueOrThrow(xla::GetDistributedRuntimeService(
+                              static_cast<std::string>(c_address), options))
+        .release();
 
-  return MyValueOrThrow(xla::GetDistributedRuntimeService(address, options))
+  return MyValueOrThrow(xla::DistributedRuntimeService::Get(
+                            static_cast<std::string>(c_address),
+                            xla::ifrt::proxy::GetServerCredentials(), options))
       .release();
 }
 
