@@ -125,15 +125,18 @@ end
 
 function ConcretePJRTArray(
     data::Array{T,N};
-    client::XLA.AbstractClient=XLA.default_backend[],
+    client::XLA.AbstractClient=XLA.default_backend(),
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
     if !Sharding.is_sharded(sharding)
         if device === nothing
-            idx = idx === nothing ? XLA.default_device_idx[] : idx
-            device = XLA.get_addressable_device(client, idx)
+            if idx === nothing
+                device = XLA.default_device(client)
+            else
+                device = XLA.get_addressable_device(client, idx)
+            end
         else
             if idx !== nothing
                 device_from_idx = XLA.get_addressable_device(client, idx)
