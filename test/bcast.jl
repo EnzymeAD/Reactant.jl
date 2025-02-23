@@ -54,12 +54,12 @@ function test()
 end
 @test test() == "module {\n}"
 
-@testset "ConcreteRArray broadcasting" begin
+@testset "ConcretePJRTArray broadcasting" begin
     x = ones(10, 10)
     y = ones(10, 10)
 
-    x_ca = Reactant.ConcreteRArray(x)
-    y_ca = Reactant.ConcreteRArray(y)
+    x_ca = Reactant.to_rarray(x)
+    y_ca = Reactant.to_rarray(y)
 
     @testset "Broadcasting" begin
         @test x .+ y ≈ @jit x_ca .+ y_ca

@@ -14,7 +14,7 @@ using InteractiveUtils
 
     r_res = sum(x)
 
-    a = ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
 
     c_res = @allowscalar sum(a)
     @test c_res ≈ r_res
@@ -27,7 +27,7 @@ end
 
     r_res = fastmax(x)
 
-    a = ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
 
     c_res = @allowscalar fastmax(a)
     @test c_res ≈ r_res
@@ -43,7 +43,7 @@ sinexpbc(x) = sinexp.(x)
 
     r_res = sinexpbc(x)
 
-    a = ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
 
     c_res = @allowscalar sinexpbc(a)
     @test c_res ≈ r_res
@@ -57,7 +57,7 @@ sum_compare(x) = sum(x) > 0
 
 @testset "Basic mapreduce" begin
     x = rand(Float32, 10)
-    a = ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
     r_res = sumexp(x)
 
     f_res = @jit sumexp(a)
@@ -78,7 +78,7 @@ end
     x = rand(2, 10)
     r_res = mysoftmax!(x)
 
-    a = ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
 
     f_res = @jit mysoftmax!(a)
     @test f_res ≈ r_res
@@ -88,7 +88,7 @@ bcast_cos(x) = cos.(x)
 
 @testset "Basic cos" begin
     x = rand(3, 2)
-    c = ConcreteRArray(x)
+    c = Reactant.to_rarray(x)
 
     @test @jit(bcast_cos(c)) ≈ cos.(x)
 end
@@ -118,7 +118,7 @@ function resgrad_ip(x)
 end
 
 @testset "Basic grad cos" begin
-    c = ConcreteRArray(ones(3, 2))
+    c = Reactant.to_rarray(ones(3, 2))
 
     @test @jit(grad_ip(c)) ≈ -sin.(ones(3, 2))
 
@@ -129,21 +129,21 @@ end
 end
 
 @testset "matmul" begin
-    c = ConcreteRArray(ones(50, 70))
-    d = ConcreteRArray(ones(70, 30))
+    c = Reactant.to_rarray(ones(50, 70))
+    d = Reactant.to_rarray(ones(70, 30))
 
     @test @jit(*(c, d)) ≈ *(ones(50, 70), ones(70, 30))
 end
 
-@testset "similar ConcreteRArray" begin
-    c = ConcreteRArray(ones(50, 70))
+@testset "similar Reactant.to_rarray" begin
+    c = Reactant.to_rarray(ones(50, 70))
     sim_c = similar(c)
     @test typeof(sim_c) == typeof(c) && size(sim_c) == size(sim_c)
 end
 
 @testset "@code_hlo" begin
-    W = ConcreteRArray(randn(Float32, 10, 20))
-    x = ConcreteRArray(randn(Float32, 20, 5))
+    W = Reactant.to_rarray(randn(Float32, 10, 20))
+    x = Reactant.to_rarray(randn(Float32, 20, 5))
     res = @code_hlo W * x
     res_repr = sprint(show, res)
 
@@ -151,8 +151,8 @@ end
 end
 
 @testset "@code_hlo broadcasting" begin
-    x = ConcreteRArray(randn(Float32, 2, 2))
-    y = ConcreteRArray(randn(Float32, 2, 2))
+    x = Reactant.to_rarray(randn(Float32, 2, 2))
+    y = Reactant.to_rarray(randn(Float32, 2, 2))
     res = @code_hlo (.+)(x, y)
     res_repr = sprint(show, res)
 
@@ -161,7 +161,7 @@ end
 
 @testset "Statistics: `mean` & `var`" begin
     x = randn(2, 3, 4)
-    x_ca = ConcreteRArray(x)
+    x_ca = Reactant.to_rarray(x)
 
     @test @jit(mean(x_ca)) ≈ mean(x)
     @test @jit(mean(x_ca; dims=1)) ≈ mean(x; dims=1)
@@ -425,18 +425,18 @@ end
         x_ra = Reactant.to_rarray(x; track_numbers=Number)
         f2 = @compile f1(x_ra)
         @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) ≈ 5 * 5.2
-        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) isa ConcreteRNumber
+        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) isa ConcretePJRTNumber
 
         x_ra = Reactant.to_rarray(x)
         f3 = @compile f1(x_ra)
         @test f3(Reactant.to_rarray((5, 5.2))) ≈ f1(x)
-        @test !(f3(Reactant.to_rarray((5, 5.2))) isa ConcreteRNumber)
+        @test !(f3(Reactant.to_rarray((5, 5.2))) isa ConcretePJRTNumber)
         @test f3(Reactant.to_rarray((5, 5.2))) isa Number
 
         x_ra = Reactant.to_rarray(x; track_numbers=Int)
         f4 = @compile f1(x_ra)
         @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) ≈ 5 * 3.14
-        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) isa ConcreteRNumber
+        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) isa ConcretePJRTNumber
     end
 
     @testset "Mixed" begin
@@ -480,7 +480,7 @@ end
     @test Float32(x) isa Float32
     @test Float64(x) isa Float64
     @test Int(x) isa Int
-    @test float(x) isa ConcreteRNumber{Float64}
+    @test float(x) isa ConcretePJRTNumber{Float64}
 end
 
 @testset "concrete number with fill" begin
@@ -516,9 +516,9 @@ end
     for x in (rand(Float32, (3, 3)), rand(Float64))
         intop = gensym("int_$op")
         @eval begin
-            @test @jit($op.(ConcreteRNumber.($x))) == $op.($x)
+            @test @jit($op.(ConcretePJRTNumber.($x))) == $op.($x)
             $intop(x) = $op(Int, x)
-            @test @jit($intop.(ConcreteRNumber.($x))) == $intop.($x)
+            @test @jit($intop.(ConcretePJRTNumber.($x))) == $intop.($x)
         end
     end
 end
@@ -533,7 +533,7 @@ end
     using ArrayInterface
 
     x_res = collect(reshape(1.0:4.0, 2, 1, 2))
-    x_ca = ConcreteRNumber.(x_res)
+    x_ca = ConcretePJRTNumber.(x_res)
 
     y_ca1 = @allowscalar ArrayInterface.aos_to_soa(x_ca)
     @test y_ca1 ≈ x_res
@@ -548,7 +548,7 @@ end
     x = randn(2, 3)
     x_ra = Reactant.to_rarray(x)
 
-    @testset "ConcreteRArray" begin
+    @testset "Reactant.to_rarray" begin
         y = collect(x_ra)
         @test y == x
         @test y !== x_ra
@@ -563,7 +563,7 @@ end
     x = 5
     x_ra = ConcreteRNumber(x)
 
-    @testset "ConcreteRNumber" begin
+    @testset "ConcretePJRTNumber" begin
         y = collect(x_ra)
         @test y isa Array{Int,0}
     end
@@ -598,12 +598,12 @@ end
     )
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
-    ) isa ConcreteRNumber{Float64}
+    ) isa ConcretePJRTNumber{Float64}
     @test 0.0f0 ==
         @jit ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
-    ) isa ConcreteRNumber{Float32}
+    ) isa ConcretePJRTNumber{Float32}
 
     cond = ConcreteRNumber(true)
     x = ConcreteRNumber(1.0)
@@ -613,7 +613,7 @@ end
     @test @jit(ifelse(cond, 0.0, 1.0)) == ConcreteRNumber(0.0)
 end
 
-@testset "fill! and zero on ConcreteRArray" begin
+@testset "fill! and zero on Reactant.to_rarray" begin
     x_ra = Reactant.to_rarray(rand(3, 4))
 
     z = zero(x_ra)
@@ -659,10 +659,10 @@ end
         return x .* eta, eta
     end
 
-    res = @jit test_convert(ConcreteRArray(rand(4, 2)), ConcreteRNumber(3.0f0))
+    res = @jit test_convert(Reactant.to_rarray(rand(4, 2)), ConcreteRNumber(3.0f0))
 
     @test res[1] isa ConcreteRArray{Float64,2}
-    @test res[2] isa ConcreteRNumber{Float64}
+    @test res[2] isa ConcretePJRTNumber{Float64}
 end
 
 @testset "stack" begin
@@ -753,14 +753,14 @@ end
 
     @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
         @test @jit(fn.(x_ra)) ≈ fn.(x)
-        @test @jit(fn.(x_ra)) isa ConcreteRNumber{Float32}
+        @test @jit(fn.(x_ra)) isa ConcretePJRTNumber{Float32}
     end
     @testset for fn in (sincospi, sincos)
         res = @jit fn(x_ra)
         @test res[1] ≈ fn(x)[1]
         @test res[2] ≈ fn(x)[2]
-        @test res[1] isa ConcreteRNumber{Float32}
-        @test res[2] isa ConcreteRNumber{Float32}
+        @test res[1] isa ConcretePJRTNumber{Float32}
+        @test res[2] isa ConcretePJRTNumber{Float32}
     end
 end
 
@@ -842,7 +842,7 @@ end
 end
 
 @testset "Broadcasting with Range" begin
-    x = ConcreteRArray(rand(10))
+    x = Reactant.to_rarray(rand(10))
     fn(x) = x .+ (1:length(x))
 
     @test @jit(fn(x)) ≈ fn(Array(x))

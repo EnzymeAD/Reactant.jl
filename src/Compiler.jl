@@ -7,8 +7,8 @@ import ..Reactant:
     Reactant,
     MLIR,
     XLA,
-    ConcreteRArray,
-    ConcreteRNumber,
+    ConcretePJRTArray,
+    ConcretePJRTNumber,
     TracedRArray,
     TracedRNumber,
     RArray,
@@ -82,55 +82,63 @@ function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
 end
 
 function create_result(
-    tocopy::ConcreteRNumber{T,D,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcretePJRTNumber{T,D,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    sharding_mesh,
 ) where {T,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
             sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-            return :(ConcreteRNumber{$T,length($(restore)),$(typeof(sharding))}(
+            return :(ConcretePJRTNumber{$T,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $sharding
             ))
         else
-            return :(ConcreteRNumber{$T}($restore))
+            return :(ConcretePJRTNumber{$T}($restore))
         end
     end
 
     if path_to_shard_info !== nothing # restore sharding
         sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-        return :(ConcreteRNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
+        return :(ConcretePJRTNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data...,)), $sharding
         ))
     end
     # We will set the data for this later
-    return :(ConcreteRNumber{$T}($(tocopy.data)))
+    return :(ConcretePJRTNumber{$T}($(tocopy.data)))
 end
 
 function create_result(
-    tocopy::ConcreteRArray{T,N,D,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcretePJRTArray{T,N,D,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    sharding_mesh,
 ) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
             sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-            return :(ConcreteRArray{$T,$N,length($(restore)),$(typeof(sharding))}(
+            return :(ConcretePJRTArray{$T,$N,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $(tocopy.shape), $sharding
             ))
         else
-            return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
+            return :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
         end
     end
 
     if path_to_shard_info !== nothing # restore sharding
         sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-        return :(ConcreteRArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
+        return :(ConcretePJRTArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
     end
     # We will set the data for this later
-    return :(ConcreteRArray{$T,$N,$D,$S}(
+    return :(ConcretePJRTArray{$T,$N,$D,$S}(
         $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
     ))
 end
@@ -1214,7 +1222,7 @@ function codegen_unflatten!(
                             :(
                                 $cache_dict = $(IdDict{
                                     Union{TracedRArray,TracedRNumber},
-                                    Union{ConcreteRArray,ConcreteRNumber},
+                                    Union{ConcretePJRTArray,ConcretePJRTNumber},
                                 }())
                             ),
                         )
@@ -1225,7 +1233,7 @@ function codegen_unflatten!(
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcreteRArray{
+                                $cache_dict[$final_val] = ConcretePJRTArray{
                                     $(Reactant.unwrapped_eltype)($final_val),
                                     ndims($final_val),
                                 }(
@@ -1238,7 +1246,7 @@ function codegen_unflatten!(
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcreteRNumber{
+                                $cache_dict[$final_val] = ConcretePJRTNumber{
                                     $(Reactant.unwrapped_eltype)($final_val)
                                 }(
                                     $concrete_res_name
