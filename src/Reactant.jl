@@ -44,6 +44,7 @@ include("Devices.jl")
 include("Interpreter.jl")
 include("Profiler.jl")
 include("Types.jl")
+include("Distributed.jl")
 
 const with_profiler = Profiler.with_profiler
 
@@ -218,15 +219,13 @@ end
 
 function __init__()
     initialize_ptrs()
-    return initialize_dialect()
+    initialize_dialect()
+    return nothing
 end
 
-function set_default_backend(backend::XLA.AbstractClient)
-    return XLA.default_backend[] = backend
-end
-
-function set_default_backend(backend::String)
-    return set_default_backend(XLA.backends[backend])
+function set_default_backend(backend::Union{String,XLA.AbstractClient})
+    XLA.set_default_backend(backend)
+    return nothing
 end
 
 include("Precompile.jl")
