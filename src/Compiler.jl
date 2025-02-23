@@ -603,7 +603,7 @@ function compile_mlir!(
     no_nan::Bool=false,
     backend="gpu",
     fn_kwargs=(),
-    raise::Bool=false,
+    raise::Union{Bool,String}=false,
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -647,14 +647,14 @@ function compile_mlir!(
         )
         @assert curesulthandler !== nothing
         curesulthandler = Base.reinterpret(UInt, curesulthandler)
-        kern = if raise
+        kern = if raise isa String || raise
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
         else
             "lower-kernel,canonicalize"
         end
         jit = "lower-jit{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     else
-        kern = if raise
+        kern = if raise isa String || raise
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
         else
             "lower-kernel,canonicalize"
@@ -665,7 +665,11 @@ function compile_mlir!(
     opt_passes = optimization_passes(; no_nan, sroa=true)
     opt_passes2 = optimization_passes(; no_nan, sroa=false)
 
-    raise = if raise
+    raise_passes = if raise isa String
+        # Raising passes were specified
+        raise
+    elseif raise
+        # Raise enabled but use default passes
         "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,raise-affine-to-stablehlo,arith-raise{stablehlo=true}," *
         opt_passes2
     else
@@ -686,7 +690,7 @@ function compile_mlir!(
                     "enzyme-simplify-math",
                     opt_passes2,
                     kern,
-                    raise,
+                    raise_passes,
                     jit,
                 ],
                 ',',
@@ -723,7 +727,7 @@ function compile_mlir!(
                     "enzyme-simplify-math",
                     opt_passes2,
                     kern,
-                    raise,
+                    raise_passes,
                 ],
                 ',',
             ),
@@ -787,7 +791,7 @@ function compile_mlir!(
                     "enzyme-simplify-math",
                     opt_passes2,
                     kern,
-                    raise,
+                    raise_passes,
                     jit,
                 ],
                 ',',
@@ -804,7 +808,7 @@ function compile_mlir!(
                 [
                     "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                     kern,
-                    raise,
+                    raise_passes,
                     jit,
                 ],
                 ',',
