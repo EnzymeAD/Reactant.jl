@@ -44,21 +44,15 @@ for (jlop, xlaop, field) in (
     @eval function XLA.$(jlop)(exec::LoadedExecutable)
         exec.is_sharded || return XLA.OpSharding[]
 
-        jl_op_shardings = [Ref{XLA.JLOpSharding}() for _ in 1:(exec.$(field))]
-        jl_op_shardings_ptr = [
-            Base.unsafe_convert(Ptr{XLA.JLOpSharding}, sharding) for
-            sharding in jl_op_shardings
-        ]
+        op_shardings = Ref{NTuple{exec.$(field),Ptr{Cvoid}}}()
 
-        GC.@preserve jl_op_shardings begin
+        GC.@preserve op_shardings begin
             @ccall MLIR.API.mlir_c.$(xlaop)(
-                exec.exec::Ptr{Cvoid},
-                jl_op_shardings_ptr::Ptr{Ptr{XLA.JLOpSharding}},
-                exec.$(field)::Int32,
+                exec.exec::Ptr{Cvoid}, op_shardings::Ptr{Ptr{Cvoid}}, exec.$(field)::Int32
             )::Cvoid
         end
 
-        return map(Base.Fix1(convert, XLA.OpSharding) ∘ getindex, jl_op_shardings)
+        return [XLA.OpSharding(op_sharding) for op_sharding in op_shardings[]]
     end
 end
 
@@ -81,12 +75,11 @@ function XLA.compile(
     device::Union{Device,Nothing},
     mod::MLIR.IR.Module;
     is_sharded::Bool=false,
-    local_device_ids::Vector{Int64}=Int64[],
+    global_device_ids::Vector{Int64}=Int64[],
     num_outputs::Int64,
     num_parameters::Int64,
 )
     device_id = is_sharded ? Int64(-1) : Int64(XLA.device_ordinal(device))
-    global_device_ids = Int64.(XLA.device_ordinal.((client,), local_device_ids))
     GC.@preserve client mod begin
         exec = @ccall MLIR.API.mlir_c.ClientCompile(
             client.client::Ptr{Cvoid},
