@@ -74,10 +74,12 @@ function create_result(
     return Expr(:new, T, elems...)
 end
 
-function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-    device_to_array_slices, partition_spec = path_to_shard_info[path]
+function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh, N::Integer)
+    device_to_array_slices, hlo_sharding = path_to_shard_info[path]
     delete!(path_to_shard_info, path)
-    sharding = Reactant.Sharding.NamedSharding(sharding_mesh, partition_spec)
+    sharding = Reactant.Sharding.HloSharding(
+        hlo_sharding, sharding_mesh, ntuple(Returns(true), N), ntuple(Returns(-1), N)
+    )
     return Reactant.Sharding.ShardInfo(sharding, device_to_array_slices)
 end
 
@@ -92,7 +94,9 @@ function create_result(
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
             return :(ConcretePJRTNumber{$T,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $sharding
             ))
@@ -102,7 +106,9 @@ function create_result(
     end
 
     if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
         return :(ConcretePJRTNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data...,)), $sharding
         ))
@@ -122,7 +128,9 @@ function create_result(
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
             return :(ConcretePJRTArray{$T,$N,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $(tocopy.shape), $sharding
             ))
@@ -132,7 +140,9 @@ function create_result(
     end
 
     if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
         return :(ConcretePJRTArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
@@ -1107,7 +1117,6 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
-            device_ids = mesh.sorted_device_ids
             if Reactant.Sharding.is_sharded(carg)
                 # Currently disabling the error since we roundtrip from MHLO to generate
                 # the shardings
@@ -1119,7 +1128,7 @@ function codegen_flatten!(
 
                 push!(flatten_code, :($usbuf = $flatcode.data))
                 for j in 1:length(mesh)
-                    sbuf = Symbol(:sbuf_, i, "_", device_ids[j])
+                    sbuf = Symbol(:sbuf_, i, "_", mesh.device_ids[j])
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
                 end
@@ -1129,18 +1138,18 @@ function codegen_flatten!(
                 )
                 push!(flatten_code, :($usbuf = $flatcode))
                 device_to_array_slices = XLA.sharding_to_concrete_array_indices(
-                    condensed_op_sharding, size(carg), mesh
+                    condensed_op_sharding, size(carg), mesh.device_ids
                 )
                 for j in 1:length(mesh)
-                    local_device_id = device_ids[j]
-                    buf = Symbol(:buf_, i, :_, local_device_id)
+                    device_id = mesh.device_ids[j]
+                    buf = Symbol(:buf_, i, :_, device_id)
                     slice = device_to_array_slices[j]
                     push!(
                         flatten_code,
                         :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
                     )
-                    sbuf = Symbol(:sbuf_, i, :_, local_device_id)
-                    device = XLA.get_addressable_device(client, local_device_id)
+                    sbuf = Symbol(:s, buf)
+                    device = XLA.get_device(client, device_id)
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
                 end
@@ -1491,8 +1500,8 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # compile MLIR module to XLA executable
-        local_device_ids = if mlir_fn_res.is_sharded
-            collect(Int64, mlir_fn_res.sharding_mesh.sorted_device_ids)
+        global_device_ids = if mlir_fn_res.is_sharded
+            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
         else
             Int64[]
         end
@@ -1505,7 +1514,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
             num_outputs=length(mlir_fn_res.linear_results),
             num_parameters=length(mlir_fn_res.linear_args),
             mlir_fn_res.is_sharded,
-            local_device_ids,
+            global_device_ids,
         )
 
         return mod, exec, mlir_fn_res, device, client
@@ -1553,10 +1562,10 @@ function compile(f, args; sync=false, kwargs...)
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
         output_shardings = XLA.get_output_shardings(exec)
-        XLA.compute_array_indices_and_partition_spec.(
+        XLA.compute_array_indices_and_hlo_sharding.(
             output_shardings,
             size.(mlir_fn_res.linear_results),
-            (mlir_fn_res.sharding_mesh,),
+            (mlir_fn_res.sharding_mesh.logical_device_ids,),
         )
     else
         ntuple(Returns(nothing), length(linear_results))
