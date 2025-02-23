@@ -3,12 +3,12 @@ mutable struct LoadedExecutable <: XLA.AbstractLoadedExecutable
     num_outputs::Int64
     num_parameters::Int64
     is_sharded::Bool
+    num_replicas::Int64
+    num_partitions::Int64
 
-    function LoadedExecutable(
-        exec::Ptr{Cvoid}, num_outputs::Int64, num_parameters::Int64, is_sharded::Bool
-    )
+    function LoadedExecutable(exec::Ptr{Cvoid}, args...)
         @assert exec != C_NULL
-        return finalizer(free_exec, new(exec, num_outputs, num_parameters, is_sharded))
+        return finalizer(free_exec, new(exec, args...))
     end
 end
 
@@ -26,16 +26,9 @@ function XLA.client(exec::LoadedExecutable)
     end
 end
 
-for (jlop, xlaop) in (
-    (:num_replicas, :PjRtLoadedExecutableNumReplicas),
-    (:num_partitions, :PjRtLoadedExecutableNumPartitions),
-)
-    @eval function XLA.$(jlop)(exec::LoadedExecutable)
-        GC.@preserve exec begin
-            return @ccall MLIR.API.mlir_c.$(xlaop)(exec.exec::Ptr{Cvoid})::Cint
-        end
-    end
-end
+XLA.num_partitions(exec::LoadedExecutable) = exec.num_partitions
+XLA.num_replicas(exec::LoadedExecutable) = exec.num_replicas
+XLA.num_devices(exec::LoadedExecutable) = XLA.num_replicas(exec) * XLA.num_partitions(exec)
 
 for (jlop, xlaop, field) in (
     (:get_output_shardings, :PjRtLoadedExecutableGetOuputShardings, :num_outputs),
@@ -78,6 +71,8 @@ function XLA.compile(
     global_device_ids::Vector{Int64}=Int64[],
     num_outputs::Int64,
     num_parameters::Int64,
+    num_replicas::Int64,
+    num_partitions::Int64,
 )
     device_id = is_sharded ? Int64(-1) : Int64(XLA.device_ordinal(device))
     GC.@preserve client mod begin
@@ -91,7 +86,9 @@ function XLA.compile(
             XLA.CUDA_DATA_DIR[]::Cstring,
         )::Ptr{Cvoid}
     end
-    return LoadedExecutable(exec, num_outputs, num_parameters, is_sharded)
+    return LoadedExecutable(
+        exec, num_outputs, num_parameters, is_sharded, num_replicas, num_partitions
+    )
 end
 
 function execute_ir(N, M, n_outs, fn, with_device::Bool, nmesh_ids::Int64)

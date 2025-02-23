@@ -35,25 +35,27 @@ include("Memory.jl")
 
 include("PJRT/PJRT.jl")
 
-@kwdef mutable struct BackendState
+include("IFRT/IFRT.jl")
+
+@kwdef mutable struct PJRTBackendState
     initialized::Bool = false
     clients::Dict{String,PJRT.Client} = Dict{String,PJRT.Client}()
     default_client::PJRT.Client = PJRT.Client(C_NULL; skip_check=true)
 end
 
-function Base.getproperty(bs::BackendState, sym::Symbol)
+function Base.getproperty(bs::PJRTBackendState, sym::Symbol)
     (sym === :initialized || bs.initialized) && return getfield(bs, sym)
-    initialize_default_clients!(bs)
+    initialize_default_pjrt_clients!(bs)
     return getfield(bs, sym)
 end
 
-function Base.setproperty!(bs::BackendState, sym::Symbol, val)
+function Base.setproperty!(bs::PJRTBackendState, sym::Symbol, val)
     (sym === :initialized || bs.initialized) && return setfield!(bs, sym, val)
-    initialize_default_clients!(bs)
+    initialize_default_pjrt_clients!(bs)
     return setfield!(bs, sym, val)
 end
 
-const global_backend_state = BackendState()
+const global_backend_state = PJRTBackendState()
 const global_state = State()
 
 client(backend::String) = global_backend_state.clients[backend]
@@ -72,8 +74,13 @@ end
 
 function update_global_state!(args...; kwargs...)
     update!(global_state, args...; kwargs...)
-    # We need to update the clients based on the new state
-    initialize_default_clients!(global_backend_state)
+    # We conditionally initialize for now, since a lot of options that are set are not
+    # necessarily supported by PJRT. This makes testing for IFRT quite hard.
+    # Once we move to IFRT completely, we can remove this.
+    if global_backend_state.initialized
+        # We need to update the clients based on the new state
+        initialize_default_pjrt_clients!(global_backend_state)
+    end
     return nothing
 end
 
@@ -100,9 +107,9 @@ function __init__()
     end
 
     if haskey(ENV, "REACTANT_VISIBLE_GPU_DEVICES")
-        global_state.local_device_ids =
+        global_state.local_gpu_device_ids =
             parse.(Int, split(ENV["REACTANT_VISIBLE_GPU_DEVICES"], ","))
-        @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_device_ids
+        @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids
     end
 
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
@@ -110,16 +117,27 @@ function __init__()
     return nothing
 end
 
-function initialize_default_clients!(state::BackendState)
+function initialize_default_pjrt_clients!(state::PJRTBackendState)
     was_initialized = state.initialized
     state.initialized = true
+    distributed_runtime_client = if global_state.num_processes > 1
+        @assert global_state.client !== nothing
+        global_state.client
+    else
+        nothing
+    end
+    common_kwargs = (;
+        node_id=global_state.process_id,
+        num_nodes=global_state.num_processes,
+        distributed_runtime_client,
+    )
 
     # CPU
     if was_initialized && haskey(state.clients, "cpu")
         XLA.free_client(state.clients["cpu"])
         XLA.PJRT.cpu_client_count[] -= 1
     end
-    cpu = PJRT.CPUClient(global_state.process_id, global_state.num_processes)
+    cpu = PJRT.CPUClient(; common_kwargs..., asynchronous=true)
     state.clients["cpu"] = cpu
     state.default_client = cpu
 
@@ -142,8 +160,9 @@ function initialize_default_clients!(state::BackendState)
                     XLA.free_client(state.clients["tpu"])
                     XLA.PJRT.tpu_client_count[] -= 1
                 end
-                # XXX: process_id? num_processes?
-                tpu = PJRT.TPUClient(dataset_dir * "/libtpu.so")
+                tpu = PJRT.TPUClient(;
+                    tpu_path=dataset_dir * "/libtpu.so", common_kwargs...
+                )
                 state.clients["tpu"] = tpu
                 state.default_client = tpu
             catch e
@@ -152,22 +171,12 @@ function initialize_default_clients!(state::BackendState)
         else
             if !Reactant.precompiling()
                 try
-                    distributed_runtime_client = if global_state.num_processes > 1
-                        @assert global_state.client !== nothing
-                        global_state.client
-                    else
-                        nothing
-                    end
-
                     if was_initialized && haskey(state.clients, "gpu")
                         XLA.free_client(state.clients["gpu"])
                         XLA.PJRT.gpu_client_count[] -= 1
                     end
-                    gpu = PJRT.GPUClient(
-                        global_state.process_id,
-                        global_state.num_processes;
-                        allowed_devices=global_state.local_device_ids,
-                        distributed_runtime_client,
+                    gpu = PJRT.GPUClient(;
+                        common_kwargs..., allowed_devices=global_state.local_gpu_device_ids
                     )
                     state.clients["gpu"] = gpu
                     state.default_client = gpu

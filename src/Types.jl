@@ -135,11 +135,11 @@ function ConcretePJRTArray(
             if idx === nothing
                 device = XLA.default_device(client)
             else
-                device = XLA.get_addressable_device(client, idx)
+                device = XLA.get_device(client, idx)
             end
         else
             if idx !== nothing
-                device_from_idx = XLA.get_addressable_device(client, idx)
+                device_from_idx = XLA.get_device(client, idx)
                 @assert device_from_idx == device "If both `idx` and `device` are \
                                                    specified, `idx` must match `device`"
             end

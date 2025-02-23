@@ -38,7 +38,15 @@ function Base.size(buffer::Buffer)
     GC.@preserve buffer begin
         sz = @ccall MLIR.API.mlir_c.BufferShape(buffer.buffer::Ptr{Cvoid})::Ptr{Int64}
     end
-    return [unsafe_load(sz, i) for i in 1:ndims(buffer)]
+    return Tuple(unsafe_wrap(Array, sz, ndims(buffer)))
+end
+
+function Base.eltype(buffer::Buffer)
+    GC.@preserve buffer begin
+        return XLA.julia_type(
+            @ccall MLIR.API.mlir_c.BufferPrimitiveType(buffer.buffer::Ptr{Cvoid})::Cint
+        )
+    end
 end
 
 function XLA.device(buffer::Buffer)
@@ -65,12 +73,6 @@ function XLA.buffer_on_cpu(buffer::Buffer)
     end
 end
 
-function Base.convert(::Type{<:Array{T}}, buffer::Buffer) where {T}
-    arr = zeros(T, reverse(size(buffer))...)
-    XLA.to_host(buffer, arr)
-    return arr
-end
-
 function XLA.to_host(buffer::Buffer, data)
     GC.@preserve buffer begin
         @ccall MLIR.API.mlir_c.BufferToHost(
@@ -94,3 +96,5 @@ function XLA.copy_buffer_to_device(buffer::Buffer, dev::Device)
         )
     end
 end
+
+XLA.sharding(::Buffer) = error("PJRT Buffers are not sharded.")

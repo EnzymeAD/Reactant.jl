@@ -8,24 +8,24 @@ function initialize(;
     coordinator_address::Union{Nothing,String}=nothing,
     num_processes::Union{Nothing,Integer}=nothing,
     process_id::Union{Nothing,Integer}=nothing,
-    local_device_ids::Union{Nothing,Vector{Int}}=nothing,
+    local_gpu_device_ids::Union{Nothing,Vector{Int}}=nothing,
     initialization_timeout_in_seconds::Integer=300,
     kwargs...,
 )
     @assert !initialized[] "`Distributed.initialize` has already been called"
 
-    (coordinator_address, num_processes, process_id, local_device_ids) = auto_detect_unset_distributed_params(;
+    (coordinator_address, num_processes, process_id, local_gpu_device_ids) = auto_detect_unset_distributed_params(;
         coordinator_address,
         num_processes,
         process_id,
-        local_device_ids,
+        local_gpu_device_ids,
         initialization_timeout_in_seconds,
     )
 
-    @debug "Detected Reactant distributed params" coordinator_address num_processes process_id local_device_ids
+    @debug "Detected Reactant distributed params" coordinator_address num_processes process_id local_gpu_device_ids
 
     Reactant.XLA.update_global_state!(;
-        coordinator_address, num_processes, process_id, local_device_ids, kwargs...
+        coordinator_address, num_processes, process_id, local_gpu_device_ids, kwargs...
     )
 
     @debug "New Global State" Reactant.XLA.global_state
@@ -57,14 +57,14 @@ function auto_detect_unset_distributed_params(;
     coordinator_address::Union{Nothing,String}=nothing,
     num_processes::Union{Nothing,Integer}=nothing,
     process_id::Union{Nothing,Integer}=nothing,
-    local_device_ids::Union{Nothing,Vector{Int}}=nothing,
+    local_gpu_device_ids::Union{Nothing,Vector{Int}}=nothing,
     initialization_timeout_in_seconds::Integer=300,
 )
     if all(
         Base.Fix2(!==, nothing),
-        (coordinator_address, num_processes, process_id, local_device_ids),
+        (coordinator_address, num_processes, process_id, local_gpu_device_ids),
     )
-        return coordinator_address, num_processes, process_id, local_device_ids
+        return coordinator_address, num_processes, process_id, local_gpu_device_ids
     end
 
     idx = findfirst(is_env_present, detector_list)
@@ -91,11 +91,11 @@ function auto_detect_unset_distributed_params(;
         process_id = get_process_id(detector)
     end
 
-    if local_device_ids === nothing
-        local_device_ids = [get_local_process_id(detector)]
+    if local_gpu_device_ids === nothing
+        local_gpu_device_ids = [get_local_process_id(detector)]
     end
 
-    return coordinator_address, num_processes, process_id, local_device_ids
+    return coordinator_address, num_processes, process_id, local_gpu_device_ids
 end
 
 # OpenMPIORTEEnvDetector & OpenMPIPMIXEnvDetector

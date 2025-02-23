@@ -508,13 +508,6 @@ function compile_mlir(f, args; client=nothing, kwargs...)
 
         mlir_fn_res = compile_mlir!(mod, f, args; backend, kwargs...)
 
-        client, _ = __resolve_device_and_client(
-            client,
-            mlir_fn_res.seen_args,
-            mlir_fn_res.linear_args,
-            mlir_fn_res.is_sharded,
-        )
-
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
@@ -1509,6 +1502,8 @@ function compile_xla(f, args; client=nothing, kwargs...)
             num_parameters=length(mlir_fn_res.linear_args),
             mlir_fn_res.is_sharded,
             global_device_ids,
+            mlir_fn_res.num_replicas,
+            mlir_fn_res.num_partitions,
         )
 
         return mod, exec, mlir_fn_res, device, client

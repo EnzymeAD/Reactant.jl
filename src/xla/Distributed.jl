@@ -106,7 +106,7 @@ end
 @kwdef mutable struct State
     process_id::Int = 0
     num_processes::Int = 1
-    local_device_ids::Union{Nothing,Vector{Int}} = nothing
+    local_gpu_device_ids::Union{Nothing,Vector{Int}} = nothing
     service::Union{Nothing,DistributedRuntimeService} = nothing
     client::Union{Nothing,DistributedRuntimeClient} = nothing
     coordinator_address::Union{Nothing,String} = nothing
@@ -129,7 +129,7 @@ function update!(
     coordinator_address::String,
     num_processes::Int,
     process_id::Int,
-    local_device_ids::Vector{Int},
+    local_gpu_device_ids::Vector{Int},
     coordinator_bind_address::Union{Nothing,String}=nothing,
     cluster_register_timeout_in_minutes::Integer=60,
     rpc_timeout_in_seconds::Integer=120,
@@ -141,7 +141,7 @@ function update!(
     @assert 0 ≤ process_id < num_processes
 
     state.coordinator_address = coordinator_address
-    state.local_device_ids = local_device_ids
+    state.local_gpu_device_ids = local_gpu_device_ids
     state.process_id = process_id
     state.num_processes = num_processes
 
