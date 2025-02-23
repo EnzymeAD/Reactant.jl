@@ -920,3 +920,14 @@ end
     @test contains(hlo, "HloModule")
     @test contains(hlo, "sine")
 end
+
+@testset "Raise keyword" begin
+    v = randn(Float32, 16)
+    rv = Reactant.to_rarray(v)
+    @test sin.(v) ≈ @jit raise = true sin.(rv)
+    @test cos.(v) ≈ @jit raise = false cos.(rv)
+    @test exp.(v) ≈ @jit raise = "canonicalize" exp.(rv)
+    @test_throws Reactant.MLIR.IR.AddPipelineException @jit raise = "this_pass-does_not_ExisT" exp.(
+        rv
+    )
+end
