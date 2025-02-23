@@ -602,6 +602,7 @@ cc_library(
         "@xla//xla/backends/profiler/cpu:metadata_utils",
         "@xla//xla/backends/profiler/tpu:tpu_tracer",
         "@xla//xla/python:profiler_utils",
+        "@xla//xla/backends/cpu/collectives:mpi_collectives",
 
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
@@ -632,7 +633,20 @@ cc_library(
     }) + if_rocm([
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/backends/profiler/gpu:device_tracer",
-    ]),
+    ]) + select({
+        # gloo tcp transport only builds on linux
+        "@xla//xla/tsl:macos": [
+            "@xla//xla/backends/cpu/collectives:gloo_collectives",
+            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@gloo//:transport_uv",
+        ],
+        "@xla//xla/tsl:windows": [],
+        "//conditions:default": [
+            "@xla//xla/backends/cpu/collectives:gloo_collectives",
+            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@gloo//:transport_tcp",
+        ],
+    }),
 )
 
 # cc_shared_library(

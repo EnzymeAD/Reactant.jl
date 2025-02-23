@@ -2991,6 +2991,46 @@ function tcgen05_alloc(addr::Value, nCols::Value; group=nothing, location=Locati
 end
 
 """
+`tcgen05_commit`
+
+The `tcgen05.commit` makes the mbarrier object, specified by
+the operand `addr`, track the completion of all the prior
+async-tcgen05 operations initiated by the executing thread.
+The multicast variants allow signaling on the mbarrier objects
+of multiple CTAs within the cluster. Operand `multicastMask`,
+when present, specifies the destination CTAs in the cluster such
+that each bit position in the 16-bit `multicastMask` operand
+corresponds to the `nvvm.read.ptx.sreg.ctaid` of the destination CTA.
+[For more information refer PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen-async-sync-operations-commit)
+"""
+function tcgen05_commit(
+    addr::Value,
+    multicastMask=nothing::Union{Nothing,Value};
+    group=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(multicastMask) && push!(operands, multicastMask)
+    !isnothing(group) && push!(attributes, namedattribute("group", group))
+
+    return create_operation(
+        "nvvm.tcgen05.commit",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `tcgen05_dealloc`
 
 The `tcgen05.dealloc` Op de-allocates the tensor core memory
@@ -3021,6 +3061,36 @@ function tcgen05_dealloc(taddr::Value, nCols::Value; group=nothing, location=Loc
 end
 
 """
+`tcgen05_fence`
+
+The `tcgen05.fence<before>` orders all prior async tcgen05 operations
+with respect to the subsequent tcgen05 and execution ordering operations.
+The `tcgen05.fence<after>` orders all subsequent async tcgen05 operations
+with respect to the prior tcgen05 and execution ordering operations.
+
+[For more information refer to the PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/#tensorcore-5th-generation-instructions-tcgen05-fence)
+"""
+function tcgen05_fence(; kind, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
+
+    return create_operation(
+        "nvvm.tcgen05.fence",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `tcgen05_relinquish_alloc_permit`
 
 The `tcgen05.relinquish_alloc_permit` Op specifies that the CTA
@@ -3040,6 +3110,36 @@ function tcgen05_relinquish_alloc_permit(; group=nothing, location=Location())
 
     return create_operation(
         "nvvm.tcgen05.relinquish_alloc_permit",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`tcgen05_wait`
+
+The `tcgen05.wait<load>` causes the executing thread to block until
+all prior `tcgen05.ld` operations issued by the executing thread
+have completed. Similarly, the `tcgen05.wait<store>` causes the executing
+thread to block until all prior `tcgen05.st` operations issued by the
+executing thread have completed.
+[For more information refer PTX ISA]
+(https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instructions-tcgen05-wait)
+"""
+function tcgen05_wait(; kind, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
+
+    return create_operation(
+        "nvvm.tcgen05.wait",
         location;
         operands,
         owned_regions,

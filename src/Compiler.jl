@@ -7,8 +7,8 @@ import ..Reactant:
     Reactant,
     MLIR,
     XLA,
-    ConcreteRArray,
-    ConcreteRNumber,
+    ConcretePJRTArray,
+    ConcretePJRTNumber,
     TracedRArray,
     TracedRNumber,
     RArray,
@@ -74,63 +74,81 @@ function create_result(
     return Expr(:new, T, elems...)
 end
 
-function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-    device_to_array_slices, partition_spec = path_to_shard_info[path]
+function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh, N::Integer)
+    device_to_array_slices, hlo_sharding = path_to_shard_info[path]
     delete!(path_to_shard_info, path)
-    sharding = Reactant.Sharding.NamedSharding(sharding_mesh, partition_spec)
+    sharding = Reactant.Sharding.HloSharding(
+        hlo_sharding, sharding_mesh, ntuple(Returns(true), N), ntuple(Returns(-1), N)
+    )
     return Reactant.Sharding.ShardInfo(sharding, device_to_array_slices)
 end
 
 function create_result(
-    tocopy::ConcreteRNumber{T,D,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcretePJRTNumber{T,D,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    sharding_mesh,
 ) where {T,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-            return :(ConcreteRNumber{$T,length($(restore)),$(typeof(sharding))}(
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
+            return :(ConcretePJRTNumber{$T,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $sharding
             ))
         else
-            return :(ConcreteRNumber{$T}($restore))
+            return :(ConcretePJRTNumber{$T}($restore))
         end
     end
 
     if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-        return :(ConcreteRNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
+        return :(ConcretePJRTNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data...,)), $sharding
         ))
     end
     # We will set the data for this later
-    return :(ConcreteRNumber{$T}($(tocopy.data)))
+    return :(ConcretePJRTNumber{$T}($(tocopy.data)))
 end
 
 function create_result(
-    tocopy::ConcreteRArray{T,N,D,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcretePJRTArray{T,N,D,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    sharding_mesh,
 ) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-            return :(ConcreteRArray{$T,$N,length($(restore)),$(typeof(sharding))}(
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
+            return :(ConcretePJRTArray{$T,$N,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $(tocopy.shape), $sharding
             ))
         else
-            return :(ConcreteRArray{$T,$N}($restore, $(tocopy.shape)))
+            return :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
         end
     end
 
     if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh)
-        return :(ConcreteRArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
+        return :(ConcretePJRTArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
     end
     # We will set the data for this later
-    return :(ConcreteRArray{$T,$N,$D,$S}(
+    return :(ConcretePJRTArray{$T,$N,$D,$S}(
         $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
     ))
 end
@@ -477,11 +495,8 @@ function compile_mlir(f, args; client=nothing, kwargs...)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    if client !== nothing
-        backend = XLA.platform_name(client)
-    else
-        backend = XLA.platform_name(XLA.default_backend[])
-    end
+    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+
     if backend == "CUDA"
         backend = "GPU"
     elseif backend == "CPU"
@@ -588,6 +603,7 @@ function compile_mlir!(
     optimize::Union{Bool,Symbol}=true,
     no_nan::Bool=false,
     backend="gpu",
+    fn_kwargs=(),
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -597,7 +613,7 @@ function compile_mlir!(
     activate_callcache!(callcache)
 
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, (), "main", true)
+        Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true)
     finally
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
@@ -984,6 +1000,7 @@ function compile_call_expr(mod, compiler, options, args...)
     call = only(args)
     f_symbol = gensym(:f)
     args_symbol = gensym(:args)
+    kwargs_symbol = gensym(:kwargs)
     compiled_symbol = gensym(:compiled)
 
     if Meta.isexpr(call, :call)
@@ -999,10 +1016,24 @@ function compile_call_expr(mod, compiler, options, args...)
         else
             :($(fname))
         end
-        args_rhs = Expr(:tuple, call.args[2:end]...)
+        args_rhs = call.args[2:end]
+
+        # if (;) is used, we need to extract the kwargs
+        if length(args_rhs) ≥ 1 && Meta.isexpr(args_rhs[1], :parameters)
+            kwargs_rhs = args_rhs[1].args
+            args_rhs = args_rhs[2:end]
+        else
+            kwargs_rhs = ()
+        end
+        kw_idxs = findall(Base.Fix2(Meta.isexpr, :kw), args_rhs)
+        arg_idxs = setdiff(1:length(args_rhs), kw_idxs)
+
+        kwargs_rhs = (kwargs_rhs..., args_rhs[kw_idxs]...)
+        args_rhs = Expr(:tuple, args_rhs[arg_idxs]...)
     elseif Meta.isexpr(call, :(.), 2) && Meta.isexpr(call.args[2], :tuple)
         fname = :($(Base.Broadcast.BroadcastFunction)($(call.args[1])))
         args_rhs = only(call.args[2:end])
+        kwargs_rhs = ()
     else
         error("Invalid function call: $(call)")
     end
@@ -1010,8 +1041,12 @@ function compile_call_expr(mod, compiler, options, args...)
     return quote
         $(f_symbol) = $(fname)
         $(args_symbol) = $(args_rhs)
+        $(kwargs_symbol) = (; $(kwargs_rhs...))
         $(compiled_symbol) = $(compiler)(
-            $(f_symbol), $(args_symbol); $(Expr.(:kw, keys(options), values(options))...)
+            $(f_symbol),
+            $(args_symbol);
+            fn_kwargs=$(kwargs_symbol),
+            $(Expr.(:kw, keys(options), values(options))...),
         )
     end,
     (; compiled=compiled_symbol, args=args_symbol)
@@ -1079,7 +1114,6 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
-            device_ids = mesh.sorted_device_ids
             if Reactant.Sharding.is_sharded(carg)
                 # Currently disabling the error since we roundtrip from MHLO to generate
                 # the shardings
@@ -1091,7 +1125,7 @@ function codegen_flatten!(
 
                 push!(flatten_code, :($usbuf = $flatcode.data))
                 for j in 1:length(mesh)
-                    sbuf = Symbol(:sbuf_, i, "_", device_ids[j])
+                    sbuf = Symbol(:sbuf_, i, "_", mesh.device_ids[j])
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
                 end
@@ -1101,18 +1135,18 @@ function codegen_flatten!(
                 )
                 push!(flatten_code, :($usbuf = $flatcode))
                 device_to_array_slices = XLA.sharding_to_concrete_array_indices(
-                    condensed_op_sharding, size(carg), mesh
+                    condensed_op_sharding, size(carg), mesh.device_ids
                 )
                 for j in 1:length(mesh)
-                    local_device_id = device_ids[j]
-                    buf = Symbol(:buf_, i, :_, local_device_id)
+                    device_id = mesh.device_ids[j]
+                    buf = Symbol(:buf_, i, :_, device_id)
                     slice = device_to_array_slices[j]
                     push!(
                         flatten_code,
                         :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
                     )
-                    sbuf = Symbol(:sbuf_, i, :_, local_device_id)
-                    device = XLA.get_addressable_device(client, local_device_id)
+                    sbuf = Symbol(:s, buf)
+                    device = XLA.get_device(client, device_id)
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
                 end
@@ -1194,7 +1228,7 @@ function codegen_unflatten!(
                             :(
                                 $cache_dict = $(IdDict{
                                     Union{TracedRArray,TracedRNumber},
-                                    Union{ConcreteRArray,ConcreteRNumber},
+                                    Union{ConcretePJRTArray,ConcretePJRTNumber},
                                 }())
                             ),
                         )
@@ -1205,7 +1239,7 @@ function codegen_unflatten!(
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcreteRArray{
+                                $cache_dict[$final_val] = ConcretePJRTArray{
                                     $(Reactant.unwrapped_eltype)($final_val),
                                     ndims($final_val),
                                 }(
@@ -1218,7 +1252,7 @@ function codegen_unflatten!(
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcreteRNumber{
+                                $cache_dict[$final_val] = ConcretePJRTNumber{
                                     $(Reactant.unwrapped_eltype)($final_val)
                                 }(
                                     $concrete_res_name
@@ -1386,7 +1420,7 @@ end
 
 function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     if is_sharded
-        client === nothing && (client = XLA.default_backend[])
+        client === nothing && (client = XLA.default_backend())
         return client, nothing
     end
 
@@ -1412,14 +1446,14 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
         if device !== nothing
             client = XLA.client(device)
         else
-            client = XLA.default_backend[]
-            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
+            client = XLA.default_backend()
+            device = XLA.default_device(client)
         end
     else
         if device !== nothing
             @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
         else
-            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
+            device = XLA.default_device(client)
         end
     end
 
@@ -1432,11 +1466,8 @@ function compile_xla(f, args; client=nothing, kwargs...)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    if client !== nothing
-        backend = XLA.platform_name(client)
-    else
-        backend = XLA.platform_name(XLA.default_backend[])
-    end
+    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+
     if backend == "CUDA"
         backend = "GPU"
     elseif backend == "CPU"
@@ -1463,8 +1494,8 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # compile MLIR module to XLA executable
-        local_device_ids = if mlir_fn_res.is_sharded
-            collect(Int64, mlir_fn_res.sharding_mesh.sorted_device_ids)
+        global_device_ids = if mlir_fn_res.is_sharded
+            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
         else
             Int64[]
         end
@@ -1477,7 +1508,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
             num_outputs=length(mlir_fn_res.linear_results),
             num_parameters=length(mlir_fn_res.linear_args),
             mlir_fn_res.is_sharded,
-            local_device_ids,
+            global_device_ids,
         )
 
         return mod, exec, mlir_fn_res, device, client
@@ -1525,10 +1556,10 @@ function compile(f, args; sync=false, kwargs...)
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
         output_shardings = XLA.get_output_shardings(exec)
-        XLA.compute_array_indices_and_partition_spec.(
+        XLA.compute_array_indices_and_hlo_sharding.(
             output_shardings,
             size.(mlir_fn_res.linear_results),
-            (mlir_fn_res.sharding_mesh,),
+            (mlir_fn_res.sharding_mesh.logical_device_ids,),
         )
     else
         ntuple(Returns(nothing), length(linear_results))

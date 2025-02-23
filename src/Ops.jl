@@ -1071,11 +1071,11 @@ end
         @assert 0 < dimension <= ndims(x) "$x invalid dimension"
     end
 
-    sample_inputs = Vector{Reactant.ConcreteRNumber}(undef, length(xs) * 2)
+    sample_inputs = Vector{Reactant.ConcretePJRTNumber}(undef, length(xs) * 2)
     for i in eachindex(xs)
         T = Reactant.unwrapped_eltype(xs[i])
-        sample_inputs[2i - 1] = Reactant.ConcreteRNumber(T(0))
-        sample_inputs[2i] = Reactant.ConcreteRNumber(T(0))
+        sample_inputs[2i - 1] = Reactant.ConcretePJRTNumber(T(0))
+        sample_inputs[2i] = Reactant.ConcretePJRTNumber(T(0))
     end
     func =
         Reactant.TracedUtils.make_mlir_fn(
@@ -1455,7 +1455,7 @@ julia> Reactant.@jit(
               Reactant.to_rarray(Float32[1, 2, 3]),
           )
        )
-(ConcreteRArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
+(ConcretePJRTArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
 ```
 """
 @noinline function hlo_call(
@@ -2197,14 +2197,17 @@ end
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     return mesh(
-        mod, [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))], vec(m); location
+        mod,
+        [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
+        collect(Int64, m.logical_device_ids);
+        location,
     )
 end
 
 @noinline function mesh(
     mod::MLIR.IR.Module,
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-    device_ids::Vector{Int64};
+    device_ids::Vector{Int64}; # logical device ids not the physical device ids
     sym_name=nothing,
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
@@ -2243,7 +2246,10 @@ end
     end
 
     # We return the name of the mesh, since the operation is a Symbol op
-    return (; sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx), mesh_attr)
+    return (;
+        sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx),
+        mesh_attr=MLIR.IR.Attribute(mesh_attr),
+    )
 end
 
 end # module Ops

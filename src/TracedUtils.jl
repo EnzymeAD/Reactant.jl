@@ -224,7 +224,7 @@ function make_mlir_fn(
     # Detect if any of the arguments are sharded
     is_sharded = false
     for (k, v) in seen_args
-        if k isa Reactant.ConcreteRArray
+        if k isa Reactant.ConcretePJRTArray
             if Reactant.Sharding.is_sharded(k)
                 is_sharded = true
                 traced_args_to_shardings[v] = k.sharding
@@ -251,6 +251,7 @@ function make_mlir_fn(
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
     MLIR.IR.activate!(fnbody)
+
     result = try
         for (i, arg) in enumerate(linear_args)
             raw_arg = MLIR.IR.argument(fnbody, i)
@@ -258,7 +259,11 @@ function make_mlir_fn(
             set_mlir_data!(arg, row_maj_arg)
         end
 
-        Reactant.call_with_reactant(f, traced_args...)
+        if isempty(kwargs)
+            Reactant.call_with_reactant(f, traced_args...)
+        else
+            Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
+        end
     finally
         MLIR.IR.deactivate!(fnbody)
     end
@@ -361,8 +366,9 @@ function make_mlir_fn(
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
                 sharding = traced_args_to_shardings[arg]
+                (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
                 linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-                    ctx, sharding, mesh_cache[sharding.mesh].sym_name; do_transpose
+                    sharding, ctx, ndims(arg), sym_name, mesh_attr
                 )
                 MLIR.API.mlirFuncSetArgAttr(
                     func2, i - 1, "sdy.sharding", linear_arg_shardings[i]

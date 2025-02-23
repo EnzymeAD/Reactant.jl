@@ -1,4 +1,6 @@
-function get_buffer(x::Union{ConcreteRArray,ConcreteRNumber}; no_error_for_scalar=false)
+function get_buffer(
+    x::Union{ConcretePJRTArray,ConcretePJRTNumber}; no_error_for_scalar=false
+)
     if Sharding.is_sharded(x.sharding)
         # For scalars this is mostly replicated
         no_error_for_scalar && return first(x.data).buffer
@@ -7,40 +9,43 @@ function get_buffer(x::Union{ConcreteRArray,ConcreteRNumber}; no_error_for_scala
     return only(x.data).buffer
 end
 
-function Base.collect(x::ConcreteRNumber{T}) where {T}
-    return collect(ConcreteRArray{T,0}(copy(x).data, ()))
+function Base.collect(x::ConcretePJRTNumber{T}) where {T}
+    return collect(ConcretePJRTArray{T,0}(copy(x).data, ()))
 end
 
-Base.size(::ConcreteRNumber) = ()
-Base.real(x::ConcreteRNumber{<:Real}) = x
-function Base.rtoldefault(::Type{ConcreteRNumber{T}}) where {T}
-    return ConcreteRNumber(Base.rtoldefault(T))
+Base.size(::AbstractConcreteNumber) = ()
+Base.real(x::AbstractConcreteNumber{<:Real}) = x
+function Base.rtoldefault(T::Type{<:AbstractConcreteNumber})
+    return T(Base.rtoldefault(unwrapped_eltype(T)))
 end
 
-Base.strides(x::ConcreteRArray) = Base.size_to_strides(1, size(x)...)
+Base.strides(x::AbstractConcreteArray) = Base.size_to_strides(1, size(x)...)
 
 # Ensure the device and client are the same as the input
-function Base.float(x::ConcreteRNumber{T}) where {T}
-    return ConcreteRNumber(
+function Base.float(x::ConcretePJRTNumber{T}) where {T}
+    return ConcretePJRTNumber(
         float(T)(to_number(x)); client=XLA.client(x), device=XLA.device(x), x.sharding
     )
 end
 
 # written like this to avoid ambiguity errors
 for T in Base.uniontypes(ReactantPrimitive)
-    @eval (::Type{$(T)})(x::ConcreteRNumber) = convert($T, x)
+    @eval (::Type{$(T)})(x::AbstractConcreteNumber) = convert($T, x)
 end
 
-Base.convert(::Type{T}, x::ConcreteRNumber) where {T<:Number} = convert(T, to_number(x))
+function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
+    return convert(T, to_number(x))
+end
 
-Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:ConcreteRArray} = T(x)
+Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
 
-Base.size(x::ConcreteRArray) = x.shape
+Base.size(x::AbstractConcreteArray) = x.shape
 
-Base.isempty(x::Union{ConcreteRArray,ConcreteRNumber}) = any(isempty, x.data)
-Base.isempty(x::WrappedConcreteRArray) = isempty(ancestor(x))
+Base.isempty(x::Union{AbstractConcreteArray,AbstractConcreteNumber}) = any(isempty, x.data)
 
-function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
+Base.isempty(x::WrappedConcretePJRTArray) = isempty(ancestor(x))
+
+function Base.convert(::Type{<:Array}, X::ConcretePJRTArray{T,N}) where {T,N}
     if Sharding.is_sharded(X)
         data = Array{T,N}(undef, size(X)...)
 
@@ -63,19 +68,19 @@ function Base.convert(::Type{<:Array}, X::ConcreteRArray{T,N}) where {T,N}
         end
     end
 end
-function Base.convert(::Type{<:Array}, X::WrappedConcreteRArray)
+function Base.convert(::Type{<:Array}, X::WrappedConcretePJRTArray)
     fn = compile(TracedUtils.materialize_traced_array, (X,))
     return convert(Array, fn(X))
 end
-Base.Array(x::AnyConcreteRArray) = convert(Array, x)
+Base.Array(x::AnyConcretePJRTArray) = convert(Array, x)
 
-function synchronize(x::Union{ConcreteRArray,ConcreteRNumber})
+function synchronize(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
     foreach(XLA.synced_buffer, x.data)
     return nothing
 end
 
 to_number(x::Number) = x
-function to_number(X::ConcreteRScalar{T}) where {T}
+function to_number(X::ConcretePJRTScalar{T}) where {T}
     data = Ref{T}()
     XLA.await(X)
     buf = get_buffer(X; no_error_for_scalar=true)
@@ -85,11 +90,9 @@ function to_number(X::ConcreteRScalar{T}) where {T}
     return data[]
 end
 
-function Base.convert(::Type{T}, x::ConcreteRScalar{T}) where {T}
-    return to_number(x; no_error_for_scalar=true)
-end
+Base.convert(::Type{T}, x::ConcretePJRTScalar{T}) where {T<:Number} = to_number(x)
 
-for jlop in (:(Base.abs),), T in (ConcreteRNumber,)
+for jlop in (:(Base.abs),), T in (AbstractConcreteNumber,)
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
@@ -102,7 +105,7 @@ for jlop in (
         :(Base.:^),
         :(Base.:(==)),
     ),
-    T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
+    T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
 
     @eval begin
         $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
@@ -112,12 +115,12 @@ for jlop in (
 end
 
 for jlop in (:(Base.isnan), :(Base.isfinite)),
-    T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
+    T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
 
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
-for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
+for T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
     for (T1, T2) in ((T, Number), (Number, T), (T, T))
         @eval begin
             function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
@@ -133,9 +136,9 @@ for T in (ConcreteRNumber, ConcreteRArray{<:Any,0})
 end
 
 for (T1, T2) in (
-    (AnyConcreteRArray, AbstractArray),
-    (AbstractArray, AnyConcreteRArray),
-    (AnyConcreteRArray, AnyConcreteRArray),
+    (AnyConcretePJRTArray, AbstractArray),
+    (AbstractArray, AnyConcretePJRTArray),
+    (AnyConcretePJRTArray, AnyConcretePJRTArray),
 )
     @eval begin
         function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
@@ -145,7 +148,7 @@ for (T1, T2) in (
     end
 end
 
-function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
+function Base.show(io::IO, X::ConcretePJRTScalar{T}) where {T}
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
@@ -156,7 +159,7 @@ function Base.show(io::IO, X::ConcreteRScalar{T}) where {T}
     return nothing
 end
 
-function Base.print_array(io::IO, X::AnyConcreteRArray)
+function Base.print_array(io::IO, X::AnyConcretePJRTArray)
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
@@ -164,7 +167,7 @@ function Base.print_array(io::IO, X::AnyConcreteRArray)
     return Base.print_array(io, convert(Array, X))
 end
 
-function Base.show(io::IO, X::AnyConcreteRArray)
+function Base.show(io::IO, X::AnyConcretePJRTArray)
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
@@ -175,7 +178,7 @@ function Base.show(io::IO, X::AnyConcreteRArray)
     return nothing
 end
 
-function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
+function Base.getindex(a::ConcretePJRTArray{T}, args::Vararg{Int,N}) where {T,N}
     isempty(a) && throw("Cannot getindex from empty buffer")
 
     XLA.await(a)
@@ -193,7 +196,7 @@ function Base.getindex(a::ConcreteRArray{T}, args::Vararg{Int,N}) where {T,N}
         end
     end
 
-    GPUArraysCore.assertscalar("getindex(::ConcreteRArray, ::Vararg{Int, N})")
+    GPUArraysCore.assertscalar("getindex(::ConcretePJRTArray, ::Vararg{Int, N})")
     return convert(Array, a)[args...]
 end
 
@@ -202,7 +205,7 @@ function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
     return nothing
 end
 
-function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N}
+function Base.setindex!(a::ConcretePJRTArray{T}, v, args::Vararg{Int,N}) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
     XLA.await(a)
@@ -221,69 +224,71 @@ function Base.setindex!(a::ConcreteRArray{T}, v, args::Vararg{Int,N}) where {T,N
         return a
     end
 
-    GPUArraysCore.assertscalar("setindex!(::ConcreteRArray, ::Any, ::Vararg{Int, N})")
+    GPUArraysCore.assertscalar("setindex!(::ConcretePJRTArray, ::Any, ::Vararg{Int, N})")
     fn = compile(mysetindex!, (a, v, args...))
     fn(a, v, args...)
     return a
 end
 
 # TODO is there any way to allocate an uninitialized buffer in XLA?
-function Base.similar(a::ConcreteRArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
-    return ConcreteRArray(
+function Base.similar(a::ConcretePJRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
+    return ConcretePJRTArray(
         Array{S}(undef, dims); client=XLA.client(a), device=XLA.device(a), a.sharding
     )
 end
-Base.similar(a::ConcreteRArray, dims::Dims) = similar(a, eltype(a), dims)
-function Base.similar(::Type{ConcreteRArray{T}}, dims) where {T}
-    return ConcreteRArray(similar(Array{T}, dims))
+Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
+function Base.similar(::Type{ConcretePJRTArray{T}}, dims) where {T}
+    return ConcretePJRTArray(similar(Array{T}, dims))
 end
 
 # Broadcasting interface
-Base.BroadcastStyle(::Type{<:ConcreteRArray}) = Broadcast.ArrayStyle{ConcreteRArray}()
+Base.BroadcastStyle(::Type{<:ConcretePJRTArray}) = Broadcast.ArrayStyle{ConcretePJRTArray}()
 function Base.similar(
-    bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}}, ::Type{T}
+    bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}
 ) where {T}
     # XXX: correct device + sharding?
-    return ConcreteRArray(similar(Array{T}, axes(bc)))
+    return ConcretePJRTArray(similar(Array{T}, axes(bc)))
 end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
-function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteRArray}})
+function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}})
     for x in bc.args
-        x isa ConcreteRArray && XLA.await(x)
+        x isa ConcretePJRTArray && XLA.await(x)
     end
 
     if all(buffer_on_cpu, bc.args) && all(
-        x -> !(x isa ConcreteRArray) || (x isa ConcreteRArray && !Sharding.is_sharded(x)),
+        x ->
+            !(x isa ConcretePJRTArray) ||
+                (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
         bc.args,
     )
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
         if !Base.isconcretetype(ElType)
             throw(
                 ErrorException(
-                    "`copy` on `ConcreteRArray` for non-concrete eltype is not implemented"
+                    "`copy` on `ConcretePJRTArray` for non-concrete eltype is not implemented",
                 ),
             )
         end
         aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
-        return ConcreteRArray(aux) # XXX: result should be on correct device?
+        return ConcretePJRTArray(aux) # XXX: result should be on correct device?
     end
 
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
     return fn(bc.args...)
 end
 
-function Base.copyto!(dest::ConcreteRArray, src::ConcreteRArray)
+function Base.copyto!(dest::AbstractConcreteArray, src::AbstractConcreteArray)
     dest.data = src.data
     return dest
 end
 
-Base.collect(x::AnyConcreteRArray) = convert(Array, x)
+Base.collect(x::AbstractConcreteArray) = convert(Array, x)
 
 function Base.mapreduce(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(A::ConcreteRArray{T,N});
+    @nospecialize(A::AbstractConcreteArray{T,N});
     dims=:,
     init=nothing,
 ) where {T,N}
@@ -301,23 +306,23 @@ end
 (f::CallMapReduce)(A) = Base.mapreduce(f.f, f.op, A; f.dims, f.init)
 
 buffer_on_cpu(::Any) = true
-buffer_on_cpu(x::ConcreteRArray) = all(XLA.buffer_on_cpu, x.data)
+buffer_on_cpu(x::ConcretePJRTArray) = all(XLA.buffer_on_cpu, x.data)
 
-function Ops.constant(x::ConcreteRArray; kwargs...)
+function Ops.constant(x::AbstractConcreteArray; kwargs...)
     return Ops.constant(Base.convert(Array, x); kwargs...)
 end
 
-function Ops.constant(x::ConcreteRNumber{T}; kwargs...) where {T}
+function Ops.constant(x::AbstractConcreteNumber{T}; kwargs...) where {T}
     return Ops.constant(Base.convert(T, x); kwargs...)
 end
 
-function Base.zero(x::ConcreteRArray{T,N}) where {T,N}
-    return ConcreteRArray(
+function Base.zero(x::ConcretePJRTArray{T,N}) where {T,N}
+    return ConcretePJRTArray(
         zeros(T, size(x)...); client=XLA.client(x), device=XLA.device(x), x.sharding
     )
 end
 
-function Base.fill!(a::ConcreteRArray{T,N}, val) where {T,N}
+function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
     XLA.await(a)
