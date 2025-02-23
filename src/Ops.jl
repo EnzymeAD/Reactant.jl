@@ -2091,8 +2091,6 @@ end
         end
     end
 
-    results = map(x -> x.value, MLIR.IR.results(if_compiled))
-
     for (residx, path) in enumerate(all_paths)
         if path[1] == :result
             Reactant.TracedUtils.set!(
