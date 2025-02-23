@@ -17,62 +17,13 @@ function Base.convert(::Type{OpShardingType.T}, i::Integer)
     return error("Invalid OpShardingType $i")
 end
 
-@enumx ShardGroupType begin
-    As
-    Like
-end
-
-function Base.convert(::Type{ShardGroupType.T}, i::Integer)
-    i == 0 && return ShardGroupType.As
-    i == 1 && return ShardGroupType.Like
-    return error("Invalid ShardGroupType $i")
-end
-
-## TODO: tuple sharding / op metadata
-## Keep this in sync with JLOpSharding in API.cpp
-struct JLOpSharding
-    type::Int32
-    n_tile_dimensions::Int32
-    tile_dimensions::Ptr{Int64}
-    n_layout_minor_to_major::Int32
-    layout_minor_to_major::Ptr{Int64}
-    replicate_on_last_tile_dim::Bool
-    n_last_tile_dims::Int32
-    last_tile_dims::Ptr{Int32}
-    n_tile_assignment_dimensions::Int32
-    tile_assignment_dimensions::Ptr{Int64}
-    n_tile_assignment_devices::Int32
-    tile_assignment_devices::Ptr{Int64}
-    n_iota_reshape_dims::Int32
-    iota_reshape_dims::Ptr{Int64}
-    n_iota_transpose_perm::Int32
-    iota_transpose_perm::Ptr{Int32}
-    is_shard_group::Bool
-    shard_group_id::Int64
-    shard_group_type::Int32
-    op_sharding::Ptr{Cvoid}
-end
-
 # xla::OpSharding
 mutable struct OpSharding
     ptr::Ptr{Cvoid}
-    type::OpShardingType.T
-    tile_dimensions::Vector{Int64}
-    layout_minor_to_major::Vector{Int64}
-    replicate_on_last_tile_dim::Bool
-    last_tile_dims::Vector{OpShardingType.T}
-    tile_assignment_dimensions::Vector{Int64}
-    tile_assignment_devices::Vector{Int64}
-    iota_reshape_dims::Vector{Int64}
-    iota_transpose_perm::Vector{Int32}
-    is_shard_group::Bool
-    shard_group_id::Int64
-    shard_group_type::ShardGroupType.T
 
-    function OpSharding(ptr::Ptr{Cvoid}, args...)
+    function OpSharding(ptr::Ptr{Cvoid})
         @assert ptr != C_NULL
-        # return finalizer(free_op_sharding, new(ptr, args...))
-        return new(ptr, args...)
+        return finalizer(free_op_sharding, new(ptr))
     end
 end
 
@@ -80,106 +31,176 @@ function free_op_sharding(op_sharding::OpSharding)
     @ccall MLIR.API.mlir_c.free_op_sharding(op_sharding.ptr::Ptr{Cvoid})::Cvoid
 end
 
-function Base.convert(::Type{OpSharding}, sharding::JLOpSharding)
-    @assert sharding.type != 2 "Tuple sharding is not supported yet!"
+function replicate_on_last_tile_dim(op_sharding::OpSharding)
+    GC.@preserve op_sharding begin
+        return @ccall MLIR.API.mlir_c.op_sharding_replicate_on_last_tile_dim(
+            op_sharding.ptr::Ptr{Cvoid}
+        )::Bool
+    end
+end
 
-    last_tile_dims = unsafe_wrap(Array, sharding.last_tile_dims, sharding.n_last_tile_dims)
-    tile_assignment_dimensions = unsafe_wrap(
-        Array, sharding.tile_assignment_dimensions, sharding.n_tile_assignment_dimensions
-    )
-    tile_assignment_devices = unsafe_wrap(
-        Array, sharding.tile_assignment_devices, sharding.n_tile_assignment_devices
-    )
-    iota_reshape_dims = unsafe_wrap(
-        Array, sharding.iota_reshape_dims, sharding.n_iota_reshape_dims
-    )
-    iota_transpose_perm = unsafe_wrap(
-        Array, sharding.iota_transpose_perm, sharding.n_iota_transpose_perm
-    )
-    iota_transpose_perm .+= 1
+function op_sharding_type(op_sharding::OpSharding)
+    type = GC.@preserve op_sharding begin
+        @ccall MLIR.API.mlir_c.op_sharding_to_op_sharding_type(
+            op_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    return convert(OpShardingType.T, type)
+end
 
-    tile_dimensions = unsafe_wrap(
-        Array, sharding.tile_dimensions, sharding.n_tile_dimensions
-    )
-    layout_minor_to_major = unsafe_wrap(
-        Array, sharding.layout_minor_to_major, sharding.n_layout_minor_to_major
-    )
+function has_iota_reshape_dims(op_sharding::OpSharding)
+    GC.@preserve op_sharding begin
+        return @ccall MLIR.API.mlir_c.op_sharding_has_iota_reshape_dims(
+            op_sharding.ptr::Ptr{Cvoid}
+        )::Bool
+    end
+end
 
-    return OpSharding(
-        sharding.op_sharding,
-        convert(OpShardingType.T, sharding.type),
-        tile_dimensions,
-        layout_minor_to_major,
-        sharding.replicate_on_last_tile_dim,
-        last_tile_dims,
-        tile_assignment_dimensions,
-        tile_assignment_devices,
-        iota_reshape_dims,
-        iota_transpose_perm,
-        sharding.is_shard_group,
-        sharding.shard_group_id,
-        convert(ShardGroupType.T, sharding.shard_group_type),
+function iota_reshape_dims(op_sharding::OpSharding)
+    GC.@preserve op_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.op_sharding_iota_reshape_dims_size(
+            op_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    dimensions = Vector{Int32}(undef, ndims)
+    GC.@preserve op_sharding dimensions begin
+        @ccall MLIR.API.mlir_c.op_sharding_iota_reshape_dims(
+            op_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int32}
+        )::Cvoid
+    end
+    return dimensions
+end
+
+function has_iota_transpose_perm(op_sharding::OpSharding)
+    GC.@preserve op_sharding begin
+        return @ccall MLIR.API.mlir_c.op_sharding_has_iota_transpose_perm(
+            op_sharding.ptr::Ptr{Cvoid}
+        )::Bool
+    end
+end
+
+function iota_transpose_perm(op_sharding::OpSharding)
+    GC.@preserve op_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.op_sharding_iota_transpose_perm_size(
+            op_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    dimensions = Vector{Int32}(undef, ndims)
+    GC.@preserve op_sharding dimensions begin
+        @ccall MLIR.API.mlir_c.op_sharding_iota_transpose_perm(
+            op_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int32}
+        )::Cvoid
+    end
+    dimensions .+= 1
+    return dimensions
+end
+
+function tile_assignment_dimensions(op_sharding::OpSharding)
+    GC.@preserve op_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.op_sharding_tile_assignment_dimensions_size(
+            op_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    dimensions = Vector{Int32}(undef, ndims)
+    GC.@preserve op_sharding dimensions begin
+        @ccall MLIR.API.mlir_c.op_sharding_tile_assignment_dimensions(
+            op_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int32}
+        )::Cvoid
+    end
+    return dimensions
+end
+
+function tile_assignment_devices(op_sharding::OpSharding)
+    GC.@preserve op_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.op_sharding_tile_assignment_devices_size(
+            op_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    devices = Vector{Int32}(undef, ndims)
+    GC.@preserve op_sharding devices begin
+        @ccall MLIR.API.mlir_c.op_sharding_tile_assignment_devices(
+            op_sharding.ptr::Ptr{Cvoid}, devices::Ptr{Int32}
+        )::Cvoid
+    end
+    return devices
+end
+
+function has_last_tile_dims(op_sharding::OpSharding)
+    GC.@preserve op_sharding begin
+        return @ccall MLIR.API.mlir_c.op_sharding_has_last_tile_dims(
+            op_sharding.ptr::Ptr{Cvoid}
+        )::Bool
+    end
+end
+
+# This separation is mostly for testing purposes
+function generate_device_list_from_tile_assignment_devices(sharding::OpSharding)
+    return tile_assignment_devices(sharding)
+end
+
+function generate_device_list_from_iota_tile(sharding::OpSharding)
+    return generate_device_list_from_iota_tile(
+        tile_assignment_dimensions(sharding),
+        iota_reshape_dims(sharding),
+        iota_transpose_perm(sharding),
     )
+end
+
+function generate_device_list_from_iota_tile(
+    tile_assignment_dimensions, iota_reshape_dims, iota_transpose_perm
+)
+    # Generate device IDs using iota
+    num_devices = prod(tile_assignment_dimensions)
+    ird = Int64.(iota_reshape_dims)
+
+    # Permute the iota array if iota_transpose_perm is provided
+    # We need to ensure that we account for the col-major ordering in julia. See the
+    # unit tests for examples.
+    if !isempty(iota_transpose_perm)
+        # XXX: Simplify the permutedims
+        iota_devices = collect(Int64, reshape(0:(num_devices - 1), reverse(ird)...))
+
+        iota_devices = permutedims(iota_devices, reverse(1:ndims(iota_devices)))
+        iota_devices = permutedims(iota_devices, iota_transpose_perm)
+        iota_devices = permutedims(iota_devices, reverse(1:ndims(iota_devices)))
+
+        return vec(iota_devices)
+    else
+        @assert num_devices == prod(ird)
+        return collect(0:(num_devices - 1))
+    end
 end
 
 function generate_device_list(sharding::OpSharding)
-    if !isempty(sharding.iota_reshape_dims)
-        # Generate device IDs using iota
-        num_devices = prod(sharding.tile_assignment_dimensions)
-
-        # Permute the iota array if iota_transpose_perm is provided
-        # We need to ensure that we account for the col-major ordering in julia. See the
-        # unit tests for examples.
-        if !isempty(sharding.iota_transpose_perm)
-            # XXX: Simplify the permutedims
-            iota_devices = collect(
-                Int64, reshape(0:(num_devices - 1), reverse(sharding.iota_reshape_dims)...)
-            )
-
-            iota_devices = permutedims(iota_devices, reverse(1:ndims(iota_devices)))
-            iota_devices = permutedims(iota_devices, sharding.iota_transpose_perm)
-            iota_devices = permutedims(iota_devices, reverse(1:ndims(iota_devices)))
-
-            return vec(iota_devices)
-        else
-            @assert num_devices == prod(sharding.iota_reshape_dims)
-            return collect(0:(num_devices - 1))
-        end
-    end
-    return sharding.tile_assignment_devices
+    has_iota_reshape_dims(sharding) && return generate_device_list_from_iota_tile(sharding)
+    return generate_device_list_from_tile_assignment_devices(sharding)
 end
 
 function get_number_of_ways_dim_sharded(op_sharding::OpSharding)
-    op_sharding.type == OpShardingType.Replicated && return Int64[], 1
-
-    if op_sharding.replicate_on_last_tile_dim
-        return (
-            op_sharding.tile_assignment_dimensions[1:(end - 1)],
-            op_sharding.tile_assignment_dimensions[end],
-        )
-    end
-    return op_sharding.tile_assignment_dimensions, 1
+    op_sharding_type(op_sharding) == OpShardingType.Replicated && return Int64[], 1
+    td = tile_assignment_dimensions(op_sharding)
+    replicate_on_last_tile_dim(op_sharding) && return td[1:(end - 1)], td[end]
+    return td, 1
 end
 
-function sharding_to_concrete_array_indices(
-    sharding::OpSharding, shape::Dims{N}, mesh
-) where {N}
+function sharding_to_concrete_array_indices(sharding::OpSharding, shape, device_ids)
     return sharding_to_concrete_array_indices(
-        convert(CondensedOpSharding, sharding), shape, mesh
+        convert(CondensedOpSharding, sharding), shape, device_ids
     )
 end
 
-function compute_array_indices_and_partition_spec(
-    sharding::OpSharding, array_size::Dims{N}, mesh
-) where {N}
-    return compute_array_indices_and_partition_spec(
-        convert(CondensedOpSharding, sharding), array_size, mesh
+function compute_array_indices_and_hlo_sharding(
+    sharding::OpSharding, array_size, device_ids
+)
+    return compute_array_indices_and_hlo_sharding(
+        convert(CondensedOpSharding, sharding), array_size, device_ids
     )
 end
 
 # This only stores the data that we currently support, and is useful for checking equality
 # We would want to extend support to more of the fields at a later time
 struct CondensedOpSharding{N}
+    opsharding::OpSharding
     type::OpShardingType.T
     replicate_on_last_tile_dim::Bool
     tile_assignment::Array{Int64,N}
@@ -192,29 +213,25 @@ function Base.:(==)(a::CondensedOpSharding, b::CondensedOpSharding)
 end
 
 function Base.convert(::Type{CondensedOpSharding}, sharding::OpSharding)
-    @assert isempty(sharding.last_tile_dims) "Last Tile dimensions are not supported \
-                                              yet!"
-    @assert isempty(sharding.tile_dimensions) "Tile dimensions are not supported yet! \
-                                               Open an issue with an MWE for this case."
-    @assert isempty(sharding.layout_minor_to_major) "Layout transformation is not \
-                                                     supported yet!"
+    @assert !has_last_tile_dims(sharding) "Last Tile dimensions are not supported \
+                                           yet!"
 
-    if sharding.type == OpShardingType.Replicated || sharding.type == OpShardingType.Maximal
+    type = op_sharding_type(sharding)
+
+    if type == OpShardingType.Replicated || type == OpShardingType.Maximal
         tile_assignment = generate_device_list(sharding)
-    elseif sharding.type == OpShardingType.Other
+    elseif type == OpShardingType.Other
+        td = tile_assignment_dimensions(sharding)
         tile_assignment = permutedims(
-            reshape(
-                generate_device_list(sharding),
-                reverse(sharding.tile_assignment_dimensions)...,
-            ),
-            reverse(1:length(sharding.tile_assignment_dimensions)),
+            reshape(generate_device_list(sharding), Int64.(reverse(td))...),
+            reverse(1:length(td)),
         )
     else
-        error("Invalid sharding type: $(sharding.type)")
+        error("Invalid sharding type: $(type)")
     end
 
     return CondensedOpSharding(
-        sharding.type, sharding.replicate_on_last_tile_dim, tile_assignment
+        sharding, type, replicate_on_last_tile_dim(sharding), Int64.(tile_assignment)
     )
 end
 
@@ -231,10 +248,10 @@ function get_number_of_ways_dim_sharded(op_sharding::CondensedOpSharding{N}) whe
 end
 
 function sharding_to_concrete_array_indices(
-    sharding::CondensedOpSharding, shape::Dims{N}, mesh
+    sharding::CondensedOpSharding, shape::Dims{N}, device_ids
 ) where {N}
     if sharding.type == OpShardingType.Replicated || sharding.type == OpShardingType.Maximal
-        return ntuple(Returns(ntuple(i -> 1:shape[i], N)), length(mesh))
+        return ntuple(Returns(ntuple(i -> 1:shape[i], N)), length(device_ids))
     elseif sharding.type == OpShardingType.Other
         partitions, num_replicas = get_number_of_ways_dim_sharded(sharding)
         @assert length(partitions) == length(shape)
@@ -259,60 +276,19 @@ function sharding_to_concrete_array_indices(
             end
         end
 
-        return map(Base.Fix1(getindex, indices), mesh.sorted_device_ids)
+        return map(Base.Fix1(getindex, indices), device_ids)
     else
         error("Unsupported sharding type: $(sharding.type)")
     end
 end
 
-# Function to compute array indices for each device
-function compute_array_indices_and_partition_spec(
-    sharding::CondensedOpSharding, array_size::Dims{N}, mesh
-) where {N}
-    if sharding.type == OpShardingType.Replicated # All devices have the entire array
-        return (
-            ntuple(Returns(ntuple(i -> 1:array_size[i], N)), length(mesh)),
-            ntuple(Returns(nothing), N),
-        )
-    elseif sharding.type == OpShardingType.Maximal # Only one device has the entire array
-        @assert length(mesh) == 1
-        return (
-            ntuple(Returns(ntuple(i -> 1:array_size[i], N)), length(mesh)),
-            ntuple(Returns(nothing), N),
-        )
-    elseif sharding.type == OpShardingType.Other # Tiled sharding
-        tile_dims, _ = get_number_of_ways_dim_sharded(sharding)
-        mesh_devices = Reactant.Sharding.device_ids(mesh)
-
-        # Match dimensions to mesh axes
-        used_axes = Set{Int}()
-        partition_spec = ntuple(N) do dim
-            if dim <= length(tile_dims) && tile_dims[dim] > 1
-                tile_seq = __get_device_sequence(
-                    sharding.tile_assignment, dim + sharding.replicate_on_last_tile_dim
-                )
-
-                for (axis_idx, axis_name) in enumerate(mesh.axis_names)
-                    if axis_idx ∉ used_axes && size(mesh_devices, axis_idx) == length(tile_seq)
-                        mesh_seq = __get_device_sequence(mesh_devices, axis_idx)
-                        if tile_seq == mesh_seq || tile_seq == reverse(mesh_seq)
-                            push!(used_axes, axis_idx)
-                            return axis_name
-                        end
-                    end
-                end
-            end
-            return nothing
-        end
-
-        device_to_array_indices = sharding_to_concrete_array_indices(
-            sharding, array_size, mesh
-        )
-
-        return device_to_array_indices, partition_spec
-    else
-        error("Unsupported sharding type: $(sharding.type)")
-    end
+function compute_array_indices_and_hlo_sharding(
+    sharding::CondensedOpSharding, array_size, device_ids
+)
+    return (
+        sharding_to_concrete_array_indices(sharding, array_size, device_ids),
+        convert(HloSharding, sharding.opsharding),
+    )
 end
 
 # Helper function to get device sequence along a dimension
@@ -340,6 +316,20 @@ function free_hlo_sharding(hlo_sharding::HloSharding)
     @ccall MLIR.API.mlir_c.free_hlo_sharding(hlo_sharding.ptr::Ptr{Cvoid})::Cvoid
 end
 
+function Base.convert(::Type{CondensedOpSharding}, hlo_sharding::HloSharding)
+    return convert(CondensedOpSharding, convert(OpSharding, hlo_sharding))
+end
+
+function Base.convert(::Type{OpSharding}, hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        return OpSharding(
+            @ccall MLIR.API.mlir_c.hlo_sharding_to_op_sharding(
+                hlo_sharding.ptr::Ptr{Cvoid}
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
 function Base.convert(::Type{HloSharding}, op_sharding::OpSharding)
     GC.@preserve op_sharding begin
         return HloSharding(
@@ -358,4 +348,21 @@ function Base.show(io::IO, ::MIME"text/plain", hlo_sharding::HloSharding)
     end
     print(io, "XLA.HloSharding(\"", unsafe_string_and_free(str), "\")")
     return nothing
+end
+
+function sharding_to_concrete_array_indices(sharding::HloSharding, shape, device_ids)
+    return sharding_to_concrete_array_indices(
+        convert(CondensedOpSharding, sharding), shape, device_ids
+    )
+end
+
+function compute_array_indices_and_hlo_sharding(
+    sharding::HloSharding, array_size, device_ids
+)
+    return (
+        compute_array_indices_and_hlo_sharding(
+            convert(CondensedOpSharding, sharding), array_size, device_ids
+        ),
+        sharding,
+    )
 end
