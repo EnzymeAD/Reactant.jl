@@ -218,7 +218,7 @@ function make_mlir_fn(
     ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
 
-    mesh_cache = OrderedIdDict()
+    mesh_cache = Reactant.Compiler.sdycache()
     traced_args_to_shardings = OrderedIdDict()
 
     # Detect if any of the arguments are sharded
@@ -228,9 +228,7 @@ function make_mlir_fn(
             if Reactant.Sharding.is_sharded(k)
                 is_sharded = true
                 traced_args_to_shardings[v] = k.sharding
-                if !haskey(mesh_cache, k.sharding.mesh)
-                    mesh_cache[k.sharding.mesh] = Reactant.Ops.mesh(mod, k.sharding.mesh)
-                end
+                Reactant.Ops.mesh(mod, k.sharding.mesh)
             end
         end
     end

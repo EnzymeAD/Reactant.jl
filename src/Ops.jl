@@ -12,6 +12,7 @@ using ..Reactant:
     RNumber,
     MissingTracedValue,
     unwrapped_eltype
+using ReactantCore: ReactantCore
 using Functors: fmap
 
 function mlir_type(x::Union{RNumber,RArray})
@@ -2227,13 +2228,17 @@ We return a NamedTuple with the following fields:
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
-    return mesh(
+    cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
+    cache !== nothing && haskey(cache, m) && return cache[m]
+    result = mesh(
         mod,
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
         collect(Int64, m.logical_device_ids);
         sym_name,
         location,
     )
+    cache !== nothing && (cache[m] = result)
+    return result
 end
 
 @noinline function mesh(
@@ -2296,7 +2301,26 @@ and `sharding`.
     sharding::Reactant.Sharding.AbstractSharding;
     location=mlir_stacktrace("reshard", @__FILE__, @__LINE__),
 )
-    error("TODO: implement reshard")
+    cache = Reactant.Compiler.sdycache()
+    if !haskey(cache, sharding.mesh)
+        # If reshard is the first shardy operation, we need to register the mesh
+        # XXX: This isn't correct. We need to register the mesh outside of any block
+        mod = MLIR.IR.mmodule()
+        Ops.mesh(mod, sharding.mesh; location)
+    end
+    (; sym_name, mesh_attr) = cache[sharding.mesh]
+    tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
+        sharding, MLIR.IR.context(), sym_name, mesh_attr
+    )
+    resharded_value = MLIR.IR.result(
+        MLIR.Dialects.sdy.reshard(input.mlir_data; sharding=tensor_sharding_attr, location),
+        1,
+    )
+    if input isa TracedRNumber
+        return TracedRNumber{unwrapped_eltype(input)}(resharded_value)
+    else
+        return TracedRArray{unwrapped_eltype(input)}(resharded_value)
+    end
 end
 
 end # module Ops
