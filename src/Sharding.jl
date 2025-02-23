@@ -293,10 +293,13 @@ end
 function get_shardy_tensor_sharding_attribute(
     sharding::HloSharding, ctx, mesh_name, mesh_attr; kwargs...
 )
+    string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
     GC.@preserve sharding begin
         return MLIR.IR.Attribute(
             @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
+                ctx::MLIR.API.MlirContext,
                 sharding.hlo_sharding.ptr::Ptr{Cvoid},
+                string_mesh_name.attribute::MLIR.API.MlirAttribute,
                 mesh_attr.attribute::MLIR.API.MlirAttribute,
                 Int64(length(sharding.is_closed))::Int64,
                 Bool[sharding.is_closed...]::Ptr{Bool},
