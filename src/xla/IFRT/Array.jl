@@ -149,6 +149,12 @@ function XLA.to_host(buffer::Array, data)
         return nothing
     end
 
+    if any(!is_addressable, all_devices)
+        @warn "Not all devices are addressable. Currently we only fill in the data for \
+               addressable devices. Remaining slices of data in `data` are left \
+               untouched."
+    end
+
     # While some client implementations might support directly copying to host, but we 
     # avoid the complexity of supporting that for now.
     single_device_arrays = disassemble_into_single_device_arrays(buffer, true)

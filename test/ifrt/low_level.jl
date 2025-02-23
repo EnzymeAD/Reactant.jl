@@ -16,7 +16,7 @@ fn_test3(x, y) = x .+ y' .- x
 
     ifrt_client = if platform_name == "cpu"
         IFRT.CPUClient(; checkcount=false)
-    elseif platform_name == "gpu"
+    elseif platform_name == "gpu" || platform_name == "cuda"
         IFRT.GPUClient(; checkcount=false)
     elseif platform_name == "tpu"
         IFRT.TPUClient(; checkcount=false)
