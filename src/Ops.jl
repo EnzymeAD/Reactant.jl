@@ -1792,7 +1792,6 @@ end
                 if length(p) > 0 && p[1] == true_fn_args
                     path = p[2:end]
                 end
-                Core.println(p)
             end
             if isnothing(path)
                 error("if_condition: could not find path for linear arg $i")
