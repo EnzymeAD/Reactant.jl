@@ -2133,10 +2133,13 @@ hloShardingFromTensorShardingAttr(mlir::sdy::TensorShardingAttr attr,
       xla::sdy::convertToHloSharding(attr, get_mesh_attr, manual_axes));
 }
 
-extern "C" mlir::sdy::TensorShardingAttr
-hloShardingToTensorShardingAttr(const xla::HloSharding *hloSharding,
-                                mlir::sdy::MeshAttr meshAttr, int64_t rank,
-                                const bool *isClosed, const int64_t *priority) {
+// XXX: This is incorrect for multiple meshes. We need to use the current mesh
+// to generate this instead of the global mesh Currently we are storing only a
+// single mesh, so we can just use this.
+extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
+    mlir::MLIRContext *context, const xla::HloSharding *hloSharding,
+    mlir::StringAttr meshName, mlir::sdy::MeshAttr meshAttr, int64_t rank,
+    const bool *isClosed, const int64_t *priority) {
   const SmallDenseMap<int64_t, StringRef> deviceIdToMaximalMeshName =
       SmallDenseMap<int64_t, StringRef>();
   mlir::sdy::TensorShardingAttr tensorShardingAttr =
@@ -2157,7 +2160,9 @@ hloShardingToTensorShardingAttr(const xla::HloSharding *hloSharding,
                                                  isClosed[i], dimPriority));
   }
 
-  return tensorShardingAttr;
+  return mlir::sdy::TensorShardingAttr::get(
+      context, meshName, tensorShardingAttr.getDimShardings(),
+      tensorShardingAttr.getReplicatedAxes());
 }
 
 #pragma endregion
