@@ -766,8 +766,8 @@ end
     clock = TestClock(ConcreteRNumber(0))
     simulation = TestSimulation(clock, ConcreteRNumber(3), ConcreteRNumber(true))
 
-    simulate! = @compile sync = true simulate!(simulation)
-    result = simulate!(simulation)
+    f! = @compile sync = true simulate!(simulation)
+    result = f!(simulation)
 
     @test result == [3, 3, false]
     @test simulation.running == false
