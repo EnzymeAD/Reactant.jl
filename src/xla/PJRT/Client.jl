@@ -1,8 +1,8 @@
 mutable struct Client <: XLA.AbstractClient
     client::Ptr{Cvoid}
 
-    function Client(client::Ptr{Cvoid})
-        @assert client != C_NULL
+    function Client(client::Ptr{Cvoid}; skip_check::Bool=false)
+        skip_check || (@assert client != C_NULL)
         return new(client)
     end
 end
@@ -25,6 +25,28 @@ function XLA.num_addressable_devices(client::Client)
             client.client::Ptr{Cvoid}
         )::Cint
     end
+end
+
+function XLA.devices(client::Client)
+    ndevices = Int(XLA.num_devices(client))
+    devices = Ref{NTuple{ndevices,Ptr{Cvoid}}}()
+    GC.@preserve client devices begin
+        @ccall MLIR.API.mlir_c.ClientGetDevices(
+            client.client::Ptr{Cvoid}, devices::Ptr{Ptr{Cvoid}}
+        )::Cvoid
+    end
+    return [Device(device) for device in devices[]]
+end
+
+function XLA.addressable_devices(client::Client)
+    naddressable_devices = Int(XLA.num_addressable_devices(client))
+    addressable_devices = Ref{NTuple{naddressable_devices,Ptr{Cvoid}}}()
+    GC.@preserve client addressable_devices begin
+        @ccall MLIR.API.mlir_c.ClientGetAddressableDevices(
+            client.client::Ptr{Cvoid}, addressable_devices::Ptr{Ptr{Cvoid}}
+        )::Cvoid
+    end
+    return [Device(device) for device in addressable_devices[]]
 end
 
 function XLA.process_index(client::Client)
@@ -75,8 +97,12 @@ for (backend, fname, counter) in (
     @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
         if checkcount
             @assert $(counter)[] == 0
+        end
+        client = Client(XLA.$(backend)($(fname), args...; kwargs...))
+        if checkcount
+            # Only increment the counter if we successfully created a client
             $(counter)[] += 1
         end
-        return Client(XLA.$(backend)($(fname), args...; kwargs...))
+        return client
     end
 end

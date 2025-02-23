@@ -1,27 +1,23 @@
 """
     devices(backend::String)
-    devices(backend::XLA.AbstractClient = XLA.default_backend[])
+    devices(backend::XLA.AbstractClient = XLA.default_backend())
 
-Return a list of devices available on the backend.
+Return a list of devices available for the given client.
 """
-devices(backend::String) = devices(XLA.backends[backend])
+devices(backend::String) = devices(XLA.client(backend))
 
-function devices(client::XLA.AbstractClient=XLA.default_backend[])
-    ndevices = XLA.num_devices(client)
-    return [XLA.get_device(client, i - 1) for i in 1:ndevices]
-end
+devices(client::XLA.AbstractClient=XLA.default_backend()) = XLA.devices(client)
 
 """
     addressable_devices(backend::String)
-    addressable_devices(backend::XLA.AbstractClient = XLA.default_backend[])
+    addressable_devices(backend::XLA.AbstractClient = XLA.default_backend())
 
-Return a list of addressable devices available on the backend.
+Return a list of addressable devices available for the given client.
 """
-addressable_devices(backend::String) = addressable_devices(XLA.backends[backend])
+addressable_devices(backend::String) = addressable_devices(XLA.client(backend))
 
-function addressable_devices(client::XLA.AbstractClient=XLA.default_backend[])
-    ndevices = XLA.num_addressable_devices(client)
-    return [XLA.get_addressable_device(client, i - 1) for i in 1:ndevices]
+function addressable_devices(client::XLA.AbstractClient=XLA.default_backend())
+    return XLA.addressable_devices(client)
 end
 
 # https://github.com/jax-ml/jax/blob/152099ee0ef31119f16f4c2dac50d84fcb1575ef/jax/_src/hardware_utils.py#L19-L55

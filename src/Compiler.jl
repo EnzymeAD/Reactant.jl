@@ -495,11 +495,8 @@ function compile_mlir(f, args; client=nothing, kwargs...)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    if client !== nothing
-        backend = XLA.platform_name(client)
-    else
-        backend = XLA.platform_name(XLA.default_backend[])
-    end
+    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+
     if backend == "CUDA"
         backend = "GPU"
     elseif backend == "CPU"
@@ -1423,7 +1420,7 @@ end
 
 function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     if is_sharded
-        client === nothing && (client = XLA.default_backend[])
+        client === nothing && (client = XLA.default_backend())
         return client, nothing
     end
 
@@ -1449,14 +1446,14 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
         if device !== nothing
             client = XLA.client(device)
         else
-            client = XLA.default_backend[]
-            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
+            client = XLA.default_backend()
+            device = XLA.default_device(client)
         end
     else
         if device !== nothing
             @assert client == XLA.client(device) "client ($(client)) and XLA.client(device) ($(XLA.client(device))) must be the same"
         else
-            device = XLA.get_addressable_device(client, XLA.default_device_idx[])
+            device = XLA.default_device(client)
         end
     end
 
@@ -1469,11 +1466,8 @@ function compile_xla(f, args; client=nothing, kwargs...)
     context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    if client !== nothing
-        backend = XLA.platform_name(client)
-    else
-        backend = XLA.platform_name(XLA.default_backend[])
-    end
+    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+
     if backend == "CUDA"
         backend = "GPU"
     elseif backend == "CPU"
