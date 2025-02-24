@@ -218,36 +218,14 @@ function make_mlir_fn(
     ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
 
-    mesh_cache = OrderedIdDict()
+    # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
-
-    # Detect if any of the arguments are sharded
-    is_sharded = false
     for (k, v) in seen_args
-        if k isa Reactant.ConcreteRArray
-            if Reactant.Sharding.is_sharded(k)
-                is_sharded = true
-                traced_args_to_shardings[v] = k.sharding
-                if !haskey(mesh_cache, k.sharding.mesh)
-                    mesh_op_attrs = Reactant.Ops.mesh(mod, k.sharding.mesh)
-                    mesh_cache[k.sharding.mesh] = mesh_op_attrs
-                end
-            end
+        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber) &&
+            Reactant.Sharding.is_sharded(k)
+            Reactant.Ops.mesh(k.sharding.mesh)
+            traced_args_to_shardings[v] = k.sharding
         end
-    end
-
-    if is_sharded
-        unique_meshes = unique([m.mesh for (k, m) in traced_args_to_shardings])
-        # TODO: support multiple meshes
-        @assert length(unique_meshes) == 1 "Currently we support using a single mesh"
-        # sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
-        # @assert allequal(sorted_devices) "All meshes must have the same device ids"
-        # num_partitions = length(first(sorted_devices))
-        sharding_mesh = first(unique_meshes)
-        mesh_op_attrs = mesh_cache[sharding_mesh]
-        num_partitions = length(sharding_mesh)
-    else
-        sharding_mesh = nothing
     end
 
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
@@ -261,64 +239,12 @@ function make_mlir_fn(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
 
-    if is_sharded
-        # Here we construct tensor sharding annotations for the function arguments
-        linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
-        for (i, arg) in enumerate(linear_args)
-            if haskey(traced_args_to_shardings, arg)
-                if ndims(arg) == 0
-                    throw(
-                        ErrorException(
-                            "Sharding annotations are not supported for scalar arguments"
-                        ),
-                    )
-                end
-                sharding = traced_args_to_shardings[arg]
-                mesh_op_attrs = mesh_cache[sharding.mesh]
-                @assert length(sharding.partition_spec) == ndims(arg)
-
-                dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(undef, ndims(arg))
-                for (j, name) in enumerate(sharding.partition_spec)
-                    if name === nothing
-                        axes = MLIR.IR.Attribute[]
-                    else
-                        @assert name isa Symbol
-                        axes = [
-                            MLIR.API.sdyAxisRefAttrGet(
-                                ctx, String(name), MLIR.API.MlirAttribute(C_NULL)
-                            ),
-                        ]
-                    end
-                    dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
-                        ctx, length(axes), axes, sharding.is_closed[j], sharding.priority[j]
-                    )
-                end
-
-                # Currently we don't support replicated axes from user input, we do
-                # implicitly via shardy
-                linear_arg_shardings[i] = MLIR.IR.Attribute(
-                    MLIR.API.sdyTensorShardingAttrGet(
-                        ctx,
-                        mesh_op_attrs.sym_name,
-                        length(dimension_sharding_attrs),
-                        if do_transpose
-                            reverse(dimension_sharding_attrs)
-                        else
-                            dimension_sharding_attrs
-                        end,
-                        0,
-                        MLIR.API.MlirAttribute[],
-                    ),
-                )
-            end
-        end
-    end
-
     @assert MLIR.IR._has_block()
 
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
     MLIR.IR.activate!(fnbody)
+
     result = try
         for (i, arg) in enumerate(linear_args)
             raw_arg = MLIR.IR.argument(fnbody, i)
@@ -326,7 +252,11 @@ function make_mlir_fn(
             set_mlir_data!(arg, row_maj_arg)
         end
 
-        Reactant.call_with_reactant(f, traced_args...)
+        if isempty(kwargs)
+            Reactant.call_with_reactant(f, traced_args...)
+        else
+            Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
+        end
     finally
         MLIR.IR.deactivate!(fnbody)
     end
@@ -411,10 +341,31 @@ function make_mlir_fn(
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
+    mesh_cache = Reactant.Compiler.sdycache()
+    is_sharded = !isempty(mesh_cache)
+
     if is_sharded
+        unique_meshes = keys(mesh_cache)
+
+        # TODO: support multiple meshes
+        if length(unique_meshes) > 1
+            error("Currently we support using a single mesh")
+            sorted_devices = [m.sorted_device_ids for m in unique_meshes]
+            @assert allequal(sorted_devices) "All meshes must have the same device ids"
+        end
+        sharding_mesh = first(unique_meshes)
+        num_partitions = length(sharding_mesh)
+
+        linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
+
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
+                sharding = traced_args_to_shardings[arg]
+                (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
+                linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
+                    sharding, ctx, sym_name, mesh_attr
+                )
                 MLIR.API.mlirFuncSetArgAttr(
                     func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
                 )
@@ -426,20 +377,16 @@ function make_mlir_fn(
         for i in mutated_args
             arg = linear_args[i]
             if has_residx(arg) && haskey(traced_args_to_shardings, arg)
-                residx = -1
-                for (j, res) in enumerate(linear_results)
-                    if res === arg
-                        residx = j
-                        break
-                    end
-                end
-                @assert residx > 0
+                residx = findfirst(Base.Fix1(===, arg), linear_results)
+                @assert residx !== nothing
                 result_not_replicated[residx] = true
                 MLIR.API.mlirFuncSetResultAttr(
                     func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
                 )
             end
         end
+    else
+        sharding_mesh = nothing
     end
 
     MLIR.API.mlirOperationDestroy(func.operation)
@@ -657,8 +604,19 @@ end
 function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
     return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
 end
-broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
+
+broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
+function broadcast_to_size(arg::UnitRange, rsize)
+    # For small inputs this will be automatically optimized away, and for large ranges
+    # helps reduce the IR size
+    x = Ops.add(
+        Ops.iota(eltype(arg), [length(arg)]; iota_dimension=1),
+        Ops.fill(first(arg), [length(arg)]),
+    )
+    return broadcast_to_size(x, rsize)
+end
+broadcast_to_size(arg::Base.OneTo, rsize) = broadcast_to_size(1:last(arg), rsize)
 
 function broadcast_to_size(arg::Base.RefValue, rsize)
     # XXX: don't we want to expand here to rsize?

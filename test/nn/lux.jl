@@ -40,7 +40,7 @@ end
     cps = Reactant.to_rarray(ps)
     cst = Reactant.to_rarray(Lux.testmode(st))
     cst2 = Reactant.to_rarray(st)
-    cnoisy = Reactant.ConcreteRArray(noisy)
+    cnoisy = Reactant.to_rarray(noisy)
 
     f = Reactant.compile((a, b, c, d) -> first(a(b, c, d)), (cmodel, cnoisy, cps, cst))
 
@@ -50,7 +50,7 @@ end
 
     target = onehotbatch(truth, [true, false])                   # 2×1000 OneHotMatrix
 
-    ctarget = Reactant.ConcreteRArray(Array{Float32}(target))
+    ctarget = Reactant.to_rarray(Array{Float32}(target))
     # ctarget = Reactant.to_rarray(target)
 
     res, dps = gradient_loss_function(model, noisy, target, ps, st)

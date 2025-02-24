@@ -1,5 +1,6 @@
 using Reactant, Test
 using LinearAlgebra
+using Reactant.ReactantCore
 
 function condition1(x)
     y = sum(x)
@@ -664,7 +665,7 @@ end
 
 @testset "call: rnumber" begin
     a = 10
-    a_rn = Reactant.ConcreteRNumber(a)
+    a_rn = ConcreteRNumber(a)
 
     @test @jit(call2(a_rn)) == call2(a)
 end
@@ -735,4 +736,41 @@ end
     @jit call5!(a_ra, b_ra)
     call5!(a, b)
     @test a_ra == a
+end
+
+mutable struct TestClock{I}
+    iteration::I
+end
+
+mutable struct TestSimulation{C,I,B}
+    clock::C
+    stop_iteration::I
+    running::B
+end
+
+function step!(sim)
+    cond = sim.clock.iteration >= sim.stop_iteration
+    @trace if cond
+        sim.running = false
+    else
+        sim.clock.iteration += 1 # time step
+    end
+    return sim
+end
+
+function simulate!(sim)
+    return ReactantCore.traced_while(sim -> sim.running, step!, (sim,))
+end
+
+@testset "simulation loop" begin
+    clock = TestClock(ConcreteRNumber(0))
+    simulation = TestSimulation(clock, ConcreteRNumber(3), ConcreteRNumber(true))
+
+    f! = @compile sync = true simulate!(simulation)
+    result = f!(simulation)
+
+    @test result == [3, 3, false]
+    @test simulation.running == false
+    @test simulation.clock.iteration == 3
+    @test simulation.stop_iteration == 3
 end

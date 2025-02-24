@@ -81,15 +81,15 @@ tuplef(a) = @cuda threads = 1 tuplef!((a,))
 tuplef2(a) = @cuda threads = 1 tuplef2!((5, a))
 
 @testset "Structured Kernel Arguments" begin
-    A = ConcreteRArray(fill(1))
+    A = Reactant.to_rarray(fill(1))
     @jit tuplef(A)
     @test all(Array(A) .≈ 3)
 
-    A = ConcreteRArray(fill(1))
+    A = Reactant.to_rarray(fill(1))
     @jit tuplef2(A)
     @test all(Array(A) .≈ 5)
 end
-A = ConcreteRArray(fill(1))
+A = Reactant.to_rarray(fill(1))
 @jit tuplef2(A)
 @test all(Array(A) .≈ 5)
 
@@ -108,7 +108,7 @@ function aliased(s)
 end
 
 @testset "Aliasing arguments" begin
-    a = ConcreteRArray([3])
+    a = Reactant.to_rarray([3])
 
     @jit aliased(a)
     @test all(Array(a) .== 9)
@@ -129,7 +129,7 @@ end
 @testset "Non-traced argument" begin
     if CUDA.functional()
         a = CuArray([4])
-        b = ConcreteRArray([3])
+        b = Reactant.to_rarray([3])
         @jit mixed(a, b)
         @test all(Array(a) .== 4)
         @test all(Array(b) .== 12)

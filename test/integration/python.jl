@@ -11,7 +11,7 @@ using Test
         jax = pyimport("jax")
 
         result = @jit jax.numpy.sum(Reactant.to_rarray(Float32[1, 2, 3]))
-        @test typeof(result) == ConcreteRNumber{Float32,1,Sharding.NoShardInfo}
+        @test typeof(result) == ConcretePJRTNumber{Float32,1,Sharding.NoShardInfo}
         @test result ≈ 6
     end
 end

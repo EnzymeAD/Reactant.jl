@@ -1,6 +1,10 @@
 abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
+abstract type AbstractConcreteNumber{T} <: RNumber{T} end
+
 abstract type RArray{T,N} <: AbstractArray{T,N} end
+
+abstract type AbstractConcreteArray{T,N} <: RArray{T,N} end
 
 # Traced Types
 
@@ -63,102 +67,114 @@ mutable struct TracedRNG <: Random.AbstractRNG
 end
 
 # Concrete Types
-## ConcreteRNumber
-mutable struct ConcreteRNumber{T,D,S<:Sharding.ShardInfo} <: RNumber{T}
-    data::NTuple{D,XLA.AsyncBuffer}
+## ConcretePJRTNumber
+mutable struct ConcretePJRTNumber{T,D,S<:Sharding.ShardInfo} <: AbstractConcreteNumber{T}
+    data::NTuple{D,XLA.PJRT.AsyncBuffer}
     sharding::S
 end
 
-ConcreteRNumber{T,1,Sharding.NoShardInfo}(x::Number) where {T} = ConcreteRNumber{T}(x)
+ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(x::Number) where {T} = ConcretePJRTNumber{T}(x)
 
-function ConcreteRNumber{T}(data::Tuple{XLA.AsyncBuffer}) where {T}
-    return ConcreteRNumber{T,1,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
+function ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
+    return ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
 end
 
-@leaf ConcreteRNumber
+@leaf ConcretePJRTNumber
 
-function ConcreteRNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
-    carray = ConcreteRArray(fill(convert(T, data)); kwargs...)
+function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
+    carray = ConcretePJRTArray(fill(convert(T, data)); kwargs...)
     if !Sharding.is_sharded(carray.sharding)
-        return ConcreteRNumber{T,1,typeof(carray.sharding)}(
+        return ConcretePJRTNumber{T,1,typeof(carray.sharding)}(
             (carray.data[1],), carray.sharding
         )
     end
-    @assert all(isnothing, carray.sharding.partition_spec) "ConcreteRNumber cannot be \
+    @assert all(isnothing, carray.sharding.partition_spec) "ConcretePJRTNumber cannot be \
                                                             sharded"
-    return ConcreteRNumber{T,length(carray.data),typeof(carray.sharding)}(
+    return ConcretePJRTNumber{T,length(carray.data),typeof(carray.sharding)}(
         carray.data, carray.sharding
     )
 end
-ConcreteRNumber(data::T; kwargs...) where {T<:Number} = ConcreteRNumber{T}(data; kwargs...)
+function ConcretePJRTNumber(data::T; kwargs...) where {T<:Number}
+    return ConcretePJRTNumber{T}(data; kwargs...)
+end
 
-## ConcreteRArray
-mutable struct ConcreteRArray{T,N,D,S<:Sharding.ShardInfo} <: RArray{T,N}
-    data::NTuple{D,XLA.AsyncBuffer}
+## ConcretePJRTArray
+mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: AbstractConcreteArray{T,N}
+    data::NTuple{D,XLA.PJRT.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::S
 end
 
-@leaf ConcreteRArray
-Adapt.parent_type(::Type{<:ConcreteRArray{T,N}}) where {T,N} = ConcreteRArray{T,N}
-Adapt.parent_type(::Type{ConcreteRArray{T,N,D,S}}) where {T,N,D,S} = ConcreteRArray{T,N,D,S}
-
-Base.@deprecate ConcreteRArray(data::Number; kwargs...) ConcreteRNumber(data; kwargs...)
-
-function ConcreteRArray{T,N}(data::Tuple{XLA.AsyncBuffer}, shape::NTuple{N,Int}) where {T,N}
-    return ConcreteRArray{T,N,1,Sharding.NoShardInfo}(data, shape, Sharding.NoShardInfo())
+@leaf ConcretePJRTArray
+Adapt.parent_type(::Type{<:ConcretePJRTArray{T,N}}) where {T,N} = ConcretePJRTArray{T,N}
+function Adapt.parent_type(::Type{ConcretePJRTArray{T,N,D,S}}) where {T,N,D,S}
+    return ConcretePJRTArray{T,N,D,S}
 end
 
-function ConcreteRArray(
+Base.@deprecate ConcretePJRTArray(data::Number; kwargs...) ConcretePJRTNumber(
+    data; kwargs...
+)
+
+function ConcretePJRTArray{T,N}(
+    data::Tuple{XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}
+) where {T,N}
+    return ConcretePJRTArray{T,N,1,Sharding.NoShardInfo}(
+        data, shape, Sharding.NoShardInfo()
+    )
+end
+
+function ConcretePJRTArray(
     data::Array{T,N};
-    client::XLA.Client=XLA.default_backend[],
+    client::XLA.AbstractClient=XLA.default_backend(),
     idx::Union{Int,Nothing}=nothing,
-    device::Union{Nothing,XLA.Device}=nothing,
+    device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
     if !Sharding.is_sharded(sharding)
         if device === nothing
-            idx = idx === nothing ? XLA.default_device_idx[] : idx
-            device = XLA.ClientGetAddressableDevice(client, XLA.device_ordinal(client, idx))
+            if idx === nothing
+                device = XLA.default_device(client)
+            else
+                device = XLA.get_device(client, idx)
+            end
         else
             if idx !== nothing
-                device_from_idx = XLA.ClientGetAddressableDevice(
-                    client, XLA.device_ordinal(client, idx)
-                )
-                @assert device_from_idx == device "If both `idx` and `device` are specified, `idx` must match `device`"
+                device_from_idx = XLA.get_device(client, idx)
+                @assert device_from_idx == device "If both `idx` and `device` are \
+                                                   specified, `idx` must match `device`"
             end
         end
         sdata, sharding = sharding(client, device, data)
-        return ConcreteRArray{T,N,1,typeof(sharding)}(sdata, size(data), sharding)
+        return ConcretePJRTArray{T,N,1,typeof(sharding)}(sdata, size(data), sharding)
     end
     @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, `device` and `idx` cannot be specified!"
     sharded_data, sharding = sharding(client, nothing, data)
-    return ConcreteRArray{T,N,length(sharded_data),typeof(sharding)}(
+    return ConcretePJRTArray{T,N,length(sharded_data),typeof(sharding)}(
         sharded_data, size(data), sharding
     )
 end
 
-XLA.await(x::Union{ConcreteRArray,ConcreteRNumber}) = foreach(XLA.await, x.data)
-XLA.client(x::Union{ConcreteRArray,ConcreteRNumber}) = XLA.client(x.data)
-function XLA.device(x::Union{ConcreteRArray,ConcreteRNumber})
+XLA.await(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(XLA.await, x.data)
+XLA.client(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = XLA.client(x.data)
+function XLA.device(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
     x.sharding isa Sharding.NoShardInfo && return XLA.device(only(x.data))
-    return nothing # This is intentional to make constructing ConcreteRArrays easier
+    return nothing # This is intentional to make constructing ConcretePJRTArrays easier
 end
 
-const ConcreteRScalar{T} = Union{ConcreteRArray{T,0},ConcreteRNumber{T}}
-const WrappedConcreteRArray{T,N,D,S} = WrappedArray{
-    T,N,ConcreteRArray,ConcreteRArray{T,N,D,S}
+const ConcretePJRTScalar{T} = Union{ConcretePJRTArray{T,0},ConcretePJRTNumber{T}}
+const WrappedConcretePJRTArray{T,N,D,S} = WrappedArray{
+    T,N,ConcretePJRTArray,ConcretePJRTArray{T,N,D,S}
 }
-const AnyConcreteRArray{T,N,D,S} = Union{
-    ConcreteRArray{T,N,D,S},WrappedConcreteRArray{T,N,D,S}
+const AnyConcretePJRTArray{T,N,D,S} = Union{
+    ConcretePJRTArray{T,N,D,S},WrappedConcretePJRTArray{T,N,D,S}
 }
 
-ConcreteRArray(x::AnyConcreteRArray) = ConcreteRArray{eltype(x),ndims(x)}(x)
-ConcreteRArray{T}(x::AnyConcreteRArray) where {T} = ConcreteRArray{T,ndims(x)}(x)
-ConcreteRArray{T,N}(x::ConcreteRArray{T,N}) where {T,N} = x
-function ConcreteRArray{T,N}(x::AnyConcreteRArray) where {T,N}
+ConcretePJRTArray(x::AnyConcretePJRTArray) = ConcretePJRTArray{eltype(x),ndims(x)}(x)
+ConcretePJRTArray{T}(x::AnyConcretePJRTArray) where {T} = ConcretePJRTArray{T,ndims(x)}(x)
+ConcretePJRTArray{T,N}(x::ConcretePJRTArray{T,N}) where {T,N} = x
+function ConcretePJRTArray{T,N}(x::AnyConcretePJRTArray) where {T,N}
     ancestor_x = ancestor(x)
-    return ConcreteRArray(
+    return ConcretePJRTArray(
         convert(Array{T,N}, x);
         client=XLA.client(ancestor_x),
         device=XLA.device(ancestor_x),
@@ -167,7 +183,11 @@ function ConcreteRArray{T,N}(x::AnyConcreteRArray) where {T,N}
 end
 
 ## ConcreteRNG
-mutable struct ConcreteRNG{D,S} <: Random.AbstractRNG
-    seed::ConcreteRArray{UInt64,1,D,S}
+mutable struct ConcreteRNG{S<:ConcretePJRTArray} <: Random.AbstractRNG
+    seed::S
     const algorithm::String
 end
+
+## Aliases to prevent breaking changes
+const ConcreteRArray = ConcretePJRTArray
+const ConcreteRNumber = ConcretePJRTNumber

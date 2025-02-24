@@ -1,145 +1,75 @@
-# Buffer
-@inline function free_buffer(buffer)
-    sbuffer = buffer.buffer
-    if sbuffer != C_NULL
-        @ccall MLIR.API.mlir_c.PjRtBufferFree(sbuffer::Ptr{Cvoid})::Cvoid
-    end
+abstract type AbstractBuffer end
+
+function synced_buffer end
+function buffer_on_cpu end
+function to_host end
+function unsafe_buffer_pointer end
+function copy_buffer_to_device end
+function sharding end
+
+Base.convert(::Type{Array}, buffer::AbstractBuffer) = convert(Array{eltype(buffer)}, buffer)
+
+function Base.convert(::Type{<:Array{T}}, buffer::AbstractBuffer) where {T}
+    arr = zeros(T, reverse(size(buffer))...)
+    XLA.to_host(buffer, arr)
+    return arr
 end
 
-mutable struct Buffer
-    buffer::Ptr{Cvoid}
-    function Buffer(buffer::Ptr{Cvoid})
-        return finalizer(free_buffer, new(buffer))
-    end
-end
-
-function Base.ndims(buffer::Buffer)
-    GC.@preserve buffer begin
-        return @ccall MLIR.API.mlir_c.BufferNDimensions(buffer.buffer::Ptr{Cvoid})::Cint
-    end
-end
-
-function Base.size(buffer::Buffer)
-    GC.@preserve buffer begin
-        sz = @ccall MLIR.API.mlir_c.BufferShape(buffer.buffer::Ptr{Cvoid})::Ptr{Int64}
-    end
-    return [unsafe_load(sz, i) for i in 1:ndims(buffer)]
-end
-
-function device(buffer::Buffer)
-    GC.@preserve buffer begin
-        return Device(
-            @ccall MLIR.API.mlir_c.BufferToDevice(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
-        )
-    end
-end
-
-function client(buffer::Buffer)
-    GC.@preserve buffer begin
-        return Client(
-            @ccall MLIR.API.mlir_c.BufferToClient(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
-        )
-    end
-end
-
-@inline synced_buffer(buffer::Buffer) = buffer
-
-# TODO users themselves need to gc preserve here
-function UnsafeBufferPointer(buffer::Buffer)
-    @ccall MLIR.API.mlir_c.UnsafeBufferPointer(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
-end
-
-function BufferOnCPU(buffer::Buffer)
-    GC.@preserve buffer begin
-        (@ccall MLIR.API.mlir_c.BufferOnCPU(buffer.buffer::Ptr{Cvoid})::UInt8) != 0
-    end
-end
-
-function ArrayFromHostBuffer(client::Client, array::Array{T,N}, device) where {T,N}
-    sizear = Int64[s for s in reverse(size(array))]
-    buffer = GC.@preserve array sizear begin
-        @ccall MLIR.API.mlir_c.ArrayFromHostBuffer(
-            client.client::Ptr{Cvoid},
-            pointer(array)::Ptr{T},
-            primitive_type(T)::UInt64,
-            N::Csize_t,
-            pointer(sizear)::Ptr{Int64},
-            device.device::Ptr{Cvoid},
-        )::Ptr{Cvoid}
-    end
-    return Buffer(buffer)
-end
-
-function BufferToHost(buffer::Buffer, data)
-    GC.@preserve buffer begin
-        @ccall MLIR.API.mlir_c.BufferToHost(
-            buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
-        )::Cvoid
-    end
-end
-
-function CopyBufferToDevice(buffer::Buffer, dev::Device)
-    device(buffer) == dev && return buffer
-    GC.@preserve buffer dev begin
-        Buffer(
-            @ccall MLIR.API.mlir_c.CopyBufferToDevice(
-                buffer.buffer::Ptr{Cvoid}, dev.device::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
-    end
-end
-
-# AsyncBuffer
-mutable struct AsyncBuffer
-    buffer::Buffer
-    future::Union{Future,Nothing}
-end
-
-const AsyncEmptyBuffer = AsyncBuffer(Buffer(C_NULL), nothing)
-
-for op in (:(Base.ndims), :(Base.size), :device, :client)
-    @eval $op(buffer::AsyncBuffer) = $op(buffer.buffer)
-end
-
-function client(buffers::Union{Array{<:AsyncBuffer},NTuple{<:Any,AsyncBuffer}})
+@inline function client(
+    buffers::Union{Array{<:AbstractBuffer},NTuple{<:Any,AbstractBuffer}}
+)
     all_clients = map(client, buffers)
     @assert allequal(all_clients) "All buffers must have the same client"
     return first(all_clients)
 end
 
-@inline function synced_buffer(buffer::AsyncBuffer)
-    if buffer.future !== nothing
-        future = buffer.future
-        buffer.future = nothing
-        await(future::Future)
-    end
-    return buffer.buffer
-end
-
 @inline function synced_buffer(
-    buffers::Union{
-        AbstractArray{<:Union{AsyncBuffer,Buffer}},NTuple{<:Any,<:Union{AsyncBuffer,Buffer}}
-    },
+    buffers::Union{AbstractArray{<:AbstractBuffer},NTuple{<:Any,<:AbstractBuffer}}
 )
     return map(synced_buffer, buffers)
 end
 
-@inline function await(buffer::AsyncBuffer)::Nothing
-    if buffer.future === nothing
-        return nothing
-    else
-        future = buffer.future
-        buffer.future = nothing
-        await(future::Future)
-    end
+function Base.show(io::IO, mime::MIME"text/plain", buffer::B) where {B<:AbstractBuffer}
+    print(io, "$(B) storing ")
+    show(io, mime, convert(Array, buffer))
     return nothing
 end
 
-function is_ready(buffer::AsyncBuffer)::Bool
-    future = buffer.future
-    if isnothing(future)
-        return true
-    else
-        return is_ready(future)
-    end
+# Async Buffers
+abstract type AbstractAsyncBuffer <: AbstractBuffer end
+
+Base.isempty(buffer::AbstractAsyncBuffer) = buffer.buffer.buffer == C_NULL
+
+function Base.convert(T::Type{Array}, buffer::AbstractAsyncBuffer)
+    XLA.await(buffer)
+    return convert(T, buffer.buffer)
 end
+
+function Base.convert(T::Type{<:Array{T1}}, buffer::AbstractAsyncBuffer) where {T1}
+    XLA.await(buffer)
+    return convert(T, buffer.buffer)
+end
+
+for op in (:(Base.ndims), :(Base.size), :(Base.eltype), :device, :client, :sharding)
+    @eval $op(buffer::AbstractAsyncBuffer) = $op(buffer.buffer)
+end
+
+function XLA.synced_buffer(buffer::AbstractAsyncBuffer)
+    XLA.await(buffer)
+    return buffer.buffer
+end
+
+function XLA.await(buffer::AbstractAsyncBuffer)
+    buffer.future === nothing && return nothing
+    future = buffer.future
+    buffer.future = nothing
+    XLA.await(future)
+    return nothing
+end
+
+function XLA.is_ready(buffer::AbstractAsyncBuffer)
+    buffer.future === nothing && return true
+    return XLA.is_ready(buffer.future)
+end
+
+XLA.buffer_on_cpu(buffer::AbstractAsyncBuffer) = XLA.buffer_on_cpu(buffer.buffer)

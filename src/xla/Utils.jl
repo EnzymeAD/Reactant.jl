@@ -13,34 +13,43 @@ function reactant_err(msg::Cstring)::Cvoid
 end
 
 # https://github.com/openxla/xla/blob/4bfb5c82a427151d6fe5acad8ebe12cee403036a/xla/xla_data.proto#L29
-@inline primitive_type(::Type{Bool}) = 1
-
-@inline primitive_type(::Type{Int8}) = 2
-@inline primitive_type(::Type{UInt8}) = 6
-
-@inline primitive_type(::Type{Int16}) = 3
-@inline primitive_type(::Type{UInt16}) = 7
-
-@inline primitive_type(::Type{Int32}) = 4
-@inline primitive_type(::Type{UInt32}) = 8
-
-@inline primitive_type(::Type{Int64}) = 5
-@inline primitive_type(::Type{UInt64}) = 9
-
-@inline primitive_type(::Type{Float16}) = 10
-@inline primitive_type(::Type{Float32}) = 11
-
-@inline primitive_type(::Type{Reactant.F8E5M2}) = 19
-@inline primitive_type(::Type{Reactant.F8E4M3FN}) = 20
-@inline primitive_type(::Type{Reactant.F8E4M3B11FNUZ}) = 23
-@inline primitive_type(::Type{Reactant.F8E5M2FNUZ}) = 24
-@inline primitive_type(::Type{Reactant.F8E4M3FNUZ}) = 25
+primitive_types_list = [
+    (1, Bool),
+    (2, Int8),
+    (6, UInt8),
+    (3, Int16),
+    (7, UInt16),
+    (4, Int32),
+    (8, UInt32),
+    (5, Int64),
+    (9, UInt64),
+    (10, Float16),
+    (11, Float32),
+    (19, Reactant.F8E5M2),
+    (20, Reactant.F8E4M3FN),
+    (23, Reactant.F8E4M3B11FNUZ),
+    (24, Reactant.F8E5M2FNUZ),
+    (25, Reactant.F8E4M3FNUZ),
+    (12, Float64),
+    (15, Complex{Float32}),
+    (18, Complex{Float64}),
+]
 
 @static if isdefined(Core, :BFloat16)
-    @inline primitive_type(::Type{Core.BFloat16}) = 16
+    push!(primitive_types_list, (16, Core.BFloat16))
 end
 
-@inline primitive_type(::Type{Float64}) = 12
+for (int_val, jl_type) in primitive_types_list
+    @eval begin
+        @inline primitive_type(::Type{$(jl_type)}) = $(int_val)
+        @inline julia_type(::Val{$(int_val)}) = $(jl_type)
+    end
+end
 
-@inline primitive_type(::Type{Complex{Float32}}) = 15
-@inline primitive_type(::Type{Complex{Float64}}) = 18
+@inline julia_type(@nospecialize(x::Integer)) = julia_type(Val(Int64(x)))
+
+function unsafe_string_and_free(str::Cstring, args...)
+    str_jl = unsafe_string(str, args...)
+    @ccall free(str::Cstring)::Cvoid
+    return str_jl
+end

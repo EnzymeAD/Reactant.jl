@@ -96,7 +96,7 @@ end
 end
 
 @testset "zeta" begin
-    s = ConcreteRArray([1.0, 2.0, 50.0])
-    z = ConcreteRArray([1e-8, 0.001, 2.0])
+    s = Reactant.to_rarray([1.0, 2.0, 50.0])
+    z = Reactant.to_rarray([1e-8, 0.001, 2.0])
     @test SpecialFunctions.zeta.(Array(s), Array(z)) ≈ @jit SpecialFunctions.zeta.(s, z)
 end

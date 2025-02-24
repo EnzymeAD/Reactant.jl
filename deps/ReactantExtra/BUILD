@@ -466,8 +466,33 @@ cc_library(
 "-Wl,-exported_symbol,_BufferNDimensions",
 "-Wl,-exported_symbol,_BufferPrimitiveType",
 "-Wl,-exported_symbol,_PjRtLoadedExecutableGetOuputShardings",
+"-Wl,-exported_symbol,_PjRtLoadedExecutableGetParameterShardings",
+"-Wl,-exported_symbol,_PjRtLoadedExecutableGetHloModules",
+"-Wl,-exported_symbol,_HloModuleToString",
+"-Wl,-exported_symbol,_FreeHloModule",
+"-Wl,-exported_symbol,_PjRtLoadedExecutableNumReplicas",
+"-Wl,-exported_symbol,_PjRtLoadedExecutableNumPartitions",
 "-Wl,-exported_symbol,_ifrt_*",
 "-Wl,-exported_symbol,_reactant_*",
+"-Wl,-exported_symbol,_free_op_sharding",
+"-Wl,-exported_symbol,_free_hlo_sharding",
+"-Wl,-exported_symbol,_free_ifrt_hlo_sharding",
+"-Wl,-exported_symbol,_hlo_sharding_from_op_sharding",
+"-Wl,-exported_symbol,_hlo_sharding_to_op_sharding",
+"-Wl,-exported_symbol,_hlo_sharding_to_string",
+"-Wl,-exported_symbol,_DeviceGetKind",
+"-Wl,-exported_symbol,_GetDistributedRuntimeClient",
+"-Wl,-exported_symbol,_free_distributed_runtime_client",
+"-Wl,-exported_symbol,_distributed_runtime_client_connect",
+"-Wl,-exported_symbol,_distributed_runtime_client_shutdown",
+"-Wl,-exported_symbol,_GetDistributedRuntimeService",
+"-Wl,-exported_symbol,_free_distributed_runtime_service",
+"-Wl,-exported_symbol,_distributed_runtime_service_shutdown",
+"-Wl,-exported_symbol,_ClientGetDevices",
+"-Wl,-exported_symbol,_ClientGetAddressableDevices",
+"-Wl,-exported_symbol,_hloShardingFromTensorShardingAttr",
+"-Wl,-exported_symbol,_op_sharding_*",
+"-Wl,-exported_symbol,_hloShardingToTensorShardingAttr",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -513,12 +538,17 @@ cc_library(
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
+        "@xla//xla/pjrt/distributed:distributed",
+        "@xla//xla/pjrt/distributed:client",
+        "@xla//xla/pjrt/distributed:service",
+        "@xla//xla/service/spmd/shardy/stablehlo_round_trip:export_shardings",
+        "@xla//xla/service/spmd/shardy/stablehlo_round_trip:stablehlo_import",
 
         "@xla//xla:xla_proto_cc",
         "@xla//xla:xla_proto_cc_impl",
         "@xla//xla/stream_executor:device_description_proto_cc_impl",
 
-	"@xla//xla/tsl/platform/default:platform_port",
+        "@xla//xla/tsl/platform/default:platform_port",
 
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
@@ -532,13 +562,19 @@ cc_library(
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
 
-	"@xla//xla/tsl/protobuf:protos_all_cc_impl",
+        "@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
 
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt:ifrt",
         "@xla//xla/python/pjrt_ifrt:pjrt_ifrt",
+        "@xla//xla/python/ifrt_proxy/server:grpc_server",
+        "@xla//xla/python/ifrt_proxy/client:grpc_client",
+        "@xla//xla/python/ifrt_proxy/client:registry",
+        # "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
+        # "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "@xla//xla/python/ifrt/hlo:hlo_program",
+        "@xla//xla/python/ifrt/ir:ifrt_ir_program",
         "@xla//xla/ffi:call_frame",
         "@com_google_protobuf//:protobuf",
 
@@ -566,6 +602,7 @@ cc_library(
         "@xla//xla/backends/profiler/cpu:metadata_utils",
         "@xla//xla/backends/profiler/tpu:tpu_tracer",
         "@xla//xla/python:profiler_utils",
+        "@xla//xla/backends/cpu/collectives:mpi_collectives",
 
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
@@ -596,7 +633,20 @@ cc_library(
     }) + if_rocm([
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/backends/profiler/gpu:device_tracer",
-    ]),
+    ]) + select({
+        # gloo tcp transport only builds on linux
+        "@xla//xla/tsl:macos": [
+            "@xla//xla/backends/cpu/collectives:gloo_collectives",
+            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@gloo//:transport_uv",
+        ],
+        "@xla//xla/tsl:windows": [],
+        "//conditions:default": [
+            "@xla//xla/backends/cpu/collectives:gloo_collectives",
+            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@gloo//:transport_tcp",
+        ],
+    }),
 )
 
 # cc_shared_library(

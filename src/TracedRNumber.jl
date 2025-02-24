@@ -94,7 +94,6 @@ for (jlop, hloop) in (
     (:(Base.:*), :multiply),
     (:(Base.:/), :divide),
     (:(Base.:^), :power),
-    (:(Base.mod), :remainder),
     (:(Base.rem), :remainder),
 )
     @eval function $(jlop)(
@@ -102,6 +101,35 @@ for (jlop, hloop) in (
     ) where {T}
         return Ops.$(hloop)(lhs, rhs)
     end
+end
+
+function Base.rem(
+    @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+) where {T}
+    return Ops.remainder(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+end
+function Base.rem(
+    @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
+) where {T}
+    return Ops.remainder(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
+end
+
+# Based on https://github.com/JuliaLang/julia/blob/39255d47db7657950ff1c82137ecec5a70bae622/base/float.jl#L608-L617
+function Base.mod(
+    @nospecialize(x::Reactant.TracedRNumber{T}), @nospecialize(y::Reactant.TracedRNumber{T})
+) where {T}
+    r = rem(x, y)
+    return ifelse(r == 0, copysign(r, y), ifelse((r > 0) ⊻ (y > 0), r + y, r))
+end
+function Base.mod(
+    @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+) where {T}
+    return mod(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+end
+function Base.mod(
+    @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
+) where {T}
+    return mod(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
 end
 
 function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T<:Integer}
@@ -208,6 +236,12 @@ for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
         end
         function Base.:|(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
             return Ops.or(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.xor(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+            return Ops.xor(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
@@ -379,4 +413,20 @@ function Base.typed_hvncat(
     return Base.typed_hvncat(T, dims, row_first, xs...)
 end
 
+for (Ti, Tf) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
+    @eval begin
+        Base.signbit(x::TracedRNumber{$(Ti)}) = x < 0
+        Base.signbit(x::TracedRNumber{$(Tf)}) = signbit(Ops.bitcast_convert($(Ti), x))
+    end
 end
+Base.signbit(::TracedRNumber{<:Unsigned}) = ConcretePJRTNumber(false)
+
+Base.copysign(x::TracedRNumber, y::TracedRNumber) = ifelse(signbit(y), -1, 1) * abs(x)
+function Base.copysign(x::TracedRNumber{T}, y::S) where {T,S<:Number}
+    return copysign(x, TracedUtils.promote_to(TracedRNumber{S}, y))
+end
+function Base.copysign(x::S, y::TracedRNumber{T}) where {S<:Number,T}
+    return copysign(TracedUtils.promote_to(TracedRNumber{S}, x), y)
+end
+
+end # module TracedRNumberOverrides
