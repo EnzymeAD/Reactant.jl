@@ -16,7 +16,7 @@ using Reactant, Flux
     origout = model(noisy)
 
     cmodel = Reactant.to_rarray(model)
-    cnoisy = Reactant.ConcreteRArray(noisy)
+    cnoisy = Reactant.to_rarray(noisy)
 
     f = Reactant.compile((a, b) -> a(b), (cmodel, cnoisy))
 

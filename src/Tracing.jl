@@ -57,7 +57,7 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     if Mode == ArrayToConcrete && T <: track_numbers
         if !Sharding.is_sharded(sharding)
-            return ConcreteRNumber{T,1,Sharding.NoShardInfo}
+            return ConcretePJRTNumber{T,1,Sharding.NoShardInfo}
         else
             error("TODO: implement sharding")
         end
@@ -232,7 +232,7 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T0::Type{<:ConcreteRNumber}),
+    @nospecialize(T0::Type{<:ConcretePJRTNumber}),
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
@@ -249,7 +249,7 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ConcreteRArray}),
+    @nospecialize(T::Type{<:ConcretePJRTArray}),
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
@@ -301,7 +301,7 @@ Base.@nospecializeinfer function traced_type_inner(
         throw("TracedRArray cannot be traced")
     elseif mode == TracedToConcrete
         if !Sharding.is_sharded(sharding)
-            return ConcreteRArray{T.parameters[1],T.parameters[2],1,Sharding.NoShardInfo}
+            return ConcretePJRTArray{T.parameters[1],T.parameters[2],1,Sharding.NoShardInfo}
         else
             error("TODO: implement sharding")
         end
@@ -323,7 +323,10 @@ Base.@nospecializeinfer function traced_type_inner(
         throw("TracedRNumber cannot be traced")
     elseif mode == TracedToConcrete
         if !Sharding.is_sharded(sharding)
-            return ConcreteRNumber{T.parameters[1],1,Sharding.NoShardInfo}
+            if T isa UnionAll
+                return UnionAll(T.var, ConcretePJRTNumber{T.var,1,Sharding.NoShardInfo})
+            end
+            return ConcretePJRTNumber{T.parameters[1],1,Sharding.NoShardInfo}
         else
             error("TODO: implement sharding")
         end
@@ -401,7 +404,7 @@ Base.@nospecializeinfer function traced_type_inner(
     T = eltype(A)
     if A isa UnionAll
         if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
-            return ConcreteRArray{T}
+            return ConcretePJRTArray{T}
         else
             return Array{
                 traced_type_inner(T, seen, mode, track_numbers, getproperty(sharding, 1))
@@ -411,7 +414,7 @@ Base.@nospecializeinfer function traced_type_inner(
         N = ndims(A)
         if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
             if !Sharding.is_sharded(sharding)
-                return ConcreteRArray{T,N,1,Sharding.NoShardInfo}
+                return ConcretePJRTArray{T,N,1,Sharding.NoShardInfo}
             else
                 error("TODO: implement sharding")
             end
@@ -551,7 +554,7 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     end
 
-    wrapped_carray = T <: AbstractArray && ancestor(T) <: ConcreteRArray
+    wrapped_carray = T <: AbstractArray && ancestor(T) <: ConcretePJRTArray
     wrapped_tracedarray = T <: AbstractArray && ancestor(T) <: TracedRArray
 
     subParms = []
@@ -559,7 +562,7 @@ Base.@nospecializeinfer function traced_type_inner(
         if wrapped_carray && i == 1 && SST isa Type && SST <: ReactantPrimitive
             # XXX: Sharding???
             TrT = traced_type_inner(
-                ConcreteRNumber{SST,1,Sharding.ShardInfo},
+                ConcretePJRTNumber{SST,1,Sharding.ShardInfo},
                 seen,
                 mode,
                 track_numbers,
@@ -867,14 +870,14 @@ end
 
 function make_tracer(
     seen,
-    @nospecialize(prev::ConcreteRArray{T,N}),
+    @nospecialize(prev::ConcretePJRTArray{T,N}),
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 ) where {T,N}
     if mode == TracedToTypes
-        throw("Cannot have ConcreteRArray as function call argument.")
+        throw("Cannot have ConcretePJRTArray as function call argument.")
     end
     if mode == ArrayToConcrete
         if prev.sharding isa Sharding.ShardInfo{typeof(sharding)}
@@ -898,14 +901,14 @@ end
 
 function make_tracer(
     seen,
-    prev::ConcreteRNumber{T},
+    prev::ConcretePJRTNumber{T},
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 ) where {T}
     if mode == TracedToTypes
-        throw("Cannot have ConcreteRNumber as function call argument.")
+        throw("Cannot have ConcretePJRTNumber as function call argument.")
     end
     if mode == ArrayToConcrete
         if !Sharding.is_sharded(sharding)
@@ -973,10 +976,10 @@ function make_tracer(
 
     if mode == TracedToConcrete
         if haskey(seen, prev)
-            return seen[prev]::ConcreteRArray{T,N}
+            return seen[prev]::ConcretePJRTArray{T,N}
         end
         if !Sharding.is_sharded(sharding)
-            res = ConcreteRArray{T,N,1,Sharding.NoShardInfo}(
+            res = ConcretePJRTArray{T,N,1,Sharding.NoShardInfo}(
                 (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
             )
         else
@@ -1037,10 +1040,10 @@ function make_tracer(
 
     if mode == TracedToConcrete
         if haskey(seen, prev)
-            return seen[prev]::ConcreteRNumber{T}
+            return seen[prev]::ConcretePJRTNumber{T}
         end
         if !Sharding.is_sharded(sharding)
-            res = ConcreteRNumber{T,1,Sharding.NoShardInfo}(
+            res = ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(
                 (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
             )
         else
@@ -1106,7 +1109,7 @@ function make_tracer(
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Numbers")
     if RT <: track_numbers
         if mode == ArrayToConcrete
-            return ConcreteRNumber(prev; sharding)
+            return ConcretePJRTNumber(prev; sharding)
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
                 res = TracedRNumber{RT}(
@@ -1188,7 +1191,7 @@ function make_tracer(
         return seen[prev]
     end
     if eltype(RT) <: ReactantPrimitive
-        if mode == ArrayToConcrete && return seen[prev] = ConcreteRArray(prev; sharding)
+        if mode == ArrayToConcrete && return seen[prev] = ConcretePJRTArray(prev; sharding)
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
             push!(path, copy(prev))
@@ -1255,7 +1258,7 @@ function make_tracer(
         return seen[prev]
     end
     if eltype(RT) <: ReactantPrimitive
-        if mode == ArrayToConcrete && return seen[prev] = ConcreteRArray(prev; sharding)
+        if mode == ArrayToConcrete && return seen[prev] = ConcretePJRTArray(prev; sharding)
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
             push!(path, copy(prev))
@@ -1421,11 +1424,11 @@ function to_rarray_internal(
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
-    return error("Cannot convert TracedRArray to ConcreteRArray")
+    return error("Cannot convert TracedRArray to ConcretePJRTArray")
 end
 
 @inline function to_rarray_internal(
-    @nospecialize(x::ConcreteRArray),
+    @nospecialize(x::ConcretePJRTArray),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
@@ -1442,20 +1445,20 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
-    return ConcreteRArray(x; sharding)
+    return ConcretePJRTArray(x; sharding)
 end
 
 @inline function to_rarray_internal(
     @nospecialize(x::Array{T}), @nospecialize(track_numbers::Type), @nospecialize(sharding)
 ) where {T<:Number}
     if reactant_primitive(T) !== nothing
-        return ConcreteRArray(to_reactant_primitive.(x); sharding)
+        return ConcretePJRTArray(to_reactant_primitive.(x); sharding)
     end
     return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding)
 end
 
 @inline function to_rarray_internal(
-    @nospecialize(x::ConcreteRNumber),
+    @nospecialize(x::ConcretePJRTNumber),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
@@ -1472,7 +1475,7 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
-    typeof(x) <: track_numbers && return ConcreteRNumber(x; sharding)
+    typeof(x) <: track_numbers && return ConcretePJRTNumber(x; sharding)
     return x
 end
 
@@ -1481,7 +1484,7 @@ end
 )
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Numbers")
     if reactant_primitive(typeof(x)) !== nothing
-        return ConcreteRArray(to_reactant_primitive(x))
+        return ConcretePJRTArray(to_reactant_primitive(x))
     end
     return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding)
 end

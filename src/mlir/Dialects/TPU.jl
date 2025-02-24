@@ -1285,6 +1285,25 @@ function vector_store(
     )
 end
 
+function wait_dma2(semaphore::Value, src::Value, dst::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[semaphore, src, dst]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.wait_dma2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function wait_dma(semaphore::Value, ref::Value; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[semaphore, ref]

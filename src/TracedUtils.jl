@@ -218,20 +218,13 @@ function make_mlir_fn(
     ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
 
-    mesh_cache = OrderedIdDict()
+    # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
-
-    # Detect if any of the arguments are sharded
-    is_sharded = false
     for (k, v) in seen_args
-        if k isa Reactant.ConcreteRArray
-            if Reactant.Sharding.is_sharded(k)
-                is_sharded = true
-                traced_args_to_shardings[v] = k.sharding
-                if !haskey(mesh_cache, k.sharding.mesh)
-                    mesh_cache[k.sharding.mesh] = Reactant.Ops.mesh(mod, k.sharding.mesh)
-                end
-            end
+        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber) &&
+            Reactant.Sharding.is_sharded(k)
+            Reactant.Ops.mesh(k.sharding.mesh)
+            traced_args_to_shardings[v] = k.sharding
         end
     end
 
@@ -251,6 +244,7 @@ function make_mlir_fn(
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
     MLIR.IR.activate!(fnbody)
+
     result = try
         for (i, arg) in enumerate(linear_args)
             raw_arg = MLIR.IR.argument(fnbody, i)
@@ -258,7 +252,11 @@ function make_mlir_fn(
             set_mlir_data!(arg, row_maj_arg)
         end
 
-        Reactant.call_with_reactant(f, traced_args...)
+        if isempty(kwargs)
+            Reactant.call_with_reactant(f, traced_args...)
+        else
+            Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
+        end
     finally
         MLIR.IR.deactivate!(fnbody)
     end
@@ -343,8 +341,11 @@ function make_mlir_fn(
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
+    mesh_cache = Reactant.Compiler.sdycache()
+    is_sharded = !isempty(mesh_cache)
+
     if is_sharded
-        unique_meshes = unique([m.mesh for (k, m) in traced_args_to_shardings])
+        unique_meshes = keys(mesh_cache)
 
         # TODO: support multiple meshes
         if length(unique_meshes) > 1
@@ -361,8 +362,9 @@ function make_mlir_fn(
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
                 sharding = traced_args_to_shardings[arg]
+                (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
                 linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-                    ctx, sharding, mesh_cache[sharding.mesh].sym_name; do_transpose
+                    sharding, ctx, sym_name, mesh_attr
                 )
                 MLIR.API.mlirFuncSetArgAttr(
                     func2, i - 1, "sdy.sharding", linear_arg_shardings[i]

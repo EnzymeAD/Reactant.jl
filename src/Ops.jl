@@ -12,6 +12,7 @@ using ..Reactant:
     RNumber,
     MissingTracedValue,
     unwrapped_eltype
+using ReactantCore: ReactantCore
 using Functors: fmap
 
 function mlir_type(x::Union{RNumber,RArray})
@@ -1071,11 +1072,11 @@ end
         @assert 0 < dimension <= ndims(x) "$x invalid dimension"
     end
 
-    sample_inputs = Vector{Reactant.ConcreteRNumber}(undef, length(xs) * 2)
+    sample_inputs = Vector{Reactant.ConcretePJRTNumber}(undef, length(xs) * 2)
     for i in eachindex(xs)
         T = Reactant.unwrapped_eltype(xs[i])
-        sample_inputs[2i - 1] = Reactant.ConcreteRNumber(T(0))
-        sample_inputs[2i] = Reactant.ConcreteRNumber(T(0))
+        sample_inputs[2i - 1] = Reactant.ConcretePJRTNumber(T(0))
+        sample_inputs[2i] = Reactant.ConcretePJRTNumber(T(0))
     end
     func =
         Reactant.TracedUtils.make_mlir_fn(
@@ -1455,7 +1456,7 @@ julia> Reactant.@jit(
               Reactant.to_rarray(Float32[1, 2, 3]),
           )
        )
-(ConcreteRArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
+(ConcretePJRTArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
 ```
 """
 @noinline function hlo_call(
@@ -1781,11 +1782,28 @@ end
     true_fn_body = MLIR.IR.Block()
     push!(MLIR.IR.region(true_func_tmp, 1), true_fn_body)
 
+    true_fn_args = true_fn_names[1]
+
     MLIR.IR.activate!(true_fn_body)
     tb_result = try
         for (i, arg) in enumerate(tb_linear_args)
+            # find the right path to index the traced arg.
+            path = nothing
+            for p in Reactant.TracedUtils.get_paths(arg)
+                if length(p) > 0 && p[1] == true_fn_args
+                    path = p[2:end]
+                end
+            end
+            if isnothing(path)
+                error("if_condition: could not find path for linear arg $i")
+            end
             Reactant.TracedUtils.set_mlir_data!(
-                arg, Reactant.TracedUtils.get_mlir_data(tb_traced_args[i])
+                arg,
+                only(
+                    Reactant.TracedUtils.push_val!(
+                        [], tb_traced_args[path[1]], path[2:end]
+                    ),
+                ),
             )
         end
         Reactant.call_with_reactant(true_fn, tb_traced_args...)
@@ -1828,11 +1846,27 @@ end
     false_fn_body = MLIR.IR.Block()
     push!(MLIR.IR.region(false_func_tmp, 1), false_fn_body)
 
+    false_fn_args = false_fn_names[1]
     MLIR.IR.activate!(false_fn_body)
     fb_result = try
         for (i, arg) in enumerate(fb_linear_args)
+            # find the right path to index the traced arg.
+            path = nothing
+            for p in Reactant.TracedUtils.get_paths(arg)
+                if length(p) > 0 && p[1] == false_fn_args
+                    path = p[2:end]
+                end
+            end
+            if isnothing(path)
+                error("if_condition: could not find path for linear arg $i")
+            end
             Reactant.TracedUtils.set_mlir_data!(
-                arg, Reactant.TracedUtils.get_mlir_data(fb_traced_args[i])
+                arg,
+                only(
+                    Reactant.TracedUtils.push_val!(
+                        [], fb_traced_args[path[1]], path[2:end]
+                    ),
+                ),
             )
         end
         Reactant.call_with_reactant(false_fn, fb_traced_args...)
@@ -2063,10 +2097,21 @@ end
             Reactant.TracedUtils.set!(
                 corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
             )
-        else
-            Reactant.TracedUtils.set!(
-                args, path[2:end], MLIR.IR.result(if_compiled, residx)
-            )
+        elseif path[1] == :resarg
+            # The resarg path is with respect to the linear args, not the traced args.
+            # We find the path into traced args by searching for it in the linear args.
+            # Concretely, we look into tb_linear_args, but we could also look into fb_linear_args, they contain the same arg path.
+            @assert length(path) == 2
+            argpath = nothing
+            for p in Reactant.TracedUtils.get_paths(tb_linear_args[path[2]])
+                if length(p) > 0 && p[1] == true_fn_names[1]
+                    argpath = p[2:end]
+                end
+            end
+            if isnothing(argpath)
+                error("if_condition: could not find path for resarg $path")
+            end
+            Reactant.TracedUtils.set!(args, argpath, MLIR.IR.result(if_compiled, residx))
         end
     end
 
@@ -2145,21 +2190,65 @@ end
 end
 
 # Shardy Ops
+"""
+    mesh(
+        mesh::Reactant.Sharding.Mesh; mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+        sym_name::String="mesh",
+        location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
+    )
+    mesh(
+        mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
+        device_ids::Vector{Int64};
+        sym_name::String="mesh",
+        mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+        location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
+    )
+
+Produces a [`Reactant.MLIR.Dialects.sdy.mesh`](@ref) operation with the given `mesh` and
+`device_ids`.
+
+Based on the provided `sym_name``, we generate a unique name for the mesh in the module's
+`SymbolTable`. Note that users shouldn't use this sym_name directly, instead they should
+use the returned `sym_name` to refer to the mesh in the module.
+
+!!! warning
+
+    The `device_ids` argument are the logical device ids, not the physical device ids.
+    For example, if the physical device ids are `[2, 4, 123, 293]`, the corresponding
+    logical device ids are `[0, 1, 2, 3]`.
+
+## Returned Value
+
+We return a NamedTuple with the following fields:
+
+- `sym_name`: The unique name of the mesh in the module's `SymbolTable`.
+- `mesh_attr`: `sdy::mlir::MeshAttr` representing the mesh.
+- `mesh_op`: The `sdy.mesh` operation.
+"""
 @noinline function mesh(
-    mod::MLIR.IR.Module,
     m::Reactant.Sharding.Mesh;
+    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
-    return mesh(
-        mod, [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))], vec(m); location
+    cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
+    cache !== nothing && haskey(cache, m) && return cache[m]
+    result = mesh(
+        [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
+        collect(Int64, m.logical_device_ids);
+        mod,
+        sym_name,
+        location,
     )
+    cache !== nothing && (cache[m] = result)
+    return result
 end
 
 @noinline function mesh(
-    mod::MLIR.IR.Module,
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
     device_ids::Vector{Int64};
-    sym_name=nothing,
+    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     # See https://github.com/openxla/shardy/blob/f9d83e779a58b811b848c4edfaf68e88b636787d/shardy/dialect/sdy/ir/verifiers.cc#L647-L699 for the checks
@@ -2187,17 +2276,57 @@ end
         device_ids,
     )
 
-    sym_name === nothing && (sym_name = "mesh")
-    if sym_name isa String
-        sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
-    end
+    sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    MLIR.IR.mmodule!(mod) do
+    mesh_op = MLIR.IR.mmodule!(mod) do
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 
+    # mesh_op needs to be moved to the beginning of the module
+    mesh_op = MLIR.IR.rmfromparent!(mesh_op)
+    mod_body = MLIR.IR.body(mod)
+    pushfirst!(mod_body, mesh_op)
+
     # We return the name of the mesh, since the operation is a Symbol op
-    return (; sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx), mesh_attr)
+    return (;
+        sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx),
+        mesh_attr=MLIR.IR.Attribute(mesh_attr),
+        mesh_op=mesh_op,
+    )
+end
+
+"""
+    sharding_constraint(
+        input::Union{TracedRArray,TracedRNumber},
+        sharding::Reactant.Sharding.AbstractSharding;
+        location=mlir_stacktrace("sharding_constraint", @__FILE__, @__LINE__)
+    )
+
+Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation with the given
+`input` and `sharding`.
+"""
+@noinline function sharding_constraint(
+    input::Union{TracedRArray,TracedRNumber},
+    sharding::Reactant.Sharding.AbstractSharding;
+    location=mlir_stacktrace("sharding_constraint", @__FILE__, @__LINE__),
+)
+    cache = Reactant.Compiler.sdycache()
+    haskey(cache, sharding.mesh) || Ops.mesh(sharding.mesh; location)
+    (; sym_name, mesh_attr) = cache[sharding.mesh]
+    tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
+        sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=true
+    )
+    resharded_value = MLIR.IR.result(
+        MLIR.Dialects.sdy.sharding_constraint(
+            input.mlir_data; sharding=tensor_sharding_attr, location
+        ),
+        1,
+    )
+    if input isa TracedRNumber
+        return TracedRNumber{unwrapped_eltype(input)}(resharded_value)
+    else
+        return TracedRArray{unwrapped_eltype(input)}(resharded_value)
+    end
 end
 
 end # module Ops

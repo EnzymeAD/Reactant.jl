@@ -31,9 +31,9 @@ end
             Array(cdata_sharded2) ≈
             Array(cdata_sharded3)
 
-        @test cdata_sharded.sharding isa Sharding.ShardInfo{<:Sharding.NamedSharding}
-        @test cdata_sharded2.sharding isa Sharding.ShardInfo{<:Sharding.NamedSharding}
-        @test cdata_sharded3.sharding isa Sharding.ShardInfo{<:Sharding.NamedSharding}
+        @test cdata_sharded.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
+        @test cdata_sharded2.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
+        @test cdata_sharded3.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
         @test cdata.sharding isa Sharding.NoShardInfo
 
         true_res_y, true_res_x, true_res_z = fn_test1(data)
@@ -66,6 +66,9 @@ fn_test3(x) = sum(x; dims=1)
         )
 
         @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
+
+        y_ra = @jit fn_test2(x_ra)
+        @test Array(@jit fn_test2(y_ra)) ≈ fn_test2(fn_test2(x))
 
         @test Array(@jit fn_test3(x_ra)) ≈ fn_test3(x)
 
@@ -113,60 +116,126 @@ end
     end
 end
 
+@testset "Multiple Axis Partition Spec" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:7), 2, 4), ("data", "model"))
+        x = reshape(collect(Float32, 1:64), 8, 8)
+        x_ra = Reactant.to_rarray(
+            x; sharding=Sharding.NamedSharding(mesh, (("data", "model"), nothing))
+        )
+        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit sum(x_ra)) ≈ sum(x)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+@testset "Open Axis Partition Spec" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:7), 2, 4), ("data", "model"))
+        x = reshape(collect(Float32, 1:16), 4, 4)
+        x_ra = Reactant.to_rarray(
+            x;
+            sharding=Sharding.NamedSharding(
+                mesh, ("model", nothing); is_closed=(false, false)
+            ),
+        )
+        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit sum(x_ra)) ≈ sum(x)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+fn_test4(x, y) = x .+ sin.(y')
+
+@testset "Multiple Mesh Sharding" begin
+    if length(addressable_devices) ≥ 8
+        mesh1 = Sharding.Mesh(reshape(collect(Int64, 0:7), (4, 2)), ("m1_x", "m1_y"))
+        mesh2 = Sharding.Mesh(
+            reshape([4, 6, 0, 2, 7, 3, 1, 5], 2, 2, 2), ("m2_x", "m2_y", "m2_z")
+        )
+
+        x = reshape(collect(Float32, 1:32), 8, 4)
+        y = reshape(collect(Float32, 1:32), 4, 8)
+
+        x_ra = Reactant.to_rarray(
+            x; sharding=Sharding.NamedSharding(mesh1, ("m1_y", "m1_x"))
+        )
+        y_ra = Reactant.to_rarray(
+            y; sharding=Sharding.NamedSharding(mesh2, ("m2_y", nothing))
+        )
+
+        # This is supported in shardy & XLA, but we don't support it yet.
+        @test_throws ErrorException @jit fn_test4(x_ra, y_ra)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+@testset "Sharding Constraint" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:7), 2, 4), ("data", "model"))
+
+        x = reshape(collect(Float32, 1:16), 4, 4)
+        x_ra = Reactant.to_rarray(
+            x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
+        )
+
+        constraint = Sharding.NamedSharding(mesh, ("model", nothing))
+
+        function fn_with_constraint(x)
+            y = x .+ x
+            return Reactant.Ops.sharding_constraint(y, constraint)
+        end
+
+        hlo = @code_hlo fn_with_constraint(x_ra)
+        @test contains(repr(hlo), "sharding_constraint")
+
+        z = Reactant.to_rarray(x; sharding=constraint)
+        res = @jit fn_with_constraint(x_ra)
+
+        @test x .+ x ≈ Array(res)
+        @test string(z.sharding.sharding.hlo_sharding) ==
+            string(res.sharding.sharding.hlo_sharding)
+        @test string(res.sharding.sharding.hlo_sharding) !=
+            string(x_ra.sharding.sharding.hlo_sharding)
+
+        # Test we can compile even when there is an intermediate sharding
+        x_ra_no_sharding = Reactant.to_rarray(x)
+
+        hlo = @code_hlo fn_with_constraint(x_ra_no_sharding)
+        @test contains(repr(hlo), "sharding_constraint")
+
+        res = @jit fn_with_constraint(x_ra_no_sharding)
+        @test x .+ x ≈ Array(res)
+        @test string(z.sharding.sharding.hlo_sharding) ==
+            string(res.sharding.sharding.hlo_sharding)
+        @test string(res.sharding.sharding.hlo_sharding) !=
+            string(x_ra_no_sharding.sharding.sharding.hlo_sharding)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
 # Tests from the examples in
 # https://github.com/openxla/xla/blob/96d6678053d867099a42be9001c49b2ed7111afd/xla/hlo/ir/tile_assignment.h#L53-L68
 @testset "Device List from Iota Tile" begin
-    @test Reactant.XLA.generate_device_list(
-        Reactant.XLA.OpSharding(
-            convert(Ptr{Nothing}, pointer([1])), # dummy pointer that isn't used here
-            Reactant.XLA.OpShardingType.Other,
-            Int64[],
-            Int64[],
-            true,
-            Reactant.XLA.OpShardingType.T[],
-            [4, 4, 1],
-            Int64[],
-            [4, 2, 2],
-            Int32[1, 2, 3],
-            false,
-            0,
-            Reactant.XLA.ShardGroupType.As,
-        ),
+    @test Reactant.XLA.generate_device_list_from_iota_tile(
+        [4, 4, 1],        #=tile_assignment_dimensions=#
+        [4, 2, 2],        #=iota_reshape_dims=#
+        [1, 2, 3],        #=iota_transpose_perm=#
     ) == collect(0:15)
 
-    @test Reactant.XLA.generate_device_list(
-        Reactant.XLA.OpSharding(
-            convert(Ptr{Nothing}, pointer([1])), # dummy pointer that isn't used here
-            Reactant.XLA.OpShardingType.Other,
-            Int64[],
-            Int64[],
-            true,
-            Reactant.XLA.OpShardingType.T[],
-            [4, 4, 1],
-            Int64[],
-            [4, 2, 2],
-            Int32[2, 1, 3],
-            false,
-            0,
-            Reactant.XLA.ShardGroupType.As,
-        ),
+    @test Reactant.XLA.generate_device_list_from_iota_tile(
+        [4, 4, 1],        #=tile_assignment_dimensions=#
+        [4, 2, 2],        #=iota_reshape_dims=#
+        [2, 1, 3],        #=iota_transpose_perm=#
     ) == [0, 1, 4, 5, 8, 9, 12, 13, 2, 3, 6, 7, 10, 11, 14, 15]
 
-    @test Reactant.XLA.generate_device_list(
-        Reactant.XLA.OpSharding(
-            convert(Ptr{Nothing}, pointer([1])), # dummy pointer that isn't used here
-            Reactant.XLA.OpShardingType.Other,
-            Int64[],
-            Int64[],
-            true,
-            Reactant.XLA.OpShardingType.T[],
-            [2, 4],
-            Int64[],
-            [4, 2],
-            Int32[2, 1],
-            false,
-            0,
-            Reactant.XLA.ShardGroupType.As,
-        ),
+    @test Reactant.XLA.generate_device_list_from_iota_tile(
+        [2, 4],        #=tile_assignment_dimensions=#
+        [4, 2],        #=iota_reshape_dims=#
+        [2, 1],        #=iota_transpose_perm=#
     ) == [0, 2, 4, 6, 1, 3, 5, 7]
 end

@@ -9,29 +9,68 @@ end
 
 function XLA.free_client(client::Client)
     GC.@preserve client begin
-        @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
+        @ccall MLIR.API.mlir_c.ifrt_FreeClient(client.client::Ptr{Cvoid})::Cvoid
     end
 end
 
 function XLA.num_devices(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientNumDevices(client.client::Ptr{Cvoid})::Cint
+        return @ccall MLIR.API.mlir_c.ifrt_client_device_count(
+            client.client::Ptr{Cvoid}
+        )::Cint
     end
 end
 
 function XLA.num_addressable_devices(client::Client)
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientNumAddressableDevices(
+        return @ccall MLIR.API.mlir_c.ifrt_client_addressable_device_count(
             client.client::Ptr{Cvoid}
         )::Cint
     end
+end
+
+function XLA.process_index(client::Client)
+    GC.@preserve client begin
+        return @ccall MLIR.API.mlir_c.ifrt_ClientProcessIndex(
+            client.client::Ptr{Cvoid}
+        )::Cint
+    end
+end
+
+function XLA.get_device(client::Client, idx)
+    GC.@preserve client begin
+        return Device(
+            @ccall MLIR.API.mlir_c.ifrt_client_lookup_device(
+                client.client::Ptr{Cvoid}, idx::Cint
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+function XLA.get_addressable_device(client::Client, idx)
+    GC.@preserve client begin
+        return Device(
+            @ccall MLIR.API.mlir_c.ifrt_client_lookup_addressable_device(
+                client.client::Ptr{Cvoid}, idx::Cint
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+function XLA.platform_name(client::Client)
+    GC.@preserve client begin
+        str = @ccall MLIR.API.mlir_c.ifrt_ClientGetPlatformName(
+            client.client::Ptr{Cvoid}
+        )::Cstring
+    end
+    return XLA.unsafe_string_and_free(str)
 end
 
 function XLA.devices(client::Client)
     ndevices = Int(XLA.num_devices(client))
     devices = Ref{NTuple{ndevices,Ptr{Cvoid}}}()
     GC.@preserve client devices begin
-        @ccall MLIR.API.mlir_c.ClientGetDevices(
+        @ccall MLIR.API.mlir_c.ifrt_client_devices(
             client.client::Ptr{Cvoid}, devices::Ptr{Ptr{Cvoid}}
         )::Cvoid
     end
@@ -42,46 +81,11 @@ function XLA.addressable_devices(client::Client)
     naddressable_devices = Int(XLA.num_addressable_devices(client))
     addressable_devices = Ref{NTuple{naddressable_devices,Ptr{Cvoid}}}()
     GC.@preserve client addressable_devices begin
-        @ccall MLIR.API.mlir_c.ClientGetAddressableDevices(
+        @ccall MLIR.API.mlir_c.ifrt_client_addressable_devices(
             client.client::Ptr{Cvoid}, addressable_devices::Ptr{Ptr{Cvoid}}
         )::Cvoid
     end
     return [Device(device) for device in addressable_devices[]]
-end
-
-function XLA.process_index(client::Client)
-    GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientProcessIndex(client.client::Ptr{Cvoid})::Cint
-    end
-end
-
-function XLA.get_device(client::Client, idx)
-    GC.@preserve client begin
-        return Device(
-            @ccall MLIR.API.mlir_c.ClientGetDevice(
-                client.client::Ptr{Cvoid}, idx::Cint
-            )::Ptr{Cvoid}
-        )
-    end
-end
-
-function XLA.get_addressable_device(client::Client, idx)
-    GC.@preserve client begin
-        return Device(
-            @ccall MLIR.API.mlir_c.ClientGetAddressableDevice(
-                client.client::Ptr{Cvoid}, idx::Cint
-            )::Ptr{Cvoid}
-        )
-    end
-end
-
-function XLA.platform_name(client::Client)
-    GC.@preserve client begin
-        str = @ccall MLIR.API.mlir_c.ClientGetPlatformName(
-            client.client::Ptr{Cvoid}
-        )::Cstring
-    end
-    return XLA.unsafe_string_and_free(str)
 end
 
 # Different Backends
@@ -94,37 +98,46 @@ for (backend, counter) in (
     (:GPUClient, :gpu_client_count),
     (:TPUClient, :tpu_client_count),
 )
-    main_fn = Symbol(:Make, backend)
+    main_fn = Symbol(:MakeIFRTPJRT, backend)
     @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
         if checkcount
             @assert $(counter)[] == 0
         end
-        client = Client($(main_fn)(args...; kwargs...))
+        client, refstr = $(main_fn)(args...; kwargs...)
+        client == C_NULL && throw(AssertionError(unsafe_string(refstr[])))
         XLA.LLVMclopts("-nvptx-fma-level=1")
         if checkcount
             # Only increment the counter if we successfully created a client
             $(counter)[] += 1
         end
-        return client
+        return Client(client)
     end
 end
 
-function MakeCPUClient(;
+function MakeIFRTPJRTCPUClient(;
     node_id::Integer=0,
     num_nodes::Integer=1,
     asynchronous::Bool=true,
     distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
 )
-    @assert num_nodes == 1 "`PJRT.MakeCPUClient` does not support num_nodes > 1"
-    @assert distributed_runtime_client === nothing "`PJRT.MakeCPUClient` does not support \
-                                                    distributed_runtime_client"
+    refstr = Ref{Cstring}()
+    distributed_runtime_client =
+        distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
-    return @ccall MLIR.API.mlir_c.MakeCPUClient(
-        asynchronous::UInt8, node_id::Cint
-    )::Ptr{Cvoid}
+    GC.@preserve refstr distributed_runtime_client begin
+        client = @ccall MLIR.API.mlir_c.ifrt_make_pjrt_cpu_client(
+            asynchronous::UInt8,
+            node_id::Cint,
+            num_nodes::Cint,
+            distributed_runtime_client::Ptr{Cvoid},
+            refstr::Ptr{Cstring},
+        )::Ptr{Cvoid}
+    end
+
+    return client, refstr
 end
 
-function MakeGPUClient(;
+function MakeIFRTPJRTGPUClient(;
     node_id::Integer=0,
     num_nodes::Integer=1,
     platform::String="gpu",
@@ -139,7 +152,7 @@ function MakeGPUClient(;
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
     GC.@preserve refstr allowed_devices distributed_runtime_client begin
-        client = @ccall MLIR.API.mlir_c.MakeGPUClient(
+        client = @ccall MLIR.API.mlir_c.ifrt_make_pjrt_gpu_client(
             node_id::Cint,
             num_nodes::Cint,
             allowed_devices::Ptr{Cvoid},
@@ -152,28 +165,28 @@ function MakeGPUClient(;
         )::Ptr{Cvoid}
     end
 
-    client == C_NULL && throw(AssertionError(unsafe_string(refstr[])))
-    return client
+    return client, refstr
 end
 
-function MakeTPUClient(;
+function MakeIFRTPJRTTPUClient(;
     tpu_path::String,
     node_id::Integer=0,
     num_nodes::Integer=1,
     distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
 )
-    @assert node_id == 0 "`PJRT.MakeTPUClient` does not support node_id"
-    @assert num_nodes == 1 "`PJRT.MakeTPUClient` does not support num_nodes > 1"
-    @assert distributed_runtime_client === nothing "`PJRT.MakeTPUClient` does not support \
-                                                    distributed_runtime_client"
-
     refstr = Ref{Cstring}()
-    GC.@preserve refstr begin
-        client = @ccall MLIR.API.mlir_c.MakeTPUClient(
-            tpu_path::Cstring, refstr::Ptr{Cstring}
+    distributed_runtime_client =
+        distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
+
+    GC.@preserve refstr distributed_runtime_client begin
+        client = @ccall MLIR.API.mlir_c.ifrt_make_pjrt_tpu_client(
+            tpu_path::Cstring,
+            refstr::Ptr{Cstring},
+            node_id::Cint,
+            num_nodes::Cint,
+            distributed_runtime_client::Ptr{Cvoid},
         )::Ptr{Cvoid}
     end
 
-    client == C_NULL && throw(AssertionError(unsafe_string(refstr[])))
-    return client
+    return client, refstr
 end

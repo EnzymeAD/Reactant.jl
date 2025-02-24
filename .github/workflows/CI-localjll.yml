@@ -42,7 +42,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
-      - uses: bazel-contrib/setup-bazel@0.13.0
+      - uses: bazel-contrib/setup-bazel@0.14.0
         name: Set up Bazel
         with:
           # Avoid downloading Bazel every time.
