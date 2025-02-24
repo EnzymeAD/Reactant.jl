@@ -592,6 +592,14 @@ function compile_mlir!(
             traced_result::Any,
             mutated_args::Vector{Int},
         }
+    }(),
+    sdycache=IdDict{
+        Reactant.Sharding.Mesh,
+        @NamedTuple{
+            sym_name::MLIR.IR.Attribute,
+            mesh_attr::MLIR.IR.Attribute,
+            mesh_op::MLIR.IR.Operation,
+        }
     }();
     optimize::Union{Bool,Symbol}=true,
     no_nan::Bool=false,
@@ -604,10 +612,12 @@ function compile_mlir!(
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
     activate_callcache!(callcache)
+    activate_sdycache!(sdycache)
 
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true)
     finally
+        deactivate_sdycache!(sdycache)
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
@@ -835,7 +845,7 @@ function compile_mlir!(
 
     res_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
     if res_attrs isa MLIR.IR.Attribute
-        res_attrs = [
+        res_attrs = MLIR.IR.Attribute[
             res_attrs[i - 1] for (i, present) in enumerate(results_mask) if present
         ]
     end
@@ -1656,39 +1666,38 @@ function register_thunk(
     return Thunk{Core.Typeof(f),tag,argtys,isclosure}(f)
 end
 
-function activate_callcache!(callcache)
-    stack = get!(task_local_storage(), :callcache) do
-        return []
-    end
-    push!(stack, callcache)
-    return nothing
-end
+for cache_type in (:callcache, :sdycache)
+    activate_fn = Symbol(:activate_, cache_type, :!)
+    deactivate_fn = Symbol(:deactivate_, cache_type, :!)
+    has_fn = Symbol(:_has_, cache_type)
 
-function deactivate_callcache!(callcache)
-    callcache === last(task_local_storage(:callcache)) ||
-        error("Deactivating wrong callcache")
-    return pop!(task_local_storage(:callcache))
-end
+    @eval begin
+        function $(activate_fn)(cache)
+            stack = get!(task_local_storage(), $(Meta.quot(cache_type))) do
+                return []
+            end
+            push!(stack, cache)
+            return nothing
+        end
 
-function _has_callcache()
-    return haskey(task_local_storage(), :callcache) &&
-           !Base.isempty(task_local_storage(:callcache))
-end
+        function $(deactivate_fn)(cache)
+            cache === last(task_local_storage($(Meta.quot(cache_type)))) ||
+                error("Deactivating wrong cache")
+            return pop!(task_local_storage($(Meta.quot(cache_type))))
+        end
 
-function callcache(; throw_error::Bool=true)
-    if !_has_callcache()
-        throw_error && error("No callcache is active")
-        return nothing
-    end
-    return last(task_local_storage(:callcache))
-end
+        function $(has_fn)()
+            return haskey(task_local_storage(), $(Meta.quot(cache_type))) &&
+                   !Base.isempty(task_local_storage($(Meta.quot(cache_type))))
+        end
 
-function callcache!(f, callcache)
-    activate_callcache!(callcache)
-    try
-        return f()
-    finally
-        deactivate_callcache!(callcache)
+        function $(cache_type)(; throw_error::Bool=true)
+            if !$(has_fn)()
+                throw_error && error("No cache is active")
+                return nothing
+            end
+            return last(task_local_storage($(Meta.quot(cache_type))))
+        end
     end
 end
 

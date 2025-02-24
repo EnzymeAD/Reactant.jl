@@ -12,6 +12,7 @@ using ..Reactant:
     RNumber,
     MissingTracedValue,
     unwrapped_eltype
+using ReactantCore: ReactantCore
 using Functors: fmap
 
 function mlir_type(x::Union{RNumber,RArray})
@@ -2189,24 +2190,65 @@ end
 end
 
 # Shardy Ops
+"""
+    mesh(
+        mesh::Reactant.Sharding.Mesh; mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+        sym_name::String="mesh",
+        location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
+    )
+    mesh(
+        mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
+        device_ids::Vector{Int64};
+        sym_name::String="mesh",
+        mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+        location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
+    )
+
+Produces a [`Reactant.MLIR.Dialects.sdy.mesh`](@ref) operation with the given `mesh` and
+`device_ids`.
+
+Based on the provided `sym_name``, we generate a unique name for the mesh in the module's
+`SymbolTable`. Note that users shouldn't use this sym_name directly, instead they should
+use the returned `sym_name` to refer to the mesh in the module.
+
+!!! warning
+
+    The `device_ids` argument are the logical device ids, not the physical device ids.
+    For example, if the physical device ids are `[2, 4, 123, 293]`, the corresponding
+    logical device ids are `[0, 1, 2, 3]`.
+
+## Returned Value
+
+We return a NamedTuple with the following fields:
+
+- `sym_name`: The unique name of the mesh in the module's `SymbolTable`.
+- `mesh_attr`: `sdy::mlir::MeshAttr` representing the mesh.
+- `mesh_op`: The `sdy.mesh` operation.
+"""
 @noinline function mesh(
-    mod::MLIR.IR.Module,
     m::Reactant.Sharding.Mesh;
+    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
-    return mesh(
-        mod,
+    cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
+    cache !== nothing && haskey(cache, m) && return cache[m]
+    result = mesh(
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
         collect(Int64, m.logical_device_ids);
+        mod,
+        sym_name,
         location,
     )
+    cache !== nothing && (cache[m] = result)
+    return result
 end
 
 @noinline function mesh(
-    mod::MLIR.IR.Module,
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-    device_ids::Vector{Int64}; # logical device ids not the physical device ids
-    sym_name=nothing,
+    device_ids::Vector{Int64};
+    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     # See https://github.com/openxla/shardy/blob/f9d83e779a58b811b848c4edfaf68e88b636787d/shardy/dialect/sdy/ir/verifiers.cc#L647-L699 for the checks
@@ -2234,20 +2276,57 @@ end
         device_ids,
     )
 
-    sym_name === nothing && (sym_name = "mesh")
-    if sym_name isa String
-        sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
-    end
+    sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    MLIR.IR.mmodule!(mod) do
+    mesh_op = MLIR.IR.mmodule!(mod) do
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
+
+    # mesh_op needs to be moved to the beginning of the module
+    mesh_op = MLIR.IR.rmfromparent!(mesh_op)
+    mod_body = MLIR.IR.body(mod)
+    pushfirst!(mod_body, mesh_op)
 
     # We return the name of the mesh, since the operation is a Symbol op
     return (;
         sym_name=MLIR.IR.FlatSymbolRefAttribute(sym_name; context=ctx),
         mesh_attr=MLIR.IR.Attribute(mesh_attr),
+        mesh_op=mesh_op,
     )
+end
+
+"""
+    sharding_constraint(
+        input::Union{TracedRArray,TracedRNumber},
+        sharding::Reactant.Sharding.AbstractSharding;
+        location=mlir_stacktrace("sharding_constraint", @__FILE__, @__LINE__)
+    )
+
+Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation with the given
+`input` and `sharding`.
+"""
+@noinline function sharding_constraint(
+    input::Union{TracedRArray,TracedRNumber},
+    sharding::Reactant.Sharding.AbstractSharding;
+    location=mlir_stacktrace("sharding_constraint", @__FILE__, @__LINE__),
+)
+    cache = Reactant.Compiler.sdycache()
+    haskey(cache, sharding.mesh) || Ops.mesh(sharding.mesh; location)
+    (; sym_name, mesh_attr) = cache[sharding.mesh]
+    tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
+        sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=true
+    )
+    resharded_value = MLIR.IR.result(
+        MLIR.Dialects.sdy.sharding_constraint(
+            input.mlir_data; sharding=tensor_sharding_attr, location
+        ),
+        1,
+    )
+    if input isa TracedRNumber
+        return TracedRNumber{unwrapped_eltype(input)}(resharded_value)
+    else
+        return TracedRArray{unwrapped_eltype(input)}(resharded_value)
+    end
 end
 
 end # module Ops

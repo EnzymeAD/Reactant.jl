@@ -340,13 +340,17 @@ function Base.convert(::Type{HloSharding}, op_sharding::OpSharding)
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", hlo_sharding::HloSharding)
+function Base.string(hlo_sharding::HloSharding)
     GC.@preserve hlo_sharding begin
         str = @ccall MLIR.API.mlir_c.hlo_sharding_to_string(
             hlo_sharding.ptr::Ptr{Cvoid}
         )::Cstring
     end
-    print(io, "XLA.HloSharding(\"", unsafe_string_and_free(str), "\")")
+    return unsafe_string_and_free(str)
+end
+
+function Base.show(io::IO, ::MIME"text/plain", hlo_sharding::HloSharding)
+    print(io, "XLA.HloSharding(\"", string(hlo_sharding), "\")")
     return nothing
 end
 

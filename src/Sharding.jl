@@ -189,7 +189,7 @@ function (sharding::NamedSharding)(
 end
 
 function get_shardy_tensor_sharding_attribute(
-    sharding::NamedSharding, ctx, ::Integer, mesh_name, mesh_attr
+    sharding::NamedSharding, ctx, mesh_name, mesh_attr; do_transpose=true
 )
     dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(
         undef, length(sharding.partition_spec)
@@ -215,7 +215,7 @@ function get_shardy_tensor_sharding_attribute(
             ctx,
             mesh_name,
             length(dimension_sharding_attrs),
-            reverse(dimension_sharding_attrs),
+            do_transpose ? reverse(dimension_sharding_attrs) : dimension_sharding_attrs,
             0,
             MLIR.API.MlirAttribute[],
         ),
@@ -247,17 +247,14 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
         ctx = MLIR.IR.Context(Reactant.registry[], false)
         @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     end
-    mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
 
     MLIR.IR.context!(ctx) do
-        mesh_op = Reactant.Ops.mesh(mod, sharding.mesh)
+        mesh_op = Reactant.Ops.mesh(
+            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+        )
 
         tensor_sharding_attr = get_shardy_tensor_sharding_attribute(
-            sharding,
-            ctx,
-            length(sharding.partition_spec),
-            mesh_op.sym_name,
-            mesh_op.mesh_attr,
+            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr; do_transpose=true
         )
 
         return HloSharding(
@@ -295,14 +292,17 @@ function (sharding::HloSharding)(
 end
 
 function get_shardy_tensor_sharding_attribute(
-    sharding::HloSharding, ctx, N::Integer, mesh_name, mesh_attr; kwargs...
+    sharding::HloSharding, ctx, mesh_name, mesh_attr; kwargs...
 )
+    string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
     GC.@preserve sharding begin
         return MLIR.IR.Attribute(
             @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
+                ctx::MLIR.API.MlirContext,
                 sharding.hlo_sharding.ptr::Ptr{Cvoid},
+                string_mesh_name.attribute::MLIR.API.MlirAttribute,
                 mesh_attr.attribute::MLIR.API.MlirAttribute,
-                Int64(N)::Int64,
+                Int64(length(sharding.is_closed))::Int64,
                 Bool[sharding.is_closed...]::Ptr{Bool},
                 Int64[sharding.priority...]::Ptr{Int64},
             )::MLIR.API.MlirAttribute

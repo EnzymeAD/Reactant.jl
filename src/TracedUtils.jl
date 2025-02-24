@@ -218,20 +218,13 @@ function make_mlir_fn(
     ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
 
-    mesh_cache = OrderedIdDict()
+    # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
-
-    # Detect if any of the arguments are sharded
-    is_sharded = false
     for (k, v) in seen_args
-        if k isa Reactant.ConcretePJRTArray
-            if Reactant.Sharding.is_sharded(k)
-                is_sharded = true
-                traced_args_to_shardings[v] = k.sharding
-                if !haskey(mesh_cache, k.sharding.mesh)
-                    mesh_cache[k.sharding.mesh] = Reactant.Ops.mesh(mod, k.sharding.mesh)
-                end
-            end
+        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber) &&
+            Reactant.Sharding.is_sharded(k)
+            Reactant.Ops.mesh(k.sharding.mesh)
+            traced_args_to_shardings[v] = k.sharding
         end
     end
 
@@ -348,8 +341,11 @@ function make_mlir_fn(
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
+    mesh_cache = Reactant.Compiler.sdycache()
+    is_sharded = !isempty(mesh_cache)
+
     if is_sharded
-        unique_meshes = unique([m.mesh for (k, m) in traced_args_to_shardings])
+        unique_meshes = keys(mesh_cache)
 
         # TODO: support multiple meshes
         if length(unique_meshes) > 1
@@ -368,7 +364,7 @@ function make_mlir_fn(
                 sharding = traced_args_to_shardings[arg]
                 (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
                 linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-                    sharding, ctx, ndims(arg), sym_name, mesh_attr
+                    sharding, ctx, sym_name, mesh_attr
                 )
                 MLIR.API.mlirFuncSetArgAttr(
                     func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
