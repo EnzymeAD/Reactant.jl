@@ -2314,7 +2314,7 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     haskey(cache, sharding.mesh) || Ops.mesh(sharding.mesh; location)
     (; sym_name, mesh_attr) = cache[sharding.mesh]
     tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-        sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=false
+        sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=true
     )
     resharded_value = MLIR.IR.result(
         MLIR.Dialects.sdy.sharding_constraint(

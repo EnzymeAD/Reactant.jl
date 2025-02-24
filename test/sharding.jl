@@ -173,6 +173,38 @@ fn_test4(x, y) = x .+ sin.(y')
     end
 end
 
+@testset "Sharding Constraint" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:7), 2, 4), ("data", "model"))
+
+        x = reshape(collect(Float32, 1:16), 4, 4)
+        x_ra = Reactant.to_rarray(
+            x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
+        )
+
+        constraint = Sharding.NamedSharding(mesh, ("model", nothing))
+
+        function fn_with_constraint(x)
+            y = x .+ x
+            return Reactant.Ops.sharding_constraint(y, constraint)
+        end
+
+        hlo = @code_hlo fn_with_constraint(x_ra)
+        @test contains(repr(hlo), "sharding_constraint")
+
+        z = Reactant.to_rarray(x; sharding=constraint)
+        res = @jit fn_with_constraint(x_ra)
+
+        @test x .+ x ≈ Array(res)
+        @test string(z.sharding.sharding.hlo_sharding) ==
+            string(res.sharding.sharding.hlo_sharding)
+        @test string(res.sharding.sharding.hlo_sharding) !=
+            string(x_ra.sharding.sharding.hlo_sharding)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
 # Tests from the examples in
 # https://github.com/openxla/xla/blob/96d6678053d867099a42be9001c49b2ed7111afd/xla/hlo/ir/tile_assignment.h#L53-L68
 @testset "Device List from Iota Tile" begin
