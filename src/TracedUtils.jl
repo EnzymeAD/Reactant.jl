@@ -219,10 +219,12 @@ function make_mlir_fn(
     mod = MLIR.IR.mmodule()
 
     # Insert meshes for the sharded arguments
+    traced_args_to_shardings = OrderedIdDict()
     for (k, v) in seen_args
         if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber) &&
             Reactant.Sharding.is_sharded(k)
             Reactant.Ops.mesh(k.sharding.mesh)
+            traced_args_to_shardings[v] = k.sharding
         end
     end
 
@@ -358,8 +360,8 @@ function make_mlir_fn(
 
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
-            if Reactant.Sharding.is_sharded(arg)
-                sharding = arg.sharding
+            if haskey(traced_args_to_shardings, arg)
+                sharding = traced_args_to_shardings[arg]
                 (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
                 linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
                     sharding, ctx, sym_name, mesh_attr
@@ -374,7 +376,7 @@ function make_mlir_fn(
         result_not_replicated = falses(length(linear_results))
         for i in mutated_args
             arg = linear_args[i]
-            if has_residx(arg) && Reactant.Sharding.is_sharded(arg)
+            if has_residx(arg) && haskey(traced_args_to_shardings, arg)
                 residx = findfirst(Base.Fix1(===, arg), linear_results)
                 @assert residx !== nothing
                 result_not_replicated[residx] = true
