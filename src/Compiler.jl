@@ -578,6 +578,38 @@ end
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 
+function activate_raising!(is_raising::Bool)
+    stack = get!(task_local_storage(), :reactant_is_raising) do
+        Bool[]
+    end
+    push!(stack, is_raising)
+    return nothing
+end
+
+function deactivate_raising!(is_raising::Bool)
+    key = :reactant_is_raising
+    is_raising === last(task_local_storage(key)) ||
+        error("Deactivating wrong Reactant raising context")
+    return pop!(task_local_storage(key))
+end
+
+function raising(; throw_error::Bool=true)
+    key = :reactant_is_raising
+    if !(haskey(task_local_storage(), key) && !Base.isempty(task_local_storage(key)))
+        throw_error && error("No Reactant raising context")
+    end
+    return last(task_local_storage(key)::Vector{Bool})
+end
+
+function raising!(f, is_raising::Bool)
+    activate_raising!(is_raising)
+    try
+        return f()
+    finally
+        deactivate_raising!(is_raising)
+    end
+end
+
 function compile_mlir!(
     mod,
     f,
@@ -617,11 +649,12 @@ function compile_mlir!(
     # checking whether the user set an explicit list of passes, or chose
     # `raise=true` to use the default passes.
     is_raising = raise isa String || raise
-    task_local_storage(:reactant_is_raising, is_raising)
+    activate_raising!(is_raising)
 
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true)
     finally
+        deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
