@@ -218,18 +218,11 @@ function make_mlir_fn(
     ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
 
-    mesh_cache = Reactant.Compiler.sdycache()
-    traced_args_to_shardings = OrderedIdDict()
-
-    # Detect if any of the arguments are sharded
-    is_sharded = false
+    # Insert meshes for the sharded arguments
     for (k, v) in seen_args
-        if k isa Reactant.ConcretePJRTArray
-            if Reactant.Sharding.is_sharded(k)
-                is_sharded = true
-                traced_args_to_shardings[v] = k.sharding
-                Reactant.Ops.mesh(k.sharding.mesh)
-            end
+        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber) &&
+            Reactant.Sharding.is_sharded(k)
+            Reactant.Ops.mesh(k.sharding.mesh)
         end
     end
 
@@ -346,8 +339,11 @@ function make_mlir_fn(
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
+    mesh_cache = Reactant.Compiler.sdycache()
+    is_sharded = !isempty(mesh_cache)
+
     if is_sharded
-        unique_meshes = unique([m.mesh for (k, m) in traced_args_to_shardings])
+        unique_meshes = keys(mesh_cache)
 
         # TODO: support multiple meshes
         if length(unique_meshes) > 1
@@ -362,8 +358,8 @@ function make_mlir_fn(
 
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
-            if haskey(traced_args_to_shardings, arg)
-                sharding = traced_args_to_shardings[arg]
+            if Reactant.Sharding.is_sharded(arg)
+                sharding = arg.sharding
                 (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
                 linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
                     sharding, ctx, sym_name, mesh_attr
@@ -378,7 +374,7 @@ function make_mlir_fn(
         result_not_replicated = falses(length(linear_results))
         for i in mutated_args
             arg = linear_args[i]
-            if has_residx(arg) && haskey(traced_args_to_shardings, arg)
+            if has_residx(arg) && Reactant.Sharding.is_sharded(arg)
                 residx = findfirst(Base.Fix1(===, arg), linear_results)
                 @assert residx !== nothing
                 result_not_replicated[residx] = true

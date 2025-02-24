@@ -200,6 +200,19 @@ end
             string(res.sharding.sharding.hlo_sharding)
         @test string(res.sharding.sharding.hlo_sharding) !=
             string(x_ra.sharding.sharding.hlo_sharding)
+
+        # Test we can compile even when there is an intermediate sharding
+        x_ra_no_sharding = Reactant.to_rarray(x)
+
+        hlo = @code_hlo fn_with_constraint(x_ra_no_sharding)
+        @test contains(repr(hlo), "sharding_constraint")
+
+        res = @jit fn_with_constraint(x_ra_no_sharding)
+        @test x .+ x ≈ Array(res)
+        @test string(z.sharding.sharding.hlo_sharding) ==
+            string(res.sharding.sharding.hlo_sharding)
+        @test string(res.sharding.sharding.hlo_sharding) !=
+            string(x_ra_no_sharding.sharding.sharding.hlo_sharding)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
