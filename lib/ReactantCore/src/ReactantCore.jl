@@ -225,7 +225,11 @@ function trace_if_with_returns(mod, expr)
     new_expr, _, all_check_vars = trace_if(
         mod, expr.args[2]; store_last_line=expr.args[1], depth=1
     )
+    cond_name = first(all_check_vars)
+    original_cond = expr.args[2].args[1]
+    expr.args[2].args[1] = cond_name
     return quote
+        $(cond_name) = $(original_cond)
         if $(within_compile)() && $(any)($(is_traced), ($(all_check_vars...),))
             $(new_expr)
         else
