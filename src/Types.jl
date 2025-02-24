@@ -169,6 +169,8 @@ const AnyConcretePJRTArray{T,N,D,S} = Union{
     ConcretePJRTArray{T,N,D,S},WrappedConcretePJRTArray{T,N,D,S}
 }
 
+const AnyConcreteRArray = AnyConcretePJRTArray
+
 ConcretePJRTArray(x::AnyConcretePJRTArray) = ConcretePJRTArray{eltype(x),ndims(x)}(x)
 ConcretePJRTArray{T}(x::AnyConcretePJRTArray) where {T} = ConcretePJRTArray{T,ndims(x)}(x)
 ConcretePJRTArray{T,N}(x::ConcretePJRTArray{T,N}) where {T,N} = x
