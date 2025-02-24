@@ -749,8 +749,7 @@ mutable struct TestSimulation{C,I,B}
 end
 
 function step!(sim)
-    cond = sim.clock.iteration >= sim.stop_iteration
-    @trace if cond
+    @trace if sim.clock.iteration >= sim.stop_iteration
         sim.running = false
     else
         sim.clock.iteration += 1 # time step
