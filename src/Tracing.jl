@@ -1113,7 +1113,7 @@ function make_tracer(
         return nothing
     end
     RT = Core.Typeof(prev)
-    if RT <: track_numbers
+    if RT <: track_numbers && mode != TracedSetPath
         if mode == ArrayToConcrete
             return ConcretePJRTNumber(prev; sharding)
         else
