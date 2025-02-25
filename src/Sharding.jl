@@ -101,6 +101,7 @@ Base.getproperty(::NoSharding, x) = NoSharding()
 Base.getproperty(::NoSharding, x::Symbol) = NoSharding()
 
 function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,Number})
+    device === nothing && (device = XLA.default_device(client))
     buffer = XLA.PJRT.AsyncBuffer(client, x, device)
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
@@ -266,9 +267,7 @@ struct DimsSharding{M,D,P} <: AbstractSharding
     end
 end
 
-function (sharding::DimsSharding)(
-    client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
-)
+function standardize_sharding(sharding::DimsSharding, x::Union{AbstractArray,Number})
     final_dims = map(sharding.dims) do d
         @assert !iszero(d) "dims cannot contain 0"
         return ifelse(d < 0, ndims(x) + d + 1, d)
@@ -291,8 +290,13 @@ function (sharding::DimsSharding)(
         return sharding.priority[dim_index]
     end
 
-    named_sharding = NamedSharding(sharding.mesh, partition_spec; is_closed, priority)
-    return named_sharding(client, device, x)
+    return NamedSharding(sharding.mesh, partition_spec; is_closed, priority)
+end
+
+function (sharding::DimsSharding)(
+    client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
+)
+    return (standardize_sharding(sharding, x))(client, device, x)
 end
 
 # HloSharding
