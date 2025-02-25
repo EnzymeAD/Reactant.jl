@@ -1178,7 +1178,7 @@ function codegen_flatten!(
 
                 push!(flatten_code, :($usbuf = $flatcode.data))
                 for j in 1:length(mesh)
-                    sbuf = Symbol(:sbuf_, i, "_", mesh.device_ids[j])
+                    sbuf = Symbol(:sbuf_, i, "_", mesh.logical_device_ids[j])
                     push!(flatten_names, sbuf)
                     push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
                 end
@@ -1188,10 +1188,10 @@ function codegen_flatten!(
                 )
                 push!(flatten_code, :($usbuf = $flatcode))
                 device_to_array_slices = XLA.sharding_to_concrete_array_indices(
-                    condensed_op_sharding, size(carg), mesh.device_ids
+                    condensed_op_sharding, size(carg), mesh.logical_device_ids
                 )
                 for j in 1:length(mesh)
-                    device_id = mesh.device_ids[j]
+                    device_id = mesh.logical_device_ids[j]
                     buf = Symbol(:buf_, i, :_, device_id)
                     slice = device_to_array_slices[j]
                     push!(
@@ -1548,7 +1548,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
 
         # compile MLIR module to XLA executable
         global_device_ids = if mlir_fn_res.is_sharded
-            collect(Int64, mlir_fn_res.sharding_mesh.device_ids)
+            vec(mlir_fn_res.sharding_mesh.device_ids)
         else
             Int64[]
         end

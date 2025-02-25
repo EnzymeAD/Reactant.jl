@@ -21,11 +21,9 @@ julia> mesh = Mesh(reshape(devices, 2, 2, 2), (:x, :y, :z));
 julia> mesh = Mesh(reshape(devices, 4, 2), (:x, :y));
 ```
 """
-struct Mesh{D,ND}
-    device_ids::NTuple{ND,Int}
-    sorted_device_ids::NTuple{ND,Int}
-    logical_device_ids::NTuple{ND,Int}
-    shape::Dims{D}
+struct Mesh{D}
+    device_ids::Array{Int64,D}
+    logical_device_ids::UnitRange{Int}
     axis_names::NTuple{D,Symbol}
 
     function Mesh(devices::AbstractArray{<:XLA.AbstractDevice}, axis_names)
@@ -33,38 +31,44 @@ struct Mesh{D,ND}
     end
 
     function Mesh(
-        devices::NTuple{D,<:XLA.AbstractDevice}, shape::Dims{D}, axis_names
-    ) where {D}
-        return Mesh(XLA.device_ordinal.(devices), shape, axis_names)
-    end
-
-    function Mesh(
         device_ids::AbstractArray{<:Integer,D}, axis_names::NTuple{D,Union{String,Symbol}}
     ) where {D}
-        return Mesh(Tuple(vec(device_ids)), size(device_ids), axis_names)
+        return new{D}(device_ids, 0:(length(device_ids) - 1), Symbol.(axis_names))
     end
 
+    # XXX (Deprecated): remove in v0.3
     function Mesh(
-        device_ids::NTuple{D1,Int},
-        shape::Dims{D},
-        axis_names::NTuple{D,Union{String,Symbol}},
-    ) where {D,D1}
-        @assert allunique(device_ids)
-        return new{D,D1}(
-            device_ids,
-            Tuple(sort([device_ids...])),
-            ntuple(Base.Fix2(-, 1), D1),
-            shape,
-            Symbol.(axis_names),
+        devices::NTuple{D,<:XLA.AbstractDevice}, shape::Dims{D}, axis_names
+    ) where {D}
+        Base.depwarn(
+            "Mesh(devices::NTuple{D,<:XLA.AbstractDevice}, shape::Dims{D}, axis_names) is \
+             deprecated, use Mesh(reshape(collect(XLA.device_ordinal.(devices)), shape), \
+             axis_names) instead",
+            :Mesh,
         )
+        global_ids = reshape(collect(XLA.device_ordinal.(devices)), shape)
+        return Mesh(global_ids, axis_names)
+    end
+
+    # XXX (Deprecated): remove in v0.3
+    function Mesh(
+        device_ids::Dims{D1}, shape::Dims{D}, axis_names::NTuple{D,Union{String,Symbol}}
+    ) where {D,D1}
+        Base.depwarn(
+            "Mesh(device_ids::Dims{D1}, shape::Dims{D}, \
+             axis_names::NTuple{D,Union{String,Symbol}}) is deprecated, use \
+             Mesh(reshape(collect(Int64, device_ids), shape), axis_names) instead",
+            :Mesh,
+        )
+        return Mesh(reshape(collect(Int64, device_ids), shape), axis_names)
     end
 end
 
-Base.length(::Mesh{D,ND}) where {D,ND} = ND
+Base.length(m::Mesh) = length(m.device_ids)
 Base.ndims(::Mesh{D}) where {D} = D
 
-Base.size(mesh::Mesh) = mesh.shape
-Base.size(mesh::Mesh, axis::Int) = mesh.shape[axis]
+Base.size(mesh::Mesh) = size(mesh.device_ids)
+Base.size(mesh::Mesh, axis::Int) = size(mesh.device_ids, axis)
 function Base.size(mesh::Mesh, axis::Union{String,Symbol})
     return size(mesh, findfirst(==(Symbol(axis)), mesh.axis_names))
 end
@@ -146,18 +150,18 @@ julia> sharding = NamedSharding(mesh, (nothing, nothing)); # fully replicated Ma
 
 See also: [`Sharding.NoSharding`](@ref)
 """
-struct NamedSharding{D1,D2,P<:Tuple,D3} <: AbstractSharding
-    mesh::Mesh{D1,D2}
+struct NamedSharding{D1,D2,P<:Tuple} <: AbstractSharding
+    mesh::Mesh{D1}
     partition_spec::P
-    is_closed::NTuple{D3,Bool}
-    priority::NTuple{D3,Int}
+    is_closed::NTuple{D2,Bool}
+    priority::NTuple{D2,Int}
 
     function NamedSharding(
-        mesh::Mesh{D1,D2},
+        mesh::Mesh{D1},
         partition_spec::P;
-        is_closed::NTuple{D3,Bool}=ntuple(Returns(true), length(partition_spec)),
-        priority::NTuple{D3,Int}=ntuple(i -> -1, length(partition_spec)),
-    ) where {D1,D2,P<:Tuple,D3}
+        is_closed::NTuple{D2,Bool}=ntuple(Returns(true), length(partition_spec)),
+        priority::NTuple{D2,Int}=ntuple(i -> -1, length(partition_spec)),
+    ) where {D1,P<:Tuple,D2}
         axis_names = Symbol[]
         pspec = ()
         for p in partition_spec
@@ -177,7 +181,7 @@ struct NamedSharding{D1,D2,P<:Tuple,D3} <: AbstractSharding
         end
         @assert allunique(axis_names) "Duplicate axis names!"
 
-        return new{D1,D2,typeof(pspec),D3}(mesh, pspec, is_closed, priority)
+        return new{D1,D2,typeof(pspec)}(mesh, pspec, is_closed, priority)
     end
 end
 
@@ -226,17 +230,17 @@ end
 # This stores the sharding information in the form of XLA.HloSharding, and provides a
 # central type for the final storage. It also potentially saves us the pain of not having
 # to regenerate the partition spec from the HloSharding.
-struct HloSharding{M,D,D2} <: AbstractSharding
+struct HloSharding{D1,D2} <: AbstractSharding
     hlo_sharding::XLA.HloSharding
-    mesh::Mesh{M,D}
+    mesh::Mesh{D1}
     is_closed::NTuple{D2,Bool}
     priority::NTuple{D2,Int}
 
     function HloSharding(
-        hlo_sharding::XLA.HloSharding, mesh::Mesh{M,D}, is_closed, priority
-    ) where {M,D}
+        hlo_sharding::XLA.HloSharding, mesh::Mesh{D1}, is_closed, priority
+    ) where {D1}
         @assert length(is_closed) == length(priority)
-        return new{M,D,length(is_closed)}(hlo_sharding, mesh, is_closed, priority)
+        return new{D1,length(is_closed)}(hlo_sharding, mesh, is_closed, priority)
     end
 end
 

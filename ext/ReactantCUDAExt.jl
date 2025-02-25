@@ -585,7 +585,9 @@ function vendored_buildIntrinsicLoweringPipeline(
     return LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
 end
 
-function vendored_buildScalarOptimizerPipeline(fpm, @nospecialize(job), opt_level; instcombine::Bool=false)
+function vendored_buildScalarOptimizerPipeline(
+    fpm, @nospecialize(job), opt_level; instcombine::Bool=false
+)
     if opt_level >= 2
         LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
         LLVM.add!(fpm, LLVM.SROAPass())
@@ -597,9 +599,9 @@ function vendored_buildScalarOptimizerPipeline(fpm, @nospecialize(job), opt_leve
         LLVM.add!(fpm, LLVM.DCEPass())
         LLVM.add!(fpm, LLVM.IRCEPass())
         if instcombine
-        	LLVM.add!(fpm, LLVM.InstCombinePass())
+            LLVM.add!(fpm, LLVM.InstCombinePass())
         else
-	   LLVM.add!(fpm, LLVM.InstSimplifyPass())
+            LLVM.add!(fpm, LLVM.InstSimplifyPass())
         end
         LLVM.add!(fpm, LLVM.JumpThreadingPass())
     end

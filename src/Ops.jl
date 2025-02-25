@@ -2235,7 +2235,7 @@ We return a NamedTuple with the following fields:
     cache !== nothing && haskey(cache, m) && return cache[m]
     result = mesh(
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
-        collect(Int64, m.logical_device_ids);
+        m.logical_device_ids;
         mod,
         sym_name,
         location,
@@ -2246,23 +2246,25 @@ end
 
 @noinline function mesh(
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-    device_ids::Vector{Int64};
+    device_ids::AbstractVector{Int64};
     mod::MLIR.IR.Module=MLIR.IR.mmodule(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     # See https://github.com/openxla/shardy/blob/f9d83e779a58b811b848c4edfaf68e88b636787d/shardy/dialect/sdy/ir/verifiers.cc#L647-L699 for the checks
     ndevices = prod(last, mesh_axes)
+
     @assert allunique(first, mesh_axes) "mesh_axes must be unique"
     @assert ndevices == length(device_ids) "length(device_ids) should be same as \
                                             prod(last, mesh_axes)"
-    @assert all(x -> x ≥ 0, device_ids) "device_ids must be non-negative"
-    @assert Base.sort(device_ids) == collect(Int64, 0:(ndevices - 1)) "sorted device_ids must be the same as iota(product(axes)), got $(Base.sort(device_ids))"
+    @assert all(Base.Fix2(≥, 0), device_ids) "device_ids must be non-negative"
+    @assert Base.sort(device_ids) == 0:(ndevices - 1) "sorted device_ids must be the same \
+                                                       as iota(product(axes)), got \
+                                                       $(Base.sort(device_ids))"
 
-    if Base.sort(device_ids) == device_ids
-        # error: if the ordered device ids are the same as iota(product(axes)), no need to specify them for simplicity
-        device_ids = Int64[]
-    end
+    # error: if the ordered device ids are the same as iota(product(axes)), no need to
+    # specify them for simplicity
+    issorted(device_ids) && (device_ids = Int64[])
 
     ctx = MLIR.IR.context()
     mesh_axis_attrs = [
@@ -2273,7 +2275,7 @@ end
         Int64(length(mesh_axis_attrs)),
         mesh_axis_attrs,
         Int64(length(device_ids)),
-        device_ids,
+        collect(Int64, device_ids),
     )
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
@@ -2306,10 +2308,13 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
 `input` and `sharding`.
 """
 @noinline function sharding_constraint(
-    input::Union{TracedRArray,TracedRNumber},
+    input::Union{AbstractArray,Number},
     sharding::Reactant.Sharding.AbstractSharding;
     location=mlir_stacktrace("sharding_constraint", @__FILE__, @__LINE__),
 )
+    !(input isa TracedRNumber || input isa TracedRArray) &&
+        (input = constant(input; location))
+
     cache = Reactant.Compiler.sdycache()
     haskey(cache, sharding.mesh) || Ops.mesh(sharding.mesh; location)
     (; sym_name, mesh_attr) = cache[sharding.mesh]
