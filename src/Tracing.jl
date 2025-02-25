@@ -481,7 +481,6 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
-
     if T === Any
         return T
     end
