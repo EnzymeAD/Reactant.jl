@@ -588,6 +588,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if !isempty(subParms)
+        @show mode track_numbers
         TT2 = Core.apply_type(T.name.wrapper, subParms...)
     else
         TT2 = T
@@ -713,7 +714,7 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 Base.@assume_effects :total @inline function traced_type(
     T::Type, ::Val{mode}, track_numbers::Type, sharding
 ) where {mode}
-    if mode == TracedSetPath
+    if mode == TracedSetPath || mode == TracedTrack
         return T
     end
 
@@ -1113,7 +1114,7 @@ function make_tracer(
         return nothing
     end
     RT = Core.Typeof(prev)
-    if RT <: track_numbers && mode != TracedSetPath
+    if RT <: track_numbers && mode != TracedSetPath && mode != TracedTrack
         if mode == ArrayToConcrete
             return ConcretePJRTNumber(prev; sharding)
         else
