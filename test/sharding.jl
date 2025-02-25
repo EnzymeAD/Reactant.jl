@@ -81,19 +81,19 @@ fn_test3(x) = sum(x; dims=1)
                 Sharding.NamedSharding(mesh, ("model", "data")),
                 Sharding.NamedSharding(mesh, ("model", nothing)),
                 Sharding.NamedSharding(mesh, (nothing, "data")),
-                Sharding.DimsSharding(mesh, (2,), (:data)),
+                Sharding.DimsSharding(mesh, (2,), (:data,)),
             ),
             (
                 Sharding.NamedSharding(mesh, ("model", "data")),
                 Sharding.NamedSharding(mesh, (nothing, "data")),
                 Sharding.NoSharding(),
-                Sharding.DimsSharding(mesh, (-2,), (:model)),
+                Sharding.DimsSharding(mesh, (-2,), (:model,)),
             ),
             (
                 Sharding.NamedSharding(mesh, ("model", "data")),
                 Sharding.NoSharding(),
                 Sharding.NoSharding(),
-                Sharding.NamedSharding(mesh, ("model", "data"))
+                Sharding.NamedSharding(mesh, ("model", "data")),
             ),
         )
             samples_ra = Reactant.to_rarray(samples; sharding=samples_sharding)

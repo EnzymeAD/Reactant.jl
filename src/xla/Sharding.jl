@@ -263,7 +263,16 @@ function sharding_to_concrete_array_indices(
             @assert n_shards > 0 "Invalid number of shards: $n_shards"
             n_shards == 1 && return [1:dim]
             shard_size, remainder = divrem(dim, n_shards)
-            @assert remainder == 0 "Dimension $dim not evenly divisible by $n_shards shards"
+
+            if remainder != 0
+                throw(
+                    DimensionMismatch(
+                        "Dimension of Size $(dim) cannot be partitioned into $(n_shards) \
+                         shards each of size $(shard_size) (remainder = $(remainder)).",
+                    ),
+                )
+            end
+
             return [(i * shard_size + 1):((i + 1) * shard_size) for i in 0:(n_shards - 1)]
         end
 
