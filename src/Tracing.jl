@@ -481,6 +481,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
+
     if T === Any
         return T
     end
@@ -712,6 +713,10 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 Base.@assume_effects :total @inline function traced_type(
     T::Type, ::Val{mode}, track_numbers::Type, sharding
 ) where {mode}
+    if mode == TracedSetPath
+        return T
+    end
+
     cache = nothing
     cache_key = (mode, track_numbers, sharding)
     if haskey(traced_type_cache, cache_key)
