@@ -397,4 +397,21 @@ function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTr
     return C
 end
 
+LinearAlgebra.transpose(a::AnyTracedRArray) = error("transpose not defined for $(typeof(a)).")
+
+function LinearAlgebra.transpose!(B::AnyTracedRVector, A::AnyTracedRMatrix)
+    LinearAlgebra.check_transpose_axes((size(B,1), size(B,2)), size(A))
+    set_mlir_data!(B, get_mlir_data(Ops.reshape(A, length(B))))
+end
+
+function LinearAlgebra.transpose!(B::AnyTracedRMatrix, A::AnyTracedRVector)
+    LinearAlgebra.check_transpose_axes(size(B), (size(A, 1), size(A, 2)))
+    set_mlir_data!(B, get_mlir_data(Ops.broadcast_in_dim(A, [2], [1, length(A)])))
+end
+
+function LinearAlgebra.transpose!(B::AnyTracedRMatrix, A::AnyTracedRMatrix)
+    LinearAlgebra.check_transpose_axes(size(B), size(A))
+    set_mlir_data!(B, get_mlir_data(Ops.transpose(A, [2,1])))
+end
+
 end
