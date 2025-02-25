@@ -585,6 +585,41 @@ function vendored_buildIntrinsicLoweringPipeline(
     return LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
 end
 
+function vendored_buildScalarOptimizerPipeline(fpm, @nospecialize(job), opt_level; instcombine::Bool=false)
+    if opt_level >= 2
+        LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
+        LLVM.add!(fpm, LLVM.SROAPass())
+        LLVM.add!(fpm, LLVM.InstSimplifyPass())
+        LLVM.add!(fpm, LLVM.GVNPass())
+        LLVM.add!(fpm, LLVM.MemCpyOptPass())
+        LLVM.add!(fpm, LLVM.SCCPPass())
+        LLVM.add!(fpm, LLVM.CorrelatedValuePropagationPass())
+        LLVM.add!(fpm, LLVM.DCEPass())
+        LLVM.add!(fpm, LLVM.IRCEPass())
+        if instcombine
+        	LLVM.add!(fpm, LLVM.InstCombinePass())
+        else
+	   LLVM.add!(fpm, LLVM.InstSimplifyPass())
+        end
+        LLVM.add!(fpm, LLVM.JumpThreadingPass())
+    end
+    if opt_level >= 3
+        LLVM.add!(fpm, LLVM.GVNPass())
+    end
+    if opt_level >= 2
+        LLVM.add!(fpm, LLVM.DSEPass())
+        # TODO invokePeepholeCallbacks
+        LLVM.add!(fpm, LLVM.SimplifyCFGPass(; GPUCompiler.AggressiveSimplifyCFGOptions...))
+        LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
+        LLVM.add!(fpm, LLVM.NewPMLoopPassManager()) do lpm
+            LLVM.add!(lpm, LLVM.LoopDeletionPass())
+            LLVM.add!(lpm, LLVM.LoopInstSimplifyPass())
+        end
+        LLVM.add!(fpm, LLVM.LoopDistributePass())
+    end
+    # TODO invokeScalarOptimizerCallbacks
+end
+
 function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
     # Doesn't call instcombine
     GPUCompiler.buildEarlySimplificationPipeline(mpm, job, opt_level)
@@ -593,8 +628,7 @@ function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
     LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
         # Doesn't call instcombine
         GPUCompiler.buildLoopOptimizerPipeline(fpm, job, opt_level)
-        # Doesn't call instcombine
-        GPUCompiler.buildScalarOptimizerPipeline(fpm, job, opt_level)
+        vendored_buildScalarOptimizerPipeline(fpm, job, opt_level)
         if GPUCompiler.uses_julia_runtime(job) && opt_level >= 2
             # XXX: we disable vectorization, as this generally isn't useful for GPU targets
             #      and actually causes issues with some back-end compilers (like Metal).
