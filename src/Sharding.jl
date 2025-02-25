@@ -226,6 +226,75 @@ function get_shardy_tensor_sharding_attribute(
     )
 end
 
+# TODO: Something like NamedDims.jl will allow us to support NamedDimsSharding similar to
+#       `levanter`
+
+"""
+    DimsSharding(
+        mesh::Mesh{M},
+        dims::NTuple{D,Int},
+        partition_spec;
+        is_closed::NTuple{D,Bool}=ntuple(Returns(true), D),
+        priority::NTuple{D,Int}=ntuple(i -> -1, D),
+    )
+
+Similar to [`NamedSharding`](@ref) but works for a arbitrary dimensional array. Dimensions
+not specified in `dims` are replicated. If any dimension in `dims` is greater than the total
+number of dimensions in the array, the corresponding `partition_spec`, `is_closed` and
+`priority` are ignored. Additionally for any negative dimensions in `dims`, the true
+dims are calculated as `ndims(x) - dim + 1`. A dims value of `0` will throw an error.
+"""
+struct DimsSharding{M,D,P} <: AbstractSharding
+    mesh::Mesh{M}
+    dims::NTuple{D,Int}
+    partition_spec::P
+    is_closed::NTuple{D,Bool}
+    priority::NTuple{D,Int}
+
+    function DimsSharding(
+        mesh::Mesh{M},
+        dims::NTuple{D,Int},
+        partition_spec;
+        is_closed::NTuple{D,Bool}=ntuple(Returns(true), length(partition_spec)),
+        priority::NTuple{D,Int}=ntuple(i -> -1, length(partition_spec)),
+    ) where {M,D}
+        @assert length(partition_spec) == length(dims)
+        # Validity checks on the inputs are deferred to NamedSharding
+        return new{M,D,typeof(partition_spec)}(
+            mesh, dims, partition_spec, is_closed, priority
+        )
+    end
+end
+
+function (sharding::DimsSharding)(
+    client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
+)
+    final_dims = map(sharding.dims) do d
+        @assert !iszero(d) "dims cannot contain 0"
+        return ifelse(d < 0, ndims(x) + d + 1, d)
+    end
+
+    dim_indices = ntuple(i -> findfirst(==(i), final_dims), ndims(x))
+    partition_spec = ntuple(ndims(x)) do i
+        dim_index = dim_indices[i]
+        dim_index === nothing && return nothing # replicated dimension
+        return sharding.partition_spec[dim_index]
+    end
+    is_closed = ntuple(ndims(x)) do i
+        dim_index = dim_indices[i]
+        dim_index === nothing && return true # replicated dimension
+        return sharding.is_closed[dim_index]
+    end
+    priority = ntuple(ndims(x)) do i
+        dim_index = dim_indices[i]
+        dim_index === nothing && return -1 # replicated dimension
+        return sharding.priority[dim_index]
+    end
+
+    named_sharding = NamedSharding(sharding.mesh, partition_spec; is_closed, priority)
+    return named_sharding(client, device, x)
+end
+
 # HloSharding
 # This stores the sharding information in the form of XLA.HloSharding, and provides a
 # central type for the final storage. It also potentially saves us the pain of not having
@@ -348,6 +417,7 @@ Checks whether the given sharding refers to no sharding.
 """
 is_sharded(::NoSharding) = false
 is_sharded(::NamedSharding) = true
+is_sharded(::DimsSharding) = true
 is_sharded(::HloSharding) = true
 is_sharded(s::ShardInfo) = is_sharded(s.sharding)
 
