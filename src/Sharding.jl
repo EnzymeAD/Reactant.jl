@@ -96,6 +96,10 @@ See also: [`Sharding.NamedSharding`](@ref)
 """
 struct NoSharding <: AbstractSharding end
 
+@inline ndevices(::NoSharding) = 1
+
+@inline shard_type(::Type{NoSharding}, _) = ShardInfo{NoSharding,Nothing}
+
 # This allows us to mark entire branches as NoSharding
 Base.getproperty(::NoSharding, x) = NoSharding()
 Base.getproperty(::NoSharding, x::Symbol) = NoSharding()
@@ -186,6 +190,12 @@ struct NamedSharding{D1,D2,P<:Tuple} <: AbstractSharding
     end
 end
 
+@inline ndevices(sharding::NamedSharding) = length(sharding.mesh.device_ids)
+
+@inline function shard_type(::Type{NamedSharding{D1,D2,P}}, N) where {D1,D2,P}
+    return shard_type(HloSharding{D1,D2}, N)
+end
+
 function (sharding::NamedSharding)(
     client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
 )
@@ -267,6 +277,12 @@ struct DimsSharding{M,D,P} <: AbstractSharding
     end
 end
 
+@inline ndevices(sharding::DimsSharding) = length(sharding.mesh.device_ids)
+
+@inline function shard_type(::Type{DimsSharding{M,D,P}}, N) where {M,D,P}
+    return shard_type(HloSharding{M,N}, N)
+end
+
 function standardize_sharding(sharding::DimsSharding, x::Union{AbstractArray,Number})
     final_dims = map(sharding.dims) do d
         @assert !iszero(d) "dims cannot contain 0"
@@ -315,6 +331,12 @@ struct HloSharding{D1,D2} <: AbstractSharding
         @assert length(is_closed) == length(priority)
         return new{D1,length(is_closed)}(hlo_sharding, mesh, is_closed, priority)
     end
+end
+
+@inline ndevices(sharding::HloSharding) = length(sharding.mesh.device_ids)
+
+@inline function shard_type(::Type{HloSharding{D1,D2}}, N) where {D1,D2}
+    return ShardInfo{HloSharding{D1,D2},Vector{NTuple{N,UnitRange{Int64}}}}
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
@@ -393,6 +415,10 @@ struct ShardInfo{S,D} <: AbstractSharding
     sharding::S
     device_to_array_slices::D
 end
+
+@inline ndevices(sharding::ShardInfo) = length(sharding.mesh)
+
+@inline shard_type(::Type{ShardInfo{S,D}}, N) where {S,D} = shard_type(S, N)
 
 function Base.getproperty(sharding::ShardInfo, name::Symbol)
     name ∈ (:sharding, :device_to_array_slices) && return getfield(sharding, name)
