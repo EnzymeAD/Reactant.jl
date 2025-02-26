@@ -185,7 +185,16 @@ end
 end
 
 @testset "axpy!" begin
-    α = 3.1
+    α = 3
+    x = rand(Int64, 4)
+    x_ra = Reactant.to_rarray(x)
+    y = rand(Int64, 4)
+    y_ra = Reactant.to_rarray(y) 
+
+    @jit axpy!(α, x_ra, y_ra)
+    @test y_ra ≈ axpy!(α, x, y)
+
+    α = 2
     x = rand(4)
     x_ra = Reactant.to_rarray(x)
     y = rand(4)
@@ -194,30 +203,67 @@ end
     @jit axpy!(α, x_ra, y_ra)
     @test y_ra ≈ axpy!(α, x, y)
 
+    α = 4.12
+    X = rand(3, 5)
+    Y = rand(3, 5)
+    X_ra = Reactant.to_rarray(X)
+    Y_ra = Reactant.to_rarray(Y)
+    
+    @jit axpy!(α, X_ra, Y_ra)
+    @test Y_ra ≈ axpy!(α, X, Y)
+    
     α = 3.2 + 1im
-    x = rand(Complex{Float64}, 4)
+    x = rand(Complex{Float32}, 4)
     x_ra = Reactant.to_rarray(x)
-    y = rand(Complex{Float64}, 4)
+    y = rand(Complex{Float32}, 4)
     y_ra = Reactant.to_rarray(y) 
 
     @jit axpy!(α, x_ra, y_ra)
     @test y_ra ≈ axpy!(α, x, y)
 
+end
+
+@testset "axpby!" begin
+    α = 3
+    β = 2
+    x = rand(Int64, 4)
+    x_ra = Reactant.to_rarray(x)
+    y = rand(Int64, 4)
+    y_ra = Reactant.to_rarray(y) 
+
+    @jit axpby!(α, x_ra, β, y_ra)
+    @test y_ra ≈ axpby!(α, x, β, y)
+
+    α = 2
+    β = 3
+    x = rand(4)
+    x_ra = Reactant.to_rarray(x)
+    y = rand(4)
+    y_ra = Reactant.to_rarray(y) 
+
+    @jit axpby!(α, x_ra, β, y_ra)
+    @test y_ra ≈ axpby!(α, x, β, y)
+
+    α = 4.12
     X = rand(3, 5)
     Y = rand(3, 5)
     X_ra = Reactant.to_rarray(X)
     Y_ra = Reactant.to_rarray(Y)
-    α = 4
-    @jit axpy!(α, X_ra, Y_ra)
-    @test Y_ra ≈ axpy!(α, X, Y)
+    
+    @jit axpby!(α, X_ra, β, Y_ra)
+    @test Y_ra ≈ axpby!(α, X, β, Y)
+    
+    α = 3.2 + 1im
+    β = 2.1 - 4.2im
+    x = rand(Complex{Float32}, 4)
+    x_ra = Reactant.to_rarray(x)
+    y = rand(Complex{Float32}, 4)
+    y_ra = Reactant.to_rarray(y) 
 
-    X = rand(Complex{Float64}, (3, 5))
-    Y = rand(Complex{Float64}, (3, 5))
-    X_ra = Reactant.to_rarray(X)
-    Y_ra = Reactant.to_rarray(Y)
-    α = 1.5
-    @jit axpy!(α, X_ra, Y_ra)
-    @test Y_ra ≈ axpy!(α, X, Y)
+    @jit axpby!(α, x_ra, β, y_ra)
+    @test y_ra ≈ axpby!(α, x, β, y)
 
 end
+
+
 
