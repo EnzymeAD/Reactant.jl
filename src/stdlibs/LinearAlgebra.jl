@@ -397,4 +397,14 @@ function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTr
     return C
 end
 
+function LinearAlgebra.axpy!(α::Number, x::TracedRArray, y::TracedRArray)
+    if length(x) != length(y)
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
+    end
+    T = unwrapped_eltype(x)
+    ax = Ops.multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
+    set_mlir_data!(y, get_mlir_data(Ops.add(y, ax)))
+end
+
+
 end
