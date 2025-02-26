@@ -587,7 +587,6 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if !isempty(subParms)
-        @show mode track_numbers
         TT2 = Core.apply_type(T.name.wrapper, subParms...)
     else
         TT2 = T
