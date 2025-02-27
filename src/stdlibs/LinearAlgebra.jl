@@ -434,6 +434,7 @@ function LinearAlgebra.adjoint!(B::AnyTracedRVector{T1}, A::AnyTracedRMatrix{T2}
     end
     AT = TracedUtils.promote_to(TracedRArray{T, 2}, A)
     set_mlir_data!(B, get_mlir_data(Ops.reshape(AT, length(B))))
+    return B
 end
 
 function LinearAlgebra.adjoint!(B::AnyTracedRMatrix{T1}, A::AnyTracedRVector{T2}) where {T1, T2}
@@ -443,6 +444,7 @@ function LinearAlgebra.adjoint!(B::AnyTracedRMatrix{T1}, A::AnyTracedRVector{T2}
         A = Ops.conj(A)
     end
     set_mlir_data!(B, get_mlir_data(Ops.broadcast_in_dim(A, [2], [1, length(A)])))
+    return B
 end
 
 function LinearAlgebra.adjoint!(B::AnyTracedRMatrix{T1}, A::AnyTracedRMatrix{T2}) where {T1, T2}
@@ -453,6 +455,7 @@ function LinearAlgebra.adjoint!(B::AnyTracedRMatrix{T1}, A::AnyTracedRMatrix{T2}
     end
     AT = TracedUtils.promote_to(TracedRArray{T, 2}, Ops.transpose(A, [2,1]))
     set_mlir_data!(B, get_mlir_data(AT))
+    return B
 end
                   
 function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T}) where {T}
