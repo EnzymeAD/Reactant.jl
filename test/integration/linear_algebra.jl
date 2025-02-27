@@ -183,3 +183,29 @@ end
         end
     end
 end
+
+@testset "transpose!" begin
+    v = zeros(5)
+    M = rand(1, 5)
+    v_ra = Reactant.to_rarray(v)
+    M_ra = Reactant.to_rarray(M)
+    
+    @jit transpose!(v_ra, M_ra)
+    @test v_ra ≈ transpose!(v, M)
+
+    v = rand(7)
+    M = zeros(1, 7)
+    v_ra = Reactant.to_rarray(v)
+    M_ra = Reactant.to_rarray(M)
+    
+    @jit transpose!(M_ra, v_ra)
+    @test M_ra ≈ transpose!(M, v)
+
+    A = rand(3, 7)
+    B = rand(7, 3)
+    A_ra = Reactant.to_rarray(A)
+    B_ra = Reactant.to_rarray(B)
+    @jit transpose!(B_ra, A_ra)
+    @test B_ra ≈ transpose!(B, A)
+end
+
