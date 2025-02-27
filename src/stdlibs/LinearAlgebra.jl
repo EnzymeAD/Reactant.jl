@@ -397,20 +397,20 @@ function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTr
     return C
 end
 
-function LinearAlgebra.dot(x::TracedRArray{T}, y::TracedRArray{T}) where {T}
+function LinearAlgebra.dot(x::TracedRArray{T}, y::TracedRArray) where {T}
     lx = length(x)
     if lx != length(y)
          throw(DimensionMismatch(lazy"first array has length $(lx) which does not match the length of the second, $(length(y))."))
     end
     
     if T <: Complex
-        return Ops.dot_general(Ops.conj(x), y; contracting_dimensions = [[1], [1]]) 
-    else
-        return Ops.dot_general(x, y; contracting_dimensions = [[1], [1]]) 
+        x = Ops.conj(x)
     end
+    
+    return Ops.dot_general(x, y; contracting_dimensions = [[1], [1]]) 
 end
 
-function LinearAlgebra.cross(a::AnyTracedRVector{T}, b::AnyTracedRVector{T}) where{T}
+function LinearAlgebra.cross(a::AnyTracedRVector{T1}, b::AnyTracedRVector{T2}) where {T1, T2}
     if !(length(a) == length(b) == 3)
          throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
     end
@@ -419,13 +419,40 @@ function LinearAlgebra.cross(a::AnyTracedRVector{T}, b::AnyTracedRVector{T}) whe
 
     a1, a2, a3 = a
     b1, b2, b3 = b
-   
     c = [a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1]
-    c = TracedUtils.promote_to(TracedRArray{T, 1}, c)
+    
+    T = promote_type(T1, T2)
 
-    return TracedRNumber{T}((), c.mlir_data) 
+    return TracedUtils.promote_to(TracedRArray{T, 1}, c)
 end
 
+function LinearAlgebra.adjoint!(B::AnyTracedRVector{T1}, A::AnyTracedRMatrix{T2}) where {T1, T2}
+    LinearAlgebra.check_transpose_axes((size(B,1), size(B,2)), size(A))
+    T = promote_type(T1, T2)
+    if T <: Complex
+        A = Ops.conj(A)
+    end
+    AT = TracedUtils.promote_to(TracedRArray{T, 2}, A)
+    set_mlir_data!(B, get_mlir_data(Ops.reshape(AT, length(B))))
+end
 
+function LinearAlgebra.adjoint!(B::AnyTracedRMatrix{T1}, A::AnyTracedRVector{T2}) where {T1, T2}
+    LinearAlgebra.check_transpose_axes(size(B), (size(A, 1), size(A, 2)))
+    T = promote_type(T1, T2)
+    if T <: Complex
+        A = Ops.conj(A)
+    end
+    set_mlir_data!(B, get_mlir_data(Ops.broadcast_in_dim(A, [2], [1, length(A)])))
+end
+
+function LinearAlgebra.adjoint!(B::AnyTracedRMatrix{T1}, A::AnyTracedRMatrix{T2}) where {T1, T2}
+    LinearAlgebra.check_transpose_axes(size(B), size(A))
+    T = promote_type(T1, T2)
+    if T <: Complex
+        A = Ops.conj(A)
+    end
+    AT = TracedUtils.promote_to(TracedRArray{T, 2}, Ops.transpose(A, [2,1]))
+    set_mlir_data!(B, get_mlir_data(AT))
+end
 
 end
