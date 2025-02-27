@@ -454,5 +454,27 @@ function LinearAlgebra.adjoint!(B::AnyTracedRMatrix{T1}, A::AnyTracedRMatrix{T2}
     AT = TracedUtils.promote_to(TracedRArray{T, 2}, Ops.transpose(A, [2,1]))
     set_mlir_data!(B, get_mlir_data(AT))
 end
+                  
+function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T}) where {T}
+    if length(x) != length(y)
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
+    end
+    ax = Ops.multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
+    
+    set_mlir_data!(y, get_mlir_data(Ops.add(y, ax)))
+    return y
+end
+
+function LinearAlgebra.axpby!(α::Number, x::TracedRArray{T}, β::Number, y::TracedRArray{T}) where {T}
+    if length(x) != length(y)
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
+    end
+    ax = Ops.multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
+    by = Ops.multiply(y, TracedUtils.broadcast_to_size(T(β), size(y)))
+ 
+    set_mlir_data!(y, get_mlir_data(Ops.add(ax, by)))
+    return y
+end
+
 
 end
