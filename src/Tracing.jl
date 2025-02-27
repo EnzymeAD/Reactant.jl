@@ -350,9 +350,17 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
-    return ConcreteRNG{
-        traced_type_inner(TracedRArray{UInt64,1}, seen, mode, track_numbers, sharding)
-    }
+    if mode == ConcreteToTraced
+        throw("TracedRNG cannot be traced")
+    elseif mode == TracedToConcrete
+        return ConcreteRNG{
+            traced_type_inner(TracedRArray{UInt64,1}, seen, mode, track_numbers, sharding)
+        }
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+        return T
+    else
+        throw("Unsupported mode: $mode")
+    end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
