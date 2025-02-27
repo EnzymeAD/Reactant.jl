@@ -183,3 +183,57 @@ end
         end
     end
 end
+
+@testset "dot" begin
+    a = [1, 2, 3, 4]
+    b = [-2, 5, 6, 7]
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit dot(a_ra, b_ra) ≈ dot(a, b)
+
+    a = rand(4)
+    b = rand(4)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    
+    @test @jit dot(a_ra, b_ra) ≈ dot(a, b)
+
+    a = rand(Complex{Float64}, 4)
+    b = rand(Complex{Float64}, 4)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    ab_ra = @jit dot(a_ra, b_ra)
+    ab = dot(a,b)
+    
+    @test ab_ra ≈ ab 
+    
+    # I found this strange. If in dot_generat I did not apply Ops.conj,
+    # calling the line below still gives test passed while the one above does not
+    # @test @jit dot(a_ra, b_ra) ≈ dot(a, b)
+end
+
+
+@testset "cross" begin
+    a = [1, 2, 3]
+    b = [-2, 5, 7]
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit cross(a_ra, b_ra) ≈ cross(a, b)
+
+    a = rand(3)
+    b = rand(3)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    
+    @test @jit dot(a_ra, b_ra) ≈ dot(a, b)
+
+    a = rand(Complex{Float64}, 3)
+    b = rand(Complex{Float64}, 3)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit cross(a_ra, b_ra) ≈ cross(a,b)
+end    
+

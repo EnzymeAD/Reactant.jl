@@ -397,4 +397,35 @@ function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTr
     return C
 end
 
+function LinearAlgebra.dot(x::TracedRArray{T}, y::TracedRArray{T}) where {T}
+    lx = length(x)
+    if lx != length(y)
+         throw(DimensionMismatch(lazy"first array has length $(lx) which does not match the length of the second, $(length(y))."))
+    end
+    
+    if T <: Complex
+        return Ops.dot_general(Ops.conj(x), y; contracting_dimensions = [[1], [1]]) 
+    else
+        return Ops.dot_general(x, y; contracting_dimensions = [[1], [1]]) 
+    end
+end
+
+function LinearAlgebra.cross(a::AnyTracedRVector{T}, b::AnyTracedRVector{T}) where{T}
+    if !(length(a) == length(b) == 3)
+         throw(DimensionMismatch("cross product is only defined for vectors of length 3"))
+    end
+    a = materialize_traced_array(a)
+    b = materialize_traced_array(b)
+
+    a1, a2, a3 = a
+    b1, b2, b3 = b
+   
+    c = [a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1]
+    c = TracedUtils.promote_to(TracedRArray{T, 1}, c)
+
+    return TracedRNumber{T}((), c.mlir_data) 
+end
+
+
+
 end
