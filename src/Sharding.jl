@@ -96,11 +96,16 @@ See also: [`Sharding.NamedSharding`](@ref)
 """
 struct NoSharding <: AbstractSharding end
 
+@inline ndevices(::NoSharding) = 1
+
+@inline shard_type(::Type{NoSharding}, _) = ShardInfo{NoSharding,Nothing}
+
 # This allows us to mark entire branches as NoSharding
 Base.getproperty(::NoSharding, x) = NoSharding()
 Base.getproperty(::NoSharding, x::Symbol) = NoSharding()
 
 function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,Number})
+    device === nothing && (device = XLA.default_device(client))
     buffer = XLA.PJRT.AsyncBuffer(client, x, device)
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
@@ -185,6 +190,12 @@ struct NamedSharding{D1,D2,P<:Tuple} <: AbstractSharding
     end
 end
 
+@inline ndevices(sharding::NamedSharding) = length(sharding.mesh.device_ids)
+
+@inline function shard_type(::Type{NamedSharding{D1,D2,P}}, N) where {D1,D2,P}
+    return shard_type(HloSharding{D1,D2}, N)
+end
+
 function (sharding::NamedSharding)(
     client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
 )
@@ -226,6 +237,84 @@ function get_shardy_tensor_sharding_attribute(
     )
 end
 
+# TODO: Something like NamedDims.jl will allow us to support NamedDimsSharding similar to
+#       `levanter`
+
+"""
+    DimsSharding(
+        mesh::Mesh{M},
+        dims::NTuple{D,Int},
+        partition_spec;
+        is_closed::NTuple{D,Bool}=ntuple(Returns(true), D),
+        priority::NTuple{D,Int}=ntuple(i -> -1, D),
+    )
+
+Similar to [`NamedSharding`](@ref) but works for a arbitrary dimensional array. Dimensions
+not specified in `dims` are replicated. If any dimension in `dims` is greater than the total
+number of dimensions in the array, the corresponding `partition_spec`, `is_closed` and
+`priority` are ignored. Additionally for any negative dimensions in `dims`, the true
+dims are calculated as `ndims(x) - dim + 1`. A dims value of `0` will throw an error.
+"""
+struct DimsSharding{M,D,P} <: AbstractSharding
+    mesh::Mesh{M}
+    dims::NTuple{D,Int}
+    partition_spec::P
+    is_closed::NTuple{D,Bool}
+    priority::NTuple{D,Int}
+
+    function DimsSharding(
+        mesh::Mesh{M},
+        dims::NTuple{D,Int},
+        partition_spec;
+        is_closed::NTuple{D,Bool}=ntuple(Returns(true), length(partition_spec)),
+        priority::NTuple{D,Int}=ntuple(i -> -1, length(partition_spec)),
+    ) where {M,D}
+        @assert length(partition_spec) == length(dims)
+        # Validity checks on the inputs are deferred to NamedSharding
+        return new{M,D,typeof(partition_spec)}(
+            mesh, dims, partition_spec, is_closed, priority
+        )
+    end
+end
+
+@inline ndevices(sharding::DimsSharding) = length(sharding.mesh.device_ids)
+
+@inline function shard_type(::Type{DimsSharding{M,D,P}}, N) where {M,D,P}
+    return shard_type(HloSharding{M,N}, N)
+end
+
+function standardize_sharding(sharding::DimsSharding, x::Union{AbstractArray,Number})
+    final_dims = map(sharding.dims) do d
+        @assert !iszero(d) "dims cannot contain 0"
+        return ifelse(d < 0, ndims(x) + d + 1, d)
+    end
+
+    dim_indices = ntuple(i -> findfirst(==(i), final_dims), ndims(x))
+    partition_spec = ntuple(ndims(x)) do i
+        dim_index = dim_indices[i]
+        dim_index === nothing && return nothing # replicated dimension
+        return sharding.partition_spec[dim_index]
+    end
+    is_closed = ntuple(ndims(x)) do i
+        dim_index = dim_indices[i]
+        dim_index === nothing && return true # replicated dimension
+        return sharding.is_closed[dim_index]
+    end
+    priority = ntuple(ndims(x)) do i
+        dim_index = dim_indices[i]
+        dim_index === nothing && return -1 # replicated dimension
+        return sharding.priority[dim_index]
+    end
+
+    return NamedSharding(sharding.mesh, partition_spec; is_closed, priority)
+end
+
+function (sharding::DimsSharding)(
+    client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
+)
+    return (standardize_sharding(sharding, x))(client, device, x)
+end
+
 # HloSharding
 # This stores the sharding information in the form of XLA.HloSharding, and provides a
 # central type for the final storage. It also potentially saves us the pain of not having
@@ -242,6 +331,12 @@ struct HloSharding{D1,D2} <: AbstractSharding
         @assert length(is_closed) == length(priority)
         return new{D1,length(is_closed)}(hlo_sharding, mesh, is_closed, priority)
     end
+end
+
+@inline ndevices(sharding::HloSharding) = length(sharding.mesh.device_ids)
+
+@inline function shard_type(::Type{HloSharding{D1,D2}}, N) where {D1,D2}
+    return ShardInfo{HloSharding{D1,D2},Vector{NTuple{N,UnitRange{Int64}}}}
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
@@ -321,6 +416,10 @@ struct ShardInfo{S,D} <: AbstractSharding
     device_to_array_slices::D
 end
 
+@inline ndevices(sharding::ShardInfo) = length(sharding.mesh)
+
+@inline shard_type(::Type{ShardInfo{S,D}}, N) where {S,D} = shard_type(S, N)
+
 function Base.getproperty(sharding::ShardInfo, name::Symbol)
     name ∈ (:sharding, :device_to_array_slices) && return getfield(sharding, name)
     return getproperty(sharding.sharding, name)
@@ -348,6 +447,7 @@ Checks whether the given sharding refers to no sharding.
 """
 is_sharded(::NoSharding) = false
 is_sharded(::NamedSharding) = true
+is_sharded(::DimsSharding) = true
 is_sharded(::HloSharding) = true
 is_sharded(s::ShardInfo) = is_sharded(s.sharding)
 
