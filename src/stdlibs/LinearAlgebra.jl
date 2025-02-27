@@ -404,6 +404,7 @@ function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T})
     ax = Ops.multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
     
     set_mlir_data!(y, get_mlir_data(Ops.add(y, ax)))
+    return y
 end
 
 function LinearAlgebra.axpby!(α::Number, x::TracedRArray{T}, β::Number, y::TracedRArray{T}) where {T}
@@ -414,6 +415,7 @@ function LinearAlgebra.axpby!(α::Number, x::TracedRArray{T}, β::Number, y::Tra
     by = Ops.multiply(y, TracedUtils.broadcast_to_size(T(β), size(y)))
  
     set_mlir_data!(y, get_mlir_data(Ops.add(ax, by)))
+    return y
 end
 
 
