@@ -709,7 +709,7 @@ function compile_mlir!(
         raise
     elseif raise
         # Raise enabled but use default passes
-        "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,canonicalize,affine-cfg,canonicalize,raise-affine-to-stablehlo,arith-raise{stablehlo=true}," *
+        "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,print,simplify-affine-exprs,canonicalize,affine-cfg,canonicalize,raise-affine-to-stablehlo,arith-raise{stablehlo=true}," *
         opt_passes2
     else
         "canonicalize"
