@@ -316,7 +316,7 @@ end
 `recv`
 
 MPI_Recv performs a blocking receive of `size` elements of type `dtype` 
-from rank `dest`. The `tag` value and communicator enables the library to 
+from rank `source`. The `tag` value and communicator enables the library to
 determine the matching of multiple sends and receives between the same 
 ranks.
 
@@ -330,12 +330,12 @@ to check for errors.
 function recv(
     ref::Value,
     tag::Value,
-    rank::Value;
+    source::Value;
     retval=nothing::Union{Nothing,IR.Type},
     location=Location(),
 )
     op_ty_results = IR.Type[]
-    operands = Value[ref, tag, rank]
+    operands = Value[ref, tag, source]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
@@ -393,12 +393,12 @@ to check for errors.
 function send(
     ref::Value,
     tag::Value,
-    rank::Value;
+    dest::Value;
     retval=nothing::Union{Nothing,IR.Type},
     location=Location(),
 )
     op_ty_results = IR.Type[]
-    operands = Value[ref, tag, rank]
+    operands = Value[ref, tag, dest]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
