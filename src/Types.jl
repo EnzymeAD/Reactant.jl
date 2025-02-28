@@ -119,7 +119,6 @@ function ConcretePJRTArray{T,N,D,S}(
 ) where {T,N,D,S}
     all(iszero, padding) && return x
 
-    # TODO: There should be a nicer way to do this instead of copying the data
     data = convert(Array, x)
     full_data = zeros(T, size(x) .+ padding)
     full_data[[1:size(x, i) for i in 1:N]...] .= data
@@ -192,28 +191,7 @@ function XLA.device(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
     return nothing # This is intentional to make constructing ConcretePJRTArrays easier
 end
 
-# ## PaddedConcretePJRTArray
-# ## This type isn't meant to be directly constructed by the user. Rather it is used if
-# ## we need to pad an array to ensure that the final sizes are a multiple of the shard sizes.
-# mutable struct PaddedConcretePJRTArray{T,N,A<:ConcretePJRTArray{T,N}} <:
-#                AbstractConcreteArray{T,N}
-#     array::A
-#     padding::NTuple{N,Int} # padding is always done at the end of each dimension
-# end
-
-# Base.parent(x::PaddedConcretePJRTArray) = x.array
-# Base.size(x::PaddedConcretePJRTArray) = size(x.array) .+ x.padding
-# Base.size(x::PaddedConcretePJRTArray, i::Int) = size(x.array, i) + x.padding[i]
-
-# @leaf PaddedConcretePJRTArray
-
-# Adapt.parent_type(::Type{PaddedConcretePJRTArray{T,N,A}}) where {T,N,A} = A
-
 const ConcretePJRTScalar{T} = Union{ConcretePJRTArray{T,0},ConcretePJRTNumber{T}}
-# const WrappedConcretePJRTArray{T,N,D,S} = Union{
-#     WrappedArray{T,N,ConcretePJRTArray,ConcretePJRTArray{T,N,D,S}},
-#     PaddedConcretePJRTArray{T,N,ConcretePJRTArray{T,N,D,S}},
-# }
 const WrappedConcretePJRTArray{T,N,D,S} = WrappedArray{
     T,N,ConcretePJRTArray,ConcretePJRTArray{T,N,D,S}
 }
