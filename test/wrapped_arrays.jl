@@ -264,3 +264,27 @@ end
     hlo = repr(@code_hlo(permutedims_getindex(x_ra)))
     @test !occursin("stablehlo.gather", hlo)
 end
+
+function view_adjoint(x)
+    y = view(x, 1:2, 1:2)
+    return adjoint(y) .+ y
+end
+
+function view_transpose(x)
+    y = view(x, 1:2, 1:2)
+    return transpose(y) .+ y
+end
+
+function view_diagonal(x)
+    y = view(x, 1:2, 1:2)
+    return Diagonal(y) .+ y
+end
+
+@testset "2 levels of wrapping" begin
+    x = reshape(collect(Float32, 1:8), 2, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(view_adjoint(x_ra)) ≈ view_adjoint(x)
+    @test @jit(view_transpose(x_ra)) ≈ view_transpose(x)
+    @test @jit(view_diagonal(x_ra)) ≈ view_diagonal(x)
+end

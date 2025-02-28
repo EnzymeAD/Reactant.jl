@@ -602,6 +602,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 end
 
 function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
+    if Reactant.ancestor(arg) isa TracedRArray
+        return broadcast_to_size(materialize_traced_array(arg), rsize)
+    end
     return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
 end
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
