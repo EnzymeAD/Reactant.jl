@@ -1363,7 +1363,8 @@ function codegen_unflatten!(
                 res = :(args[$(path[2])])
                 path = path[3:end]
             end
-            for p in path
+
+            for p in path[1:(end - 1)]
                 res = :(traced_getfield($res, $(Meta.quot(p))))
             end
 
@@ -1371,8 +1372,59 @@ function codegen_unflatten!(
             for p in argpath[3:end]
                 argres = :(traced_getfield($argres, $(Meta.quot(p))))
             end
+            argres = :($argres.data)
 
-            res = :(traced_setfield!($res, :data, $argres.data))
+            if length(path) > 0
+                final_val = gensym("final_val")
+                clocal = gensym("clocal")
+                if !has_cache_dict
+                    has_cache_dict = true
+                    push!(
+                        unflatten_code,
+                        :(
+                            $cache_dict = $(IdDict{
+                                Union{TracedRArray,TracedRNumber},
+                                Union{ConcretePJRTArray,ConcretePJRTNumber},
+                            }())
+                        ),
+                    )
+                end
+                res = quote
+                    $final_val = traced_getfield($res, $(Meta.quot(path[end])))
+                    if $final_val isa TracedRArray
+                        $clocal = if haskey($cache_dict, $final_val)
+                            $cache_dict[$final_val]
+                        else
+                            $cache_dict[$final_val] = ConcretePJRTArray{
+                                $(Reactant.unwrapped_eltype)($final_val),
+                                ndims($final_val),
+                            }(
+                                $argres, size($final_val)
+                            )
+                            $cache_dict[$final_val]
+                        end
+                        traced_setfield!($res, $(Meta.quot(path[end])), $clocal)
+                    elseif $final_val isa TracedRNumber
+                        $clocal = if haskey($cache_dict, $final_val)
+                            $cache_dict[$final_val]
+                        else
+                            $cache_dict[$final_val] = ConcretePJRTNumber{
+                                $(Reactant.unwrapped_eltype)($final_val)
+                            }(
+                                $argres
+                            )
+                            $cache_dict[$final_val]
+                        end
+                        traced_setfield!($res, $(Meta.quot(path[end])), $clocal)
+                    else
+                        traced_setfield!($res, :data, $argres)
+                    end
+                end
+            else
+                res = :(traced_setfield!($res, :data, $argres))
+            end
+
+            # res = :(traced_setfield!($res, :data, $argres.data))
             push!(unflatten_code, res)
         end
     end
