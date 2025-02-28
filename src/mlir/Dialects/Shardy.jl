@@ -262,6 +262,8 @@ sdy.mesh @mesh = <[\"a\"=2, \"b\"=2, \"c\"=4, \"d\"=2, \"e\"=2, \"f\"=2]>
 
 **Constraints:**
 - Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
+- If input and output sharding have different meshes, then those meshes must
+  have exactly the same axes and different order of device ids.
 - For each dimension, the product of sharding axis sizes in `out_sharding`
   must match that of the corresponding operand dimension sharding.
 """
