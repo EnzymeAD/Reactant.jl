@@ -257,24 +257,27 @@ function sharding_to_concrete_array_indices(
         @assert length(partitions) == length(shape)
         shape = reverse(shape)
 
-        # Calculate indices for each dimension
-        axis_indices = map(zip(shape, partitions)) do (dim, n_shards)
-            @assert dim > 0 "Invalid dimension: $dim"
-            @assert n_shards > 0 "Invalid number of shards: $n_shards"
-            n_shards == 1 && return [1:dim]
-            shard_size, remainder = divrem(dim, n_shards)
-
-            if remainder != 0
-                throw(
-                    DimensionMismatch(
-                        "Dimension of Size $(dim) cannot be partitioned into $(n_shards) \
-                         shards each of size $(shard_size) (remainder = $(remainder)).",
-                    ),
-                )
-            end
-
-            return [(i * shard_size + 1):((i + 1) * shard_size) for i in 0:(n_shards - 1)]
+        # XLA will automatically pad the inputs that don't match the final shape
+        partitionable_shape = map(zip(shape, partitions)) do (dim, n_shards)
+            dim % n_shards == 0 && return dim
+            res = dim + n_shards ÷ 2
+            return res - res % n_shards
         end
+        partitionable_shape = Tuple(partitionable_shape)
+
+        # Calculate indices for each dimension
+        axis_indices =
+            map(zip(partitionable_shape, shape, partitions)) do (dim_padded, dim, n_shards)
+                @assert dim > 0 "Invalid dimension: $dim"
+                @assert n_shards > 0 "Invalid number of shards: $n_shards"
+                n_shards == 1 && return [1:dim]
+                shard_size = dim_padded ÷ n_shards
+
+                return [
+                    (i * shard_size + 1):min((i + 1) * shard_size, dim) for
+                    i in 0:(n_shards - 1)
+                ]
+            end
 
         indices = Dict{Int,NTuple{N,UnitRange{Int}}}()
         device_idx = 1
