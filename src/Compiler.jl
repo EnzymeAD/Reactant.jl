@@ -636,6 +636,7 @@ function compile_mlir!(
     backend="gpu",
     fn_kwargs=(),
     raise::Union{Bool,String}=false,
+    input_shardings=nothing,
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -652,7 +653,7 @@ function compile_mlir!(
     activate_raising!(is_raising)
 
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true)
+        Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true; input_shardings)
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
@@ -1186,7 +1187,7 @@ function codegen_flatten!(
                 end
             else
                 push!(flatten_code, :($usbuf = $flatcode))
-                device_to_array_slices = XLA.sharding_to_concrete_array_indices(
+                device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
                     condensed_op_sharding, size(carg), mesh.logical_device_ids
                 )
                 for j in 1:length(mesh)
