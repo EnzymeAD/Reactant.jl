@@ -358,13 +358,11 @@ end
 end
 
 @testset "repeat" begin
-    fn_inner(x, counts) = repeat(x; inner=counts)
-
     @testset for (size, counts) in Iterators.product(
         [(2,), (2, 3), (2, 3, 4), (2, 3, 4, 5)],
         [(), (1,), (2,), (2, 1), (1, 2), (2, 2), (2, 2, 2), (1, 1, 1, 1, 1)],
     )
-        x = rand(size...)
+        x = reshape(collect(Float32, 1:prod(size)), size...)
 
         @testset "outer repeat" begin
             @test (@jit repeat(Reactant.to_rarray(x), counts...)) == repeat(x, counts...)
@@ -373,7 +371,8 @@ end
         length(counts) < length(size) && continue
 
         @testset "inner repeat" begin
-            @test (@jit fn_inner(Reactant.to_rarray(x), counts)) == fn_inner(x, counts)
+            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ==
+                repeat(x; inner=counts)
         end
     end
 end
