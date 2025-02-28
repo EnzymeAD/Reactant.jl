@@ -1363,7 +1363,7 @@ function codegen_unflatten!(
                 res = :(args[$(path[2])])
                 path = path[3:end]
             end
-            for p in path
+            for p in path[1:(end - 1)]
                 res = :(traced_getfield($res, $(Meta.quot(p))))
             end
 
@@ -1372,7 +1372,7 @@ function codegen_unflatten!(
                 argres = :(traced_getfield($argres, $(Meta.quot(p))))
             end
 
-            res = :($res.data = $argres.data)
+            res = :(traced_setfield!($res, $(Meta.quot(path[end])), $argres.data))
             push!(unflatten_code, res)
         end
     end

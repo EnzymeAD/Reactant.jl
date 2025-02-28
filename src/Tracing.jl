@@ -6,6 +6,7 @@
     TracedSetPath = 5
     TracedToTypes = 6
     NoStopTracedTrack = 7
+    UnpadTracedArray = 8
 end
 
 struct VisitedObject
@@ -893,6 +894,10 @@ function make_tracer(
             "Mismatched sharding. Input has sharding $(prev.sharding), but requested sharding is $(typeof(sharding))",
         )
     end
+    if mode == UnpadTracedArray
+        tarray = seen[prev]::TracedRArray{T,N}
+        return view(tarray, [1:(size(prev, i) - prev.padding[i]) for i in 1:N]...)
+    end
     if mode != ConcreteToTraced
         throw("Cannot trace concrete")
     end
@@ -922,6 +927,9 @@ function make_tracer(
         else
             return ConcretePJRTNumber(prev; sharding)
         end
+    end
+    if mode == UnpadTracedArray
+        return seen[prev]::TracedRNumber{T}
     end
     if mode != ConcreteToTraced
         throw("Cannot trace existing trace type")

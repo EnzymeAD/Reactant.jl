@@ -193,10 +193,14 @@ function make_mlir_fn(
         )
     end
 
+    any_padded = false
     linear_args = Reactant.TracedType[]
     for (k, v) in seen_args
         v isa Reactant.TracedType || continue
         push!(linear_args, v)
+        if k isa Reactant.ConcretePJRTArray && any(!iszero, k.padding)
+            any_padded = true
+        end
     end
 
     in_tys = if toscalar
@@ -250,6 +254,14 @@ function make_mlir_fn(
             raw_arg = MLIR.IR.argument(fnbody, i)
             row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
             set_mlir_data!(arg, row_maj_arg)
+        end
+
+        if any_padded # We need to un-pad the arguments
+            for i in 1:N
+                traced_args[i] = Reactant.make_tracer(
+                    seen_args, args[i], (), Reactant.UnpadTracedArray;
+                )
+            end
         end
 
         if isempty(kwargs)
@@ -602,6 +614,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 end
 
 function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
+    if Reactant.ancestor(arg) isa TracedRArray
+        return broadcast_to_size(materialize_traced_array(arg), rsize)
+    end
     return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
 end
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)

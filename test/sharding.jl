@@ -242,3 +242,23 @@ end
         [2, 1],        #=iota_transpose_perm=#
     ) == [0, 2, 4, 6, 1, 3, 5, 7]
 end
+
+@testset "Sharding with non-divisible axes sizes" begin
+    # Test the low-level API where we automatically un-pad the arrays
+    x_test = Reactant.to_rarray(reshape(collect(Float32, 1:16), 4, 4))
+    x_padded = Reactant.ConcretePJRTArray(x_test, (1, 3))
+
+    # If not done correctly, this will throw an error
+    @test Array(@jit(fn_test2(x_padded))) ≈ Array(@jit(fn_test2(x_test)))
+
+    function fn_set_1(x)
+        x[:, 1:2] .= 1
+        return x
+    end
+
+    res1 = @jit fn_set_1(x_padded)
+    res2 = @jit fn_set_1(x_test)
+    @test Array(res1) ≈ Array(res2)
+    @test_broken all(Array(x_padded)[:, 1:2] .== 1)
+    @test all(Array(x_test)[:, 1:2] .== 1)
+end

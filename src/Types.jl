@@ -103,6 +103,29 @@ mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: AbstractConcret
     data::NTuple{D,XLA.PJRT.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::S
+    padding::NTuple{N,Int} # this is an internal field and is used for sharding mostly
+end
+
+# Note that these constructors are provided as a means to test the padding logic easily.
+# For all other purposes, padding is directly handled by the sharding logic.
+function ConcretePJRTArray(
+    x::ConcretePJRTArray{T,N,D,S}, padding::NTuple{N,Int}
+) where {T,N,D,S}
+    return ConcretePJRTArray{T,N,D,S}(x, padding)
+end
+
+function ConcretePJRTArray{T,N,D,S}(
+    x::ConcretePJRTArray{T,N,D,S}, padding::NTuple{N,Int}
+) where {T,N,D,S}
+    all(iszero, padding) && return x
+
+    # TODO: There should be a nicer way to do this instead of copying the data
+    data = convert(Array, x)
+    full_data = zeros(T, size(x) .+ padding)
+    full_data[[1:size(x, i) for i in 1:N]...] .= data
+
+    carray = ConcretePJRTArray(full_data; client=XLA.client(x), sharding=x.sharding)
+    return ConcretePJRTArray{T,N,D,S}(carray.data, size(carray), x.sharding, padding)
 end
 
 @leaf ConcretePJRTArray
@@ -114,6 +137,12 @@ end
 Base.@deprecate ConcretePJRTArray(data::Number; kwargs...) ConcretePJRTNumber(
     data; kwargs...
 )
+
+function ConcretePJRTArray{T,N,D,S}(
+    data::NTuple{D,XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}, sharding::S
+) where {T,N,D,S}
+    return ConcretePJRTArray{T,N,D,S}(data, shape, sharding, ntuple(Returns(0), N))
+end
 
 function ConcretePJRTArray{T,N}(
     data::Tuple{XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}
@@ -144,13 +173,15 @@ function ConcretePJRTArray(
                                                    specified, `idx` must match `device`"
             end
         end
-        sdata, sharding = sharding(client, device, data)
-        return ConcretePJRTArray{T,N,1,typeof(sharding)}(sdata, size(data), sharding)
+        sdata, sharding, padding = sharding(client, device, data)
+        return ConcretePJRTArray{T,N,1,typeof(sharding)}(
+            sdata, size(data), sharding, padding
+        )
     end
     @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, `device` and `idx` cannot be specified!"
-    sharded_data, sharding = sharding(client, nothing, data)
+    sharded_data, sharding, padding = sharding(client, nothing, data)
     return ConcretePJRTArray{T,N,length(sharded_data),typeof(sharding)}(
-        sharded_data, size(data), sharding
+        sharded_data, size(data), sharding, padding
     )
 end
 
@@ -161,7 +192,28 @@ function XLA.device(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
     return nothing # This is intentional to make constructing ConcretePJRTArrays easier
 end
 
+# ## PaddedConcretePJRTArray
+# ## This type isn't meant to be directly constructed by the user. Rather it is used if
+# ## we need to pad an array to ensure that the final sizes are a multiple of the shard sizes.
+# mutable struct PaddedConcretePJRTArray{T,N,A<:ConcretePJRTArray{T,N}} <:
+#                AbstractConcreteArray{T,N}
+#     array::A
+#     padding::NTuple{N,Int} # padding is always done at the end of each dimension
+# end
+
+# Base.parent(x::PaddedConcretePJRTArray) = x.array
+# Base.size(x::PaddedConcretePJRTArray) = size(x.array) .+ x.padding
+# Base.size(x::PaddedConcretePJRTArray, i::Int) = size(x.array, i) + x.padding[i]
+
+# @leaf PaddedConcretePJRTArray
+
+# Adapt.parent_type(::Type{PaddedConcretePJRTArray{T,N,A}}) where {T,N,A} = A
+
 const ConcretePJRTScalar{T} = Union{ConcretePJRTArray{T,0},ConcretePJRTNumber{T}}
+# const WrappedConcretePJRTArray{T,N,D,S} = Union{
+#     WrappedArray{T,N,ConcretePJRTArray,ConcretePJRTArray{T,N,D,S}},
+#     PaddedConcretePJRTArray{T,N,ConcretePJRTArray{T,N,D,S}},
+# }
 const WrappedConcretePJRTArray{T,N,D,S} = WrappedArray{
     T,N,ConcretePJRTArray,ConcretePJRTArray{T,N,D,S}
 }
@@ -169,8 +221,7 @@ const AnyConcretePJRTArray{T,N,D,S} = Union{
     ConcretePJRTArray{T,N,D,S},WrappedConcretePJRTArray{T,N,D,S}
 }
 
-const AnyConcreteRArray = AnyConcretePJRTArray
-
+## Helpful functions
 ConcretePJRTArray(x::AnyConcretePJRTArray) = ConcretePJRTArray{eltype(x),ndims(x)}(x)
 ConcretePJRTArray{T}(x::AnyConcretePJRTArray) where {T} = ConcretePJRTArray{T,ndims(x)}(x)
 ConcretePJRTArray{T,N}(x::ConcretePJRTArray{T,N}) where {T,N} = x
@@ -193,3 +244,4 @@ end
 ## Aliases to prevent breaking changes
 const ConcreteRArray = ConcretePJRTArray
 const ConcreteRNumber = ConcretePJRTNumber
+const AnyConcreteRArray = AnyConcretePJRTArray

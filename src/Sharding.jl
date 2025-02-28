@@ -107,7 +107,7 @@ Base.getproperty(::NoSharding, x::Symbol) = NoSharding()
 function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,Number})
     device === nothing && (device = XLA.default_device(client))
     buffer = XLA.PJRT.AsyncBuffer(client, x, device)
-    return (buffer,), ShardInfo(NoSharding(), nothing)
+    return (buffer,), ShardInfo(NoSharding(), nothing), ntuple(Returns(0), ndims(x))
 end
 
 """
@@ -387,7 +387,7 @@ function (sharding::HloSharding)(
         )
     end
 
-    return data, ShardInfo(sharding, device_to_array_slices)
+    return data, ShardInfo(sharding, device_to_array_slices), ntuple(Returns(0), ndims(x))
 end
 
 function get_shardy_tensor_sharding_attribute(

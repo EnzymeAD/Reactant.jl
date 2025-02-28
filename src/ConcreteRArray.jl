@@ -167,6 +167,17 @@ function Base.print_array(io::IO, X::AnyConcretePJRTArray)
     return Base.print_array(io, convert(Array, X))
 end
 
+function Base.showarg(io::IO, a::ConcretePJRTArray{T,N}, toplevel) where {T,N}
+    toplevel || print(io, "::")
+    print(io, "ConcretePJRTArray{$T,$N}")
+    if Sharding.is_sharded(a)
+        print(io, " with sharding $(typeof(a.sharding.sharding))")
+    end
+    if any(!iszero, a.padding)
+        print(io, " with padding ", a.padding)
+    end
+end
+
 function Base.show(io::IO, X::AnyConcretePJRTArray)
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
