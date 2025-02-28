@@ -375,9 +375,16 @@ function (sharding::HloSharding)(
 )
     condensed_op_sharding = convert(XLA.CondensedOpSharding, sharding.hlo_sharding)
 
-    device_to_array_slices = XLA.sharding_to_concrete_array_indices(
+    device_to_array_slices, padding = XLA.sharding_to_concrete_array_indices(
         condensed_op_sharding, size(x), sharding.mesh.logical_device_ids
     )
+
+    if any(!iszero, padding)
+        tmp = similar(x, size(x) .+ padding)
+        fill!(tmp, zero(eltype(x)))
+        tmp[[1:size(x, i) for i in 1:ndims(x)]...] .= x
+        x = tmp
+    end
 
     data = ntuple(length(sharding.mesh)) do i
         XLA.PJRT.AsyncBuffer(
@@ -387,7 +394,7 @@ function (sharding::HloSharding)(
         )
     end
 
-    return data, ShardInfo(sharding, device_to_array_slices), ntuple(Returns(0), ndims(x))
+    return data, ShardInfo(sharding, device_to_array_slices), padding
 end
 
 function get_shardy_tensor_sharding_attribute(

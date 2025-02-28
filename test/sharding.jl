@@ -261,4 +261,16 @@ end
     @test Array(res1) ≈ Array(res2)
     @test_broken all(Array(x_padded)[:, 1:2] .== 1)
     @test all(Array(x_test)[:, 1:2] .== 1)
+
+    if length(Reactant.addressable_devices()) ≥ 8
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:7), 2, 4), ("data", "model"))
+        x = reshape(collect(Float32, 1:14), 2, 7)
+        x_ra = Reactant.to_rarray(
+            x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
+        )
+
+        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
 end

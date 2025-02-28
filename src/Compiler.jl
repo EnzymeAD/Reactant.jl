@@ -1187,7 +1187,7 @@ function codegen_flatten!(
                     Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
                 )
                 push!(flatten_code, :($usbuf = $flatcode))
-                device_to_array_slices = XLA.sharding_to_concrete_array_indices(
+                device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
                     condensed_op_sharding, size(carg), mesh.logical_device_ids
                 )
                 for j in 1:length(mesh)

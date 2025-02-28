@@ -174,13 +174,13 @@ function ConcretePJRTArray(
         end
         sdata, sharding, padding = sharding(client, device, data)
         return ConcretePJRTArray{T,N,1,typeof(sharding)}(
-            sdata, size(data), sharding, padding
+            sdata, size(data) .+ padding, sharding, padding
         )
     end
     @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, `device` and `idx` cannot be specified!"
     sharded_data, sharding, padding = sharding(client, nothing, data)
     return ConcretePJRTArray{T,N,length(sharded_data),typeof(sharding)}(
-        sharded_data, size(data), sharding, padding
+        sharded_data, size(data) .+ padding, sharding, padding
     )
 end
 

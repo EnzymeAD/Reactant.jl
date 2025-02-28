@@ -251,28 +251,29 @@ function sharding_to_concrete_array_indices(
     sharding::CondensedOpSharding, shape::Dims{N}, device_ids
 ) where {N}
     if sharding.type == OpShardingType.Replicated || sharding.type == OpShardingType.Maximal
-        return ntuple(Returns(ntuple(i -> 1:shape[i], N)), length(device_ids))
+        return (
+            ntuple(Returns(ntuple(i -> 1:shape[i], N)), length(device_ids)),
+            ntuple(Returns(0), N),
+        )
     elseif sharding.type == OpShardingType.Other
         partitions, num_replicas = get_number_of_ways_dim_sharded(sharding)
         @assert length(partitions) == length(shape)
         shape = reverse(shape)
 
+        partitionable_shape = map(zip(shape, partitions)) do (dim, n_shards)
+            dim % n_shards == 0 && return dim
+            res = dim + n_shards ÷ 2
+            return res - res % n_shards
+        end
+        partitionable_shape = Tuple(partitionable_shape)
+        padding = partitionable_shape .- shape
+
         # Calculate indices for each dimension
-        axis_indices = map(zip(shape, partitions)) do (dim, n_shards)
+        axis_indices = map(zip(partitionable_shape, partitions)) do (dim, n_shards)
             @assert dim > 0 "Invalid dimension: $dim"
             @assert n_shards > 0 "Invalid number of shards: $n_shards"
             n_shards == 1 && return [1:dim]
-            shard_size, remainder = divrem(dim, n_shards)
-
-            if remainder != 0
-                throw(
-                    DimensionMismatch(
-                        "Dimension of Size $(dim) cannot be partitioned into $(n_shards) \
-                         shards each of size $(shard_size) (remainder = $(remainder)).",
-                    ),
-                )
-            end
-
+            shard_size = dim ÷ n_shards
             return [(i * shard_size + 1):((i + 1) * shard_size) for i in 0:(n_shards - 1)]
         end
 
@@ -285,7 +286,7 @@ function sharding_to_concrete_array_indices(
             end
         end
 
-        return map(Base.Fix1(getindex, indices), device_ids)
+        return map(Base.Fix1(getindex, indices), device_ids), reverse(padding)
     else
         error("Unsupported sharding type: $(sharding.type)")
     end
@@ -295,7 +296,7 @@ function compute_array_indices_and_hlo_sharding(
     sharding::CondensedOpSharding, array_size, device_ids
 )
     return (
-        sharding_to_concrete_array_indices(sharding, array_size, device_ids),
+        first(sharding_to_concrete_array_indices(sharding, array_size, device_ids)),
         convert(HloSharding, sharding.opsharding),
     )
 end
