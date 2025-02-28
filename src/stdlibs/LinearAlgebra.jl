@@ -50,6 +50,12 @@ function TracedUtils.materialize_traced_array(
 end
 
 function TracedUtils.materialize_traced_array(
+    x::Diagonal{TracedRNumber{T},WrappedTracedRArray{T,1}}
+) where {T}
+    return diagm(materialize_traced_array(parent(x)))
+end
+
+function TracedUtils.materialize_traced_array(
     x::Tridiagonal{TracedRNumber{T},TracedRArray{T,1}}
 ) where {T}
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)

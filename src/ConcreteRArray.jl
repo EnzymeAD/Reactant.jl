@@ -170,12 +170,9 @@ end
 function Base.showarg(io::IO, a::ConcretePJRTArray{T,N}, toplevel) where {T,N}
     toplevel || print(io, "::")
     print(io, "ConcretePJRTArray{$T,$N}")
-    if Sharding.is_sharded(a)
-        print(io, " with sharding $(typeof(a.sharding.sharding))")
-    end
-    if any(!iszero, a.padding)
-        print(io, " with padding ", a.padding)
-    end
+    Sharding.is_sharded(a) && print(io, " with sharding $(typeof(a.sharding.sharding))")
+    any(!iszero, a.padding) && print(io, " with padding ", a.padding)
+    return nothing
 end
 
 function Base.show(io::IO, X::AnyConcretePJRTArray)
