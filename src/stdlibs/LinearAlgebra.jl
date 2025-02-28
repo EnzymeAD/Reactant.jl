@@ -7,6 +7,7 @@ using ..Reactant:
     AnyTracedRMatrix,
     AnyTracedRVector,
     AnyTracedRVecOrMat,
+    WrappedTracedRArray,
     unwrapped_eltype,
     Ops,
     MLIR
@@ -25,9 +26,21 @@ function TracedUtils.materialize_traced_array(
 end
 
 function TracedUtils.materialize_traced_array(
+    x::Transpose{TracedRNumber{T},<:WrappedTracedRArray{T,N}}
+) where {T,N}
+    return materialize_traced_array(transpose(materialize_traced_array(parent(x))))
+end
+
+function TracedUtils.materialize_traced_array(
     x::Adjoint{TracedRNumber{T},TracedRArray{T,N}}
 ) where {T,N}
     return conj(materialize_traced_array(transpose(parent(x))))
+end
+
+function TracedUtils.materialize_traced_array(
+    x::Adjoint{TracedRNumber{T},<:WrappedTracedRArray{T,N}}
+) where {T,N}
+    return materialize_traced_array(adjoint(materialize_traced_array(parent(x))))
 end
 
 function TracedUtils.materialize_traced_array(
