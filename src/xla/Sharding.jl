@@ -251,7 +251,7 @@ function sharding_to_concrete_array_indices(
     sharding::CondensedOpSharding, shape::Dims{N}, device_ids
 ) where {N}
     if sharding.type == OpShardingType.Replicated || sharding.type == OpShardingType.Maximal
-        return ntuple(Returns(ntuple(i -> 1:shape[i], N)), length(device_ids)), false
+        return map(Returns(UnitRange.(1, shape)), device_ids), false
     elseif sharding.type == OpShardingType.Other
         partitions, num_replicas = get_number_of_ways_dim_sharded(sharding)
         @assert length(partitions) == length(shape)
