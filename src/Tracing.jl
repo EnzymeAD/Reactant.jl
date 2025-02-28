@@ -712,6 +712,10 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 Base.@assume_effects :total @inline function traced_type(
     T::Type, ::Val{mode}, track_numbers::Type, sharding
 ) where {mode}
+    if mode == TracedSetPath || mode == TracedTrack
+        return T
+    end
+
     cache = nothing
     cache_key = (mode, track_numbers, sharding)
     if haskey(traced_type_cache, cache_key)
@@ -1108,7 +1112,7 @@ function make_tracer(
         return nothing
     end
     RT = Core.Typeof(prev)
-    if RT <: track_numbers
+    if RT <: track_numbers && mode != TracedSetPath && mode != TracedTrack
         if mode == ArrayToConcrete
             return ConcretePJRTNumber(prev; sharding)
         else

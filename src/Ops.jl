@@ -1816,10 +1816,10 @@ end
         seen_true_results,
         tb_result,
         (true_fn_names[2],),
-        Reactant.TracedTrack;
+        Reactant.NoStopTracedTrack;
         track_numbers=Number,
     )
-    for i in 1:length(tb_linear_args)
+    for i in eachindex(tb_linear_args)
         Reactant.make_tracer(
             seen_true_results,
             tb_linear_args[i],
@@ -1879,10 +1879,10 @@ end
         seen_false_results,
         fb_result,
         (false_fn_names[2],),
-        Reactant.TracedTrack;
+        Reactant.NoStopTracedTrack;
         track_numbers=Number,
     )
-    for i in 1:length(fb_linear_args)
+    for i in eachindex(fb_linear_args)
         Reactant.make_tracer(
             seen_false_results,
             fb_linear_args[i],
