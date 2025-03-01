@@ -41,12 +41,12 @@ abstract type AbstractAsyncBuffer <: AbstractBuffer end
 Base.isempty(buffer::AbstractAsyncBuffer) = buffer.buffer.buffer == C_NULL
 
 function Base.convert(T::Type{Array}, buffer::AbstractAsyncBuffer)
-    XLA.await(buffer)
+    wait(buffer)
     return convert(T, buffer.buffer)
 end
 
 function Base.convert(T::Type{<:Array{T1}}, buffer::AbstractAsyncBuffer) where {T1}
-    XLA.await(buffer)
+    wait(buffer)
     return convert(T, buffer.buffer)
 end
 
@@ -55,21 +55,21 @@ for op in (:(Base.ndims), :(Base.size), :(Base.eltype), :device, :client, :shard
 end
 
 function XLA.synced_buffer(buffer::AbstractAsyncBuffer)
-    XLA.await(buffer)
+    wait(buffer)
     return buffer.buffer
 end
 
-function XLA.await(buffer::AbstractAsyncBuffer)
+function Base.wait(buffer::AbstractAsyncBuffer)
     buffer.future === nothing && return nothing
     future = buffer.future
     buffer.future = nothing
-    XLA.await(future)
+    wait(future)
     return nothing
 end
 
-function XLA.is_ready(buffer::AbstractAsyncBuffer)
+function Base.isready(buffer::AbstractAsyncBuffer)
     buffer.future === nothing && return true
-    return XLA.is_ready(buffer.future)
+    return Base.isready(buffer.future)
 end
 
 XLA.buffer_on_cpu(buffer::AbstractAsyncBuffer) = XLA.buffer_on_cpu(buffer.buffer)
