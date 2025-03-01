@@ -280,12 +280,9 @@ for (dialect, op) in [
 end
 
 # is* checks
-for (dialect, op) in [
-    #(:stablehlo, :is_finite),
-    (:chlo, :is_inf),
-    (:chlo, :is_neg_inf),
-    (:chlo, :is_pos_inf),
-]
+for (dialect, op) in
+    [(:stablehlo, :is_finite), (:chlo, :is_inf), (:chlo, :is_neg_inf), (:chlo, :is_pos_inf)]
+    result = dialect == :stablehlo ? :y : :result
     @eval begin
         @noinline function $op(
             x::TracedRArray{T,N};
@@ -293,7 +290,9 @@ for (dialect, op) in [
         ) where {T,N}
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
-                    x.mlir_data; result=mlir_type(TracedRArray{Bool,N}, size(x)), location
+                    x.mlir_data;
+                    $(result)=mlir_type(TracedRArray{Bool,N}, size(x)),
+                    location,
                 ),
             )
             return TracedRArray{Bool,N}((), res, size(x))
@@ -305,32 +304,12 @@ for (dialect, op) in [
         ) where {T}
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
-                    x.mlir_data; result=mlir_type(TracedRArray{Bool,0}, ()), location
+                    x.mlir_data; $(result)=mlir_type(TracedRArray{Bool,0}, ()), location
                 ),
             )
             return TracedRNumber{Bool}((), res)
         end
     end
-end
-
-@noinline function is_finite(
-    x::TracedRArray{T,N}; location=mlir_stacktrace("is_finite", @__FILE__, @__LINE__)
-) where {T,N}
-    res = MLIR.IR.result(
-        stablehlo.is_finite(
-            x.mlir_data; y=mlir_type(TracedRArray{Bool,N}, size(x)), location
-        ),
-    )
-    return TracedRArray{Bool,N}((), res, size(x))
-end
-
-@noinline function is_finite(
-    x::TracedRNumber{T}; location=mlir_stacktrace("is_finite", @__FILE__, @__LINE__)
-) where {T}
-    res = MLIR.IR.result(
-        stablehlo.is_finite(x.mlir_data; y=mlir_type(TracedRArray{Bool,0}, ()), location)
-    )
-    return TracedRNumber{Bool}((), res)
 end
 
 # fixes to default automated implementations
