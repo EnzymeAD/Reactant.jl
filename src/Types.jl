@@ -125,7 +125,7 @@ end
 
 function ConcretePJRTArray(
     data::Array{T,N};
-    client::XLA.AbstractClient=XLA.default_backend(),
+    client::XLA.PJRT.Client=XLA.default_backend(),
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
@@ -184,12 +184,15 @@ function ConcretePJRTArray{T,N}(x::AnyConcretePJRTArray) where {T,N}
     )
 end
 
+## ConcreteIFRTArray
+
 ## ConcreteRNG
-mutable struct ConcreteRNG{S<:ConcretePJRTArray} <: Random.AbstractRNG
+mutable struct ConcreteRNG{S<:AbstractConcreteArray} <: Random.AbstractRNG
     seed::S
     const algorithm::String
 end
 
 ## Aliases to prevent breaking changes
+# XXX (Deprecated): remove in v0.3 and replace the first with a function
 const ConcreteRArray = ConcretePJRTArray
 const ConcreteRNumber = ConcretePJRTNumber
