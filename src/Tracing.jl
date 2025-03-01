@@ -15,11 +15,7 @@ end
 function traced_type_inner end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{Union{}}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(T::Type{Union{}}), @nospecialize(args...)
 )
     return T
 end
@@ -38,11 +34,7 @@ for T in (
     VersionNumber,
 )
     @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(T::Type{<:$T}),
-        seen,
-        mode::TraceMode,
-        @nospecialize(track_numbers::Type),
-        @nospecialize(sharding)
+        @nospecialize(T::Type{<:$T}), @nospecialize(args...)
     )
         return T
     end
@@ -53,12 +45,19 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     if mode == ArrayToConcrete && T <: track_numbers
-        return ConcretePJRTNumber{
-            T,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), 0)
-        }
+        if runtime isa Val{:PJRT}
+            return ConcretePJRTNumber{
+                T,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), 0)
+            }
+        elseif runtime isa Val{:IFRT}
+            return ConcreteIFRTNumber{T,Sharding.shard_type(typeof(sharding), 0)}
+        else
+            error("Unsupported runtime $runtime")
+        end
     elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) &&
         T <: track_numbers
         return TracedRNumber{T}
@@ -67,17 +66,10 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(C::Type{<:Complex}),
-    seen,
-    @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(C::Type{<:Complex}), @nospecialize(args...)
 )
-    if !(C isa UnionAll)
-        return Complex{traced_type_inner(C.parameters[1], seen, mode, track_numbers)}
-    else
-        return C
-    end
+    C isa UnionAll || return Complex{traced_type_inner(C.parameters[1], args...)}
+    return C
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -85,7 +77,8 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     # functions are directly returned
     if sizeof(T) == 0
@@ -98,7 +91,7 @@ Base.@nospecializeinfer function traced_type_inner(
     traced_fieldtypes = Type[]
     for i in 1:N
         next = traced_type_inner(
-            fieldtype(T, i), seen, mode, track_numbers, getproperty(sharding, i)
+            fieldtype(T, i), seen, mode, track_numbers, getproperty(sharding, i), runtime
         )
         changed |= next != fieldtype(T, i)
         push!(traced_fieldtypes, next)
@@ -113,47 +106,33 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_tuple_type_inner(
-    @nospecialize(T::Type{<:Tuple}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(T::Type{<:Tuple}), @nospecialize(args...)
 )
     if T === Tuple
         return T
     end
     if T isa UnionAll
         if T.var.lb === Union{} && T.var.ub === Any
-            return UnionAll(
-                T.var, traced_type_inner(T.body, seen, mode, track_numbers, sharding)
-            )
+            return UnionAll(T.var, traced_type_inner(T.body, args...))
         end
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
     end
     TT = Union{Type,Core.TypeofVararg}[]
     for i in 1:length(T.parameters)
-        st = traced_type_inner(T.parameters[i], seen, mode, track_numbers, sharding)
+        st = traced_type_inner(T.parameters[i], args...)
         push!(TT, st)
     end
     return Tuple{TT...}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Core.TypeofVararg),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(T::Core.TypeofVararg), @nospecialize(args...)
 )
-    return Vararg{traced_type_inner(T.T, seen, mode, track_numbers, sharding),T.N}
+    return Vararg{traced_type_inner(T.T, args...),T.N}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::TypeVar),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(T::TypeVar), @nospecialize(args...)
 )
     if T.lb === Union{} && T.ub === Any
         return T
@@ -162,25 +141,17 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:Tuple}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(T::Type{<:Tuple}), @nospecialize(args...)
 )
-    return traced_tuple_type_inner(T, seen, mode, track_numbers, sharding)
+    return traced_tuple_type_inner(T, args...)
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:NamedTuple}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(T::Type{<:NamedTuple}), @nospecialize(args...)
 )
     N = T.parameters[1]
     V = T.parameters[2]
-    return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers, sharding)}
+    return NamedTuple{N,traced_type_inner(V, args...)}
 end
 
 Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
@@ -201,18 +172,14 @@ Base.@nospecializeinfer @inline function dict_value(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:AbstractDict}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(T::Type{<:AbstractDict}), @nospecialize(args...)
 )
     V = dict_value(T)
     if V === nothing
         return T
     else
         K = dict_key(T)
-        V2 = traced_type_inner(V, seen, mode, track_numbers, sharding)
+        V2 = traced_type_inner(V, args...)
         if V == V2
             return T
         end
@@ -232,33 +199,93 @@ end
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T0::Type{<:ConcretePJRTNumber}),
     seen,
-    mode::TraceMode,
+    @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     T = T0.parameters[1]
     if mode == ConcreteToTraced
         return TracedRNumber{T}
     elseif mode == TracedToConcrete
         return T0
+    elseif mode == ArrayToConcrete
+        @assert runtime isa Val{:PJRT}
+        return ConcretePJRTNumber{
+            T,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), 0)
+        }
     else
-        throw("Abstract RNumber cannot be made concrete")
+        throw("Unsupported mode: $mode")
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T0::Type{<:ConcreteIFRTNumber}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+)
+    T = T0.parameters[1]
+    if mode == ConcreteToTraced
+        return TracedRNumber{T}
+    elseif mode == TracedToConcrete
+        return T0
+    elseif mode == ArrayToConcrete
+        @assert runtime isa Val{:IFRT}
+        return ConcreteIFRTNumber{T,Sharding.shard_type(typeof(sharding), 0)}
+    else
+        throw("Unsupported mode: $mode")
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{<:ConcretePJRTArray}),
     seen,
-    mode::TraceMode,
+    @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     if mode == ConcreteToTraced
         return TracedRArray{T.parameters[1],T.parameters[2]}
     elseif mode == TracedToConcrete
         return T
+    elseif mode == ArrayToConcrete
+        @assert runtime isa Val{:PJRT}
+        return ConcretePJRTArray{
+            T.parameters[1],
+            T.parameters[2],
+            Sharding.ndevices(sharding),
+            Sharding.shard_type(typeof(sharding), T.parameters[2]),
+        }
     else
-        throw("Abstract RArray cannot be made concrete")
+        throw("Unsupported mode: $mode")
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:ConcreteIFRTArray}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+)
+    if mode == ConcreteToTraced
+        return TracedRArray{T.parameters[1],T.parameters[2]}
+    elseif mode == TracedToConcrete
+        return T
+    elseif mode == ArrayToConcrete
+        @assert runtime isa Val{:IFRT}
+        return ConcreteIFRTArray{
+            T.parameters[1],
+            T.parameters[2],
+            Sharding.shard_type(typeof(sharding), T.parameters[2]),
+        }
+    else
+        throw("Unsupported mode: $mode")
     end
 end
 
@@ -267,7 +294,8 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     if mode == ConcreteToTraced
         return TracedRNG
@@ -279,11 +307,7 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:MissingTracedValue}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(T::Type{<:MissingTracedValue}), @nospecialize(args...)
 )
     return error("This should not happen")
 end
@@ -293,17 +317,27 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     if mode == ConcreteToTraced
         throw("TracedRArray cannot be traced")
     elseif mode == TracedToConcrete
-        return ConcretePJRTArray{
-            T.parameters[1],
-            T.parameters[2],
-            Sharding.ndevices(sharding),
-            Sharding.shard_type(typeof(sharding), T.parameters[2]),
-        }
+        if runtime isa Val{:PJRT}
+            return ConcretePJRTArray{
+                T.parameters[1],
+                T.parameters[2],
+                Sharding.ndevices(sharding),
+                Sharding.shard_type(typeof(sharding), T.parameters[2]),
+            }
+        elseif runtime isa Val{:IFRT}
+            return ConcreteIFRTArray{
+                T.parameters[1],
+                T.parameters[2],
+                Sharding.shard_type(typeof(sharding), T.parameters[2]),
+            }
+        end
+        error("Unsupported runtime $runtime")
     elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         return T
     else
@@ -316,26 +350,40 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     if mode == ConcreteToTraced
         throw("TracedRNumber cannot be traced")
     elseif mode == TracedToConcrete
-        if T isa UnionAll
-            return UnionAll(
-                T.var,
-                ConcretePJRTNumber{
+        if runtime isa Val{:PJRT}
+            if T isa UnionAll
+                return UnionAll(
                     T.var,
-                    Sharding.ndevices(sharding),
-                    Sharding.shard_type(typeof(sharding), 0),
-                },
-            )
+                    ConcretePJRTNumber{
+                        T.var,
+                        Sharding.ndevices(sharding),
+                        Sharding.shard_type(typeof(sharding), 0),
+                    },
+                )
+            end
+            return ConcretePJRTNumber{
+                T.parameters[1],
+                Sharding.ndevices(sharding),
+                Sharding.shard_type(typeof(sharding), 0),
+            }
+        elseif runtime isa Val{:IFRT}
+            if T isa UnionAll
+                return UnionAll(
+                    T.var,
+                    ConcreteIFRTNumber{T.var,Sharding.shard_type(typeof(sharding), 0)},
+                )
+            end
+            return ConcreteIFRTNumber{
+                T.parameters[1],Sharding.shard_type(typeof(sharding), 0)
+            }
         end
-        return ConcretePJRTNumber{
-            T.parameters[1],
-            Sharding.ndevices(sharding),
-            Sharding.shard_type(typeof(sharding), 0),
-        }
+        error("Unsupported runtime $runtime")
     elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         return T
     else
@@ -344,18 +392,12 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:TracedRNG}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(T::Type{<:TracedRNG}), seen, mode::TraceMode, @nospecialize(args...)
 )
     if mode == ConcreteToTraced
         throw("TracedRNG cannot be traced")
     elseif mode == TracedToConcrete
-        return ConcreteRNG{
-            traced_type_inner(TracedRArray{UInt64,1}, seen, mode, track_numbers, sharding)
-        }
+        return ConcreteRNG{traced_type_inner(TracedRArray{UInt64,1}, seen, mode, args...)}
     elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         return T
     else
@@ -364,22 +406,16 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(A::Type{AbstractArray}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(A::Type{AbstractArray}), @nospecialize(args...)
 )
     return A
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(A::Type{AbstractArray{T}}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(A::Type{AbstractArray{T}}), seen, mode::TraceMode, @nospecialize(args...)
 ) where {T}
     if mode == ConcreteToTraced
-        return AbstractArray{TracedRNumber{T}}
+        return AbstractArray{traced_type_inner(T, seen, mode, args...)}
     else
         return A
     end
@@ -389,10 +425,10 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(A::Type{AbstractArray{T,N}}),
     seen,
     mode::TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(args...)
 ) where {T,N}
     if mode == ConcreteToTraced
-        return AbstractArray{TracedRNumber{T},N}
+        return AbstractArray{traced_type_inner(T, seen, mode, args...),N}
     else
         return A
     end
@@ -403,26 +439,37 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     T = eltype(A)
     if A isa UnionAll
         if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
-            return ConcretePJRTArray{T}
+            runtime isa Val{:PJRT} && return ConcretePJRTArray{T}
+            runtime isa Val{:IFRT} && return ConcreteIFRTArray{T}
+            error("Unsupported runtime $runtime")
         else
             return Array{
-                traced_type_inner(T, seen, mode, track_numbers, getproperty(sharding, 1))
+                traced_type_inner(
+                    T, seen, mode, track_numbers, getproperty(sharding, 1), runtime
+                ),
             }
         end
     else
         N = ndims(A)
         if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
-            return ConcretePJRTArray{
+            runtime isa Val{:PJRT} && return ConcretePJRTArray{
                 T,N,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), N)
             }
+            runtime isa Val{:IFRT} &&
+                return ConcreteIFRTArray{T,N,Sharding.shard_type(typeof(sharding), N)}
+            error("Unsupported runtime $runtime")
         else
             return Array{
-                traced_type_inner(T, seen, mode, track_numbers, getproperty(sharding, 1)),N
+                traced_type_inner(
+                    T, seen, mode, track_numbers, getproperty(sharding, 1), runtime
+                ),
+                N,
             }
         end
     end
@@ -430,48 +477,28 @@ end
 
 for P in (Ptr, Core.LLVMPtr, Base.RefValue)
     @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(PT::Type{$P}),
-        seen,
-        mode::TraceMode,
-        @nospecialize(track_numbers::Type),
-        @nospecialize(sharding)
+        @nospecialize(PT::Type{$P}), @nospecialize(args...)
     )
-        return $P
+        return $(P)
     end
 end
 for P in (Ptr, Base.RefValue)
     @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(PT::Type{$P{T}}),
-        seen,
-        mode::TraceMode,
-        @nospecialize(track_numbers::Type),
-        @nospecialize(sharding)
+        @nospecialize(PT::Type{$P{T}}), @nospecialize(args...)
     ) where {T}
-        return $P{traced_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding)}
+        return $P{traced_type_inner(PT.parameters[1], args...)}
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(PT::Type{Core.LLVMPtr{T}}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(PT::Type{Core.LLVMPtr{T}}), @nospecialize(args...)
 ) where {T}
-    return Core.LLVMPtr{
-        traced_type_inner(PT.body.parameters[1], seen, mode, track_numbers, sharding)
-    }
+    return Core.LLVMPtr{traced_type_inner(PT.body.parameters[1], args...)}
 end
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(PT::Type{Core.LLVMPtr{T,A}}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(PT::Type{Core.LLVMPtr{T,A}}), @nospecialize(args...)
 ) where {T,A}
-    return Core.LLVMPtr{
-        traced_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding),A
-    }
+    return Core.LLVMPtr{traced_type_inner(PT.parameters[1], args...),A}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -479,7 +506,8 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     if T === Any
         return T
@@ -501,7 +529,8 @@ Base.@nospecializeinfer function traced_type_inner(
     if Base.inferencebarrier(T) isa UnionAll
         if T.var.lb === Union{} && T.var.ub === Any || T <: Type
             return UnionAll(
-                T.var, traced_type_inner(T.body, seen, mode, track_numbers, sharding)
+                T.var,
+                traced_type_inner(T.body, seen, mode, track_numbers, sharding, runtime),
             )
         end
         aT = Base.argument_datatype(T)
@@ -516,8 +545,8 @@ Base.@nospecializeinfer function traced_type_inner(
 
     if T isa Union
         return Union{
-            traced_type_inner(T.a, seen, mode, track_numbers, sharding),
-            traced_type_inner(T.b, seen, mode, track_numbers, sharding),
+            traced_type_inner(T.a, seen, mode, track_numbers, sharding, runtime),
+            traced_type_inner(T.b, seen, mode, track_numbers, sharding, runtime),
         }
     end
 
@@ -530,7 +559,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if T <: Tuple
-        return traced_tuple_type_inner(T, seen, mode, track_numbers, sharding)
+        return traced_tuple_type_inner(T, seen, mode, track_numbers, sharding, runtime)
     end
 
     if haskey(seen, T)
@@ -544,7 +573,7 @@ Base.@nospecializeinfer function traced_type_inner(
     subTys = Union{Type,TypeVar}[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
-        subTT = traced_type_inner(subT, seen2, mode, track_numbers, sharding)
+        subTT = traced_type_inner(subT, seen2, mode, track_numbers, sharding, runtime)
         changed |= subT != subTT
         push!(subTys, subTT)
     end
@@ -556,29 +585,43 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     end
 
-    wrapped_carray = T <: AbstractArray && ancestor(T) <: ConcretePJRTArray
+    wrapped_cpjrt_array = T <: AbstractArray && ancestor(T) <: ConcretePJRTArray
+    wrapped_cifrt_array = T <: AbstractArray && ancestor(T) <: ConcreteIFRTArray
     wrapped_tracedarray = T <: AbstractArray && ancestor(T) <: TracedRArray
 
     subParms = []
     for (i, SST) in enumerate(T.parameters)
-        if wrapped_carray && i == 1 && SST isa Type && SST <: ReactantPrimitive
+        if wrapped_cpjrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
             # XXX: Sharding???
             TrT = traced_type_inner(
-                ConcretePJRTNumber{SST,1,Sharding.ShardInfo},
+                ConcretePJRTNumber{
+                    SST,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), 0)
+                },
                 seen,
                 mode,
                 track_numbers,
                 sharding,
+                runtime,
             )
             push!(subParms, TrT)
+        elseif wrapped_cifrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
+            # XXX: Sharding???
+            TrT = traced_type_inner(
+                ConcreteIFRTNumber{SST,Sharding.shard_type(typeof(sharding), 0)},
+                seen,
+                mode,
+                track_numbers,
+                sharding,
+                runtime,
+            )
         elseif wrapped_tracedarray && i == 1 && SST isa Type && SST <: TracedRNumber
             TrT = traced_type_inner(
-                unwrapped_eltype(SST), seen, mode, track_numbers, sharding
+                unwrapped_eltype(SST), seen, mode, track_numbers, sharding, runtime
             )
             push!(subParms, TrT)
         else
             if SST isa Type
-                TrT = traced_type_inner(SST, seen, mode, track_numbers, sharding)
+                TrT = traced_type_inner(SST, seen, mode, track_numbers, sharding, runtime)
                 push!(subParms, TrT)
             else
                 push!(subParms, SST)
@@ -598,7 +641,7 @@ Base.@nospecializeinfer function traced_type_inner(
         for f in 1:fieldcount(T)
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
-            subTT = traced_type_inner(subT, seen3, mode, track_numbers, sharding)
+            subTT = traced_type_inner(subT, seen3, mode, track_numbers, sharding, runtime)
             if subT2 != subTT
                 legal = false
                 break
@@ -710,7 +753,7 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 # end
 
 Base.@assume_effects :total @inline function traced_type(
-    T::Type, ::Val{mode}, track_numbers::Type, sharding
+    T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime
 ) where {mode}
     if mode == TracedSetPath || mode == TracedTrack
         return T
@@ -724,7 +767,7 @@ Base.@assume_effects :total @inline function traced_type(
         cache = Dict{Type,Type}()
         traced_type_cache[cache_key] = cache
     end
-    return traced_type_inner(T, cache, mode, track_numbers, sharding)
+    return traced_type_inner(T, cache, mode, track_numbers, sharding, runtime)
 end
 
 abstract type TracedTypeException <: Exception end
@@ -772,6 +815,7 @@ function make_tracer(
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -787,7 +831,7 @@ function make_tracer(
         push!(path, RT)
         seen[prev] = VisitedObject(length(seen) + 1)
     end
-    TT = traced_type(RT, Val(mode), track_numbers, sharding)
+    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
@@ -885,21 +929,28 @@ function make_tracer(
     if mode == TracedToTypes
         throw("Cannot have ConcretePJRTArray as function call argument.")
     end
-    if mode == ArrayToConcrete
-        if prev.sharding isa Sharding.ShardInfo{typeof(sharding)}
-            return prev
-        end
-        error(
-            "Mismatched sharding. Input has sharding $(prev.sharding), but requested sharding is $(typeof(sharding))",
-        )
+    mode == ArrayToConcrete && return ConcretePJRTArray(prev; sharding)
+    mode != ConcreteToTraced && throw("Cannot trace concrete")
+    haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
+    res = TracedRArray{T,N}((path,), nothing, size(prev))
+    seen[prev] = res
+    return res
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev::ConcreteIFRTArray{T,N}),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+) where {T,N}
+    if mode == TracedToTypes
+        throw("Cannot have ConcreteIFRTArray as function call argument.")
     end
-    if mode != ConcreteToTraced
-        throw("Cannot trace concrete")
-    end
-    if haskey(seen, prev)
-        return seen[prev]::TracedRArray{T,N}
-    end
-    @assert N isa Int
+    mode == ArrayToConcrete && return ConcreteIFRTArray(prev; sharding)
+    mode != ConcreteToTraced && throw("Cannot trace concrete")
+    haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
     res = TracedRArray{T,N}((path,), nothing, size(prev))
     seen[prev] = res
     return res
@@ -916,19 +967,28 @@ function make_tracer(
     if mode == TracedToTypes
         throw("Cannot have ConcretePJRTNumber as function call argument.")
     end
-    if mode == ArrayToConcrete
-        if !Sharding.is_sharded(sharding)
-            return prev
-        else
-            return ConcretePJRTNumber(prev; sharding)
-        end
+    mode == ArrayToConcrete && return ConcretePJRTNumber(prev; sharding)
+    mode != ConcreteToTraced && throw("Cannot trace existing trace type")
+    haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
+    res = TracedRNumber{T}((path,), nothing)
+    seen[prev] = res
+    return res
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev::ConcreteIFRTNumber{T}),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+) where {T}
+    if mode == TracedToTypes
+        throw("Cannot have ConcreteIFRTNumber as function call argument.")
     end
-    if mode != ConcreteToTraced
-        throw("Cannot trace existing trace type")
-    end
-    if haskey(seen, prev)
-        return seen[prev]::TracedRNumber{T}
-    end
+    mode == ArrayToConcrete && return ConcreteIFRTNumber(prev; sharding)
+    mode != ConcreteToTraced && throw("Cannot trace existing trace type")
+    haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
     res = TracedRNumber{T}((path,), nothing)
     seen[prev] = res
     return res
@@ -942,6 +1002,7 @@ function make_tracer(
     toscalar=false,
     tobatch=nothing,
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N}
     if mode == ConcreteToTraced
@@ -981,18 +1042,30 @@ function make_tracer(
     end
 
     if mode == TracedToConcrete
-        if haskey(seen, prev)
-            return seen[prev]::ConcretePJRTArray{T,N}
+        if runtime isa Val{:PJRT}
+            haskey(seen, prev) && return seen[prev]::ConcretePJRTArray{T,N}
+            if !Sharding.is_sharded(sharding)
+                res = ConcretePJRTArray{T,N,1,Sharding.NoShardInfo}(
+                    (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
+                )
+            else
+                error("TODO: implement sharding")
+            end
+            seen[prev] = res
+            return res
+        elseif runtime isa Val{:IFRT}
+            haskey(seen, prev) && return seen[prev]::ConcreteIFRTArray{T,N}
+            if !Sharding.is_sharded(sharding)
+                res = ConcreteIFRTArray{T,N,Sharding.NoShardInfo}(
+                    XLA.IFRT.AsyncEmptyArray, size(prev), Sharding.NoShardInfo()
+                )
+            else
+                error("TODO: implement sharding")
+            end
+            seen[prev] = res
+            return res
         end
-        if !Sharding.is_sharded(sharding)
-            res = ConcretePJRTArray{T,N,1,Sharding.NoShardInfo}(
-                (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
-            )
-        else
-            error("TODO: implement sharding")
-        end
-        seen[prev] = res
-        return res
+        error("Unsupported runtime $runtime")
     end
 
     throw("Cannot Unknown trace mode $mode")
@@ -1006,6 +1079,7 @@ function make_tracer(
     tobatch=nothing,
     toscalar=false,
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T}
     if mode == ConcreteToTraced
@@ -1045,18 +1119,30 @@ function make_tracer(
     end
 
     if mode == TracedToConcrete
-        if haskey(seen, prev)
-            return seen[prev]::ConcretePJRTNumber{T}
+        if runtime isa Val{:PJRT}
+            haskey(seen, prev) && return seen[prev]::ConcretePJRTNumber{T}
+            if !Sharding.is_sharded(sharding)
+                res = ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(
+                    (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
+                )
+            else
+                error("TODO: implement sharding")
+            end
+            seen[prev] = res
+            return res
+        elseif runtime isa Val{:IFRT}
+            haskey(seen, prev) && return seen[prev]::ConcreteIFRTNumber{T}
+            if !Sharding.is_sharded(sharding)
+                res = ConcreteIFRTNumber{T,Sharding.NoShardInfo}(
+                    XLA.IFRT.AsyncEmptyArray, Sharding.NoShardInfo()
+                )
+            else
+                error("TODO: implement sharding")
+            end
+            seen[prev] = res
+            return res
         end
-        if !Sharding.is_sharded(sharding)
-            res = ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(
-                (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
-            )
-        else
-            error("TODO: implement sharding")
-        end
-        seen[prev] = res
-        return res
+        error("Unsupported runtime $runtime")
     end
 
     throw("Cannot Unknown trace mode $mode")
@@ -1105,6 +1191,7 @@ function make_tracer(
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     kwargs...,
 )
     if mode == TracedToTypes
@@ -1114,7 +1201,9 @@ function make_tracer(
     RT = Core.Typeof(prev)
     if RT <: track_numbers && mode != TracedSetPath && mode != TracedTrack
         if mode == ArrayToConcrete
-            return ConcretePJRTNumber(prev; sharding)
+            runtime isa Val{:PJRT} && return ConcretePJRTNumber(prev; sharding)
+            runtime isa Val{:IFRT} && return ConcreteIFRTNumber(prev; sharding)
+            error("Unsupported runtime $runtime")
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
                 res = TracedRNumber{RT}(
@@ -1182,6 +1271,7 @@ function make_tracer(
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1196,7 +1286,12 @@ function make_tracer(
         return seen[prev]
     end
     if eltype(RT) <: ReactantPrimitive
-        if mode == ArrayToConcrete && return seen[prev] = ConcretePJRTArray(prev; sharding)
+        if mode == ArrayToConcrete
+            runtime isa Val{:PJRT} &&
+                (return seen[prev] = ConcretePJRTArray(prev; sharding))
+            runtime isa Val{:IFRT} &&
+                (return seen[prev] = ConcreteIFRTArray(prev; sharding))
+            error("Unsupported runtime $runtime")
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
             push!(path, copy(prev))
@@ -1208,12 +1303,14 @@ function make_tracer(
         for I in eachindex(prev)
             if isassigned(prev, I)
                 pv = prev[I]
-                make_tracer(seen, pv, path, mode; track_numbers, sharding, kwargs...)
+                make_tracer(
+                    seen, pv, path, mode; track_numbers, sharding, runtime, kwargs...
+                )
             end
         end
         return nothing
     end
-    TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding)
+    TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
     seen[prev] = newa
     same = true
@@ -1227,6 +1324,7 @@ function make_tracer(
                 mode;
                 track_numbers,
                 sharding=Base.getproperty(sharding, I),
+                runtime,
                 kwargs...,
             )
             if pv !== nv
@@ -1249,11 +1347,10 @@ function make_tracer(
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     kwargs...,
 ) where {Key,Value}
     RT = Core.Typeof(prev)
-    # XXX: If someone wants to shard the same array with different shardings, we need to
-    #      somehow handle this correctly... Right now we just use the first sharding.
     if mode != NoStopTracedTrack && haskey(seen, prev)
         if mode == TracedToTypes
             visited = seen[prev]
@@ -1263,7 +1360,12 @@ function make_tracer(
         return seen[prev]
     end
     if eltype(RT) <: ReactantPrimitive
-        if mode == ArrayToConcrete && return seen[prev] = ConcretePJRTArray(prev; sharding)
+        if mode == ArrayToConcrete
+            runtime isa Val{:PJRT} &&
+                (return seen[prev] = ConcretePJRTArray(prev; sharding))
+            runtime isa Val{:IFRT} &&
+                (return seen[prev] = ConcreteIFRTArray(prev; sharding))
+            error("Unsupported runtime $runtime")
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
             push!(path, copy(prev))
@@ -1273,12 +1375,12 @@ function make_tracer(
     elseif mode == TracedToTypes
         push!(path, RT)
         for (k, v) in prev
-            make_tracer(seen, k, path, mode; track_numbers, sharding, kwargs...)
-            make_tracer(seen, v, path, mode; track_numbers, sharding, kwargs...)
+            make_tracer(seen, k, path, mode; track_numbers, sharding, runtime, kwargs...)
+            make_tracer(seen, v, path, mode; track_numbers, sharding, runtime, kwargs...)
         end
         return nothing
     end
-    Value2 = traced_type(Value, Val(mode), track_numbers, sharding)
+    Value2 = traced_type(Value, Val(mode), track_numbers, sharding, runtime)
     newa = Dict{Key,Value2}()
     seen[prev] = newa
     same = true
@@ -1290,6 +1392,7 @@ function make_tracer(
             mode;
             track_numbers,
             sharding=Base.getproperty(sharding, k),
+            runtime,
             kwargs...,
         )
         if v !== nv
@@ -1343,6 +1446,7 @@ function make_tracer(
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
     kwargs...,
 )
     NT = Core.Typeof(prev)
@@ -1358,7 +1462,7 @@ function make_tracer(
         end
         return nothing
     end
-    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, sharding)}((
+    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, sharding, runtime)}((
         (
             make_tracer(
                 seen,
@@ -1408,18 +1512,23 @@ end
 
 @inline function to_rarray(
     @nospecialize(x);
+    runtime::Union{Nothing,Val{:IFRT},Val{:PJRT}}=nothing,
     track_numbers::Union{Bool,Type}=false,
     sharding=Sharding.Sharding.NoSharding(),
 )
+    runtime === nothing && (runtime = XLA.runtime())
     track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
-    return to_rarray_internal(x, track_numbers, sharding)
+    return to_rarray_internal(x, track_numbers, sharding, runtime)
 end
 
 @inline function to_rarray_internal(
-    @nospecialize(x), @nospecialize(track_numbers::Type), @nospecialize(sharding)
+    @nospecialize(x),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     return make_tracer(
-        OrderedIdDict(), x, (), Reactant.ArrayToConcrete; track_numbers, sharding
+        OrderedIdDict(), x, (), Reactant.ArrayToConcrete; track_numbers, sharding, runtime
     )
 end
 
@@ -1427,69 +1536,102 @@ end
 function to_rarray_internal(
     @nospecialize(::TracedRArray),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
-    return error("Cannot convert TracedRArray to ConcretePJRTArray")
+    return error("Cannot convert TracedRArray to ConcreteArray")
 end
 
 @inline function to_rarray_internal(
     @nospecialize(x::ConcretePJRTArray),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
-)
-    if x.sharding isa Sharding.ShardInfo{typeof(sharding)}
-        return x
-    end
-    return error(
-        "Mismatched sharding. Input has sharding $(x.sharding), but requested sharding is $(typeof(sharding))",
-    )
-end
-
-@inline function to_rarray_internal(
-    @nospecialize(x::Array{<:ReactantPrimitive}),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    ::Val{:PJRT},
 )
     return ConcretePJRTArray(x; sharding)
 end
 
 @inline function to_rarray_internal(
-    @nospecialize(x::Array{T}), @nospecialize(track_numbers::Type), @nospecialize(sharding)
+    @nospecialize(x::ConcreteIFRTArray),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    ::Val{:IFRT},
+)
+    return ConcreteIFRTArray(x; sharding)
+end
+
+@inline function to_rarray_internal(
+    @nospecialize(x::Array{<:ReactantPrimitive}),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+)
+    runtime isa Val{:PJRT} && return ConcretePJRTArray(x; sharding)
+    runtime isa Val{:IFRT} && return ConcreteIFRTArray(x; sharding)
+    return error("Unsupported runtime $runtime")
+end
+
+@inline function to_rarray_internal(
+    @nospecialize(x::Array{T}),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    runtime,
 ) where {T<:Number}
     if reactant_primitive(T) !== nothing
-        return ConcretePJRTArray(to_reactant_primitive.(x); sharding)
+        if runtime isa Val{:PJRT}
+            return ConcretePJRTArray(to_reactant_primitive.(x); sharding)
+        elseif runtime isa Val{:IFRT}
+            return ConcreteIFRTArray(to_reactant_primitive.(x); sharding)
+        end
+        error("Unsupported runtime $runtime")
     end
-    return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding)
+    return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding, runtime)
 end
 
 @inline function to_rarray_internal(
     @nospecialize(x::ConcretePJRTNumber),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    ::Val{:PJRT},
 )
-    if x.sharding isa Sharding.ShardInfo{typeof(sharding)}
-        return x
-    end
-    return error(
-        "Mismatched sharding. Input has sharding $(x.sharding), but requested sharding is $(typeof(sharding))",
-    )
+    return ConcretePJRTNumber(x; sharding)
+end
+
+@inline function to_rarray_internal(
+    @nospecialize(x::ConcreteIFRTNumber),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    ::Val{:IFRT},
+)
+    return ConcreteIFRTNumber(x; sharding)
 end
 
 @inline function to_rarray_internal(
     @nospecialize(x::ReactantPrimitive),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    runtime,
 )
-    typeof(x) <: track_numbers && return ConcretePJRTNumber(x; sharding)
+    if typeof(x) <: track_numbers
+        runtime isa Val{:PJRT} && return ConcretePJRTNumber(x; sharding)
+        runtime isa Val{:IFRT} && return ConcreteIFRTNumber(x; sharding)
+        error("Unsupported runtime $runtime")
+    end
     return x
 end
 
 @inline function to_rarray_internal(
-    @nospecialize(x::Number), @nospecialize(track_numbers::Type), @nospecialize(sharding)
+    @nospecialize(x::Number),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    runtime,
 )
-    Sharding.is_sharded(sharding) && error("Cannot specify sharding for Numbers")
     if reactant_primitive(typeof(x)) !== nothing
-        return ConcretePJRTArray(to_reactant_primitive(x))
+        runtime isa Val{:PJRT} &&
+            return ConcretePJRTArray(to_reactant_primitive(x); sharding)
+        runtime isa Val{:IFRT} &&
+            return ConcreteIFRTArray(to_reactant_primitive(x); sharding)
+        error("Unsupported runtime $runtime")
     end
-    return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding)
+    return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding, runtime)
 end
