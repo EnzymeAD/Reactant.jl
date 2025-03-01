@@ -9,10 +9,13 @@ function get_buffer(
     return only(x.data).buffer
 end
 
-function Base.collect(x::ConcretePJRTNumber{T}) where {T}
-    return collect(ConcretePJRTArray{T,0}(copy(x).data, ()))
+for runtime in (:PJRT, :IFRT)
+    numType = Symbol(:Concrete, runtime, :Number)
+    arrType = Symbol(:Concrete, runtime, :Array)
+    @eval function Base.collect(x::$(numType){T}) where {T}
+        return collect($(arrType){T,0}(copy(x).data, (), x.sharding))
+    end
 end
-# TODO: IFRT
 
 Base.size(::AbstractConcreteNumber) = ()
 Base.real(x::AbstractConcreteNumber{<:Real}) = x
@@ -23,12 +26,13 @@ end
 Base.strides(x::AbstractConcreteArray) = Base.size_to_strides(1, size(x)...)
 
 # Ensure the device and client are the same as the input
-function Base.float(x::ConcretePJRTNumber{T}) where {T}
-    return ConcretePJRTNumber(
-        float(T)(to_number(x)); client=XLA.client(x), device=XLA.device(x), x.sharding
-    )
+for numType in (:ConcretePJRTNumber, :ConcreteIFRTNumber)
+    @eval function Base.float(x::$(numType){T}) where {T}
+        return $(numType)(
+            float(T)(to_number(x)); client=XLA.client(x), device=XLA.device(x), x.sharding
+        )
+    end
 end
-# TODO: IFRT
 
 # written like this to avoid ambiguity errors
 for T in Base.uniontypes(ReactantPrimitive)
@@ -43,7 +47,11 @@ Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray
 
 Base.size(x::AbstractConcreteArray) = x.shape
 
-Base.isempty(x::Union{AbstractConcreteArray,AbstractConcreteNumber}) = any(isempty, x.data)
+function Base.isempty(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    data = x.data
+    data isa Tuple && return any(isempty, data)
+    return isempty(data)
+end
 
 function Base.isempty(x::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray})
     return isempty(ancestor(x))
@@ -72,7 +80,13 @@ function Base.convert(::Type{<:Array}, X::ConcretePJRTArray{T,N}) where {T,N}
         end
     end
 end
-# TODO: IFRT
+
+function Base.convert(::Type{<:Array}, X::ConcreteIFRTArray{T,N}) where {T,N}
+    buf = XLA.synced_buffer(X.data)
+    GC.@preserve buf begin
+        return convert(Array{T}, buf)
+    end
+end
 
 function Base.convert(
     ::Type{<:Array}, X::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray}
@@ -103,7 +117,16 @@ function to_number(X::ConcretePJRTScalar{T}) where {T}
     end
     return data[]
 end
-# TODO: IFRT
+
+function to_number(X::ConcreteIFRTScalar{T}) where {T}
+    data = Ref{T}()
+    wait(X)
+    buf = XLA.synced_buffer(X.data)
+    GC.@preserve data buf begin
+        XLA.to_host(buf, data)
+    end
+    return data[]
+end
 
 function Base.convert(
     ::Type{T}, x::Union{ConcretePJRTScalar{T},ConcreteIFRTScalar{T}}
@@ -170,7 +193,7 @@ for (T1, T2) in (
     end
 end
 
-function Base.show(io::IO, X::ConcretePJRTScalar{T}) where {T}
+function Base.show(io::IO, X::Union{ConcretePJRTScalar,ConcreteIFRTScalar})
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
@@ -180,25 +203,25 @@ function Base.show(io::IO, X::ConcretePJRTScalar{T}) where {T}
     print(io, ")")
     return nothing
 end
-# TODO: IFRT
 
-function Base.print_array(io::IO, X::AnyConcretePJRTArray)
+function Base.print_array(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
     end
     return Base.print_array(io, convert(Array, X))
 end
-# TODO: IFRT
 
-function Base.showarg(io::IO, a::ConcretePJRTArray{T,N}, toplevel) where {T,N}
+function Base.showarg(
+    io::IO, a::Union{ConcretePJRTArray{T,N},ConcreteIFRTArray{T,N}}, toplevel
+) where {T,N}
     toplevel || print(io, "::")
-    print(io, "ConcretePJRTArray{$T,$N}")
+    print(io, "$(typeof(a).name.wrapper){$T,$N}")
     Sharding.is_sharded(a) && print(io, " with sharding $(typeof(a.sharding.sharding))")
     return nothing
 end
 
-function Base.show(io::IO, X::AnyConcretePJRTArray)
+function Base.show(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
@@ -208,7 +231,6 @@ function Base.show(io::IO, X::AnyConcretePJRTArray)
     print(io, ")")
     return nothing
 end
-# TODO: IFRT
 
 function Base.getindex(a::ConcretePJRTArray{T}, args::Vararg{Int,N}) where {T,N}
     isempty(a) && throw("Cannot getindex from empty buffer")
@@ -279,12 +301,14 @@ end
 # Broadcasting interface
 Base.BroadcastStyle(::Type{<:ConcretePJRTArray}) = Broadcast.ArrayStyle{ConcretePJRTArray}()
 # TODO: IFRT
+
 function Base.similar(
     bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}
 ) where {T}
     # XXX: correct device + sharding?
     return ConcretePJRTArray(similar(Array{T}, axes(bc)))
 end
+# TODO: IFRT
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}})

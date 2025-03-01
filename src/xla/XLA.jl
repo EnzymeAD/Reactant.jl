@@ -8,7 +8,7 @@ using EnumX: @enumx
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
-const REACTANT_RUNTIME_BACKEND = Ref{String}("PJRT")
+const REACTANT_XLA_RUNTIME = Ref{String}("PJRT")
 
 const CUDA_DATA_DIR = Ref(
     isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
@@ -69,6 +69,11 @@ default_backend() = global_backend_state[].default_client
 default_device() = default_device(default_backend())
 process_index() = process_index(default_backend())
 
+runtime(::Nothing) = runtime()
+runtime() = runtime(default_backend())
+runtime(::PJRT.Client) = Val(:PJRT)
+runtime(::IFRT.Client) = Val(:IFRT)
+
 function set_default_backend(backend::AbstractClient)
     global_backend_state[].default_client = backend
     return nothing
@@ -122,18 +127,18 @@ function __init__()
         @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids
     end
 
-    if haskey(ENV, "REACTANT_RUNTIME_BACKEND")
-        REACTANT_RUNTIME_BACKEND[] = ENV["REACTANT_RUNTIME_BACKEND"]
-        @debug "REACTANT_RUNTIME_BACKEND: " REACTANT_RUNTIME_BACKEND[]
+    if haskey(ENV, "REACTANT_XLA_RUNTIME")
+        REACTANT_XLA_RUNTIME[] = ENV["REACTANT_XLA_RUNTIME"]
+        @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME[]
     end
 
     # Set the runtime backend
-    if REACTANT_RUNTIME_BACKEND[] == "PJRT"
+    if REACTANT_XLA_RUNTIME[] == "PJRT"
         global_backend_state[] = PJRTBackendState()
-    elseif REACTANT_RUNTIME_BACKEND[] == "IFRT"
+    elseif REACTANT_XLA_RUNTIME[] == "IFRT"
         global_backend_state[] = IFRTBackendState()
     else
-        error("Unsupported REACTANT_RUNTIME_BACKEND: $(REACTANT_RUNTIME_BACKEND[])")
+        error("Unsupported REACTANT_XLA_RUNTIME: $(REACTANT_XLA_RUNTIME[])")
     end
 
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
