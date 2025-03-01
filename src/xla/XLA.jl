@@ -125,13 +125,15 @@ function __init__()
     if haskey(ENV, "REACTANT_RUNTIME_BACKEND")
         REACTANT_RUNTIME_BACKEND[] = ENV["REACTANT_RUNTIME_BACKEND"]
         @debug "REACTANT_RUNTIME_BACKEND: " REACTANT_RUNTIME_BACKEND[]
-        if REACTANT_RUNTIME_BACKEND[] == "PJRT"
-            global_backend_state[] = PJRTBackendState()
-        elseif REACTANT_RUNTIME_BACKEND[] == "IFRT"
-            global_backend_state[] = IFRTBackendState()
-        else
-            error("Unsupported REACTANT_RUNTIME_BACKEND: $(REACTANT_RUNTIME_BACKEND[])")
-        end
+    end
+
+    # Set the runtime backend
+    if REACTANT_RUNTIME_BACKEND[] == "PJRT"
+        global_backend_state[] = PJRTBackendState()
+    elseif REACTANT_RUNTIME_BACKEND[] == "IFRT"
+        global_backend_state[] = IFRTBackendState()
+    else
+        error("Unsupported REACTANT_RUNTIME_BACKEND: $(REACTANT_RUNTIME_BACKEND[])")
     end
 
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
