@@ -111,6 +111,7 @@ function Adapt.parent_type(::Type{ConcretePJRTArray{T,N,D,S}}) where {T,N,D,S}
     return ConcretePJRTArray{T,N,D,S}
 end
 
+# XXX (Deprecated): remove in v0.3
 Base.@deprecate ConcretePJRTArray(data::Number; kwargs...) ConcretePJRTNumber(
     data; kwargs...
 )
@@ -127,7 +128,7 @@ function ConcretePJRTArray(
     data::Array{T,N};
     client::XLA.PJRT.Client=XLA.default_backend(),
     idx::Union{Int,Nothing}=nothing,
-    device::Union{Nothing,XLA.AbstractDevice}=nothing,
+    device::Union{Nothing,XLA.PJRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
     if !Sharding.is_sharded(sharding)
@@ -147,14 +148,15 @@ function ConcretePJRTArray(
         sdata, sharding = sharding(client, device, data)
         return ConcretePJRTArray{T,N,1,typeof(sharding)}(sdata, size(data), sharding)
     end
-    @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, `device` and `idx` cannot be specified!"
+    @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, \
+                                                   `device` and `idx` cannot be specified!"
     sharded_data, sharding = sharding(client, nothing, data)
     return ConcretePJRTArray{T,N,length(sharded_data),typeof(sharding)}(
         sharded_data, size(data), sharding
     )
 end
 
-XLA.await(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(XLA.await, x.data)
+Base.wait(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(wait, x.data)
 XLA.client(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = XLA.client(x.data)
 function XLA.device(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
     x.sharding isa Sharding.NoShardInfo && return XLA.device(only(x.data))
@@ -169,8 +171,6 @@ const AnyConcretePJRTArray{T,N,D,S} = Union{
     ConcretePJRTArray{T,N,D,S},WrappedConcretePJRTArray{T,N,D,S}
 }
 
-const AnyConcreteRArray = AnyConcretePJRTArray
-
 ConcretePJRTArray(x::AnyConcretePJRTArray) = ConcretePJRTArray{eltype(x),ndims(x)}(x)
 ConcretePJRTArray{T}(x::AnyConcretePJRTArray) where {T} = ConcretePJRTArray{T,ndims(x)}(x)
 ConcretePJRTArray{T,N}(x::ConcretePJRTArray{T,N}) where {T,N} = x
@@ -184,7 +184,87 @@ function ConcretePJRTArray{T,N}(x::AnyConcretePJRTArray) where {T,N}
     )
 end
 
+## ConcreteIFRTNumber
+mutable struct ConcreteIFRTNumber{T} <: AbstractConcreteNumber{T}
+    data::XLA.IFRT.AsyncArray
+end
+
+@leaf ConcreteIFRTNumber
+
+function ConcreteIFRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
+    carray = ConcreteIFRTArray(fill(convert(T, data)); kwargs...)
+    return ConcreteIFRTNumber{T}(carray.data)
+end
+function ConcreteIFRTNumber(data::T; kwargs...) where {T<:Number}
+    return ConcreteIFRTNumber{T}(data; kwargs...)
+end
+
 ## ConcreteIFRTArray
+mutable struct ConcreteIFRTArray{T,N} <: AbstractConcreteArray{T,N}
+    data::XLA.IFRT.AsyncArray
+    shape::NTuple{N,Int}
+end
+
+@leaf ConcreteIFRTArray
+
+Adapt.parent_type(::Type{ConcreteIFRTArray{T,N}}) where {T,N} = ConcreteIFRTArray{T,N}
+
+function ConcreteIFRTArray(
+    data::Array{T,N};
+    client::XLA.IFRT.Client=XLA.default_backend(),
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.IFRT.Device}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {T,N}
+    if !Sharding.is_sharded(sharding)
+        if device === nothing
+            if idx === nothing
+                device = XLA.default_device(client)
+            else
+                device = XLA.get_device(client, idx)
+            end
+        else
+            if idx !== nothing
+                device_from_idx = XLA.get_device(client, idx)
+                @assert device_from_idx == device "If both `idx` and `device` are \
+                                                   specified, `idx` must match `device`"
+            end
+        end
+    else
+        @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, \
+                                                       `device` and `idx` cannot be \
+                                                       specified!"
+    end
+    sharded_data, sharding = sharding(client, device, data)
+    return ConcreteIFRTArray{T,N}(sharded_data, size(data))
+end
+
+Base.wait(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = wait(x.data)
+XLA.client(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = XLA.client(x.data)
+function XLA.device(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
+    return XLA.device(x.data)
+end
+
+const ConcreteIFRTScalar{T} = Union{ConcreteIFRTArray{T,0},ConcreteIFRTNumber{T}}
+const WrappedConcreteIFRTArray{T,N} = WrappedArray{
+    T,N,ConcreteIFRTArray,ConcreteIFRTArray{T,N}
+}
+const AnyConcreteIFRTArray{T,N} = Union{
+    ConcreteIFRTArray{T,N},WrappedConcreteIFRTArray{T,N}
+}
+
+ConcreteIFRTArray(x::AnyConcreteIFRTArray) = ConcreteIFRTArray{eltype(x),ndims(x)}(x)
+ConcreteIFRTArray{T}(x::AnyConcreteIFRTArray) where {T} = ConcreteIFRTArray{T,ndims(x)}(x)
+ConcreteIFRTArray{T,N}(x::ConcreteIFRTArray{T,N}) where {T,N} = x
+function ConcreteIFRTArray{T,N}(x::AnyConcreteIFRTArray) where {T,N}
+    ancestor_x = ancestor(x)
+    return ConcreteIFRTArray(
+        convert(Array{T,N}, x);
+        client=XLA.client(ancestor_x),
+        device=XLA.device(ancestor_x),
+        sharding=ancestor_x.sharding,
+    )
+end
 
 ## ConcreteRNG
 mutable struct ConcreteRNG{S<:AbstractConcreteArray} <: Random.AbstractRNG
@@ -193,6 +273,8 @@ mutable struct ConcreteRNG{S<:AbstractConcreteArray} <: Random.AbstractRNG
 end
 
 ## Aliases to prevent breaking changes
-# XXX (Deprecated): remove in v0.3 and replace the first with a function
+# XXX (Deprecated): remove in v0.3 and replace the first two with a function that dispatch
+#                   on the client
 const ConcreteRArray = ConcretePJRTArray
 const ConcreteRNumber = ConcretePJRTNumber
+const AnyConcreteRArray = AnyConcretePJRTArray
