@@ -223,7 +223,7 @@ function make_mlir_fn(
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
     for (k, v) in seen_args
-        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber)
+        if hasfield(typeof(k), :sharding)
             if Reactant.Sharding.is_sharded(k)
                 Reactant.Ops.mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding

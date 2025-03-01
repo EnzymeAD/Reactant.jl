@@ -5,15 +5,11 @@ using OffsetArrays: OffsetArray
 using Reactant: Reactant, MLIR, Ops, TracedRArray
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(OA::Type{<:OffsetArray}),
-    seen,
-    mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(OA::Type{<:OffsetArray}), @nospecialize(args...)
 )
     N = ndims(OA)
     T = OffsetArrays.parenttype(OA)
-    T2 = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding)
+    T2 = Reactant.traced_type_inner(T, args...)
     return OffsetArray{eltype(T2),N,T2}
 end
 

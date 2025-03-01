@@ -9,6 +9,8 @@ import ..Reactant:
     XLA,
     ConcretePJRTArray,
     ConcretePJRTNumber,
+    ConcreteIFRTArray,
+    ConcreteIFRTNumber,
     TracedRArray,
     TracedRNumber,
     RArray,
@@ -105,6 +107,7 @@ function create_result(
         end
     end
 
+    # We will set the data for this later
     if path_to_shard_info !== nothing # restore sharding
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
@@ -113,8 +116,33 @@ function create_result(
             ($(tocopy.data...,)), $sharding
         ))
     end
-    # We will set the data for this later
     return :(ConcretePJRTNumber{$T}($(tocopy.data)))
+end
+
+function create_result(
+    tocopy::ConcreteIFRTNumber{T,S}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T,S}
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing # restore sharding
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
+            return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(restore), $sharding))
+        else
+            return :(ConcreteIFRTNumber{$T}($restore))
+        end
+    end
+
+    # We will set the data for this later
+    if path_to_shard_info !== nothing # restore sharding
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
+        return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(tocopy.data), $sharding))
+    end
+    return :(ConcreteIFRTNumber{$T}($(tocopy.data)))
 end
 
 function create_result(
@@ -149,6 +177,38 @@ function create_result(
     end
     # We will set the data for this later
     return :(ConcretePJRTArray{$T,$N,$D,$S}(
+        $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
+    ))
+end
+
+function create_result(
+    tocopy::ConcreteIFRTArray{T,N,S}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T,N,S}
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing # restore sharding
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
+            return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
+                $(restore), $(tocopy.shape), $sharding
+            ))
+        else
+            return :(ConcreteIFRTArray{$T,$N}($restore, $(tocopy.shape)))
+        end
+    end
+
+    if path_to_shard_info !== nothing # restore sharding
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
+        return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
+            $(tocopy.data), $(tocopy.shape), $sharding
+        ))
+    end
+    # We will set the data for this later
+    return :(ConcreteIFRTArray{$T,$N,$S}(
         $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
     ))
 end
@@ -506,7 +566,9 @@ function compile_mlir(f, args; client=nothing, kwargs...)
     results = MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
-        mlir_fn_res = compile_mlir!(mod, f, args; backend, kwargs...)
+        mlir_fn_res = compile_mlir!(
+            mod, f, args; backend, runtime=XLA.runtime(client), kwargs...
+        )
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
@@ -637,6 +699,7 @@ function compile_mlir!(
     fn_kwargs=(),
     raise::Union{Bool,String}=false,
     input_shardings=nothing,
+    runtime::Union{Val{:PJRT},Val{:IFRT}},
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -668,7 +731,7 @@ function compile_mlir!(
     concrete_seen = OrderedIdDict()
 
     concrete_result = make_tracer(
-        concrete_seen, traced_result, ("result",), TracedToConcrete
+        concrete_seen, traced_result, ("result",), TracedToConcrete; runtime
     )
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
@@ -1136,6 +1199,7 @@ function codegen_flatten!(
 )
     flatten_names = Symbol[]
     flatten_code = Expr[]
+    runtime = XLA.runtime(client)
 
     if is_sharded
         inv_seen_args = Reactant.OrderedIdDict()
@@ -1168,6 +1232,11 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
+
+            if runtime isa Val{:IFRT}
+                error("TODO: implement sharding for IFRT")
+            end
+
             condensed_op_sharding = convert(
                 Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
             )
@@ -1209,7 +1278,13 @@ function codegen_flatten!(
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
             if arg isa TracedRArray || arg isa TracedRNumber
-                push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+                if runtime isa Val{:PJRT}
+                    push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+                elseif runtime isa Val{:IFRT}
+                    push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+                else
+                    error("Unsupported runtime $runtime")
+                end
             else
                 error("Unsupported type $(typeof(arg))")
             end
@@ -1476,9 +1551,12 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
 
     device = nothing
     if length(linear_args) > 0
-        devices_list = [
-            XLA.device(only(k.data)) for (k, v) in seen_args if v isa TracedRArray
-        ]
+        devices_list = []
+        for (k, v) in seen_args
+            !(v isa TracedRArray || v isa TracedRNumber) && continue
+            buffer = k.data isa Tuple ? only(k.data) : k.data
+            push!(devices_list, XLA.device(buffer))
+        end
         if !isempty(devices_list)
             if !allequal(devices_list)
                 msg = "Expected all arguments to be on the same device, got:\n"
@@ -1528,7 +1606,9 @@ function compile_xla(f, args; client=nothing, kwargs...)
     results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        mlir_fn_res = compile_mlir!(mod, f, args; backend, kwargs...)
+        mlir_fn_res = compile_mlir!(
+            mod, f, args; backend, runtime=XLA.runtime(client), kwargs...
+        )
 
         # Resolve client and device
         client, device = __resolve_device_and_client(

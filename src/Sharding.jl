@@ -110,6 +110,11 @@ function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
 
+function (::NoSharding)(client::XLA.IFRT.Client, device, x::Union{AbstractArray,Number})
+    device === nothing && (device = XLA.default_device(client))
+    return XLA.IFRT.AsyncArray(client, x, device), ShardInfo(NoSharding(), nothing)
+end
+
 """
     NamedSharding(
         mesh::Mesh, partition_spec::Tuple;
