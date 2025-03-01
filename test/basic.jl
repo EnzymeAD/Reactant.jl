@@ -766,18 +766,18 @@ end
 
 @testset "isfinite" begin
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
-    @test Reactant.@jit(isfinite.(x)) == [true, false, false, false, false]
+    @test @jit(isfinite.(x)) == [true, false, false, false, false]
 
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test Reactant.@jit(isfinite.(x)) == [true, false, false, false, false]
+    @test @jit(isfinite.(x)) == [true, false, false, false, false]
 end
 
 @testset "isnan" begin
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
-    @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
+    @test @jit(isnan.(x)) == [false, true, false, false, true]
 
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
+    @test @jit(isnan.(x)) == [false, true, false, false, true]
 end
 
 @testset "isnan/isfinite" begin
@@ -787,19 +787,27 @@ end
     @test !isfinite(Reactant.to_rarray(Inf; track_numbers=Number))
 end
 
+@testset "isinf" begin
+    @test Bool(@jit(isinf(ConcreteRNumber(Inf))))
+    @test Bool(@jit(isinf(ConcreteRNumber(-Inf))))
+    @test !Bool(@jit(isinf(ConcreteRNumber(2))))
+    @test !Bool(@jit(isinf(ConcreteRNumber(2.0))))
+    @test !Bool(@jit(isinf(ConcreteRNumber(true))))
+end
+
 @testset "mod and rem" begin
     a = [-1.1, 7.7, -3.3, 9.9, -5.5]
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
 
     expected_mod = mod.(a, b)
-    @test Reactant.@jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
-    @test Reactant.@jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
-    @test Reactant.@jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
+    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
 
     expected_rem = rem.(a, b)
-    @test Reactant.@jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
-    @test Reactant.@jit(rem.(a, Reactant.to_rarray(b))) ≈ expected_rem
-    @test Reactant.@jit(rem.(Reactant.to_rarray(a), b)) ≈ expected_rem
+    @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
+    @test @jit(rem.(a, Reactant.to_rarray(b))) ≈ expected_rem
+    @test @jit(rem.(Reactant.to_rarray(a), b)) ≈ expected_rem
 end
 
 @testset "xor" begin
@@ -910,7 +918,7 @@ end
     x[:b] = 3.1 * ones(4)
 
     ra = Reactant.to_rarray(x)
-    Reactant.@jit dip!(ra)
+    @jit dip!(ra)
     ra[:a] ≈ (2.7 * 2) * ones(4)
 end
 

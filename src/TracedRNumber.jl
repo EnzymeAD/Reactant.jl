@@ -19,16 +19,18 @@ end
 function Base.isfinite(x::TracedRNumber{<:Complex})
     return isfinite(real(x)) & isfinite(imag(x))
 end
-function Base.isfinite(x::TracedRNumber{T}) where {T<:AbstractFloat}
-    return Reactant.Ops.is_finite(x)
-end
+Base.isfinite(x::TracedRNumber{<:AbstractFloat}) = Ops.is_finite(x)
 
-function Base.isnan(x::TracedRNumber{T}) where {T<:AbstractFloat}
-    return !isfinite(x) & (x != typemax(T)) & (x != typemin(T))
-end
 function Base.isnan(x::TracedRNumber{<:Complex})
     return isnan(real(x)) | isnan(imag(x))
 end
+function Base.isnan(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return !isfinite(x) & (x != typemax(T)) & (x != typemin(T))
+end
+
+Base.isinf(x::TracedRNumber{<:Complex}) = isinf(real(x)) | isinf(imag(x))
+Base.isinf(x::TracedRNumber{<:AbstractFloat}) = Ops.is_inf(x)
+Base.isinf(::TracedRNumber{<:Integer}) = false
 
 function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
     return print(io, "TracedRNumber{", T, "}(", X.paths, ")")
