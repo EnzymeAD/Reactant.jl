@@ -141,12 +141,6 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:Tuple}), @nospecialize(args...)
-)
-    return traced_tuple_type_inner(T, args...)
-end
-
-Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{<:NamedTuple}), @nospecialize(args...)
 )
     N = T.parameters[1]
@@ -523,6 +517,10 @@ Base.@nospecializeinfer function traced_type_inner(
 
     if T == Type || T == DataType
         return T
+    end
+
+    if T <: Tuple
+        return traced_tuple_type_inner(T, seen, mode, track_numbers, sharding, runtime)
     end
 
     # unknown number of fields
