@@ -120,7 +120,7 @@ function use_overlayed_version(x::AbstractArray)
 end
 
 # StdLib Overloads
-include("stdlibs/LinearAlgebra.jl")
+include("stdlibs/LinearAlgebra/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
 include("stdlibs/Base.jl")
 
