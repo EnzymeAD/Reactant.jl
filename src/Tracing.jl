@@ -502,7 +502,7 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type),
+    @nospecialize(T::Type{<:Any}),
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
