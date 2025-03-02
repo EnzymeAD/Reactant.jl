@@ -1480,12 +1480,12 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
 }
 
 extern "C" ifrt::Client *ifrt_pjrt_make_client(
-    HeldPjRtClient *pjrt_client, int node_id, int num_nodes,
+    PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
     std::string key_prefix,
     std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store) {
   ifrt::PjRtClient::CreateOptions options;
-  options.pjrt_client = pjrt_client->obj();
+  options.pjrt_client = std::shared_ptr<PjRtClient>(pjrt_client);
 
   if (num_nodes > 1) {
     if (distributed_runtime_client == nullptr) {
@@ -1508,14 +1508,6 @@ extern "C" ifrt::Client *ifrt_pjrt_make_client(
   options.num_processes = num_nodes;
 
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
-}
-
-extern "C" HeldPjRtClient *pjrt_make_cpu_client_shared(
-    uint8_t asynchronous, int node_id,
-    std::optional<std::shared_ptr<xla::cpu::CpuCollectives>> collectives) {
-  PjRtClient *client =
-      MakeCPUClientInternal(asynchronous, node_id, collectives);
-  return reactant::capture(std::shared_ptr<PjRtClient>(client));
 }
 
 const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
@@ -1562,8 +1554,8 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
     }
   }
 
-  HeldPjRtClient *pjrt_client =
-      pjrt_make_cpu_client_shared(asynchronous, node_id, collectives);
+  PjRtClient *pjrt_client =
+      MakeCPUClientInternal(asynchronous, node_id, collectives);
   if (pjrt_client == nullptr)
     return nullptr;
   return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
@@ -1571,21 +1563,11 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
                                kv_store);
 }
 
-extern "C" HeldPjRtClient *pjrt_make_gpu_client_shared(
-    int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
-    double memory_fraction, bool preallocate, const char *platform_name,
-    const char **error, void *distributed_runtime_client) {
-  PjRtClient *client = MakeGPUClient(
-      node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
-      preallocate, platform_name, error, distributed_runtime_client);
-  return reactant::capture(std::shared_ptr<PjRtClient>(client));
-}
-
 extern "C" ifrt::Client *ifrt_make_pjrt_gpu_client(
     int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
     double memory_fraction, bool preallocate, const char *platform_name,
     const char **error, void *distributed_runtime_client) {
-  HeldPjRtClient *pjrt_client = pjrt_make_gpu_client_shared(
+  PjRtClient *pjrt_client = MakeGPUClient(
       node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
       preallocate, platform_name, error, distributed_runtime_client);
   if (pjrt_client == nullptr)
@@ -1596,16 +1578,10 @@ extern "C" ifrt::Client *ifrt_make_pjrt_gpu_client(
                                kv_store);
 }
 
-extern "C" HeldPjRtClient *pjrt_make_tpu_client_shared(const char *tpu_path,
-                                                       const char **error) {
-  PjRtClient *client = MakeTPUClient(tpu_path, error);
-  return reactant::capture(std::shared_ptr<PjRtClient>(client));
-}
-
 extern "C" ifrt::Client *
 ifrt_make_pjrt_tpu_client(const char *tpu_path, const char **error, int node_id,
                           int num_nodes, void *distributed_runtime_client) {
-  HeldPjRtClient *pjrt_client = pjrt_make_tpu_client_shared(tpu_path, error);
+  PjRtClient *pjrt_client = MakeTPUClient(tpu_path, error);
   if (pjrt_client == nullptr)
     return nullptr;
   std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;

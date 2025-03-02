@@ -11,7 +11,7 @@ end
     @ccall MLIR.API.mlir_c.ifrt_free_future(future.future::Ptr{Cvoid})::Cvoid
 end
 
-function XLA.is_ready(future::Future)
+function Base.isready(future::Future)
     GC.@preserve future begin
         return (@ccall MLIR.API.mlir_c.ifrt_future_is_ready(
             future.future::Ptr{Cvoid}
@@ -19,7 +19,7 @@ function XLA.is_ready(future::Future)
     end
 end
 
-@inline function XLA.await(future::Future)::Nothing
+@inline function Base.wait(future::Future)::Nothing
     GC.@preserve future begin
         @ccall MLIR.API.mlir_c.ifrt_future_await(future.future::Ptr{Cvoid})::Cvoid
     end
