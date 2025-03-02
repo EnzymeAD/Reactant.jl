@@ -131,3 +131,24 @@ end
         AsyncArray(Array(outputs[i]), future ? Future(future_res[]) : nothing)
     end
 end
+
+# Convinience functions matching the signatures of the PJRT loaded executable
+@inline function XLA.execute(
+    exec::LoadedExecutable,
+    inputs::NTuple{N,Ptr{Cvoid}},
+    donated_args::NTuple{M,UInt8},
+    ::Val{n_outs},
+    ::Val{K},
+) where {N,M,n_outs,K}
+    return XLA.execute(exec, inputs, donated_args, Val(n_outs), Val(K))
+end
+
+@inline function XLA.execute_sharded(
+    exec::LoadedExecutable,
+    ::Device,
+    inputs::NTuple{N,Ptr{Cvoid}},
+    donated_args::NTuple{N,UInt8},
+    ::Val{n_outs},
+) where {N,n_outs}
+    return XLA.execute(exec, inputs, donated_args, Val(n_outs))
+end

@@ -115,9 +115,10 @@ function Base.eltype(buffer::Array)
     end
 end
 
-function XLA.device(::Array)
-    return error("IFRT.Array can be sharded/replicated across multiple devices. Hence, \
-                  `XLA.device` is not defined.")
+function XLA.device(buffer::Array)
+    devices = XLA.devices(XLA.sharding(buffer))
+    length(devices) == 1 && return only(devices)
+    return nothing
 end
 
 function XLA.client(buffer::Array)
