@@ -1483,7 +1483,7 @@ julia> Reactant.@jit(
                     MLIR.IR.Attribute("private"),
                 )
 
-                # Change function nane
+                # Change function name
                 MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
             end
         end
