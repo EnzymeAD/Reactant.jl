@@ -429,4 +429,6 @@ function Base.copysign(x::S, y::TracedRNumber{T}) where {S<:Number,T}
     return copysign(TracedUtils.promote_to(TracedRNumber{S}, x), y)
 end
 
+Base.:(:)(start::T, stop::T) where {N<:Real,T<:TracedRNumber{N}} = UnitRange{T}(start, stop)
+
 end # module TracedRNumberOverrides
