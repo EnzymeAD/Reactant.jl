@@ -568,7 +568,7 @@ end
             Tuple(rsize)
         end
     else
-        Base.error("Invalid FFT type: $type")
+        error("Invalid FFT type: $type")
     end
 
     res = MLIR.IR.result(
@@ -841,7 +841,7 @@ end
     sizea = Dict(c => d for (c, d) in zip(ia, size(lhs)))
     sizeb = Dict(c => d for (c, d) in zip(ib, size(rhs)))
     sizes = mergewith(sizea, sizeb) do da, db
-        da == db ? da : Base.error("Invalid dimensions in einsum equation")
+        da == db ? da : error("Invalid dimensions in einsum equation")
     end
 
     rsize = Tuple(sizes[i] for i in ic)
@@ -921,7 +921,7 @@ end
             elseif typ <: TracedRNumber
                 return typ((), res)
             else
-                Base.error("Invalid type: $typ")
+                error("Invalid type: $typ")
             end
         end,
     )
@@ -1493,7 +1493,7 @@ julia> Reactant.@jit(
     end
 
     if isnothing(fn)
-        Base.error("hlo_call: could not find function $func_name in the provided module")
+        error("hlo_call: could not find function $func_name in the provided module")
     end
 
     ftype_attr = MLIR.IR.attr(fn, "function_type")
@@ -1772,7 +1772,7 @@ end
                 end
             end
             if isnothing(path)
-                Base.error("if_condition: could not find path for linear arg $i")
+                error("if_condition: could not find path for linear arg $i")
             end
             Reactant.TracedUtils.set_mlir_data!(
                 arg,
@@ -1835,7 +1835,7 @@ end
                 end
             end
             if isnothing(path)
-                Base.error("if_condition: could not find path for linear arg $i")
+                error("if_condition: could not find path for linear arg $i")
             end
             Reactant.TracedUtils.set_mlir_data!(
                 arg,
@@ -2061,7 +2061,7 @@ end
 
     corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr
         if fr isa MissingTracedValue && tr isa MissingTracedValue
-            Base.error("Both false and true branches are missing")
+            error("Both false and true branches are missing")
         elseif fr isa MissingTracedValue
             return tr
         else
@@ -2086,7 +2086,7 @@ end
                 end
             end
             if isnothing(argpath)
-                Base.error("if_condition: could not find path for resarg $path")
+                error("if_condition: could not find path for resarg $path")
             end
             Reactant.TracedUtils.set!(args, argpath, MLIR.IR.result(if_compiled, residx))
         end

@@ -161,9 +161,3 @@ end
         Base.inferencebarrier(Base._unique_dims)(A, dims)
     end
 end
-
-## `Base.error` --> `Ops.throw`
-## XXX: `throw` is a Core method. Can it be overlayed?
-@reactant_overlay @noinline function Base.error(msg::String)
-    return Ops.throw(msg)
-end
