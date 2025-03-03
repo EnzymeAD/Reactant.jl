@@ -2311,20 +2311,30 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     end
 end
 
+"""
+    throw(
+        msg::String,
+        condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+        location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
+    )
+
+Throw a runtime error with the given `msg` if `condition` is `true`. If `condition` is not provided, it defaults to `true`.
+"""
 @noinline function throw(
     msg::String,
-    value::Union{TracedRNumber{Bool},Nothing}=nothing;
-    location=mlir_stacktrace("throw", @__FILE__, @__LINE__),
+    condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+    location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
 )
-    value === nothing &&
-        (value = Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, true))
+    if condition === nothing
+        condition = Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, true)
+    end
 
     return stablehlo.custom_call(
-        MLIR.IR.Value[value.mlir_data];
+        MLIR.IR.Value[condition.mlir_data];
         result_0=MLIR.IR.Type[],
         has_side_effect=true,
-        call_target_name="throw",
-        backend_config=MLIR.IR.Attribute(Dict("error_message" => MLIR.IR.Attribute(msg))),
+        call_target_name="xla_throw_error",
+        backend_config=MLIR.IR.Attribute(Dict("message" => MLIR.IR.Attribute(msg))),
         api_version=MLIR.IR.Attribute(Int32(4)),
         location,
     )

@@ -154,9 +154,7 @@ end
 ## fixes #493
 @reactant_overlay @noinline function Base._unique_dims(A::AbstractArray, dims::Colon)
     if use_overlayed_version(A)
-        Base.inferencebarrier(error)(
-            "Reactant doesn't have a `Base._unique_dims` with the current interpreter."
-        )
+        error("Reactant doesn't have a `Base._unique_dims` with the current interpreter.")
     else
         Base.inferencebarrier(Base._unique_dims)(A, dims)
     end
