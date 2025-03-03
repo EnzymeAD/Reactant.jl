@@ -2735,7 +2735,6 @@ end
         location,
     )
 
-<<<<<<< HEAD
     corrected_traced_results =
         map(zip(traced_false_results, traced_true_results)) do (fr, tr)
             if fr isa MissingTracedValue && tr isa MissingTracedValue
@@ -2745,15 +2744,6 @@ end
             else
                 return fr
             end
-=======
-    corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr
-        if fr isa MissingTracedValue && tr isa MissingTracedValue
-            error("Both false and true branches are missing")
-        elseif fr isa MissingTracedValue
-            return tr
-        else
-            return fr
->>>>>>> bd8e335e4 (fix: don't overlay for now)
         end
 
     @assert length(all_paths) == length(result_types)
@@ -2766,27 +2756,10 @@ end
                 corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
             )
         elseif path[1] == :resarg
-<<<<<<< HEAD
             residx += 1
             Reactant.TracedUtils.set!(
                 args, path[2:end], MLIR.IR.result(if_compiled, residx)
             )
-=======
-            # The resarg path is with respect to the linear args, not the traced args.
-            # We find the path into traced args by searching for it in the linear args.
-            # Concretely, we look into tb_linear_args, but we could also look into fb_linear_args, they contain the same arg path.
-            @assert length(path) == 2
-            argpath = nothing
-            for p in Reactant.TracedUtils.get_paths(tb_linear_args[path[2]])
-                if length(p) > 0 && p[1] == true_fn_names[1]
-                    argpath = p[2:end]
-                end
-            end
-            if isnothing(argpath)
-                error("if_condition: could not find path for resarg $path")
-            end
-            Reactant.TracedUtils.set!(args, argpath, MLIR.IR.result(if_compiled, residx))
->>>>>>> bd8e335e4 (fix: don't overlay for now)
         end
     end
 
@@ -4186,20 +4159,30 @@ end
     return nothing
 end
 
+"""
+    throw(
+        msg::String,
+        condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+        location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
+    )
+
+Throw a runtime error with the given `msg` if `condition` is `true`. If `condition` is not provided, it defaults to `true`.
+"""
 @noinline function throw(
     msg::String,
-    value::Union{TracedRNumber{Bool},Nothing}=nothing;
-    location=mlir_stacktrace("throw", @__FILE__, @__LINE__),
+    condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+    location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
 )
-    value === nothing &&
-        (value = Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, true))
+    if condition === nothing
+        condition = Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, true)
+    end
 
     return stablehlo.custom_call(
-        MLIR.IR.Value[value.mlir_data];
+        MLIR.IR.Value[condition.mlir_data];
         result_0=MLIR.IR.Type[],
         has_side_effect=true,
-        call_target_name="throw",
-        backend_config=MLIR.IR.Attribute(Dict("error_message" => MLIR.IR.Attribute(msg))),
+        call_target_name="xla_throw_error",
+        backend_config=MLIR.IR.Attribute(Dict("message" => MLIR.IR.Attribute(msg))),
         api_version=MLIR.IR.Attribute(Int32(4)),
         location,
     )

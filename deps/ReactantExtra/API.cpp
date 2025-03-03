@@ -183,6 +183,12 @@
 #include "absl/status/statusor.h"
 #include "xla/pjrt/proto/compile_options.pb.h"
 
+// XLA FFI
+#include "xla/ffi/api/c_api.h"
+#include "xla/ffi/api/ffi.h"
+#include "xla/ffi/ffi_api.h"
+#include "xla/service/custom_call_target_registry.h"
+
 using namespace mlir;
 using namespace xla;
 using ::tensorflow::profiler::ToolOptions;
@@ -3686,3 +3692,19 @@ REACTANT_ABI void *ReactantGetCompileOptions(size_t *size) {
   memcpy(data, serialized.data(), *size);
   return data;
 }
+// Register an XLA FFI for throwing runtime errors
+xla::ffi::Error xla_throw_error(xla::ffi::BufferR0<xla::ffi::PRED> cond,
+                                std::string_view message) {
+  if (cond.typed_data()[0])
+    return xla::ffi::Error(xla::ffi::ErrorCode::kInternal,
+                           std::string(message));
+  return xla::ffi::Error::Success();
+}
+
+XLA_FFI_DEFINE_HANDLER(xla_throw_error_handler, xla_throw_error,
+                       xla::ffi::Ffi::Bind()
+                           .Arg<xla::ffi::BufferR0<xla::ffi::PRED>>()
+                           .Attr<std::string_view>("message"));
+
+XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_throw_error", "Host",
+                         xla_throw_error_handler);
