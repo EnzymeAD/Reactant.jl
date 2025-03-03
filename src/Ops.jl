@@ -844,7 +844,7 @@ end
             Tuple(rsize)
         end
     else
-        Base.error("Invalid FFT type: $type")
+        error("Invalid FFT type: $type")
     end
 
     res = MLIR.IR.result(
@@ -1155,7 +1155,7 @@ end
             elseif typ <: TracedRNumber
                 return typ((), res)
             else
-                Base.error("Invalid type: $typ")
+                error("Invalid type: $typ")
             end
         end,
     )
@@ -1992,7 +1992,7 @@ module @reactant_hlo_call attributes {mhlo.num_partitions = 1 : i64, mhlo.num_re
     end
 
     if isnothing(fn)
-        Base.error("hlo_call: could not find function $func_name in the provided module")
+        error("hlo_call: could not find function $func_name in the provided module")
     end
 
     ftype_attr = MLIR.IR.getattr(fn, "function_type")
@@ -2419,7 +2419,7 @@ end
                 end
             end
             if isnothing(path)
-                Base.error("if_condition: could not find path for linear arg $i")
+                error("if_condition: could not find path for linear arg $i")
             end
             Reactant.TracedUtils.set_mlir_data!(
                 arg,
@@ -2484,7 +2484,7 @@ end
                 end
             end
             if isnothing(path)
-                Base.error("if_condition: could not find path for linear arg $i")
+                error("if_condition: could not find path for linear arg $i")
             end
             Reactant.TracedUtils.set_mlir_data!(
                 arg,
@@ -2735,6 +2735,7 @@ end
         location,
     )
 
+<<<<<<< HEAD
     corrected_traced_results =
         map(zip(traced_false_results, traced_true_results)) do (fr, tr)
             if fr isa MissingTracedValue && tr isa MissingTracedValue
@@ -2744,6 +2745,15 @@ end
             else
                 return fr
             end
+=======
+    corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr
+        if fr isa MissingTracedValue && tr isa MissingTracedValue
+            error("Both false and true branches are missing")
+        elseif fr isa MissingTracedValue
+            return tr
+        else
+            return fr
+>>>>>>> bd8e335e4 (fix: don't overlay for now)
         end
 
     @assert length(all_paths) == length(result_types)
@@ -2756,10 +2766,27 @@ end
                 corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
             )
         elseif path[1] == :resarg
+<<<<<<< HEAD
             residx += 1
             Reactant.TracedUtils.set!(
                 args, path[2:end], MLIR.IR.result(if_compiled, residx)
             )
+=======
+            # The resarg path is with respect to the linear args, not the traced args.
+            # We find the path into traced args by searching for it in the linear args.
+            # Concretely, we look into tb_linear_args, but we could also look into fb_linear_args, they contain the same arg path.
+            @assert length(path) == 2
+            argpath = nothing
+            for p in Reactant.TracedUtils.get_paths(tb_linear_args[path[2]])
+                if length(p) > 0 && p[1] == true_fn_names[1]
+                    argpath = p[2:end]
+                end
+            end
+            if isnothing(argpath)
+                error("if_condition: could not find path for resarg $path")
+            end
+            Reactant.TracedUtils.set!(args, argpath, MLIR.IR.result(if_compiled, residx))
+>>>>>>> bd8e335e4 (fix: don't overlay for now)
         end
     end
 

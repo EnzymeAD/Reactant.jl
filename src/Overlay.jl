@@ -385,9 +385,3 @@ end
         return call_with_native(LinearAlgebra.dot, x, A, y)
     end
 end
-
-## `Base.error` --> `Ops.throw`
-## XXX: `throw` is a Core method. Can it be overlayed?
-@reactant_overlay @noinline function Base.error(msg::String)
-    return Ops.throw(msg)
-end
