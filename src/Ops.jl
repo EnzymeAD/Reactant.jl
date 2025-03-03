@@ -568,7 +568,7 @@ end
             Tuple(rsize)
         end
     else
-        error("Invalid FFT type: $type")
+        Base.error("Invalid FFT type: $type")
     end
 
     res = MLIR.IR.result(
@@ -841,7 +841,7 @@ end
     sizea = Dict(c => d for (c, d) in zip(ia, size(lhs)))
     sizeb = Dict(c => d for (c, d) in zip(ib, size(rhs)))
     sizes = mergewith(sizea, sizeb) do da, db
-        da == db ? da : error("Invalid dimensions in einsum equation")
+        da == db ? da : Base.error("Invalid dimensions in einsum equation")
     end
 
     rsize = Tuple(sizes[i] for i in ic)
@@ -921,7 +921,7 @@ end
             elseif typ <: TracedRNumber
                 return typ((), res)
             else
-                error("Invalid type: $typ")
+                Base.error("Invalid type: $typ")
             end
         end,
     )
@@ -1074,9 +1074,7 @@ end
     @assert fn_name == "comparator" "$comparator: no function generated"
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
-        "$comparator return type is not tensor<i1>"
-    )
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) "$comparator return type is not tensor<i1>"
 
     comparator = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
@@ -1495,7 +1493,7 @@ julia> Reactant.@jit(
     end
 
     if isnothing(fn)
-        error("hlo_call: could not find function $func_name in the provided module")
+        Base.error("hlo_call: could not find function $func_name in the provided module")
     end
 
     ftype_attr = MLIR.IR.attr(fn, "function_type")
@@ -1774,7 +1772,7 @@ end
                 end
             end
             if isnothing(path)
-                error("if_condition: could not find path for linear arg $i")
+                Base.error("if_condition: could not find path for linear arg $i")
             end
             Reactant.TracedUtils.set_mlir_data!(
                 arg,
@@ -1837,7 +1835,7 @@ end
                 end
             end
             if isnothing(path)
-                error("if_condition: could not find path for linear arg $i")
+                Base.error("if_condition: could not find path for linear arg $i")
             end
             Reactant.TracedUtils.set_mlir_data!(
                 arg,
@@ -2063,7 +2061,7 @@ end
 
     corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr
         if fr isa MissingTracedValue && tr isa MissingTracedValue
-            error("Both false and true branches are missing")
+            Base.error("Both false and true branches are missing")
         elseif fr isa MissingTracedValue
             return tr
         else
@@ -2088,7 +2086,7 @@ end
                 end
             end
             if isnothing(argpath)
-                error("if_condition: could not find path for resarg $path")
+                Base.error("if_condition: could not find path for resarg $path")
             end
             Reactant.TracedUtils.set!(args, argpath, MLIR.IR.result(if_compiled, residx))
         end
@@ -2311,6 +2309,25 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     else
         return TracedRArray{unwrapped_eltype(input)}(resharded_value)
     end
+end
+
+@noinline function throw(
+    msg::String,
+    value::Union{TracedRNumber{Bool},Nothing}=nothing;
+    location=mlir_stacktrace("throw", @__FILE__, @__LINE__),
+)
+    value === nothing &&
+        (value = Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, true))
+
+    return stablehlo.custom_call(
+        MLIR.IR.Value[value.mlir_data];
+        result_0=MLIR.IR.Type[],
+        has_side_effect=true,
+        call_target_name="throw",
+        backend_config=MLIR.IR.Attribute(Dict("error_message" => MLIR.IR.Attribute(msg))),
+        api_version=MLIR.IR.Attribute(Int32(4)),
+        location,
+    )
 end
 
 end # module Ops
