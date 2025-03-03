@@ -1071,3 +1071,35 @@ end
 
     @test Reactant.@jit(f_multiple_hlo_calls(x_reactant, y_reactant))[1] ≈ (x .+ y) .* y
 end
+
+@testset "reduce" begin
+    # stablehlo reduce collapse the dimension so that (1,3) beomces (3, )
+    # while Julia reduce retains (1, 3). The test will fail despite elements being equal
+    function squeeze_dims(r)
+        return dropdims(r,dims=tuple(findall(size(r).==1)...))
+    end
+
+    A = rand(3, 4, 5)
+    A_ra = Reactant.to_rarray(A)
+    init = 2.1 
+    init_ra = @jit Reactant.Ops.constant(init)
+    
+    dims = [2]    
+    r_hlo = @jit Reactant.Ops.reduce(A_ra, init_ra, dims, *)
+    r = reduce(*, A; dims=dims, init=init)
+    @test r_hlo ≈ squeeze_dims(r)
+
+    dims = [1,3]
+    r_hlo = @jit Reactant.Ops.reduce(A_ra, init_ra, dims, +)
+    r = reduce(+, A; dims=dims, init=init)
+    @test r_hlo ≈ squeeze_dims(r)
+
+    dims = [1,2,3]
+    r_hlo = @jit Reactant.Ops.reduce(A_ra, init_ra, dims, +)
+    r = reduce(+, A; dims=dims, init=init)
+    @test r_hlo ≈ squeeze_dims(r)
+
+end
+
+
+

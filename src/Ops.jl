@@ -1483,7 +1483,7 @@ julia> Reactant.@jit(
                     MLIR.IR.Attribute("private"),
                 )
 
-                # Change function name
+                # Change function nane
                 MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
             end
         end
@@ -2311,6 +2311,52 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     else
         return TracedRArray{unwrapped_eltype(input)}(resharded_value)
     end
+end
+
+@noinline function reduce(
+    x::TracedRArray{T},
+    init_values::TracedRNumber{T},
+    dimensions::Vector{Int},
+    fn::Function,
+    location=mlir_stacktrace("reduce", @__FILE__, @__LINE__)
+) where {T}
+    reduced_shape = Tuple(deleteat!(collect(size(x)), dimensions))
+
+    result_type = mlir_type(TracedRArray{T, length(reduced_shape)}, reduced_shape)
+    
+    sample_inputs = [Reactant.ConcretePJRTNumber(T(0)), Reactant.ConcretePJRTNumber(T(0))]
+
+    func =
+        Reactant.TracedUtils.make_mlir_fn(
+            fn,
+            (sample_inputs),
+            (),
+            "reduce_fn";
+            args_in_result=:none,
+            return_dialect=:stablehlo,
+        ).f
+    @assert MLIR.IR.nregions(func) == 1
+    fn_name = String(
+        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+    )
+    @assert fn_name == "reduce_fn"
+    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype = MLIR.IR.Type(ftype_attr)
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(T)) error (
+        "$fn return type is not tensor<i1>"
+    )
+    fn = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(fn, MLIR.IR.region(func, 1))
+    MLIR.IR.rmfromparent!(func)
+    
+    dimensions = MLIR.IR.Attribute(dimensions .- 1) 
+
+    res = MLIR.IR.result(stablehlo.reduce(
+        [x.mlir_data], [init_values.mlir_data];
+        result_0=[result_type], dimensions=dimensions, body=fn, location=location
+    ))
+
+    return TracedRArray{T, length(reduced_shape)}((), res, reduced_shape)
 end
 
 end # module Ops
