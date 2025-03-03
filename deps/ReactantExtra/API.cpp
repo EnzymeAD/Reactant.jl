@@ -3708,3 +3708,22 @@ XLA_FFI_DEFINE_HANDLER(xla_throw_error_handler, xla_throw_error,
 
 XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_throw_error", "Host",
                          xla_throw_error_handler);
+
+#ifdef REACTANT_CUDA
+#include "third_party/gpus/cuda/include/cuda.h"
+
+xla::ffi::Error xla_throw_error(cudaStream_t stream,
+                                xla::ffi::BufferR0<xla::ffi::PRED> cond,
+                                std::string_view message) {
+  return xla_throw_error(cond, message);
+}
+
+XLA_FFI_DEFINE_HANDLER(xla_throw_error_handler_cuda, xla_throw_error,
+                       xla::ffi::Ffi::Bind()
+                           .Ctx<xla::ffi::PlatformStream<CUstream>>()
+                           .Arg<xla::ffi::BufferR0<xla::ffi::PRED>>()
+                           .Attr<std::string_view>("message"));
+
+XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_throw_error", "CUDA",
+                         xla_throw_error_handler_cuda);
+#endif
