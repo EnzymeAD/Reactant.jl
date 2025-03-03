@@ -743,6 +743,20 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "MemRefJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "MemRef.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/MemRef/MemRefOps.td",
+    deps = [
+        "@llvm-project//mlir:MemRefOpsTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
+gentbl_cc_library(
     name = "NvvmIncJLGen",
     tbl_outs = [(
             ["--generator=jl-op-defs", "--disable-module-wrap=0"],
