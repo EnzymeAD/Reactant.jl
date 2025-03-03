@@ -200,7 +200,7 @@ function (sharding::NamedSharding)(
     client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
 )
     @assert length(sharding.partition_spec) == ndims(x)
-    return (convert(HloSharding, sharding))(client, device, x)
+    return HloSharding(sharding, client, device, x)
 end
 
 function get_shardy_tensor_sharding_attribute(
@@ -339,7 +339,9 @@ end
     return ShardInfo{HloSharding{D1,D2},Vector{NTuple{N,UnitRange{Int64}}}}
 end
 
-function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
+# This doesn't account for the size of the input so in-presence of padding this will be
+# incorrect. Hence always use the HloSharding constructor.
+function generate_hlo_sharding_from_tensor_attribute(sharding::NamedSharding)
     if MLIR.IR._has_context()
         ctx = MLIR.IR.context()
     else
@@ -370,14 +372,62 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
     end
 end
 
+function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
+    hlo_sharding = generate_hlo_sharding_from_tensor_attribute(sharding)
+
+    # Check if the input needs to be padded. If so this sharding is not valid and we
+    # need to request the tensor sharding from XLA
+    condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
+    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+        condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
+    )
+
+    if needs_padding
+        # Compile a dummy function to get the tensor sharding
+        tmp = if x isa Number
+            Reactant.ConcretePJRTNumber(zero(eltype(x)))
+        else
+            Reactant.ConcretePJRTArray(ones(eltype(x), size(x)...))
+        end
+        _, exec, _, _, _ = Reactant.Compiler.compile_xla(
+            Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
+        )
+        xla_hlo_sharding = convert(
+            Reactant.XLA.HloSharding, only(Reactant.XLA.get_parameter_shardings(exec))
+        )
+        hlo_sharding = HloSharding(
+            xla_hlo_sharding,
+            hlo_sharding.mesh,
+            hlo_sharding.is_closed,
+            hlo_sharding.priority,
+        )
+
+        condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
+        device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+            condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
+        )
+    end
+
+    data = ntuple(length(hlo_sharding.mesh)) do i
+        XLA.PJRT.AsyncBuffer(
+            client,
+            x[device_to_array_slices[i]...],
+            XLA.get_device(client, hlo_sharding.mesh.device_ids[i]),
+        )
+    end
+
+    return data, ShardInfo(hlo_sharding, device_to_array_slices)
+end
+
 function (sharding::HloSharding)(
     client::XLA.PJRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
     condensed_op_sharding = convert(XLA.CondensedOpSharding, sharding.hlo_sharding)
 
-    device_to_array_slices = XLA.sharding_to_concrete_array_indices(
+    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
         condensed_op_sharding, size(x), sharding.mesh.logical_device_ids
     )
+    @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl"
 
     data = ntuple(length(sharding.mesh)) do i
         XLA.PJRT.AsyncBuffer(

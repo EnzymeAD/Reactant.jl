@@ -48,7 +48,7 @@ function Array(client::Client, array::Base.Array{T,N}, sharding::Sharding) where
     end
 
     all_devices = XLA.devices(sharding)
-    array_slices = XLA.sharding_to_concrete_array_indices(
+    array_slices, _ = XLA.sharding_to_concrete_array_indices(
         convert(XLA.HloSharding, sharding),
         size(array),
         collect(Int64, 0:(length(all_devices) - 1)),
@@ -159,7 +159,7 @@ function XLA.to_host(buffer::Array, data)
     # avoid the complexity of supporting that for now.
     single_device_arrays = disassemble_into_single_device_arrays(buffer, true)
 
-    array_slices = XLA.sharding_to_concrete_array_indices(
+    array_slices, _ = XLA.sharding_to_concrete_array_indices(
         convert(XLA.HloSharding, sharding),
         size(data),
         collect(Int64, 0:(length(all_devices) - 1)),
