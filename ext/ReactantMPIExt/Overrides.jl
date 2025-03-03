@@ -1,3 +1,5 @@
+using Reactant: @reactant_overlay, TracedRArray, TracedRNumber
+
 @reactant_overlay @noinline function MPI.Init(; kwargs...)
     if !isempty(kwargs)
         @warn "Ignoring MPI.Init kwargs when tracing over MPI..." kwargs...
@@ -30,30 +32,35 @@ function MPI.Wait(req::TracedRequest)
 end
 
 # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
-function MPI.Send(buf::TracedRArray, dest::Number, tag::Number, comm::MPI.Comm)
+function MPI.Send(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
+    tag = Reactant.Ops.constant(tag)
+    dest = Reactant.Ops.constant(dest)
+    return MPI.Send(buf, dest, tag, comm)
+end
+
+# TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+function MPI.Send(
+    buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
+)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-
-    tag = if !(tag isa TracedRNumber)
-        Ops.constant(tag)
-    end
-
-    dest = if !(dest isa TracedRNumber)
-        Ops.constant(dest)
-    end
-
     return Ops.send(buf, tag, dest)
 end
 
 # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
-function MPI.Isend(buf::TracedRArray, dest::Number, tag::Number, comm::MPI.Comm)
+function MPI.Isend(
+    buf::TracedRArray,
+    dest::Union{T,TracedRNumber{T}},
+    tag::Union{T,TracedRNumber{T}},
+    comm::MPI.Comm,
+) where {T<:Integer}
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
 
     tag = if !(tag isa TracedRNumber)
-        Ops.constant(tag)
+        Reactant.Ops.constant(tag)
     end
 
     dest = if !(dest isa TracedRNumber)
-        Ops.constant(dest)
+        Reactant.Ops.constant(dest)
     end
 
     return Ops.isend(buf, tag, dest)
@@ -76,35 +83,35 @@ function MPI.Recv!(
     @assert isnothing(status) "Status not supported yet"
 
     tag = if !(tag isa TracedRNumber)
-        Ops.constant(tag)
+        Reactant.Ops.constant(tag)
     end
 
     source = if !(source isa TracedRNumber)
-        Ops.constant(source)
+        Reactant.Ops.constant(source)
     end
 
     return Ops.recv(recvbuf, tag, source)
 end
 
 # TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
-function MPI.IRecv!(recvbuf::TracedRArray, source::Number, tag::Number, comm::MPI.Comm)
+function MPI.Irecv!(recvbuf::TracedRArray, source::Number, tag::Number, comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
 
     tag = if !(tag isa TracedRNumber)
-        Ops.constant(tag)
+        Reactant.Ops.constant(tag)
     end
 
     source = if !(source isa TracedRNumber)
-        Ops.constant(source)
+        Reactant.Ops.constant(source)
     end
 
     return Ops.irecv!(recvbuf, tag, source)
 end
 
-function MPI.IRecv!(
+function MPI.Irecv!(
     recvbuf::TracedRArray, source::Number, tag::Number, comm::MPI.Comm, req::TracedRequest
 )
-    gen_req = MPI.IRecv!(recvbuf, source, tag, comm)
+    gen_req = MPI.Irecv!(recvbuf, source, tag, comm)
     req.mlir_data = gen_req.mlir_data
     return req
 end
