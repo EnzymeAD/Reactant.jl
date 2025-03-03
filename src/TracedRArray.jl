@@ -787,8 +787,10 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
     end
 end
 
-Base.all(f::Function, x::AnyTracedRArray) = mapreduce(f, &, x)
-Base.any(f::Function, x::AnyTracedRArray) = mapreduce(f, |, x)
+Base._all(f, x::AnyTracedRArray, dims) = mapreduce(f, &, x; dims)
+Base._all(f, x::AnyTracedRArray, dims::Colon) = mapreduce(f, &, x; dims)
+Base._any(f, x::AnyTracedRArray, dims) = mapreduce(f, |, x; dims)
+Base._any(f, x::AnyTracedRArray, dims::Colon) = mapreduce(f, |, x; dims)
 
 # outer repeat
 function Base._RepeatInnerOuter.repeat_outer(
