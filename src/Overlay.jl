@@ -154,8 +154,16 @@ end
 ## fixes #493
 @reactant_overlay @noinline function Base._unique_dims(A::AbstractArray, dims::Colon)
     if use_overlayed_version(A)
-        error("Reactant doesn't have a `Base._unique_dims` with the current interpreter.")
+        Base.inferencebarrier(error)(
+            "Reactant doesn't have a `Base._unique_dims` with the current interpreter."
+        )
     else
         Base.inferencebarrier(Base._unique_dims)(A, dims)
     end
+end
+
+## `Base.error` --> `Ops.throw`
+## XXX: `throw` is a Core method. Can it be overlayed?
+@reactant_overlay @noinline function Base.error(msg::String)
+    return Ops.throw(msg)
 end
