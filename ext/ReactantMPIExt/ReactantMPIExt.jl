@@ -1,8 +1,9 @@
 module ReactantMPIExt
 
 using Reactant
-using Reactant: Reactant, Distributed
+using Reactant: Reactant, Distributed, MLIR
 using MPI: MPI
+using Libdl
 
 # https://github.com/jax-ml/jax/blob/b0117366686ab084d38ad2657d9a2ae3a581ca7e/jax/_src/clusters/mpi4py_cluster.py
 Distributed.is_env_present(::Distributed.MPIEnvDetector) = MPI.Initialized()
@@ -35,21 +36,24 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
+    # TODO maybe it's more efficient if we use `RTLD_NOW` instead of `RTLD_LAZY`?
+    libmpi_handle = Libdl.dlopen(MPI.API.libmpi, RTLD_LAZY | RTLD_GLOBAL)
+
     # register MPI routines
     for name in [
-        "MPI_Init",
-        "MPI_Finalize",
-        "MPI_Comm_rank",
-        "MPI_Comm_size",
-        "MPI_Send",
-        "MPI_Recv",
-        "MPI_Isend",
-        "MPI_Irecv",
-        "MPI_Barrier",
-        "MPI_Wait",
-        "MPI_Request_free",
+        :MPI_Init,
+        :MPI_Finalize,
+        :MPI_Comm_rank,
+        :MPI_Comm_size,
+        :MPI_Send,
+        :MPI_Recv,
+        :MPI_Isend,
+        :MPI_Irecv,
+        :MPI_Barrier,
+        :MPI_Wait,
+        :MPI_Request_free,
     ]
-        sym = Libdl.dlsym(MPI.API.libmpi, name)
+        sym = Libdl.dlsym(libmpi_handle, name)
         @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
     end
 
@@ -81,14 +85,14 @@ function __init__()
         :MPI_LONG_DOUBLE_INT,
         :MPI_LONG_INT,
         :MPI_SHORT_INT,
-        :MPI_2INT,
+        # :MPI_2INT,
         :MPI_UB,
         :MPI_LB,
         :MPI_WCHAR,
         :MPI_LONG_LONG_INT,
         :MPI_UNSIGNED_LONG_LONG,
-        :MPI_2COMPLEX,
-        :MPI_2DOUBLE_COMPLEX,
+        # :MPI_2COMPLEX,
+        # :MPI_2DOUBLE_COMPLEX,
         :MPI_INT8_T,
         :MPI_UINT8_T,
         :MPI_INT16_T,
@@ -102,7 +106,7 @@ function __init__()
         :MPI_C_BOOL,
         :MPI_C_FLOAT_COMPLEX,
         :MPI_C_DOUBLE_COMPLEX,
-        :MPI_C_LONG_DOUBLE_COMPLEX,
+        # :MPI_C_LONG_DOUBLE_COMPLEX,
         :MPI_COUNT,
         # ops
         :MPI_OP_NULL,
@@ -180,38 +184,41 @@ function __init__()
         :MPI_ERR_UNSUPPORTED_DATAREP,
         :MPI_ERR_UNSUPPORTED_OPERATION,
         :MPI_ERR_WIN,
-        :MPI_T_ERR_MEMORY,
-        :MPI_T_ERR_NOT_INITIALIZED,
-        :MPI_T_ERR_CANNOT_INIT,
-        :MPI_T_ERR_INVALID_INDEX,
-        :MPI_T_ERR_INVALID_ITEM,
-        :MPI_T_ERR_INVALID_HANDLE,
-        :MPI_T_ERR_OUT_OF_HANDLES,
-        :MPI_T_ERR_OUT_OF_SESSIONS,
-        :MPI_T_ERR_INVALID_SESSION,
-        :MPI_T_ERR_CVAR_SET_NOT_NOW,
-        :MPI_T_ERR_CVAR_SET_NEVER,
-        :MPI_T_ERR_PVAR_NO_STARTSTOP,
-        :MPI_T_ERR_PVAR_NO_WRITE,
-        :MPI_T_ERR_PVAR_NO_ATOMIC,
+        # :MPI_T_ERR_MEMORY,
+        # :MPI_T_ERR_NOT_INITIALIZED,
+        # :MPI_T_ERR_CANNOT_INIT,
+        # :MPI_T_ERR_INVALID_INDEX,
+        # :MPI_T_ERR_INVALID_ITEM,
+        # :MPI_T_ERR_INVALID_HANDLE,
+        # :MPI_T_ERR_OUT_OF_HANDLES,
+        # :MPI_T_ERR_OUT_OF_SESSIONS,
+        # :MPI_T_ERR_INVALID_SESSION,
+        # :MPI_T_ERR_CVAR_SET_NOT_NOW,
+        # :MPI_T_ERR_CVAR_SET_NEVER,
+        # :MPI_T_ERR_PVAR_NO_STARTSTOP,
+        # :MPI_T_ERR_PVAR_NO_WRITE,
+        # :MPI_T_ERR_PVAR_NO_ATOMIC,
         :MPI_ERR_RMA_RANGE,
         :MPI_ERR_RMA_ATTACH,
         :MPI_ERR_RMA_FLAVOR,
         :MPI_ERR_RMA_SHARED,
-        :MPI_T_ERR_INVALID,
-        :MPI_T_ERR_INVALID_NAME,
-        :MPI_ERR_PROC_ABORTED,
-        :MPI_ERR_PROC_FAILED,
-        :MPI_ERR_PROC_FAILED_PENDING,
-        :MPI_ERR_REVOKED,
+        # :MPI_T_ERR_INVALID,
+        # :MPI_T_ERR_INVALID_NAME,
+        # :MPI_ERR_PROC_ABORTED,
+        # :MPI_ERR_PROC_FAILED,
+        # :MPI_ERR_PROC_FAILED_PENDING,
+        # :MPI_ERR_REVOKED,
     ]
         value = getproperty(MPI.API, name)
+        if value isa Base.RefValue
+            value = value[]
+        end
         @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, value::Cint)::Cvoid
     end
 end
 
 struct TracedRequest <: MPI.AbstractRequest
-    mlir_data::Union{Nothing,MLIR.IR.Value}
+    mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
 end
 
 include("Ops.jl")
