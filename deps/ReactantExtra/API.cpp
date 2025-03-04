@@ -1040,6 +1040,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::stablehlo::StablehloDialect>();
   context.loadDialect<mlir::chlo::ChloDialect>();
   context.loadDialect<mlir::sdy::SdyDialect>();
+  context.loadDialect<mlir::LLVM::LLVMDialect>();
 }
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
