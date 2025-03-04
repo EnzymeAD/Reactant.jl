@@ -56,6 +56,7 @@ function comm_rank(world; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @
     value_out = Reactant.Ops.constant(fill(Cint(-1)))
     inputs = IR.Value[world.mlir_data, value_out.mlir_data]
 
+    # TODO output_operand_aliases
     res = IR.result(
         enzymexla.jit_call(inputs; fn=sym_attr, result_0=signature, location), 2
     )
