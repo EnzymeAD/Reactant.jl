@@ -40,6 +40,7 @@ if do_gpu_list
 end
 
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
+const REACTANT_XLA_RUNTIME = lowercase(get(ENV, "REACTANT_XLA_RUNTIME", "PJRT"))
 
 @testset "Reactant.jl Tests" begin
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
@@ -63,8 +64,12 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         end
         @safetestset "Sharding" include("sharding.jl")
 
-        @testset "IFRT" begin
-            @safetestset "IFRT Low-Level API" include("ifrt/low_level.jl")
+        # These tests are only special tests, hence no need to run them when we are already
+        # testing with IFRT above
+        if REACTANT_XLA_RUNTIME == "pjrt"
+            @testset "IFRT" begin
+                @safetestset "IFRT Low-Level API" include("ifrt/low_level.jl")
+            end
         end
     end
 

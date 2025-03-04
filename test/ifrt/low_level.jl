@@ -1,6 +1,6 @@
 # Testing manual IFRT buffer creation + compilation + execution
 using Reactant, Test
-using Reactant: XLA
+using Reactant: XLA, ConcretePJRTArray
 using Reactant.XLA: IFRT
 
 fn_test1(x, y) = x .+ y
@@ -24,8 +24,8 @@ fn_test3(x, y) = x .+ y' .- x
         error("Unsupported platform: $(platform_name)")
     end
 
-    pjrt_x = ConcreteRArray(x) # XXX: Rename to ConcretePJRTArray
-    pjrt_y = ConcreteRArray(y) # XXX: Rename to ConcretePJRTArray
+    pjrt_x = ConcretePJRTArray(x)
+    pjrt_y = ConcretePJRTArray(y)
 
     ifrt_x = IFRT.Array(ifrt_client, x) # XXX: Use ConcreteIFRTArray once ready
     ifrt_y = IFRT.Array(ifrt_client, y) # XXX: Use ConcreteIFRTArray once ready
