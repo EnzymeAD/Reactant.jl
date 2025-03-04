@@ -857,6 +857,7 @@ function make_tracer(
                     mode;
                     track_numbers,
                     sharding=Base.getproperty(sharding, i),
+                    runtime,
                     kwargs...,
                 )
                 if xi !== xi2
@@ -893,6 +894,7 @@ function make_tracer(
                 mode;
                 track_numbers,
                 sharding=Base.getproperty(sharding, i),
+                runtime,
                 kwargs...,
             )
             if xi !== xi2
