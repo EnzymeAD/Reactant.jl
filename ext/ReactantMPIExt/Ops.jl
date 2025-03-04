@@ -65,11 +65,45 @@ end
 
 # TODO emit wrapper if not found
 function comm_size(; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__))
-    inputs = IR.Value[]
-    sym = IR.FlatSymbolRefAttribute("enzymexla_wrapper_MPI_Comm_size")
-    rettype = [IR.TensorType(Int[], IR.Type(Cint))]
+    sym_name = "enzymexla_wrapper_MPI_Comm_size"
+    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    res = IR.result(enzymexla.jit_call(inputs; fn=sym, result_0=rettype, location))
+    tensor_int_type = IR.TensorType(Int[], IR.Type(Cint))
+    signature = IR.Type[tensor_int_type, tensor_int_type]
+
+    current_module = IR.mmodule()
+    fn = IR.lookup(IR.SymbolTable(IR.Operation(current_module)), sym_name)
+
+    if isnothing(fn)
+        top_level_block = MLIR.IR.body(current_module)
+        #! format: off
+        code = parse(IR.Module, """
+            module {
+                llvm.func @MPI_Comm_size(i32, !llvm.ptr) -> i32
+                func.func @$sym_name(%world_ptr : !llvm.ptr, %size_ptr : !llvm.ptr) -> () {
+                    %world = llvm.load %world_ptr : !llvm.ptr -> i32
+                    %status = llvm.call @MPI_Comm_size(%world, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
+                    func.return
+                }
+            }
+        """) |> IR.body
+        #! format: on
+
+        # using `collect` because if we remove the op, then the `OperationIterator` state is broken and skips ops
+        for op in collect(IR.OperationIterator(code))
+            IR.rmfromparent!(op)
+            push!(top_level_block, op)
+        end
+    end
+
+    world = Reactant.Ops.constant(Base.unsafe_convert(Cint, world))
+    value_out = Reactant.Ops.constant(fill(Cint(-1)))
+    inputs = IR.Value[world.mlir_data, value_out.mlir_data]
+
+    # TODO output_operand_aliases
+    res = IR.result(
+        enzymexla.jit_call(inputs; fn=sym_attr, result_0=signature, location), 2
+    )
     return TracedRNumber{Cint}((), res)
 end
 
