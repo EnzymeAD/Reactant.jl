@@ -19,6 +19,17 @@ end
 Base.:(==)(op::Operation, other::Operation) = API.mlirOperationEqual(op, other)
 
 """
+    parse(::Type{Operation}, code; context=context())
+
+Parses an operation from the string and transfers ownership to the caller.
+"""
+Base.parse(::Core.Type{Operation}, code; context::Context=context()) = Operation(
+    @ccall API.mlir_c.mlirOperationParse(
+        context::API.MlirContext, code::API.MlirStringRef
+    )::API.MlirOperation
+)
+
+"""
     copy(op)
 
 Creates a deep copy of an operation. The operation is not inserted and ownership is transferred to the caller.
