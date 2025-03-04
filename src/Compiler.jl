@@ -1314,10 +1314,23 @@ function codegen_unflatten!(
     path_to_shard_info,
     linear_result_shard_info,
     sharding_mesh,
+    client,
 )
     cache_dict = gensym("cache_dict")
     has_cache_dict = false
     unflatten_code = Expr[]
+
+    runtime = XLA.runtime(client)
+    if runtime isa Val{:PJRT}
+        numtype = ConcretePJRTNumber
+        arrtype = ConcretePJRTArray
+    elseif runtime isa Val{:IFRT}
+        numtype = ConcreteIFRTNumber
+        arrtype = ConcreteIFRTArray
+    else
+        error("Unsupported runtime $runtime")
+    end
+    ctypes = Union{arrtype,numtype}
 
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result, shard_info) in
@@ -1354,20 +1367,19 @@ function codegen_unflatten!(
                         push!(
                             unflatten_code,
                             :(
-                                $cache_dict = $(IdDict{
-                                    Union{TracedRArray,TracedRNumber},
-                                    Union{ConcretePJRTArray,ConcretePJRTNumber},
-                                }())
+                                $cache_dict =
+                                    $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())
                             ),
                         )
                     end
                     unflatcode = quote
+                        # XXX: we might need to handle sharding here
                         $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
                         if $final_val isa TracedRArray
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcretePJRTArray{
+                                $cache_dict[$final_val] = $(arrtype){
                                     $(Reactant.unwrapped_eltype)($final_val),
                                     ndims($final_val),
                                 }(
@@ -1380,7 +1392,7 @@ function codegen_unflatten!(
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcretePJRTNumber{
+                                $cache_dict[$final_val] = $(numtype){
                                     $(Reactant.unwrapped_eltype)($final_val)
                                 }(
                                     $concrete_res_name
@@ -1705,6 +1717,7 @@ function compile(f, args; sync=false, kwargs...)
         path_to_shard_info,
         linear_result_shard_info,
         mlir_fn_res.sharding_mesh,
+        client,
     )
 
     sync_call = if sync

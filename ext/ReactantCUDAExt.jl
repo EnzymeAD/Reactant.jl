@@ -1207,7 +1207,15 @@ end
 @static if !Sys.isapple()
     Reactant.PrecompileTools.@setup_workload begin
         Reactant.initialize_dialect()
-        client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+
+        if Reactant.XLA.runtime() isa Val{:PJRT}
+            client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+        elseif Reactant.XLA.runtime() isa Val{:IFRT}
+            client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
+        else
+            error("Unsupported runtime: $(Reactant.XLA.runtime())")
+        end
+
         Reactant.PrecompileTools.@compile_workload begin
             @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
                 function square_kernel!(x)
@@ -1220,10 +1228,11 @@ end
                     CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
                     return nothing
                 end
-                y = Reactant.ConcretePJRTArray([2.0]; client)
+                y = Reactant.ConcreteRArray([2.0]; client)
                 Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
             end
         end
+
         Reactant.XLA.free_client(client)
         client.client = C_NULL
         Reactant.deinitialize_dialect()
