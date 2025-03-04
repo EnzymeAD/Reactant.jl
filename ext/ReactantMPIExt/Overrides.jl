@@ -23,7 +23,7 @@ end
 
 @reactant_overlay @noinline function MPI.Barrier(comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.barrier()
+    return Ops.barrier(comm)
 end
 
 # TODO status not supported yet
