@@ -1230,22 +1230,22 @@ function codegen_flatten!(
             flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
         end
 
-        if is_sharded
-            carg = inv_seen_args[arg]
+        if runtime isa Val{:PJRT}
+            if is_sharded
+                carg = inv_seen_args[arg]
 
-            condensed_op_sharding = convert(
-                Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
-            )
-            if Reactant.Sharding.is_sharded(carg)
-                arg_condensed_op_sharding = convert(
-                    Reactant.Sharding.XLA.CondensedOpSharding,
-                    carg.sharding.sharding.hlo_sharding,
+                condensed_op_sharding = convert(
+                    Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
                 )
-                # Check if the sharding provided is same as the one we have
-                @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                if Reactant.Sharding.is_sharded(carg)
+                    arg_condensed_op_sharding = convert(
+                        Reactant.Sharding.XLA.CondensedOpSharding,
+                        carg.sharding.sharding.hlo_sharding,
+                    )
+                    # Check if the sharding provided is same as the one we have
+                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 
-                push!(flatten_code, :($usbuf = $flatcode.data))
-                if runtime isa Val{:PJRT}
+                    push!(flatten_code, :($usbuf = $flatcode.data))
                     for j in 1:length(mesh)
                         sbuf = Symbol(:sbuf_, i, "_", mesh.logical_device_ids[j])
                         push!(flatten_names, sbuf)
@@ -1254,48 +1254,44 @@ function codegen_flatten!(
                         )
                     end
                 else
-                    sbuf = Symbol(:sbuf_, i)
-                    push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+                    push!(flatten_code, :($usbuf = $flatcode))
+                    device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
+                        condensed_op_sharding, size(carg), mesh.logical_device_ids
+                    )
+                    for j in 1:length(mesh)
+                        device_id = mesh.logical_device_ids[j]
+                        buf = Symbol(:buf_, i, :_, device_id)
+                        slice = device_to_array_slices[j]
+                        push!(
+                            flatten_code,
+                            :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
+                        )
+                        sbuf = Symbol(:s, buf)
+                        device = XLA.get_device(client, device_id)
+                        push!(flatten_names, sbuf)
+                        push!(
+                            flatten_code,
+                            :($sbuf = XLA.copy_buffer_to_device($buf, $device)),
+                        )
+                    end
                 end
             else
-                if runtime isa Val{:IFRT}
-                    error("TODO: implement sharding for IFRT")
-                end
-
-                push!(flatten_code, :($usbuf = $flatcode))
-                device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
-                    condensed_op_sharding, size(carg), mesh.logical_device_ids
-                )
-                for j in 1:length(mesh)
-                    device_id = mesh.logical_device_ids[j]
-                    buf = Symbol(:buf_, i, :_, device_id)
-                    slice = device_to_array_slices[j]
-                    push!(
-                        flatten_code,
-                        :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
-                    )
-                    sbuf = Symbol(:s, buf)
-                    device = XLA.get_device(client, device_id)
-                    push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
+                push!(flatten_code, :($usbuf = $flatcode.data))
+                sbuf = Symbol(:sbuf_, i)
+                push!(flatten_names, sbuf)
+                if arg isa TracedRArray || arg isa TracedRNumber
+                    push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+                else
+                    error("Unsupported type $(typeof(arg))")
                 end
             end
-        else
+        elseif runtime isa Val{:IFRT}
             push!(flatten_code, :($usbuf = $flatcode.data))
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
-            if arg isa TracedRArray || arg isa TracedRNumber
-                if runtime isa Val{:PJRT}
-                    push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
-                elseif runtime isa Val{:IFRT}
-                    push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
-                else
-                    error("Unsupported runtime $runtime")
-                end
-            else
-                error("Unsupported type $(typeof(arg))")
-            end
+            push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+        else
+            error("Unsupported runtime $runtime")
         end
     end
 

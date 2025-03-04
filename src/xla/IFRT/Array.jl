@@ -137,7 +137,11 @@ function XLA.buffer_on_cpu(::Array)
     return error("IFRT.Array does not support `XLA.buffer_on_cpu`")
 end
 
-function XLA.to_host(buffer::Array, data)
+function XLA.to_host(buffer::Array, data, reactant_sharding)
+    if reactant_sharding isa Reactant.Sharding.ShardInfo
+        reactant_sharding = reactant_sharding.sharding
+    end
+
     sharding = XLA.sharding(buffer)
     all_devices = XLA.devices(sharding)
 
@@ -150,65 +154,38 @@ function XLA.to_host(buffer::Array, data)
         return nothing
     end
 
+    @assert reactant_sharding isa Reactant.Sharding.HloSharding
+
     # We compile a function that replicates the data to all devices
-    mesh = Reactant.Sharding.Mesh(vec(all_devices), (:x,))
-    sharding_constraint = Reactant.Sharding.NamedSharding(
-        mesh, ntuple(Returns(nothing), ndims(data))
-    )
-
-    fn_compiled = Reactant.compile((data,)) do x
-        return Reactant.Ops.sharding_constraint(x, sharding_constraint)
-    end
-    copied_data = fn_compiled(data)
-    wait(copied_data)
-    synced_buffer = XLA.synced_buffer(copied_data.data)
-
-    error(1)
-    single_device_arrays = disassemble_into_single_device_arrays(synced_buffer, true)
-
-    @show single_device_arrays[1]
-
-    # GC.@preserve synced_buffer data begin
-    #     @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
-    #         synced_buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
-    #     )::Cvoid
-    # end
-
-    # @show data
-
-    # sleep(10)
-
-    # return nothing
-    error(1)
-
-    if any(!XLA.is_addressable, all_devices)
-        @warn "Not all devices are addressable. Currently we only fill in the data for \
-               addressable devices. Remaining slices of data in `data` are left \
-               untouched."
-    end
-
-    # While some client implementations might support directly copying to host, but we 
-    # avoid the complexity of supporting that for now.
-    single_device_arrays = disassemble_into_single_device_arrays(buffer, true)
-
     array_slices, _ = XLA.sharding_to_concrete_array_indices(
-        convert(XLA.HloSharding, sharding),
+        convert(XLA.CondensedOpSharding, reactant_sharding.hlo_sharding),
         size(data),
         collect(Int64, 0:(length(all_devices) - 1)),
     )
-    array_slices = [
-        slice for
-        (device, slice) in zip(all_devices, array_slices) if XLA.is_addressable(device)
-    ]
 
-    @assert length(array_slices) == length(single_device_arrays)
+    concrete_ifrt_array = Reactant.ConcreteIFRTArray{
+        eltype(data),
+        ndims(data),
+        Reactant.Sharding.ShardInfo{typeof(reactant_sharding),typeof(array_slices)},
+    }(
+        AsyncArray(buffer, nothing),
+        size(data),
+        Reactant.Sharding.ShardInfo(reactant_sharding, array_slices),
+    )
 
-    for (slice, arr) in zip(array_slices, single_device_arrays)
-        data_slice = data[slice...]
-        XLA.to_host(arr, data_slice)
-        data[slice...] .= data_slice
+    sharding_constraint = Reactant.Sharding.NamedSharding(
+        reactant_sharding.mesh, ntuple(Returns(nothing), ndims(data))
+    )
+
+    fn_compiled = Reactant.compile((concrete_ifrt_array,)) do x
+        return Reactant.Ops.sharding_constraint(x, sharding_constraint)
     end
-    return nothing
+    copied_data = fn_compiled(concrete_ifrt_array)
+
+    single_device_arrays = disassemble_into_single_device_arrays(
+        XLA.synced_buffer(copied_data.data), true
+    )
+    return XLA.to_host(single_device_arrays[2], data, reactant_sharding)
 end
 
 function disassemble_into_single_device_arrays(array::Array, only_addressable_devices::Bool)
