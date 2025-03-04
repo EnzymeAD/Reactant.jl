@@ -749,7 +749,7 @@ gentbl_cc_library(
             "MemRef.jl"
         )
     ],
-    td_file = "@llvm-project//mlir:include/mlir/Dialect/MemRef/MemRefOps.td",
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/MemRef/IR/MemRefOps.td",
     deps = [
         "@llvm-project//mlir:MemRefOpsTdFiles",
     ],
