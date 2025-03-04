@@ -83,9 +83,11 @@ end
 
 function Base.convert(::Type{<:Array}, X::ConcreteIFRTArray{T,N}) where {T,N}
     buf = XLA.synced_buffer(X.data)
+    data = zeros(T, size(X)...)
     GC.@preserve buf begin
-        return convert(Array{T}, buf)
+        XLA.to_host(buf, data, X.sharding)
     end
+    return data
 end
 
 function Base.convert(
@@ -113,7 +115,7 @@ function to_number(X::ConcretePJRTScalar{T}) where {T}
     wait(X)
     buf = get_buffer(X; no_error_for_scalar=true)
     GC.@preserve data buf begin
-        XLA.to_host(buf, data)
+        XLA.to_host(buf, data, X.sharding)
     end
     return data[]
 end
@@ -123,7 +125,7 @@ function to_number(X::ConcreteIFRTScalar{T}) where {T}
     wait(X)
     buf = XLA.synced_buffer(X.data)
     GC.@preserve data buf begin
-        XLA.to_host(buf, data)
+        XLA.to_host(buf, data, X.sharding)
     end
     return data[]
 end

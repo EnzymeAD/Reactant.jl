@@ -145,7 +145,6 @@ for runtime in (:PJRT, :IFRT)
     @eval function initialize_default_clients!(state::$(Symbol(runtime, :BackendState)))
         was_initialized = state.initialized
         state.initialized = true
-        @show state
         distributed_runtime_client = if global_state.num_processes > 1
             @assert global_state.client !== nothing
             global_state.client

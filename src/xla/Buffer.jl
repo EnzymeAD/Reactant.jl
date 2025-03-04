@@ -11,7 +11,7 @@ Base.convert(::Type{Array}, buffer::AbstractBuffer) = convert(Array{eltype(buffe
 
 function Base.convert(::Type{<:Array{T}}, buffer::AbstractBuffer) where {T}
     arr = zeros(T, reverse(size(buffer))...)
-    XLA.to_host(buffer, arr)
+    XLA.to_host(buffer, arr, XLA.sharding(buffer))
     return arr
 end
 
