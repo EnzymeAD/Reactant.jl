@@ -1,7 +1,7 @@
 steps:
   - group: ":test_tube: Tests"
     steps:
-      - label: ":julia: :linux: CUDA Julia v{{matrix.version}} -- {{matrix.group}}"
+      - label: ":julia: :linux: CUDA Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
         matrix:
           setup:
             version:
@@ -10,6 +10,9 @@ steps:
               - core
               - neural_networks
               - integration
+            runtime:
+              - "PJRT"
+              - "IFRT"
         plugins:
           - JuliaCI/julia#v1:
               version: "{{matrix.version}}"
@@ -33,6 +36,7 @@ steps:
         env:
           REACTANT_TEST_GROUP: "{{matrix.group}}"
           CUDA_VISIBLE_DEVICES: 0
+          REACTANT_XLA_RUNTIME: "{{matrix.runtime}}"
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 120
 

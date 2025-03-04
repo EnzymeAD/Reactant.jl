@@ -309,7 +309,11 @@ end
 
     res = @jit write_with_broadcast1!(x_ra, y_ra)
 
-    @test res.data[1] === x_ra.data[1]
+    if res.data isa Tuple
+        @test res.data[1] === x_ra.data[1]
+    else
+        @test res.data === x_ra.data
+    end
 
     res = Array(res)
     y = Array(y_ra)
@@ -320,7 +324,11 @@ end
 
     res = @jit write_with_broadcast2!(x_ra, y_ra)
 
-    @test res.data[1] === x_ra.data[1]
+    if res.data isa Tuple
+        @test res.data[1] === x_ra.data[1]
+    else
+        @test res.data === x_ra.data
+    end
 
     res = Array(res)
     y = Array(y_ra)

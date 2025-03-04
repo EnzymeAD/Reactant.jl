@@ -1051,18 +1051,19 @@ end
         @assert 0 < dimension <= ndims(x) "$x invalid dimension"
     end
 
-    sample_inputs = Vector{Reactant.ConcretePJRTNumber}(undef, length(xs) * 2)
+    sample_inputs = Vector{TracedRNumber}(undef, length(xs) * 2)
     for i in eachindex(xs)
         T = Reactant.unwrapped_eltype(xs[i])
-        sample_inputs[2i - 1] = Reactant.ConcretePJRTNumber(T(0))
-        sample_inputs[2i] = Reactant.ConcretePJRTNumber(T(0))
+        sample_inputs[2i - 1] = Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0)
+        sample_inputs[2i] = Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0)
     end
     func =
         Reactant.TracedUtils.make_mlir_fn(
             comparator,
             (sample_inputs...,),
             (),
-            "comparator";
+            "comparator",
+            false;
             args_in_result=:none,
             return_dialect=:stablehlo,
         ).f

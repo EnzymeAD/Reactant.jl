@@ -78,12 +78,11 @@ end
     @testset "MockTensor" begin
         @testset "immutable" begin
             x = MockTensor(rand(4, 4), [:i, :j])
-            x2 = MockTensor(ConcretePJRTArray(parent(x)), x.inds)
+            x2 = MockTensor(Reactant.to_rarray(parent(x)), x.inds)
 
             y = @jit(bcast_cos(x2))
 
-            @test y isa
-                MockTensor{Float64,2,ConcretePJRTArray{Float64,2,1,Sharding.NoShardInfo}}
+            @test y isa MockTensor{Float64,2,<:ConcreteRArray{Float64,2}}
             @test size(y) == (4, 4)
             @test isapprox(parent(y), bcast_cos(parent(x)))
             @test x.inds == [:i, :j]
@@ -91,13 +90,11 @@ end
 
         @testset "mutable" begin
             x = MutableMockTensor(rand(4, 4), [:i, :j])
-            x2 = MutableMockTensor(ConcretePJRTArray(parent(x)), x.inds)
+            x2 = MutableMockTensor(Reactant.to_rarray(parent(x)), x.inds)
 
             y = @jit(bcast_cos(x2))
 
-            @test y isa MutableMockTensor{
-                Float64,2,ConcretePJRTArray{Float64,2,1,Sharding.NoShardInfo}
-            }
+            @test y isa MutableMockTensor{Float64,2,<:ConcreteRArray{Float64,2}}
             @test size(y) == (4, 4)
             @test isapprox(parent(y), bcast_cos(parent(x)))
             @test x.inds == [:i, :j]
