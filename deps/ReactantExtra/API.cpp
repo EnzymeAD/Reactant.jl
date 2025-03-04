@@ -33,6 +33,7 @@
 #include "mlir/InitAllPasses.h"
 #include "mlir/Pass/PassRegistry.h"
 #include "mlir/Transforms/Passes.h"
+#include "mlir/Parser/Parser.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
@@ -224,6 +225,15 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
                                                          double imag) {
   return wrap(complex::NumberAttr::getChecked(
       unwrap(loc), cast<ComplexType>(unwrap(type)), real, imag));
+}
+
+extern "C" MlirOperation mlirOperationParse(MlirContext ctx,
+                                            MlirStringRef code) {
+  ParserConfig config(unwrap(ctx));
+  OwningOpRef<Operation*> owning_op = parseSourceString(unwrap(code), config);
+  if (!owning_op)
+    return MlirOperation{nullptr};
+  return MlirOperation{owning_op.release()};
 }
 
 // TODO mlirComplexAttrGetnValue
