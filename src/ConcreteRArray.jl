@@ -288,7 +288,15 @@ function Base.setindex!(a::ConcretePJRTArray{T}, v, args::Vararg{Int,N}) where {
     fn(a, v, args...)
     return a
 end
-# TODO: IFRT
+
+function Base.setindex!(a::ConcreteIFRTArray, v, args::Vararg{Int,N}) where {N}
+    isempty(args) && throw("Cannot setindex! to empty buffer")
+
+    GPUArraysCore.assertscalar("setindex!(::ConcreteIFRTArray, ::Any, ::Vararg{Int, N})")
+    fn = compile(mysetindex!, (a, v, args...))
+    fn(a, v, args...)
+    return a
+end
 
 # TODO is there any way to allocate an uninitialized buffer in XLA?
 function Base.similar(a::ConcretePJRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
@@ -300,19 +308,32 @@ Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
 function Base.similar(::Type{ConcretePJRTArray{T}}, dims) where {T}
     return ConcretePJRTArray(similar(Array{T}, dims))
 end
-# TODO: IFRT
+
+function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
+    return ConcreteIFRTArray(
+        Array{S}(undef, dims); client=XLA.client(a), device=XLA.device(a), a.sharding
+    )
+end
+Base.similar(a::ConcreteIFRTArray, dims::Dims) = similar(a, eltype(a), dims)
+function Base.similar(::Type{ConcreteIFRTArray{T}}, dims) where {T}
+    return ConcreteIFRTArray(similar(Array{T}, dims))
+end
 
 # Broadcasting interface
 Base.BroadcastStyle(::Type{<:ConcretePJRTArray}) = Broadcast.ArrayStyle{ConcretePJRTArray}()
-# TODO: IFRT
+Base.BroadcastStyle(::Type{<:ConcreteIFRTArray}) = Broadcast.ArrayStyle{ConcreteIFRTArray}()
 
+# XXX: correct device + sharding?
 function Base.similar(
-    bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}
+    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}
 ) where {T}
-    # XXX: correct device + sharding?
     return ConcretePJRTArray(similar(Array{T}, axes(bc)))
 end
-# TODO: IFRT
+function Base.similar(
+    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}}, ::Type{T}
+) where {T}
+    return ConcreteIFRTArray(similar(Array{T}, axes(bc)))
+end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}})
@@ -341,7 +362,11 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
     return fn(bc.args...)
 end
-# TODO: IFRT
+
+function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}})
+    fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
+    return fn(bc.args...)
+end
 
 # XXX: This is not necessarily correct. We need to check for sharding and also device
 #      compatibility.
@@ -389,7 +414,11 @@ function Base.zero(x::ConcretePJRTArray{T,N}) where {T,N}
         zeros(T, size(x)...); client=XLA.client(x), device=XLA.device(x), x.sharding
     )
 end
-# TODO: IFRT
+function Base.zero(x::ConcreteIFRTArray{T,N}) where {T,N}
+    return ConcreteIFRTArray(
+        zeros(T, size(x)...); client=XLA.client(x), device=XLA.device(x), x.sharding
+    )
+end
 
 function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
@@ -411,4 +440,12 @@ function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
     fn(a, val, idxs...)
     return a
 end
-# TODO: IFRT
+
+function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
+    isempty(a) && throw("Cannot setindex! to empty buffer")
+
+    idxs = ntuple(Returns(Colon()), N)
+    fn = compile(mysetindex!, (a, val, idxs...))
+    fn(a, val, idxs...)
+    return a
+end

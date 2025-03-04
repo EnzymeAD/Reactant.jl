@@ -84,7 +84,36 @@ unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
 function aos_to_soa(x::AbstractArray{<:ConcretePJRTNumber{T}}) where {T}
-    x_c = ConcretePJRTArray(zeros(T, size(x)))
+    all_clients = XLA.client.(x)
+    @assert allequal(all_clients)
+    all_devices = XLA.device.(x)
+    @assert allequal(all_devices)
+    all_shardings = [xᵢ.sharding for xᵢ in x]
+    @assert allequal(all_shardings)
+
+    x_c = ConcretePJRTArray(
+        zeros(T, size(x));
+        client=first(all_clients),
+        device=first(all_devices),
+        sharding=first(all_shardings),
+    )
+    x_c .= x
+    return x_c
+end
+function aos_to_soa(x::AbstractArray{<:ConcreteIFRTNumber{T}}) where {T}
+    all_clients = XLA.client.(x)
+    @assert allequal(all_clients)
+    all_devices = XLA.device.(x)
+    @assert allequal(all_devices)
+    all_shardings = [xᵢ.sharding for xᵢ in x]
+    @assert allequal(all_shardings)
+
+    x_c = ConcreteIFRTArray(
+        zeros(T, size(x));
+        client=first(all_clients),
+        device=first(all_devices),
+        sharding=first(all_shardings),
+    )
     x_c .= x
     return x_c
 end
