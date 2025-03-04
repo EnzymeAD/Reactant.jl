@@ -1091,7 +1091,12 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(A::Type{<:CuTracedArray}), @nospecialize(args...)
+    @nospecialize(A::Type{<:CuTracedArray}),
+    seen,
+    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     return A
 end

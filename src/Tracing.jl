@@ -34,7 +34,12 @@ for T in (
     VersionNumber,
 )
     @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(T::Type{<:$T}), @nospecialize(args...)
+        @nospecialize(T::Type{<:$T}),
+        seen,
+        @nospecialize(mode::TraceMode),
+        @nospecialize(track_numbers::Type),
+        @nospecialize(sharding),
+        @nospecialize(runtime)
     )
         return T
     end
@@ -66,9 +71,16 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(C::Type{<:Complex}), @nospecialize(args...)
+    @nospecialize(C::Type{<:Complex}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
-    C isa UnionAll || return Complex{traced_type_inner(C.parameters[1], args...)}
+    C isa UnionAll || return Complex{
+        traced_type_inner(C.parameters[1], seen, mode, track_numbers, sharding, runtime)
+    }
     return C
 end
 
@@ -106,33 +118,53 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_tuple_type_inner(
-    @nospecialize(T::Type{<:Tuple}), @nospecialize(args...)
+    @nospecialize(T::Type{<:Tuple}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     if T === Tuple
         return T
     end
     if T isa UnionAll
         if T.var.lb === Union{} && T.var.ub === Any
-            return UnionAll(T.var, traced_type_inner(T.body, args...))
+            return UnionAll(
+                T.var,
+                traced_type_inner(T.body, seen, mode, track_numbers, sharding, runtime),
+            )
         end
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
     end
     TT = Union{Type,Core.TypeofVararg}[]
     for i in 1:length(T.parameters)
-        st = traced_type_inner(T.parameters[i], args...)
+        st = traced_type_inner(
+            T.parameters[i], seen, mode, track_numbers, sharding, runtime
+        )
         push!(TT, st)
     end
     return Tuple{TT...}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Core.TypeofVararg), @nospecialize(args...)
+    @nospecialize(T::Core.TypeofVararg),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
-    return Vararg{traced_type_inner(T.T, args...),T.N}
+    return Vararg{traced_type_inner(T.T, seen, mode, track_numbers, sharding, runtime),T.N}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::TypeVar), @nospecialize(args...)
+    @nospecialize(T::TypeVar),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     if T.lb === Union{} && T.ub === Any
         return T
@@ -141,11 +173,16 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:NamedTuple}), @nospecialize(args...)
+    @nospecialize(T::Type{<:NamedTuple}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     N = T.parameters[1]
     V = T.parameters[2]
-    return NamedTuple{N,traced_type_inner(V, args...)}
+    return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)}
 end
 
 Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
@@ -166,14 +203,19 @@ Base.@nospecializeinfer @inline function dict_value(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:AbstractDict}), @nospecialize(args...)
+    @nospecialize(T::Type{<:AbstractDict}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     V = dict_value(T)
     if V === nothing
         return T
     else
         K = dict_key(T)
-        V2 = traced_type_inner(V, args...)
+        V2 = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
         if V == V2
             return T
         end
@@ -386,12 +428,21 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:TracedRNG}), seen, mode::TraceMode, @nospecialize(args...)
+    @nospecialize(T::Type{<:TracedRNG}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     if mode == ConcreteToTraced
         throw("TracedRNG cannot be traced")
     elseif mode == TracedToConcrete
-        return ConcreteRNG{traced_type_inner(TracedRArray{UInt64,1}, seen, mode, args...)}
+        return ConcreteRNG{
+            traced_type_inner(
+                TracedRArray{UInt64,1}, seen, mode, track_numbers, sharding, runtime
+            ),
+        }
     elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         return T
     else
@@ -400,16 +451,28 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(A::Type{AbstractArray}), @nospecialize(args...)
+    @nospecialize(A::Type{AbstractArray}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     return A
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(A::Type{AbstractArray{T}}), seen, mode::TraceMode, @nospecialize(args...)
+    @nospecialize(A::Type{AbstractArray{T}}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 ) where {T}
     if mode == ConcreteToTraced
-        return AbstractArray{traced_type_inner(T, seen, mode, args...)}
+        return AbstractArray{
+            traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+        }
     else
         return A
     end
@@ -419,10 +482,14 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(A::Type{AbstractArray{T,N}}),
     seen,
     mode::TraceMode,
-    @nospecialize(args...)
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 ) where {T,N}
     if mode == ConcreteToTraced
-        return AbstractArray{traced_type_inner(T, seen, mode, args...),N}
+        return AbstractArray{
+            traced_type_inner(T, seen, mode, track_numbers, sharding, runtime),N
+        }
     else
         return A
     end
@@ -471,28 +538,58 @@ end
 
 for P in (Ptr, Core.LLVMPtr, Base.RefValue)
     @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(PT::Type{$P}), @nospecialize(args...)
+        @nospecialize(PT::Type{$P}),
+        seen,
+        @nospecialize(mode::TraceMode),
+        @nospecialize(track_numbers::Type),
+        @nospecialize(sharding),
+        @nospecialize(runtime)
     )
         return $(P)
     end
 end
 for P in (Ptr, Base.RefValue)
     @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(PT::Type{$P{T}}), @nospecialize(args...)
+        @nospecialize(PT::Type{$P{T}}),
+        seen,
+        @nospecialize(mode::TraceMode),
+        @nospecialize(track_numbers::Type),
+        @nospecialize(sharding),
+        @nospecialize(runtime)
     ) where {T}
-        return $P{traced_type_inner(PT.parameters[1], args...)}
+        return $P{
+            traced_type_inner(
+                PT.parameters[1], seen, mode, track_numbers, sharding, runtime
+            ),
+        }
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(PT::Type{Core.LLVMPtr{T}}), @nospecialize(args...)
+    @nospecialize(PT::Type{Core.LLVMPtr{T}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 ) where {T}
-    return Core.LLVMPtr{traced_type_inner(PT.body.parameters[1], args...)}
+    return Core.LLVMPtr{
+        traced_type_inner(
+            PT.body.parameters[1], seen, mode, track_numbers, sharding, runtime
+        ),
+    }
 end
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(PT::Type{Core.LLVMPtr{T,A}}), @nospecialize(args...)
+    @nospecialize(PT::Type{Core.LLVMPtr{T,A}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 ) where {T,A}
-    return Core.LLVMPtr{traced_type_inner(PT.parameters[1], args...),A}
+    return Core.LLVMPtr{
+        traced_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding, runtime),A
+    }
 end
 
 Base.@nospecializeinfer function traced_type_inner(
