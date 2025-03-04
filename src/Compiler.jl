@@ -636,6 +636,7 @@ function compile_mlir!(
     backend="gpu",
     fn_kwargs=(),
     raise::Union{Bool,String}=false,
+    input_shardings=nothing,
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -652,7 +653,7 @@ function compile_mlir!(
     activate_raising!(is_raising)
 
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true)
+        Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true; input_shardings)
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
@@ -1167,14 +1168,16 @@ function codegen_flatten!(
 
         if is_sharded
             carg = inv_seen_args[arg]
+            condensed_op_sharding = convert(
+                Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
+            )
             if Reactant.Sharding.is_sharded(carg)
-                # Currently disabling the error since we roundtrip from MHLO to generate
-                # the shardings
-                # # Check if the sharding provided is same as the one we have
-                # arg_condensed_op_sharding = Reactant.Sharding.XLA.CondensedOpSharding(
-                #     Reactant.Sharding.ShardingWithShape(carg.sharding, size(carg))
-                # )
-                # @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                arg_condensed_op_sharding = convert(
+                    Reactant.Sharding.XLA.CondensedOpSharding,
+                    carg.sharding.sharding.hlo_sharding,
+                )
+                # Check if the sharding provided is same as the one we have
+                @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 
                 push!(flatten_code, :($usbuf = $flatcode.data))
                 for j in 1:length(mesh)
@@ -1183,11 +1186,8 @@ function codegen_flatten!(
                     push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
                 end
             else
-                condensed_op_sharding = convert(
-                    Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
-                )
                 push!(flatten_code, :($usbuf = $flatcode))
-                device_to_array_slices = XLA.sharding_to_concrete_array_indices(
+                device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
                     condensed_op_sharding, size(carg), mesh.logical_device_ids
                 )
                 for j in 1:length(mesh)

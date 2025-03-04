@@ -161,6 +161,7 @@ function make_mlir_fn(
     args_in_result::Symbol=:all,
     construct_function_without_args::Bool=false,
     do_transpose=true,
+    input_shardings=nothing, # This is not meant to be used by the user.
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -173,6 +174,7 @@ function make_mlir_fn(
             return_dialect,
             do_transpose,
             args_in_result,
+            input_shardings,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
@@ -221,10 +223,14 @@ function make_mlir_fn(
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
     for (k, v) in seen_args
-        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber) &&
-            Reactant.Sharding.is_sharded(k)
-            Reactant.Ops.mesh(k.sharding.mesh)
-            traced_args_to_shardings[v] = k.sharding
+        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber)
+            if Reactant.Sharding.is_sharded(k)
+                Reactant.Ops.mesh(k.sharding.mesh)
+                traced_args_to_shardings[v] = k.sharding
+            elseif input_shardings !== nothing && haskey(input_shardings, k)
+                Reactant.Ops.mesh(input_shardings[k].mesh)
+                traced_args_to_shardings[v] = input_shardings[k]
+            end
         end
     end
 
