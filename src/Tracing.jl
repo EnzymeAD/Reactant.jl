@@ -716,6 +716,7 @@ Base.@nospecializeinfer function traced_type_inner(
                 sharding,
                 runtime,
             )
+            push!(subParms, TrT)
         elseif wrapped_tracedarray && i == 1 && SST isa Type && SST <: TracedRNumber
             TrT = traced_type_inner(
                 unwrapped_eltype(SST), seen, mode, track_numbers, sharding, runtime
@@ -757,7 +758,6 @@ Base.@nospecializeinfer function traced_type_inner(
         end
     end
 
-    name = Symbol[]
     throw(NoFieldMatchError(T, TT2, subTys))
 end
 

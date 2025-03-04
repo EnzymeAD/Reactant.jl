@@ -135,7 +135,6 @@ function __init__()
         @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids
     end
 
-
     @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME
 
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid

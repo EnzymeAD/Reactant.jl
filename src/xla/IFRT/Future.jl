@@ -3,7 +3,9 @@ mutable struct Future <: XLA.AbstractFuture
 
     function Future(future::Ptr{Cvoid})
         @assert future != C_NULL
-        return finalizer(free_future, new(future))
+        # XXX: double free issue?? potentiialy due to wrapper over PJRTFuture?
+        # return finalizer(free_future, new(future))
+        return new(future)
     end
 end
 
