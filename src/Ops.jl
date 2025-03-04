@@ -2153,7 +2153,7 @@ end
         temp = Reactant.TracedUtils.make_mlir_fn(
             f, args, (), f_name, false; args_in_result=:all, do_transpose=false, mutate_traced_args=true
         )
-        (; traced_result, ret, linear_args) = temp
+        (; traced_result, linear_results, ret, linear_args) = temp
         final_func = temp.f
         mlir_result_types = [
             MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)

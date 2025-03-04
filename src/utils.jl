@@ -476,11 +476,12 @@ function rewrite_insts!(ir, interp, guaranteed_error)
     return ir, any_changed
 end
 
-function temp1(f, args...)
+function call_prologue(f, args...)
     concretein = false
-    construct_function_without_args = false
     toscalar = false
     do_transpose = false
+    mutate_traced_args = true
+    input_shardings = nothing
 
     name = String(Symbol(f))
     
@@ -502,18 +503,21 @@ function temp1(f, args...)
         # make tracer inserted `()` into the path, here we remove it:
         v.paths = v.paths[1:end-1]
     end
+    original_paths = [Reactant.TracedUtils.get_paths(arg) for arg in caller_linear_args]
     
     N = length(args)
     seen_args, traced_args, callee_linear_args = TracedUtils.prepare_args(
-        args, concretein, toscalar
+        args, concretein, toscalar, mutate_traced_args
     )
 
     mod, temp_func, fnbody, in_tys, sym_visibility = TracedUtils.placeholder_func(
         name,
         callee_linear_args,
+        seen_args,
         toscalar,
         do_transpose,
         concretein,
+        input_shardings,
     )
     
     MLIR.IR.activate!(fnbody)
@@ -522,22 +526,23 @@ function temp1(f, args...)
         TracedUtils.set_mlir_data!(arg, MLIR.IR.argument(fnbody, i))
     end
 
-    return mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name
+    return mod, temp_func, in_tys, fnbody, sym_visibility, args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths
 end
 
-@inline get_traced_args_from_temp1((mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name)) = traced_args
+@inline get_traced_args_from_temp1((mod, temp_func, in_tys, fnbody, sym_visibility, original_args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths)) = traced_args
 
-function temp2(
-    result, (mod, temp_func, in_tys, fnbody, sym_visibility, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name)
+function call_epilogue(
+    result, (mod, temp_func, in_tys, fnbody, sym_visibility, original_args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths)
 )
     MLIR.IR.deactivate!(fnbody)
     
     concretein = false
-    args_in_result = :mutated
+    args_in_result = :all
     do_transpose = false
     return_dialect = :func
+    mutate_traced_args = true
     
-    seen_result, traced_result, linear_results, out_tys, mutated = TracedUtils.prepare_results(
+    seen_result, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
         result,
         traced_args,
         callee_linear_args,
@@ -545,6 +550,7 @@ function temp2(
         concretein,
         args_in_result,
         do_transpose,
+        mutate_traced_args
     )
     
     ret = TracedUtils.create_return!(
@@ -562,19 +568,37 @@ function temp2(
         mlir_caller_args; result_0=out_tys, callee=MLIR.IR.FlatSymbolRefAttribute(name)
     )
 
-    i = 1
-    for v in linear_results
-        v isa TracedType || continue
-        TracedUtils.set_mlir_data!(v, MLIR.IR.result(call_op, i))
-        i += 1
+    mlir_results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
+    for (i, v) in enumerate(linear_results)
+        @assert v isa Reactant.TracedType
+        # this mutates `traced_result`, which is what we want:
+        Reactant.TracedUtils.set_mlir_data!(v, MLIR.IR.result(call_op, i))
+        for p in Reactant.TracedUtils.get_paths(v)
+            if length(p) > 0
+                if p[1] == :resargs && !MLIR.IR.is_block_arg(mlir_results[i])
+                    Reactant.TracedUtils.set!(original_args, p[2:end], MLIR.IR.result(call_op, i))
+                end
+            end
+        end
+        Reactant.TracedUtils.set_paths!(v, ())
     end
-    nres = MLIR.IR.nresults(call_op)
-    # mutated args are included as the last ones in the call op results
-    for (result_i, arg_i) in zip((nres - length(mutated)):nres, mutated)
-        Reactant.TracedUtils.set_mlir_data!(
-            caller_linear_args[arg_i], MLIR.IR.result(call_op, result_i + 1)
-        )
+    for (arg, paths) in zip(caller_linear_args, original_paths)
+        Reactant.TracedUtils.set_paths!(arg, paths)
     end
+
+    # i = 1
+    # for v in linear_results
+    #     v isa TracedType || continue
+    #     TracedUtils.set_mlir_data!(v, MLIR.IR.result(call_op, i))
+    #     i += 1
+    # end
+    # nres = MLIR.IR.nresults(call_op)
+    # # mutated args are included as the last ones in the call op results
+    # for (result_i, arg_i) in zip((nres - length(mutated)):nres, mutated)
+    #     Reactant.TracedUtils.set_mlir_data!(
+    #         caller_linear_args[arg_i], MLIR.IR.result(call_op, result_i + 1)
+    #     )
+    # end
     return traced_result
 end
 
@@ -837,7 +861,7 @@ function call_with_reactant_generator(
     end
 
     if TRACE_CALLS[]
-        push!(overdubbed_code, Expr(:call, temp1, fn_args...))
+        push!(overdubbed_code, Expr(:call, call_prologue, fn_args...))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         temp1_output = Core.SSAValue(length(overdubbed_code))
         
@@ -856,7 +880,7 @@ function call_with_reactant_generator(
     ocres = Core.SSAValue(length(overdubbed_code))
 
     if TRACE_CALLS[]
-        push!(overdubbed_code, Expr(:call, temp2, ocres, temp1_output))
+        push!(overdubbed_code, Expr(:call, call_epilogue, ocres, temp1_output))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         
         ocres = Core.SSAValue(length(overdubbed_code))

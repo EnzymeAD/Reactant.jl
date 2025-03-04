@@ -130,7 +130,7 @@ function transpose_val(val)
 end
 
 mutable struct CompiledMlirFnResult{
-    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA
+    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh}
 }
     fnwrapped::Bool
     f::F
@@ -147,7 +147,6 @@ mutable struct CompiledMlirFnResult{
     preserved_args::PA
     concrete_result::CR
     sharding_mesh::M
-    mutated_args::MA
 end
 
 function prepare_args(args, concretein, toscalar, mutate_traced_args)
@@ -175,7 +174,7 @@ function prepare_args(args, concretein, toscalar, mutate_traced_args)
 end
 
 function placeholder_func(
-    name, linear_args, toscalar, do_transpose, concretein
+    name, linear_args, seen_args, toscalar, do_transpose, concretein, input_shardings
 )
     in_tys = if toscalar
         [
@@ -310,9 +309,9 @@ function final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
             sym_name=name,
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
-            arg_attrs=MLIR.IR.attr(func, "arg_attrs"),
-            res_attrs=MLIR.IR.attr(func, "res_attrs"),
-            no_inline=MLIR.IR.attr(func, "no_inline"),
+            arg_attrs=MLIR.IR.attr(temp_func, "arg_attrs"),
+            res_attrs=MLIR.IR.attr(temp_func, "res_attrs"),
+            no_inline=MLIR.IR.attr(temp_func, "no_inline"),
             sym_visibility,
         )
     end
@@ -366,9 +365,11 @@ function make_mlir_fn(
     mod, temp_func, fnbody, in_tys, sym_visibility = placeholder_func(
         name,
         linear_args,
+        seen_args,
         toscalar,
         do_transpose,
         concretein,
+        input_shardings
     )
 
     # Explicitly don't use block! to avoid creating a closure, which creates
@@ -446,25 +447,22 @@ function make_mlir_fn(
             end
         end
 
-        # Ensure the sharding of the mutated arguments is propagated to the results
-        result_not_replicated = falses(length(linear_results))
-        for i in mutated_args
-            arg = linear_args[i]
-            if has_residx(arg) && haskey(traced_args_to_shardings, arg)
-                residx = findfirst(Base.Fix1(===, arg), linear_results)
-                @assert residx !== nothing
-                result_not_replicated[residx] = true
-                MLIR.API.mlirFuncSetResultAttr(
-                    func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
-                )
-            end
-        end
+        # # Ensure the sharding of the mutated arguments is propagated to the results
+        # result_not_replicated = falses(length(linear_results))
+        # for i in mutated_args
+        #     arg = linear_args[i]
+        #     if has_residx(arg) && haskey(traced_args_to_shardings, arg)
+        #         residx = findfirst(Base.Fix1(===, arg), linear_results)
+        #         @assert residx !== nothing
+        #         result_not_replicated[residx] = true
+        #         MLIR.API.mlirFuncSetResultAttr(
+        #             func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
+        #         )
+        #     end
+        # end
     else
         sharding_mesh = nothing
     end
-
-    MLIR.API.mlirOperationDestroy(func.operation)
-    func.operation = MLIR.API.MlirOperation(C_NULL)
 
     return CompiledMlirFnResult(
         false,
@@ -482,7 +480,6 @@ function make_mlir_fn(
         nothing,
         nothing,
         sharding_mesh,
-        mutated_args,
     )
 end
 
