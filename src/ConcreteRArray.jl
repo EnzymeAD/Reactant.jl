@@ -253,7 +253,11 @@ function Base.getindex(a::ConcretePJRTArray{T}, args::Vararg{Int,N}) where {T,N}
     GPUArraysCore.assertscalar("getindex(::ConcretePJRTArray, ::Vararg{Int, N})")
     return convert(Array, a)[args...]
 end
-# TODO: IFRT
+
+function Base.getindex(a::ConcreteIFRTArray, args::Vararg{Int,N}) where {N}
+    GPUArraysCore.assertscalar("getindex(::ConcreteIFRTArray, ::Vararg{Int, N})")
+    return convert(Array, a)[args...]
+end
 
 function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
     setindex!(a, v, args...)

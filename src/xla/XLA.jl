@@ -5,10 +5,11 @@ using Reactant_jll
 using Libdl
 using Scratch, Downloads
 using EnumX: @enumx
+using Preferences: load_preference
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
-const REACTANT_XLA_RUNTIME = Ref{String}("PJRT")
+const REACTANT_XLA_RUNTIME = load_preference(Reactant, "xla_runtime", "PJRT")
 
 const CUDA_DATA_DIR = Ref(
     isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
@@ -61,11 +62,18 @@ for runtime in (:PJRT, :IFRT)
     end
 end
 
-const global_backend_state = Ref{Union{Nothing,PJRTBackendState,IFRTBackendState}}(nothing)
+const global_backend_state = if REACTANT_XLA_RUNTIME == "PJRT"
+    PJRTBackendState()
+elseif REACTANT_XLA_RUNTIME == "IFRT"
+    IFRTBackendState()
+else
+    error("Unsupported REACTANT_XLA_RUNTIME (set via `xla_runtime` preference): \
+           $(REACTANT_XLA_RUNTIME)")
+end
 const global_state = State()
 
-client(backend::String) = global_backend_state[].clients[backend]
-default_backend() = global_backend_state[].default_client
+client(backend::String) = global_backend_state.clients[backend]
+default_backend() = global_backend_state.default_client
 default_device() = default_device(default_backend())
 process_index() = process_index(default_backend())
 
@@ -75,12 +83,12 @@ runtime(::PJRT.Client) = Val(:PJRT)
 runtime(::IFRT.Client) = Val(:IFRT)
 
 function set_default_backend(backend::AbstractClient)
-    global_backend_state[].default_client = backend
+    global_backend_state.default_client = backend
     return nothing
 end
 
 function set_default_backend(backend::String)
-    global_backend_state[].default_client = client(backend)
+    global_backend_state.default_client = client(backend)
     return nothing
 end
 
@@ -89,9 +97,9 @@ function update_global_state!(args...; kwargs...)
     # We conditionally initialize for now, since a lot of options that are set are not
     # necessarily supported by PJRT. This makes testing for IFRT quite hard.
     # Once we move to IFRT completely, we can remove this.
-    if global_backend_state[].initialized
+    if global_backend_state.initialized
         # We need to update the clients based on the new state
-        initialize_default_clients!(global_backend_state[])
+        initialize_default_clients!(global_backend_state)
     end
     return nothing
 end
@@ -127,19 +135,8 @@ function __init__()
         @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids
     end
 
-    if haskey(ENV, "REACTANT_XLA_RUNTIME")
-        REACTANT_XLA_RUNTIME[] = ENV["REACTANT_XLA_RUNTIME"]
-        @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME[]
-    end
 
-    # Set the runtime backend
-    if REACTANT_XLA_RUNTIME[] == "PJRT"
-        global_backend_state[] = PJRTBackendState()
-    elseif REACTANT_XLA_RUNTIME[] == "IFRT"
-        global_backend_state[] = IFRTBackendState()
-    else
-        error("Unsupported REACTANT_XLA_RUNTIME: $(REACTANT_XLA_RUNTIME[])")
-    end
+    @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME
 
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
