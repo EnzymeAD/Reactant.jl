@@ -8,6 +8,26 @@ using Reactant.Ops: mlir_stacktrace
 using ..ReactantMPIExt: TracedRequest
 using MPI: MPI
 
+function try_inject_to_top_block!(sym_name, code)
+    current_module = IR.mmodule()
+    fn = IR.lookup(IR.SymbolTable(IR.Operation(current_module)), sym_name)
+
+    if isnothing(fn)
+        top_level_block = MLIR.IR.body(current_module)
+        code = IR.body(parse(IR.Module, code))
+
+        # using `collect` because if we remove the op, then the `OperationIterator` state is broken and skips ops
+        for op in collect(IR.OperationIterator(code))
+            IR.rmfromparent!(op)
+            push!(top_level_block, op)
+        end
+
+        return true
+    else
+        return false
+    end
+end
+
 # TODO we might need to have a `TracedComm` for communicators created during the compiled function
 
 # function init(; location=mlir_stacktrace("mpi.init", @__FILE__, @__LINE__))
@@ -22,30 +42,18 @@ function comm_rank(comm; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @_
     sym_name = "enzymexla_wrapper_MPI_Comm_rank"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    current_module = IR.mmodule()
-    fn = IR.lookup(IR.SymbolTable(IR.Operation(current_module)), sym_name)
-
-    if isnothing(fn)
-        top_level_block = MLIR.IR.body(current_module)
-        #! format: off
-        code = parse(IR.Module, """
-            module {
-                llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32
-                func.func @$sym_name(%comm_ptr : !llvm.ptr, %rank_ptr : !llvm.ptr) -> () {
-                    %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
-                    %status = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
-                    func.return
-                }
+    #! format: off
+    try_inject_to_top_block!(sym_name, """
+        module {
+            llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32
+            func.func @$sym_name(%comm_ptr : !llvm.ptr, %rank_ptr : !llvm.ptr) -> () {
+                %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
+                %status = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
+                func.return
             }
-        """) |> IR.body
-        #! format: on
-
-        # using `collect` because if we remove the op, then the `OperationIterator` state is broken and skips ops
-        for op in collect(IR.OperationIterator(code))
-            IR.rmfromparent!(op)
-            push!(top_level_block, op)
-        end
-    end
+        }
+    """)
+    #! format: on
 
     # NOTE we assume here that `MPI_Comm` is of word-size
     comm = Reactant.Ops.constant(Base.unsafe_convert(Cint, comm))
@@ -66,30 +74,18 @@ function comm_size(comm; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @_
     sym_name = "enzymexla_wrapper_MPI_Comm_size"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    current_module = IR.mmodule()
-    fn = IR.lookup(IR.SymbolTable(IR.Operation(current_module)), sym_name)
-
-    if isnothing(fn)
-        top_level_block = MLIR.IR.body(current_module)
-        #! format: off
-        code = parse(IR.Module, """
-            module {
-                llvm.func @MPI_Comm_size(i32, !llvm.ptr) -> i32
-                func.func @$sym_name(%comm_ptr : !llvm.ptr, %size_ptr : !llvm.ptr) -> () {
-                    %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
-                    %status = llvm.call @MPI_Comm_size(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
-                    func.return
-                }
+    #! format: off
+    try_inject_to_top_block!(sym_name, """
+        module {
+            llvm.func @MPI_Comm_size(i32, !llvm.ptr) -> i32
+            func.func @$sym_name(%comm_ptr : !llvm.ptr, %size_ptr : !llvm.ptr) -> () {
+                %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
+                %status = llvm.call @MPI_Comm_size(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
+                func.return
             }
-        """) |> IR.body
-        #! format: on
-
-        # using `collect` because if we remove the op, then the `OperationIterator` state is broken and skips ops
-        for op in collect(IR.OperationIterator(code))
-            IR.rmfromparent!(op)
-            push!(top_level_block, op)
-        end
-    end
+        }
+    """)
+    #! format: on
 
     comm = Reactant.Ops.constant(Base.unsafe_convert(Cint, comm))
     value_out = Reactant.Ops.constant(fill(Cint(-1)))
@@ -112,30 +108,18 @@ function barrier(comm; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LIN
     tensor_int_type = IR.TensorType(Int[], IR.Type(Cint))
     signature = IR.Type[tensor_int_type]
 
-    current_module = IR.mmodule()
-    fn = IR.lookup(IR.SymbolTable(IR.Operation(current_module)), sym_name)
-
-    if isnothing(fn)
-        top_level_block = MLIR.IR.body(current_module)
-        #! format: off
-        code = parse(IR.Module, """
-            module {
-                llvm.func @MPI_Barrier(i32) -> i32
-                func.func @$sym_name(%comm_ptr : !llvm.ptr) -> () {
-                    %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
-                    %status = llvm.call @MPI_Barrier(%comm) : (i32) -> (i32)
-                    func.return
-                }
+    #! format: off
+    try_inject_to_top_block!(sym_name, """
+        module {
+            llvm.func @MPI_Barrier(i32) -> i32
+            func.func @$sym_name(%comm_ptr : !llvm.ptr) -> () {
+                %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
+                %status = llvm.call @MPI_Barrier(%comm) : (i32) -> (i32)
+                func.return
             }
-        """) |> IR.body
-        #! format: on
-
-        # using `collect` because if we remove the op, then the `OperationIterator` state is broken and skips ops
-        for op in collect(IR.OperationIterator(code))
-            IR.rmfromparent!(op)
-            push!(top_level_block, op)
-        end
-    end
+        }
+    """)
+    #! format: on
 
     comm = Reactant.Ops.constant(Base.unsafe_convert(Cint, comm))
     inputs = [comm.mlir_data]
