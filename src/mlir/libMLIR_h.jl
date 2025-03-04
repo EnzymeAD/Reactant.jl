@@ -732,6 +732,17 @@ function mlirModuleCreateParse(context, _module)
 end
 
 """
+    mlirModuleCreateParseFromFile(context, fileName)
+
+Parses a module from file and transfers ownership to the caller.
+"""
+function mlirModuleCreateParseFromFile(context, fileName)
+    @ccall mlir_c.mlirModuleCreateParseFromFile(
+        context::MlirContext, fileName::MlirStringRef
+    )::MlirModule
+end
+
+"""
     mlirModuleGetContext(_module)
 
 Gets the context that a module was created with.
@@ -4261,6 +4272,12 @@ function mlirDenseElementsAttrGetUInt64Value(attr, pos)
     )::UInt64
 end
 
+function mlirDenseElementsAttrGetIndexValue(attr, pos)
+    @ccall mlir_c.mlirDenseElementsAttrGetIndexValue(
+        attr::MlirAttribute, pos::intptr_t
+    )::UInt64
+end
+
 function mlirDenseElementsAttrGetFloatValue(attr, pos)
     @ccall mlir_c.mlirDenseElementsAttrGetFloatValue(
         attr::MlirAttribute, pos::intptr_t
@@ -6142,6 +6159,12 @@ function mlirFuncSetArgAttr(op, pos, name, attr)
     )::Cvoid
 end
 
+function mlirFuncSetResultAttr(op, pos, name, attr)
+    @ccall mlir_c.mlirFuncSetResultAttr(
+        op::MlirOperation, pos::intptr_t, name::MlirStringRef, attr::MlirAttribute
+    )::Cvoid
+end
+
 function mlirGetDialectHandle__gpu__()
     @ccall mlir_c.mlirGetDialectHandle__gpu__()::MlirDialectHandle
 end
@@ -6222,6 +6245,10 @@ Loads all IRDL dialects in the provided module, registering the dialects in the 
 """
 function mlirLoadIRDLDialects(_module)
     @ccall mlir_c.mlirLoadIRDLDialects(_module::MlirModule)::MlirLogicalResult
+end
+
+function mlirGetDialectHandle__index__()
+    @ccall mlir_c.mlirGetDialectHandle__index__()::MlirDialectHandle
 end
 
 function mlirGetDialectHandle__llvm__()
@@ -6312,6 +6339,15 @@ Returns the pos-th input type.
 """
 function mlirLLVMFunctionTypeGetInput(type, pos)
     @ccall mlir_c.mlirLLVMFunctionTypeGetInput(type::MlirType, pos::intptr_t)::MlirType
+end
+
+"""
+    mlirLLVMFunctionTypeGetReturnType(type)
+
+Returns the return type of the function type.
+"""
+function mlirLLVMFunctionTypeGetReturnType(type)
+    @ccall mlir_c.mlirLLVMFunctionTypeGetReturnType(type::MlirType)::MlirType
 end
 
 """
@@ -9099,6 +9135,80 @@ function mlirTranslateModuleToLLVMIR(_module, context)
     )::LLVMModuleRef
 end
 
+struct MlirTypeFromLLVMIRTranslator
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirTypeFromLLVMIRTranslatorCreate(ctx)
+
+Create an LLVM::TypeFromLLVMIRTranslator and transfer ownership to the caller.
+"""
+function mlirTypeFromLLVMIRTranslatorCreate(ctx)
+    @ccall mlir_c.mlirTypeFromLLVMIRTranslatorCreate(
+        ctx::MlirContext
+    )::MlirTypeFromLLVMIRTranslator
+end
+
+"""
+    mlirTypeFromLLVMIRTranslatorDestroy(translator)
+
+Takes an LLVM::TypeFromLLVMIRTranslator owned by the caller and destroys it. It is the responsibility of the user to only pass an LLVM::TypeFromLLVMIRTranslator class.
+"""
+function mlirTypeFromLLVMIRTranslatorDestroy(translator)
+    @ccall mlir_c.mlirTypeFromLLVMIRTranslatorDestroy(
+        translator::MlirTypeFromLLVMIRTranslator
+    )::Cvoid
+end
+
+"""
+    mlirTypeFromLLVMIRTranslatorTranslateType(translator, llvmType)
+
+Translates the given LLVM IR type to the MLIR LLVM dialect.
+"""
+function mlirTypeFromLLVMIRTranslatorTranslateType(translator, llvmType)
+    @ccall mlir_c.mlirTypeFromLLVMIRTranslatorTranslateType(
+        translator::MlirTypeFromLLVMIRTranslator, llvmType::LLVMTypeRef
+    )::MlirType
+end
+
+struct MlirTypeToLLVMIRTranslator
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirTypeToLLVMIRTranslatorCreate(ctx)
+
+Create an LLVM::TypeToLLVMIRTranslator and transfer ownership to the caller.
+"""
+function mlirTypeToLLVMIRTranslatorCreate(ctx)
+    @ccall mlir_c.mlirTypeToLLVMIRTranslatorCreate(
+        ctx::LLVMContextRef
+    )::MlirTypeToLLVMIRTranslator
+end
+
+"""
+    mlirTypeToLLVMIRTranslatorDestroy(translator)
+
+Takes an LLVM::TypeToLLVMIRTranslator owned by the caller and destroys it. It is the responsibility of the user to only pass an LLVM::TypeToLLVMIRTranslator class.
+"""
+function mlirTypeToLLVMIRTranslatorDestroy(translator)
+    @ccall mlir_c.mlirTypeToLLVMIRTranslatorDestroy(
+        translator::MlirTypeToLLVMIRTranslator
+    )::Cvoid
+end
+
+"""
+    mlirTypeToLLVMIRTranslatorTranslateType(translator, mlirType)
+
+Translates the given MLIR LLVM dialect to the LLVM IR type.
+"""
+function mlirTypeToLLVMIRTranslatorTranslateType(translator, mlirType)
+    @ccall mlir_c.mlirTypeToLLVMIRTranslatorTranslateType(
+        translator::MlirTypeToLLVMIRTranslator, mlirType::MlirType
+    )::LLVMTypeRef
+end
+
 function stablehloScatterDimensionNumbersGet(
     ctx,
     nUpdateWindowDims,
@@ -10006,6 +10116,8 @@ function sdyOpShardingRuleAttrGet(
     reductionFactors,
     nNeedReplicationFactors,
     needReplicationFactors,
+    nPermutationFactors,
+    permutationFactors,
     isCustomRule,
 )
     @ccall mlir_c.sdyOpShardingRuleAttrGet(
@@ -10020,6 +10132,8 @@ function sdyOpShardingRuleAttrGet(
         reductionFactors::Ptr{Int64},
         nNeedReplicationFactors::intptr_t,
         needReplicationFactors::Ptr{Int64},
+        nPermutationFactors::intptr_t,
+        permutationFactors::Ptr{Int64},
         isCustomRule::Bool,
     )::MlirAttribute
 end
@@ -10078,6 +10192,18 @@ end
 
 function sdyOpShardingRuleAttrGetNeedReplicationFactorsElem(attr, pos)
     @ccall mlir_c.sdyOpShardingRuleAttrGetNeedReplicationFactorsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::Int64
+end
+
+function sdyOpShardingRuleAttrGetPermutationFactorsSize(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetPermutationFactorsSize(
+        attr::MlirAttribute
+    )::intptr_t
+end
+
+function sdyOpShardingRuleAttrGetPermutationFactorsElem(attr, pos)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetPermutationFactorsElem(
         attr::MlirAttribute, pos::intptr_t
     )::Int64
 end

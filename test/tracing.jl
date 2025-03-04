@@ -1,7 +1,6 @@
 using Reactant
 using Reactant:
     traced_type,
-    ConcreteRArray,
     TracedRArray,
     TracedRNumber,
     ConcreteToTraced,
@@ -30,6 +29,7 @@ end
                 (Char, Char, Char),
                 (AbstractString, AbstractString, AbstractString),
                 (String, String, String),
+                (VersionNumber, VersionNumber, VersionNumber),
 
                 # Numeric types
                 (AbstractFloat, AbstractFloat, AbstractFloat),
@@ -58,22 +58,22 @@ end
 
                 # RArray types
                 (
-                    ConcreteRArray{Float64,0},
+                    ConcretePJRTArray{Float64,0,1,Sharding.NoShardInfo},
                     TracedRArray{Float64,0},
                     TracedRArray{Float64,0},
                 ),
                 (
-                    ConcreteRArray{Float64,1},
+                    ConcretePJRTArray{Float64,1,1,Sharding.NoShardInfo},
                     TracedRArray{Float64,1},
                     TracedRArray{Float64,1},
                 ),
                 (
-                    ConcreteRArray{Float64,2},
+                    ConcretePJRTArray{Float64,2,1,Sharding.NoShardInfo},
                     TracedRArray{Float64,2},
                     TracedRArray{Float64,2},
                 ),
                 (
-                    ConcreteRArray{Float64,3},
+                    ConcretePJRTArray{Float64,3,1,Sharding.NoShardInfo},
                     TracedRArray{Float64,3},
                     TracedRArray{Float64,3},
                 ),
@@ -81,7 +81,7 @@ end
                 # Array types
                 (Array{Float64,1}, Array{Float64,1}, Array{TracedRNumber{Float64},1}),
                 (
-                    Array{ConcreteRArray{Float64,2},1},
+                    Array{ConcretePJRTArray{Float64,2,1,Sharding.NoShardInfo},1},
                     Array{TracedRArray{Float64,2},1},
                     Array{TracedRArray{Float64,2},1},
                 ),
@@ -89,7 +89,7 @@ end
                 # Union types
                 (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRNumber{Int}}),
                 (
-                    Union{Nothing,ConcreteRArray{Float64,1}},
+                    Union{Nothing,ConcretePJRTArray{Float64,1,1,Sharding.NoShardInfo}},
                     Union{Nothing,TracedRArray{Float64,1}},
                     Union{Nothing,TracedRArray{Float64,1}},
                 ),
@@ -97,7 +97,7 @@ end
                 # Ptr types
                 (Ptr{Float64}, Ptr{Float64}, Ptr{TracedRNumber{Float64}}),
                 (
-                    Ptr{ConcreteRArray{Float64,1}},
+                    Ptr{ConcretePJRTArray{Float64,1,1,Sharding.NoShardInfo}},
                     Ptr{TracedRArray{Float64,1}},
                     Ptr{TracedRArray{Float64,1}},
                 ),
@@ -107,7 +107,7 @@ end
                     Core.LLVMPtr{TracedRNumber{Float64}},
                 ),
                 (
-                    Core.LLVMPtr{ConcreteRArray{Float64,1}},
+                    Core.LLVMPtr{ConcretePJRTArray{Float64,1,1,Sharding.NoShardInfo}},
                     Core.LLVMPtr{TracedRArray{Float64,1}},
                     Core.LLVMPtr{TracedRArray{Float64,1}},
                 ),
@@ -117,7 +117,7 @@ end
                     Base.RefValue{TracedRNumber{Float64}},
                 ),
                 (
-                    Base.RefValue{ConcreteRArray{Float64,1}},
+                    Base.RefValue{ConcretePJRTArray{Float64,1,1,Sharding.NoShardInfo}},
                     Base.RefValue{TracedRArray{Float64,1}},
                     Base.RefValue{TracedRArray{Float64,1}},
                 ),
@@ -127,14 +127,14 @@ end
                 (Val{0.5}, Val{0.5}, Val{0.5}),
                 (Val{:x}, Val{:x}, Val{:x}),
                 (
-                    Dict{Int,ConcreteRArray{Float64,0}},
+                    Dict{Int,ConcretePJRTArray{Float64,0,1,Sharding.NoShardInfo}},
                     Dict{Int,TracedRArray{Float64,0}},
                     Dict{Int,TracedRArray{Float64,0}},
                 ),
                 (Dict{Int}, Dict{Int}, Dict{Int}),
                 (Dict, Dict, Dict),
                 (
-                    (Dict{A,ConcreteRArray{Float64,0}} where {A}),
+                    (Dict{A,ConcretePJRTArray{Float64,0,1,Sharding.NoShardInfo}} where {A}),
                     (Dict{A,TracedRArray{Float64,0}} where {A}),
                     (Dict{A,TracedRArray{Float64,0}} where {A}),
                 ),
@@ -164,6 +164,11 @@ end
                     NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
                     NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
                     NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
+                ),
+                (
+                    Base.RefValue{A} where {A},
+                    Base.RefValue{A} where {A},
+                    Base.RefValue{A} where {A},
                 ),
                 (Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}),
                 (
@@ -172,23 +177,27 @@ end
                     Wrapper{TracedRNumber{Float64},Vector{Float64}},
                 ),
                 (
-                    Wrapper{Float64,ConcreteRArray{Float64,1}},
+                    Wrapper{Float64,ConcretePJRTArray{Float64,1,1,Sharding.NoShardInfo}},
                     Wrapper{Float64,TracedRArray{Float64,1}},
                     Wrapper{TracedRNumber{Float64},TracedRArray{Float64,1}},
                 ),
                 (Wrapper{Symbol}, Wrapper{Symbol}, Wrapper{Symbol}),
                 (Wrapper{Float64}, Wrapper{Float64}, Wrapper{TracedRNumber{Float64}}),
                 (
-                    Wrapper{ConcreteRArray{Float64,1}},
+                    Wrapper{ConcretePJRTArray{Float64,1,1,Sharding.NoShardInfo}},
                     Wrapper{TracedRArray{Float64,1}},
                     Wrapper{TracedRArray{Float64,1}},
                 ),
                 (Wrapper, Wrapper, Wrapper),
             ]
-                tracedty = traced_type(origty, Val(ConcreteToTraced), Union{})
+                tracedty = traced_type(
+                    origty, Val(ConcreteToTraced), Union{}, Sharding.NoSharding()
+                )
                 @test tracedty == targetty
 
-                tracedty2 = traced_type(origty, Val(ConcreteToTraced), ReactantPrimitive)
+                tracedty2 = traced_type(
+                    origty, Val(ConcreteToTraced), ReactantPrimitive, Sharding.NoSharding()
+                )
                 @test tracedty2 == targetty
             end
 
@@ -199,7 +208,7 @@ end
                 TracedRArray{Float64,3},
             ]
                 @test_throws Union{ErrorException,String} traced_type(
-                    type, Val(ConcreteToTraced), Union{}
+                    type, Val(ConcreteToTraced), Union{}, Sharding.NoSharding()
                 )
             end
         end
@@ -208,21 +217,29 @@ end
                 x::Vector{Float64}
                 y::Union{Nothing,Node}
             end
-            @test_throws NoFieldMatchError traced_type(Node, Val(ArrayToConcrete), Union{})
+            @test_throws NoFieldMatchError traced_type(
+                Node, Val(ArrayToConcrete), Union{}, Sharding.NoSharding()
+            )
         end
     end
 
     @testset "specialized dispatches" begin
-        @test @inferred Union{Float64,ConcreteRArray{Float64}} Reactant.to_rarray(
+        @test @inferred Union{Float64,ConcretePJRTArray{Float64}} Reactant.to_rarray(
             1.0; track_numbers=Number
-        ) isa ConcreteRNumber
+        ) isa ConcretePJRTNumber
         @test @inferred Reactant.to_rarray(1.0) isa Float64
-        @test @inferred Reactant.to_rarray(rand(3)) isa ConcreteRArray
+        @test @inferred Reactant.to_rarray(rand(3)) isa ConcretePJRTArray
 
         x_ra = Reactant.to_rarray(rand(3))
-        @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRArray
+        @test @inferred Reactant.to_rarray(x_ra) isa ConcretePJRTArray
 
         x_ra = Reactant.to_rarray(1.0; track_numbers=Number)
-        @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRNumber
+        @test @inferred Reactant.to_rarray(x_ra) isa ConcretePJRTNumber
+    end
+
+    @testset "no trace Val" begin
+        st = (; a=1, training=Val(true))
+        st_traced = Reactant.to_rarray(st; track_numbers=Number)
+        @test st_traced.training isa Val{true}
     end
 end

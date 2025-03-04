@@ -1,5 +1,6 @@
 module TracedRArrayOverrides
 
+using Adapt: WrappedReshapedArray, WrappedArray
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
@@ -87,7 +88,7 @@ end
 function generate_index_list(i1, is...)
     list = reshape(i1, :, 1) .- 1
     for i in is
-        i = reshape(i, :, 1)
+        i = TracedUtils.broadcast_to_size(i, (length(i), 1))
         lorig = size(list, 1)
         list = repeat(list, size(i, 1), 1)
         i = repeat(i; inner=(lorig, 1)) .- 1
@@ -158,6 +159,21 @@ function Base.getindex(a::TracedRArray{T,N}, indices::CartesianIndex{N}) where {
     return Ops.gather_getindex(a, indices)[1]
 end
 
+# Needed to prevent method ambiguity
+function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {T}
+    indices =
+        materialize_traced_array(
+            reshape(
+                TracedUtils.promote_to(
+                    TracedRArray{Int,1}, collect(Int64, vcat(Tuple(indices)...))
+                ),
+                1,
+                1,
+            ),
+        ) .- 1
+    return Ops.gather_getindex(a, indices)[1]
+end
+
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = TracedUtils.normalize_indices(a, indices...)
 
@@ -181,8 +197,12 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
-        indices, integer_indices, result_size, _ = TracedUtils.traced_indices(indices...)
-        res = Ops.gather_getindex(a, generate_index_list(indices...))
+        indices, integer_indices, result_size, preddim_result_size, _ = TracedUtils.traced_indices(
+            indices...
+        )
+        res = Ops.reshape(
+            Ops.gather_getindex(a, generate_index_list(indices...)), preddim_result_size
+        )
         isempty(integer_indices) ||
             (res = materialize_traced_array(dropdims(res; dims=integer_indices)))
         return Ops.reshape(res, result_size)
@@ -211,6 +231,24 @@ end
 
 function Base.getindex(a::WrappedTracedRArray, indices...)
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
+end
+
+## Specialize certain dispatches for better codegen
+for aType in (
+    WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}} where {T,N,M},
+    PermutedDimsArray{
+        TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}
+    } where {T,N,perm,iperm},
+)
+    @eval begin
+        function Base.getindex(a::$aType, indices::Union{Int,TracedRNumber{Int}}...)
+            return getindex(materialize_traced_array(a), indices...)
+        end
+
+        function Base.getindex(a::$aType, indices...)
+            return getindex(materialize_traced_array(a), indices...)
+        end
+    end
 end
 
 function maybe_assert_scalar_setindexing(
@@ -529,10 +567,14 @@ function Base.mapreducedim!(
     @nospecialize(R::TracedRArray),
     A::Base.AbstractArrayOrBroadcasted,
 )
-    tmp = TracedUtils.broadcast_to_size(
-        Base.mapreduce(f, op, A; dims=1), (1, size(R)[2:end]...)
-    )
-    R.mlir_data = broadcast(op, R, tmp).mlir_data
+    @assert length(size(R)) == length(size(A))
+    dims = map(enumerate(zip(size(R), size(A)))) do (i, (sR, sA))
+        sR == sA && return nothing
+        @assert sR == 1
+        return i
+    end
+    tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
+    set_mlir_data!(R, get_mlir_data(tmp))
     return R
 end
 

@@ -148,7 +148,7 @@ end
         ("Transpose", write_to_transposed_array!),
         ("Adjoint", write_to_adjoint_array!),
     ]
-        x = ConcreteRArray(rand(3, 2))
+        x = Reactant.to_rarray(rand(3, 2))
         y = @jit fn(x)
         @test all(isone, Array(y))
     end
@@ -227,7 +227,7 @@ end
         @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx2_ra)) ≈
         @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Array(idx2_ra)))
 
-    idx3 = ConcreteRNumber(2)
+    idx3 = Reactant.to_rarray(2; track_numbers=true)
 
     @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra), Int64(idx3)) ≈
         @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx3)) ≈
@@ -242,4 +242,49 @@ end
     fn(x) = view(x, 1:2) .+ 1
     x_ra = Reactant.to_rarray(rand(3, 4, 3))
     @test @jit(fn(x_ra)) == fn(Array(x_ra))
+end
+
+function reshape_getindex(x)
+    x = reshape(x, 2, 4, 3)
+    return x[1, :, :]
+end
+
+function permutedims_getindex(x)
+    x = PermutedDimsArray(x, (2, 1))
+    return x[1, :]
+end
+
+@testset "no gather getindex" begin
+    x = ones(8, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    hlo = repr(@code_hlo(reshape_getindex(x_ra)))
+    @test !occursin("stablehlo.gather", hlo)
+
+    hlo = repr(@code_hlo(permutedims_getindex(x_ra)))
+    @test !occursin("stablehlo.gather", hlo)
+end
+
+function view_adjoint(x)
+    y = view(x, 1:2, 1:2)
+    return adjoint(y) .+ y
+end
+
+function view_transpose(x)
+    y = view(x, 1:2, 1:2)
+    return transpose(y) .+ y
+end
+
+function view_diagonal(x)
+    y = view(x, 1:2, 1:2)
+    return Diagonal(y) .+ y
+end
+
+@testset "2 levels of wrapping" begin
+    x = reshape(collect(Float32, 1:8), 2, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(view_adjoint(x_ra)) ≈ view_adjoint(x)
+    @test @jit(view_transpose(x_ra)) ≈ view_transpose(x)
+    @test @jit(view_diagonal(x_ra)) ≈ view_diagonal(x)
 end

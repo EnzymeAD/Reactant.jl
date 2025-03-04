@@ -293,3 +293,47 @@ end
     @test @jit(scalar_setindex(x_ra, ConcreteRNumber(1), 1)) ≈ scalar_setindex(x, 1, 1)
     @test @allowscalar x_ra[1] == 1
 end
+
+function write_with_broadcast1!(x, y)
+    x[1, :, :] .= reshape(y, 4, 3)
+    return x
+end
+function write_with_broadcast2!(x, y)
+    x[:, 1, :] .= view(y, :, 1:3)
+    return x
+end
+
+@testset "write_with_broadcast" begin
+    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
+    y_ra = Reactant.to_rarray(rand(3, 4))
+
+    res = @jit write_with_broadcast1!(x_ra, y_ra)
+
+    @test res.data[1] === x_ra.data[1]
+
+    res = Array(res)
+    y = Array(y_ra)
+    @test res[1, :, :] ≈ reshape(y, 4, 3)
+
+    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
+    y_ra = Reactant.to_rarray(rand(3, 4))
+
+    res = @jit write_with_broadcast2!(x_ra, y_ra)
+
+    @test res.data[1] === x_ra.data[1]
+
+    res = Array(res)
+    y = Array(y_ra)
+    @test res[:, 1, :] ≈ view(y, :, 1:3)
+end
+
+@testset "getindex ambiguity" begin
+    x = collect(Float32, 1:8)
+    x_ra = Reactant.to_rarray(x)
+
+    idx = CartesianIndex(1)
+
+    fn(x, idx) = @allowscalar x[idx]
+
+    @test @jit(fn(x_ra, idx)) ≈ fn(x, idx)
+end

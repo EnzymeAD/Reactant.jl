@@ -34,6 +34,8 @@ function call_indirect(
     callee::Value,
     callee_operands::Vector{Value};
     results::Vector{IR.Type},
+    arg_attrs=nothing,
+    res_attrs=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -41,6 +43,8 @@ function call_indirect(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
 
     return create_operation(
         "func.call_indirect",
@@ -72,6 +76,8 @@ function call(
     operands::Vector{Value};
     result_0::Vector{IR.Type},
     callee,
+    arg_attrs=nothing,
+    res_attrs=nothing,
     no_inline=nothing,
     location=Location(),
 )
@@ -80,6 +86,8 @@ function call(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("callee", callee),]
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
 
     return create_operation(

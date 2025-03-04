@@ -47,18 +47,13 @@
 
 #include "xla/mlir/utils/type_util.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
-#include "xla/pjrt/cpu/cpu_client.h"
-#include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
-#include "xla/pjrt/pjrt_api.h"
-#include "xla/pjrt/pjrt_c_api_client.h"
-#include "xla/pjrt/pjrt_executable.h"
-#include "xla/pjrt/status_casters.h"
 
+#include "tsl/platform/init_main.h"
 #include "tsl/profiler/lib/profiler_session.h"
 #include "tsl/profiler/lib/traceme.h"
+#include "xla/python/profiler_utils.h"
 #include "xla/tsl/profiler/rpc/client/capture_profile.h"
 #include "xla/tsl/profiler/rpc/profiler_server.h"
-#include "xla/python/profiler_utils.h"
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -68,21 +63,50 @@
 
 #include "llvm-c/TargetMachine.h"
 
+// PJRT
+#include "xla/pjrt/cpu/cpu_client.h"
+#include "xla/pjrt/distributed/client.h"
+#include "xla/pjrt/distributed/distributed.h"
+#include "xla/pjrt/distributed/service.h"
+#include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
+#include "xla/pjrt/pjrt_api.h"
+#include "xla/pjrt/pjrt_c_api_client.h"
+#include "xla/pjrt/pjrt_executable.h"
+
+// CPU collectives
+#include "xla/backends/cpu/collectives/mpi_collectives.h"
+#if defined(__linux__)
+#include "gloo/transport/tcp/attr.h"
+#include "gloo/transport/tcp/device.h"
+#include "xla/backends/cpu/collectives/gloo_collectives.h"
+#include "xla/backends/cpu/collectives/gloo_kv_store.h"
+#elif defined(__APPLE__)
+#include "gloo/transport/uv/device.h"
+#include "xla/backends/cpu/collectives/gloo_collectives.h"
+#include "xla/backends/cpu/collectives/gloo_kv_store.h"
+#endif // defined(__linux__)
+
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
 #include "shardy/integrations/c/attributes.h"
+#include "xla/pjrt/mlir_to_hlo.h"
+#include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
+#include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_import.h"
 
 // IFRT
 #include "xla/python/ifrt/array.h"
+#include "xla/python/ifrt/attribute_map.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/compiler.h"
 #include "xla/python/ifrt/device.h"
+#include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/dtype.h"
 #include "xla/python/ifrt/executable.h"
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "xla/python/ifrt/host_callback.h"
 #include "xla/python/ifrt/index.h"
 #include "xla/python/ifrt/index_domain.h"
+#include "xla/python/ifrt/ir/ifrt_ir_program.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
@@ -101,9 +125,17 @@
 #include "xla/python/pjrt_ifrt/pjrt_memory.h"
 #include "xla/python/pjrt_ifrt/pjrt_topology.h"
 #include "xla/python/pjrt_ifrt/pjrt_tuple.h"
+#include "xla/python/pjrt_ifrt/xla_compiler.h"
+#include "xla/python/pjrt_ifrt/xla_sharding.h"
+
+// IFRT - Proxy (RPC)
+#include "xla/python/ifrt_proxy/client/registry.h"
+#include "xla/python/ifrt_proxy/server/grpc_server.h"
 
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
+
+#include "llvm/Support/ExtensibleRTTI.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -116,19 +148,56 @@ void registerGenerateApplyPatternsPass();
 } // namespace enzyme
 } // namespace mlir
 
+namespace reactant {
+
+template <typename T> struct unwrap_type {
+  typedef T type;
+};
+template <typename T> struct unwrap_type<std::shared_ptr<T>> {
+  typedef T type;
+};
+template <typename T> struct unwrap_type<tsl::RCReference<T>> {
+  typedef T type;
+};
+
+template <typename T> using unwrap_type_t = typename unwrap_type<T>::type;
+
+template <typename T> struct HeldValue {
+public:
+  HeldValue(T &obj) : holded(obj) {}
+  ~HeldValue() = default;
+
+  unwrap_type_t<T> *ptr() const { return holded.get(); }
+
+  T obj() const { return holded; }
+
+  T value() const { return holded; }
+
+  unwrap_type_t<T> *operator->() const { return ptr(); }
+
+private:
+  T holded;
+};
+
+template <typename T> HeldValue<T> *capture(T obj) {
+  return new HeldValue<T>(obj);
+}
+
+} // namespace reactant
+
+using reactant::HeldValue;
+using HeldPjRtClient = HeldValue<std::shared_ptr<xla::PjRtClient>>;
+using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
+using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
+
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
 // Utilities for `StatusOr`.
 template <typename T> T MyValueOrThrow(absl::StatusOr<T> v) {
-  if (ReactantThrowError) {
-    if (!v.ok()) {
-      ReactantThrowError(v.status().ToString().c_str());
-      throw xla::XlaRuntimeError(v.status().ToString().c_str());
-    }
-    return std::move(v).value();
-  } else {
-    return xla::ValueOrThrow(std::move(v));
+  if (!v.ok()) {
+    ReactantThrowError(v.status().ToString().c_str());
   }
+  return std::move(v).value();
 }
 
 extern "C" void ReactantHandleCuResult(uint32_t curesult) {
@@ -160,6 +229,20 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
 // TODO mlirComplexAttrGetnValue
 // TODO extern "C" MlirTypeID mlirComplexAttrGetTypeID(void) { return
 // wrap(complex::NumberAttr::getTypeID()); }
+
+extern "C" void ReactantFuncSetResultAttr(MlirOperation op, intptr_t pos,
+                                          MlirStringRef name,
+                                          MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
+      .setResultAttr(pos, unwrap(name), unwrap(attr));
+}
+
+extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
+                                       MlirStringRef name, MlirAttribute attr) {
+  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
+      .setArgAttr(pos, unwrap(name), unwrap(attr));
+}
+
 #pragma endregion
 
 // auxiliar functions
@@ -189,7 +272,11 @@ T *unwrap_absl_statusor(absl::StatusOr<T> status, char **error_msg) {
 // int xla::_LayoutProto_default_instance_;
 
 extern "C" void InitializeLogs() {
-  absl::InitializeLog();
+  const char *binary = "julia";
+  int argc = 1;
+  char *argv[] = {(char *)binary};
+  char **argv2 = &argv[0];
+  tsl::port::InitMain(binary, &argc, &argv2);
   LLVMInitializeX86Target();
   LLVMInitializeX86TargetInfo();
   LLVMInitializeX86TargetMC();
@@ -265,25 +352,47 @@ extern "C" void ProfilerServerStop(tsl::profiler::ProfilerServer *server) {
   delete server;
 }
 
-extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id,
-                                     int num_nodes) {
+PjRtClient *MakeCPUClientInternal(
+    uint8_t asynchronous, int node_id,
+    std::optional<std::shared_ptr<xla::cpu::CpuCollectives>> collectives) {
   CpuClientOptions options;
-  // options.kv_store = "etcd";
+
   options.process_id = node_id;
-  // options.num_nodes = num_nodes;
-  // options.collectives = num_nodes;
   options.asynchronous = asynchronous != 0;
+
+  if (collectives.has_value())
+    options.collectives = collectives.value();
+
   auto client = MyValueOrThrow(GetTfrtCpuClient(options));
   return client.release();
+}
+
+extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id) {
+  std::optional<std::shared_ptr<xla::cpu::CpuCollectives>> collectives;
+  return MakeCPUClientInternal(asynchronous, node_id, collectives);
 }
 
 // xla/python/xla.cc 390
 extern "C" PjRtClient *
 MakeGPUClient(int node_id, int num_nodes, int *allowed_devices,
               int num_allowed_devices, double memory_fraction, bool preallocate,
-              const char *platform_name, const char **error) {
+              const char *platform_name, const char **error,
+              void *distributed_runtime_client) {
   GpuClientOptions options;
-  // options.kv_store = "etcd";
+
+  if (num_nodes > 1) {
+    if (distributed_runtime_client == nullptr) {
+      *error =
+          "`distributed_runtime_client` must be non-null if `num_nodes` > 1";
+      return nullptr;
+    }
+    auto typed_distributed_runtime_client = static_cast<
+        HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *>(
+        distributed_runtime_client);
+    options.kv_store = GetDistributedKeyValueStore(
+        typed_distributed_runtime_client->obj(), /*key_prefix=*/"");
+  }
+
   // options.allocator_config =
   options.allocator_config.preallocate = preallocate;
   options.allocator_config.memory_fraction = memory_fraction;
@@ -394,6 +503,25 @@ extern "C" const char *ClientGetPlatformName(PjRtClient *client) {
   return cstr_from_string(client->platform_name());
 }
 
+extern "C" const char *DeviceGetKind(PjRtDevice *device) {
+  return cstr_from_string(device->device_kind());
+}
+
+extern "C" void ClientGetDevices(PjRtClient *client, PjRtDevice **out_devices) {
+  auto span = client->devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
+}
+
+extern "C" void ClientGetAddressableDevices(PjRtClient *client,
+                                            PjRtDevice **out_devices) {
+  auto span = client->addressable_devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
+}
+
 // To keep in sync with JLAllocatorStats in src/XLA.jl
 struct JLAllocatorStats {
   int64_t num_allocs;
@@ -438,11 +566,28 @@ extern "C" PjRtClient *BufferToClient(PjRtBuffer *Buffer) {
   return Buffer->client();
 }
 
+extern "C" const int64_t *BufferShape(PjRtBuffer *Buffer) {
+  return Buffer->dimensions().data();
+}
+
+extern "C" int64_t BufferNDimensions(PjRtBuffer *Buffer) {
+  return Buffer->dimensions().length();
+}
+
+extern "C" xla::PrimitiveType BufferPrimitiveType(PjRtBuffer *Buffer) {
+  return Buffer->element_type();
+}
+
+extern "C" void PjRtBufferFree(PjRtBuffer *Buffer) { delete Buffer; }
+
 extern "C" PjRtClient *DeviceToClient(PjRtDevice *Device) {
   return Device->client();
 }
 
-extern "C" void PjRtBufferFree(PjRtBuffer *Buffer) { delete Buffer; }
+extern "C" PjRtClient *
+PjRtLoadedExecutableGetClient(PjRtLoadedExecutable *exec) {
+  return exec->client();
+}
 
 // https://openxla.org/xla/shapes
 // This minor-to-major dimension order of 0 up to N-1 is akin to column-major
@@ -503,9 +648,10 @@ extern "C" PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
   // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
   // &layout));
-  auto buffer = MyValueOrThrow(
-      client->BufferFromHostBuffer(data, primtype, shape, /*byte_strides*/ {},
-                                   semantics, /*ondone*/ {}, device));
+  const xla::Layout *layout = nullptr;
+  auto buffer = MyValueOrThrow(client->BufferFromHostBuffer(
+      data, primtype, shape, /*byte_strides*/ {}, semantics, /*ondone*/ {},
+      *device->default_memory_space(), layout));
   auto bres = buffer.release();
   return bres;
 }
@@ -514,7 +660,8 @@ extern "C" uint8_t BufferOnCPU(PjRtBuffer *buffer) { return buffer->IsOnCpu(); }
 
 extern "C" PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
                                           PjRtDevice *dst_device) {
-  auto res = MyValueOrThrow(buffer->CopyToDevice(dst_device));
+  auto res = MyValueOrThrow(
+      buffer->CopyToMemorySpace(*dst_device->default_memory_space()));
   return res.release();
 }
 
@@ -593,51 +740,6 @@ extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
   return wrap(res);
 }
 
-/* Note that this */
-extern "C" xla::PjRtLoadedExecutable *ClientCompile(PjRtClient *client,
-                                                    MlirModule cmod,
-                                                    int *global_ordinals,
-                                                    int num_global_ordinals,
-                                                    const char* xla_gpu_cuda_data_dir) {
-  auto program =
-      std::make_unique<xla::ifrt::HloProgram>(cast<ModuleOp>(*unwrap(cmod)));
-
-  CompileOptions options;
-
-  // https://github.com/pytorch/xla/blob/8b2414094578e829b99a8383877c86d357eeb682/torch_xla/csrc/runtime/pjrt_computation_client.cc#L601
-  int device_count = client->addressable_device_count();
-
-  options.executable_build_options.set_num_replicas(device_count);
-  options.executable_build_options.set_num_partitions(1);
-  options.executable_build_options.mutable_debug_options()->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
-
-  xla::DeviceAssignment device_assignment(device_count, 1);
-  for (int64_t device_id = 0; device_id < num_global_ordinals; ++device_id) {
-    int ordinal = global_ordinals[device_id];
-    if (ordinal < 0) {
-      continue;
-    }
-    device_assignment(ordinal, 0) = device_id;
-  }
-  options.executable_build_options.set_device_assignment(device_assignment);
-
-  auto addressable_devices = client->addressable_devices();
-  if (!addressable_devices.empty()) {
-    int device_ordinal = options.executable_build_options.device_ordinal();
-    if (device_ordinal < 0) {
-      device_ordinal = 0;
-    }
-    assert(device_ordinal < addressable_devices.size());
-    auto stats = addressable_devices[device_ordinal]->GetAllocatorStats();
-    if (stats.ok() && stats->bytes_limit) {
-      options.executable_build_options.set_device_memory_size(*stats->bytes_limit);
-    }
-  }
-  auto exec =
-      MyValueOrThrow(client->Compile(cast<ModuleOp>(*unwrap(cmod)), options));
-  return exec.release();
-}
-
 typedef PjRtFuture<> FutureType;
 extern "C" void FreeFuture(FutureType *Future) { delete Future; }
 
@@ -646,6 +748,125 @@ extern "C" uint8_t FutureIsReady(FutureType *Future) {
 }
 
 extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
+
+xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
+                                           const int64_t *mesh_ids,
+                                           int64_t num_mesh_ids,
+                                           const char *xla_gpu_cuda_data_dir) {
+  xla::CompileOptions options;
+  options.executable_build_options.mutable_debug_options()
+      ->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
+
+  if (is_sharded) {
+    assert(device_id < 0);
+
+    options.executable_build_options.set_num_replicas(1);
+    options.executable_build_options.set_num_partitions(num_mesh_ids);
+
+    options.executable_build_options.set_use_spmd_partitioning(true);
+    options.executable_build_options.set_use_shardy_partitioner(true);
+
+    // auto partitioning for GPUs is not available in open source version of XLA
+    // options.executable_build_options.set_use_auto_spmd_partitioning(true);
+    // std::vector<int64_t> mesh_shape_vec(mesh_shape, mesh_shape +
+    // num_mesh_shape);
+    // options.executable_build_options.set_auto_spmd_partitioning_mesh_shape(mesh_shape_vec);
+    // std::vector<int64_t> mesh_ids_vec(mesh_ids, mesh_ids + num_mesh_ids);
+    // options.executable_build_options.set_auto_spmd_partitioning_mesh_ids(mesh_ids_vec);
+
+    xla::DeviceAssignment device_assignment(1, num_mesh_ids);
+    for (int64_t i = 0; i < num_mesh_ids; ++i) {
+      int64_t mesh_id = mesh_ids[i];
+      assert(mesh_id >= 0);
+      device_assignment(0, i) = mesh_id;
+    }
+    options.executable_build_options.set_device_assignment(device_assignment);
+
+    options.executable_build_options
+        .set_allow_spmd_sharding_propagation_to_parameters({false});
+    options.executable_build_options
+        .set_allow_spmd_sharding_propagation_to_output({false});
+  } else {
+    assert(device_id >= 0);
+
+    options.executable_build_options.set_num_replicas(1);
+    options.executable_build_options.set_num_partitions(1);
+    options.executable_build_options.set_device_ordinal(device_id);
+
+    xla::DeviceAssignment device_assignment(1, 1);
+    device_assignment(0, 0) = device_id;
+    options.executable_build_options.set_device_assignment(device_assignment);
+  }
+
+  return options;
+}
+
+extern "C" xla::PjRtLoadedExecutable *
+ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
+              bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
+              const char *xla_gpu_cuda_data_dir) {
+  CompileOptions options = GenerateCompileOptions(
+      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+
+  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
+  if (is_sharded) {
+    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
+    auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
+    if (!status.ok()) {
+      ReactantThrowError(status.ToString().c_str());
+    }
+  }
+
+  auto exec = MyValueOrThrow(client->Compile(cmod_op, options));
+  return exec.release();
+}
+
+extern "C" void
+PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
+                                      xla::OpSharding **op_shardings,
+                                      int32_t num_op_shardings) {
+  std::optional<std::vector<OpSharding>> shardings = exec->GetOutputShardings();
+  if (!shardings.has_value()) {
+    ReactantThrowError(
+        "No sharding found for the output of the loaded executable");
+  }
+
+  std::vector<xla::OpSharding> hlo_op_shardings = shardings.value();
+  if (num_op_shardings != hlo_op_shardings.size()) {
+    ReactantThrowError(("Expected " + std::to_string(num_op_shardings) +
+                        " shardings, got " +
+                        std::to_string(hlo_op_shardings.size()))
+                           .c_str());
+  }
+
+  for (int32_t i = 0; i < num_op_shardings; i++) {
+    op_shardings[i] = new xla::OpSharding(hlo_op_shardings[i]);
+  }
+}
+
+extern "C" void
+PjRtLoadedExecutableGetParameterShardings(xla::PjRtLoadedExecutable *exec,
+                                          xla::OpSharding **op_shardings,
+                                          int32_t num_op_shardings) {
+  std::optional<std::vector<OpSharding>> shardings =
+      exec->GetParameterShardings();
+  if (!shardings.has_value()) {
+    ReactantThrowError(
+        "No sharding found for the output of the loaded executable");
+  }
+
+  std::vector<xla::OpSharding> hlo_op_shardings = shardings.value();
+  if (num_op_shardings != hlo_op_shardings.size()) {
+    ReactantThrowError(("Expected " + std::to_string(num_op_shardings) +
+                        " shardings, got " +
+                        std::to_string(hlo_op_shardings.size()))
+                           .c_str());
+  }
+
+  for (int32_t i = 0; i < num_op_shardings; i++) {
+    op_shardings[i] = new xla::OpSharding(hlo_op_shardings[i]);
+  }
+}
 
 extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
                                   PjRtBuffer **op_args, PjRtDevice *device,
@@ -667,25 +888,25 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
   // Optional future to hold asynchronous execution results.
   std::optional<PjRtFuture<>> returned_future;
 
-  auto results = MyValueOrThrow(
-      exec->ExecuteSharded(argument_handles,
-          device, options, returned_future, /*fill_future=*/true));
+  auto results = MyValueOrThrow(exec->ExecuteSharded(argument_handles, device,
+                                                     options, returned_future,
+                                                     /*fill_future=*/true));
 
   // Validate the number of results.
   if (results.size() != num_results) {
-    llvm::errs() << "Error: results.size()=" << results.size()
-                 << " does not match num_results=" << num_results << "\n";
-    std::abort(); // Terminate if the number of results is incorrect.
+    ReactantThrowError(
+        ("Error: results.size()=" + std::to_string(results.size()) +
+         " does not match num_results=" + std::to_string(num_results) + "\n")
+            .c_str());
   }
 
   // Handle futures if they are returned.
-  if (returned_future.has_value()) {
-    *futures = true;
+  auto future_val = returned_future.has_value();
+  *futures = future_val;
+  if (future_val) {
     for (size_t i = 0; i < num_results; i++) {
       future_results[i] = new FutureType(*returned_future);
     }
-  } else {
-    *futures = false;
   }
 
   // Release the results into the output array.
@@ -694,23 +915,44 @@ extern "C" void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
   }
 }
 
-extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
+// This isn't exposed to julia, but leaving it here since it is very useful for
+// debugging sharding (and generally for the execute workflow)
+void PrintPjRtBuffer(PjRtBuffer *buffer) {
+  if (buffer) {
+    xla::Shape shape = MyValueOrThrow(buffer->HostShape());
+    auto dims = shape.dimensions();
+    auto nelems = std::accumulate(dims.begin(), dims.end(), 1,
+                                  std::multiplies<int64_t>());
+    std::vector<float> host_data(nelems);
+    BufferToHost(buffer, host_data.data());
+
+    for (int i = 0; i < nelems; ++i) {
+      std::cout << host_data[i] << " ";
+    }
+    std::cout << std::endl;
+  } else {
+    std::cout << "    Buffer is nullptr" << std::endl;
+  }
+  return;
+}
+
+extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
                            PjRtBuffer **op_args, uint8_t *is_arg_donatable,
                            int num_results, PjRtBuffer **op_results,
                            uint8_t *futures, FutureType **future_results) {
-  auto client = exec->client();
-  int num_devices = client->addressable_device_count();
+  xla::DeviceAssignment device_assignment = exec->device_assignment();
+  int num_devices = device_assignment.computation_count();
 
   // Ensure argument_handles is structured as num_devices x num_args
   std::vector<std::vector<PjRtBuffer *>> argument_handles(num_devices);
+  int num_args = op_args_len / num_devices;
 
   // Distribute arguments across devices
   for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
     argument_handles[device_idx].reserve(num_args);
     for (int arg_idx = 0; arg_idx < num_args; ++arg_idx) {
-      // Assuming op_args is a flat array of size num_devices * num_args
-      // where arguments for each device are contiguous
-      argument_handles[device_idx].push_back(op_args[device_idx * num_args + arg_idx]);
+      argument_handles[device_idx].push_back(
+          op_args[device_idx * num_args + arg_idx]);
     }
   }
 
@@ -722,34 +964,41 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
   }
   options.untuple_result = true;
 
-  std::optional<std::vector<FutureType>> returned_futures;
-  auto results = MyValueOrThrow(
-      exec->Execute(static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
-                        argument_handles),
-                    options, returned_futures));
+  std::optional<std::vector<FutureType>> returned_futures =
+      std::vector<FutureType>();
+  std::vector<std::vector<std::unique_ptr<PjRtBuffer>>> results =
+      MyValueOrThrow(exec->Execute(
+          static_cast<absl::Span<const std::vector<PjRtBuffer *>>>(
+              argument_handles),
+          options, returned_futures));
 
-  assert(results.size() == num_devices);
+  if (results.size() != num_devices) {
+    ReactantThrowError((" results.size()=" + std::to_string(results.size()) +
+                        " num_devices=" + std::to_string(num_devices) + "\n")
+                           .c_str());
+  }
 
   for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
+    // Remove mesh_id lookup since we're using device_idx ordering
     if (results[device_idx].size() != num_results) {
-      llvm::errs() << " results[" << device_idx << "].size()=" << results[device_idx].size()
-                   << " num_results=" << num_results << "\n";
+      ReactantThrowError(
+          (" results[" + std::to_string(device_idx) +
+           "].size()=" + std::to_string(results[device_idx].size()) +
+           " num_results=" + std::to_string(num_results) + "\n")
+              .c_str());
     }
-    assert(results[device_idx].size() == num_results);
   }
 
   // Handle returned futures
-  if (returned_futures) {
-    *futures = true;
-    assert(returned_futures->size() == num_devices * num_results);
-    for (int device_idx = 0; device_idx < num_devices; ++device_idx) {
-      for (int result_idx = 0; result_idx < num_results; ++result_idx) {
-        int flat_index = device_idx * num_results + result_idx;
-        future_results[flat_index] = new FutureType((*returned_futures)[flat_index]);
-      }
+  auto future_val = returned_futures.has_value();
+  *futures = future_val;
+  if (future_val) {
+    if (returned_futures->size() != num_devices) {
+      ReactantThrowError((" returned_futures->size()=" +
+                          std::to_string(returned_futures->size()) +
+                          " num_devices=" + std::to_string(num_devices) + "\n")
+                             .c_str());
     }
-  } else {
-    *futures = false;
   }
 
   // Copy results into the output buffers
@@ -757,8 +1006,20 @@ extern "C" void XLAExecute(xla::PjRtLoadedExecutable *exec, int num_args,
     for (int result_idx = 0; result_idx < num_results; ++result_idx) {
       int flat_index = device_idx * num_results + result_idx;
       op_results[flat_index] = results[device_idx][result_idx].release();
+      if (future_val) {
+        future_results[flat_index] =
+            new FutureType((*returned_futures)[device_idx]);
+      }
     }
   }
+}
+
+extern "C" int PjRtLoadedExecutableNumReplicas(PjRtLoadedExecutable *exec) {
+  return exec->num_replicas();
+}
+
+extern "C" int PjRtLoadedExecutableNumPartitions(PjRtLoadedExecutable *exec) {
+  return exec->num_partitions();
 }
 
 void prepareRegistry(mlir::DialectRegistry &registry);
@@ -784,16 +1045,15 @@ extern "C" void RegisterDialects(MlirContext cctx) {
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMIRToLLVMTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/NVVM/LLVMIRToNVVMTranslation.h"
-extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
-  mlir::DialectRegistry &registry = *unwrap(creg);
-  prepareRegistry(registry);
+#include "xla/service/spmd/shardy/sdy_round_trip/pipelines.h"
 
+extern "C" void InitializePasses(MlirDialectRegistry creg) {
   mlir::registerenzymePasses();
   enzyme::registerenzymexlaPasses();
 
   // Register the standard passes we want.
   mlir::registerCSEPass();
-  mlir::registerConvertAffineToStandardPass();
+  mlir::registerLowerAffinePass();
   mlir::registerSCCPPass();
   mlir::registerInlinerPass();
   mlir::registerCanonicalizerPass();
@@ -801,11 +1061,7 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::registerLoopInvariantCodeMotionPass();
   mlir::registerConvertSCFToOpenMPPass();
   mlir::affine::registerAffinePasses();
-  mlir::registerReconcileUnrealizedCasts();
-
-  mlir::registerLLVMDialectImport(registry);
-  mlir::registerNVVMDialectImport(registry);
-  mlir::LLVM::registerInlinerInterface(registry);
+  mlir::registerReconcileUnrealizedCastsPass();
 
   /*
     registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
@@ -827,6 +1083,19 @@ extern "C" void InitializeRegistryAndPasses(MlirDialectRegistry creg) {
   mlir::transform::registerInterpreterPass();
   mlir::enzyme::registerGenerateApplyPatternsPass();
   mlir::enzyme::registerRemoveTransformPass();
+
+  // xla + shardy specific passes
+  xla::sdy::registerSdyRoundTripExportPipeline();
+  xla::sdy::registerSdyRoundTripImportPipeline();
+}
+
+extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
+  mlir::DialectRegistry &registry = *unwrap(creg);
+  prepareRegistry(registry);
+
+  mlir::registerLLVMDialectImport(registry);
+  mlir::registerNVVMDialectImport(registry);
+  mlir::LLVM::registerInlinerInterface(registry);
 }
 
 /// Returns an unused symbol in `module` for `oldSymbolName` by trying numeric
@@ -881,12 +1150,6 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
   return success();
 }
 
-extern "C" void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
-                                       MlirStringRef name, MlirAttribute attr) {
-  llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
-      .setArgAttr(pos, unwrap(name), unwrap(attr));
-}
-
 extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
                                       const char *entryfn) {
   auto prevMod = cast<ModuleOp>(*unwrap(prevModC));
@@ -923,558 +1186,436 @@ extern "C" MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
   return wrap(entryFn);
 }
 
-#pragma region xla::ifrt
+extern "C" void pjrt_client_dtor(HeldPjRtClient *client) { delete client; }
 
-#pragma region xla::ifrt::Value
-extern "C" ifrt::Client *ifrt_value_client(ifrt::Value *value) {
-  return value->client();
+extern "C" int pjrt_client_num_devices(HeldPjRtClient *client) {
+  return client->ptr()->device_count();
 }
 
-extern "C" ifrt::Future<> ifrt_value_get_ready_future(ifrt::Value *value) {
-  return value->GetReadyFuture();
+extern "C" int pjrt_client_num_addressable_devices(HeldPjRtClient *client) {
+  return client->ptr()->addressable_device_count();
 }
 
-extern "C" ifrt::Future<> ifrt_value_delete(ifrt::Value *value) {
-  return value->Delete();
+extern "C" int pjrt_client_pid(HeldPjRtClient *client) {
+  return client->ptr()->process_index();
 }
 
-extern "C" bool ifrt_value_is_deleted(ifrt::Value *value) {
-  return value->IsDeleted();
+extern "C" PjRtDevice *pjrt_client_get_device(HeldPjRtClient *client,
+                                              int device_id) {
+  return ClientGetDevice(client->ptr(), device_id);
 }
 
-extern "C" const char *ifrt_value_debug_string(ifrt::Value *value) {
-  return cstr_from_string(value->DebugString());
+extern "C" PjRtDevice *
+pjrt_client_get_addressable_device(HeldPjRtClient *client, int device_id) {
+  return ClientGetAddressableDevice(client->ptr(), device_id);
 }
-#pragma endregion
 
-#pragma region xla::ifrt::Tuple
-extern "C" int ifrt_tuple_arity(ifrt::Tuple *tuple) { return tuple->Arity(); }
+extern "C" const char *pjrt_client_platform_name(HeldPjRtClient *client) {
+  return ClientGetPlatformName(client->ptr());
+}
 
-// TODO ifrt::Tuple::Unpack
-#pragma endregion
+// deprecated
+// extern "C" HeldValue<std::shared_ptr<xla::PjRtBuffer>> *
+// reactant_hold_pjrtbuffer(xla::PjRtBuffer *buffer) {
+//   return reactant::capture(std::shared_ptr<xla::PjRtBuffer>(buffer));
+// }
 
-#pragma region xla::ifrt::PjRtTuple
-extern "C" ifrt::PjRtTuple *
-ifrt_pjrt_tuple_ctor(ifrt::PjRtCompatibleClient *client, ifrt::Value *values,
-                     int nvalues) {
-  auto values_ptr = new tsl::RCReference<ifrt::Value>[nvalues];
-  for (int i = 0; i < nvalues; i++) {
-    values_ptr[i] = tsl::RCReference<ifrt::Value>();
-    values_ptr[i].reset(&values[i]);
+extern "C" HeldPjRtBuffer *pjrt_buffer_from_host(HeldPjRtClient *client,
+                                                 void *data, uint64_t ptype,
+                                                 size_t dim, int64_t *cshape,
+                                                 PjRtDevice *device) {
+  PjRtBuffer *buffer =
+      ArrayFromHostBuffer(client->ptr(), data, ptype, dim, cshape, device);
+  return reactant::capture(std::shared_ptr<PjRtBuffer>(buffer));
+}
+
+extern "C" void pjrt_buffer_dtor(HeldPjRtBuffer *buffer) { delete buffer; }
+
+extern "C" void *pjrt_buffer_unsafe_buffer_pointer(HeldPjRtBuffer *buffer) {
+  return UnsafeBufferPointer(buffer->ptr());
+}
+
+extern "C" bool pjrt_buffer_is_on_cpu(HeldPjRtBuffer *buffer) {
+  return buffer->ptr()->IsOnCpu();
+}
+
+extern "C" HeldPjRtBuffer *pjrt_buffer_copy_to_device(HeldPjRtBuffer *buffer,
+                                                      PjRtDevice *dst_device) {
+  PjRtBuffer *ret = CopyBufferToDevice(buffer->ptr(), dst_device);
+  return reactant::capture(std::shared_ptr<PjRtBuffer>(ret));
+}
+
+extern "C" void pjrt_buffer_to_host(HeldPjRtBuffer *buffer, void *data) {
+  BufferToHost(buffer->ptr(), data);
+}
+
+extern "C" void pjrt_buffer_print(HeldPjRtBuffer *buffer) {
+  PrintPjRtBuffer(buffer->ptr());
+}
+
+extern "C" PjRtDevice *pjrt_buffer_get_device(HeldPjRtBuffer *buffer) {
+  return buffer->ptr()->device();
+}
+
+extern "C" HeldPjRtClient *pjrt_buffer_get_client(HeldPjRtBuffer *buffer) {
+  return reactant::capture(
+      std::shared_ptr<PjRtClient>(buffer->ptr()->client()));
+}
+
+extern "C" void ifrt_client_dtor(ifrt::Client *client) { delete client; }
+
+// generic version, but IFRT-PjRt backend only supports SingleDeviceSharding
+// and FullyReplicated. use `ifrt_pjrt_array_create` if using IFRT-PjRt.
+extern "C" HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
+    ifrt::Client *client, void *data,
+    int dtype_kind, // int
+    int ndims, const int64_t *c_shape,
+    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding,
+    int c_semantics) {
+  auto dtype = ifrt::DType(static_cast<ifrt::DType::Kind>(dtype_kind));
+  auto shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
+  return reactant::capture(MyValueOrThrow(client->MakeArrayFromHostBuffer(
+      data, dtype, shape,
+      std::nullopt, // byte_strides
+      sharding->obj(),
+      static_cast<ifrt::Client::HostBufferSemantics>(c_semantics),
+      [] {} // on_done_with_host_buffer
+      )));
+}
+
+extern "C" HeldIfrtArray *ifrt_client_make_single_shard_array_from_host_buffer(
+    ifrt::Client *client, void *data,
+    int dtype_kind, // int
+    int ndims, const int64_t *c_shape, int c_semantics, ifrt::Device *device,
+    const char *mem_kind) {
+  auto memory_kind = ifrt::MemoryKind(std::string(mem_kind));
+  auto sharding = reactant::capture(std::shared_ptr<const ifrt::Sharding>(
+      ifrt::SingleDeviceSharding::Create(device, memory_kind).release()));
+  return ifrt_client_make_array_from_host_buffer(
+      client, data, dtype_kind, ndims, c_shape, sharding, c_semantics);
+}
+
+// all arrays are assumed to have same DType
+// each process only provides arrays for its own addressable devices
+extern "C" HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
+    ifrt::Client *client, int32_t ndims, const int64_t *c_shape,
+    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding, int32_t narrays,
+    HeldIfrtArray **c_arrays, int32_t c_semantics) {
+  ifrt::Shape shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
+  std::vector<tsl::RCReference<ifrt::Array>> arrays;
+  for (int i = 0; i < narrays; i++) {
+    arrays.emplace_back(c_arrays[i]->obj());
   }
-  auto span = absl::Span<tsl::RCReference<ifrt::Value>>(values_ptr, nvalues);
-  return MyValueOrThrow(ifrt::PjRtTuple::Create(client, span)).release();
+  return reactant::capture(
+      MyValueOrThrow(client->AssembleArrayFromSingleDeviceArrays(
+          shape, sharding->obj(), absl::MakeSpan(arrays),
+          static_cast<ifrt::ArrayCopySemantics>(c_semantics),
+          ifrt::SingleDeviceShardSemantics::kAddressableShards)));
 }
 
-extern "C" void ifrt_pjrt_tuple_free(ifrt::PjRtTuple *tuple) { delete tuple; }
-#pragma endregion
-
-#pragma region xla::ifrt::DType
-extern "C" ifrt::DType *ifrt_dtype_ctor(ifrt::DType::Kind kind) {
-  return new ifrt::DType(kind);
+// we should deprecate this because is IFRT-PjRt specific
+// try use `ifrt_client_make_single_shard_array_from_host_buffer` instead
+extern "C" HeldIfrtArray *
+ifrt_pjrt_array_create(ifrt::PjRtClient *client,
+                       HeldValue<std::shared_ptr<xla::PjRtBuffer>> *buffer) {
+  return reactant::capture(tsl::RCReference<ifrt::Array>(
+      MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj()))));
 }
 
-extern "C" void ifrt_dtype_free(ifrt::DType *dtype) { delete dtype; }
+// we might me interested in the `Compiler::Compile` method variant that accepts
+// `Topology`
+extern "C" xla::ifrt::LoadedExecutable *
+ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
+             bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
+             const char *xla_gpu_cuda_data_dir) {
+  xla::CompileOptions compile_options = GenerateCompileOptions(
+      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+  auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
+      xla::ifrt::XlaCompileOptions(compile_options));
 
-extern "C" ifrt::DType::Kind ifrt_dtype_kind(ifrt::DType *dtype) {
-  return dtype->kind();
-}
-
-extern "C" bool ifrt_dtype_eq(ifrt::DType *dtype1, ifrt::DType *dtype2) {
-  return *dtype1 == *dtype2;
-}
-
-extern "C" bool ifrt_dtype_ne(ifrt::DType *dtype1, ifrt::DType *dtype2) {
-  return *dtype1 != *dtype2;
-}
-
-// Returns -1 if not aligned to a byte boundary or there is no fixed size
-extern "C" int ifrt_dtype_byte_size(ifrt::DType *dtype) {
-  auto byte_size = dtype->byte_size();
-  if (byte_size.has_value()) {
-    return byte_size.value();
+  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
+  if (is_sharded) {
+    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
+    auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
+    if (!status.ok()) {
+      ReactantThrowError(status.ToString().c_str());
+    }
   }
-  return -1;
+
+  auto program =
+      std::make_unique<xla::ifrt::HloProgram>(xla::ifrt::HloProgram(cmod_op));
+  auto compiler = client->GetDefaultCompiler();
+
+  return MyValueOrThrow(
+             compiler->Compile(std::move(program), std::move(options)))
+      .release();
 }
 
-// Returns -1 if there is no fixed size
-extern "C" int ifrt_dtype_bit_size(ifrt::DType *dtype) {
-  auto bit_size = dtype->bit_size();
-  if (bit_size.has_value()) {
-    return bit_size.value();
+extern "C" void
+ifrt_pjrt_loaded_executable_dtor(xla::ifrt::PjRtLoadedExecutable *exec) {
+  delete exec;
+}
+
+extern "C" void ifrt_array_dtor(HeldIfrtArray *array) { delete array; }
+
+// in principle, use ArrayCopySemantics::kAlwaysCopy (=0)
+extern "C" FutureType *
+ifrt_CopyArrayToHostBuffer(HeldIfrtArray *array, void *data,
+                           ifrt::ArrayCopySemantics semantics) {
+  return new FutureType(
+      (*array)->CopyToHostBuffer(data, std::nullopt, semantics));
+}
+
+extern "C" void
+PjRtLoadedExecutableGetHloModules(xla::PjRtLoadedExecutable *exec,
+                                  void **hlo_modules, int32_t *nmodules) {
+  auto hlo_modules_vec = MyValueOrThrow(exec->GetHloModules());
+  *nmodules = hlo_modules_vec.size();
+  for (int i = 0; i < *nmodules; i++) {
+    hlo_modules[i] = reactant::capture(hlo_modules_vec[i]);
   }
-  return -1;
-}
-
-extern "C" const char *ifrt_dtype_debug_string(ifrt::DType *dtype) {
-  return cstr_from_string(dtype->DebugString());
-}
-
-// xla::PrimitiveType is a enum, so we use int to represent it on Julia side
-extern "C" xla::PrimitiveType ifrt_to_primitive_type(ifrt::DType *dtype) {
-  return MyValueOrThrow(ifrt::ToPrimitiveType(*dtype));
-}
-
-// xla::PrimitiveType is a enum, so we use int to represent it on Julia side
-extern "C" ifrt::DType *ifrt_to_dtype(xla::PrimitiveType primitive_type) {
-  auto dtype = MyValueOrThrow(ifrt::ToDType(primitive_type));
-  return new ifrt::DType(dtype.kind());
-}
-#pragma endregion
-
-#pragma region xla::ifrt::Shape
-extern "C" ifrt::Shape *ifrt_shape_ctor(const int64_t *dims, size_t dims_size) {
-  return new ifrt::Shape(absl::Span<const int64_t>(dims, dims_size));
-}
-
-extern "C" void ifrt_shape_free(ifrt::Shape *shape) { delete shape; }
-
-extern "C" const int64_t *ifrt_shape_dims(ifrt::Shape *shape) {
-  return shape->dims().data();
-}
-
-extern "C" int64_t ifrt_shape_dims_num_elements(ifrt::Shape *shape) {
-  return shape->num_elements();
-}
-
-extern "C" const char *ifrt_shape_debug_string(ifrt::Shape *shape) {
-  return cstr_from_string(shape->DebugString());
-}
-#pragma endregion
-
-#pragma region xla::ifrt::DynamicShape
-extern "C" ifrt::DynamicShape *
-ifrt_dynamicshape_ctor(ifrt::Shape *shape, const bool *dynamic_dims_mask) {
-  auto tag = ifrt::BoundedDynamicShapeTag(
-      absl::Span<const bool>(dynamic_dims_mask, shape->dims().size()));
-  auto dynshape = MyValueOrThrow(ifrt::DynamicShape::Create(*shape, tag));
-  return new ifrt::DynamicShape(dynshape);
-}
-
-extern "C" void ifrt_dynamicshape_free(ifrt::DynamicShape *shape) {
-  delete shape;
-}
-
-// TODO ifrt::DynamicShape::GetTag
-
-extern "C" bool ifrt_dynamicshape_eq(ifrt::DynamicShape *shape1,
-                                     ifrt::DynamicShape *shape2) {
-  return *shape1 == *shape2;
-}
-
-extern "C" bool ifrt_dynamicshape_ne(ifrt::DynamicShape *shape1,
-                                     ifrt::DynamicShape *shape2) {
-  return *shape1 != *shape2;
-}
-
-extern "C" ifrt::Shape *
-ifrt_dynamicshape_get_padded_shape(ifrt::DynamicShape *shape) {
-  auto padshape = MyValueOrThrow(shape->GetPaddedShape());
-  return new ifrt::Shape(padshape);
-}
-
-extern "C" bool ifrt_dynamicshape_is_dynamic_dim(ifrt::DynamicShape *shape,
-                                                 int dimension) {
-  return shape->IsDynamicDim(dimension);
 }
 
 extern "C" const char *
-ifrt_dynamicshape_debug_string(ifrt::DynamicShape *shape) {
-  return cstr_from_string(shape->DebugString());
-}
-#pragma endregion
-
-#pragma region xla::ifrt::Index
-extern "C" ifrt::Index *ifrt_index_ctor(const int64_t *elements,
-                                        size_t elements_size) {
-  return new ifrt::Index(absl::Span<const int64_t>(elements, elements_size));
+HloModuleToString(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+  return cstr_from_string(hlo_module->obj()->ToString());
 }
 
-extern "C" ifrt::Index *ifrt_index_zeros(int num_elements) {
-  return new ifrt::Index(ifrt::Index::Zeros(num_elements));
+extern "C" void
+FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+  delete hlo_module;
 }
 
-extern "C" void ifrt_index_free(ifrt::Index *index) { delete index; }
+#pragma region IfRtClient
 
-extern "C" const int64_t *ifrt_index_elements(ifrt::Index *index) {
-  return index->elements().data();
-}
+// XXX: Bring back with the correct API
+// extern "C" ifrt::proxy::GrpcServer *
+// ifrt_proxy_grpc_server_create_from_ifrt_client_factory_cpu(
+//     const char *c_address, uint8_t asynchronous, int node_id) {
+//   std::string address = c_address;
 
-extern "C" int ifrt_index_count(ifrt::Index *index) {
-  return index->elements().size();
-}
+//   return MyValueOrThrow(
+//              ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
+//                  address,
+//                  [asynchronous,
+//                   node_id]() -> absl::StatusOr<std::shared_ptr<ifrt::Client>>
+//                   {
+//                    auto pjrt_client = std::shared_ptr<PjRtClient>(
+//                        MakeCPUClient(asynchronous, node_id));
+//                    return std::shared_ptr<ifrt::Client>(
+//                        xla::ifrt::PjRtClient::Create(pjrt_client).release());
+//                  }))
+//       .release();
+// }
 
-extern "C" bool ifrt_index_eq(ifrt::Index *index1, ifrt::Index *index2) {
-  return *index1 == *index2;
-}
+// extern "C" ifrt::proxy::GrpcServer *
+// ifrt_proxy_grpc_server_create_from_ifrt_client_factory_gpu(
+//     int node_id, int num_nodes, int *allowed_devices, int
+//     num_allowed_devices, double memory_fraction, bool preallocate, const char
+//     *platform_name, const char **error) {
+//   return MyValueOrThrow(
+//              ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
+//                  std::string(),
+//                  [node_id, num_nodes, allowed_devices, num_allowed_devices,
+//                   memory_fraction, preallocate, platform_name,
+//                   error]() -> absl::StatusOr<std::shared_ptr<ifrt::Client>> {
+//                    auto pjrt_client =
+//                    std::shared_ptr<PjRtClient>(MakeGPUClient(
+//                        node_id, num_nodes, allowed_devices,
+//                        num_allowed_devices, memory_fraction, preallocate,
+//                        platform_name, error));
+//                    return std::shared_ptr<ifrt::Client>(
+//                        xla::ifrt::PjRtClient::Create(pjrt_client).release());
+//                  }))
+//       .release();
+// }
 
-extern "C" bool ifrt_index_ne(ifrt::Index *index1, ifrt::Index *index2) {
-  return *index1 != *index2;
-}
+// extern "C" ifrt::proxy::GrpcServer *
+// ifrt_proxy_grpc_server_create_from_ifrt_client_factory_tpu(
+//     const char *c_address, const char *tpu_path, const char **error) {
+//   std::string address = c_address;
+//
+//   return MyValueOrThrow(
+//              xla::ifrt::proxy::GrpcServer::CreateFromIfrtClientFactory(
+//                  address,
+//                  [](xla::ifrt::AttributeMap initialization_data) ->
+//                  absl::StatusOr<std::shared_ptr<xla::ifrt::Client>> {
+//                    auto pjrt_client =
+//                        std::shared_ptr<xla::PjRtClient>(GetCApiClient("TPU"));
+//                    return
+//                    xla::ifrt::PjRtClient::Create(std::move(pjrt_client));
+//                  }))
+//       .release();
+// }
 
-extern "C" ifrt::Index *ifrt_index_add(ifrt::Index *index,
-                                       ifrt::Index *offset) {
-  return new ifrt::Index(*index + *offset);
-}
-
-extern "C" ifrt::Index *ifrt_index_sub(ifrt::Index *index,
-                                       ifrt::Index *offset) {
-  return new ifrt::Index(*index - *offset);
-}
-
-// WARN we're not checking if the multiplier has the same size as the index
-extern "C" ifrt::Index *ifrt_index_mul(ifrt::Index *index,
-                                       const int64_t *multiplier) {
-  return new ifrt::Index(
-      *index * absl::Span<const int64_t>(multiplier, ifrt_index_count(index)));
-}
-
-extern "C" void ifrt_index_add_inplace(ifrt::Index *index,
-                                       ifrt::Index *offset) {
-  *index += *offset;
-}
-
-extern "C" void ifrt_index_sub_inplace(ifrt::Index *index,
-                                       ifrt::Index *offset) {
-  *index -= *offset;
-}
-
-extern "C" void ifrt_index_mul_inplace(ifrt::Index *index,
-                                       const int64_t *multiplier) {
-  *index *= absl::Span<const int64_t>(multiplier, ifrt_index_count(index));
-}
-
-extern "C" const char *ifrt_index_debug_string(ifrt::Index *index) {
-  return cstr_from_string(index->DebugString());
-}
-#pragma endregion
-
-#pragma region xla::ifrt::IndexDomain
-extern "C" ifrt::IndexDomain *ifrt_indexdomain_ctor(ifrt::Shape *shape) {
-  return new ifrt::IndexDomain(*shape);
-}
-
-extern "C" ifrt::IndexDomain *
-ifrt_indexdomain_ctor_with_origin(ifrt::Index *origin, ifrt::Shape *shape) {
-  return new ifrt::IndexDomain(*origin, *shape);
-}
-
-extern "C" void ifrt_indexdomain_free(ifrt::IndexDomain *index_domain) {
-  delete index_domain;
-}
-
-extern "C" const ifrt::Index *
-ifrt_indexdomain_origin(ifrt::IndexDomain *index_domain) {
-  return &index_domain->origin();
-}
-
-extern "C" const ifrt::Shape *
-ifrt_indexdomain_shape(ifrt::IndexDomain *index_domain) {
-  return &index_domain->shape();
-}
-
-extern "C" bool ifrt_indexdomain_eq(ifrt::IndexDomain *index_domain1,
-                                    ifrt::IndexDomain *index_domain2) {
-  return *index_domain1 == *index_domain2;
-}
-
-extern "C" bool ifrt_indexdomain_ne(ifrt::IndexDomain *index_domain1,
-                                    ifrt::IndexDomain *index_domain2) {
-  return *index_domain1 != *index_domain2;
-}
-
-extern "C" ifrt::IndexDomain *
-ifrt_indexdomain_add(ifrt::IndexDomain *index_domain, ifrt::Index *offset) {
-  return new ifrt::IndexDomain(*index_domain + *offset);
-}
-
-extern "C" ifrt::IndexDomain *
-ifrt_indexdomain_sub(ifrt::IndexDomain *index_domain, ifrt::Index *offset) {
-  return new ifrt::IndexDomain(*index_domain - *offset);
-}
-
-extern "C" void ifrt_indexdomain_add_inplace(ifrt::IndexDomain *index_domain,
-                                             ifrt::Index *offset) {
-  *index_domain += *offset;
-}
-
-extern "C" void ifrt_indexdomain_sub_inplace(ifrt::IndexDomain *index_domain,
-                                             ifrt::Index *offset) {
-  *index_domain -= *offset;
+extern "C" void ifrt_proxy_grpc_server_dtor(ifrt::proxy::GrpcServer *server) {
+  delete server;
 }
 
 extern "C" const char *
-ifrt_indexdomain_debug_string(ifrt::IndexDomain *index_domain) {
-  return cstr_from_string(index_domain->DebugString());
-}
-#pragma endregion
-
-#pragma region xla::ifrt::MemoryKind
-// Pass a nullptr to create a `MemoryKind` with no memory chosen.
-extern "C" ifrt::MemoryKind *ifrt_memorykind_ctor(const char *memory_kind) {
-  if (memory_kind == nullptr)
-    return new ifrt::MemoryKind();
-  return new ifrt::MemoryKind(std::string(memory_kind));
+ifrt_proxy_grpc_server_address(ifrt::proxy::GrpcServer *server) {
+  return cstr_from_string(server->address());
 }
 
-extern "C" void ifrt_memorykind_free(ifrt::MemoryKind *memory_kind) {
-  delete memory_kind;
+extern "C" void ifrt_proxy_grpc_server_wait(ifrt::proxy::GrpcServer *server) {
+  server->Wait();
 }
 
-extern "C" bool ifrt_memorykind_eq(ifrt::MemoryKind *mk1,
-                                   ifrt::MemoryKind *mk2) {
-  return *mk1 == *mk2;
+// `c_proxy_server_address` must be of the form
+// `<backend-transport>:<backend-address>`; e.g. "grpc:localhost"
+// NOTE not sure if we must pass the port, but probably yes
+// by default, set `connection_timeout_in_minutes` to 2
+extern "C" ifrt::Client *
+ifrt_proxy_create_client(const char *c_proxy_server_address,
+                         int connection_timeout_in_minutes) {
+  std::string proxy_server_address = c_proxy_server_address;
+  ifrt::proxy::ClientConnectionOptions options = {
+      absl::Minutes(connection_timeout_in_minutes),
+      nullptr, // callback `on_disconnect`
+      nullptr, // callback `on_connection_update`
+  };
+  return MyValueOrThrow(
+             ifrt::proxy::CreateClient(proxy_server_address, options))
+      .release();
 }
 
-extern "C" bool ifrt_memorykind_ne(ifrt::MemoryKind *mk1,
-                                   ifrt::MemoryKind *mk2) {
-  return *mk1 != *mk2;
+extern "C" ifrt::Client *ifrt_pjrt_make_client(
+    HeldPjRtClient *pjrt_client, int node_id, int num_nodes,
+    void *distributed_runtime_client, const char **error,
+    std::string key_prefix,
+    std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store) {
+  ifrt::PjRtClient::CreateOptions options;
+  options.pjrt_client = pjrt_client->obj();
+
+  if (num_nodes > 1) {
+    if (distributed_runtime_client == nullptr) {
+      *error =
+          "`distributed_runtime_client` must be non-null if `num_nodes` > 1";
+      return nullptr;
+    }
+    if (kv_store.has_value()) {
+      options.kv_store = kv_store.value();
+    } else {
+      auto typed_distributed_runtime_client = static_cast<
+          HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *>(
+          distributed_runtime_client);
+      options.kv_store = GetDistributedKeyValueStore(
+          typed_distributed_runtime_client->obj(), key_prefix);
+    }
+  }
+
+  options.process_id = node_id;
+  options.num_processes = num_nodes;
+
+  return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
 }
 
-extern "C" const char *ifrt_memorykind_string(ifrt::MemoryKind *memory_kind) {
-  if (memory_kind->memory_kind().has_value())
-    return cstr_from_string(memory_kind->memory_kind().value());
-  else
+extern "C" HeldPjRtClient *pjrt_make_cpu_client_shared(
+    uint8_t asynchronous, int node_id,
+    std::optional<std::shared_ptr<xla::cpu::CpuCollectives>> collectives) {
+  PjRtClient *client =
+      MakeCPUClientInternal(asynchronous, node_id, collectives);
+  return reactant::capture(std::shared_ptr<PjRtClient>(client));
+}
+
+const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
+
+extern "C" ifrt::Client *
+ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
+                          void *distributed_runtime_client,
+                          const char **error) {
+  std::optional<std::shared_ptr<xla::cpu::CpuCollectives>> collectives;
+  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
+
+  if (distributed_runtime_client != nullptr) {
+    auto mpi_trampoline_path = llvm::sys::Process::GetEnv(kMpiTrampolineLibEnv);
+    if (mpi_trampoline_path) {
+      // Use MPI
+      // TODO: How do we Finalize??
+      auto mpi_collectives = std::make_shared<xla::cpu::MpiCollectives>();
+      collectives = mpi_collectives;
+      static_cast<xla::cpu::MpiCollectives *>(mpi_collectives.get())->Init();
+    } else {
+      // Use Gloo
+      auto typed_distributed_runtime_client = static_cast<
+          HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *>(
+          distributed_runtime_client);
+      kv_store =
+          GetDistributedKeyValueStore(typed_distributed_runtime_client->obj(),
+                                      /*key_prefix=*/"cpu:");
+      auto gloo_kv_store =
+          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store.value());
+#if defined(__linux__)
+      auto tcp_attrs = gloo::transport::tcp::attr();
+      auto tcp_device = gloo::transport::tcp::CreateDevice(tcp_attrs);
+      collectives = std::make_shared<xla::cpu::GlooCollectives>(
+          std::move(gloo_kv_store), std::move(tcp_device));
+#elif defined(__APPLE__)
+      auto uv_attrs = gloo::transport::uv::attr();
+      auto uv_device = gloo::transport::uv::CreateDevice(uv_attrs);
+      collectives = std::make_shared<xla::cpu::GlooCollectives>(
+          std::move(gloo_kv_store), std::move(uv_device));
+#else
+      ReactantThrowError(
+          "Gloo TCP Collectives only implemented for linux and macos");
+#endif
+    }
+  }
+
+  HeldPjRtClient *pjrt_client =
+      pjrt_make_cpu_client_shared(asynchronous, node_id, collectives);
+  if (pjrt_client == nullptr)
     return nullptr;
+  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
+                               distributed_runtime_client, error, "cpu",
+                               kv_store);
 }
 
-extern "C" ifrt::MemoryKind *
-ifrt_memorykind_canonicalize(ifrt::MemoryKind *memory_kind,
-                             ifrt::Device *device) {
-  return new ifrt::MemoryKind(CanonicalizeMemoryKind(*memory_kind, device));
-}
-#pragma endregion
-
-#pragma region xla::ifrt::Memory
-// MemoryId is a struct with a single int32_t field --> check out
-// xla/python/ifrt/memory.h
-extern "C" ifrt::MemoryId ifrt_memory_id(ifrt::Memory *memory) {
-  return memory->Id();
+extern "C" HeldPjRtClient *pjrt_make_gpu_client_shared(
+    int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
+    double memory_fraction, bool preallocate, const char *platform_name,
+    const char **error, void *distributed_runtime_client) {
+  PjRtClient *client = MakeGPUClient(
+      node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
+      preallocate, platform_name, error, distributed_runtime_client);
+  return reactant::capture(std::shared_ptr<PjRtClient>(client));
 }
 
-extern "C" const ifrt::MemoryKind *ifrt_memory_kind(ifrt::Memory *memory) {
-  return &(memory->Kind());
+extern "C" ifrt::Client *ifrt_make_pjrt_gpu_client(
+    int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
+    double memory_fraction, bool preallocate, const char *platform_name,
+    const char **error, void *distributed_runtime_client) {
+  HeldPjRtClient *pjrt_client = pjrt_make_gpu_client_shared(
+      node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
+      preallocate, platform_name, error, distributed_runtime_client);
+  if (pjrt_client == nullptr)
+    return nullptr;
+  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
+  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
+                               distributed_runtime_client, error, "gpu",
+                               kv_store);
 }
 
-extern "C" const char *ifrt_memory_to_string(ifrt::Memory *memory) {
-  return cstr_from_string(memory->ToString());
+extern "C" HeldPjRtClient *pjrt_make_tpu_client_shared(const char *tpu_path,
+                                                       const char **error) {
+  PjRtClient *client = MakeTPUClient(tpu_path, error);
+  return reactant::capture(std::shared_ptr<PjRtClient>(client));
 }
 
-extern "C" const char *ifrt_memory_debug_string(ifrt::Memory *memory) {
-  return cstr_from_string(memory->DebugString());
+extern "C" ifrt::Client *
+ifrt_make_pjrt_tpu_client(const char *tpu_path, const char **error, int node_id,
+                          int num_nodes, void *distributed_runtime_client) {
+  HeldPjRtClient *pjrt_client = pjrt_make_tpu_client_shared(tpu_path, error);
+  if (pjrt_client == nullptr)
+    return nullptr;
+  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
+  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
+                               distributed_runtime_client, error, "tpu",
+                               kv_store);
 }
 
-extern "C" std::tuple<size_t, ifrt::Device *const *>
-ifrt_memory_devices(ifrt::Memory *memory) {
-  auto devices = memory->Devices();
-  return std::make_tuple<size_t, ifrt::Device *const *>(devices.size(),
-                                                        devices.data());
-}
-#pragma endregion
+extern "C" void ifrt_FreeClient(ifrt::Client *client) { delete client; }
 
-#pragma region xla::ifrt::PjRtMemory
-extern "C" ifrt::PjRtMemory *
-ifrt_pjrt_memory_ctor(ifrt::PjRtClient *client,
-                      xla::PjRtMemorySpace *memory_space) {
-  return new ifrt::PjRtMemory(client, memory_space);
-}
-
-extern "C" void ifrt_pjrt_memory_free(ifrt::PjRtMemory *memory) {
-  delete memory;
-}
-
-extern "C" ifrt::PjRtClient *ifrt_pjrt_memory_client(ifrt::PjRtMemory *memory) {
-  return memory->client();
-}
-
-extern "C" xla::PjRtMemorySpace *
-ifrt_pjrt_memory_space(ifrt::PjRtMemory *memory) {
-  return memory->pjrt_memory();
-}
-#pragma endregion
-
-#pragma region xla::ifrt::Device
-extern "C" ifrt::Client *ifrt_device_client(ifrt::Device *device) {
-  return device->client();
-}
-
-// DeviceId is a struct with a single int32_t field --> check out
-// xla/pjrt/pjrt_common.h
-extern "C" ifrt::DeviceId ifrt_device_id(ifrt::Device *device) {
-  return device->Id();
-}
-
-// TODO ifrt_device_attributes
-
-extern "C" const char *ifrt_device_kind(ifrt::Device *device) {
-  return cstr_from_string(device->Kind());
-}
-
-extern "C" const char *ifrt_device_to_string(ifrt::Device *device) {
-  return cstr_from_string(device->ToString());
-}
-
-extern "C" const char *ifrt_device_debug_string(ifrt::Device *device) {
-  return cstr_from_string(device->DebugString());
-}
-
-extern "C" ifrt::Memory *ifrt_device_default_memory(ifrt::Device *device) {
-  return MyValueOrThrow(device->DefaultMemory());
-}
-
-// TODO ifrt_device_memories
-
-extern "C" bool ifrt_device_is_addressable(ifrt::Device *device) {
-  return device->IsAddressable();
-}
-
-extern "C" int ifrt_device_process_index(ifrt::Device *device) {
-  return device->ProcessIndex();
-}
-#pragma endregion
-
-#pragma region xla::ifrt::PjRtDevice
-// DeviceId is a struct with a single int32_t field --> check out
-// xla/pjrt/pjrt_common.h
-// TODO support `attributes` parameter
-extern "C" ifrt::PjRtDevice *
-ifrt_pjrt_device_ctor(ifrt::PjRtClient *client, ifrt::DeviceId device_id,
-                      const char *kind, const char *to_string,
-                      const char *debug_string, int process_index,
-                      xla::PjRtDevice *pjrt_device) {
-  return new ifrt::PjRtDevice(
-      client, device_id, kind, to_string, debug_string, process_index,
-      absl::flat_hash_map<std::string, PjRtDeviceAttribute>(), pjrt_device);
-}
-
-extern "C" void ifrt_pjrt_device_free(ifrt::PjRtDevice *device) {
-  delete device;
-}
-
-extern "C" xla::PjRtDevice *
-ifrt_pjrt_device_pjrt_device(ifrt::PjRtDevice *device) {
-  return device->pjrt_device();
-}
-#pragma endregion
-
-#pragma region xla::ifrt::Sharding
-// TODO ifrt_sharding_devices
-// TODO ifrt_sharding_memory_kind
-
-// extern "C" void ifrt_sharding_disassemble(ifrt::Sharding* sharding,
-// ifrt::Shape* shape, char** error) {
-//     auto status = sharding->Disassemble(*shape);
-//     if (!status.ok()) {
-//         auto str = status.message();
-//         char* err = (char*)malloc(str.size()+1);
-//         memcpy(err, str.data(), str.size()+1);
-//         *error = err;
-//     }
-// }
-
-// TODO ifrt_sharding_disassemble_dynamic_shape
-// TODO ifrt_sharding_index_domains
-
-extern "C" const char *ifrt_sharding_debug_string(ifrt::Sharding *sharding) {
-  return cstr_from_string(sharding->DebugString());
-}
-#pragma endregion
-
-#pragma region xla::ifrt::Array
-extern "C" ifrt::DType *ifrt_array_dtype(ifrt::Array *array) {
-  return new ifrt::DType(array->dtype());
-}
-
-extern "C" const ifrt::Shape *ifrt_array_shape(ifrt::Array *array) {
-  return &(array->shape());
-}
-
-extern "C" const ifrt::Sharding *ifrt_array_sharding(ifrt::Array *array) {
-  return &(array->sharding());
-}
-
-// @mofeng this is now a shared ptr, will let you fix
-// extern "C" PjRtLayout *ifrt_array_layout(ifrt::Array *array) {
-//  return MyValueOrThrow(array->layout()).release();
-// }
-
-// TODO xla::ifrt::Array::DisassembleIntoSingleDeviceArrays
-// TODO xla::ifrt::Array::FullyReplicatedShard
-
-extern "C" ifrt::Future<>
-ifrt_array_copy_to_host_buffer(ifrt::Array *array, void *data,
-                               const int64_t *byte_strides, int semantics) {
-  return array->CopyToHostBuffer(
-      data,
-      absl::Span<const int64_t>(byte_strides, array->shape().num_elements()),
-      ifrt::ArrayCopySemantics(semantics));
-}
-#pragma endregion
-
-#pragma region xla::ifrt::PjRtArray
-// TODO constructors / `Create`
-
-extern "C" std::tuple<size_t, xla::PjRtBuffer *const *>
-ifrt_pjrt_array_pjrt_buffers(ifrt::PjRtArray *array) {
-  auto buffers = array->pjrt_buffers();
-  auto buffers_ptr = new xla::PjRtBuffer *[buffers.size()];
-  for (int i = 0; i < buffers.size(); i++) {
-    buffers_ptr[i] = buffers[i].get();
-  }
-  return std::make_tuple(buffers.size(), buffers_ptr);
-}
-#pragma endregion
-
-#pragma region xla::ifrt::Topology
-extern "C" const char *ifrt_topology_platform_name(ifrt::Topology *topology) {
-  return cstr_from_string(topology->platform_name());
-}
-
-extern "C" const char *
-ifrt_topology_platform_version(ifrt::Topology *topology) {
-  return cstr_from_string(topology->platform_version());
-}
-
-// returns PjRtPlatformId which is a type alias for uint64_t
-extern "C" uint64_t ifrt_topology_platform_id(ifrt::Topology *topology) {
-  return topology->platform_id();
-}
-
-extern "C" std::tuple<size_t, const xla::PjRtDeviceDescription **>
-ifrt_topology_device_descriptions(ifrt::Topology *topology) {
-  auto descriptions = topology->DeviceDescriptions();
-  auto descriptions_ptr =
-      new const xla::PjRtDeviceDescription *[descriptions.size()];
-  for (int i = 0; i < descriptions.size(); i++) {
-    descriptions_ptr[i] = descriptions[i].release();
-  }
-  return std::make_tuple(descriptions.size(), descriptions_ptr);
-}
-
-// TODO xla::ifrt::Topology::GetDefaultLayout
-
-extern "C" const char *ifrt_topology_serialize(ifrt::Topology *topology) {
-  return cstr_from_string(MyValueOrThrow(topology->Serialize()));
-}
-
-// TODO xla::ifrt::Topology::Attributes
-
-#pragma endregion
-
-#pragma region xla::ifrt::PjRtTopology
-extern "C" ifrt::PjRtTopology *
-ifrt_pjrt_topology_ctor(const xla::PjRtTopologyDescription *description) {
-  return new ifrt::PjRtTopology(
-      std::shared_ptr<const xla::PjRtTopologyDescription>{description});
-}
-
-extern "C" const xla::PjRtTopologyDescription *
-ifrt_pjrt_topology_description(ifrt::PjRtTopology *topology) {
-  return topology->description().get();
-}
-#pragma endregion
-
-#pragma region xla::ifrt::Client
 extern "C" int ifrt_client_device_count(ifrt::Client *client) {
   return client->device_count();
 }
@@ -1483,450 +1624,660 @@ extern "C" int ifrt_client_addressable_device_count(ifrt::Client *client) {
   return client->addressable_device_count();
 }
 
-extern "C" ifrt::Device *const *ifrt_client_devices(ifrt::Client *client) {
-  return client->devices().data();
+extern "C" void ifrt_client_devices(ifrt::Client *client,
+                                    ifrt::Device **out_devices) {
+  auto span = client->devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
 }
 
-extern "C" ifrt::Device *const *
-ifrt_client_addressable_devices(ifrt::Client *client) {
-  return client->addressable_devices().data();
+extern "C" void ifrt_client_addressable_devices(ifrt::Client *client,
+                                                ifrt::Device **out_devices) {
+  auto span = client->addressable_devices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
 }
 
-extern "C" int ifrt_client_process_index(ifrt::Client *client) {
-  return client->process_index();
+extern "C" void ifrt_client_all_devices(ifrt::Client *client,
+                                        ifrt::Device **out_devices) {
+  auto span = client->GetAllDevices();
+  for (int i = 0; i < span.size(); i++) {
+    out_devices[i] = span[i];
+  }
 }
-
-// TODO xla::ifrt::Client::GetDefaultDeviceAssignment
 
 extern "C" ifrt::Device *ifrt_client_lookup_device(ifrt::Client *client,
-                                                   int device_id) {
-  return MyValueOrThrow(client->LookupDevice(ifrt::DeviceId(device_id)));
+                                                   int dev_id) {
+  return MyValueOrThrow(
+      client->LookupDevice(static_cast<ifrt::DeviceId>(dev_id)));
 }
 
 extern "C" ifrt::Device *
-ifrt_client_lookup_addressable_device(ifrt::Client *client, int device_id) {
-  return MyValueOrThrow(client->LookupAddressableDevice(device_id));
+ifrt_client_lookup_addressable_device(ifrt::Client *client, int local_hw_id) {
+  return MyValueOrThrow(client->LookupAddressableDevice(local_hw_id));
 }
 
-extern "C" ifrt::Compiler *ifrt_client_default_compiler(ifrt::Client *client) {
-  return client->GetDefaultCompiler();
+extern "C" int ifrt_ClientProcessIndex(ifrt::Client *client) {
+  return client->process_index();
 }
 
-// TODO ifrt_client_topology_for_devices
-// TODO ifrt_client_default_layout_for_device
+extern "C" const char *ifrt_ClientGetPlatformName(ifrt::Client *client) {
+  return cstr_from_string(client->platform_name());
+}
+
+extern "C" ifrt::Device *ifrt_ClientGetDevice(ifrt::Client *client, int idx) {
+  return MyValueOrThrow(client->LookupDevice(ifrt::DeviceId(idx)));
+}
+
+extern "C" ifrt::Device *ifrt_ClientGetAddressableDevice(ifrt::Client *client,
+                                                         int idx) {
+  return MyValueOrThrow(client->LookupAddressableDevice(idx));
+}
+
 #pragma endregion
 
-#pragma region xla::ifrt::PjRtClient
-// TODO support more parameters of `PjRtClient::CreateOptions`
-extern "C" ifrt::PjRtClient *
-ifrt_pjrt_client_ctor(xla::PjRtClient *pjrt_client) {
-  return MyValueOrThrow(
-             ifrt::PjRtClient::Create(ifrt::PjRtClient::CreateOptions{
-                 std::shared_ptr<xla::PjRtClient>{pjrt_client}}))
-      .release();
+#pragma region IfRtDevice
+
+extern "C" int64_t ifrt_DeviceGetGlobalDeviceId(ifrt::Device *device) {
+  return device->Id().value();
 }
 
-extern "C" void ifrt_pjrt_client_free(ifrt::PjRtClient *client) {
-  delete client;
+extern "C" const char *ifrt_DeviceGetKind(ifrt::Device *device) {
+  return cstr_from_string(device->Kind());
 }
 
-extern "C" xla::PjRtClient *
-ifrt_pjrt_client_pjrt_client(ifrt::PjRtClient *client) {
-  return client->pjrt_client();
+extern "C" ifrt::Client *ifrt_DeviceToClient(ifrt::Device *device) {
+  return device->client();
 }
 
-// TODO there are problems with using `make_shared
-// extern "C" ifrt::PjRtCompatibleArray*
-// ifrt_pjrt_client_create_pjrt_array(ifrt::PjRtClient* client, xla::PjRtBuffer*
-// pjrt_buffer) {
-//     auto buffer_ptr = std::make_shared<xla::PjRtBuffer>(*pjrt_buffer);
-//     return MyValueOrThrow(client->CreatePjRtArray(buffer_ptr)).release();
-// }
-
-// TODO extern "C" ifrt::PjRtCompatibleArray*
-// ifrt_pjrt_client_create_pjrt_array_from_buffers(ifrt::Shape* shape,
-// ifrt::PjRtBuffer** pjrt_buffers, int num_buffers) {}
-
-extern "C" ifrt::PjRtCompatibleDevice *
-ifrt_pjrt_client_lookup_pjrt_device(ifrt::PjRtClient *client,
-                                    xla::PjRtDevice *pjrt_device) {
-  return MyValueOrThrow(client->LookupPjRtDevice(pjrt_device));
+extern "C" bool ifrt_DeviceIsAddressable(ifrt::Device *device) {
+  return device->IsAddressable();
 }
 
-extern "C" ifrt::PjRtCompatibleMemory *
-ifrt_pjrt_client_lookup_pjrt_memory(ifrt::PjRtClient *client,
-                                    xla::PjRtMemorySpace *pjrt_memory_space) {
-  return MyValueOrThrow(client->LookupPjRtMemory(pjrt_memory_space));
-}
-#pragma endregion
-
-#pragma region xla::ifrt::HostCallback
-extern "C" const char *
-ifrt_hostcallback_serialize(ifrt::HostCallback *host_callback) {
-  return cstr_from_string(host_callback->Serialize());
-}
-#pragma endregion
-
-#pragma region xla::ifrt::LoadedHostCallback
-extern "C" ifrt::Client *
-ifrt_loadedhostcallback_client(ifrt::LoadedHostCallback *host_callback) {
-  return host_callback->client();
+tsl::RCReference<ifrt::DeviceList> ifrt_CreateDeviceListFromDevices(
+    ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices) {
+  absl::Span<ifrt::Device *const> devices(device_list, num_devices);
+  return client->MakeDeviceList(devices);
 }
 
-extern "C" const char *
-ifrt_loadedhostcallback_serialize(ifrt::LoadedHostCallback *host_callback) {
-  // auto msg = ;
-  return cstr_from_string(MyValueOrThrow(host_callback->Serialize()));
-}
-#pragma endregion
-
-#pragma region xla::ifrt::PjRtHostSendAndRecvLoadedHostCallback
-extern "C" ifrt::PjRtHostSendAndRecvLoadedHostCallback *
-ifrt_pjrt_hostsendandrecv_loadhostcallback_ctor(
-    ifrt::PjRtClient *client, xla::HostCallback *host_callback) {
-  auto xla_callback_ptr = std::make_unique<xla::HostCallback>(*host_callback);
-  return new ifrt::PjRtHostSendAndRecvLoadedHostCallback(
-      client, std::move(xla_callback_ptr));
+extern "C" ifrt::Memory *ifrt_DeviceGetDefaultMemory(ifrt::Device *device) {
+  return MyValueOrThrow(device->DefaultMemory());
 }
 
-extern "C" void ifrt_pjrt_hostsendandrecv_loadhostcallback_free(
-    ifrt::PjRtHostSendAndRecvLoadedHostCallback *host_callback) {
-  delete host_callback;
+extern "C" ifrt::Memory **ifrt_DeviceGetMemories(ifrt::Device *device,
+                                                 int32_t *size) {
+  auto memory_list = device->Memories();
+  *size = memory_list.size();
+  return const_cast<ifrt::Memory **>(memory_list.data());
 }
 
-extern "C" xla::HostCallback *
-ifrt_pjrt_hostsendandrecv_loadhostcallback_host_callback(
-    ifrt::PjRtHostSendAndRecvLoadedHostCallback *host_callback) {
-  return new xla::HostCallback(host_callback->host_callback());
-}
-#pragma endregion
-
-#pragma region xla::ifrt::Executable
-extern "C" const char *ifrt_executable_name(ifrt::Executable *executable) {
-  return cstr_from_string(executable->name());
+extern "C" ifrt::MemoryKind *ifrt_MemoryGetMemoryKind(ifrt::Memory *memory) {
+  ifrt::MemoryKind *memory_kind = new ifrt::MemoryKind(memory->Kind());
+  return memory_kind;
 }
 
-extern "C" const char *
-ifrt_executable_fingerprint(ifrt::Executable *executable) {
-  auto result = MyValueOrThrow(executable->Fingerprint());
-  if (!result.has_value())
+extern "C" const char *ifrt_MemoryToString(ifrt::Memory *memory) {
+  return cstr_from_string(memory->ToString());
+}
+
+extern "C" const char *ifrt_MemoryKindToString(ifrt::MemoryKind *memory_kind) {
+  auto memkind = memory_kind->memory_kind();
+  if (!memkind.has_value())
     return "";
-  return cstr_from_string(result.value());
+  return cstr_from_string(memkind.value());
 }
 
-extern "C" const char *ifrt_executable_serialize(ifrt::Executable *executable) {
-  return cstr_from_string(MyValueOrThrow(executable->Serialize()));
+extern "C" bool ifrt_MemoryKindsAreEqual(ifrt::MemoryKind *a,
+                                         ifrt::MemoryKind *b) {
+  return *a == *b;
 }
 
-extern "C" int ifrt_executable_num_devices(ifrt::Executable *executable) {
-  return executable->num_devices();
-}
-
-extern "C" int64_t ifrt_executable_size(ifrt::Executable *executable) {
-  return executable->SizeOfGeneratedCodeInBytes();
-}
-
-// TODO xla::ifrt::Executable::GetCompiledMemoryStats
-
-extern "C" std::tuple<size_t, OpSharding *>
-ifrt_executable_parameter_shardings(ifrt::Executable *executable) {
-  auto shardings = executable->GetParameterShardings();
-  if (!shardings.has_value())
-    return std::make_tuple(0, nullptr);
-  return std::make_tuple(shardings.value().size(), shardings.value().data());
-}
-
-extern "C" std::tuple<size_t, OpSharding *>
-ifrt_executable_output_shardings(ifrt::Executable *executable) {
-  auto shardings = executable->GetOutputShardings();
-  if (!shardings.has_value())
-    return std::make_tuple(0, nullptr);
-  return std::make_tuple(shardings.value().size(), shardings.value().data());
-}
-
-// @mofeng this is now a shared ptr, will let you fix
-// extern "C" std::tuple<size_t, xla::PjRtLayout **>
-// ifrt_executable_parameter_layouts(ifrt::Executable *executable) {
-//   auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
-//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-//   for (int i = 0; i < layouts.size(); i++) {
-//     layouts_ptr[i] = layouts[i].release();
-//   }
-//   return std::make_tuple(layouts.size(), layouts_ptr);
-// }
-
-// @mofeng this is now a shared ptr, will let you fix
-// extern "C" std::tuple<size_t, xla::PjRtLayout **>
-// ifrt_executable_output_layouts(ifrt::Executable *executable) {
-//   auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-//   for (int i = 0; i < layouts.size(); i++) {
-//     layouts_ptr[i] = layouts[i].release();
-//   }
-//   return std::make_tuple(layouts.size(), layouts_ptr);
-// }
-
-extern "C" std::tuple<size_t, xla::HloModule **>
-ifrt_executable_hlo_modules(ifrt::Executable *executable) {
-  auto modules = MyValueOrThrow(executable->GetHloModules());
-  auto modules_ptr = new xla::HloModule *[modules.size()];
-  for (int i = 0; i < modules.size(); i++) {
-    modules_ptr[i] = modules[i].get();
-  }
-  return std::make_tuple(modules.size(), modules_ptr);
-}
-
-// TODO xla::ifrt::Executable::GetCostAnalysis
 #pragma endregion
 
-#pragma region xla::ifrt::PjRtExecutable
-// TODO there are problems with using `make_shared
-// extern "C" ifrt::Executable* ifrt_pjrt_executable_ctor(xla::PjRtExecutable*
-// pjrt_executable, ifrt::XlaCompileOptions* compile_options) {
-//     auto pjrt_executable_shared =
-//     std::make_shared<xla::PjRtExecutable>(*pjrt_executable); auto options =
-//     std::make_unique<ifrt::XlaCompileOptions>(*compile_options); return
-//     MyValueOrThrow(ifrt::PjRtExecutable::Create(pjrt_executable_shared,
-//     std::move(options))).release();
-// }
+#pragma region OpSharding
 
-extern "C" void ifrt_pjrt_executable_free(ifrt::PjRtExecutable *executable) {
-  delete executable;
+extern "C" void free_op_sharding(xla::OpSharding *op_sharding) {
+  delete op_sharding;
 }
 
-extern "C" xla::PjRtExecutable *
-ifrt_pjrt_executable_pjrt_executable(ifrt::PjRtExecutable *executable) {
-  return executable->pjrt_executable();
-}
-#pragma endregion
-
-#pragma region xla::ifrt::LoadedExecutable
-extern "C" ifrt::Client *
-ifrt_loadedexecutable_client(ifrt::LoadedExecutable *executable) {
-  return executable->client();
+extern "C" int32_t
+op_sharding_to_op_sharding_type(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->type());
 }
 
-extern "C" const char *
-ifrt_loadedexecutable_name(ifrt::LoadedExecutable *executable) {
-  return cstr_from_string(executable->name());
+extern "C" int32_t
+op_sharding_to_shard_group_type(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->shard_group_type());
 }
 
-extern "C" const char *
-ifrt_loadedexecutable_fingerprint(ifrt::LoadedExecutable *executable) {
-  auto result = MyValueOrThrow(executable->Fingerprint());
-  if (!result.has_value())
-    return "";
-  return cstr_from_string(result.value());
+extern "C" int32_t op_sharding_to_shard_group_id(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->shard_group_id());
 }
 
-extern "C" const char *
-ifrt_loadedexecutable_serialize(ifrt::LoadedExecutable *executable) {
-  return cstr_from_string(MyValueOrThrow(executable->Serialize()));
-}
-
-extern "C" ifrt::Future<>
-ifrt_loadedexecutable_get_ready_future(ifrt::LoadedExecutable *executable) {
-  return executable->GetReadyFuture();
-}
-
-extern "C" int
-ifrt_loadedexecutable_num_devices(ifrt::LoadedExecutable *executable) {
-  return executable->num_devices();
-}
-
-extern "C" int64_t
-ifrt_loadedexecutable_size(ifrt::LoadedExecutable *executable) {
-  return executable->SizeOfGeneratedCodeInBytes();
-}
-
-// TODO xla::ifrt::GetCompiledMemoryStats
-
-extern "C" std::tuple<size_t, OpSharding *>
-ifrt_loadedexecutable_parameter_shardings(ifrt::LoadedExecutable *executable) {
-  auto shardings = executable->GetParameterShardings();
-  if (!shardings.has_value())
-    return std::make_tuple(0, nullptr);
-  return std::make_tuple(shardings.value().size(), shardings.value().data());
-}
-
-extern "C" std::tuple<size_t, OpSharding *>
-ifrt_loadedexecutable_output_shardings(ifrt::LoadedExecutable *executable) {
-  auto shardings = executable->GetOutputShardings();
-  if (!shardings.has_value())
-    return std::make_tuple(0, nullptr);
-  return std::make_tuple(shardings.value().size(), shardings.value().data());
-}
-
-// @mofeng this is now a shared ptr, will let you fix
-// extern "C" std::tuple<size_t, xla::PjRtLayout **>
-// ifrt_loadedexecutable_parameter_layouts(ifrt::LoadedExecutable *executable) {
-//   auto layouts = MyValueOrThrow(executable->GetParameterLayouts());
-//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-//   for (int i = 0; i < layouts.size(); i++) {
-//     layouts_ptr[i] = layouts[i].release();
-//   }
-//   return std::make_tuple(layouts.size(), layouts_ptr);
-// }
-
-// @mofeng this is now a shared ptr, will let you fix
-// extern "C" std::tuple<size_t, xla::PjRtLayout **>
-// ifrt_loadedexecutable_output_layouts(ifrt::LoadedExecutable *executable) {
-//   auto layouts = MyValueOrThrow(executable->GetOutputLayouts());
-//   auto layouts_ptr = new xla::PjRtLayout *[layouts.size()];
-//   for (int i = 0; i < layouts.size(); i++) {
-//     layouts_ptr[i] = layouts[i].release();
-//   }
-//   return std::make_tuple(layouts.size(), layouts_ptr);
-// }
-
-extern "C" std::tuple<size_t, xla::HloModule **>
-ifrt_loadedexecutable_hlo_modules(ifrt::LoadedExecutable *executable) {
-  auto modules = MyValueOrThrow(executable->GetHloModules());
-  auto modules_ptr = new xla::HloModule *[modules.size()];
-  for (int i = 0; i < modules.size(); i++) {
-    modules_ptr[i] = modules[i].get();
-  }
-  return std::make_tuple(modules.size(), modules_ptr);
-}
-
-// TODO xla::ifrt::LoadedExecutable::GetOutputMemoryKinds
-// TODO xla::ifrt::LoadedExecutable::GetCostAnalysis
-
-// extern "C" ifrt::LoadedExecutable::ExecuteResult*
-// ifrt_loadedexecutable_execute(ifrt::LoadedExecutable* executable,
-// ifrt::Array** args, size_t args_size, ifrt::Array** results, size_t
-// results_size, ifrt::Future<*>** futures, size_t futures_size) {
-//     std::vector<ifrt::Array*> arguments(args, args + args_size);
-//     std::vector<ifrt::Array*> result(results, results + results_size);
-//     std::vector<ifrt::Future<*>*> future(futures, futures + futures_size);
-//     return MyValueOrThrow(executable->Execute(arguments, result, future));
-// }
-
-extern "C" ifrt::Future<>
-ifrt_loadedexecutable_delete(ifrt::LoadedExecutable *executable) {
-  return executable->Delete();
+extern "C" bool op_sharding_is_shard_group(xla::OpSharding *op_sharding) {
+  return op_sharding->is_shard_group();
 }
 
 extern "C" bool
-ifrt_loadedexecutable_is_deleted(ifrt::LoadedExecutable *executable) {
-  return executable->IsDeleted();
+op_sharding_replicate_on_last_tile_dim(xla::OpSharding *op_sharding) {
+  return op_sharding->replicate_on_last_tile_dim();
 }
 
-extern "C" std::tuple<size_t, ifrt::Device *const *>
-ifrt_loadedexecutable_addressable_devices(ifrt::LoadedExecutable *executable) {
-  auto devices = executable->addressable_devices();
-  return std::make_tuple(devices.size(), devices.data());
+extern "C" bool op_sharding_has_last_tile_dims(xla::OpSharding *op_sharding) {
+  return op_sharding->last_tile_dims_size() > 0;
 }
 
-// TODO auxiliary functions for xla::ifrt::LoadedExecutable::ExecuteResult
-#pragma endregion
+extern "C" int32_t
+op_sharding_last_tile_dims_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->last_tile_dims_size());
+}
 
-#pragma region xla::ifrt::PjRtLoadedExecutable
-// TODO add support for LoadedHostCallback
-// TODO there are problems with using `make_shared
-// extern "C" ifrt::LoadedExecutable*
-// ifrt_pjrt_loadedexecutable_ctor(ifrt::PjRtCompatibleClient* client,
-// xla::PjRtLoadedExecutable* pjrt_loaded_executable) {
-//     auto pjrt_loaded_executable_ptr =
-//     std::make_shared<xla::PjRtLoadedExecutable>(*pjrt_loaded_executable);
-//     return MyValueOrThrow(ifrt::PjRtLoadedExecutable::Create(client,
-//     pjrt_loaded_executable_ptr,
-//     std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>())).release();
-// }
+extern "C" void op_sharding_last_tile_dims(xla::OpSharding *op_sharding,
+                                           int32_t *last_tile_dims) {
+  std::vector<int32_t> last_tile_dims_vec(op_sharding->last_tile_dims().begin(),
+                                          op_sharding->last_tile_dims().end());
+  std::copy(last_tile_dims_vec.begin(), last_tile_dims_vec.end(),
+            last_tile_dims);
+  return;
+}
 
-// TODO add support for LoadedHostCallback
-extern "C" ifrt::LoadedExecutable *
-ifrt_pjrt_loadedexecutable_ctor_from_mlir_module(
-    ifrt::PjRtCompatibleClient *client, mlir::ModuleOp *module,
-    xla::CompileOptions *compile_options) {
-  return MyValueOrThrow(
-             ifrt::PjRtLoadedExecutable::Create(
-                 client, *module, *compile_options,
-                 std::vector<tsl::RCReference<ifrt::LoadedHostCallback>>()))
-      .release();
+extern "C" bool
+op_sharding_has_iota_reshape_dims(xla::OpSharding *op_sharding) {
+  return op_sharding->iota_reshape_dims_size() > 0;
+}
+
+extern "C" int32_t
+op_sharding_iota_reshape_dims_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->iota_reshape_dims_size());
+}
+
+extern "C" void op_sharding_iota_reshape_dims(xla::OpSharding *op_sharding,
+                                              int32_t *iota_reshape_dims) {
+  std::vector<int32_t> iota_reshape_dims_vec(
+      op_sharding->iota_reshape_dims().begin(),
+      op_sharding->iota_reshape_dims().end());
+  std::copy(iota_reshape_dims_vec.begin(), iota_reshape_dims_vec.end(),
+            iota_reshape_dims);
+  return;
+}
+
+extern "C" bool
+op_sharding_has_iota_transpose_perm(xla::OpSharding *op_sharding) {
+  return op_sharding->iota_transpose_perm_size() > 0;
+}
+
+extern "C" int32_t
+op_sharding_iota_transpose_perm_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->iota_transpose_perm_size());
+}
+
+extern "C" void op_sharding_iota_transpose_perm(xla::OpSharding *op_sharding,
+                                                int32_t *iota_transpose_perm) {
+  std::vector<int32_t> iota_transpose_perm_vec(
+      op_sharding->iota_transpose_perm().begin(),
+      op_sharding->iota_transpose_perm().end());
+  std::copy(iota_transpose_perm_vec.begin(), iota_transpose_perm_vec.end(),
+            iota_transpose_perm);
+  return;
+}
+
+extern "C" bool
+op_sharding_has_tile_assignment_dimensions(xla::OpSharding *op_sharding) {
+  return op_sharding->tile_assignment_dimensions_size() > 0;
+}
+
+extern "C" int32_t
+op_sharding_tile_assignment_dimensions_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->tile_assignment_dimensions_size());
 }
 
 extern "C" void
-ifrt_pjrt_loadedexecutable_free(ifrt::PjRtLoadedExecutable *executable) {
-  delete executable;
+op_sharding_tile_assignment_dimensions(xla::OpSharding *op_sharding,
+                                       int32_t *tile_assignment_dimensions) {
+  std::vector<int32_t> tile_assignment_dimensions_vec(
+      op_sharding->tile_assignment_dimensions().begin(),
+      op_sharding->tile_assignment_dimensions().end());
+  std::copy(tile_assignment_dimensions_vec.begin(),
+            tile_assignment_dimensions_vec.end(), tile_assignment_dimensions);
+  return;
 }
 
-extern "C" xla::PjRtLoadedExecutable *
-ifrt_pjrt_loadedexecutable_pjrt_loadedexecutable(
-    ifrt::PjRtLoadedExecutable *executable) {
-  return executable->pjrt_loaded_executable();
+extern "C" bool
+op_sharding_has_tile_assignment_devices(xla::OpSharding *op_sharding) {
+  return op_sharding->tile_assignment_devices_size() > 0;
 }
+
+extern "C" int32_t
+op_sharding_tile_assignment_devices_size(xla::OpSharding *op_sharding) {
+  return static_cast<int32_t>(op_sharding->tile_assignment_devices_size());
+}
+
+extern "C" void
+op_sharding_tile_assignment_devices(xla::OpSharding *op_sharding,
+                                    int32_t *tile_assignment_devices) {
+  std::vector<int32_t> tile_assignment_devices_vec(
+      op_sharding->tile_assignment_devices().begin(),
+      op_sharding->tile_assignment_devices().end());
+  std::copy(tile_assignment_devices_vec.begin(),
+            tile_assignment_devices_vec.end(), tile_assignment_devices);
+  return;
+}
+
 #pragma endregion
 
-#pragma region xla::ifrt::CustomCallProgram
-#pragma endregion
+#pragma region HloSharding
 
-#pragma region xla::ifrt::HloProgram
-extern "C" ifrt::HloProgram *ifrt_hloprogram_ctor() {
-  return new ifrt::HloProgram();
+extern "C" void free_hlo_sharding(xla::HloSharding *hlo_sharding) {
+  delete hlo_sharding;
 }
 
-extern "C" ifrt::HloProgram *
-ifrt_hloprogram_ctor_with_module(mlir::ModuleOp *module) {
-  return new ifrt::HloProgram(*module);
+extern "C" void free_ifrt_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
+  delete hlo_sharding;
 }
 
-// extern "C" ifrt::HloProgram*
-// ifrt_hloprogram_ctor_with_context_and_module(mlir::MLIRContext* context,
-// mlir::ModuleOp* module) {
-//     auto context_ptr = std::make_unique<mlir::MLIRContext>(*context);
-//     return new ifrt::HloProgram(std::move(context_ptr), *module);
-// }
-#pragma endregion
+extern "C" xla::HloSharding *
+hlo_sharding_from_op_sharding(xla::OpSharding *op_sharding) {
+  xla::HloSharding *hlo_sharding = new xla::HloSharding(
+      MyValueOrThrow(xla::HloSharding::FromProto(*op_sharding)));
+  return hlo_sharding;
+}
 
-#pragma region xla::ifrt::Compiler
-extern "C" ifrt::LoadedExecutable *
-ifrt_compiler_compile(ifrt::Compiler *compiler, ifrt::Program *program) {
-  // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and
-  // set directly to the default
-  auto program_ptr = std::make_unique<ifrt::Program>(*program);
-  auto options = std::make_unique<ifrt::CompileOptions>();
-  return MyValueOrThrow(
-             compiler->Compile(std::move(program_ptr), std::move(options)))
+extern "C" xla::OpSharding *
+hlo_sharding_to_op_sharding(xla::HloSharding *hlo_sharding) {
+  xla::OpSharding *op_sharding = new xla::OpSharding(hlo_sharding->ToProto());
+  return op_sharding;
+}
+
+extern "C" const char *
+hlo_sharding_to_string(const xla::HloSharding *hlo_sharding) {
+  return cstr_from_string(hlo_sharding->ToString(true));
+}
+
+extern "C" ifrt::MemoryKind *ifrt_memory_kind_from_string(const char *c_str) {
+  return new ifrt::MemoryKind(std::string(c_str));
+}
+
+extern "C" ifrt::HloSharding *ifrt_hlo_sharding_from_xla_hlo_sharding(
+    ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices,
+    ifrt::MemoryKind *memory_kind, xla::HloSharding *xla_hlo_sharding) {
+  return ifrt::HloSharding::Create(
+             ifrt_CreateDeviceListFromDevices(client, device_list, num_devices),
+             *memory_kind, *xla_hlo_sharding)
       .release();
 }
 
-extern "C" ifrt::Executable *
-ifrt_compiler_compile_with_topology(ifrt::Compiler *compiler,
-                                    ifrt::Program *program,
-                                    const ifrt::Topology *topology) {
-  // apparently ifrt::CompileOptions is a legacy artifact so we don't use it and
-  // set directly to the default
-  auto options = std::make_unique<ifrt::CompileOptions>();
-  auto program_ptr = std::make_unique<ifrt::Program>(*program);
-  auto exec_ptr =
-      MyValueOrThrow(compiler->Compile(std::move(program_ptr), *topology,
-                                       std::move(options)))
-          .release();
-  return exec_ptr;
+extern "C" xla::HloSharding *
+ifrt_hlo_sharding_to_xla_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
+  xla::HloSharding *xla_hlo_sharding =
+      new xla::HloSharding(hlo_sharding->xla_hlo_sharding());
+  return xla_hlo_sharding;
 }
 
-extern "C" ifrt::LoadedExecutable *
-ifrt_compiler_deserialize_loadedexecutable(ifrt::Compiler *compiler,
-                                           const char *data) {
-  // apparently ifrt::DeserializeExecutableOptions is a legacy artifact so we
-  // don't use it and set directly to the default
-  auto options = std::make_unique<ifrt::DeserializeExecutableOptions>();
-  return MyValueOrThrow(compiler->DeserializeLoadedExecutable(
-                            std::string(data), std::move(options)))
+extern "C" const char *
+ifrt_hlo_sharding_to_string(ifrt::HloSharding *hlo_sharding) {
+  return cstr_from_string(hlo_sharding->DebugString());
+}
+
+extern "C" ifrt::HloSharding *ifrt_sharding_to_ifrt_hlo_sharding(
+    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+  const ifrt::Sharding *val = sharding->obj().get();
+  if (!llvm::isa<ifrt::HloSharding>(val))
+    ReactantThrowError("Expected a HloSharding");
+  return new ifrt::HloSharding(*llvm::dyn_cast<const ifrt::HloSharding>(val));
+}
+
+extern "C" void
+free_ifrt_sharding(HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+  delete sharding;
+}
+
+extern "C" HeldValue<std::shared_ptr<ifrt::Sharding>> *
+ifrt_sharding_from_ifrt_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
+  return reactant::capture(std::shared_ptr<ifrt::Sharding>(hlo_sharding));
+}
+
+extern "C" HeldValue<std::shared_ptr<ifrt::Sharding>> *
+ifrt_sharding_from_hlo_sharding(ifrt::Client *client,
+                                ifrt::Device **device_list, int32_t num_devices,
+                                ifrt::MemoryKind *memory_kind,
+                                xla::HloSharding *xla_hlo_sharding) {
+  return ifrt_sharding_from_ifrt_hlo_sharding(
+      ifrt_hlo_sharding_from_xla_hlo_sharding(client, device_list, num_devices,
+                                              memory_kind, xla_hlo_sharding));
+}
+
+extern "C" bool ifrt_sharding_is_single_device_sharding(
+    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+  return llvm::isa<const ifrt::SingleDeviceSharding>(sharding->obj().get());
+}
+
+extern "C" bool ifrt_sharding_is_fully_replicated(
+    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+  return sharding->obj()->IsFullyReplicated();
+}
+
+extern "C" const char *
+ifrt_sharding_to_string(HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+  return cstr_from_string(sharding->obj()->DebugString());
+}
+
+extern "C" int32_t ifrt_sharding_devices_size(
+    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+  return sharding->obj()->devices()->size();
+}
+
+extern "C" void ifrt_sharding_to_device_list(
+    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding,
+    ifrt::Device **devices) {
+  auto device_list = sharding->obj()->devices()->devices();
+  for (int i = 0; i < device_list.size(); i++) {
+    devices[i] = device_list[i];
+  }
+}
+
+#pragma endregion
+
+typedef ifrt::Future<> IfRtFutureType;
+
+extern "C" void ifrt_free_future(IfRtFutureType *Future) { delete Future; }
+
+extern "C" uint8_t ifrt_future_is_ready(IfRtFutureType *Future) {
+  return Future->IsReady();
+}
+
+extern "C" void ifrt_future_await(IfRtFutureType *Future) { Future->Await(); }
+
+#pragma region IfRtArray
+
+extern "C" void ifrt_free_array(HeldIfrtArray *array) { delete array; }
+
+extern "C" int64_t *ifrt_array_shape(HeldIfrtArray *array) {
+  auto dims =
+      static_cast<absl::Span<const int64_t>>(array->obj()->shape().dims());
+  int64_t *dims_ptr = new int64_t[dims.size()];
+  std::copy(dims.begin(), dims.end(), dims_ptr);
+  return dims_ptr;
+}
+
+extern "C" int64_t ifrt_array_ndims(HeldIfrtArray *array) {
+  return array->obj()->shape().dims().size();
+}
+
+extern "C" ifrt::DType ifrt_array_eltype(HeldIfrtArray *array) {
+  return array->obj()->dtype();
+}
+
+extern "C" ifrt::Client *ifrt_array_to_client(HeldIfrtArray *array) {
+  return array->obj()->client();
+}
+
+extern "C" HeldValue<std::shared_ptr<const ifrt::Sharding>> *
+ifrt_array_to_sharding(HeldIfrtArray *array) {
+  return reactant::capture(array->obj()->shared_ptr_sharding());
+}
+
+extern "C" void ifrt_array_copy_to_host_buffer(HeldIfrtArray *array,
+                                               void *data) {
+  std::optional<absl::Span<const int64_t>> byte_strides;
+  auto future = array->obj()->CopyToHostBuffer(
+      data, byte_strides, static_cast<ifrt::ArrayCopySemantics>(0));
+  future.Await();
+  return;
+}
+
+extern "C" HeldIfrtArray **ifrt_array_disassemble_into_single_device_arrays(
+    HeldIfrtArray *array, int32_t c_semantics,
+    int32_t c_single_device_shard_semantics, int32_t *narrays) {
+  std::vector<tsl::RCReference<ifrt::Array>> single_device_arrays =
+      MyValueOrThrow(array->obj()->DisassembleIntoSingleDeviceArrays(
+          static_cast<ifrt::ArrayCopySemantics>(c_semantics),
+          static_cast<ifrt::SingleDeviceShardSemantics>(
+              c_single_device_shard_semantics)));
+
+  *narrays = single_device_arrays.size();
+  HeldIfrtArray **arrays = new HeldIfrtArray *[single_device_arrays.size()];
+  for (int i = 0; i < single_device_arrays.size(); i++) {
+    arrays[i] = reactant::capture(std::move(single_device_arrays[i]));
+  }
+  return arrays;
+}
+
+#pragma endregion
+
+#pragma region xla::Distributed
+
+extern "C" HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *
+GetDistributedRuntimeClient(char *c_address, int32_t node_id,
+                            int32_t rpc_timeout_in_seconds,
+                            // int32_t init_timeout,
+                            int32_t shutdown_timeout_in_minutes,
+                            int32_t heartbeat_interval_in_seconds,
+                            int max_missing_heartbeats, bool use_compression) {
+  xla::DistributedRuntimeClient::Options options;
+  options.node_id = node_id;
+  options.rpc_timeout = absl::Seconds(rpc_timeout_in_seconds);
+  // options.init_timeout = absl::Seconds(init_timeout);
+  options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
+  options.heartbeat_interval = absl::Seconds(heartbeat_interval_in_seconds);
+  options.max_missing_heartbeats = max_missing_heartbeats;
+
+  std::string address = c_address;
+
+  return reactant::capture(
+      xla::GetDistributedRuntimeClient(address, options, use_compression));
+}
+
+extern "C" void free_distributed_runtime_client(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+  delete client;
+}
+
+extern "C" void distributed_runtime_client_connect(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+  auto status = client->obj()->Connect();
+  if (!status.ok())
+    ReactantThrowError(status.ToString().c_str());
+}
+
+extern "C" void distributed_runtime_client_shutdown(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+  auto status = client->obj()->Shutdown();
+  if (!status.ok())
+    ReactantThrowError(status.ToString().c_str());
+}
+
+extern "C" xla::DistributedRuntimeService *GetDistributedRuntimeService(
+    char *c_address, int num_nodes, int32_t heartbeat_interval_in_seconds,
+    int max_missing_heartbeats, int32_t cluster_register_timeout_in_minutes,
+    int32_t shutdown_timeout_in_minutes) {
+  xla::CoordinationServiceImpl::Options options;
+  options.num_nodes = num_nodes;
+  options.heartbeat_interval = absl::Seconds(heartbeat_interval_in_seconds);
+  options.max_missing_heartbeats = max_missing_heartbeats;
+  options.cluster_register_timeout =
+      absl::Minutes(cluster_register_timeout_in_minutes);
+  options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
+
+  std::string address = c_address;
+
+  return MyValueOrThrow(xla::GetDistributedRuntimeService(address, options))
       .release();
 }
-#pragma endregion
 
-#pragma region xla::ifrt::PjRtCompiler
-extern "C" ifrt::PjRtCompiler *
-ifrt_pjrt_compiler_ctor(ifrt::PjRtClient *client) {
-  return new ifrt::PjRtCompiler(client);
+extern "C" void free_distributed_runtime_service(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeService>> *service) {
+  delete service;
 }
 
-extern "C" void ifrt_pjrt_compiler_free(ifrt::PjRtCompiler *compiler) {
-  delete compiler;
+extern "C" void distributed_runtime_service_shutdown(
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeService>> *service) {
+  service->obj()->Shutdown();
 }
+
 #pragma endregion
+
+#pragma region Shardy
+
+extern "C" xla::HloSharding *
+hloShardingFromTensorShardingAttr(mlir::sdy::TensorShardingAttr attr,
+                                  mlir::sdy::MeshAttr meshAttr) {
+  mlir::ArrayRef<mlir::StringAttr> manual_axes = {};
+  std::function<mlir::sdy::MeshAttr(mlir::sdy::TensorShardingAttr)>
+      get_mesh_attr = [meshAttr](mlir::sdy::TensorShardingAttr local_attr) {
+        return meshAttr;
+      };
+
+  return new xla::HloSharding(
+      xla::sdy::convertToHloSharding(attr, get_mesh_attr, manual_axes));
+}
+
+// XXX: This is incorrect for multiple meshes. We need to use the current mesh
+// to generate this instead of the global mesh Currently we are storing only a
+// single mesh, so we can just use this.
+extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
+    mlir::MLIRContext *context, const xla::HloSharding *hloSharding,
+    mlir::StringAttr meshName, mlir::sdy::MeshAttr meshAttr, int64_t rank,
+    const bool *isClosed, const int64_t *priority) {
+  const SmallDenseMap<int64_t, StringRef> deviceIdToMaximalMeshName =
+      SmallDenseMap<int64_t, StringRef>();
+  mlir::sdy::TensorShardingAttr tensorShardingAttr =
+      xla::sdy::convertToSdySharding(*hloSharding, meshAttr,
+                                     deviceIdToMaximalMeshName, rank,
+                                     /*openDims=*/true);
+
+  for (int64_t i = 0; i < rank; i++) {
+    auto oldDimSharding = tensorShardingAttr.getDimSharding(i);
+
+    std::optional<int64_t> dimPriority;
+    if (priority[i] > 0)
+      dimPriority = priority[i];
+
+    tensorShardingAttr = tensorShardingAttr.replaceDimSharding(
+        i, mlir::sdy::DimensionShardingAttr::get(oldDimSharding.getContext(),
+                                                 oldDimSharding.getAxes(),
+                                                 isClosed[i], dimPriority));
+  }
+
+  return mlir::sdy::TensorShardingAttr::get(
+      context, meshName, tensorShardingAttr.getDimShardings(),
+      tensorShardingAttr.getReplicatedAxes());
+}
+
+#pragma endregion
+
+#pragma region ifrt::LoadedExecutable
+
+extern "C" void ifrt_loaded_executable_dtor(ifrt::LoadedExecutable *exec) {
+  delete exec;
+}
+
+extern "C" void ifrt_loaded_executable_execute(
+    ifrt::LoadedExecutable *exec, int num_args,
+    HeldValue<tsl::RCReference<ifrt::Array>> **op_args,
+    uint8_t *is_arg_donatable, int num_results,
+    HeldValue<tsl::RCReference<ifrt::Array>> **op_results, uint8_t *futures,
+    FutureType **status) {
+  std::vector<tsl::RCReference<xla::ifrt::Array>> args;
+  for (int i = 0; i < num_args; i++) {
+    args.emplace_back(op_args[i]->obj());
+  }
+
+  ifrt::ExecuteOptions options;
+  for (size_t i = 0; i < num_args; i++) {
+    if (!is_arg_donatable[i]) {
+      options.non_donatable_input_indices.insert(static_cast<int>(i));
+    }
+  }
+  options.fill_status = true;
+
+  auto result = MyValueOrThrow(exec->Execute(
+      static_cast<absl::Span<tsl::RCReference<xla::ifrt::Array>>>(args),
+      options, /* devices */ std::nullopt));
+
+  if (result.outputs.size() != num_results) {
+    llvm::errs() << "Error: results.size()=" << result.outputs.size()
+                 << " does not match num_results=" << num_results << "\n";
+    std::abort(); // Terminate if the number of results is incorrect.
+  }
+
+  // there is only 1 status and is valid because we set `options.fill_status =
+  // true`
+  *futures = true;
+  *status = new FutureType(result.status);
+
+  for (int i = 0; i < num_results; i++) {
+    op_results[i] = reactant::capture(result.outputs[i]);
+  }
+}
+
+extern "C" ifrt::Client *
+ifrt_loaded_executable_client(ifrt::LoadedExecutable *exec) {
+  return exec->client();
+}
+
+extern "C" void
+ifrt_loaded_executable_get_parameter_shardings(ifrt::LoadedExecutable *exec,
+                                               xla::OpSharding **op_shardings,
+                                               int32_t num_op_shardings) {
+  std::optional<std::vector<xla::OpSharding>> shardings =
+      exec->GetParameterShardings();
+  if (!shardings.has_value()) {
+    ReactantThrowError(
+        "No sharding found for the output of the loaded executable");
+  }
+
+  std::vector<xla::OpSharding> hlo_op_shardings = shardings.value();
+  if (num_op_shardings != hlo_op_shardings.size()) {
+    ReactantThrowError(("Expected " + std::to_string(num_op_shardings) +
+                        " shardings, got " +
+                        std::to_string(hlo_op_shardings.size()))
+                           .c_str());
+  }
+
+  for (int32_t i = 0; i < num_op_shardings; i++) {
+    op_shardings[i] = new xla::OpSharding(hlo_op_shardings[i]);
+  }
+}
+
+extern "C" void
+ifrt_loaded_executable_get_output_shardings(ifrt::LoadedExecutable *exec,
+                                            xla::OpSharding **op_shardings,
+                                            int32_t num_op_shardings) {
+  std::optional<std::vector<xla::OpSharding>> shardings =
+      exec->GetOutputShardings();
+  if (!shardings.has_value()) {
+    ReactantThrowError(
+        "No sharding found for the output of the loaded executable");
+  }
+
+  std::vector<xla::OpSharding> hlo_op_shardings = shardings.value();
+  if (num_op_shardings != hlo_op_shardings.size()) {
+    ReactantThrowError(("Expected " + std::to_string(num_op_shardings) +
+                        " shardings, got " +
+                        std::to_string(hlo_op_shardings.size()))
+                           .c_str());
+  }
+
+  for (int32_t i = 0; i < num_op_shardings; i++) {
+    op_shardings[i] = new xla::OpSharding(hlo_op_shardings[i]);
+  }
+}
+
+extern "C" void
+ifrt_loaded_executable_get_hlo_modules(ifrt::LoadedExecutable *exec,
+                                       void **hlo_modules, int32_t *nmodules) {
+  auto hlo_modules_vec = MyValueOrThrow(exec->GetHloModules());
+  *nmodules = hlo_modules_vec.size();
+  for (int32_t i = 0; i < *nmodules; i++) {
+    hlo_modules[i] = reactant::capture(hlo_modules_vec[i]);
+  }
+}
+
+extern "C" int32_t
+ifrt_loaded_executable_num_devices(ifrt::LoadedExecutable *exec) {
+  return static_cast<int32_t>(exec->num_devices());
+}
 
 #pragma endregion

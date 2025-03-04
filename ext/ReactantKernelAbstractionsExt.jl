@@ -24,18 +24,20 @@ end
 
 KA.allocate(n::ReactantBackend, ::Type{T}, dims::Tuple) where {T} = KA.zeros(b, T, dims)
 function KA.zeros(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    return ConcreteRArray(zeros(T, dims))
+    return ConcretePJRTArray(zeros(T, dims))
 end
-KA.ones(::ReactantBackend, ::Type{T}, dims::Tuple) where {T} = ConcreteRArray(ones(T, dims))
+function KA.ones(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
+    return ConcretePJRTArray(ones(T, dims))
+end
 
 KA.get_backend(::Reactant.AnyTracedRArray) = ReactantBackend()
-KA.get_backend(::Reactant.AnyConcreteRArray) = ReactantBackend()
+KA.get_backend(::Reactant.AnyConcretePJRTArray) = ReactantBackend()
 function KA.synchronize(::ReactantBackend) end
 
 Adapt.adapt_storage(::ReactantBackend, a::Array) = a
 Adapt.adapt_storage(::ReactantBackend, a::Reactant.AnyTracedRArray) = a
-Adapt.adapt_storage(::ReactantBackend, a::Reactant.AnyConcreteRArray) = a
-Adapt.adapt_storage(::KA.CPU, a::Reactant.AnyConcreteRArray) = convert(Array, a)
+Adapt.adapt_storage(::ReactantBackend, a::Reactant.AnyConcretePJRTArray) = a
+Adapt.adapt_storage(::KA.CPU, a::Reactant.AnyConcretePJRTArray) = convert(Array, a)
 
 ## memory operations
 

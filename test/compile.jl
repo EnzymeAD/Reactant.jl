@@ -10,7 +10,7 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
             x2 = Reactant.to_rarray(x)
 
             res = @jit sum(x2)
-            @test res isa @NamedTuple{a::Reactant.ConcreteRNumber{Float64}}
+            @test res isa @NamedTuple{a::ConcreteRNumber{Float64,1,Sharding.NoShardInfo}}
             @test isapprox(res.a, sum(x.a))
         end
 
@@ -30,8 +30,8 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
     @testset "world-age" begin
         a = ones(2, 10)
         b = ones(10, 2)
-        a_ra = Reactant.ConcreteRArray(a)
-        b_ra = Reactant.ConcreteRArray(b)
+        a_ra = Reactant.to_rarray(a)
+        b_ra = Reactant.to_rarray(b)
 
         fworld(x, y) = @jit(x * y)
 
@@ -40,7 +40,7 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
 
     @testset "type casting & optimized out returns" begin
         a = ones(2, 10)
-        a_ra = Reactant.ConcreteRArray(a)
+        a_ra = Reactant.to_rarray(a)
 
         ftype1(x) = Float64.(x)
         ftype2(x) = Float32.(x)
@@ -48,8 +48,8 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
         y1 = @jit ftype1(a_ra)
         y2 = @jit ftype2(a_ra)
 
-        @test y1 isa Reactant.ConcreteRArray{Float64,2}
-        @test y2 isa Reactant.ConcreteRArray{Float32,2}
+        @test y1 isa Reactant.ConcretePJRTArray{Float64,2}
+        @test y2 isa Reactant.ConcretePJRTArray{Float32,2}
 
         @test y1 ≈ Float64.(a)
         @test y2 ≈ Float32.(a)
@@ -84,7 +84,7 @@ end
 
     hlo_code = @code_hlo f(x_ra)
     @test !startswith(string(hlo_code), "Module")
-    @test startswith(string(hlo_code), "module {")
+    @test startswith(string(hlo_code), "module")
 end
 
 @testset "Bool attributes" begin

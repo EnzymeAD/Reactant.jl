@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - '.github/workflows/CI.yml'
-      - 'deps/**'
       - 'ext/**'
       - 'lib/**'
       - 'src/**'
@@ -17,7 +16,6 @@ on:
     tags: '*'
     paths:
       - '.github/workflows/CI.yml'
-      - 'deps/**'
       - 'ext/**'
       - 'lib/**'
       - 'src/**'
@@ -32,7 +30,8 @@ concurrency:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ matrix.libReactant }} libReactant - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
+    timeout-minutes: 90
+    name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -42,65 +41,49 @@ jobs:
           - '1.11'
           # - 'nightly'
         os:
-          - ubuntu-20.04
-          - ubuntu-24.04-arm
+          - ubuntu-24.04
+          # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
+          # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
+          - ubuntu-22.04-arm
+          - macOS-13
           - macOS-latest
         test_group:
           - core
           - neural_networks
           - integration
-        arch:
-          - x64
-          - aarch64
         assertions:
           - false
-        libReactant: [packaged]
         include:
-          - os: ubuntu-20.04
-            arch: x64
-            libReactant: packaged
+          - os: ubuntu-24.04
             version: '1.10'
             assertions: true
             test_group: core
-          - os: ubuntu-20.04
-            arch: x64
-            libReactant: packaged
+          - os: ubuntu-24.04
             version: '1.10'
             assertions: true
             test_group: neural_networks
-          - os: ubuntu-20.04
-            arch: x64
-            libReactant: packaged
+          - os: ubuntu-24.04
             version: '1.10'
             assertions: true
             test_group: integration
-          # - os: ubuntu-20.04
-          #   arch: x86
+          # - os: ubuntu-24.04
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: core
-          # - os: ubuntu-20.04
-          #   arch: x86
+          # - os: ubuntu-24.04
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: neural_networks
-          # - os: ubuntu-20.04
-          #   arch: x86
+          # - os: ubuntu-24.04
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: integration
-        exclude:
-          - os: ubuntu-20.04 # this is x86_64, exclude foreign architecture
-            arch: aarch64
-          - os: ubuntu-24.04-arm # this is aarch64, exclude foreign architecture
-            arch: x64
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         if: ${{ ! matrix.assertions }}
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v2
       - uses: actions/checkout@v4
         if: ${{ matrix.assertions }}
@@ -114,23 +97,7 @@ jobs:
           sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
           make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
           echo $PWD/julia/usr/bin >> $GITHUB_PATH
-      - name: Build libReactant
-        if: ${{ matrix.libReactant == 'local' && matrix.os != 'macOS-latest'}}
-        id: build_libreactant
-        run: |
-          python -m pip install numpy
-          julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl
-          cp LocalPreferences.toml test/
-      - name: Build libReactant MacOS
-        if: ${{ matrix.libReactant == 'local' && matrix.os == 'macOS-latest'}}
-        id: build_libreactant_mac
-        run: |
-          python -m pip install numpy
-          julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          SDKROOT=`xcrun --show-sdk-path` julia --color=yes --project=deps deps/build_local.jl
-          cp LocalPreferences.toml test/
-      - name: "Install Dependencies and Run Tests"
+      - name: "Install Dependencies"
         run: |
           import Pkg
           Pkg.Registry.update()
@@ -140,15 +107,23 @@ jobs:
               push!(dev_pks, Pkg.PackageSpec(; path))
           end
           Pkg.develop(dev_pks)
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
+        # Only in Julia v1.10 we need to install `ReactantCore` manually.
+        if: ${{ matrix.version == '1.10' }}
+        env:
+          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+      - name: "Run Tests"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
           Pkg.test(; coverage="user")
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
           REACTANT_TEST_GROUP: ${{ matrix.test_group }}
+          XLA_FLAGS: "--xla_force_host_platform_device_count=8"
       - uses: julia-actions/julia-processcoverage@v1
-        if: steps.run_tests.outcome == 'success'
       - uses: codecov/codecov-action@v5
-        if: steps.run_tests.outcome == 'success'
         with:
           files: lcov.info

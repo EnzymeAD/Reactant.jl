@@ -2,6 +2,8 @@ using Reactant
 using Test
 using Enzyme
 using Statistics
+using Random
+Random.seed!(123)
 
 fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
 
@@ -12,7 +14,7 @@ using InteractiveUtils
 
     r_res = sum(x)
 
-    a = Reactant.ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
 
     c_res = @allowscalar sum(a)
     @test c_res ≈ r_res
@@ -25,7 +27,7 @@ end
 
     r_res = fastmax(x)
 
-    a = Reactant.ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
 
     c_res = @allowscalar fastmax(a)
     @test c_res ≈ r_res
@@ -41,7 +43,7 @@ sinexpbc(x) = sinexp.(x)
 
     r_res = sinexpbc(x)
 
-    a = Reactant.ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
 
     c_res = @allowscalar sinexpbc(a)
     @test c_res ≈ r_res
@@ -55,7 +57,7 @@ sum_compare(x) = sum(x) > 0
 
 @testset "Basic mapreduce" begin
     x = rand(Float32, 10)
-    a = Reactant.ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
     r_res = sumexp(x)
 
     f_res = @jit sumexp(a)
@@ -76,7 +78,7 @@ end
     x = rand(2, 10)
     r_res = mysoftmax!(x)
 
-    a = Reactant.ConcreteRArray(x)
+    a = Reactant.to_rarray(x)
 
     f_res = @jit mysoftmax!(a)
     @test f_res ≈ r_res
@@ -86,7 +88,7 @@ bcast_cos(x) = cos.(x)
 
 @testset "Basic cos" begin
     x = rand(3, 2)
-    c = Reactant.ConcreteRArray(x)
+    c = Reactant.to_rarray(x)
 
     @test @jit(bcast_cos(c)) ≈ cos.(x)
 end
@@ -101,9 +103,7 @@ f_var(args...) = sum(args)
     @test @jit(f_var(x, y, z)) ≈ [6.6, 6.6, 6.6]
 end
 
-function sumcos(x)
-    return sum(cos.(x))
-end
+sumcos(x) = sum(cos.(x))
 
 function grad_ip(x)
     dx = Enzyme.make_zero(x)
@@ -118,7 +118,7 @@ function resgrad_ip(x)
 end
 
 @testset "Basic grad cos" begin
-    c = Reactant.ConcreteRArray(ones(3, 2))
+    c = Reactant.to_rarray(ones(3, 2))
 
     @test @jit(grad_ip(c)) ≈ -sin.(ones(3, 2))
 
@@ -128,35 +128,32 @@ end
     @test r ≈ -sin.(ones(3, 2))
 end
 
-function mul(A, B)
-    return A * B
-end
 @testset "matmul" begin
-    c = Reactant.ConcreteRArray(ones(50, 70))
-    d = Reactant.ConcreteRArray(ones(70, 30))
+    c = Reactant.to_rarray(ones(50, 70))
+    d = Reactant.to_rarray(ones(70, 30))
 
-    @test @jit(mul(c, d)) ≈ mul(ones(50, 70), ones(70, 30))
+    @test @jit(*(c, d)) ≈ *(ones(50, 70), ones(70, 30))
 end
 
-@testset "ConcreteRArray" begin
-    c = Reactant.ConcreteRArray(ones(50, 70))
+@testset "similar Reactant.to_rarray" begin
+    c = Reactant.to_rarray(ones(50, 70))
     sim_c = similar(c)
     @test typeof(sim_c) == typeof(c) && size(sim_c) == size(sim_c)
 end
 
-@testset "Reactant.@code_hlo" begin
-    W = Reactant.ConcreteRArray(randn(Float32, 10, 20))
-    x = Reactant.ConcreteRArray(randn(Float32, 20, 5))
-    res = Reactant.@code_hlo W * x
+@testset "@code_hlo" begin
+    W = Reactant.to_rarray(randn(Float32, 10, 20))
+    x = Reactant.to_rarray(randn(Float32, 20, 5))
+    res = @code_hlo W * x
     res_repr = sprint(show, res)
 
     @test contains(res_repr, "stablehlo.dot_general")
 end
 
-@testset "Reactant.@code_hlo broadcasting" begin
-    x = Reactant.ConcreteRArray(randn(Float32, 2, 2))
-    y = Reactant.ConcreteRArray(randn(Float32, 2, 2))
-    res = Reactant.@code_hlo (.+)(x, y)
+@testset "@code_hlo broadcasting" begin
+    x = Reactant.to_rarray(randn(Float32, 2, 2))
+    y = Reactant.to_rarray(randn(Float32, 2, 2))
+    res = @code_hlo (.+)(x, y)
     res_repr = sprint(show, res)
 
     @test contains(res_repr, "stablehlo.add")
@@ -164,57 +161,19 @@ end
 
 @testset "Statistics: `mean` & `var`" begin
     x = randn(2, 3, 4)
-    x_ca = Reactant.ConcreteRArray(x)
+    x_ca = Reactant.to_rarray(x)
 
-    # XXX: @jit doesn't work with `;`
-    # @test @jit(mean(x_ca)) ≈ mean(x)
-    # @test @jit(mean(x_ca; dims=1)) ≈ mean(x; dims=1)
-    # @test @jit(mean(x_ca; dims=(1, 2))) ≈ mean(x; dims=(1, 2))
-    # @test @jit(mean(x_ca; dims=(1, 3))) ≈ mean(x; dims=(1, 3))
+    @test @jit(mean(x_ca)) ≈ mean(x)
+    @test @jit(mean(x_ca; dims=1)) ≈ mean(x; dims=1)
+    @test @jit(mean(x_ca; dims=(1, 2))) ≈ mean(x; dims=(1, 2))
+    @test @jit(mean(x_ca; dims=(1, 3))) ≈ mean(x; dims=(1, 3))
 
-    mean_fn1(x) = mean(x)
-    mean_fn2(x) = mean(x; dims=1)
-    mean_fn3(x) = mean(x; dims=(1, 2))
-    mean_fn4(x) = mean(x; dims=(1, 3))
-    mean_f1abs2(x) = mean(abs2, x)
-    mean_f2abs2(x) = mean(abs2, x; dims=1)
-
-    mean_fn1_compiled = @compile mean_fn1(x_ca)
-    mean_fn2_compiled = @compile mean_fn2(x_ca)
-    mean_fn3_compiled = @compile mean_fn3(x_ca)
-    mean_fn4_compiled = @compile mean_fn4(x_ca)
-    mean_f1abs2_compiled = @compile mean_f1abs2(x_ca)
-    mean_f2abs2_compiled = @compile mean_f2abs2(x_ca)
-
-    @test mean_fn1(x) ≈ mean_fn1_compiled(x_ca)
-    @test mean_fn2(x) ≈ mean_fn2_compiled(x_ca)
-    @test mean_fn3(x) ≈ mean_fn3_compiled(x_ca)
-    @test mean_fn4(x) ≈ mean_fn4_compiled(x_ca)
-    @test mean_f1abs2(x) ≈ mean_f1abs2_compiled(x_ca)
-    @test mean_f2abs2(x) ≈ mean_f2abs2_compiled(x_ca)
-
-    # XXX: @jit doesn't work with `;`
-    # @test @jit(var(x_ca)) ≈ var(x)
-    # @test @jit(var(x_ca; dims=1)) ≈ var(x; dims=1)
-    # @test @jit(var(x_ca; dims=(1, 2), corrected=false)) ≈
-    #     var(x; dims=(1, 2), corrected=false)
-    # @test @jit(var(x_ca; dims=(1, 3), corrected=false)) ≈
-    #     var(x; dims=(1, 3), corrected=false)
-
-    var_fn1(x) = var(x)
-    var_fn2(x) = var(x; dims=1)
-    var_fn3(x) = var(x; dims=(1, 2), corrected=false)
-    var_fn4(x) = var(x; dims=(1, 3), corrected=false)
-
-    var_fn1_compiled = @compile var_fn1(x_ca)
-    var_fn2_compiled = @compile var_fn2(x_ca)
-    var_fn3_compiled = @compile var_fn3(x_ca)
-    var_fn4_compiled = @compile var_fn4(x_ca)
-
-    @test var_fn1(x) ≈ var_fn1_compiled(x_ca)
-    @test var_fn2(x) ≈ var_fn2_compiled(x_ca)
-    @test var_fn3(x) ≈ var_fn3_compiled(x_ca)
-    @test var_fn4(x) ≈ var_fn4_compiled(x_ca)
+    @test @jit(var(x_ca)) ≈ var(x)
+    @test @jit(var(x_ca, dims=1)) ≈ var(x; dims=1)
+    @test @jit(var(x_ca, dims=(1, 2); corrected=false)) ≈
+        var(x; dims=(1, 2), corrected=false)
+    @test @jit(var(x_ca; dims=(1, 3), corrected=false)) ≈
+        var(x; dims=(1, 3), corrected=false)
 end
 
 @testset "concatenation" begin
@@ -376,7 +335,7 @@ end
         b = Reactant.to_rarray(_b)
         c = Reactant.to_rarray(_c)
 
-        # vcat test        
+        # vcat test
         y = @jit vcat(a, b)
         @test y == vcat(a, _b)
         @test y isa ConcreteRArray{typeof_a,1}
@@ -419,51 +378,17 @@ end
     end
 end
 
-function write_with_broadcast1!(x, y)
-    x[1, :, :] .= reshape(y, 4, 3)
-    return x
-end
-function write_with_broadcast2!(x, y)
-    x[:, 1, :] .= view(y, :, 1:3)
-    return x
-end
-
-@testset "write_with_broadcast" begin
-    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
-    y_ra = Reactant.to_rarray(rand(3, 4))
-
-    res = @jit write_with_broadcast1!(x_ra, y_ra)
-
-    @test res.data === x_ra.data
-
-    res = Array(res)
-    y = Array(y_ra)
-    @test res[1, :, :] ≈ reshape(y, 4, 3)
-
-    x_ra = Reactant.to_rarray(zeros(3, 4, 3))
-    y_ra = Reactant.to_rarray(rand(3, 4))
-
-    res = @jit write_with_broadcast2!(x_ra, y_ra)
-
-    @test res.data === x_ra.data
-
-    res = Array(res)
-    y = Array(y_ra)
-    @test res[:, 1, :] ≈ view(y, :, 1:3)
-end
-
 tuple_byref(x) = (; a=(; b=x))
-tuple_byref2(x) = abs2.(x), tuple_byref2(x)
+tuple_byref2(x) = abs2.(x), tuple_byref(x)
 
 @testset "Tuple byref" begin
     x = Reactant.to_rarray([1.0 -2.0; -3.0 4.0])
     @test @jit(tuple_byref(x)).a.b.data === x.data
 
-    # TODO this seems to hang during compile
-    # f2 = @compile tuple_byref2(x)
-    # r2 = f2(x)
-    # @test r2[2].a.b.data === x.data
-    # @test r2[1] == abs2.([1.0 -2.0; -3.0 4.0])
+    f2 = @compile tuple_byref2(x)
+    r2 = f2(x)
+    @test r2[2].a.b.data === x.data
+    @test r2[1] == abs2.([1.0 -2.0; -3.0 4.0])
 end
 
 sum_xxᵀ(x) = sum(x .* x')
@@ -500,18 +425,18 @@ end
         x_ra = Reactant.to_rarray(x; track_numbers=Number)
         f2 = @compile f1(x_ra)
         @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) ≈ 5 * 5.2
-        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) isa ConcreteRNumber
+        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) isa ConcretePJRTNumber
 
         x_ra = Reactant.to_rarray(x)
         f3 = @compile f1(x_ra)
         @test f3(Reactant.to_rarray((5, 5.2))) ≈ f1(x)
-        @test !(f3(Reactant.to_rarray((5, 5.2))) isa ConcreteRNumber)
+        @test !(f3(Reactant.to_rarray((5, 5.2))) isa ConcretePJRTNumber)
         @test f3(Reactant.to_rarray((5, 5.2))) isa Number
 
         x_ra = Reactant.to_rarray(x; track_numbers=Int)
         f4 = @compile f1(x_ra)
         @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) ≈ 5 * 3.14
-        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) isa ConcreteRNumber
+        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) isa ConcretePJRTNumber
     end
 
     @testset "Mixed" begin
@@ -555,7 +480,7 @@ end
     @test Float32(x) isa Float32
     @test Float64(x) isa Float64
     @test Int(x) isa Int
-    @test float(x) isa ConcreteRNumber{Float64}
+    @test float(x) isa ConcretePJRTNumber{Float64}
 end
 
 @testset "concrete number with fill" begin
@@ -591,18 +516,24 @@ end
     for x in (rand(Float32, (3, 3)), rand(Float64))
         intop = gensym("int_$op")
         @eval begin
-            @test @jit($op.(ConcreteRNumber.($x))) == $op.($x)
+            @test @jit($op.(ConcretePJRTNumber.($x))) == $op.($x)
             $intop(x) = $op(Int, x)
-            @test @jit($intop.(ConcreteRNumber.($x))) == $intop.($x)
+            @test @jit($intop.(ConcretePJRTNumber.($x))) == $intop.($x)
         end
     end
+end
+
+@testset "sign" begin
+    x = collect(Float64, 0:0.01:1) .- 0.5
+    x_ra = Reactant.to_rarray(x)
+    @test Array(@jit(sign.(x_ra))) ≈ sign.(x)
 end
 
 @testset "aos_to_soa" begin
     using ArrayInterface
 
     x_res = collect(reshape(1.0:4.0, 2, 1, 2))
-    x_ca = ConcreteRNumber.(x_res)
+    x_ca = ConcretePJRTNumber.(x_res)
 
     y_ca1 = @allowscalar ArrayInterface.aos_to_soa(x_ca)
     @test y_ca1 ≈ x_res
@@ -617,7 +548,7 @@ end
     x = randn(2, 3)
     x_ra = Reactant.to_rarray(x)
 
-    @testset "ConcreteRArray" begin
+    @testset "Reactant.to_rarray" begin
         y = collect(x_ra)
         @test y == x
         @test y !== x_ra
@@ -632,7 +563,7 @@ end
     x = 5
     x_ra = ConcreteRNumber(x)
 
-    @testset "ConcreteRNumber" begin
+    @testset "ConcretePJRTNumber" begin
         y = collect(x_ra)
         @test y isa Array{Int,0}
     end
@@ -667,15 +598,22 @@ end
     )
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
-    ) isa ConcreteRNumber{Float64}
+    ) isa ConcretePJRTNumber{Float64}
     @test 0.0f0 ==
         @jit ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
-    ) isa ConcreteRNumber{Float32}
+    ) isa ConcretePJRTNumber{Float32}
+
+    cond = ConcreteRNumber(true)
+    x = ConcreteRNumber(1.0)
+    @test @jit(ifelse(cond, x, 0.0)) == ConcreteRNumber(1.0)
+    @test @jit(ifelse(cond, 0.0, x)) == ConcreteRNumber(0.0)
+    @test @jit(ifelse(cond, 1.0, 0.0)) == ConcreteRNumber(1.0)
+    @test @jit(ifelse(cond, 0.0, 1.0)) == ConcreteRNumber(0.0)
 end
 
-@testset "fill! and zero on ConcreteRArray" begin
+@testset "fill! and zero on Reactant.to_rarray" begin
     x_ra = Reactant.to_rarray(rand(3, 4))
 
     z = zero(x_ra)
@@ -703,13 +641,13 @@ end
     @test @allowscalar T[1][1] == 2
 
     ptr_x = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.UnsafeBufferPointer(x.data.buffer)
+        Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(x.data[1].buffer)
     )
     ptr_res = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.UnsafeBufferPointer(res.data.buffer)
+        Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(res.data[1].buffer)
     )
     ptr_T1 = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.UnsafeBufferPointer(T[1].data.buffer)
+        Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(T[1].data[1].buffer)
     )
 
     @test ptr_x == ptr_res == ptr_T1
@@ -721,10 +659,10 @@ end
         return x .* eta, eta
     end
 
-    res = @jit test_convert(ConcreteRArray(rand(4, 2)), ConcreteRNumber(3.0f0))
+    res = @jit test_convert(Reactant.to_rarray(rand(4, 2)), ConcreteRNumber(3.0f0))
 
     @test res[1] isa ConcreteRArray{Float64,2}
-    @test res[2] isa ConcreteRNumber{Float64}
+    @test res[2] isa ConcretePJRTNumber{Float64}
 end
 
 @testset "stack" begin
@@ -815,31 +753,31 @@ end
 
     @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
         @test @jit(fn.(x_ra)) ≈ fn.(x)
-        @test @jit(fn.(x_ra)) isa ConcreteRNumber{Float32}
+        @test @jit(fn.(x_ra)) isa ConcretePJRTNumber{Float32}
     end
     @testset for fn in (sincospi, sincos)
         res = @jit fn(x_ra)
         @test res[1] ≈ fn(x)[1]
         @test res[2] ≈ fn(x)[2]
-        @test res[1] isa ConcreteRNumber{Float32}
-        @test res[2] isa ConcreteRNumber{Float32}
+        @test res[1] isa ConcretePJRTNumber{Float32}
+        @test res[2] isa ConcretePJRTNumber{Float32}
     end
 end
 
 @testset "isfinite" begin
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
-    @test Reactant.@jit(isfinite.(x)) == [true, false, false, false, false]
+    @test @jit(isfinite.(x)) == [true, false, false, false, false]
 
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test Reactant.@jit(isfinite.(x)) == [true, false, false, false, false]
+    @test @jit(isfinite.(x)) == [true, false, false, false, false]
 end
 
 @testset "isnan" begin
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
-    @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
+    @test @jit(isnan.(x)) == [false, true, false, false, true]
 
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test Reactant.@jit(isnan.(x)) == [false, true, false, false, true]
+    @test @jit(isnan.(x)) == [false, true, false, false, true]
 end
 
 @testset "isnan/isfinite" begin
@@ -847,6 +785,49 @@ end
     @test !isnan(Reactant.to_rarray(0.0; track_numbers=Number))
     @test isfinite(Reactant.to_rarray(0.0; track_numbers=Number))
     @test !isfinite(Reactant.to_rarray(Inf; track_numbers=Number))
+end
+
+@testset "isinf" begin
+    @test Bool(@jit(isinf(ConcreteRNumber(Inf))))
+    @test Bool(@jit(isinf(ConcreteRNumber(-Inf))))
+    @test !Bool(@jit(isinf(ConcreteRNumber(2))))
+    @test !Bool(@jit(isinf(ConcreteRNumber(2.0))))
+    @test !Bool(@jit(isinf(ConcreteRNumber(true))))
+end
+
+@testset "mod and rem" begin
+    a = [-1.1, 7.7, -3.3, 9.9, -5.5]
+    b = [6.6, -2.2, -8.8, 4.4, -10.1]
+
+    expected_mod = mod.(a, b)
+    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
+
+    expected_rem = rem.(a, b)
+    @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
+    @test @jit(rem.(a, Reactant.to_rarray(b))) ≈ expected_rem
+    @test @jit(rem.(Reactant.to_rarray(a), b)) ≈ expected_rem
+end
+
+@testset "xor" begin
+    for a in (true, false), b in (true, false)
+        @test @jit(xor(ConcreteRNumber(a), ConcreteRNumber(b))) == xor(a, b)
+    end
+end
+
+@testset "signbit" begin
+    for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
+        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
+    end
+end
+
+@testset "copysign" begin
+    for a in (-3.14, -2, 0.0, 2.71, 42), b in (-7, -0.57, -0.0, 1, 3.14)
+        # Make sure also the return type is correct
+        @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ===
+            copysign(a, b)
+    end
 end
 
 @testset "reduce integers" begin
@@ -869,8 +850,92 @@ end
 end
 
 @testset "Broadcasting with Range" begin
-    x = ConcreteRArray(rand(10))
+    x = Reactant.to_rarray(rand(10))
     fn(x) = x .+ (1:length(x))
 
     @test @jit(fn(x)) ≈ fn(Array(x))
+end
+
+function fntest1(x)
+    y = similar(x, 1, 1, 8)
+    sum!(y, x)
+    return y
+end
+
+function fntest2(x)
+    y = similar(x, 2, 1, 8)
+    sum!(y, x)
+    return y
+end
+
+function fntest3(x)
+    y = similar(x, 2, 1, 1)
+    sum!(abs2, y, x)
+    return y
+end
+
+@testset "mapreducedim!" begin
+    x = reshape(collect(Float32, 1:64), 2, 4, 8) ./ 64
+    x_ra = Reactant.to_rarray(x)
+
+    @test Array(@jit(fntest1(x_ra))) ≈ fntest1(x)
+    @test Array(@jit(fntest2(x_ra))) ≈ fntest2(x)
+    @test Array(@jit(fntest3(x_ra))) ≈ fntest3(x)
+end
+
+@testset "don't expand ranges by default" begin
+    fn(x) = Reactant.TracedUtils.broadcast_to_size(x, (length(x),))
+
+    hlo = repr(@code_hlo(fn(1:10000)))
+    @test contains(hlo, "stablehlo.iota")
+    @test contains(hlo, "stablehlo.add")
+    @test Array(@jit(fn(1:10000))) ≈ collect(1:10000)
+
+    hlo = repr(@code_hlo(fn(32:10000)))
+    @test contains(hlo, "stablehlo.iota")
+    @test contains(hlo, "stablehlo.add")
+    @test Array(@jit(fn(32:10000))) ≈ collect(32:10000)
+
+    hlo = repr(@code_hlo(fn(0:10000)))
+    @test contains(hlo, "stablehlo.iota")
+    @test !contains(hlo, "stablehlo.add")
+    @test Array(@jit(fn(0:10000))) ≈ collect(0:10000)
+
+    hlo = repr(@code_hlo(fn(Base.OneTo(10000))))
+    @test contains(hlo, "stablehlo.iota")
+    @test contains(hlo, "stablehlo.add")
+    @test Array(@jit(fn(Base.OneTo(10000)))) ≈ collect(Base.OneTo(10000))
+end
+
+function dip!(x)
+    x[:a] = x[:a] .* x[:b]
+    return nothing
+end
+
+@testset "Dict" begin
+    x = Dict{Symbol,Vector{Float32}}()
+    x[:a] = 2.7 * ones(4)
+    x[:b] = 3.1 * ones(4)
+
+    ra = Reactant.to_rarray(x)
+    @jit dip!(ra)
+    ra[:a] ≈ (2.7 * 2) * ones(4)
+end
+
+@testset "@code_xla" begin
+    x_ra = Reactant.to_rarray(ones(4))
+    hlo = repr(@code_xla(sin.(x_ra)))
+    @test contains(hlo, "HloModule")
+    @test contains(hlo, "sine")
+end
+
+@testset "Raise keyword" begin
+    v = randn(Float32, 16)
+    rv = Reactant.to_rarray(v)
+    @test sin.(v) ≈ @jit raise = true sin.(rv)
+    @test cos.(v) ≈ @jit raise = false cos.(rv)
+    @test exp.(v) ≈ @jit raise = "canonicalize" exp.(rv)
+    @test_throws Reactant.MLIR.IR.AddPipelineException @jit raise = "this_pass-does_not_ExisT" exp.(
+        rv
+    )
 end

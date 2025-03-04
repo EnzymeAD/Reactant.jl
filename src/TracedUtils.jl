@@ -17,6 +17,7 @@ using ..Reactant:
     ReactantPrimitive,
     Ops
 using ReactantCore: MissingTracedValue, is_traced
+using Functors: Functors
 
 materialize_traced_array(x::TracedRArray) = x
 
@@ -66,7 +67,9 @@ function get_ancestor_indices(
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = normalize_indices(x, indices...)
     if any(is_traced, indices)
-        indices, integer_indices, result_size, flattened_size = traced_indices(indices...)
+        indices, integer_indices, result_size, _, flattened_size = traced_indices(
+            indices...
+        )
         linear_indices = mapreduce(+, enumerate(indices)) do (i, idx)
             bcasted_idxs = Ops.broadcast_in_dim(
                 idx, ndims(idx) == 0 ? Int64[] : Int64[i], flattened_size
@@ -126,6 +129,27 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
+mutable struct CompiledMlirFnResult{
+    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA
+}
+    fnwrapped::Bool
+    f::F
+    traced_result::TR
+    result::Re
+    seen_args::OrderedIdDict
+    ret::Rt
+    linear_args::Vector{LA}
+    in_tys::Vector{MLIR.IR.Type}
+    linear_results::Vector{LR}
+    num_partitions::Int
+    num_replicas::Int
+    is_sharded::Bool
+    preserved_args::PA
+    concrete_result::CR
+    sharding_mesh::M
+    mutated_args::MA
+end
+
 function prepare_args(args, concretein, toscalar, mutate_traced_args)
     N = length(args)
     seen_args = OrderedIdDict()
@@ -169,7 +193,23 @@ function placeholder_func(
         sym_visibility = MLIR.IR.Attribute("private")
     end
 
+    ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
+
+    # Insert meshes for the sharded arguments
+    traced_args_to_shardings = OrderedIdDict()
+    for (k, v) in seen_args
+        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber)
+            if Reactant.Sharding.is_sharded(k)
+                Reactant.Ops.mesh(k.sharding.mesh)
+                traced_args_to_shardings[v] = k.sharding
+            elseif input_shardings !== nothing && haskey(input_shardings, k)
+                Reactant.Ops.mesh(input_shardings[k].mesh)
+                traced_args_to_shardings[v] = input_shardings[k]
+            end
+        end
+    end
+
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
@@ -270,6 +310,9 @@ function final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
             sym_name=name,
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
+            arg_attrs=MLIR.IR.attr(func, "arg_attrs"),
+            res_attrs=MLIR.IR.attr(func, "res_attrs"),
+            no_inline=MLIR.IR.attr(func, "no_inline"),
             sym_visibility,
         )
     end
@@ -289,13 +332,14 @@ function make_mlir_fn(
     toscalar=false,
     return_dialect=:func,
     args_in_result::Symbol=:all,
+    construct_function_without_args::Bool=false,
     do_transpose=true,
     mutate_traced_args=false,
+    input_shardings=nothing, # This is not meant to be used by the user.
+
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
-        return (
-            true,
-            make_mlir_fn(
+        mlir_fn_res =  make_mlir_fn(
                 Reactant.apply,
                 (f, args...),
                 kwargs,
@@ -303,12 +347,16 @@ function make_mlir_fn(
                 concretein;
                 toscalar,
                 return_dialect,
-                args_in_result,
                 do_transpose,
-                mutate_traced_args
-            )[2:end]...,
-        )
+                args_in_result,
+                input_shardings,
+                mutate_traced_args,
+            )
+        mlir_fn_res.fnwrapped = true
+        return mlir_fn_res
     end
+
+    num_partitions, num_replicas = 1, 1
 
     N = length(args)
     seen_args, traced_args, linear_args = prepare_args(
@@ -333,7 +381,11 @@ function make_mlir_fn(
             set_mlir_data!(arg, row_maj_arg)
         end
 
-        Reactant.call_with_reactant(f, traced_args...)
+        if isempty(kwargs)
+            Reactant.call_with_reactant(f, traced_args...)
+        else
+            Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
+        end
     finally
         MLIR.IR.deactivate!(fnbody)
     end
@@ -363,7 +415,58 @@ function make_mlir_fn(
     Core.println("\nOverview of make_mlir_fn for $f [$name]:\nlinear_args: $linear_args")
     Core.println("linear_results: $linear_results\n")
 
-    return (
+    mesh_cache = Reactant.Compiler.sdycache()
+    is_sharded = !isempty(mesh_cache)
+
+    if is_sharded
+        unique_meshes = keys(mesh_cache)
+
+        # TODO: support multiple meshes
+        if length(unique_meshes) > 1
+            error("Currently we support using a single mesh")
+            sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
+            @assert allequal(sorted_devices) "All meshes must have the same device ids"
+        end
+        sharding_mesh = first(unique_meshes)
+        num_partitions = length(sharding_mesh)
+
+        linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
+
+        # Attach `sdy.sharding` attribute to the argument
+        for (i, arg) in enumerate(linear_args)
+            if haskey(traced_args_to_shardings, arg)
+                sharding = traced_args_to_shardings[arg]
+                (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
+                linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
+                    sharding, ctx, sym_name, mesh_attr
+                )
+                MLIR.API.mlirFuncSetArgAttr(
+                    func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
+                )
+            end
+        end
+
+        # Ensure the sharding of the mutated arguments is propagated to the results
+        result_not_replicated = falses(length(linear_results))
+        for i in mutated_args
+            arg = linear_args[i]
+            if has_residx(arg) && haskey(traced_args_to_shardings, arg)
+                residx = findfirst(Base.Fix1(===, arg), linear_results)
+                @assert residx !== nothing
+                result_not_replicated[residx] = true
+                MLIR.API.mlirFuncSetResultAttr(
+                    func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
+                )
+            end
+        end
+    else
+        sharding_mesh = nothing
+    end
+
+    MLIR.API.mlirOperationDestroy(func.operation)
+    func.operation = MLIR.API.MlirOperation(C_NULL)
+
+    return CompiledMlirFnResult(
         false,
         final_func,
         traced_result,
@@ -373,6 +476,13 @@ function make_mlir_fn(
         linear_args,
         in_tys,
         linear_results,
+        num_partitions,
+        num_replicas,
+        is_sharded,
+        nothing,
+        nothing,
+        sharding_mesh,
+        mutated_args,
     )
 end
 
@@ -497,9 +607,12 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         return f(scalar_args...)
     end
 
-    fnwrap, func2, traced_result, result, seen_args, ret, linear_args, in_tys, linear_results = make_mlir_fn(
+    mlir_fn_res = make_mlir_fn(
         f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
     )
+    fnwrap = mlir_fn_res.fnwrapped
+    func2 = mlir_fn_res.f
+    (; result, seen_args, linear_args, linear_results) = mlir_fn_res
 
     invmap = IdDict()
     for (k, v) in seen_args
@@ -512,8 +625,6 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     @assert allequal(input_shapes) "input shapes are $(input_shapes)"
     OutShape = isempty(seen_args) ? nothing : first(input_shapes)
     @assert !isnothing(OutShape)
-
-    in_tys2 = [Ops.mlir_type(invmap[arg]) for arg in linear_args]
 
     out_tys2 = [
         MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
@@ -577,10 +688,24 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 end
 
 function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
+    if Reactant.ancestor(arg) isa TracedRArray
+        return broadcast_to_size(materialize_traced_array(arg), rsize)
+    end
     return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
 end
-broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
+
+broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
+function broadcast_to_size(arg::UnitRange, rsize)
+    # For small inputs this will be automatically optimized away, and for large ranges
+    # helps reduce the IR size
+    x = Ops.add(
+        Ops.iota(eltype(arg), [length(arg)]; iota_dimension=1),
+        Ops.fill(first(arg), [length(arg)]),
+    )
+    return broadcast_to_size(x, rsize)
+end
+broadcast_to_size(arg::Base.OneTo, rsize) = broadcast_to_size(1:last(arg), rsize)
 
 function broadcast_to_size(arg::Base.RefValue, rsize)
     # XXX: don't we want to expand here to rsize?
@@ -628,18 +753,27 @@ end
 function traced_indices(indices...)
     integer_indices = Int64[]
     result_size = Int64[]
+    preddim_result_size = Int64[]
     flattened_size = Int64[length(idx) for idx in indices]
     new_indices = map(enumerate(indices)) do (i, idx)
         if idx isa Number
+            push!(preddim_result_size, 1)
             push!(integer_indices, i)
             idx isa TracedRNumber && return idx
             return promote_to(TracedRNumber{Int}, idx)
         end
+        append!(preddim_result_size, [size(idx)...])
         append!(result_size, [size(idx)...])
         idx isa TracedRArray && return materialize_traced_array(vec(idx))
         return promote_to(TracedRArray{Int,1}, vec(idx))
     end
-    return new_indices, Tuple(integer_indices), result_size, flattened_size
+    return (
+        new_indices,
+        Tuple(integer_indices),
+        result_size,
+        preddim_result_size,
+        flattened_size,
+    )
 end
 
 end

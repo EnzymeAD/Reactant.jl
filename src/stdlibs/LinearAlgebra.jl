@@ -7,6 +7,7 @@ using ..Reactant:
     AnyTracedRMatrix,
     AnyTracedRVector,
     AnyTracedRVecOrMat,
+    WrappedTracedRArray,
     unwrapped_eltype,
     Ops,
     MLIR
@@ -25,15 +26,33 @@ function TracedUtils.materialize_traced_array(
 end
 
 function TracedUtils.materialize_traced_array(
+    x::Transpose{TracedRNumber{T},<:WrappedTracedRArray{T,N}}
+) where {T,N}
+    return materialize_traced_array(transpose(materialize_traced_array(parent(x))))
+end
+
+function TracedUtils.materialize_traced_array(
     x::Adjoint{TracedRNumber{T},TracedRArray{T,N}}
 ) where {T,N}
     return conj(materialize_traced_array(transpose(parent(x))))
 end
 
 function TracedUtils.materialize_traced_array(
+    x::Adjoint{TracedRNumber{T},<:WrappedTracedRArray{T,N}}
+) where {T,N}
+    return materialize_traced_array(adjoint(materialize_traced_array(parent(x))))
+end
+
+function TracedUtils.materialize_traced_array(
     x::Diagonal{TracedRNumber{T},TracedRArray{T,1}}
 ) where {T}
     return diagm(parent(x))
+end
+
+function TracedUtils.materialize_traced_array(
+    x::Diagonal{TracedRNumber{T},WrappedTracedRArray{T,1}}
+) where {T}
+    return diagm(materialize_traced_array(parent(x)))
 end
 
 function TracedUtils.materialize_traced_array(
@@ -168,12 +187,13 @@ end
 # Core functions
 function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,1}),
-    @nospecialize(A::AnyTracedRMatrix),
-    @nospecialize(B::AnyTracedRVector),
+    @nospecialize(A::AbstractMatrix),
+    @nospecialize(B::AbstractVector),
     α::Number=true,
     β::Number=false,
 ) where {T}
-    # TODO: The reshape operations are not getting optimized, we should directly call dot_general
+    # TODO: The reshape operations are not getting optimized, we should directly call
+    #       dot_general
     rC = Ops.reshape(C, length(C), 1)
     overloaded_mul!(rC, A, reshape(B, :, 1), α, β)
     C.mlir_data = get_mlir_data(vec(rC))
@@ -182,8 +202,8 @@ end
 
 function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,2}),
-    @nospecialize(A::AnyTracedRMatrix),
-    @nospecialize(B::AnyTracedRVector),
+    @nospecialize(A::AbstractMatrix),
+    @nospecialize(B::AbstractVector),
     α::Number=true,
     β::Number=false,
 ) where {T}
@@ -193,11 +213,14 @@ end
 
 function overloaded_mul!(
     @nospecialize(C::TracedRArray{T,2} where {T}),
-    @nospecialize(A::AnyTracedRMatrix),
-    @nospecialize(B::AnyTracedRMatrix),
+    @nospecialize(A::AbstractMatrix),
+    @nospecialize(B::AbstractMatrix),
     α::Number=true,
     β::Number=false,
 )
+    A = TracedUtils.promote_to(TracedRArray{unwrapped_eltype(A),2}, A)
+    B = TracedUtils.promote_to(TracedRArray{unwrapped_eltype(B),2}, B)
+
     if size(C) != (size(A, 1), size(B, 2))
         throw(
             DimensionMismatch(
@@ -395,6 +418,37 @@ end
 function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTracedRVector)
     LinearAlgebra._kron!(C, A, reshape(B, length(B), 1))
     return C
+end
+
+function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T}) where {T}
+    if length(x) != length(y)
+        throw(
+            DimensionMismatch(
+                lazy"x has length $(length(x)), but y has length $(length(y))"
+            ),
+        )
+    end
+    ax = Ops.multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
+
+    set_mlir_data!(y, get_mlir_data(Ops.add(y, ax)))
+    return y
+end
+
+function LinearAlgebra.axpby!(
+    α::Number, x::TracedRArray{T}, β::Number, y::TracedRArray{T}
+) where {T}
+    if length(x) != length(y)
+        throw(
+            DimensionMismatch(
+                lazy"x has length $(length(x)), but y has length $(length(y))"
+            ),
+        )
+    end
+    ax = Ops.multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
+    by = Ops.multiply(y, TracedUtils.broadcast_to_size(T(β), size(y)))
+
+    set_mlir_data!(y, get_mlir_data(Ops.add(ax, by)))
+    return y
 end
 
 end

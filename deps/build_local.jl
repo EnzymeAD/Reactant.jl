@@ -21,7 +21,7 @@ s = ArgParseSettings()
         default = "/usr/bin/gcc"
         arg_type = String
     "--cc"
-        default = "/home/wmoses/llvms/llvm16-r/clang+llvm-16.0.2-x86_64-linux-gnu-ubuntu-22.04/bin/clang"
+        default = "/usr/bin/cc"
         arg_type = String
     "--hermetic_python_version"
         help = "Hermetic Python version."
@@ -42,6 +42,10 @@ s = ArgParseSettings()
     "--extraopt"
         help = "Extra options to be passed to Bazel.  Can be used multiple times."
         action = :append_arg
+        arg_type = String
+    "--color"
+        help = "Set to `yes` to enable color output, or `no` to disable it. Defaults to same color setting as the Julia process."
+        default = something(Base.have_color, false) ? "yes" : "no"
         arg_type = String
 end
 #! format: on
@@ -154,6 +158,7 @@ if cc_is_gcc && build_backend == "cuda"
         end
     end
 end
+push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
 
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))

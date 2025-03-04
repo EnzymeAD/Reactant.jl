@@ -55,20 +55,20 @@ function setup_simple_benchmark!(suite::BenchmarkGroup, backend)
         suite["(Basics) 2D sum (2 x 10)"]["forward (compilation)"][backend][tag] = @benchmarkable begin
             @compile optimize = $(opt_pass) sum(x)
         end setup = begin
-            x = Reactant.ConcreteRArray(ones(2, 10))
+            x = Reactant.to_rarray(ones(2, 10))
         end
 
         suite["(Basics) sum(cos, x) (2 x 10)"]["forward (compilation)"][backend][tag] = @benchmarkable begin
             @compile optimize = $(opt_pass) sumcos(x)
         end setup = begin
-            x = Reactant.ConcreteRArray(ones(2, 10))
+            x = Reactant.to_rarray(ones(2, 10))
         end
     end
 
     suite["Basics ∇sumcos (2 x 10)"]["forward (compilation)"][backend]["Reactant"] = @benchmarkable begin
         @compile optimize = :all ∇sumcos(x)
     end setup = begin
-        x = Reactant.ConcreteRArray(ones(2, 10))
+        x = Reactant.to_rarray(ones(2, 10))
     end
 
     return nothing
