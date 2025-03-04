@@ -59,6 +59,7 @@ end
 
 @setup_workload begin
     initialize_dialect()
+
     if XLA.runtime() isa Val{:PJRT}
         client = XLA.PJRT.CPUClient(; checkcount=false)
     elseif XLA.runtime() isa Val{:IFRT}
@@ -66,6 +67,7 @@ end
     else
         error("Unsupported runtime: $(XLA.runtime())")
     end
+
     @compile_workload begin
         @static if precompilation_supported()
             x = ConcreteRNumber(2.0; client)
@@ -75,6 +77,7 @@ end
             Reactant.compile(Base.sum, (y,); client, optimize=:all)
         end
     end
+
     XLA.free_client(client)
     client.client = C_NULL
     deinitialize_dialect()

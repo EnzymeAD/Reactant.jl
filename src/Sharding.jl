@@ -202,7 +202,7 @@ end
 end
 
 function (sharding::NamedSharding)(
-    client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
+    client::XLA.AbstractClient, device::Nothing, x::Union{AbstractArray,Number}
 )
     @assert length(sharding.partition_spec) == ndims(x)
     return HloSharding(sharding, client, device, x)
@@ -315,7 +315,7 @@ function standardize_sharding(sharding::DimsSharding, x::Union{AbstractArray,Num
 end
 
 function (sharding::DimsSharding)(
-    client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
+    client::XLA.AbstractClient, device::Nothing, x::Union{AbstractArray,Number}
 )
     return (standardize_sharding(sharding, x))(client, device, x)
 end
@@ -424,6 +424,10 @@ function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
     return data, ShardInfo(hlo_sharding, device_to_array_slices)
 end
 
+function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
+    error("TODO: IFRT HloSharding")
+end
+
 function (sharding::HloSharding)(
     client::XLA.PJRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
@@ -443,6 +447,12 @@ function (sharding::HloSharding)(
     end
 
     return data, ShardInfo(sharding, device_to_array_slices)
+end
+
+function (sharding::HloSharding)(
+    client::XLA.IFRT.Client, ::Nothing, x::Union{AbstractArray,Number}
+)
+    error("TODO: IFRT HloSharding")
 end
 
 function get_shardy_tensor_sharding_attribute(
