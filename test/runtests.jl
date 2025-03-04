@@ -1,4 +1,9 @@
-using Reactant, SafeTestsets, Test
+using SafeTestsets, Test, Preferences
+
+const REACTANT_XLA_RUNTIME = uppercase(get(ENV, "REACTANT_XLA_RUNTIME", "PJRT"))
+Preferences.set_preferences!("Reactant", "xla_runtime" => REACTANT_XLA_RUNTIME)
+
+using Reactant
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing; typ=typeof(default))
@@ -40,7 +45,6 @@ if do_gpu_list
 end
 
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
-const REACTANT_XLA_RUNTIME = lowercase(get(ENV, "REACTANT_XLA_RUNTIME", "PJRT"))
 
 @testset "Reactant.jl Tests" begin
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
@@ -64,12 +68,8 @@ const REACTANT_XLA_RUNTIME = lowercase(get(ENV, "REACTANT_XLA_RUNTIME", "PJRT"))
         end
         @safetestset "Sharding" include("sharding.jl")
 
-        # These tests are only special tests, hence no need to run them when we are already
-        # testing with IFRT above
-        if REACTANT_XLA_RUNTIME == "pjrt"
-            @testset "IFRT" begin
-                @safetestset "IFRT Low-Level API" include("ifrt/low_level.jl")
-            end
+        @testset "IFRT" begin
+            @safetestset "IFRT Low-Level API" include("ifrt/low_level.jl")
         end
     end
 

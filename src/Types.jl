@@ -98,6 +98,16 @@ function ConcretePJRTNumber(data::T; kwargs...) where {T<:Number}
     return ConcretePJRTNumber{T}(data; kwargs...)
 end
 
+function ConcretePJRTNumber(data::ConcretePJRTNumber; kwargs...)
+    return ConcretePJRTNumber(
+        to_number(data);
+        client=XLA.client(data),
+        device=XLA.device(data),
+        data.sharding,
+        kwargs...,
+    )
+end
+
 ## ConcretePJRTArray
 mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: AbstractConcreteArray{T,N}
     data::NTuple{D,XLA.PJRT.AsyncBuffer}
@@ -211,10 +221,20 @@ end
 
 function ConcreteIFRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcreteIFRTArray(fill(convert(T, data)); kwargs...)
-    return ConcreteIFRTNumber{T}(carray.data, carray.sharding)
+    return ConcreteIFRTNumber{T,typeof(carray.sharding)}(carray.data, carray.sharding)
 end
 function ConcreteIFRTNumber(data::T; kwargs...) where {T<:Number}
     return ConcreteIFRTNumber{T}(data; kwargs...)
+end
+
+function ConcreteIFRTNumber(data::ConcreteIFRTNumber; kwargs...)
+    return ConcreteIFRTNumber(
+        to_number(data);
+        client=XLA.client(data),
+        device=XLA.device(data),
+        data.sharding,
+        kwargs...,
+    )
 end
 
 ## ConcreteIFRTArray
@@ -307,9 +327,13 @@ mutable struct ConcreteRNG{S<:AbstractConcreteArray} <: Random.AbstractRNG
     const algorithm::String
 end
 
-## Aliases to prevent breaking changes
-# XXX (Deprecated): remove in v0.3 and replace the first two with a function that dispatch
-#                   on the client
-const ConcreteRArray = ConcretePJRTArray
-const ConcreteRNumber = ConcretePJRTNumber
-const AnyConcreteRArray = AnyConcretePJRTArray
+## Aliases based on the set preferences
+if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+    const ConcreteRArray = ConcretePJRTArray
+    const ConcreteRNumber = ConcretePJRTNumber
+    const AnyConcreteRArray = AnyConcretePJRTArray
+elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
+    const ConcreteRArray = ConcreteIFRTArray
+    const ConcreteRNumber = ConcreteIFRTNumber
+    const AnyConcreteRArray = AnyConcreteIFRTArray
+end

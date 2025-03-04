@@ -240,7 +240,8 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
-    T = T0.parameters[1]
+    T = T0 isa UnionAll ? T0.body.parameters[1] : T0.parameters[1]
+
     if mode == ConcreteToTraced
         return TracedRNumber{T}
     elseif mode == TracedToConcrete
@@ -263,7 +264,8 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
-    T = T0.parameters[1]
+    T = T0 isa UnionAll ? T0.body.parameters[1] : T0.parameters[1]
+
     if mode == ConcreteToTraced
         return TracedRNumber{T}
     elseif mode == TracedToConcrete
@@ -284,17 +286,20 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
+    if T isa UnionAll
+        elT, N = T.body.parameters[1], T.body.parameters[2]
+    else
+        elT, N = T.parameters[1], T.parameters[2]
+    end
+
     if mode == ConcreteToTraced
-        return TracedRArray{T.parameters[1],T.parameters[2]}
+        return TracedRArray{elT,N}
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
         return ConcretePJRTArray{
-            T.parameters[1],
-            T.parameters[2],
-            Sharding.ndevices(sharding),
-            Sharding.shard_type(typeof(sharding), T.parameters[2]),
+            elT,N,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), N)
         }
     else
         throw("Unsupported mode: $mode")
@@ -309,17 +314,19 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
+    if T isa UnionAll
+        elT, N = T.body.parameters[1], T.body.parameters[2]
+    else
+        elT, N = T.parameters[1], T.parameters[2]
+    end
+
     if mode == ConcreteToTraced
-        return TracedRArray{T.parameters[1],T.parameters[2]}
+        return TracedRArray{elT,N}
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:IFRT}
-        return ConcreteIFRTArray{
-            T.parameters[1],
-            T.parameters[2],
-            Sharding.shard_type(typeof(sharding), T.parameters[2]),
-        }
+        return ConcreteIFRTArray{elT,N,Sharding.shard_type(typeof(sharding), N)}
     else
         throw("Unsupported mode: $mode")
     end
@@ -1568,6 +1575,7 @@ function make_tracer(
                 mode;
                 sharding=Base.getproperty(sharding, i),
                 track_numbers,
+                runtime,
                 kwargs...,
             ) for i in 1:length(A)
         )...,
