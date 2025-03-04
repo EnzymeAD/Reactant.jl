@@ -113,6 +113,7 @@ jobs:
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
       - name: "Run Tests"
+        timeout-minutes: 60
         run: |
           import Pkg
           Pkg.Registry.update()
