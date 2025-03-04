@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - local libReactant - ${{ github.event_name }}
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.runtime }} - local libReactant - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -33,9 +33,16 @@ jobs:
         os:
           - ubuntu-24.04
           - macOS-latest
+        runtime:
+          - "PJRT"
+          - "IFRT"
         exclude:
           - os: macOS-latest
             version: '1.10'
+            runtime: "PJRT"
+          - os: macOS-latest
+            version: '1.10'
+            runtime: "IFRT"
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
