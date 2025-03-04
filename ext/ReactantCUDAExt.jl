@@ -1208,12 +1208,12 @@ end
     Reactant.PrecompileTools.@setup_workload begin
         Reactant.initialize_dialect()
 
-        if Reactant.XLA.runtime() isa Val{:PJRT}
+        if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
             client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
-        elseif Reactant.XLA.runtime() isa Val{:IFRT}
+        elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
             client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
         else
-            error("Unsupported runtime: $(Reactant.XLA.runtime())")
+            error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
         end
 
         Reactant.PrecompileTools.@compile_workload begin

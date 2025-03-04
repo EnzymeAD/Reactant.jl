@@ -60,12 +60,12 @@ end
 @setup_workload begin
     initialize_dialect()
 
-    if XLA.runtime() isa Val{:PJRT}
+    if XLA.REACTANT_XLA_RUNTIME == "PJRT"
         client = XLA.PJRT.CPUClient(; checkcount=false)
-    elseif XLA.runtime() isa Val{:IFRT}
+    elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
         client = XLA.IFRT.CPUClient(; checkcount=false)
     else
-        error("Unsupported runtime: $(XLA.runtime())")
+        error("Unsupported runtime: $(XLA.REACTANT_XLA_RUNTIME)")
     end
 
     @compile_workload begin

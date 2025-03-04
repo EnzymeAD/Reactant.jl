@@ -425,7 +425,25 @@ function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
 end
 
 function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
-    error("TODO: IFRT HloSharding")
+    hlo_sharding = generate_hlo_sharding_from_tensor_attribute(sharding)
+
+    # Check if the input needs to be padded. If so this sharding is not valid and we
+    # need to request the tensor sharding from XLA
+    condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
+    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+        condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
+    )
+
+    if needs_padding
+        error("TODO: IFRT HloSharding with padding")
+    end
+
+    ifrt_sharding = XLA.IFRT.Sharding(
+        vec(Reactant.XLA.get_device.((client,), hlo_sharding.mesh.device_ids)),
+        hlo_sharding.hlo_sharding,
+    )
+    data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
+    return data, ShardInfo(hlo_sharding, device_to_array_slices)
 end
 
 function (sharding::HloSharding)(
@@ -452,7 +470,20 @@ end
 function (sharding::HloSharding)(
     client::XLA.IFRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
-    error("TODO: IFRT HloSharding")
+    condensed_op_sharding = convert(XLA.CondensedOpSharding, sharding.hlo_sharding)
+
+    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+        condensed_op_sharding, size(x), sharding.mesh.logical_device_ids
+    )
+    @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl"
+
+    ifrt_sharding = XLA.IFRT.Sharding(
+        vec(Reactant.XLA.get_device.((client,), sharding.mesh.device_ids)),
+        sharding.hlo_sharding,
+    )
+    data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
+
+    return data, ShardInfo(sharding, device_to_array_slices)
 end
 
 function get_shardy_tensor_sharding_attribute(

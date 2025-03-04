@@ -140,7 +140,7 @@ end
     ::Val{n_outs},
     ::Val{K},
 ) where {N,M,n_outs,K}
-    return XLA.execute(exec, inputs, donated_args, Val(n_outs), Val(K))
+    return XLA.execute(exec, inputs, donated_args, Val(n_outs))
 end
 
 @inline function XLA.execute_sharded(

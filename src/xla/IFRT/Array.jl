@@ -150,7 +150,38 @@ function XLA.to_host(buffer::Array, data)
         return nothing
     end
 
-    if any(!is_addressable, all_devices)
+    # We compile a function that replicates the data to all devices
+    mesh = Reactant.Sharding.Mesh(vec(all_devices), (:x,))
+    sharding_constraint = Reactant.Sharding.NamedSharding(
+        mesh, ntuple(Returns(nothing), ndims(data))
+    )
+
+    fn_compiled = Reactant.compile((data,)) do x
+        return Reactant.Ops.sharding_constraint(x, sharding_constraint)
+    end
+    copied_data = fn_compiled(data)
+    wait(copied_data)
+    synced_buffer = XLA.synced_buffer(copied_data.data)
+
+    error(1)
+    single_device_arrays = disassemble_into_single_device_arrays(synced_buffer, true)
+
+    @show single_device_arrays[1]
+
+    # GC.@preserve synced_buffer data begin
+    #     @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
+    #         synced_buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
+    #     )::Cvoid
+    # end
+
+    # @show data
+
+    # sleep(10)
+
+    # return nothing
+    error(1)
+
+    if any(!XLA.is_addressable, all_devices)
         @warn "Not all devices are addressable. Currently we only fill in the data for \
                addressable devices. Remaining slices of data in `data` are left \
                untouched."

@@ -38,28 +38,28 @@ include("PJRT/PJRT.jl")
 
 include("IFRT/IFRT.jl")
 
+abstract type AbstractBackendState end
+
 for runtime in (:PJRT, :IFRT)
     backend_state = Symbol(runtime, :BackendState)
 
-    @eval begin
-        @kwdef mutable struct $(backend_state)
-            initialized::Bool = false
-            clients::Dict{String,$(runtime).Client} = Dict{String,$(runtime).Client}()
-            default_client::$(runtime).Client = $(runtime).Client(C_NULL; skip_check=true)
-        end
-
-        function Base.getproperty(bs::$(backend_state), sym::Symbol)
-            (sym === :initialized || bs.initialized) && return getfield(bs, sym)
-            initialize_default_clients!(bs)
-            return getfield(bs, sym)
-        end
-
-        function Base.setproperty!(bs::$(backend_state), sym::Symbol, val)
-            (sym === :initialized || bs.initialized) && return setfield!(bs, sym, val)
-            initialize_default_clients!(bs)
-            return setfield!(bs, sym, val)
-        end
+    @eval @kwdef mutable struct $(backend_state) <: AbstractBackendState
+        initialized::Bool = false
+        clients::Dict{String,$(runtime).Client} = Dict{String,$(runtime).Client}()
+        default_client::$(runtime).Client = $(runtime).Client(C_NULL; skip_check=true)
     end
+end
+
+function Base.getproperty(bs::AbstractBackendState, sym::Symbol)
+    (sym === :initialized || bs.initialized) && return getfield(bs, sym)
+    initialize_default_clients!(bs)
+    return getfield(bs, sym)
+end
+
+function Base.setproperty!(bs::AbstractBackendState, sym::Symbol, val)
+    (sym === :initialized || bs.initialized) && return setfield!(bs, sym, val)
+    initialize_default_clients!(bs)
+    return setfield!(bs, sym, val)
 end
 
 const global_backend_state = if REACTANT_XLA_RUNTIME == "PJRT"
@@ -95,8 +95,7 @@ end
 function update_global_state!(args...; kwargs...)
     update!(global_state, args...; kwargs...)
     # We conditionally initialize for now, since a lot of options that are set are not
-    # necessarily supported by PJRT. This makes testing for IFRT quite hard.
-    # Once we move to IFRT completely, we can remove this.
+    # necessarily supported by PJRT.
     if global_backend_state.initialized
         # We need to update the clients based on the new state
         initialize_default_clients!(global_backend_state)
@@ -146,6 +145,7 @@ for runtime in (:PJRT, :IFRT)
     @eval function initialize_default_clients!(state::$(Symbol(runtime, :BackendState)))
         was_initialized = state.initialized
         state.initialized = true
+        @show state
         distributed_runtime_client = if global_state.num_processes > 1
             @assert global_state.client !== nothing
             global_state.client

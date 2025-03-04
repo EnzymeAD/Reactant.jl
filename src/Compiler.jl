@@ -1233,10 +1233,6 @@ function codegen_flatten!(
         if is_sharded
             carg = inv_seen_args[arg]
 
-            if runtime isa Val{:IFRT}
-                error("TODO: implement sharding for IFRT")
-            end
-
             condensed_op_sharding = convert(
                 Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
             )
@@ -1249,12 +1245,24 @@ function codegen_flatten!(
                 @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 
                 push!(flatten_code, :($usbuf = $flatcode.data))
-                for j in 1:length(mesh)
-                    sbuf = Symbol(:sbuf_, i, "_", mesh.logical_device_ids[j])
+                if runtime isa Val{:PJRT}
+                    for j in 1:length(mesh)
+                        sbuf = Symbol(:sbuf_, i, "_", mesh.logical_device_ids[j])
+                        push!(flatten_names, sbuf)
+                        push!(
+                            flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j)))
+                        )
+                    end
+                else
+                    sbuf = Symbol(:sbuf_, i)
                     push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
+                    push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
                 end
             else
+                if runtime isa Val{:IFRT}
+                    error("TODO: implement sharding for IFRT")
+                end
+
                 push!(flatten_code, :($usbuf = $flatcode))
                 device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
                     condensed_op_sharding, size(carg), mesh.logical_device_ids
@@ -1293,6 +1301,7 @@ function codegen_flatten!(
 
     # We reorder how the buffers are passed to the XLA call
     is_sharded &&
+        runtime isa Val{:PJRT} &&
         (flatten_names = vcat(eachrow(reshape(flatten_names, length(mesh), :))...))
 
     return flatten_names, flatten_code
