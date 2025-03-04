@@ -3,9 +3,6 @@ using SafeTestsets, Test, Preferences
 const REACTANT_XLA_RUNTIME = uppercase(get(ENV, "REACTANT_XLA_RUNTIME", "PJRT"))
 Preferences.set_preferences!("Reactant", "xla_runtime" => REACTANT_XLA_RUNTIME)
 
-# XXX: re-enable precompile workload on CI
-Preferences.set_preferences!("PrecompileTools", "precompile_workloads" => false)
-
 using Reactant
 
 # parse some command-line arguments
