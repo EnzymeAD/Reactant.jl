@@ -8,7 +8,7 @@ using Reactant.Ops: mlir_stacktrace
 using ..ReactantMPIExt: TracedRequest
 using MPI: MPI
 
-# TODO add communicators
+# TODO we might need to have a `TracedComm` for communicators created during the compiled function
 
 # function init(; location=mlir_stacktrace("mpi.init", @__FILE__, @__LINE__))
 #     return mpi.init(; location)
@@ -105,15 +105,43 @@ function comm_size(comm; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @_
     return TracedRNumber{Cint}((), res)
 end
 
-# TODO emit wrapper if not found
-# TODO should we emit `stablehlo.optimization_barrier` here too?
-function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
-    inputs = IR.Value[]
-    sym = IR.FlatSymbolRefAttribute("enzymexla_wrapper_MPI_Barrier")
-    rettype = IR.Type[]
+function barrier(comm; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
+    sym_name = "enzymexla_wrapper_MPI_Barrier"
+    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    # TODO should we return `TracedRNumber{Nothing}`?
-    return IR.result(enzymexla.jit_call(inputs; fn=sym, result_0=rettype, location))
+    tensor_int_type = IR.TensorType(Int[], IR.Type(Cint))
+    signature = IR.Type[tensor_int_type]
+
+    current_module = IR.mmodule()
+    fn = IR.lookup(IR.SymbolTable(IR.Operation(current_module)), sym_name)
+
+    if isnothing(fn)
+        top_level_block = MLIR.IR.body(current_module)
+        #! format: off
+        code = parse(IR.Module, """
+            module {
+                llvm.func @MPI_Barrier(i32) -> i32
+                func.func @$sym_name(%comm_ptr : !llvm.ptr) -> () {
+                    %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
+                    %status = llvm.call @MPI_Barrier(%comm) : (i32) -> (i32)
+                    func.return
+                }
+            }
+        """) |> IR.body
+        #! format: on
+
+        # using `collect` because if we remove the op, then the `OperationIterator` state is broken and skips ops
+        for op in collect(IR.OperationIterator(code))
+            IR.rmfromparent!(op)
+            push!(top_level_block, op)
+        end
+    end
+
+    comm = Reactant.Ops.constant(Base.unsafe_convert(Cint, comm))
+    inputs = [comm.mlir_data]
+    enzymexla.jit_call(inputs; fn=sym_attr, result_0=signature, location)
+
+    return nothing
 end
 
 # TODO emit wrapper if not found
