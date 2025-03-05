@@ -213,7 +213,7 @@ function __init__()
         if value isa Base.RefValue
             value = value[]
         end
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, value::Cint)::Cvoid
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, value::Ptr{Cvoid})::Cvoid
     end
 end
 
