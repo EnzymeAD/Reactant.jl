@@ -625,30 +625,34 @@ end
 
 @testset "Preserve Aliasing" begin
     x = Reactant.to_rarray([3])
-    T = Any[nothing]
 
-    function ip(m, T)
-        @allowscalar m[1] = 2
-        T[1] = m
-        return m
+    if x isa ConcretePJRTArray
+        # For IFRT arrays we don't have unsafe_buffer_pointer implemented
+        T = Any[nothing]
+
+        function ip(m, T)
+            @allowscalar m[1] = 2
+            T[1] = m
+            return m
+        end
+
+        res = @jit ip(x, T)
+        @test @allowscalar res[1] == 2
+        @test @allowscalar x[1] == 2
+        @test @allowscalar T[1][1] == 2
+
+        ptr_x = Base.unsafe_convert(
+            Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(x.data[1].buffer)
+        )
+        ptr_res = Base.unsafe_convert(
+            Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(res.data[1].buffer)
+        )
+        ptr_T1 = Base.unsafe_convert(
+            Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(T[1].data[1].buffer)
+        )
+
+        @test ptr_x == ptr_res == ptr_T1
     end
-
-    res = @jit ip(x, T)
-    @test @allowscalar res[1] == 2
-    @test @allowscalar x[1] == 2
-    @test @allowscalar T[1][1] == 2
-
-    ptr_x = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(x.data[1].buffer)
-    )
-    ptr_res = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(res.data[1].buffer)
-    )
-    ptr_T1 = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(T[1].data[1].buffer)
-    )
-
-    @test ptr_x == ptr_res == ptr_T1
 end
 
 @testset "eltype conversion inside interpreter" begin
