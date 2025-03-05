@@ -38,36 +38,69 @@ end
 #     return mpi.finalize(; location)
 # end
 
-function comm_rank(comm; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__))
+# TODO change to this kind of MLIR
+# module {
+#     llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32
+#     func.func @$sym_name(%comm_ptr : !llvm.ptr, %rank_ptr : !llvm.ptr) -> () {
+#         %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
+#         %world_ptr = arith.constant dense<0x0asdfa> : tensor<i32>
+#         memref.get_global # global variable MPI_COMM_GLOBAL
+#         %status = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
+#         func.return
+#     }
+#     func.func @real_$sym_name() -> tensor<> {
+#         %rank_ptr = stablehlo.constant dense<-1> : tensor<i32> # this is a placeholder
+#         %rank = enzymexla.jit_call @$sym_name(%world_ptr, %rank_ptr) {
+#             output_operand_alias = [
+#                 #stablehlo.output_operand_alias<output_tuple_indices = [],
+#                                         operand_index = 1,
+#                                         operand_tuple_indices = []>
+#             ]
+#         }
+#     }
+# }
+
+function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__))
     sym_name = "enzymexla_wrapper_MPI_Comm_rank"
-    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
+    # sym_attr = IR.FlatSymbolRefAttribute(sym_name)
+    comm = MPI.COMM_WORLD
 
     #! format: off
-    try_inject_to_top_block!(sym_name, """
-        module {
-            llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32
-            func.func @$sym_name(%comm_ptr : !llvm.ptr, %rank_ptr : !llvm.ptr) -> () {
-                %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
-                %status = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
-                func.return
-            }
+    return Ops.hlo_call("""module {
+        llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32
+        func.func @$(sym_name)_jit(%comm_ptr : !llvm.ptr, %rank_ptr : !llvm.ptr) -> () {
+            %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
+            %comm = arith.constant $(Base.unsafe_convert(Cint, comm)) : i32
+            %status = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
+            func.return
         }
-    """)
+        func.func @$sym_name() -> tensor<i32> {
+            %rank_placeholder = stablehlo.constant dense<-1> : tensor<i32>
+            %rank = enzymexla.jit_call @$(sym_name)_jit(%rank_placeholder) {
+                output_operand_alias = [
+                    #stablehlo.output_operand_alias<output_tuple_indices = [],
+                                            operand_index = 1,
+                                            operand_tuple_indices = []>
+                ]
+            }
+            func.return %rank : tensor<i32>
+        }
+    }"""; func_name=sym_name)
     #! format: on
 
     # NOTE we assume here that `MPI_Comm` is of word-size
-    comm = Reactant.Ops.constant(Base.unsafe_convert(Cint, comm))
-    value_out = Reactant.Ops.constant(fill(Cint(-1)))
-    inputs = IR.Value[comm.mlir_data, value_out.mlir_data]
+    # comm = Reactant.Ops.constant(Base.unsafe_convert(Cint, comm))
+    # value_out = Reactant.Ops.constant(fill(Cint(-1)))
+    # inputs = IR.Value[comm.mlir_data, value_out.mlir_data]
 
-    tensor_int_type = IR.TensorType(Int[], IR.Type(Cint))
-    signature = IR.Type[tensor_int_type, tensor_int_type]
+    # tensor_int_type = IR.TensorType(Int[], IR.Type(Cint))
+    # signature = IR.Type[tensor_int_type, tensor_int_type]
 
-    # TODO output_operand_aliases
-    res = IR.result(
-        enzymexla.jit_call(inputs; fn=sym_attr, result_0=signature, location), 2
-    )
-    return TracedRNumber{Cint}((), res)
+    # # TODO output_operand_aliases
+    # res = IR.result(
+    #     enzymexla.jit_call(inputs; fn=sym_attr, result_0=signature, location), 2
+    # )
+    # return TracedRNumber{Cint}((), res)
 end
 
 function comm_size(comm; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__))
