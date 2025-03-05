@@ -3,6 +3,11 @@ using Documenter, DocumenterVitepress
 
 DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
 
+# Helper functions
+function first_letter_uppercase(str)
+    return uppercase(str[1]) * str[2:end]
+end
+
 # Generate examples
 
 using Literate
@@ -32,16 +37,15 @@ pages = [
     "API Reference" => [
         "Reactant API" => "api/api.md",
         "Ops" => "api/ops.md",
-        "Dialects" => [
-            "ArithOps" => "api/arith.md",
-            "Affine" => "api/affine.md",
-            "Builtin" => "api/builtin.md",
-            "Chlo" => "api/chlo.md",
-            "Enzyme" => "api/enzyme.md",
-            "Func" => "api/func.md",
-            "StableHLO" => "api/stablehlo.md",
-            "VHLO" => "api/vhlo.md",
-        ],
+        "Dialects" => sort!(
+            [
+                first_letter_uppercase(first(splitext(basename(file)))) =>
+                    joinpath("api/dialects", file) for
+                file in readdir(joinpath(@__DIR__, "src/api/dialects")) if
+                splitext(file)[2] == ".md"
+            ];
+            by=first,
+        ),
         "MLIR API" => "api/mlirc.md",
         "XLA" => "api/xla.md",
         "Internal API" => "api/internal.md",
@@ -56,14 +60,13 @@ makedocs(;
         Reactant.MLIR,
         Reactant.MLIR.API,
         Reactant.MLIR.IR,
-        Reactant.MLIR.Dialects.chlo,
-        Reactant.MLIR.Dialects.vhlo,
-        Reactant.MLIR.Dialects.stablehlo,
-        Reactant.MLIR.Dialects.enzyme,
-        Reactant.MLIR.Dialects.arith,
-        Reactant.MLIR.Dialects.func,
-        Reactant.MLIR.Dialects.affine,
-        Reactant.MLIR.Dialects.builtin,
+        filter(
+            Base.Fix2(isa, Module),
+            [
+                getproperty(Reactant.MLIR.Dialects, x) for
+                x in names(Reactant.MLIR.Dialects; all=true) if x != :Dialects
+            ],
+        )...,
     ],
     authors="William Moses <wsmoses@illinois.edu>, Valentin Churavy <vchuravy@mit.edu>",
     sitename="Reactant.jl",
