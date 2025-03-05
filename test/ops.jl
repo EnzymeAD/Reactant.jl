@@ -1079,17 +1079,19 @@ end
         return dropdims(r,dims=tuple(findall(size(r).==1)...))
     end
 
-    A = rand(3, 4, 5)
+    # Floating point operation is not associative
+    A = rand(Int64, 3, 4, 5)
     A_ra = Reactant.to_rarray(A)
-    init = 2.1 
+    init = 1 
     init_ra = @jit Reactant.Ops.constant(init)
-    
     dims = [2]    
     r_hlo = @jit Reactant.Ops.reduce(A_ra, init_ra, dims, *)
     r = reduce(*, A; dims=dims, init=init)
     @test r_hlo ≈ squeeze_dims(r)
 
     dims = [1,3]
+    init = 0 
+    init_ra = @jit Reactant.Ops.constant(init)
     r_hlo = @jit Reactant.Ops.reduce(A_ra, init_ra, dims, +)
     r = reduce(+, A; dims=dims, init=init)
     @test r_hlo ≈ squeeze_dims(r)
@@ -1100,6 +1102,4 @@ end
     @test r_hlo ≈ squeeze_dims(r)
 
 end
-
-
 
