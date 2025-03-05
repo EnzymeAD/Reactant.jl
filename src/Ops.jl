@@ -1510,7 +1510,7 @@ julia> Reactant.@jit(
         @assert expected_type == arg_type "hlo_call: argument #$i has the wrong type (expected $expected_type, got $arg_type)"
     end
 
-    operands = [a.mlir_data for a in args]
+    operands = MLIR.IR.Value[a.mlir_data for a in args]
     call = MLIR.Dialects.func.call(
         operands;
         result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
