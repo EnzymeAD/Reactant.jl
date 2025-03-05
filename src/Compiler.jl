@@ -1201,7 +1201,7 @@ function codegen_flatten!(
     flatten_code = Expr[]
     runtime = XLA.runtime(client)
 
-    if is_sharded
+    if is_sharded && runtime isa Val{:PJRT}
         inv_seen_args = Reactant.OrderedIdDict()
         for (k, v) in seen_args
             inv_seen_args[v] = k
