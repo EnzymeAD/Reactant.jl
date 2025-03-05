@@ -1,7 +1,7 @@
 # Testing manual IFRT buffer creation + compilation + execution
 using Reactant, Test
 using Reactant: XLA, ConcretePJRTArray
-using Reactant.XLA: IFRT
+using Reactant.XLA: IFRT, PJRT
 
 fn_test1(x, y) = x .+ y
 fn_test2(x, y) = x .* y
@@ -14,21 +14,21 @@ fn_test3(x, y) = x .+ y' .- x
     pjrt_client = Reactant.XLA.default_backend()
     platform_name = lowercase(XLA.platform_name(pjrt_client))
 
-    ifrt_client = if platform_name == "cpu"
-        IFRT.CPUClient(; checkcount=false)
+    ifrt_client, pjrt_client = if platform_name == "cpu"
+        IFRT.CPUClient(; checkcount=false), PJRT.CPUClient(; checkcount=false)
     elseif platform_name == "gpu" || platform_name == "cuda"
-        IFRT.GPUClient(; checkcount=false)
+        IFRT.GPUClient(; checkcount=false), PJRT.GPUClient(; checkcount=false)
     elseif platform_name == "tpu"
-        IFRT.TPUClient(; checkcount=false)
+        IFRT.TPUClient(; checkcount=false), PJRT.TPUClient(; checkcount=false)
     else
         error("Unsupported platform: $(platform_name)")
     end
 
-    pjrt_x = ConcretePJRTArray(x)
-    pjrt_y = ConcretePJRTArray(y)
+    pjrt_x = ConcretePJRTArray(x; client=pjrt_client)
+    pjrt_y = ConcretePJRTArray(y; client=pjrt_client)
 
-    ifrt_x = IFRT.Array(ifrt_client, x) # XXX: Use ConcreteIFRTArray once ready
-    ifrt_y = IFRT.Array(ifrt_client, y) # XXX: Use ConcreteIFRTArray once ready
+    ifrt_x = IFRT.Array(ifrt_client, x)
+    ifrt_y = IFRT.Array(ifrt_client, y)
 
     @testset for fn in (fn_test1, fn_test2, fn_test3)
         pjrt_result = @jit fn(pjrt_x, pjrt_y)
