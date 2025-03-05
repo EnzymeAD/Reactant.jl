@@ -66,10 +66,9 @@ function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LIN
     comm = MPI.COMM_WORLD
 
     #! format: off
-    return Ops.hlo_call("""module {
+    return Reactant.Ops.hlo_call("""module {
         llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32
-        func.func @$(sym_name)_jit(%comm_ptr : !llvm.ptr, %rank_ptr : !llvm.ptr) -> () {
-            %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
+        func.func @$(sym_name)_jit(%rank_ptr : !llvm.ptr) -> () {
             %comm = arith.constant $(Base.unsafe_convert(Cint, comm)) : i32
             %status = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
             func.return
@@ -77,12 +76,12 @@ function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LIN
         func.func @$sym_name() -> tensor<i32> {
             %rank_placeholder = stablehlo.constant dense<-1> : tensor<i32>
             %rank = enzymexla.jit_call @$(sym_name)_jit(%rank_placeholder) {
-                output_operand_alias = [
+                output_operand_aliases = [
                     #stablehlo.output_operand_alias<output_tuple_indices = [],
                                             operand_index = 1,
                                             operand_tuple_indices = []>
                 ]
-            }
+            } : (tensor<i32>) -> (tensor<i32>)
             func.return %rank : tensor<i32>
         }
     }"""; func_name=sym_name)
