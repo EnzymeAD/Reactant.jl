@@ -3,6 +3,11 @@ using Documenter, DocumenterVitepress
 
 DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
 
+# Helper functions
+function first_letter_uppercase(str)
+    return uppercase(str[1]) * str[2:end]
+end
+
 # Generate examples
 
 using Literate
@@ -32,24 +37,15 @@ pages = [
     "API Reference" => [
         "Reactant API" => "api/api.md",
         "Ops" => "api/ops.md",
-        "Dialects" => [
-            "ArithOps" => "api/dialects/arith.md",
-            "Affine" => "api/dialects/affine.md",
-            "Builtin" => "api/dialects/builtin.md",
-            "Chlo" => "api/dialects/chlo.md",
-            "Enzyme" => "api/dialects/enzyme.md",
-            "Func" => "api/dialects/func.md",
-            "StableHLO" => "api/dialects/stablehlo.md",
-            "VHLO" => "api/dialects/vhlo.md",
-            "GPU" => "api/dialects/gpu.md",
-            "LLVM" => "api/dialects/llvm.md",
-            "NVVM" => "api/dialects/nvvm.md",
-            "TPU" => "api/dialects/tpu.md",
-            "Triton" => "api/dialects/triton.md",
-            "Shardy" => "api/dialects/shardy.md",
-            "MPI" => "api/dialects/mpi.md",
-            "MemRef" => "api/dialects/memref.md",
-        ],
+        "Dialects" => sort!(
+            [
+                first_letter_uppercase(first(splitext(basename(file)))) =>
+                    joinpath("api/dialects", file) for
+                file in readdir(joinpath(@__DIR__, "src/api/dialects")) if
+                splitext(file)[2] == ".md"
+            ];
+            by=first,
+        ),
         "MLIR API" => "api/mlirc.md",
         "XLA" => "api/xla.md",
         "Internal API" => "api/internal.md",
