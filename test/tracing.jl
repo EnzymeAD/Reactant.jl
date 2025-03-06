@@ -15,6 +15,17 @@ struct Wrapper{A,B}
     b::B
 end
 
+struct Descent{T}
+    eta::T
+end
+
+struct RMSProp{Teta,Trho,Teps,C<:Bool}
+    eta::Teta
+    rho::Trho
+    epsilon::Teps
+    centred::C
+end
+
 @testset "Tracing" begin
     @testset "trace_type" begin
         @testset "mode = ConcreteToTraced" begin
@@ -241,5 +252,18 @@ end
         st = (; a=1, training=Val(true))
         st_traced = Reactant.to_rarray(st; track_numbers=Number)
         @test st_traced.training isa Val{true}
+    end
+
+    @testset "to_rarray(::AbstractRule)" begin
+        opt = Descent(0.1)
+        opt_traced = Reactant.to_rarray(opt; track_numbers=AbstractFloat)
+        @test opt_traced.eta isa ConcreteRNumber{Float64}
+
+        opt = RMSProp(0.1, 0.9, 1e-8, true)
+        opt_traced = Reactant.to_rarray(opt; track_numbers=AbstractFloat)
+        @test opt_traced.eta isa ConcreteRNumber{Float64}
+        @test opt_traced.rho isa ConcreteRNumber{Float64}
+        @test opt_traced.epsilon isa ConcreteRNumber{Float64}
+        @test opt_traced.centred isa Bool
     end
 end

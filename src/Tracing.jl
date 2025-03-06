@@ -55,7 +55,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding)
 )
-    if Mode == ArrayToConcrete && T <: track_numbers
+    if mode == ArrayToConcrete && T <: track_numbers
         return ConcretePJRTNumber{
             T,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), 0)
         }
