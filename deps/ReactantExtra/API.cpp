@@ -230,25 +230,28 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
 extern "C" bool mlirOperationInject(MlirContext ctx,
   MlirBlock block,
   MlirStringRef code,
-  MlirLocation location)
-{
-  ParserConfig config(unwrap(ctx));
+  MlirLocation location,
+  bool verify_after_parse
+) {
+  ParserConfig config(unwrap(ctx), verify_after_parse);
   if (failed(parseSourceString(unwrap(code), unwrap(block), config)))
     return false;
   return true;
 }
 
-extern "C" MlirOperation mlirOperationParseAppend(MlirContext ctx,
-                                            MlirBlock block,
-                                            MlirStringRef code,
-                                            MlirLocation location) {
-  ParserConfig config(unwrap(ctx));
+extern "C" MlirOperation mlirOperationParse(MlirContext ctx,
+  MlirBlock block,
+  MlirStringRef code,
+  MlirLocation location,
+  bool verify_after_parse
+) {
+  ParserConfig config(unwrap(ctx), verify_after_parse);
   if (failed(parseSourceString(unwrap(code), unwrap(block), config)))
     return MlirOperation{nullptr};
-  std::cout << "[ReactantExtra] YES?" << std::endl;
   return MlirOperation{
     mlir::detail::constructContainerOpForParserIfNecessary<Operation*>(
-      unwrap(block), config.getContext(), unwrap(location)).release()};
+      unwrap(block), config.getContext(), unwrap(location)).release()
+    };
 }
 
 // TODO mlirComplexAttrGetnValue
