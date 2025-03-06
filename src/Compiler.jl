@@ -1201,7 +1201,7 @@ function codegen_flatten!(
     flatten_code = Expr[]
     runtime = XLA.runtime(client)
 
-    if is_sharded && runtime isa Val{:PJRT}
+    if is_sharded
         inv_seen_args = Reactant.OrderedIdDict()
         for (k, v) in seen_args
             inv_seen_args[v] = k
@@ -1235,12 +1235,11 @@ function codegen_flatten!(
                 carg = inv_seen_args[arg]
 
                 condensed_op_sharding = convert(
-                    Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
+                    XLA.CondensedOpSharding, linear_parameter_shardings[i]
                 )
                 if Reactant.Sharding.is_sharded(carg)
                     arg_condensed_op_sharding = convert(
-                        Reactant.Sharding.XLA.CondensedOpSharding,
-                        carg.sharding.sharding.hlo_sharding,
+                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
                     )
                     # Check if the sharding provided is same as the one we have
                     @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
@@ -1289,7 +1288,49 @@ function codegen_flatten!(
             push!(flatten_code, :($usbuf = $flatcode.data))
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
-            push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+            if is_sharded
+                carg = inv_seen_args[arg]
+
+                condensed_op_sharding = convert(
+                    XLA.CondensedOpSharding, linear_parameter_shardings[i]
+                )
+                if Reactant.Sharding.is_sharded(carg)
+                    arg_condensed_op_sharding = convert(
+                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
+                    )
+                    # Check if the sharding provided is same as the one we have
+                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                    push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+                else
+                    # XXX: Currently we copy to host and then make the transfer to the
+                    #      sharded devices. This is not ideal, we might be able to do a
+                    #      device-to-device transfer, maybe using reshard?
+                    hlo_sharding = convert(XLA.HloSharding, condensed_op_sharding)
+                    ifrt_sharding = XLA.IFRT.Sharding(
+                        vec(Reactant.XLA.get_device.((client,), mesh.device_ids)),
+                        hlo_sharding,
+                    )
+                    data_sym = gensym(:data)
+                    push!(
+                        flatten_code,
+                        quote
+                            $(data_sym) = similar(
+                                $(Array{eltype(carg),ndims(carg)}), $(size(carg))
+                            )
+                            $(XLA.to_host)(
+                                XLA.synced_buffer($usbuf),
+                                $(data_sym),
+                                Reactant.Sharding.NoSharding(),
+                            )
+                            $(sbuf) = XLA.IFRT.Array(
+                                $(client), $(data_sym), $(ifrt_sharding)
+                            )
+                        end,
+                    )
+                end
+            else
+                push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+            end
         else
             error("Unsupported runtime $runtime")
         end

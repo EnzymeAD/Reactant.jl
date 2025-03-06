@@ -301,7 +301,7 @@ function compute_array_indices_and_hlo_sharding(
 )
     return (
         first(sharding_to_concrete_array_indices(sharding, array_size, device_ids)),
-        convert(HloSharding, sharding.opsharding),
+        convert(HloSharding, sharding),
     )
 end
 
@@ -352,6 +352,10 @@ function Base.convert(::Type{HloSharding}, op_sharding::OpSharding)
             )::Ptr{Cvoid}
         )
     end
+end
+
+function Base.convert(::Type{HloSharding}, op_sharding::CondensedOpSharding)
+    return convert(HloSharding, op_sharding.opsharding)
 end
 
 function Base.string(hlo_sharding::HloSharding)
