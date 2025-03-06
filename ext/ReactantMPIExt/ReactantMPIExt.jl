@@ -211,9 +211,9 @@ function __init__()
     ]
         value = getproperty(MPI.API, name)
         if value isa Base.RefValue
-            value = value[]
+            value = value[] # TODO we need to convert this to Ptr{Cvoid} because that's what the symbol table stores
         end
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, value::Ptr{Cvoid})::Cvoid
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, value::Cint)::Cvoid
     end
 end
 

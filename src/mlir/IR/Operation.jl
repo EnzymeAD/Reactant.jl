@@ -23,11 +23,22 @@ Base.:(==)(op::Operation, other::Operation) = API.mlirOperationEqual(op, other)
 
 Parses an operation from the string and transfers ownership to the caller.
 """
-Base.parse(::Core.Type{Operation}, code; context::Context=context()) = Operation(
-    @ccall API.mlir_c.mlirOperationParse(
-        context::API.MlirContext, code::API.MlirStringRef
-    )::API.MlirOperation
+function Base.parse(
+    ::Core.Type{Operation},
+    code;
+    context::Context=context(),
+    block=Block(),
+    location::Location=Location(),
 )
+    return Operation(
+        @ccall API.mlir_c.mlirOperationParseAppend(
+            context::API.MlirContext,
+            block::API.MlirBlock,
+            code::API.MlirStringRef,
+            location::API.MlirLocation,
+        )::API.MlirOperation
+    )
+end
 
 """
     copy(op)
