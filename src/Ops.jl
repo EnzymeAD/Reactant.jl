@@ -2318,12 +2318,12 @@ end
     init_values::TracedRNumber{T},
     dimensions::Vector{Int},
     fn::Function,
-    location=mlir_stacktrace("reduce", @__FILE__, @__LINE__)
+    location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
 ) where {T}
     reduced_shape = Tuple(deleteat!(collect(size(x)), dimensions))
 
-    result_type = mlir_type(TracedRArray{T, length(reduced_shape)}, reduced_shape)
-    
+    result_type = mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)
+
     sample_inputs = [Reactant.ConcretePJRTNumber(T(0)), Reactant.ConcretePJRTNumber(T(0))]
 
     func =
@@ -2348,15 +2348,21 @@ end
     fn = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(fn, MLIR.IR.region(func, 1))
     MLIR.IR.rmfromparent!(func)
-    
-    dimensions = MLIR.IR.Attribute(dimensions .- 1) 
 
-    res = MLIR.IR.result(stablehlo.reduce(
-        [x.mlir_data], [init_values.mlir_data];
-        result_0=[result_type], dimensions=dimensions, body=fn, location=location
-    ))
+    dimensions = MLIR.IR.Attribute(dimensions .- 1)
 
-    return TracedRArray{T, length(reduced_shape)}((), res, reduced_shape)
+    res = MLIR.IR.result(
+        stablehlo.reduce(
+            [x.mlir_data],
+            [init_values.mlir_data];
+            result_0=[result_type],
+            dimensions=dimensions,
+            body=fn,
+            location=location,
+        ),
+    )
+
+    return TracedRArray{T,length(reduced_shape)}((), res, reduced_shape)
 end
 
 end # module Ops
