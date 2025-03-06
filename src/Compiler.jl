@@ -716,7 +716,9 @@ function compile_mlir!(
     activate_raising!(is_raising)
 
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true; input_shardings)
+        Reactant.TracedUtils.make_mlir_fn(
+            f, args, fn_kwargs, "main", true; input_shardings, runtime
+        )
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)

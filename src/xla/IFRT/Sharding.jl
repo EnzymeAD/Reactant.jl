@@ -168,3 +168,38 @@ function Base.show(io::IO, ::MIME"text/plain", sharding::Sharding)
     print(io, "XLA.IFRT.Sharding(\"", string(sharding), "\")")
     return nothing
 end
+
+function XLA.sharding_to_concrete_array_indices(sharding::Sharding, shape, device_ids)
+    shape = collect(Int64, shape)
+    reverse!(shape)
+
+    index_domain_origins = Vector{Int64}(undef, length(device_ids) * length(shape))
+    index_domain_shapes = Vector{Int64}(undef, length(device_ids) * length(shape))
+
+    GC.@preserve sharding index_domain_origins index_domain_shapes begin
+        @ccall MLIR.API.mlir_c.ifrt_sharding_to_index_domains(
+            sharding.ptr::Ptr{Cvoid},
+            shape::Ptr{Int64},
+            Int32(length(shape))::Int32,
+            index_domain_origins::Ptr{Int64},
+            index_domain_shapes::Ptr{Int64},
+        )::Cvoid
+    end
+
+    needs_padding = false
+    array_indices = Vector{NTuple{length(shape),UnitRange{Int64}}}(
+        undef, length(device_ids)
+    )
+    for i in 1:length(device_ids)
+        array_indices[i] = ntuple(length(shape)) do j
+            idx = (i - 1) * length(shape) + j
+            start_idx = index_domain_origins[idx] + 1
+            stop_idx = start_idx + index_domain_shapes[idx] - 1
+            !needs_padding && stop_idx > shape[j] && (needs_padding = true)
+            return start_idx:stop_idx
+        end
+        array_indices[i] = reverse(array_indices[i])
+    end
+
+    return array_indices, needs_padding
+end

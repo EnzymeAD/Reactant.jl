@@ -31,9 +31,9 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Transform/Transforms/Passes.h"
 #include "mlir/InitAllPasses.h"
+#include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassRegistry.h"
 #include "mlir/Transforms/Passes.h"
-#include "mlir/Parser/Parser.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
@@ -230,7 +230,7 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
 extern "C" MlirOperation mlirOperationParse(MlirContext ctx,
                                             MlirStringRef code) {
   ParserConfig config(unwrap(ctx));
-  OwningOpRef<Operation*> owning_op = parseSourceString(unwrap(code), config);
+  OwningOpRef<Operation *> owning_op = parseSourceString(unwrap(code), config);
   if (!owning_op)
     return MlirOperation{nullptr};
   return MlirOperation{owning_op.release()};
@@ -1961,6 +1961,33 @@ extern "C" void ifrt_sharding_to_device_list(
   auto device_list = sharding->obj()->devices()->devices();
   for (int i = 0; i < device_list.size(); i++) {
     devices[i] = device_list[i];
+  }
+}
+
+extern "C" void ifrt_sharding_to_index_domains(
+    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding,
+    int64_t *array_size_list, int32_t array_size_len,
+    int64_t *index_domain_origins, int64_t *index_domain_shapes) {
+  std::vector<int64_t> array_size(array_size_len);
+  for (int i = 0; i < array_size_len; i++) {
+    array_size[i] = array_size_list[i];
+  }
+  auto array_size_span = absl::MakeSpan(array_size);
+  auto array_shape = xla::ifrt::Shape(array_size_span);
+
+  std::vector<ifrt::IndexDomain> index_domains =
+      MyValueOrThrow(sharding->obj()->IndexDomains(array_shape));
+
+  for (int i = 0; i < index_domains.size(); i++) {
+    auto index_domain = index_domains[i];
+    absl::Span<const int64_t> origin = index_domain.origin().elements();
+    absl::Span<const int64_t> shape = index_domain.shape().dims();
+
+    for (int j = 0; j < origin.size(); j++) {
+      auto idx = i * origin.size() + j;
+      index_domain_origins[idx] = origin[j];
+      index_domain_shapes[idx] = shape[j];
+    }
   }
 }
 
