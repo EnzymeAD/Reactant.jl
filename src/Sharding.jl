@@ -435,7 +435,29 @@ function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
     )
 
     if needs_padding
-        error("TODO: IFRT HloSharding with padding")
+        # Compile a dummy function to get the tensor sharding
+        tmp = if x isa Number
+            Reactant.ConcreteIFRTNumber(zero(eltype(x)))
+        else
+            Reactant.ConcreteIFRTArray(ones(eltype(x), size(x)...))
+        end
+        _, exec, _, _, _ = Reactant.Compiler.compile_xla(
+            Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
+        )
+        xla_hlo_sharding = convert(
+            Reactant.XLA.HloSharding, only(Reactant.XLA.get_parameter_shardings(exec))
+        )
+        hlo_sharding = HloSharding(
+            xla_hlo_sharding,
+            hlo_sharding.mesh,
+            hlo_sharding.is_closed,
+            hlo_sharding.priority,
+        )
+
+        condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
+        device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+            condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
+        )
     end
 
     ifrt_sharding = XLA.IFRT.Sharding(
