@@ -69,24 +69,22 @@ function Base.convert(::Type{<:Array}, X::ConcretePJRTArray{T,N}) where {T,N}
             else
                 continue
             end
-            data[slice...] = convert(Array{T}, X.data[idx])
+            data_slice = data[slice...]
+            XLA.to_host(X.data[idx], data_slice, Reactant.Sharding.NoSharding())
+            data[slice...] .= data_slice
         end
 
         return data
     else
-        buf = XLA.synced_buffer(only(X.data))
-        GC.@preserve buf begin
-            return convert(Array{T}, buf)
-        end
+        data = Array{T,N}(undef, size(X)...)
+        XLA.to_host(XLA.synced_buffer(only(X.data)), data, Reactant.Sharding.NoSharding())
+        return data
     end
 end
 
 function Base.convert(::Type{<:Array}, X::ConcreteIFRTArray{T,N}) where {T,N}
-    buf = XLA.synced_buffer(X.data)
     data = zeros(T, size(X)...)
-    GC.@preserve buf begin
-        XLA.to_host(buf, data, X.sharding)
-    end
+    XLA.to_host(X.data, data, X.sharding)
     return data
 end
 
@@ -112,21 +110,13 @@ to_number(x::Number) = x
 
 function to_number(X::ConcretePJRTScalar{T}) where {T}
     data = Ref{T}()
-    wait(X)
-    buf = get_buffer(X; no_error_for_scalar=true)
-    GC.@preserve data buf begin
-        XLA.to_host(buf, data, X.sharding)
-    end
+    XLA.to_host(get_buffer(X; no_error_for_scalar=true), data, X.sharding)
     return data[]
 end
 
 function to_number(X::ConcreteIFRTScalar{T}) where {T}
     data = Ref{T}()
-    wait(X)
-    buf = XLA.synced_buffer(X.data)
-    GC.@preserve data buf begin
-        XLA.to_host(buf, data, X.sharding)
-    end
+    XLA.to_host(X.data, data, X.sharding)
     return data[]
 end
 
