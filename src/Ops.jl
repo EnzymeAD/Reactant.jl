@@ -2313,6 +2313,48 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     end
 end
 
+"""
+    reduce(
+        x::TracedRArray{T},
+        init_values::TracedRNumber{T},
+        dimensions::Vector{Int},
+        fn::Function,
+        location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
+    )
+
+Applies a reduction function `fn` along the specified `dimensions` of input `x`, starting from `init_values`.
+
+# Arguments
+
+- `x`: The input array.
+- `init_values`: The initial value.
+- `dimensions`: The dimensions to reduce along.
+- `fn`: A binary operator.
+
+!!! warning
+    This reduction operation follows StableHLO semantics. The key difference between this operation and Julia's built-in `reduce` is explained below:
+
+    - The function `fn` and the initial value `init_values` must form a **monoid**, meaning:
+      - `fn` must be an **associative** binary operation.
+      - `init_values` must be the **identity element** associated with `fn`.
+    - This constraint ensures consistent results across all implementations.
+
+    If `init_values` is not the identity element of `fn`, the results may vary between CPU and GPU executions. For example:
+
+    ```julia
+    A = [1 3; 2 4;;; 5 7; 6 8;;; 9 11; 10 12]
+    init_values = 2
+    dimensions = [1, 3]
+    ```
+
+    - **CPU version & Julia's `reduce`**:
+      - Reduce along dimension 1 → `[(15) (21); (18) (24)]`
+      - Reduce along dimension 3 → `[(33 + 2)  (45 + 2)]` → `[35 47]`
+    
+    - **GPU version**:
+      - Reduce along dimension 1 → `[(15 + 2) (21 + 2); (18 + 2) (24 + 2)]`
+      - Reduce along dimension 3 → `[37 49]`
+"""
 @noinline function reduce(
     x::TracedRArray{T},
     init_values::TracedRNumber{T},
