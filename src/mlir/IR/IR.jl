@@ -134,7 +134,7 @@ function verifyall(operation::Operation; debug=false)
 end
 verifyall(module_::IR.Module; debug=false) = verifyall(Operation(module_); debug)
 
-function tryinject!(sym_name, code; mod=IR.mmodule(), location=Location())
+function tryinject!(sym_name, code; verify=false, mod=IR.mmodule(), location=Location())
     fn = lookup(SymbolTable(Operation(mod)), sym_name)
 
     if isnothing(fn)
@@ -145,6 +145,7 @@ function tryinject!(sym_name, code; mod=IR.mmodule(), location=Location())
             block::API.MlirBlock,
             code::API.MlirStringRef,
             location::API.MlirLocation,
+            verify::Bool,
         )::Bool
         return res
     else
