@@ -579,4 +579,12 @@ function is_sharded(x::Number)
     return false
 end
 
+"""
+    unwrap_shardinfo(x)
+
+Unwraps a sharding info object, returning the sharding object itself.
+"""
+unwrap_shardinfo(x::AbstractSharding) = x
+unwrap_shardinfo(x::ShardInfo) = unwrap_shardinfo(x.sharding)
+
 end

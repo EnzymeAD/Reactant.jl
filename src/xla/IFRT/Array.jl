@@ -147,9 +147,7 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
         return data
     end
 
-    if reactant_sharding isa Reactant.Sharding.ShardInfo
-        reactant_sharding = reactant_sharding.sharding
-    end
+    reactant_sharding = Reactant.Sharding.unwrap_shardinfo(reactant_sharding)
     @assert reactant_sharding isa Reactant.Sharding.HloSharding
     client = XLA.client(buffer)
     all_devices = XLA.get_device.((client,), reactant_sharding.mesh.device_ids)

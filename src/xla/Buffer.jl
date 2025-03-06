@@ -7,13 +7,7 @@ function unsafe_buffer_pointer end
 function copy_buffer_to_device end
 function sharding end
 
-Base.convert(::Type{Array}, buffer::AbstractBuffer) = convert(Array{eltype(buffer)}, buffer)
-
-function Base.convert(::Type{<:Array{T}}, buffer::AbstractBuffer) where {T}
-    arr = zeros(T, reverse(size(buffer))...)
-    XLA.to_host(buffer, arr, XLA.sharding(buffer))
-    return arr
-end
+Base.isempty(buffer::AbstractBuffer) = buffer.buffer == C_NULL
 
 @inline function client(
     buffers::Union{Array{<:AbstractBuffer},NTuple{<:Any,AbstractBuffer}}
@@ -38,17 +32,7 @@ end
 # Async Buffers
 abstract type AbstractAsyncBuffer <: AbstractBuffer end
 
-Base.isempty(buffer::AbstractAsyncBuffer) = buffer.buffer.buffer == C_NULL
-
-function Base.convert(T::Type{Array}, buffer::AbstractAsyncBuffer)
-    wait(buffer)
-    return convert(T, buffer.buffer)
-end
-
-function Base.convert(T::Type{<:Array{T1}}, buffer::AbstractAsyncBuffer) where {T1}
-    wait(buffer)
-    return convert(T, buffer.buffer)
-end
+Base.isempty(buffer::AbstractAsyncBuffer) = isempty(buffer.buffer)
 
 for op in (:(Base.ndims), :(Base.size), :(Base.eltype), :device, :client, :sharding)
     @eval $op(buffer::AbstractAsyncBuffer) = $op(buffer.buffer)
@@ -73,3 +57,9 @@ function Base.isready(buffer::AbstractAsyncBuffer)
 end
 
 XLA.buffer_on_cpu(buffer::AbstractAsyncBuffer) = XLA.buffer_on_cpu(buffer.buffer)
+
+function XLA.to_host(buffer::AbstractAsyncBuffer, data, sharding)
+    wait(buffer)
+    XLA.to_host(buffer.buffer, data, sharding)
+    return nothing
+end

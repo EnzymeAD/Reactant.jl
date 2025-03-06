@@ -1320,9 +1320,7 @@ function codegen_flatten!(
                                 $(Array{eltype(carg),ndims(carg)}), $(size(carg))
                             )
                             $(XLA.to_host)(
-                                XLA.synced_buffer($usbuf),
-                                $(data_sym),
-                                Reactant.Sharding.NoSharding(),
+                                XLA.synced_buffer($usbuf), $(data_sym), $(carg.sharding)
                             )
                             $(sbuf) = XLA.IFRT.Array(
                                 $(client), $(data_sym), $(ifrt_sharding)
