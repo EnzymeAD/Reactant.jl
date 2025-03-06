@@ -162,6 +162,7 @@ function make_mlir_fn(
     construct_function_without_args::Bool=false,
     do_transpose=true,
     input_shardings=nothing, # This is not meant to be used by the user.
+    runtime=nothing,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -175,6 +176,7 @@ function make_mlir_fn(
             do_transpose,
             args_in_result,
             input_shardings,
+            runtime,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
@@ -192,6 +194,7 @@ function make_mlir_fn(
             (:args, i),
             concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
             toscalar,
+            runtime,
         )
     end
 
@@ -284,7 +287,8 @@ function make_mlir_fn(
         seen_results,
         result,
         (:result,),
-        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath,
+        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath;
+        runtime,
     )
 
     # marks buffers to be donated
@@ -293,7 +297,8 @@ function make_mlir_fn(
             seen_results,
             traced_args[i],
             concretein ? (:resargs, i) : (),
-            Reactant.TracedTrack,
+            Reactant.TracedTrack;
+            runtime,
         )
     end
 

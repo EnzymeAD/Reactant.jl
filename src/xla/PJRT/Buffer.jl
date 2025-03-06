@@ -79,6 +79,7 @@ function XLA.to_host(buffer::Buffer, data, sharding)
             buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
         )::Cvoid
     end
+    return data
 end
 
 # TODO: users themselves need to gc preserve here
