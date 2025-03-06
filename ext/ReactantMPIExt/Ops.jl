@@ -45,26 +45,52 @@ function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LIN
     # sym_attr = IR.FlatSymbolRefAttribute(sym_name)
     comm = MPI.COMM_WORLD
 
+    @show IR.mmodule()
+
+    # memref.global constant @MPI_COMM_WORLD : memref<i32>
+    # llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32
+
     #! format: off
-    return Reactant.Ops.hlo_call("""module {
-        llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32
+    # IR.tryinjectop!("MPI_COMM_WORLD", "memref.global @MPI_COMM_WORLD : memref<i32>")
+    # IR.tryinjectop!("MPI_Comm_rank", "module { llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32 }")
+    IR.inject!("$(sym_name)_jit", """
         func.func @$(sym_name)_jit(%rank_ptr : !llvm.ptr) -> () {
-            %comm = arith.constant $(Base.unsafe_convert(Cint, comm)) : i32
+            %comm_ref = memref.get_global @MPI_COMM_WORLD : memref<i32>
+            %comm_ptr = "enzymexla.memref2pointer"(%comm_ref) : (memref<i32>) -> (!llvm.ptr)
+            %comm = llvm.ptrtoint %comm_ptr : !llvm.ptr to i32
             %status = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
             func.return
         }
-        func.func @$sym_name() -> tensor<i32> {
-            %rank_placeholder = stablehlo.constant dense<-1> : tensor<i32>
-            %rank = enzymexla.jit_call @$(sym_name)_jit(%rank_placeholder) {
-                output_operand_aliases = [
-                    #stablehlo.output_operand_alias<output_tuple_indices = [],
-                                            operand_index = 1,
-                                            operand_tuple_indices = []>
-                ]
-            } : (tensor<i32>) -> (tensor<i32>)
-            func.return %rank : tensor<i32>
-        }
-    }"""; func_name=sym_name)
+    """)
+    @show res
+    #! format: on
+
+    # %comm_ref = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+    # %comm = llvm.ptrtoint %comm_ref : !llvm.ptr to i32
+
+    #! format: off
+    # return Reactant.Ops.hlo_call("""module {
+    #     memref.global constant @MPI_COMM_WORLD : memref<i32>
+    #     llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32
+    #     func.func @$(sym_name)_jit(%rank_ptr : !llvm.ptr) -> () {
+    #         %comm_ref = memref.get_global @MPI_COMM_WORLD : memref<i32>
+    #         %comm_ptr = "enzymexla.memref2pointer"(%comm_ref) : (memref<i32>) -> (!llvm.ptr)
+    #         %comm = llvm.ptrtoint %comm_ptr : !llvm.ptr to i32
+    #         %status = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
+    #         func.return
+    #     }
+    #     func.func @$sym_name() -> tensor<i32> {
+    #         %rank_placeholder = stablehlo.constant dense<-1> : tensor<i32>
+    #         %rank = enzymexla.jit_call @$(sym_name)_jit(%rank_placeholder) {
+    #             output_operand_aliases = [
+    #                 #stablehlo.output_operand_alias<output_tuple_indices = [],
+    #                                         operand_index = 1,
+    #                                         operand_tuple_indices = []>
+    #             ]
+    #         } : (tensor<i32>) -> (tensor<i32>)
+    #         func.return %rank : tensor<i32>
+    #     }
+    # }"""; func_name=sym_name)
     #! format: on
 
     # NOTE we assume here that `MPI_Comm` is of word-size

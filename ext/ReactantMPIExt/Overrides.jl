@@ -13,7 +13,7 @@ end
 
 @reactant_overlay @noinline function MPI.Comm_rank(comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.comm_rank(comm)
+    return Ops.comm_rank()
 end
 
 @reactant_overlay @noinline function MPI.Comm_size(comm::MPI.Comm)
