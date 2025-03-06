@@ -91,7 +91,7 @@ jobs:
         run: |
           import Pkg
           Pkg.Registry.update()
-          Pkg.test(; coverage="user", runtime="IFRT")
+          Pkg.test(; coverage="user")
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
