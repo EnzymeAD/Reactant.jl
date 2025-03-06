@@ -134,4 +134,23 @@ function verifyall(operation::Operation; debug=false)
 end
 verifyall(module_::IR.Module; debug=false) = verifyall(Operation(module_); debug)
 
+function tryinjectop!(sym_name, code; mod=IR.mmodule(), location=Location())
+    fn = lookup(SymbolTable(Operation(mod)), sym_name)
+
+    if isnothing(fn)
+        top_level_block = body(mod)
+        op = parse(Operation, code; block=top_level_block, location)
+
+        # using `collect` because if we remove the op, then the `OperationIterator` state is broken and skips ops
+        # for op in collect(OperationIterator(code))
+        #     rmfromparent!(op)
+        #     push!(top_level_block, op)
+        # end
+
+        return op
+    else
+        return nothing
+    end
+end
+
 end # module IR

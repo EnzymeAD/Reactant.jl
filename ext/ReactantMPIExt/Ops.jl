@@ -8,26 +8,6 @@ using Reactant.Ops: mlir_stacktrace
 using ..ReactantMPIExt: TracedRequest
 using MPI: MPI
 
-function try_inject_to_top_block!(sym_name, code)
-    current_module = IR.mmodule()
-    fn = IR.lookup(IR.SymbolTable(IR.Operation(current_module)), sym_name)
-
-    if isnothing(fn)
-        top_level_block = MLIR.IR.body(current_module)
-        code = IR.body(parse(IR.Module, code))
-
-        # using `collect` because if we remove the op, then the `OperationIterator` state is broken and skips ops
-        for op in collect(IR.OperationIterator(code))
-            IR.rmfromparent!(op)
-            push!(top_level_block, op)
-        end
-
-        return true
-    else
-        return false
-    end
-end
-
 # TODO we might need to have a `TracedComm` for communicators created during the compiled function
 
 # function init(; location=mlir_stacktrace("mpi.init", @__FILE__, @__LINE__))
