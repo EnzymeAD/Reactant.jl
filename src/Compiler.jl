@@ -1659,15 +1659,10 @@ function compile(f, args; sync=false, kwargs...)
         end
     end
 
-    return register_thunk(
-        fname, Tuple{map(Core.Typeof, args)...}, body, f, mlir_fn_res.fnwrapped
-    )
+    return register_thunk(fname, Tuple{map(Core.Typeof, args)...}, body, f)
 end
 
-# inspired by RuntimeGeneratedFunction.jl
-const __thunk_body_cache = Dict{Symbol,Expr}()
-
-struct Thunk{FTy,CTy,tag,IsClosure,ArgTypes}
+struct Thunk{FTy,CTy,tag,ArgTypes}
     f::FTy
     closure::CTy
 end
@@ -1675,11 +1670,11 @@ end
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
 function Base.showerror(
-    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,CTy,tag,ArgTypes,IsClosure},FoundTypes}
-) where {FTy,CTy,tag,ArgTypes,FoundTypes,IsClosure}
+    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,CTy,tag,ArgTypes},FoundTypes}
+) where {FTy,CTy,tag,ArgTypes,FoundTypes}
     print(
         io,
-        "\nThe Reactant-compiled function `$(Thunk{FTy,CTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.",
+        "\nThe Reactant-compiled function `$(Thunk{FTy,CTy, tag, ArgTypes})` exists, but no method is defined for this combination of argument types.",
     )
     print(
         io,
@@ -1695,31 +1690,28 @@ function Base.showerror(
     )
 end
 
-@generated function (thunk::Thunk{FTy,CTy,tag,ArgTypes,IsClosure})(
+@generated function (thunk::Thunk{FTy,CTy,tag,ArgTypes})(
     args...
-) where {FTy,CTy,tag,ArgTypes,IsClosure}
+) where {FTy,CTy,tag,ArgTypes}
     FoundTypes = Tuple{args...}
     if ArgTypes != FoundTypes
         return quote
-            throw(
-                $(MisMatchedThunkTypeError{Thunk{FTy,CTy,tag,ArgTypes,IsClosure},FoundTypes}())
-            )
+            throw($(MisMatchedThunkTypeError{Thunk{FTy,CTy,tag,ArgTypes},FoundTypes}()))
         end
     end
     return quote
-        Base.invokelatest(thunk.closure,args...)
+        Base.invokelatest(thunk.closure, args...)
     end
 end
 
 function register_thunk(
-    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool
+    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f)
 )
-    __thunk_body_cache[tag] = body
-    body = :((args...)->begin $body end)
-    closure = @eval $body
-    t = Thunk{Core.Typeof(f),Core.Typeof(closure),tag,argtys,isclosure}(f, closure)
-    @error t
-    return t
+    expr = :((args...) -> begin
+        $body
+    end)
+    closure = @eval $expr
+    return Thunk{Core.Typeof(f),Core.Typeof(closure),tag,argtys}(f, closure)
 end
 
 for cache_type in (:callcache, :sdycache)
