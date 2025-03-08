@@ -116,16 +116,18 @@ function __init__()
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
-    lljit = Base.reinterpret(Ptr{Enzyme.LLVM.API.LLVMOpaqueExecutionEngine}, Enzyme.LLVM.JuliaOJIT().ref)
-    Enzyme.LLVM.Context() do ctx
-        mod = Enzyme.LLVM.Module("")
-        fty = Enzyme.LLVM.FunctionType(Enzyme.LLVM.VoidType(), Enzyme.LLVM.LLVMType[])
-        for name in ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
-            fn = Enzyme.LLVM.Function(mod, name, fty)
-            ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-            Enzyme.LLVM.API.LLVMAddGlobalMapping(lljit, fn.ref, ptr)
-        end
-        mod = nothing
+    # lljit = Base.reinterpret(Ptr{Enzyme.LLVM.API.LLVMOpaqueExecutionEngine}, Enzyme.LLVM.JuliaOJIT().ref)
+
+    lljit = Enzyme.LLVM.JuliaOJIT()
+    jd_main = Enzyme.LLVM.JITDylib(lljit)
+
+    for name in ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
+        ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+        
+        Enzyme.LLVM.define(
+            jd_main,
+            Enzyme.Compiler.JIT.absolute_symbol_materialization(Enzyme.LLVM.mangle(lljit, name), ptr),
+        )
     end
     return nothing
 end
