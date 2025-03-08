@@ -62,6 +62,18 @@ jobs:
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
           julia --color=yes --project=deps deps/build_local.jl
           cp LocalPreferences.toml test/
+      - name: "Setup Runtime Preferences"
+        uses: "DamianReeves/write-file-action@master"
+        with:
+          path: "LocalPreferences.toml"
+          write-mode: "overwrite"
+          contents: |
+            [Reactant]
+            xla_runtime = "PJRT"
+      - name: "Copy Preferences"
+        run: |
+          cp LocalPreferences.toml test/LocalPreferences.toml
+        shell: bash
       - name: "Install Dependencies"
         run: |
           import Pkg
@@ -86,7 +98,19 @@ jobs:
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
           XLA_FLAGS: "--xla_force_host_platform_device_count=8"
-          REACTANT_XLA_RUNTIME: "PJRT"
+          JULIA_DEBUG: "Reactant,Reactant_jll"
+      - name: "Setup Runtime Preferences"
+        uses: "DamianReeves/write-file-action@master"
+        with:
+          path: "LocalPreferences.toml"
+          write-mode: "overwrite"
+          contents: |
+            [Reactant]
+            xla_runtime = "IFRT"
+      - name: "Copy Preferences"
+        run: |
+          cp LocalPreferences.toml test/LocalPreferences.toml
+        shell: bash
       - name: "Run Tests: IFRT"
         run: |
           import Pkg
@@ -96,7 +120,7 @@ jobs:
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
           XLA_FLAGS: "--xla_force_host_platform_device_count=8"
-          REACTANT_XLA_RUNTIME: "IFRT"
+          JULIA_DEBUG: "Reactant,Reactant_jll"
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:

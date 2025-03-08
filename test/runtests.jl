@@ -1,9 +1,4 @@
-using SafeTestsets, Test, Preferences
-
-const REACTANT_XLA_RUNTIME = uppercase(get(ENV, "REACTANT_XLA_RUNTIME", "PJRT"))
-Preferences.set_preferences!("Reactant", "xla_runtime" => REACTANT_XLA_RUNTIME)
-
-using Reactant
+using SafeTestsets, Test, Reactant
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing; typ=typeof(default))

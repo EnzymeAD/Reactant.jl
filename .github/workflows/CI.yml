@@ -103,6 +103,18 @@ jobs:
           sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
           make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
           echo $PWD/julia/usr/bin >> $GITHUB_PATH
+      - name: "Setup Runtime Preferences"
+        uses: "DamianReeves/write-file-action@master"
+        with:
+          path: "LocalPreferences.toml"
+          write-mode: "overwrite"
+          contents: |
+            [Reactant]
+            xla_runtime = "${{ matrix.runtime }}"
+      - name: "Copy Preferences"
+        run: |
+          cp LocalPreferences.toml test/LocalPreferences.toml
+        shell: bash
       - name: "Install Dependencies"
         run: |
           import Pkg
@@ -130,7 +142,7 @@ jobs:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
           REACTANT_TEST_GROUP: ${{ matrix.test_group }}
           XLA_FLAGS: "--xla_force_host_platform_device_count=8"
-          REACTANT_XLA_RUNTIME: ${{ matrix.runtime }}
+          JULIA_DEBUG: "Reactant,Reactant_jll"
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:
