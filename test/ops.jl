@@ -1113,18 +1113,18 @@ end
     C_ra = Reactant.to_rarray(C)
     D_ra = Reactant.to_rarray(D)
 
-    mr_ra = mapreduce(x -> 3*x+1.2, *, A_ra; dims=2)
-    @test mr_ra ≈ squeeze_dims(mapreduce(x -> 3*x+1.2, *, A; dims=2))
+    mr_ra = mapreduce(x -> 3 * x + 1.2, *, A_ra; dims=2)
+    @test mr_ra ≈ squeeze_dims(mapreduce(x -> 3 * x + 1.2, *, A; dims=2))
 
     mr_ra = mapreduce(x -> x^3, +, A_ra; dims=1:2)
     @test mr_ra ≈ squeeze_dims(mapreduce(x -> x^3, +, A; dims=1:2))
 
-    mr_ra = mapreduce(x -> 3*x+1.2, +, A_ra; dims=:)
-    @test mr_ra ≈ mapreduce(x -> 3*x+1.2, +, A; dims=:)
+    mr_ra = mapreduce(x -> 3 * x + 1.2, +, A_ra; dims=:)
+    @test mr_ra ≈ mapreduce(x -> 3 * x + 1.2, +, A; dims=:)
 
-    mr_ra = mapreduce(x -> 3*x+1.2, max, A_ra; dims=:)
-    @test mr_ra ≈ mapreduce(x -> 3*x+1.2, max, A; dims=:)
+    mr_ra = mapreduce(x -> 3 * x + 1.2, max, A_ra; dims=:)
+    @test mr_ra ≈ mapreduce(x -> 3 * x + 1.2, max, A; dims=:)
 
-    mr_ra = mapreduce(x -> 3*x+1.2, min, A_ra; dims=2:3)
-    @test mr_ra ≈ mapreduce(x -> 3*x+1.2, min, A; dims=2:3)
+    mr_ra = mapreduce(x -> 3 * x + 1.2, min, A_ra; dims=2:3)
+    @test mr_ra ≈ mapreduce(x -> 3 * x + 1.2, min, A; dims=2:3)
 end

@@ -2368,7 +2368,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
 
     sample_inputs = [
         Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0)
+        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
     ]
 
     func =
