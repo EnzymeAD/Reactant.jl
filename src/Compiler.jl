@@ -1648,7 +1648,7 @@ function compile(f, args; sync=false, kwargs...)
     end
 
     return register_thunk(
-        fname, Tuple{map(Core.Typeof, args)...}, body, f, mlir_fn_res.fnwrapped, exec, is_sharded ? nothing : device,
+        fname, Tuple{map(Core.Typeof, args)...}, body, f, mlir_fn_res.fnwrapped, exec, mlir_fn_res.is_sharded ? nothing : device,
     )
 end
 
