@@ -58,10 +58,6 @@ jobs:
           contents: |
             [Reactant]
             xla_runtime = "${{ matrix.runtime }}"
-      - name: "Copy Preferences"
-        run: |
-          cp LocalPreferences.toml test/LocalPreferences.toml
-        shell: bash
       - name: "Install Dependencies and Run Tests"
         run: |
           import Pkg

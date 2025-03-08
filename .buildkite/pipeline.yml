@@ -30,8 +30,6 @@ steps:
 
           cat LocalPreferences.toml
 
-          cp LocalPreferences.toml test/
-
           julia --project=. -e 'println("--- :julia: Instantiating project")
               using Pkg
               Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
