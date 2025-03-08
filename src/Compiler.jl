@@ -1201,7 +1201,10 @@ function codegen_flatten!(
                     sbuf = Symbol(:s, buf)
                     device = XLA.get_device(client, device_id)
                     push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, thunk.device)))
+                    push!(
+                        flatten_code,
+                        :($sbuf = XLA.copy_buffer_to_device($buf, thunk.device)),
+                    )
                 end
             end
         else
@@ -1396,11 +1399,7 @@ Generate Julia code to call the XLA executable.
 - `nresults`: The number of results to expect.
 """
 function codegen_xla_call(
-    flatten_names,
-    donated_args_mask,
-    nresults,
-    is_sharded::Bool,
-    ndevices::Int,
+    flatten_names, donated_args_mask, nresults, is_sharded::Bool, ndevices::Int
 )
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
