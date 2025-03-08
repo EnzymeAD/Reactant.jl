@@ -1654,8 +1654,7 @@ function compile(f, args; sync=false, kwargs...)
         f,
         mlir_fn_res.fnwrapped,
         exec,
-        mlir_fn_res.is_sharded ? nothing : device,
-        devices
+        mlir_fn_res.is_sharded ? devices : device,
     )
 end
 
@@ -1666,7 +1665,6 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
     f::FTy
     exec::ExecTy
     device::DeviceTy
-    devices
 end
 
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
@@ -1723,12 +1721,11 @@ function register_thunk(
     @nospecialize(f),
     isclosure::Bool,
     exec,
-    device,
-    devices
+    device
 )
     __thunk_body_cache[tag] = body
     return Thunk{Core.Typeof(f),tag,argtys,isclosure,Core.Typeof(exec),Core.Typeof(device)}(
-        f, exec, device, devices
+        f, exec, device
     )
 end
 
