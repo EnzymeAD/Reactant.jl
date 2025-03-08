@@ -1072,13 +1072,13 @@ end
     @test Reactant.@jit(f_multiple_hlo_calls(x_reactant, y_reactant))[1] ≈ (x .+ y) .* y
 end
 
-@testset "reduce" begin
-    # stablehlo reduce collapse the dimension so that (1,3) beomces (3, )
-    # while Julia reduce retains (1, 3). The test will fail despite elements being equal
-    function squeeze_dims(r)
-        return dropdims(r; dims=tuple(findall(size(r) .== 1)...))
-    end
+# stablehlo reduce collapse the dimension so that (1,3) beomces (3, )
+# while Julia reduce retains (1, 3). The test will fail despite elements being equal
+function squeeze_dims(r)
+    return dropdims(r; dims=tuple(findall(size(r) .== 1)...))
+end
 
+@testset "reduce" begin
     # Floating point operation is not associative
     A = rand(Int64, 3, 4, 5)
     A_ra = Reactant.to_rarray(A)
@@ -1100,4 +1100,31 @@ end
     r_hlo = @jit Reactant.Ops.reduce(A_ra, init_ra, dims, +)
     r = reduce(+, A; dims=dims, init=init)
     @test r_hlo ≈ squeeze_dims(r)
+end
+
+@testset "mapreduce" begin
+    A = rand(Float64, 3, 4, 5)
+    B = rand(Float64, 3, 4, 5)
+    C = rand(Float64, 3, 4, 5)
+    D = rand(Float64, 3, 4, 5)
+
+    A_ra = Reactant.to_rarray(A)
+    B_ra = Reactant.to_rarray(B)
+    C_ra = Reactant.to_rarray(C)
+    D_ra = Reactant.to_rarray(D)
+
+    mr_ra = mapreduce(x -> 3*x+1.2, *, A_ra; dims=2)
+    @test mr_ra ≈ squeeze_dims(mapreduce(x -> 3*x+1.2, *, A; dims=2))
+
+    mr_ra = mapreduce(x -> x^3, +, A_ra; dims=1:2)
+    @test mr_ra ≈ squeeze_dims(mapreduce(x -> x^3, +, A; dims=1:2))
+
+    mr_ra = mapreduce(x -> 3*x+1.2, +, A_ra; dims=:)
+    @test mr_ra ≈ mapreduce(x -> 3*x+1.2, +, A; dims=:)
+
+    mr_ra = mapreduce(x -> 3*x+1.2, max, A_ra; dims=:)
+    @test mr_ra ≈ mapreduce(x -> 3*x+1.2, max, A; dims=:)
+
+    mr_ra = mapreduce(x -> 3*x+1.2, min, A_ra; dims=2:3)
+    @test mr_ra ≈ mapreduce(x -> 3*x+1.2, min, A; dims=2:3)
 end
