@@ -305,7 +305,7 @@ Base.@nospecializeinfer function traced_type_inner(
             Sharding.ndevices(sharding),
             Sharding.shard_type(typeof(sharding), T.parameters[2]),
         }
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedSetPathInPlace
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedSetPathInPlace || mode == TracedToTypes
         return T
     else
         throw("Abstract RArray cannot be made concrete in mode $mode")
@@ -337,7 +337,7 @@ Base.@nospecializeinfer function traced_type_inner(
             Sharding.ndevices(sharding),
             Sharding.shard_type(typeof(sharding), 0),
         }
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedToTypes
         return T
     else
         throw("Abstract RNumber cannot be made concrete in mode $mode")
@@ -357,7 +357,7 @@ Base.@nospecializeinfer function traced_type_inner(
         return ConcreteRNG{
             traced_type_inner(TracedRArray{UInt64,1}, seen, mode, track_numbers, sharding)
         }
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedSetPathInPlace
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedSetPathInPlace || mode == TracedToTypes
         return T
     else
         throw("Unsupported mode: $mode")

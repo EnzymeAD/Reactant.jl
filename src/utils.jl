@@ -477,6 +477,8 @@ function rewrite_insts!(ir, interp, guaranteed_error)
 end
 
 function call_prologue(f, args...)
+    cached = false
+
     concretein = false
     toscalar = false
     do_transpose = false
@@ -505,6 +507,17 @@ function call_prologue(f, args...)
     end
     original_paths = [Reactant.TracedUtils.get_paths(arg) for arg in caller_linear_args]
     
+    seen = Dict()
+    cache_key = []
+    Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
+    cache = Reactant.Compiler.callcache()
+    if haskey(cache, cache_key)
+        cached = true
+        (; f_name, mlir_result_types, linear_args, traced_result, linear_results, ret) = cache[cache_key]
+        return cached, CachedPrologueResult(; f_name, out_tys=mlir_result_types, traced_result, linear_results, ret, mlir_caller_args, original_paths, original_args=args, caller_linear_args=linear_args)
+        # return cached, CachedEpilogueResult(f_name, mlir_result_types, linear_args, traced_result, linear_results, ret)
+    end
+
     N = length(args)
     seen_args, traced_args, callee_linear_args = TracedUtils.prepare_args(
         args, concretein, toscalar, mutate_traced_args
@@ -526,44 +539,101 @@ function call_prologue(f, args...)
         TracedUtils.set_mlir_data!(arg, MLIR.IR.argument(fnbody, i))
     end
 
-    return mod, temp_func, in_tys, fnbody, sym_visibility, args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths
-end
-
-@inline get_traced_args_from_temp1((mod, temp_func, in_tys, fnbody, sym_visibility, original_args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths)) = traced_args
-
-function call_epilogue(
-    result, (mod, temp_func, in_tys, fnbody, sym_visibility, original_args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths)
-)
-    MLIR.IR.deactivate!(fnbody)
-    
-    concretein = false
-    args_in_result = :all
-    do_transpose = false
-    return_dialect = :func
-    mutate_traced_args = true
-    
-    seen_result, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
-        result,
+    return cached, UncachedPrologueResult(;
+        fnbody,
         traced_args,
         callee_linear_args,
-        fnbody,
-        concretein,
-        args_in_result,
-        do_transpose,
-        mutate_traced_args
+        original_paths,
+        sym_visibility,
+        original_args=args,
+        name,
+        mod,
+        temp_func,
+        in_tys,
+        mlir_caller_args,
+        caller_linear_args,
+        cache_key,
     )
-    
-    ret = TracedUtils.create_return!(
-        fnbody, 
-        linear_results,
-        args_in_result,
-        do_transpose,
-        return_dialect,
-    )
+end
 
-    name = TracedUtils.__lookup_unique_name_in_module(mod, name)
-    final_func = TracedUtils.final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
+# @inline get_traced_args_from_temp1((cond, mod, temp_func, in_tys, fnbody, sym_visibility, original_args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths)) = traced_args
+@inline get_traced_args_from_temp1((cond, prologue_result)) = prologue_result.traced_args
+@inline get_cond_from_temp1((cond, prologue_result)) = cond
+@inline get_traced_result_from_prologue_result((cond, prologue_result)) = prologue_result.traced_result
+
+@kwdef struct CachedPrologueResult
+    f_name
+    out_tys
+    traced_result
+    linear_results
+    ret
+    mlir_caller_args
+    original_paths
+    original_args
+    caller_linear_args
+end
+
+@kwdef struct UncachedPrologueResult
+    fnbody
+    traced_args
+    callee_linear_args
+    original_paths
+    sym_visibility
+    original_args
+    name
+    mod
+    temp_func
+    in_tys
+    mlir_caller_args
+    caller_linear_args
+    cache_key
+end
+
+
+function call_epilogue(
+    result, (cached, prologue_result)
+)
+    if prologue_result isa UncachedPrologueResult
+        (; fnbody, traced_args, callee_linear_args, original_paths, sym_visibility, original_args, name, mod, temp_func, in_tys, mlir_caller_args, caller_linear_args, cache_key) = prologue_result
+
+        MLIR.IR.deactivate!(fnbody)
+        
+        concretein = false
+        args_in_result = :all
+        do_transpose = false
+        return_dialect = :func
+        mutate_traced_args = true
+        
+        seen_result, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
+            result,
+            traced_args,
+            callee_linear_args,
+            fnbody,
+            concretein,
+            args_in_result,
+            do_transpose,
+            mutate_traced_args
+        )
+        
+        ret = TracedUtils.create_return!(
+            fnbody, 
+            linear_results,
+            args_in_result,
+            do_transpose,
+            return_dialect,
+        )
     
+        name = TracedUtils.__lookup_unique_name_in_module(mod, name)
+        final_func = TracedUtils.final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
+
+        cache = Reactant.Compiler.callcache()
+        cache[cache_key] = (; f_name=name, mlir_result_types=out_tys, linear_args=caller_linear_args, traced_result, linear_results, ret)
+    else
+        @assert prologue_result isa CachedPrologueResult "Got type $(typeof(prologue_result))"
+        (; f_name, out_tys, traced_result, linear_results, ret, original_paths, original_args, mlir_caller_args, caller_linear_args) = prologue_result
+        name = f_name
+    end
+
     call_op = MLIR.Dialects.func.call(
         mlir_caller_args; result_0=out_tys, callee=MLIR.IR.FlatSymbolRefAttribute(name)
     )
@@ -586,19 +656,6 @@ function call_epilogue(
         Reactant.TracedUtils.set_paths!(arg, paths)
     end
 
-    # i = 1
-    # for v in linear_results
-    #     v isa TracedType || continue
-    #     TracedUtils.set_mlir_data!(v, MLIR.IR.result(call_op, i))
-    #     i += 1
-    # end
-    # nres = MLIR.IR.nresults(call_op)
-    # # mutated args are included as the last ones in the call op results
-    # for (result_i, arg_i) in zip((nres - length(mutated)):nres, mutated)
-    #     Reactant.TracedUtils.set_mlir_data!(
-    #         caller_linear_args[arg_i], MLIR.IR.result(call_op, result_i + 1)
-    #     )
-    # end
     return traced_result
 end
 
@@ -861,25 +918,64 @@ function call_with_reactant_generator(
     end
 
     if TRACE_CALLS[]
+        push!(code_info.slotnames, :ocres)
+        push!(code_info.slotflags, zero(UInt8))
+        ocres_slot = Core.SlotNumber(length(code_info.slotnames))
+        push!(overdubbed_code, Core.NewvarNode(ocres_slot))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
         push!(overdubbed_code, Expr(:call, call_prologue, fn_args...))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         temp1_output = Core.SSAValue(length(overdubbed_code))
-        
+
+        push!(overdubbed_code, Expr(:call, get_cond_from_temp1, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        cond = Core.SSAValue(length(overdubbed_code))
+        dest = length(overdubbed_code) + 6
+        push!(overdubbed_code, Core.GotoIfNot(cond, dest)) # jump if call was cached
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        # function was cached:
+        push!(overdubbed_code, Expr(:call, println, "function was cached"))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:call, get_traced_result_from_prologue_result, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:(=), ocres_slot, Core.SSAValue(length(overdubbed_code))))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        exitdest = length(overdubbed_code) + 6
+        push!(overdubbed_code, Core.GotoNode(exitdest))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        # function was not cached:
+        push!(overdubbed_code, Expr(:call, println, "function was not cached"))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
         push!(overdubbed_code, Expr(:call, get_traced_args_from_temp1, temp1_output))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         traced_args = Core.SSAValue(length(overdubbed_code))
         
         push!(overdubbed_code, Expr(:call, Core._apply_iterate, Base.iterate, oc, traced_args))
         push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:(=), ocres_slot, Core.SSAValue(length(overdubbed_code))))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
     else
         push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
-        push!(overdubbed_codelocs, code_info.codelocs[1])        
+        push!(overdubbed_codelocs, code_info.codelocs[1])
     end
     
     
     ocres = Core.SSAValue(length(overdubbed_code))
 
     if TRACE_CALLS[]
+        push!(overdubbed_code, ocres_slot)
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        ocres = Core.SSAValue(length(overdubbed_code))
+
         push!(overdubbed_code, Expr(:call, call_epilogue, ocres, temp1_output))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         

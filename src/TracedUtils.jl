@@ -413,9 +413,6 @@ function make_mlir_fn(
     name = __lookup_unique_name_in_module(mod, name)
     final_func = final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
 
-    Core.println("\nOverview of make_mlir_fn for $f [$name]:\nlinear_args: $linear_args")
-    Core.println("linear_results: $linear_results\n")
-
     mesh_cache = Reactant.Compiler.sdycache()
     is_sharded = !isempty(mesh_cache)
 
