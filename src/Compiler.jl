@@ -1201,7 +1201,7 @@ function codegen_flatten!(
                     sbuf = Symbol(:s, buf)
                     device = XLA.get_device(client, device_id)
                     push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
+                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, getfield(getfield(thunk, :closure), 2))))
                 end
             end
         else
@@ -1397,13 +1397,7 @@ Generate Julia code to call the XLA executable.
 - `nresults`: The number of results to expect.
 """
 function codegen_xla_call(
-    exec,
-    device,
-    flatten_names,
-    donated_args_mask,
-    nresults,
-    is_sharded::Bool,
-    ndevices::Int,
+    flatten_names, donated_args_mask, nresults, is_sharded::Bool, ndevices::Int
 )
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
@@ -1420,7 +1414,7 @@ function codegen_xla_call(
             quote
                 GC.@preserve $(flatten_names...) begin
                     linearized_results = XLA.execute(
-                        $exec,
+                        getfield(getfield(thunk, :closure), 1),
                         ($(flatten_buffer_refs...),),
                         $(Tuple(donated_args_mask)),
                         Val($nresults),
@@ -1433,8 +1427,8 @@ function codegen_xla_call(
             quote
                 GC.@preserve $(flatten_names...) begin
                     linearized_results = XLA.execute_sharded(
-                        $exec,
-                        $(device),
+                        getfield(getfield(thunk, :closure), 1),
+                        getfield(getfield(thunk, :closure), 2),
                         ($(flatten_buffer_refs...),),
                         $(Tuple(donated_args_mask)),
                         Val($nresults),
@@ -1600,8 +1594,6 @@ function compile(f, args; sync=false, kwargs...)
     )
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        exec,
-        device,
         flatten_arg_names,
         donated_args_mask,
         length(linear_results),
@@ -1652,26 +1644,32 @@ function compile(f, args; sync=false, kwargs...)
         return result
     end
 
-    return register_thunk(
-        fname, Tuple{map(Core.Typeof, args)...}, body, f, mlir_fn_res.fnwrapped
-    )
+    if mlir_fn_res.fnwrapped
+        body = quote
+            args = (getfield(thunk, :f), args...)
+            $body
+        end
+    end
+
+    return register_thunk(fname, Tuple{map(Core.Typeof, args)...}, body, f, exec, device)
 end
 
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_body_cache = Dict{Symbol,Expr}()
 
-struct Thunk{FTy,tag,IsClosure,ArgTypes}
+struct Thunk{FTy,tag,ArgTypes}
     f::FTy
+    closure
 end
 
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
 function Base.showerror(
-    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}
-) where {FTy,tag,ArgTypes,FoundTypes,IsClosure}
+    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes},FoundTypes}
+) where {FTy,tag,ArgTypes,FoundTypes}
     print(
         io,
-        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.",
+        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes})` exists, but no method is defined for this combination of argument types.",
     )
     print(
         io,
@@ -1687,33 +1685,22 @@ function Base.showerror(
     )
 end
 
-@generated function (thunk::Thunk{FTy,tag,ArgTypes,IsClosure})(
-    args...
-) where {FTy,tag,ArgTypes,IsClosure}
+@generated function (thunk::Thunk{FTy,tag,ArgTypes})(args...) where {FTy,tag,ArgTypes}
     FoundTypes = Tuple{args...}
     if ArgTypes != FoundTypes
         return quote
-            throw(
-                $(MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}())
-            )
+            throw($(MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes},FoundTypes}()))
         end
     end
     body = __thunk_body_cache[tag]
-    if IsClosure
-        return quote
-            args = (thunk.f, args...)
-            $body
-        end
-    else
-        return body
-    end
+    return body
 end
 
 function register_thunk(
-    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool
+    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), exec, device
 )
     __thunk_body_cache[tag] = body
-    return Thunk{Core.Typeof(f),tag,argtys,isclosure}(f)
+    return Thunk{Core.Typeof(f),tag,argtys}(f, (exec, device))
 end
 
 for cache_type in (:callcache, :sdycache)
