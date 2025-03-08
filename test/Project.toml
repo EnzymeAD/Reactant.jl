@@ -1,7 +1,6 @@
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
-BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
@@ -34,7 +33,6 @@ TestSetExtensions = "98d24dd4-01ad-11ea-1b02-c9a08f80db04"
 [compat]
 Adapt = "4.1"
 ArrayInterface = "7.17.1"
-BenchmarkTools = "1.5"
 CUDA = "5.5"
 Distributions = "0.25"
 Enzyme = "0.13.28"
