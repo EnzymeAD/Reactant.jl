@@ -1707,10 +1707,10 @@ end
 end
 
 function register_thunk(
-    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool, exec
+    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool, exec, device
 )
     __thunk_body_cache[tag] = body
-    return Thunk{Core.Typeof(f),tag,argtys,isclosure,Core.Typeof(exec)}(f, exec)
+    return Thunk{Core.Typeof(f),tag,argtys,isclosure,Core.Typeof(exec)}(f, exec, device)
 end
 
 for cache_type in (:callcache, :sdycache)
