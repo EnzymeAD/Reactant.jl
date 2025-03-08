@@ -91,7 +91,7 @@ function XLA.compile(
     )
 end
 
-function execute_ir(N, M, n_outs, fn, with_device::Bool, nmesh_ids::Int64)
+function execute_ir(N, M, n_outs, with_device::Bool, nmesh_ids::Int64)
     ptr = sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
     cint = sizeof(Cint) == sizeof(Int64) ? "i64" : "i32"
     args = N > 0 ? ", [$N x $ptr] %inps, [$M x i8] %donated" : ""
@@ -119,7 +119,19 @@ function execute_ir(N, M, n_outs, fn, with_device::Bool, nmesh_ids::Int64)
         "[$(nmesh_ids) x $ptr]* nocapture readonly %mesha, i64 $(nmesh_ids)"
     end
 
-    res = """define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, $args) alwaysinline {
+    fn = if with_device
+        "@XLAExecuteSharded"
+    else
+        "@XLAExecute" 
+    end
+
+    res = """
+declare void XLAExecuteSharded($ptr readonly nocapture %exec, $cint %num_args, [$N x $ptr]* readonly nocapture %op_args, $ptr readonly %device, 
+[$M x i8]* nocapture readonly %is_arg_donatable, $cint %num_results, [$n_outs x $ptr]* writeonly nocapture %op_results, i8* writeonly nocapture %futures, [$n_outs x $ptr]* writeonly nocapture %future_results)
+
+declare void XLAExecute($ptr readonly nocapture %exec, $cint %op_args_len, [$N x $ptr]* readonly nocapture %op_args, [$M x i8]* nocapture readonly %is_arg_donatable, $cint %num_results, [$n_outs x $ptr]* writeonly nocapture %op_results, i8* writeonly nocapture %futures, [$n_outs x $ptr]* writeonly nocapture %future_results)
+
+define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, $args) alwaysinline {
    entry:
    	%inpa = alloca [$N x $ptr]
    	%dona = alloca [$M x i8]
@@ -128,7 +140,7 @@ function execute_ir(N, M, n_outs, fn, with_device::Bool, nmesh_ids::Int64)
    	%mesha = alloca [$nmesh_ids x $ptr]
    	$stores
    	%futa = alloca i8
-   	call void inttoptr ($ptr $fn to void ($ptr, $cint, [$N x $ptr]*, $extra_str1, [$M x i8]*, $cint, [$n_outs x $ptr]*, i8*, [$n_outs x $ptr]*)*)($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
+   	call void $fn($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
    	%out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
    	%fut = load i8, i8* %futa
    	%futp = load [$n_outs x $ptr], [$n_outs x $ptr]* %futpa
@@ -136,7 +148,7 @@ function execute_ir(N, M, n_outs, fn, with_device::Bool, nmesh_ids::Int64)
    	%fca.1.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.0.insert, [$n_outs x $ptr] %futp, 1
    	%fca.2.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.1.insert, i8 %fut, 2
    	ret { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.2.insert
-   }
+}
    """
     return res
 end
@@ -148,9 +160,7 @@ end
     donated_args::NTuple{N,UInt8},
     ::Val{n_outs},
 ) where {N,n_outs}
-    sym0 = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "XLAExecuteSharded")
-    xla_execute_fn = reinterpret(UInt, sym0)
-    ir = execute_ir(N, N, n_outs, xla_execute_fn, true, 0)
+    ir = execute_ir(N, N, n_outs, true, 0)
     results = []
     for i in 1:n_outs
         push!(
