@@ -126,10 +126,10 @@ function execute_ir(N, M, n_outs, with_device::Bool, nmesh_ids::Int64)
     end
 
     res = """
-declare void XLAExecuteSharded($ptr readonly nocapture %exec, $cint %num_args, [$N x $ptr]* readonly nocapture %op_args, $ptr readonly %device, 
+declare void @XLAExecuteSharded($ptr readonly nocapture %exec, $cint %num_args, [$N x $ptr]* readonly nocapture %op_args, $ptr readonly %device, 
 [$M x i8]* nocapture readonly %is_arg_donatable, $cint %num_results, [$n_outs x $ptr]* writeonly nocapture %op_results, i8* writeonly nocapture %futures, [$n_outs x $ptr]* writeonly nocapture %future_results)
 
-declare void XLAExecute($ptr readonly nocapture %exec, $cint %op_args_len, [$N x $ptr]* readonly nocapture %op_args, [$M x i8]* nocapture readonly %is_arg_donatable, $cint %num_results, [$n_outs x $ptr]* writeonly nocapture %op_results, i8* writeonly nocapture %futures, [$n_outs x $ptr]* writeonly nocapture %future_results)
+declare void @XLAExecute($ptr readonly nocapture %exec, $cint %op_args_len, [$N x $ptr]* readonly nocapture %op_args, [$M x i8]* nocapture readonly %is_arg_donatable, $cint %num_results, [$n_outs x $ptr]* writeonly nocapture %op_results, i8* writeonly nocapture %futures, [$n_outs x $ptr]* writeonly nocapture %future_results)
 
 define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, $args) alwaysinline {
    entry:
