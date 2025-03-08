@@ -1648,7 +1648,13 @@ function compile(f, args; sync=false, kwargs...)
     end
 
     return register_thunk(
-        fname, Tuple{map(Core.Typeof, args)...}, body, f, mlir_fn_res.fnwrapped, exec, mlir_fn_res.is_sharded ? nothing : device,
+        fname,
+        Tuple{map(Core.Typeof, args)...},
+        body,
+        f,
+        mlir_fn_res.fnwrapped,
+        exec,
+        mlir_fn_res.is_sharded ? nothing : device,
     )
 end
 
@@ -1691,7 +1697,9 @@ end
     if ArgTypes != FoundTypes
         return quote
             throw(
-                $(MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy},FoundTypes}())
+                $(MisMatchedThunkTypeError{
+                    Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy},FoundTypes
+                }()),
             )
         end
     end
@@ -1707,10 +1715,18 @@ end
 end
 
 function register_thunk(
-    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool, exec, device
+    tag::Symbol,
+    @nospecialize(argtys::Type),
+    body::Expr,
+    @nospecialize(f),
+    isclosure::Bool,
+    exec,
+    device,
 )
     __thunk_body_cache[tag] = body
-    return Thunk{Core.Typeof(f),tag,argtys,isclosure,Core.Typeof(exec), Core.Typeof(device)}(f, exec, device)
+    return Thunk{Core.Typeof(f),tag,argtys,isclosure,Core.Typeof(exec),Core.Typeof(device)}(
+        f, exec, device
+    )
 end
 
 for cache_type in (:callcache, :sdycache)
