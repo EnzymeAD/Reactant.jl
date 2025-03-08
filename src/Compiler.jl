@@ -1652,29 +1652,26 @@ function compile(f, args; sync=false, kwargs...)
         return result
     end
 
-    if mlir_fn_res.fnwrapped
-        body = quote
-            args = ($f, args...)
-            $body
-        end
-    end
-
-    return register_thunk(fname, Tuple{map(Core.Typeof, args)...}, body, f)
+    return register_thunk(
+        fname, Tuple{map(Core.Typeof, args)...}, body, f, mlir_fn_res.fnwrapped
+    )
 end
 
-struct Thunk{FTy,CTy,tag,ArgTypes}
+# inspired by RuntimeGeneratedFunction.jl
+const __thunk_body_cache = Dict{Symbol,Expr}()
+
+struct Thunk{FTy,tag,IsClosure,ArgTypes}
     f::FTy
-    closure::CTy
 end
 
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
 function Base.showerror(
-    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,CTy,tag,ArgTypes},FoundTypes}
-) where {FTy,CTy,tag,ArgTypes,FoundTypes}
+    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}
+) where {FTy,tag,ArgTypes,FoundTypes,IsClosure}
     print(
         io,
-        "\nThe Reactant-compiled function `$(Thunk{FTy,CTy, tag, ArgTypes})` exists, but no method is defined for this combination of argument types.",
+        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.",
     )
     print(
         io,
@@ -1690,28 +1687,33 @@ function Base.showerror(
     )
 end
 
-@generated function (thunk::Thunk{FTy,CTy,tag,ArgTypes})(
+@generated function (thunk::Thunk{FTy,tag,ArgTypes,IsClosure})(
     args...
-) where {FTy,CTy,tag,ArgTypes}
+) where {FTy,tag,ArgTypes,IsClosure}
     FoundTypes = Tuple{args...}
     if ArgTypes != FoundTypes
         return quote
-            throw($(MisMatchedThunkTypeError{Thunk{FTy,CTy,tag,ArgTypes},FoundTypes}()))
+            throw(
+                $(MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}())
+            )
         end
     end
-    return quote
-        Base.invokelatest(thunk.closure, args...)
+    body = __thunk_body_cache[tag]
+    if IsClosure
+        return quote
+            args = (thunk.f, args...)
+            $body
+        end
+    else
+        return body
     end
 end
 
 function register_thunk(
-    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f)
+    tag::Symbol, @nospecialize(argtys::Type), body::Expr, @nospecialize(f), isclosure::Bool
 )
-    expr = :((args...) -> begin
-        $body
-    end)
-    closure = @eval $expr
-    return Thunk{Core.Typeof(f),Core.Typeof(closure),tag,argtys}(f, closure)
+    __thunk_body_cache[tag] = body
+    return Thunk{Core.Typeof(f),tag,argtys,isclosure}(f)
 end
 
 for cache_type in (:callcache, :sdycache)
