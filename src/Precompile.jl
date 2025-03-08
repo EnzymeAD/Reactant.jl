@@ -49,9 +49,8 @@ function clear_oc_cache()
 end
 
 # Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
-# `aarch64` seems to error with the IFRT stuff
 function precompilation_supported()
-    return (VERSION >= v"1.11" || VERSION >= v"1.10.8") && Sys.ARCH != :aarch64
+    return VERSION >= v"1.11" || VERSION >= v"1.10.8"
 end
 
 function precompiling()
