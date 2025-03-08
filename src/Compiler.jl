@@ -1201,7 +1201,7 @@ function codegen_flatten!(
                     sbuf = Symbol(:s, buf)
                     device = XLA.get_device(client, device_id)
                     push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
+                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, thunk.device)))
                 end
             end
         else
