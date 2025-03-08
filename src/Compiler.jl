@@ -619,8 +619,10 @@ function compile_mlir!(
         @NamedTuple{
             f_name::String,
             mlir_result_types::Vector{MLIR.IR.Type},
+            linear_args::Vector{TracedType},
             traced_result::Any,
-            mutated_args::Vector{Int},
+            linear_results::Vector{TracedType},
+            ret::MLIR.IR.Operation,
         }
     }(),
     sdycache=IdDict{
@@ -661,7 +663,8 @@ function compile_mlir!(
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
     end
-    (; fnwrapped, traced_result, seen_args, ret, linear_args, in_tys, linear_results) =
+    (; fnwrapped, traced_result, result, seen_args, ret, linear_args, in_tys,
+    linear_results) =
         mlir_fn_res
     compiled_f = mlir_fn_res.f
 
@@ -924,7 +927,6 @@ function compile_mlir!(
         preserved_args,
         concrete_result,
         mlir_fn_res.sharding_mesh,
-        mlir_fn_res.mutated_args,
     )
 end
 
