@@ -1601,8 +1601,6 @@ function compile(f, args; sync=false, kwargs...)
         client,
     )
 
-    Core.println("linear_results in `compile`: $(linear_results)")
-
     concretized_res_names, xla_call_code = codegen_xla_call(
         exec,
         device,
