@@ -1074,9 +1074,7 @@ end
     @assert fn_name == "comparator" "$comparator: no function generated"
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
-        "$comparator return type is not tensor<i1>"
-    )
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) "$comparator return type is not tensor<i1>"
 
     comparator = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
@@ -2311,6 +2309,35 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     else
         return TracedRArray{unwrapped_eltype(input)}(resharded_value)
     end
+end
+
+"""
+    throw(
+        msg::String,
+        condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+        location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
+    )
+
+Throw a runtime error with the given `msg` if `condition` is `true`. If `condition` is not provided, it defaults to `true`.
+"""
+@noinline function throw(
+    msg::String,
+    condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+    location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
+)
+    if condition === nothing
+        condition = Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, true)
+    end
+
+    return stablehlo.custom_call(
+        MLIR.IR.Value[condition.mlir_data];
+        result_0=MLIR.IR.Type[],
+        has_side_effect=true,
+        call_target_name="xla_throw_error",
+        backend_config=MLIR.IR.Attribute(Dict("message" => MLIR.IR.Attribute(msg))),
+        api_version=MLIR.IR.Attribute(Int32(4)),
+        location,
+    )
 end
 
 end # module Ops
