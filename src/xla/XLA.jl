@@ -147,10 +147,11 @@ function __init__()
 
     for name in ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
         ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-        
         Enzyme.LLVM.define(
             jd_main,
-            Enzyme.Compiler.JIT.absolute_symbol_materialization(Enzyme.LLVM.mangle(lljit, name), ptr),
+            Enzyme.Compiler.JIT.absolute_symbol_materialization(
+                Enzyme.LLVM.mangle(lljit, name), ptr
+            ),
         )
     end
     return nothing

@@ -122,7 +122,7 @@ function execute_ir(N, M, n_outs, with_device::Bool, nmesh_ids::Int64)
     fn = if with_device
         "@XLAExecuteSharded"
     else
-        "@XLAExecute" 
+        "@XLAExecute"
     end
 
     res = """
