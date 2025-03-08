@@ -2385,7 +2385,6 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     fn_name = String(
         MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
     )
-    @assert fn_name == "reduce_fn"
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
     @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(T)) error (
