@@ -116,20 +116,22 @@ function __init__()
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
-    # lljit = Base.reinterpret(Ptr{Enzyme.LLVM.API.LLVMOpaqueExecutionEngine}, Enzyme.LLVM.JuliaOJIT().ref)
+    # TODO we ought be able to remove this pending https://github.com/JuliaPackaging/Yggdrasil/pull/10706
+    @static if !Sys.isapple()
+        lljit = Enzyme.LLVM.JuliaOJIT()
+        jd_main = Enzyme.LLVM.JITDylib(lljit)
 
-    lljit = Enzyme.LLVM.JuliaOJIT()
-    jd_main = Enzyme.LLVM.JITDylib(lljit)
-
-    for name in ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
-        ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-        Enzyme.LLVM.define(
-            jd_main,
-            Enzyme.Compiler.JIT.absolute_symbol_materialization(
-                Enzyme.LLVM.mangle(lljit, name), ptr
-            ),
-        )
+        for name in ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
+            ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+            Enzyme.LLVM.define(
+                jd_main,
+                Enzyme.Compiler.JIT.absolute_symbol_materialization(
+                    Enzyme.LLVM.mangle(lljit, name), ptr
+                ),
+            )
+        end
     end
+
     return nothing
 end
 
