@@ -73,12 +73,13 @@ function XLA.buffer_on_cpu(buffer::Buffer)
     end
 end
 
-function XLA.to_host(buffer::Buffer, data)
+function XLA.to_host(buffer::Buffer, data, sharding)
     GC.@preserve buffer begin
         @ccall MLIR.API.mlir_c.BufferToHost(
             buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
         )::Cvoid
     end
+    return data
 end
 
 # TODO: users themselves need to gc preserve here
@@ -97,4 +98,4 @@ function XLA.copy_buffer_to_device(buffer::Buffer, dev::Device)
     end
 end
 
-XLA.sharding(::Buffer) = error("PJRT Buffers are not sharded.")
+XLA.sharding(::Buffer) = Reactant.Sharding.NoSharding()
