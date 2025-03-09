@@ -500,7 +500,7 @@ end
 end
 
 @testset "partition_id" begin
-    @test @jit(Ops.partition_id()) isa ConcretePJRTNumber{UInt32}
+    @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
 end
 
 @testset "popcnt" begin
@@ -540,7 +540,7 @@ end
 end
 
 @testset "replica_id" begin
-    @test @jit(Ops.partition_id()) isa ConcretePJRTNumber{UInt32}
+    @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
 end
 
 @testset "reshape" begin

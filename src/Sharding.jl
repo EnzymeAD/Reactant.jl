@@ -110,6 +110,11 @@ function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
 
+function (::NoSharding)(client::XLA.IFRT.Client, device, x::Union{AbstractArray,Number})
+    device === nothing && (device = XLA.default_device(client))
+    return XLA.IFRT.AsyncArray(client, x, device), ShardInfo(NoSharding(), nothing)
+end
+
 """
     NamedSharding(
         mesh::Mesh, partition_spec::Tuple;
@@ -197,7 +202,7 @@ end
 end
 
 function (sharding::NamedSharding)(
-    client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
+    client::XLA.AbstractClient, device::Nothing, x::Union{AbstractArray,Number}
 )
     @assert length(sharding.partition_spec) == ndims(x)
     return HloSharding(sharding, client, device, x)
@@ -310,7 +315,7 @@ function standardize_sharding(sharding::DimsSharding, x::Union{AbstractArray,Num
 end
 
 function (sharding::DimsSharding)(
-    client::XLA.PJRT.Client, device::Nothing, x::Union{AbstractArray,Number}
+    client::XLA.AbstractClient, device::Nothing, x::Union{AbstractArray,Number}
 )
     return (standardize_sharding(sharding, x))(client, device, x)
 end
@@ -419,6 +424,50 @@ function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
     return data, ShardInfo(hlo_sharding, device_to_array_slices)
 end
 
+function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
+    hlo_sharding = generate_hlo_sharding_from_tensor_attribute(sharding)
+
+    # Check if the input needs to be padded. If so this sharding is not valid and we
+    # need to request the tensor sharding from XLA
+    condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
+    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+        condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
+    )
+
+    if needs_padding
+        # Compile a dummy function to get the tensor sharding
+        tmp = if x isa Number
+            Reactant.ConcreteIFRTNumber(zero(eltype(x)))
+        else
+            Reactant.ConcreteIFRTArray(ones(eltype(x), size(x)...))
+        end
+        _, exec, _, _, _ = Reactant.Compiler.compile_xla(
+            Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
+        )
+        xla_hlo_sharding = convert(
+            Reactant.XLA.HloSharding, only(Reactant.XLA.get_parameter_shardings(exec))
+        )
+        hlo_sharding = HloSharding(
+            xla_hlo_sharding,
+            hlo_sharding.mesh,
+            hlo_sharding.is_closed,
+            hlo_sharding.priority,
+        )
+
+        condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
+        device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+            condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
+        )
+    end
+
+    ifrt_sharding = XLA.IFRT.Sharding(
+        vec(Reactant.XLA.get_device.((client,), hlo_sharding.mesh.device_ids)),
+        hlo_sharding.hlo_sharding,
+    )
+    data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
+    return data, ShardInfo(hlo_sharding, device_to_array_slices)
+end
+
 function (sharding::HloSharding)(
     client::XLA.PJRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
@@ -436,6 +485,25 @@ function (sharding::HloSharding)(
             XLA.get_device(client, sharding.mesh.device_ids[i]),
         )
     end
+
+    return data, ShardInfo(sharding, device_to_array_slices)
+end
+
+function (sharding::HloSharding)(
+    client::XLA.IFRT.Client, ::Nothing, x::Union{AbstractArray,Number}
+)
+    condensed_op_sharding = convert(XLA.CondensedOpSharding, sharding.hlo_sharding)
+
+    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+        condensed_op_sharding, size(x), sharding.mesh.logical_device_ids
+    )
+    @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl"
+
+    ifrt_sharding = XLA.IFRT.Sharding(
+        vec(Reactant.XLA.get_device.((client,), sharding.mesh.device_ids)),
+        sharding.hlo_sharding,
+    )
+    data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
 
     return data, ShardInfo(sharding, device_to_array_slices)
 end
@@ -510,5 +578,13 @@ function is_sharded(x::Number)
     hasfield(typeof(x), :sharding) && return is_sharded(x.sharding)
     return false
 end
+
+"""
+    unwrap_shardinfo(x)
+
+Unwraps a sharding info object, returning the sharding object itself.
+"""
+unwrap_shardinfo(x::AbstractSharding) = x
+unwrap_shardinfo(x::ShardInfo) = unwrap_shardinfo(x.sharding)
 
 end

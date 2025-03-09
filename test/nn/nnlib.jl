@@ -226,12 +226,12 @@ end
             NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index))
         )
         @test y1 ≈ output
-        @test y1 isa ConcretePJRTArray{Float32,2}
+        @test y1 isa ConcreteRArray{Float32,2}
         @test size(y1) == size(index)
 
         y2 = @jit(NNlib.gather(Reactant.to_rarray(src), index))
         @test y2 ≈ output
-        @test y2 isa ConcretePJRTArray{Float32,2}
+        @test y2 isa ConcreteRArray{Float32,2}
         @test size(y2) == size(index)
 
         dst = Float32.(zero.(index))
@@ -262,12 +262,12 @@ end
         ][:, :, 1:1]
         y = @jit(NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index)))
         @test y ≈ output
-        @test y isa ConcretePJRTArray{Float32,3}
+        @test y isa ConcreteRArray{Float32,3}
         @test size(y) == size(index)
 
         y = @jit(NNlib.gather(Reactant.to_rarray(src), index))
         @test y ≈ output
-        @test y isa ConcretePJRTArray{Float32,3}
+        @test y isa ConcreteRArray{Float32,3}
         @test size(y) == size(index)
 
         ## 2d src, 2d index of ints -> 3d output
@@ -297,12 +297,12 @@ end
 
         y = @jit(NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index)))
         @test y ≈ output
-        @test y isa ConcretePJRTArray{Float32,3}
+        @test y isa ConcreteRArray{Float32,3}
         @test size(y) == (size(src)[1:(end - 1)]..., size(index)...)
 
         y = @jit(NNlib.gather(Reactant.to_rarray(src), index))
         @test y ≈ output
-        @test y isa ConcretePJRTArray{Float32,3}
+        @test y isa ConcreteRArray{Float32,3}
         @test size(y) == (size(src)[1:(end - 1)]..., size(index)...)
     end
 
@@ -318,13 +318,13 @@ end
         y = @jit(NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index)))
         M = NNlib.typelength(eltype(index))
         Nsrc = ndims(src)
-        @test y isa ConcretePJRTArray{Float32,1}
+        @test y isa ConcreteRArray{Float32,1}
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
         @test y ≈ output
 
         y = @jit(NNlib.gather(Reactant.to_rarray(src), index))
         @test y ≈ output
-        @test y isa ConcretePJRTArray{Float32,1}
+        @test y isa ConcreteRArray{Float32,1}
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
         @test y ≈ output
 
@@ -336,13 +336,13 @@ end
         y = @jit(NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index)))
         M = NNlib.typelength(eltype(index))
         Nsrc = ndims(src)
-        @test y isa ConcretePJRTArray{Float32,3}
+        @test y isa ConcreteRArray{Float32,3}
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
 
         y = @jit(NNlib.gather(Reactant.to_rarray(src), index))
         M = NNlib.typelength(eltype(index))
         Nsrc = ndims(src)
-        @test y isa ConcretePJRTArray{Float32,3}
+        @test y isa ConcreteRArray{Float32,3}
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
     end
 
@@ -358,13 +358,13 @@ end
         y = @jit(NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index)))
         M = NNlib.typelength(eltype(index))
         Nsrc = ndims(src)
-        @test y isa ConcretePJRTArray{Float32,1}
+        @test y isa ConcreteRArray{Float32,1}
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
         @test y ≈ output
 
         y = @jit(NNlib.gather(Reactant.to_rarray(src), index))
         @test y ≈ output
-        @test y isa ConcretePJRTArray{Float32,1}
+        @test y isa ConcreteRArray{Float32,1}
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
 
         ## 3d src, 2d index of 2-tuples -> 3d output
@@ -375,13 +375,13 @@ end
         y = @jit(NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index)))
         M = NNlib.typelength(eltype(index))
         Nsrc = ndims(src)
-        @test y isa ConcretePJRTArray{Float32,3}
+        @test y isa ConcreteRArray{Float32,3}
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
 
         y = @jit(NNlib.gather(Reactant.to_rarray(src), index))
         M = NNlib.typelength(eltype(index))
         Nsrc = ndims(src)
-        @test y isa ConcretePJRTArray{Float32,3}
+        @test y isa ConcreteRArray{Float32,3}
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
     end
 end

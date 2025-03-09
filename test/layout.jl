@@ -10,8 +10,6 @@ using Test
 
     @test x == y2
 
-    # @show [y[1,1], y[1,2], y[2, 1], y[2, 2]]
-
     @allowscalar begin
         @test y[1, 1] == x[1, 1]
         @test y[1, 2] == x[1, 2]

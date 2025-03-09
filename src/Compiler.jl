@@ -9,6 +9,8 @@ import ..Reactant:
     XLA,
     ConcretePJRTArray,
     ConcretePJRTNumber,
+    ConcreteIFRTArray,
+    ConcreteIFRTNumber,
     TracedRArray,
     TracedRNumber,
     RArray,
@@ -105,6 +107,7 @@ function create_result(
         end
     end
 
+    # We will set the data for this later
     if path_to_shard_info !== nothing # restore sharding
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
@@ -113,8 +116,33 @@ function create_result(
             ($(tocopy.data...,)), $sharding
         ))
     end
-    # We will set the data for this later
     return :(ConcretePJRTNumber{$T}($(tocopy.data)))
+end
+
+function create_result(
+    tocopy::ConcreteIFRTNumber{T,S}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T,S}
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing # restore sharding
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
+            return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(restore), $sharding))
+        else
+            return :(ConcreteIFRTNumber{$T}($restore))
+        end
+    end
+
+    # We will set the data for this later
+    if path_to_shard_info !== nothing # restore sharding
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
+        return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(tocopy.data), $sharding))
+    end
+    return :(ConcreteIFRTNumber{$T}($(tocopy.data)))
 end
 
 function create_result(
@@ -149,6 +177,38 @@ function create_result(
     end
     # We will set the data for this later
     return :(ConcretePJRTArray{$T,$N,$D,$S}(
+        $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
+    ))
+end
+
+function create_result(
+    tocopy::ConcreteIFRTArray{T,N,S}, path, result_stores, path_to_shard_info, sharding_mesh
+) where {T,N,S}
+    if haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing # restore sharding
+            sharding = __reconstruct_shardinfo(
+                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+            )
+            return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
+                $(restore), $(tocopy.shape), $sharding
+            ))
+        else
+            return :(ConcreteIFRTArray{$T,$N}($restore, $(tocopy.shape)))
+        end
+    end
+
+    if path_to_shard_info !== nothing # restore sharding
+        sharding = __reconstruct_shardinfo(
+            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
+        )
+        return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
+            $(tocopy.data), $(tocopy.shape), $sharding
+        ))
+    end
+    # We will set the data for this later
+    return :(ConcreteIFRTArray{$T,$N,$S}(
         $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
     ))
 end
@@ -506,7 +566,9 @@ function compile_mlir(f, args; client=nothing, kwargs...)
     results = MLIR.IR.context!(ctx) do
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
-        mlir_fn_res = compile_mlir!(mod, f, args; backend, kwargs...)
+        mlir_fn_res = compile_mlir!(
+            mod, f, args; backend, runtime=XLA.runtime(client), kwargs...
+        )
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
@@ -637,6 +699,7 @@ function compile_mlir!(
     fn_kwargs=(),
     raise::Union{Bool,String}=false,
     input_shardings=nothing,
+    runtime::Union{Val{:PJRT},Val{:IFRT}},
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -653,7 +716,9 @@ function compile_mlir!(
     activate_raising!(is_raising)
 
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(f, args, fn_kwargs, "main", true; input_shardings)
+        Reactant.TracedUtils.make_mlir_fn(
+            f, args, fn_kwargs, "main", true; input_shardings, runtime
+        )
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
@@ -668,7 +733,7 @@ function compile_mlir!(
     concrete_seen = OrderedIdDict()
 
     concrete_result = make_tracer(
-        concrete_seen, traced_result, ("result",), TracedToConcrete
+        concrete_seen, traced_result, ("result",), TracedToConcrete; runtime
     )
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
@@ -1136,6 +1201,7 @@ function codegen_flatten!(
 )
     flatten_names = Symbol[]
     flatten_code = Expr[]
+    runtime = XLA.runtime(client)
 
     if is_sharded
         inv_seen_args = Reactant.OrderedIdDict()
@@ -1166,58 +1232,113 @@ function codegen_flatten!(
             flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
         end
 
-        if is_sharded
-            carg = inv_seen_args[arg]
-            condensed_op_sharding = convert(
-                Reactant.Sharding.XLA.CondensedOpSharding, linear_parameter_shardings[i]
-            )
-            if Reactant.Sharding.is_sharded(carg)
-                arg_condensed_op_sharding = convert(
-                    Reactant.Sharding.XLA.CondensedOpSharding,
-                    carg.sharding.sharding.hlo_sharding,
-                )
-                # Check if the sharding provided is same as the one we have
-                @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+        if runtime isa Val{:PJRT}
+            if is_sharded
+                carg = inv_seen_args[arg]
 
-                push!(flatten_code, :($usbuf = $flatcode.data))
-                for j in 1:length(mesh)
-                    sbuf = Symbol(:sbuf_, i, "_", mesh.logical_device_ids[j])
-                    push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j))))
+                condensed_op_sharding = convert(
+                    XLA.CondensedOpSharding, linear_parameter_shardings[i]
+                )
+                if Reactant.Sharding.is_sharded(carg)
+                    arg_condensed_op_sharding = convert(
+                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
+                    )
+                    # Check if the sharding provided is same as the one we have
+                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+
+                    push!(flatten_code, :($usbuf = $flatcode.data))
+                    for j in 1:length(mesh)
+                        sbuf = Symbol(:sbuf_, i, "_", mesh.logical_device_ids[j])
+                        push!(flatten_names, sbuf)
+                        push!(
+                            flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j)))
+                        )
+                    end
+                else
+                    push!(flatten_code, :($usbuf = $flatcode))
+                    device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
+                        condensed_op_sharding, size(carg), mesh.logical_device_ids
+                    )
+                    for j in 1:length(mesh)
+                        device_id = mesh.logical_device_ids[j]
+                        buf = Symbol(:buf_, i, :_, device_id)
+                        slice = device_to_array_slices[j]
+                        push!(
+                            flatten_code,
+                            :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
+                        )
+                        sbuf = Symbol(:s, buf)
+                        device = XLA.get_device(client, device_id)
+                        push!(flatten_names, sbuf)
+                        push!(
+                            flatten_code,
+                            :($sbuf = XLA.copy_buffer_to_device($buf, $device)),
+                        )
+                    end
                 end
             else
-                push!(flatten_code, :($usbuf = $flatcode))
-                device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
-                    condensed_op_sharding, size(carg), mesh.logical_device_ids
-                )
-                for j in 1:length(mesh)
-                    device_id = mesh.logical_device_ids[j]
-                    buf = Symbol(:buf_, i, :_, device_id)
-                    slice = device_to_array_slices[j]
-                    push!(
-                        flatten_code,
-                        :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
-                    )
-                    sbuf = Symbol(:s, buf)
-                    device = XLA.get_device(client, device_id)
-                    push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
+                push!(flatten_code, :($usbuf = $flatcode.data))
+                sbuf = Symbol(:sbuf_, i)
+                push!(flatten_names, sbuf)
+                if arg isa TracedRArray || arg isa TracedRNumber
+                    push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+                else
+                    error("Unsupported type $(typeof(arg))")
                 end
             end
-        else
+        elseif runtime isa Val{:IFRT}
             push!(flatten_code, :($usbuf = $flatcode.data))
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
-            if arg isa TracedRArray || arg isa TracedRNumber
-                push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+            if is_sharded
+                carg = inv_seen_args[arg]
+
+                condensed_op_sharding = convert(
+                    XLA.CondensedOpSharding, linear_parameter_shardings[i]
+                )
+                if Reactant.Sharding.is_sharded(carg)
+                    arg_condensed_op_sharding = convert(
+                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
+                    )
+                    # Check if the sharding provided is same as the one we have
+                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                    push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+                else
+                    # XXX: Currently we copy to host and then make the transfer to the
+                    #      sharded devices. This is not ideal, we might be able to do a
+                    #      device-to-device transfer, maybe using reshard?
+                    hlo_sharding = convert(XLA.HloSharding, condensed_op_sharding)
+                    ifrt_sharding = XLA.IFRT.Sharding(
+                        vec(Reactant.XLA.get_device.((client,), mesh.device_ids)),
+                        hlo_sharding,
+                    )
+                    data_sym = gensym(:data)
+                    push!(
+                        flatten_code,
+                        quote
+                            $(data_sym) = similar(
+                                $(Array{eltype(carg),ndims(carg)}), $(size(carg))
+                            )
+                            $(XLA.to_host)(
+                                XLA.synced_buffer($usbuf), $(data_sym), $(carg.sharding)
+                            )
+                            $(sbuf) = XLA.IFRT.Array(
+                                $(client), $(data_sym), $(ifrt_sharding)
+                            )
+                        end,
+                    )
+                end
             else
-                error("Unsupported type $(typeof(arg))")
+                push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
             end
+        else
+            error("Unsupported runtime $runtime")
         end
     end
 
     # We reorder how the buffers are passed to the XLA call
     is_sharded &&
+        runtime isa Val{:PJRT} &&
         (flatten_names = vcat(eachrow(reshape(flatten_names, length(mesh), :))...))
 
     return flatten_names, flatten_code
@@ -1239,10 +1360,23 @@ function codegen_unflatten!(
     path_to_shard_info,
     linear_result_shard_info,
     sharding_mesh,
+    client,
 )
     cache_dict = gensym("cache_dict")
     has_cache_dict = false
     unflatten_code = Expr[]
+
+    runtime = XLA.runtime(client)
+    if runtime isa Val{:PJRT}
+        numtype = ConcretePJRTNumber
+        arrtype = ConcretePJRTArray
+    elseif runtime isa Val{:IFRT}
+        numtype = ConcreteIFRTNumber
+        arrtype = ConcreteIFRTArray
+    else
+        error("Unsupported runtime $runtime")
+    end
+    ctypes = Union{arrtype,numtype}
 
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result, shard_info) in
@@ -1279,20 +1413,19 @@ function codegen_unflatten!(
                         push!(
                             unflatten_code,
                             :(
-                                $cache_dict = $(IdDict{
-                                    Union{TracedRArray,TracedRNumber},
-                                    Union{ConcretePJRTArray,ConcretePJRTNumber},
-                                }())
+                                $cache_dict =
+                                    $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())
                             ),
                         )
                     end
                     unflatcode = quote
+                        # XXX: we might need to handle sharding here
                         $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
                         if $final_val isa TracedRArray
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcretePJRTArray{
+                                $cache_dict[$final_val] = $(arrtype){
                                     $(Reactant.unwrapped_eltype)($final_val),
                                     ndims($final_val),
                                 }(
@@ -1305,7 +1438,7 @@ function codegen_unflatten!(
                             $clocal = if haskey($cache_dict, $final_val)
                                 $cache_dict[$final_val]
                             else
-                                $cache_dict[$final_val] = ConcretePJRTNumber{
+                                $cache_dict[$final_val] = $(numtype){
                                     $(Reactant.unwrapped_eltype)($final_val)
                                 }(
                                     $concrete_res_name
@@ -1472,9 +1605,12 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
 
     device = nothing
     if length(linear_args) > 0
-        devices_list = [
-            XLA.device(only(k.data)) for (k, v) in seen_args if v isa TracedRArray
-        ]
+        devices_list = []
+        for (k, v) in seen_args
+            !(v isa TracedRArray || v isa TracedRNumber) && continue
+            buffer = k.data isa Tuple ? only(k.data) : k.data
+            push!(devices_list, XLA.device(buffer))
+        end
         if !isempty(devices_list)
             if !allequal(devices_list)
                 msg = "Expected all arguments to be on the same device, got:\n"
@@ -1524,7 +1660,9 @@ function compile_xla(f, args; client=nothing, kwargs...)
     results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
-        mlir_fn_res = compile_mlir!(mod, f, args; backend, kwargs...)
+        mlir_fn_res = compile_mlir!(
+            mod, f, args; backend, runtime=XLA.runtime(client), kwargs...
+        )
 
         # Resolve client and device
         client, device = __resolve_device_and_client(
@@ -1621,6 +1759,7 @@ function compile(f, args; sync=false, kwargs...)
         path_to_shard_info,
         linear_result_shard_info,
         mlir_fn_res.sharding_mesh,
+        client,
     )
 
     sync_call = if sync

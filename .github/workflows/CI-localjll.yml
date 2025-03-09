@@ -62,6 +62,16 @@ jobs:
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
           julia --color=yes --project=deps deps/build_local.jl
           cp LocalPreferences.toml test/
+      - name: "Setup Runtime Preferences"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.instantiate()
+          using Preferences
+          Preferences.set_preferences!("Reactant", "xla_runtime" => "PJRT"; force=true)
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
       - name: "Install Dependencies"
         run: |
           import Pkg
@@ -77,16 +87,36 @@ jobs:
         if: ${{ matrix.version == '1.10' }}
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - name: "Run Tests"
+      - name: "Run Tests: PJRT"
         run: |
           import Pkg
           Pkg.Registry.update()
           Pkg.test(; coverage="user")
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        id: run_tests
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
           XLA_FLAGS: "--xla_force_host_platform_device_count=8"
+          JULIA_DEBUG: "Reactant,Reactant_jll"
+      - name: "Setup Runtime Preferences"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.instantiate()
+          using Preferences
+          Preferences.set_preferences!("Reactant", "xla_runtime" => "IFRT"; force=true)
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
+      - name: "Run Tests: IFRT"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.test(; coverage="user")
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
+        env:
+          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+          XLA_FLAGS: "--xla_force_host_platform_device_count=8"
+          JULIA_DEBUG: "Reactant,Reactant_jll"
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:

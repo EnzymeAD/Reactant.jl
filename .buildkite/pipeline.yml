@@ -1,7 +1,7 @@
 steps:
   - group: ":test_tube: Tests"
     steps:
-      - label: ":julia: :linux: CUDA Julia v{{matrix.version}} -- {{matrix.group}}"
+      - label: ":julia: :linux: CUDA Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
         matrix:
           setup:
             version:
@@ -10,6 +10,9 @@ steps:
               - core
               - neural_networks
               - integration
+            runtime:
+              - "PJRT"
+              - "IFRT"
         plugins:
           - JuliaCI/julia#v1:
               version: "{{matrix.version}}"
@@ -20,6 +23,13 @@ steps:
                 - ext
                 - lib/ReactantCore/src
         commands: |
+          touch LocalPreferences.toml
+
+          echo "[Reactant]" >> LocalPreferences.toml
+          echo "xla_runtime = \"{{matrix.runtime}}\"" >> LocalPreferences.toml
+
+          cat LocalPreferences.toml
+
           julia --project=. -e 'println("--- :julia: Instantiating project")
               using Pkg
               Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
@@ -33,6 +43,7 @@ steps:
         env:
           REACTANT_TEST_GROUP: "{{matrix.group}}"
           CUDA_VISIBLE_DEVICES: 0
+          JULIA_DEBUG: "Reactant,Reactant_jll"
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 120
 

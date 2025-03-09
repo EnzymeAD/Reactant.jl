@@ -1093,8 +1093,10 @@ end
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(A::Type{<:CuTracedArray}),
     seen,
-    mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     return A
 end
@@ -1104,28 +1106,34 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     T = eltype(A)
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
-        if !Reactant.Sharding.is_sharded(sharding)
-            return Reactant.ConcretePJRTArray{T,N,1,Reactant.Sharding.NoShardInfo}
-        else
-            error("TODO: implement sharding")
-        end
-    else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding)
-        if TT === T
-            return A
-        else
-            return Array{
-                Reactant.traced_type_inner(
-                    T, seen, mode, track_numbers, Base.getproperty(sharding, 1)
-                ),
+        if runtime isa Val{:PJRT}
+            return Reactant.ConcretePJRTArray{
+                T,
                 N,
+                Reactant.Sharding.ndevices(sharding),
+                Reactant.Sharding.shard_type(typeof(sharding), N),
+            }
+        elseif runtime isa Val{:IFRT}
+            return Reactant.ConcreteIFRTArray{
+                T,N,Reactant.Sharding.shard_type(typeof(sharding), N)
             }
         end
+        error("Unsupported runtime $runtime")
+    else
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+        TT === T && return A
+        return Array{
+            Reactant.traced_type_inner(
+                T, seen, mode, track_numbers, Base.getproperty(sharding, 1), runtime
+            ),
+            N,
+        }
     end
 end
 
@@ -1136,6 +1144,7 @@ function Reactant.make_tracer(
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+    @nospecialize(runtime),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1145,9 +1154,14 @@ function Reactant.make_tracer(
         return seen[prev]
     end
     if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
-        return seen[prev] = Reactant.ConcretePJRTArray(Array(prev); sharding)
+        if runtime isa Val{:PJRT}
+            return seen[prev] = Reactant.ConcretePJRTArray(Array(prev); sharding)
+        elseif runtime isa Val{:IFRT}
+            return seen[prev] = Reactant.ConcreteIFRTArray(Array(prev); sharding)
+        end
+        error("Unsupported runtime $runtime")
     end
-    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding)
+    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
     if TT === eltype(RT)
         return prev
     end
@@ -1164,6 +1178,7 @@ function Reactant.make_tracer(
                 mode;
                 track_numbers,
                 sharding=Base.getproperty(sharding, I),
+                runtime,
                 kwargs...,
             )
             if pv !== nv
@@ -1192,7 +1207,15 @@ end
 @static if !Sys.isapple()
     Reactant.PrecompileTools.@setup_workload begin
         Reactant.initialize_dialect()
-        client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+
+        if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
+            client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+        elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
+            client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
+        else
+            error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
+        end
+
         Reactant.PrecompileTools.@compile_workload begin
             @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
                 function square_kernel!(x)
@@ -1205,10 +1228,11 @@ end
                     CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
                     return nothing
                 end
-                y = Reactant.ConcretePJRTArray([2.0]; client)
+                y = Reactant.ConcreteRArray([2.0]; client)
                 Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
             end
         end
+
         Reactant.XLA.free_client(client)
         client.client = C_NULL
         Reactant.deinitialize_dialect()

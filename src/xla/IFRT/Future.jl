@@ -3,7 +3,9 @@ mutable struct Future <: XLA.AbstractFuture
 
     function Future(future::Ptr{Cvoid})
         @assert future != C_NULL
-        return finalizer(free_future, new(future))
+        # XXX: double free issue?? potentiialy due to wrapper over PJRTFuture?
+        # return finalizer(free_future, new(future))
+        return new(future)
     end
 end
 
@@ -11,7 +13,7 @@ end
     @ccall MLIR.API.mlir_c.ifrt_free_future(future.future::Ptr{Cvoid})::Cvoid
 end
 
-function XLA.is_ready(future::Future)
+function Base.isready(future::Future)
     GC.@preserve future begin
         return (@ccall MLIR.API.mlir_c.ifrt_future_is_ready(
             future.future::Ptr{Cvoid}
@@ -19,7 +21,7 @@ function XLA.is_ready(future::Future)
     end
 end
 
-@inline function XLA.await(future::Future)::Nothing
+@inline function Base.wait(future::Future)::Nothing
     GC.@preserve future begin
         @ccall MLIR.API.mlir_c.ifrt_future_await(future.future::Ptr{Cvoid})::Cvoid
     end
