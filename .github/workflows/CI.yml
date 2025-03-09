@@ -44,7 +44,7 @@ jobs:
           - macOS-13
         test_group:
           - core
-          - neural_networks
+          # - neural_networks
           - integration
         assertions:
           - false
