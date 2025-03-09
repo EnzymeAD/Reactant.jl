@@ -1118,5 +1118,5 @@ end
     csts = collect(x for x in eachsplit(hlo_ir, "\n") if occursin("stablehlo.constant", x))
     @test length(csts) == 2
     @test occursin("1, 2, 3, 4", csts[1])
-    @test occursin("6, 2, 3, 4", csts[1])
+    @test occursin("6, 2, 3, 4", csts[2])
 end
