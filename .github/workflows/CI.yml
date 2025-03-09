@@ -41,43 +41,13 @@ jobs:
           - '1.11'
           # - 'nightly'
         os:
-          - ubuntu-24.04
-          # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
-          # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
-          - ubuntu-22.04-arm
           - macOS-13
-          - macOS-latest
         test_group:
           - core
           - neural_networks
           - integration
         assertions:
           - false
-        include:
-          - os: ubuntu-24.04
-            version: '1.10'
-            assertions: true
-            test_group: core
-          - os: ubuntu-24.04
-            version: '1.10'
-            assertions: true
-            test_group: neural_networks
-          - os: ubuntu-24.04
-            version: '1.10'
-            assertions: true
-            test_group: integration
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: core
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: neural_networks
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: integration
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
