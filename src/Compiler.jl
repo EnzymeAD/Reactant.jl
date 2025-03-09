@@ -1136,6 +1136,7 @@ function codegen_flatten!(
 )
     flatten_names = Symbol[]
     flatten_code = Expr[]
+    devices = []
 
     if is_sharded
         inv_seen_args = Reactant.OrderedIdDict()
@@ -1199,9 +1200,12 @@ function codegen_flatten!(
                         :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
                     )
                     sbuf = Symbol(:s, buf)
-                    device = XLA.get_device(client, device_id)
+                    push!(devices, XLA.get_device(client, device_id))
                     push!(flatten_names, sbuf)
-                    push!(flatten_code, :($sbuf = XLA.copy_buffer_to_device($buf, $device)))
+                    push!(
+                        flatten_code,
+                        :($sbuf = XLA.copy_buffer_to_device($buf, thunk.devices[$(length(devices))])),
+                    )
                 end
             end
         else
@@ -1220,7 +1224,7 @@ function codegen_flatten!(
     is_sharded &&
         (flatten_names = vcat(eachrow(reshape(flatten_names, length(mesh), :))...))
 
-    return flatten_names, flatten_code
+    return flatten_names, flatten_code, devices
 end
 
 """
@@ -1582,7 +1586,7 @@ function compile(f, args; sync=false, kwargs...)
     path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Tuple}() : nothing
 
     # generate Julia `Thunk` code
-    flatten_arg_names, flatten_code = codegen_flatten!(
+    flatten_arg_names, flatten_code, devices = codegen_flatten!(
         linear_args,
         seen_args,
         result_stores,
@@ -1650,7 +1654,7 @@ function compile(f, args; sync=false, kwargs...)
         f,
         mlir_fn_res.fnwrapped,
         exec,
-        mlir_fn_res.is_sharded ? nothing : device,
+        mlir_fn_res.is_sharded ? devices : device,
     )
 end
 
@@ -1717,7 +1721,7 @@ function register_thunk(
     @nospecialize(f),
     isclosure::Bool,
     exec,
-    device,
+    device
 )
     __thunk_body_cache[tag] = body
     return Thunk{Core.Typeof(f),tag,argtys,isclosure,Core.Typeof(exec),Core.Typeof(device)}(
