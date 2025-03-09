@@ -140,7 +140,6 @@ function __init__()
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
-    # TODO we ought be able to remove this pending https://github.com/JuliaPackaging/Yggdrasil/pull/10706
     @static if !Sys.isapple()
         lljit = Enzyme.LLVM.JuliaOJIT()
         jd_main = Enzyme.LLVM.JITDylib(lljit)
