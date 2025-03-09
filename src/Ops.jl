@@ -2068,7 +2068,7 @@ end
         ]
         MLIR.Dialects.stablehlo.return_(vals)
     finally
-        MLIR.IR.deactivate!(false_fn_body)        
+        MLIR.IR.deactivate!(false_fn_body)
         Ops.deactivate_constant_context!(false_fn_body)
     end
 
