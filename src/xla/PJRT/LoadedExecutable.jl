@@ -119,35 +119,54 @@ function execute_ir(N, M, n_outs, with_device::Bool, nmesh_ids::Int64)
         "[$(nmesh_ids) x $ptr]* nocapture readonly %mesha, i64 $(nmesh_ids)"
     end
 
-    fn = if with_device
-        "@XLAExecuteSharded"
+    fname = if with_device
+        "XLAExecuteSharded"
     else
-        "@XLAExecute"
+        "XLAExecute"
     end
 
-    res = """
-declare void @XLAExecuteSharded($ptr %exec, $cint %num_args, [$N x $ptr]* readonly nocapture %op_args, $ptr %device, 
-[$M x i8]* nocapture readonly %is_arg_donatable, $cint %num_results, [$n_outs x $ptr]* writeonly nocapture %op_results, i8* writeonly nocapture %futures, [$n_outs x $ptr]* writeonly nocapture %future_results)
+    libname = Reactant_jll.libReactantExtra
 
-declare void @XLAExecute($ptr %exec, $cint %op_args_len, [$N x $ptr]* readonly nocapture %op_args, [$M x i8]* nocapture readonly %is_arg_donatable, $cint %num_results, [$n_outs x $ptr]* writeonly nocapture %op_results, i8* writeonly nocapture %futures, [$n_outs x $ptr]* writeonly nocapture %future_results)
+    N1 = $(length(libname)+1)
+    N2 = $(length(fname)+1)
+
+    res = """
+declare void ()* @ijl_load_and_lookup(i8*, i8*, i8**)
+
+; TODO: 1.11 has an JIT optimized variant of this
+; I hope we don't need to gensym these
+@ccalllib_Reactant = external global i8*
+@ccall_fn = external global void ()*
+@_j_str1 = private unnamed_addr constant [$N1 x i8] c"$(libname)\00", align 1
+@_j_str2 = private unnamed_addr constant [$N2 x i8] c"$(fname)\00", align 1
 
 define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, $args) alwaysinline {
    entry:
-   	%inpa = alloca [$N x $ptr]
-   	%dona = alloca [$M x i8]
-   	%outa = alloca [$n_outs x $ptr]
-   	%futpa = alloca [$n_outs x $ptr]
-   	%mesha = alloca [$nmesh_ids x $ptr]
-   	$stores
-   	%futa = alloca i8
-   	call void $fn($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
-   	%out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
-   	%fut = load i8, i8* %futa
-   	%futp = load [$n_outs x $ptr], [$n_outs x $ptr]* %futpa
-   	%fca.0.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } undef, [$n_outs x $ptr] %out, 0
-   	%fca.1.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.0.insert, [$n_outs x $ptr] %futp, 1
-   	%fca.2.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.1.insert, i8 %fut, 2
-   	ret { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.2.insert
+    %inpa = alloca [$N x $ptr]
+    %dona = alloca [$M x i8]
+    %outa = alloca [$n_outs x $ptr]
+    %futpa = alloca [$n_outs x $ptr]
+    %mesha = alloca [$nmesh_ids x $ptr]
+    $stores
+    %futa = alloca i8
+    %fn.cached = load atomic void ()*, void ()** @ccall_fn unordered, align 8
+    %is_cached = icmp ne void ()* %fn.cached, null
+    br i1 %is_cached, label %ccall, label %dlsym
+dlsym:
+    %fn.found = call void ()* @ijl_load_and_lookup(i8* getelementptr inbounds ([$N1 x i8], [$N1 x i8]* @_j_str1, i32 0, i32 0), i8* getelementptr inbounds ([$N2 x i8], [$N2 x i8]* @_j_str22, i32 0, i32 0), i8** @ccalllib_Reactant)
+    store atomic void ()* %fn.found, void ()** @ccall_fn release, align 8
+    br label %ccall
+ccall:
+    fn = %dll = phi void ()* [ %fn.cached, %top ], [ %fn.found, %dlsym ]
+    fn_typed = bitcast void ()* fn to void ($ptr, $cint, [$N x $ptr]*, $extra_str1, [$M x i8]*, $cint, [$n_outs x $ptr]*, i8*, [$n_outs x $ptr]*)*
+    call void fn_typed($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
+    %out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
+    %fut = load i8, i8* %futa
+    %futp = load [$n_outs x $ptr], [$n_outs x $ptr]* %futpa
+    %fca.0.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } undef, [$n_outs x $ptr] %out, 0
+    %fca.1.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.0.insert, [$n_outs x $ptr] %futp, 1
+    %fca.2.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.1.insert, i8 %fut, 2
+    ret { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.2.insert
 }
    """
     return res
