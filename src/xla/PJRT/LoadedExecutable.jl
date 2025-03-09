@@ -202,10 +202,10 @@ end
             device = device.device
             inputs = Base.RefValue(inputs)
             is_arg_donatable = Base.RefValue(donated_args)
-            outputs = Ref{NTuple{$n_outs,Ptr{Cvoid}}}()
+            outputs_p = Ref{NTuple{$n_outs,Ptr{Cvoid}}}()
             futures = Ref{UInt8}(0)
             future_res = Ref{NTuple{$n_outs,Ptr{Cvoid}}}()
-            GC.@preserve exec device inputs is_arg_donatable outputs futures future_res begin
+            GC.@preserve exec device inputs is_arg_donatable outputs_p futures futures_res begin
                 @ccall MLIR.API.mlir_c.XLAExecuteSharded(
                     exec::Ptr{Cvoid},
                     $N::Cuint,
@@ -213,13 +213,13 @@ end
                     device::Ptr{Cvoid},
                     is_arg_donatable::Ptr{Cvoid},
                     $n_outs::Cuint,
-                    outputs::Ptr{Cvoid},
+                    outputs_p::Ptr{Cvoid},
                     futures::Ptr{Cvoid},
                     future_res::Ptr{Cvoid})::Cvoid
             end
-            outputs = outputs[]
-            future_res = future_res[]
-            future = future[]
+            outputs = outputs_p[]
+            future_res = futures_res[]
+            future = futures[]
             return ($(results...),)
         end
     end
