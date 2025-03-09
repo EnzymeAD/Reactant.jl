@@ -1,3 +1,4 @@
+using Test
 using SpecialFunctions, Reactant
 
 macro ≈(a, b)
