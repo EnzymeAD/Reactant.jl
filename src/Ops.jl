@@ -1806,6 +1806,7 @@ end
     true_fn_args = true_fn_names[1]
 
     MLIR.IR.activate!(true_fn_body)
+    Ops.activate_constant_context!(true_fn_body)
     tb_result = try
         for (i, arg) in enumerate(tb_linear_args)
             # find the right path to index the traced arg.
@@ -1829,6 +1830,7 @@ end
         end
         Reactant.call_with_reactant(true_fn, tb_traced_args...)
     finally
+        Ops.deactivate_constant_context!(true_fn_body)
         MLIR.IR.deactivate!(true_fn_body)
     end
 
@@ -1869,6 +1871,7 @@ end
 
     false_fn_args = false_fn_names[1]
     MLIR.IR.activate!(false_fn_body)
+    Ops.activate_constant_context!(false_fn_body)
     fb_result = try
         for (i, arg) in enumerate(fb_linear_args)
             # find the right path to index the traced arg.
@@ -1892,6 +1895,7 @@ end
         end
         Reactant.call_with_reactant(false_fn, fb_traced_args...)
     finally
+        Ops.deactivate_constant_context!(false_fn_body)
         MLIR.IR.deactivate!(false_fn_body)
     end
 
@@ -1970,6 +1974,7 @@ end
 
     # finalize the true branch by adding the missing values
     MLIR.IR.activate!(true_fn_body)
+    Ops.activate_constant_context!(true_fn_body)
     tb_corrected_linear_results = Reactant.TracedType[]
     try
         for (i, path) in enumerate(tb_paths)
@@ -1981,10 +1986,12 @@ end
         end
     finally
         MLIR.IR.deactivate!(true_fn_body)
+        Ops.deactivate_constant_context!(true_fn_body)
     end
 
     # finalize the false branch by adding the missing values
     MLIR.IR.activate!(false_fn_body)
+    Ops.activate_constant_context!(false_fn_body)
     fb_corrected_linear_results = Reactant.TracedType[]
     try
         for (i, path) in enumerate(fb_paths)
@@ -1996,6 +2003,7 @@ end
         end
     finally
         MLIR.IR.deactivate!(false_fn_body)
+        Ops.deactivate_constant_context!(false_fn_body)
     end
 
     # All MissingTracedValues must be replaced with zeroes
@@ -2010,19 +2018,23 @@ end
         res = if tr isa MissingTracedValue
             @assert !(fr isa MissingTracedValue)
             MLIR.IR.activate!(true_fn_body)
+            Ops.activate_constant_context!(true_fn_body)
             try
                 tb_corrected_linear_results[i] = zero(fr)
             finally
                 MLIR.IR.deactivate!(true_fn_body)
+                Ops.deactivate_constant_context!(true_fn_body)
             end
             fr
         elseif fr isa MissingTracedValue
             @assert !(tr isa MissingTracedValue)
             MLIR.IR.activate!(false_fn_body)
+            Ops.activate_constant_context!(false_fn_body)
             try
                 fb_corrected_linear_results[i] = zero(tr)
             finally
                 MLIR.IR.deactivate!(false_fn_body)
+                Ops.deactivate_constant_context!(false_fn_body)
             end
             tr
         else
@@ -2035,6 +2047,7 @@ end
     end
 
     MLIR.IR.activate!(true_fn_body)
+    Ops.activate_constant_context!(true_fn_body)
     try
         vals = MLIR.IR.Value[
             Reactant.TracedUtils.get_mlir_data(res) for
@@ -2043,9 +2056,11 @@ end
         MLIR.Dialects.stablehlo.return_(vals)
     finally
         MLIR.IR.deactivate!(true_fn_body)
+        Ops.deactivate_constant_context!(true_fn_body)
     end
 
     MLIR.IR.activate!(false_fn_body)
+    Ops.activate_constant_context!(false_fn_body)
     try
         vals = MLIR.IR.Value[
             Reactant.TracedUtils.get_mlir_data(res) for
@@ -2053,7 +2068,8 @@ end
         ]
         MLIR.Dialects.stablehlo.return_(vals)
     finally
-        MLIR.IR.deactivate!(false_fn_body)
+        MLIR.IR.deactivate!(false_fn_body)        
+        Ops.deactivate_constant_context!(false_fn_body)
     end
 
     # With the corrected results, we can compile the true and false branches
