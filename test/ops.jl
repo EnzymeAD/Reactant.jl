@@ -1120,3 +1120,25 @@ end
     @test occursin("1, 2, 3, 4", csts[1])
     @test occursin("6, 2, 3, 4", csts[2])
 end
+
+@testset "Large constant" begin
+    N = 5
+    constant = randn(N)
+    v = randn(N)
+    vr = Reactant.to_rarray(v)
+    # Function which would use the `constant` object
+    f!(v) = v .+= constant
+    default_threshold = Ops.LARGE_CONSTANT_THRESHOLD[]
+    try
+        Ops.LARGE_CONSTANT_THRESHOLD[] = N
+        @compile f!(vr)
+    catch err
+        @test err.msg == "Generating a constant larger than $(N) bytes."
+    finally
+        # Restore threshold
+        Ops.LARGE_CONSTANT_THRESHOLD[] = default_threshold
+    end
+    # Make sure we can now compile the function
+    fr! = @compile f!(vr)
+    @test fr!(vr) ≈ f!(v)
+end
