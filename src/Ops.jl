@@ -67,14 +67,56 @@ struct Token
     mlir_data::MLIR.IR.Value
 end
 
+function activate_constant_context!(blk::MLIR.IR.Block)
+    stack = get!(task_local_storage(), :entry_block) do
+        return Tuple{MLIR.IR.Block, Dict{MLIR.IR.Attribute, TracedRArray}}[]
+    end
+    Base.push!(stack, (blk, Dict{MLIR.IR.Attribute, TracedRArray}()))
+    return nothing
+end
+
+function constant_context(; throw_error::Core.Bool=true)
+    return last(task_local_storage(:entry_block))
+end
+
+function deactivate_constant_context!(blk::MLIR.IR.Block)
+    constant_context()[1] == blk || error("Deactivating wrong block")
+    return Base.pop!(task_local_storage(:entry_block))
+end
+
 # constant ops
 @noinline function constant(
     x::DenseArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
     value = MLIR.IR.DenseElementsAttribute(x)
-    output = mlir_type(TracedRArray{T,N}, size(x))
-    res = MLIR.IR.result(stablehlo.constant(; output, value, location))
-    return TracedRArray{T,N}((), res, size(x))
+    constants = constant_context()[2]
+    if haskey(constants, value)
+        return constants[value]
+    else
+        output = mlir_type(TracedRArray{T,N}, size(x))
+
+        op_ty_results = MLIR.IR.Type[output]
+        operands = MLIR.IR.Value[]
+        owned_regions = MLIR.IR.Region[]
+        successors = MLIR.IR.Block[]
+        attributes = MLIR.IR.NamedAttribute[MLIR.Dialects.namedattribute("value", value),]
+
+        cstop = MLIR.IR.create_operation(
+            "stablehlo.constant",
+            location;
+            operands,
+            owned_regions,
+            successors,
+            attributes,
+            results=op_ty_results,
+            result_inference=false,
+        )
+
+        res = MLIR.IR.result(cstop)
+        tres = TracedRArray{T,N}((), res, size(x))
+        constants[value] = tres
+        return tres
+    end
 end
 
 @noinline function constant(
