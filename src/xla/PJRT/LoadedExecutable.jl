@@ -220,7 +220,7 @@ end
             end
             outputs = outputs_p[]
             future_res = futures_res[]
-            future = futures[]
+            future = futures[] != 0
             return ($(results...),)
         end
     end
