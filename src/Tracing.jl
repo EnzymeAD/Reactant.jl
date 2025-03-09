@@ -1171,12 +1171,14 @@ function make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...)
     end
     return prev
 end
+@static if VERSION >= v"1.11"
 function make_tracer(seen, prev::Memory, @nospecialize(path), mode; kwargs...)
     if mode == TracedToTypes
         push!(path, prev)
         return nothing
     end
     return prev
+end
 end
 
 function make_tracer(

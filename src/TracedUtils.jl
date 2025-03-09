@@ -222,7 +222,7 @@ function placeholder_func(
 
     @assert MLIR.IR._has_block()
 
-    return mod, func, fnbody, in_tys, sym_visibility
+    return mod, func, fnbody, in_tys, sym_visibility, traced_args_to_shardings
 end
 
 function prepare_results(
@@ -234,6 +234,7 @@ function prepare_results(
     args_in_result,
     do_transpose,
     mutate_traced_args,
+    traced_args_to_shardings,
 )
     N = length(traced_args)
     # check which arguments have been mutated
@@ -362,7 +363,7 @@ function make_mlir_fn(
         args, concretein, toscalar, mutate_traced_args
     )
 
-    mod, temp_func, fnbody, in_tys, sym_visibility = placeholder_func(
+    mod, temp_func, fnbody, in_tys, sym_visibility, traced_args_to_shardings = placeholder_func(
         name,
         linear_args,
         seen_args,
@@ -399,7 +400,8 @@ function make_mlir_fn(
         concretein,
         args_in_result,
         do_transpose,
-        mutate_traced_args
+        mutate_traced_args,
+        traced_args_to_shardings
     )
 
     ret = create_return!(

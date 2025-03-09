@@ -448,7 +448,7 @@ function safe_print(name, x)
 end
 
 const DEBUG_INTERP = Ref(false)
-const TRACE_CALLS = Ref(false)
+const TRACE_CALLS = Ref(true)
 
 # Rewrite type unstable calls to recurse into call_with_reactant to ensure
 # they continue to use our interpreter. Reset the derived return type
@@ -523,7 +523,7 @@ function call_prologue(f, args...)
         args, concretein, toscalar, mutate_traced_args
     )
 
-    mod, temp_func, fnbody, in_tys, sym_visibility = TracedUtils.placeholder_func(
+    mod, temp_func, fnbody, in_tys, sym_visibility, traced_args_to_shardings = TracedUtils.placeholder_func(
         name,
         callee_linear_args,
         seen_args,
@@ -553,6 +553,7 @@ function call_prologue(f, args...)
         mlir_caller_args,
         caller_linear_args,
         cache_key,
+        traced_args_to_shardings,
     )
 end
 
@@ -587,6 +588,7 @@ end
     mlir_caller_args
     caller_linear_args
     cache_key
+    traced_args_to_shardings
 end
 
 
@@ -594,7 +596,7 @@ function call_epilogue(
     result, (cached, prologue_result)
 )
     if prologue_result isa UncachedPrologueResult
-        (; fnbody, traced_args, callee_linear_args, original_paths, sym_visibility, original_args, name, mod, temp_func, in_tys, mlir_caller_args, caller_linear_args, cache_key) = prologue_result
+        (; fnbody, traced_args, callee_linear_args, original_paths, sym_visibility, original_args, name, mod, temp_func, in_tys, mlir_caller_args, caller_linear_args, cache_key, traced_args_to_shardings) = prologue_result
 
         MLIR.IR.deactivate!(fnbody)
         
@@ -612,7 +614,8 @@ function call_epilogue(
             concretein,
             args_in_result,
             do_transpose,
-            mutate_traced_args
+            mutate_traced_args,
+            traced_args_to_shardings
         )
         
         ret = TracedUtils.create_return!(
