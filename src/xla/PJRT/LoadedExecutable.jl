@@ -215,7 +215,8 @@ end
                     $n_outs::Cuint,
                     outputs_p::Ptr{Cvoid},
                     futures::Ptr{Cvoid},
-                    futures_res::Ptr{Cvoid})::Cvoid
+                    futures_res::Ptr{Cvoid},
+                )::Cvoid
             end
             outputs = outputs_p[]
             future_res = futures_res[]
