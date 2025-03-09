@@ -5,6 +5,7 @@ using Reactant_jll
 using Libdl
 using Scratch, Downloads
 using EnumX: @enumx
+using Enzyme
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
@@ -114,6 +115,7 @@ function __init__()
 
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
     @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
+
     return nothing
 end
 
