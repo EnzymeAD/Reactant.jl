@@ -1113,7 +1113,7 @@ end
         return y1 .* y2 .* c1
     end
 
-    mod = @code_hlo optimize=false const_dedup(x)
+    mod = @code_hlo optimize = false const_dedup(x)
     hlo_ir = repr(mod)
     csts = collect(x for x in eachsplit(hlo_ir, "\n") if occursin("stablehlo.constant", x))
     @test length(csts) == 2

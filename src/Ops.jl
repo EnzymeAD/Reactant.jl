@@ -69,9 +69,9 @@ end
 
 function activate_constant_context!(blk::MLIR.IR.Block)
     stack = get!(task_local_storage(), :entry_block) do
-        return Tuple{MLIR.IR.Block, Dict{MLIR.IR.Attribute, TracedRArray}}[]
+        return Tuple{MLIR.IR.Block,Dict{MLIR.IR.Attribute,TracedRArray}}[]
     end
-    Base.push!(stack, (blk, Dict{MLIR.IR.Attribute, TracedRArray}()))
+    Base.push!(stack, (blk, Dict{MLIR.IR.Attribute,TracedRArray}()))
     return nothing
 end
 
