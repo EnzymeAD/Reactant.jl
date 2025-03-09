@@ -178,7 +178,7 @@ end
     end
     args = N > 0 ? (:inputs, :donated_args) : ()
 
-    if !Reactant.precompiling() && !Sys.isapple()
+    if !Reactant.precompiling() || Sys.isapple()
         return quote
             Base.@_inline_meta
             exec = exec.exec
@@ -215,7 +215,7 @@ end
                     $n_outs::Cuint,
                     outputs_p::Ptr{Cvoid},
                     futures::Ptr{Cvoid},
-                    future_res::Ptr{Cvoid})::Cvoid
+                    futures_res::Ptr{Cvoid})::Cvoid
             end
             outputs = outputs_p[]
             future_res = futures_res[]
