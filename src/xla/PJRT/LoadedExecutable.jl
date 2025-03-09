@@ -177,21 +177,51 @@ end
         (Ptr{Cvoid}, Ptr{Cvoid})
     end
     args = N > 0 ? (:inputs, :donated_args) : ()
-    return quote
-        Base.@_inline_meta
-        exec = exec.exec
-        device = device.device
-        GC.@preserve exec device begin
-            outputs, future_res, future = Base.llvmcall(
-                ($ir, "f"),
-                Tuple{NTuple{n_outs,Ptr{Cvoid}},NTuple{n_outs,Ptr{Cvoid}},Bool},
-                Tuple{$args_type...},
-                exec,
-                device,
-                $(args...),
-            )
+
+    if !Reactant.precompiling() && !Sys.isapple()
+        return quote
+            Base.@_inline_meta
+            exec = exec.exec
+            device = device.device
+            GC.@preserve exec device begin
+                outputs, future_res, future = Base.llvmcall(
+                    ($ir, "f"),
+                    Tuple{NTuple{n_outs,Ptr{Cvoid}},NTuple{n_outs,Ptr{Cvoid}},Bool},
+                    Tuple{$args_type...},
+                    exec,
+                    device,
+                    $(args...),
+                )
+            end
+            return ($(results...),)
         end
-        return ($(results...),)
+    else
+        return quote
+            Base.@_inline_meta
+            exec = exec.exec
+            device = device.device
+            inputs = Base.RefValue(inputs)
+            is_arg_donatable = Base.RefValue(donated_args)
+            outputs = Ref{NTuple{$n_outs,Ptr{Cvoid}}}()
+            futures = Ref{UInt8}(0)
+            future_res = Ref{NTuple{$n_outs,Ptr{Cvoid}}}()
+            GC.@preserve exec device inputs is_arg_donatable outputs futures future_res begin
+                @ccall MLIR.API.mlir_c.XLAExecuteSharded(
+                    exec::Ptr{Cvoid},
+                    $N::Cuint,
+                    inputs::Ptr{Cvoid},
+                    device::Ptr{Cvoid},
+                    is_arg_donatable::Ptr{Cvoid},
+                    $n_outs::Cuint,
+                    outputs::Ptr{Cvoid},
+                    futures::Ptr{Cvoid},
+                    future_res::Ptr{Cvoid})::Cvoid
+            end
+            outputs = outputs[]
+            future_res = future_res[]
+            future = future[]
+            return ($(results...),)
+        end
     end
 end
 
