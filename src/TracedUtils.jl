@@ -244,6 +244,7 @@ function make_mlir_fn(
 
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
+    Ops.activate_constant_context!(fnbody)
 
     @assert MLIR.IR._has_block()
 
@@ -265,6 +266,7 @@ function make_mlir_fn(
         end
     finally
         MLIR.IR.deactivate!(fnbody)
+        Ops.deactivate_constant_context!(fnbody)
     end
 
     # check which arguments have been mutated
