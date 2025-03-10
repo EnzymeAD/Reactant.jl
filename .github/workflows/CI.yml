@@ -56,6 +56,13 @@ jobs:
           - "IFRT"
         assertions:
           - false
+        exclude:
+          # Until <https://github.com/EnzymeAD/Reactant.jl/issues/867>
+          # is resolved.
+          - os: macOS-13
+            test_group: core
+          - os: macOS-13
+            test_group: integration
         include:
           - os: ubuntu-24.04
             version: '1.10'
