@@ -1136,7 +1136,7 @@ function codegen_flatten!(
 )
     flatten_names = Symbol[]
     flatten_code = Expr[]
-    devices = []
+    devices = (XLA.get_device(client, device_id) for device_id in mesh.logical_device_ids)
 
     if is_sharded
         inv_seen_args = Reactant.OrderedIdDict()
@@ -1200,11 +1200,10 @@ function codegen_flatten!(
                         :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
                     )
                     sbuf = Symbol(:s, buf)
-                    push!(devices, XLA.get_device(client, device_id))
                     push!(flatten_names, sbuf)
                     push!(
                         flatten_code,
-                        :($sbuf = XLA.copy_buffer_to_device($buf, thunk.devices[$(length(devices))])),
+                        :($sbuf = XLA.copy_buffer_to_device($buf, thunk.device[$j])),
                     )
                 end
             end
