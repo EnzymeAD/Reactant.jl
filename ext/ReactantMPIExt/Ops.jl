@@ -119,154 +119,154 @@ function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__)
     return nothing
 end
 
-function inject_mpi_datatype(datatype)
-    if datatype == MPI.MPI_DATATYPE_NULL
+function inject_mpi_datatype!(datatype)
+    if datatype == MPI.DATATYPE_NULL
         IR.inject!(
             "MPI_DATATYPE_NULL",
             "llvm.mlir.global constant @MPI_DATATYPE_NULL() : !llvm.ptr",
         )
         return "MPI_DATATYPE_NULL"
-    elseif datatype == MPI.MPI_BYTE
+    elseif datatype == MPI.BYTE
         IR.inject!("MPI_BYTE", "llvm.mlir.global constant @MPI_BYTE() : !llvm.ptr")
         return "MPI_BYTE"
-    elseif datatype == MPI.MPI_PACKED
-        IR.inject!("MPI_PACKED", "llvm.mlir.global constant @MPI_PACKED() : !llvm.ptr")
-        return "MPI_PACKED"
-    elseif datatype == MPI.MPI_CHAR
+        # elseif datatype == MPI.PACKED
+        #     IR.inject!("MPI_PACKED", "llvm.mlir.global constant @MPI_PACKED() : !llvm.ptr")
+        #     return "MPI_PACKED"
+    elseif datatype == MPI.CHAR
         IR.inject!("MPI_CHAR", "llvm.mlir.global constant @MPI_CHAR() : !llvm.ptr")
         return "MPI_CHAR"
-    elseif datatype == MPI.MPI_SHORT
+    elseif datatype == MPI.SHORT
         IR.inject!("MPI_SHORT", "llvm.mlir.global constant @MPI_SHORT() : !llvm.ptr")
         return "MPI_SHORT"
-    elseif datatype == MPI.MPI_INT
+    elseif datatype == MPI.INT
         IR.inject!("MPI_INT", "llvm.mlir.global constant @MPI_INT() : !llvm.ptr")
         return "MPI_INT"
-    elseif datatype == MPI.MPI_LONG
+    elseif datatype == MPI.LONG
         IR.inject!("MPI_LONG", "llvm.mlir.global constant @MPI_LONG() : !llvm.ptr")
         return "MPI_LONG"
-    elseif datatype == MPI.MPI_FLOAT
+    elseif datatype == MPI.FLOAT
         IR.inject!("MPI_FLOAT", "llvm.mlir.global constant @MPI_FLOAT() : !llvm.ptr")
         return "MPI_FLOAT"
-    elseif datatype == MPI.MPI_DOUBLE
+    elseif datatype == MPI.DOUBLE
         IR.inject!("MPI_DOUBLE", "llvm.mlir.global constant @MPI_DOUBLE() : !llvm.ptr")
         return "MPI_DOUBLE"
-    elseif datatype == MPI.MPI_UNSIGNED_CHAR
+    elseif datatype == MPI.UNSIGNED_CHAR
         IR.inject!(
             "MPI_UNSIGNED_CHAR",
             "llvm.mlir.global constant @MPI_UNSIGNED_CHAR() : !llvm.ptr",
         )
         return "MPI_UNSIGNED_CHAR"
-    elseif datatype == MPI.MPI_SIGNED_CHAR
+    elseif datatype == MPI.SIGNED_CHAR
         IR.inject!(
             "MPI_SIGNED_CHAR", "llvm.mlir.global constant @MPI_SIGNED_CHAR() : !llvm.ptr"
         )
         return "MPI_SIGNED_CHAR"
-    elseif datatype == MPI.MPI_UNSIGNED_SHORT
+    elseif datatype == MPI.UNSIGNED_SHORT
         IR.inject!(
             "MPI_UNSIGNED_SHORT",
             "llvm.mlir.global constant @MPI_UNSIGNED_SHORT() : !llvm.ptr",
         )
         return "MPI_UNSIGNED_SHORT"
-    elseif datatype == MPI.MPI_UNSIGNED_LONG
+    elseif datatype == MPI.UNSIGNED_LONG
         IR.inject!(
             "MPI_UNSIGNED_LONG",
             "llvm.mlir.global constant @MPI_UNSIGNED_LONG() : !llvm.ptr",
         )
         return "MPI_UNSIGNED_LONG"
-    elseif datatype == MPI.MPI_UNSIGNED
+    elseif datatype == MPI.UNSIGNED
         IR.inject!("MPI_UNSIGNED", "llvm.mlir.global constant @MPI_UNSIGNED() : !llvm.ptr")
         return "MPI_UNSIGNED"
-    elseif datatype == MPI.MPI_FLOAT_INT
+    elseif datatype == MPI.FLOAT_INT
         IR.inject!(
             "MPI_FLOAT_INT", "llvm.mlir.global constant @MPI_FLOAT_INT() : !llvm.ptr"
         )
         return "MPI_FLOAT_INT"
-    elseif datatype == MPI.MPI_DOUBLE_INT
+    elseif datatype == MPI.DOUBLE_INT
         IR.inject!(
             "MPI_DOUBLE_INT", "llvm.mlir.global constant @MPI_DOUBLE_INT() : !llvm.ptr"
         )
         return "MPI_DOUBLE_INT"
-    elseif datatype == MPI.MPI_LONG_DOUBLE_INT
+    elseif datatype == MPI.LONG_DOUBLE_INT
         IR.inject!(
             "MPI_LONG_DOUBLE_INT",
             "llvm.mlir.global constant @MPI_LONG_DOUBLE_INT() : !llvm.ptr",
         )
         return "MPI_LONG_DOUBLE_INT"
-    elseif datatype == MPI.MPI_LONG_INT
+    elseif datatype == MPI.LONG_INT
         IR.inject!("MPI_LONG_INT", "llvm.mlir.global constant @MPI_LONG_INT() : !llvm.ptr")
         return "MPI_LONG_INT"
-    elseif datatype == MPI.MPI_SHORT_INT
+    elseif datatype == MPI.SHORT_INT
         IR.inject!(
             "MPI_SHORT_INT", "llvm.mlir.global constant @MPI_SHORT_INT() : !llvm.ptr"
         )
         return "MPI_SHORT_INT"
-    elseif datatype == MPI.MPI_UB
+    elseif datatype == MPI.UB
         IR.inject!("MPI_UB", "llvm.mlir.global constant @MPI_UB() : !llvm.ptr")
         return "MPI_UB"
-    elseif datatype == MPI.MPI_LB
+    elseif datatype == MPI.LB
         IR.inject!("MPI_LB", "llvm.mlir.global constant @MPI_LB() : !llvm.ptr")
         return "MPI_LB"
-    elseif datatype == MPI.MPI_WCHAR
+    elseif datatype == MPI.WCHAR
         IR.inject!("MPI_WCHAR", "llvm.mlir.global constant @MPI_WCHAR() : !llvm.ptr")
         return "MPI_WCHAR"
-    elseif datatype == MPI.MPI_LONG_LONG_INT
+    elseif datatype == MPI.LONG_LONG_INT
         IR.inject!(
             "MPI_LONG_LONG_INT",
             "llvm.mlir.global constant @MPI_LONG_LONG_INT() : !llvm.ptr",
         )
         return "MPI_LONG_LONG_INT"
-    elseif datatype == MPI.MPI_UNSIGNED_LONG_LONG
+    elseif datatype == MPI.UNSIGNED_LONG_LONG
         IR.inject!(
             "MPI_UNSIGNED_LONG_LONG",
             "llvm.mlir.global constant @MPI_UNSIGNED_LONG_LONG() : !llvm.ptr",
         )
         return "MPI_UNSIGNED_LONG_LONG"
-    elseif datatype == MPI.MPI_INT8_T
+    elseif datatype == MPI.INT8_T
         IR.inject!("MPI_INT8_T", "llvm.mlir.global constant @MPI_INT8_T() : !llvm.ptr")
         return "MPI_INT8_T"
-    elseif datatype == MPI.MPI_UINT8_T
+    elseif datatype == MPI.UINT8_T
         IR.inject!("MPI_UINT8_T", "llvm.mlir.global constant @MPI_UINT8_T() : !llvm.ptr")
         return "MPI_UINT8_T"
-    elseif datatype == MPI.MPI_INT16_T
+    elseif datatype == MPI.INT16_T
         IR.inject!("MPI_INT16_T", "llvm.mlir.global constant @MPI_INT16_T() : !llvm.ptr")
         return "MPI_INT16_T"
-    elseif datatype == MPI.MPI_UINT16_T
+    elseif datatype == MPI.UINT16_T
         IR.inject!("MPI_UINT16_T", "llvm.mlir.global constant @MPI_UINT16_T() : !llvm.ptr")
         return "MPI_UINT16_T"
-    elseif datatype == MPI.MPI_INT32_T
+    elseif datatype == MPI.INT32_T
         IR.inject!("MPI_INT32_T", "llvm.mlir.global constant @MPI_INT32_T() : !llvm.ptr")
         return "MPI_INT32_T"
-    elseif datatype == MPI.MPI_UINT32_T
+    elseif datatype == MPI.UINT32_T
         IR.inject!("MPI_UINT32_T", "llvm.mlir.global constant @MPI_UINT32_T() : !llvm.ptr")
         return "MPI_UINT32_T"
-    elseif datatype == MPI.MPI_INT64_T
+    elseif datatype == MPI.INT64_T
         IR.inject!("MPI_INT64_T", "llvm.mlir.global constant @MPI_INT64_T() : !llvm.ptr")
         return "MPI_INT64_T"
-    elseif datatype == MPI.MPI_UINT64_T
+    elseif datatype == MPI.UINT64_T
         IR.inject!("MPI_UINT64_T", "llvm.mlir.global constant @MPI_UINT64_T() : !llvm.ptr")
         return "MPI_UINT64_T"
-    elseif datatype == MPI.MPI_AINT
+    elseif datatype == MPI.AINT
         IR.inject!("MPI_AINT", "llvm.mlir.global constant @MPI_AINT() : !llvm.ptr")
         return "MPI_AINT"
-    elseif datatype == MPI.MPI_OFFSET
+    elseif datatype == MPI.OFFSET
         IR.inject!("MPI_OFFSET", "llvm.mlir.global constant @MPI_OFFSET() : !llvm.ptr")
         return "MPI_OFFSET"
-    elseif datatype == MPI.MPI_C_BOOL
+    elseif datatype == MPI.C_BOOL
         IR.inject!("MPI_C_BOOL", "llvm.mlir.global constant @MPI_C_BOOL() : !llvm.ptr")
         return "MPI_C_BOOL"
-    elseif datatype == MPI.MPI_C_FLOAT_COMPLEX
+    elseif datatype == MPI.C_FLOAT_COMPLEX
         IR.inject!(
             "MPI_C_FLOAT_COMPLEX",
             "llvm.mlir.global constant @MPI_C_FLOAT_COMPLEX() : !llvm.ptr",
         )
         return "MPI_C_FLOAT_COMPLEX"
-    elseif datatype == MPI.MPI_C_DOUBLE_COMPLEX
+    elseif datatype == MPI.C_DOUBLE_COMPLEX
         IR.inject!(
             "MPI_C_DOUBLE_COMPLEX",
             "llvm.mlir.global constant @MPI_C_DOUBLE_COMPLEX() : !llvm.ptr",
         )
         return "MPI_C_DOUBLE_COMPLEX"
-    elseif datatype == MPI.MPI_COUNT
+    elseif datatype == MPI.COUNT
         IR.inject!("MPI_COUNT", "llvm.mlir.global constant @MPI_COUNT() : !llvm.ptr")
         return "MPI_COUNT"
     else
@@ -306,7 +306,7 @@ function send(
 )
     T = Reactant.unwrapped_eltype(buf)
     mpi_datatype = convert_julia_type_to_mpi_datatype(T)
-    mpi_datatype_name = inject_mpi_datatype(mpi_datatype)
+    mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
 
     sym_name = "enzymexla_wrapper_MPI_Send_$(mpi_datatype_name)"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
@@ -475,16 +475,16 @@ function inject_mpi_op!(op)
     end
 end
 
-function allreduce(
+function allreduce!(
     op, sendbuf, recvbuf; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
 )
     @assert Reactant.unwrapped_eltype(sendbuf) == Reactant.unwrapped_eltype(recvbuf)
-    @assert length(sendbuf) == recvbuf
+    @assert length(sendbuf) == length(recvbuf)
 
-    op_name = inject_mpi_op(op)
+    op_name = inject_mpi_op!(op)
     T = Reactant.unwrapped_eltype(sendbuf)
     mpi_datatype = convert_julia_type_to_mpi_datatype(T)
-    mpi_datatype_name = inject_mpi_datatype(mpi_datatype)
+    mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
 
     IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
     IR.inject!(
@@ -492,7 +492,7 @@ function allreduce(
         "llvm.func @MPI_Allreduce(!llvm.ptr, !llvm.ptr, i32, !llvm.ptr, !llvm.ptr, !llvm.ptr) -> i32",
     )
 
-    sym_name = "@enzymexla_wrapper_MPI_Allreduce_$(op_name)_$(mpi_datatype_name)"
+    sym_name = "enzymexla_wrapper_MPI_Allreduce_$(op_name)_$(mpi_datatype_name)"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
     # TODO is okay to use `i32`? how can we use word-size value or map C's `int` to MLIR? can we use `index`?
@@ -509,19 +509,29 @@ function allreduce(
     """)
     #! format: on
 
-    count = Ops.constant(fill(length(sendbuf)))
+    count = Reactant.Ops.constant(fill(length(sendbuf)))
+
+    output_operand_aliases = IR.Attribute([
+        IR.Attribute(
+            MLIR.API.stablehloOutputOperandAliasGet(
+                MLIR.IR.context(), 0, C_NULL, 1, 0, C_NULL
+            ),
+        ),
+    ])
 
     res = IR.result(
         enzymexla.jit_call(
             IR.Value[sendbuf.mlir_data, recvbuf.mlir_data, count.mlir_data];
             fn=sym_attr,
-            result_0=IR.Type[],
+            result_0=IR.Type[Reactant.Ops.mlir_type(typeof(recvbuf), size(recvbuf))],
             location,
-            output_operand_aliases=IR.Attribute(IR.Attribute[]),
+            output_operand_aliases,
         ),
     )
 
-    return TracedRNumber{T}((), res)
+    recvbuf.mlir_data = res
+
+    return recvbuf
 end
 
 end # module
