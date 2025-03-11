@@ -938,3 +938,13 @@ end
         rv
     )
 end
+
+@testset "mapreduce with init" begin
+    x = reshape(collect(Float32, 1:12), 3, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    init = 3.0
+    init_ra = Reactant.to_rarray(init; track_numbers=Number)
+
+    @test @jit(sum(x_ra; init=init_ra, dims=2)) ≈ sum(x; init=init, dims=2)
+end
