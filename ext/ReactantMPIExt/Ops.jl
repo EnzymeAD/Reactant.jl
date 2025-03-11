@@ -369,20 +369,66 @@ function isend(
 end
 
 function recv!(
-    ref::TracedRArray,
+    recvbuf::TracedRArray,
     tag::TracedRNumber,
     src::TracedRNumber;
     location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
 )
-    # return mpi.recv(ref.mlir_data, tag.mlir_data, src.mlir_data; location)
+    T = Reactant.unwrapped_eltype(recvbuf)
+    mpi_datatype = convert_julia_type_to_mpi_datatype(T)
+    mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
 
-    # TODO emit constant for size and datatype, and pass as args
-    inputs = IR.Value[ref.mlir_data, tag.mlir_data, src.mlir_data]
-    sym = IR.FlatSymbolRefAttribute("enzymexla_wrapper_MPI_Recv")
-    rettype = IR.Type[]
+    sym_name = "enzymexla_wrapper_MPI_Recv_$(mpi_datatype_name)"
+    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    IR.result(enzymexla.jit_call(inputs; fn=sym, result_0=rettype, location))
-    return ref
+    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+    IR.inject!(
+        "MPI_STATUS_IGNORE", "llvm.mlir.global constant @MPI_STATUS_IGNORE() : !llvm.ptr"
+    )
+    IR.inject!(
+        "MPI_Recv",
+        "llvm.func @MPI_Recv(!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> i32",
+    )
+
+    #! format: off
+    IR.inject!(sym_name, """
+        func.func @$sym_name(%buf : !llvm.ptr, %count_ptr : !llvm.ptr, %source_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr) -> () {
+            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+            %datatype = llvm.mlir.addressof @$mpi_datatype_name : !llvm.ptr
+            %status = llvm.mlir.addressof @MPI_STATUS_IGNORE : !llvm.ptr
+            %count = llvm.load %count_ptr : !llvm.ptr -> i32
+            %source = llvm.load %source_ptr : !llvm.ptr -> i32
+            %tag = llvm.load %tag_ptr : !llvm.ptr -> i32
+            %errcode = llvm.call @MPI_Recv(%buf, %count, %datatype, %source, %tag, %comm, %status) : (!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> (i32)
+            func.return
+        }
+    """)
+    #! format: on
+
+    count = Reactant.Ops.constant(fill(length(recvbuf)))
+
+    output_operand_aliases = IR.Attribute([
+        IR.Attribute(
+            MLIR.API.stablehloOutputOperandAliasGet(
+                MLIR.IR.context(), 0, C_NULL, 0, 0, C_NULL
+            ),
+        ),
+    ])
+
+    res = IR.result(
+        enzymexla.jit_call(
+            IR.Value[recvbuf.mlir_data, count.mlir_data, src.mlir_data, tag.mlir_data];
+            fn=sym_attr,
+            result_0=[mlir_type(recvbuf)],
+            output_operand_aliases,
+            location,
+        ),
+        1,
+    )
+
+    recvbuf.mlir_data = res
+
+    return recvbuf
 end
 
 # TODO need c-function for creating MLIR `mpi.request` type?
