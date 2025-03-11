@@ -120,11 +120,25 @@ end
 end
 
 @noinline function constant(
+    x::AbstractArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
+) where {T,N}
+    return constant(collect(x); location)
+end
+
+@noinline function constant(x::Reactant.AbstractConcreteArray; kwargs...)
+    return constant(Base.convert(Array, x); kwargs...)
+end
+
+@noinline function constant(
     x::T; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T<:Number}
     x isa TracedRNumber && return x
     res = fill(x; location)
     return TracedRNumber{T}((), res.mlir_data)
+end
+
+@noinline function constant(x::Reactant.AbstractConcreteNumber{T}; kwargs...) where {T}
+    return constant(Base.convert(T, x); kwargs...)
 end
 
 function fill(
