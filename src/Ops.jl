@@ -374,7 +374,7 @@ end
 end
 
 # shape ops
-function reshape(x::TracedRArray, dims...; kwargs...)
+function reshape(x::TracedRArray, dims::Integer...; kwargs...)
     return reshape(x, collect(dims); kwargs...)
 end
 
@@ -2416,11 +2416,23 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
 """
 @noinline function reduce(
     x::TracedRArray{T},
-    init_values::TracedRNumber{T},
+    init_values::Union{TracedRNumber{T}, Nothing},
     dimensions::Vector{Int},
     fn::Function;
     location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
 ) where {T}
+    if init_values === nothing
+        if fn === min
+            init = typemax(T)
+        elseif fn === max
+            init = typemin(T)
+        else
+            init = Base.reduce_empty(Base.BottomRF(fn), T)
+        end
+
+        init_values = Reactant.TracedUtils.promote_to(TracedRNumber{T}, init)
+    end
+
     reduced_shape = Tuple(deleteat!(collect(size(x)), dimensions))
 
     result_type = mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)
@@ -2441,14 +2453,8 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
             return_dialect=:stablehlo,
         ).f
     @assert MLIR.IR.nregions(func) == 1
-    fn_name = String(
-        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
-    )
-    ftype_attr = MLIR.IR.attr(func, "function_type")
-    ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(T)) error (
-        "$fn return type is not tensor<i1>"
-    )
+    ftype = MLIR.IR.Type(MLIR.IR.attr(func, "function_type"))
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(T)) "$fn return type is not tensor<i1>"
     fn = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(fn, MLIR.IR.region(func, 1))
     MLIR.IR.rmfromparent!(func)
