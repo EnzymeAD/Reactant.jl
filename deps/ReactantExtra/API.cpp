@@ -227,31 +227,26 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
       unwrap(loc), cast<ComplexType>(unwrap(type)), real, imag));
 }
 
-extern "C" bool mlirOperationInject(MlirContext ctx,
-  MlirBlock block,
-  MlirStringRef code,
-  MlirLocation location,
-  bool verify_after_parse
-) {
+extern "C" bool mlirOperationInject(MlirContext ctx, MlirBlock block,
+                                    MlirStringRef code, MlirLocation location,
+                                    bool verify_after_parse) {
   ParserConfig config(unwrap(ctx), verify_after_parse);
   if (failed(parseSourceString(unwrap(code), unwrap(block), config)))
     return false;
   return true;
 }
 
-extern "C" MlirOperation mlirOperationParse(MlirContext ctx,
-  MlirBlock block,
-  MlirStringRef code,
-  MlirLocation location,
-  bool verify_after_parse
-) {
+extern "C" MlirOperation mlirOperationParse(MlirContext ctx, MlirBlock block,
+                                            MlirStringRef code,
+                                            MlirLocation location,
+                                            bool verify_after_parse) {
   ParserConfig config(unwrap(ctx), verify_after_parse);
   if (failed(parseSourceString(unwrap(code), unwrap(block), config)))
     return MlirOperation{nullptr};
   return MlirOperation{
-    mlir::detail::constructContainerOpForParserIfNecessary<Operation*>(
-      unwrap(block), config.getContext(), unwrap(location)).release()
-    };
+      mlir::detail::constructContainerOpForParserIfNecessary<Operation *>(
+          unwrap(block), config.getContext(), unwrap(location))
+          .release()};
 }
 
 // TODO mlirComplexAttrGetnValue
