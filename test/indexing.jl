@@ -345,3 +345,11 @@ end
 
     @test @jit(fn(x_ra, idx)) ≈ fn(x, idx)
 end
+
+@testset "ConcreteRArray view fill!" begin
+    x = Reactant.to_rarray(rand(2, 3))
+    x_view = view(x, 1:2, 1:2)
+
+    fill!(x_view, 0.0)
+    @test all(Array(x)[1:2, 1:2] .== 0)
+end
