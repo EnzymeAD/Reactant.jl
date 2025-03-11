@@ -75,22 +75,34 @@ function MPI.Isend(
     return req
 end
 
+function MPI.Recv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm)
+    tag = Reactant.Ops.constant(tag)
+    source = Reactant.Ops.constant(source)
+    return MPI.Recv!(buf, source, tag, comm)
+end
+
+function MPI.Recv!(
+    recvbuf::TracedRArray,
+    source::Integer,
+    tag::Integer,
+    comm::MPI.Comm,
+    ::Type{MPI.API.MPI_Status},
+)
+    return MPI.Recv!(recvbuf, source, tag, comm)
+end
+
+function MPI.Recv!(
+    recvbuf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm, ::Nothing
+)
+    return MPI.Recv!(recvbuf, source, tag, comm)
+end
+
 # TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Recv!(
-    recvbuf::TracedRArray, source::Number, tag::Number, comm::MPI.Comm, status
+    recvbuf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    @assert isnothing(status) "Status not supported yet"
-
-    tag = if !(tag isa TracedRNumber)
-        Reactant.Ops.constant(tag)
-    end
-
-    source = if !(source isa TracedRNumber)
-        Reactant.Ops.constant(source)
-    end
-
-    return Ops.recv(recvbuf, tag, source)
+    return Ops.recv!(recvbuf, tag, source)
 end
 
 # TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
