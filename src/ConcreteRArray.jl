@@ -442,7 +442,7 @@ function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
     return a
 end
 
-function Base.fill!(x::Union{AnyConcreteIFRTArray, AnyConcretePJRTArray}, val)
+function Base.fill!(x::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, val)
     idxs = ntuple(Returns(Colon()), ndims(x))
     fn = compile(mysetindex!, (x, val, idxs...))
     fn(x, val, idxs...)
