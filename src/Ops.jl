@@ -2377,7 +2377,7 @@ end
         x::TracedRArray{T},
         init_values::TracedRNumber{T},
         dimensions::Vector{Int},
-        fn::Function,
+        fn::Function;
         location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
     )
 
@@ -2409,7 +2409,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     - **CPU version & Julia's `reduce`**:
       - Reduce along dimension 1 → `[(15) (21); (18) (24)]`
       - Reduce along dimension 3 → `[(33 + 2)  (45 + 2)]` → `[35 47]`
-    
+
     - **GPU version**:
       - Reduce along dimension 1 → `[(15 + 2) (21 + 2); (18 + 2) (24 + 2)]`
       - Reduce along dimension 3 → `[37 49]`
@@ -2418,7 +2418,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     x::TracedRArray{T},
     init_values::TracedRNumber{T},
     dimensions::Vector{Int},
-    fn::Function,
+    fn::Function;
     location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
 ) where {T}
     reduced_shape = Tuple(deleteat!(collect(size(x)), dimensions))
