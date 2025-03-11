@@ -449,8 +449,13 @@ function Base.fill!(x::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, val)
     return x
 end
 
+function mymapreducedim!(f, op, R, A)
+    Base.mapreducedim!(f, op, R, A)
+    return nothing
+end
+
 function Base.mapreducedim!(f, op, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::Union{Base.AbstractBroadcasted, AbstractArray})
-    fn = compile(Base.mapreducedim!, (f, op, R, A))
+    fn = compile(mymapreducedim!, (f, op, R, A))
     fn(f, op, R, A)
     return R
 end
