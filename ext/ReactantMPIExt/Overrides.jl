@@ -18,12 +18,12 @@ end
 
 @reactant_overlay @noinline function MPI.Comm_size(comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.comm_size(comm)
+    return Ops.comm_size()
 end
 
 @reactant_overlay @noinline function MPI.Barrier(comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.barrier(comm)
+    return Ops.barrier()
 end
 
 # TODO status not supported yet
