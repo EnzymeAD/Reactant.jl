@@ -374,7 +374,6 @@ end
 
     dest_ra = @view parent_ra[1:2, 1:1]
     Base.mapreducedim!(sin, +, dest_ra, x_ra)
-    
     dest = @view parent[1:2, 1:1]
     Base.mapreducedim!(sin, +, dest, x)
 
