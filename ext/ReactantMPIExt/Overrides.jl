@@ -115,3 +115,8 @@ function MPI.Irecv!(
     req.mlir_data = gen_req.mlir_data
     return req
 end
+
+function MPI.Allreduce!(sendbuf::TracedRArray, recvbuf::TracedRArray, op, comm::MPI.Comm)
+    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
+    return Ops.allreduce!(op, sendbuf, recvbuf)
+end
