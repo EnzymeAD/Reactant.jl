@@ -24,19 +24,19 @@ function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LIN
 
     # dirty hack: since MPI constants are i32, we pass the info as the pointer and then bitcast
     # DONT LOAD FROM THEM!
-    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : i32")
-    IR.inject!("MPI_Comm_rank", "llvm.func @MPI_Comm_rank(i32, !llvm.ptr) -> i32")
+    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+    IR.inject!("MPI_Comm_rank", "llvm.func @MPI_Comm_rank(!llvm.ptr, !llvm.ptr) -> i32")
 
     #! format: off
     IR.inject!(sym_name, """
         func.func @$sym_name(%rank_ptr : !llvm.ptr) -> () {
-            %comm_ptr = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-            %comm = llvm.ptrtoint %comm_ptr : !llvm.ptr to i32
-            %status = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
+            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+            %errcode = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (!llvm.ptr, !llvm.ptr) -> (i32)
             func.return
         }
     """)
     #! format: on
+
     rank_placeholder = Reactant.Ops.constant(fill(Cint(-1)))
     output_operand_aliases = IR.Attribute([
         IR.Attribute(
@@ -58,19 +58,21 @@ function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LIN
     return TracedRNumber{Cint}((), res)
 end
 
-function comm_size(comm; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__))
+function comm_size(; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__))
     sym_name = "enzymexla_wrapper_MPI_Comm_size"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
+    # dirty hack: since MPI constants are i32, we pass the info as the pointer and then bitcast
+    # DONT LOAD FROM THEM!
+    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+    IR.inject!("MPI_Comm_size", "llvm.func @MPI_Comm_size(!llvm.ptr, !llvm.ptr) -> i32")
+
     #! format: off
-    try_inject_to_top_block!(sym_name, """
-        module {
-            llvm.func @MPI_Comm_size(i32, !llvm.ptr) -> i32
-            func.func @$sym_name(%comm_ptr : !llvm.ptr, %size_ptr : !llvm.ptr) -> () {
-                %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
-                %status = llvm.call @MPI_Comm_size(%comm, %rank_ptr) : (i32, !llvm.ptr) -> (i32)
-                func.return
-            }
+    IR.inject!(sym_name, """
+        func.func @$sym_name(%size_ptr : !llvm.ptr) -> () {
+            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+            %errcode = llvm.call @MPI_Comm_rank(%comm, %size_ptr) : (!llvm.ptr, !llvm.ptr) -> (i32)
+            func.return
         }
     """)
     #! format: on
@@ -89,25 +91,27 @@ function comm_size(comm; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @_
     return TracedRNumber{Cint}((), res)
 end
 
-function barrier(comm; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
+function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
     sym_name = "enzymexla_wrapper_MPI_Barrier"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    tensor_int_type = IR.TensorType(Int[], IR.Type(Cint))
-    signature = IR.Type[tensor_int_type]
+    # dirty hack: since MPI constants are i32, we pass the info as the pointer and then bitcast
+    # DONT LOAD FROM THEM!
+    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+    IR.inject!("MPI_Barrier", "llvm.func @MPI_Barrier(!llvm.ptr) -> i32")
 
     #! format: off
-    try_inject_to_top_block!(sym_name, """
-        module {
-            llvm.func @MPI_Barrier(i32) -> i32
-            func.func @$sym_name(%comm_ptr : !llvm.ptr) -> () {
-                %comm = llvm.load %comm_ptr : !llvm.ptr -> i32
-                %status = llvm.call @MPI_Barrier(%comm) : (i32) -> (i32)
-                func.return
-            }
+    IR.inject!(sym_name, """
+        func.func @$sym_name() -> () {
+            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+            %status = llvm.call @MPI_Barrier(%comm) : (!llvm.ptr) -> (i32)
+            func.return
         }
     """)
     #! format: on
+
+    tensor_int_type = IR.TensorType(Int[], IR.Type(Cint))
+    signature = IR.Type[tensor_int_type]
 
     comm = Reactant.Ops.constant(Base.unsafe_convert(Cint, comm))
     inputs = [comm.mlir_data]
@@ -192,12 +196,33 @@ end
 function wait(
     req::TracedRequest; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
 )
-    # return mpi.wait(req.mlir_data; location)
-    inputs = IR.Value[req.mlir_data]
-    sym = IR.FlatSymbolRefAttribute("enzymexla_wrapper_MPI_Wait")
-    rettype = IR.Type[]
+    sym_name = "enzymexla_wrapper_MPI_Wait"
+    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    return IR.result(enzymexla.jit_call(inputs; fn=sym, result_0=rettype, location))
+    # dirty hack: since MPI constants are i32, we pass the info as the pointer and then bitcast
+    # DONT LOAD FROM THEM!
+    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+    IR.inject!("MPI_Wait", "llvm.func @MPI_Wait(!llvm.ptr, !llvm.ptr) -> i32")
+
+    #! format: off
+    IR.inject!(sym_name, """
+    func.func @$sym_name(%req : !llvm.ptr) -> () {
+        %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+        %errcode = llvm.call @MPI_Wait(%req, %comm) : (!llvm.ptr, !llvm.ptr) -> (i32)
+        func.return
+        }
+    """)
+    #! format: on
+
+    enzymexla.jit_call(
+        IR.Value[req.mlir_data];
+        fn=sym_attr,
+        result_0=IR.Type[],
+        location,
+        output_operand_aliases=IR.Attribute(IR.Attribute[]),
+    )
+
+    return nothing
 end
 
 end # module
