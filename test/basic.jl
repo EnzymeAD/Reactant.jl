@@ -946,5 +946,7 @@ end
     init = 3.0
     init_ra = Reactant.to_rarray(init; track_numbers=Number)
 
-    @test @jit(sum(x_ra; init=init_ra, dims=2)) ≈ sum(x; init=init, dims=2)
+    fn(x, init; kwargs...) = sum(x; init, kwargs...)
+
+    @test @jit(fn(x_ra, init_ra; dims=2)) ≈ fn(x, init; dims=2)
 end
