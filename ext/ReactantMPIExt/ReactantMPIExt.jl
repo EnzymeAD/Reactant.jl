@@ -213,7 +213,8 @@ function __init__()
         if value isa Base.RefValue
             value = value[] # TODO we need to convert this to Ptr{Cvoid} because that's what the symbol table stores
         end
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, value::Cint)::Cvoid
+        value = convert(Int, value)
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, value::Int)::Cvoid
     end
 end
 
