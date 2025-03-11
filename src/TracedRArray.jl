@@ -564,7 +564,7 @@ end
 function Base.mapreducedim!(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(R::TracedRArray),
+    @nospecialize(R::AnyTracedRArray),
     A::Base.AbstractArrayOrBroadcasted,
 )
     @assert length(size(R)) == length(size(A))
@@ -574,7 +574,8 @@ function Base.mapreducedim!(
         return i
     end
     tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
-    set_mlir_data!(R, get_mlir_data(tmp))
+    # set_mlir_data!(R, get_mlir_data(tmp))
+    R .= op.(R, tmp) # match native Julia's behavior
     return R
 end
 
