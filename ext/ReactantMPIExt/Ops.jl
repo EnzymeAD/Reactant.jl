@@ -406,10 +406,10 @@ function wait(
 
     #! format: off
     IR.inject!(sym_name, """
-    func.func @$sym_name(%req : !llvm.ptr) -> () {
-        %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-        %errcode = llvm.call @MPI_Wait(%req, %comm) : (!llvm.ptr, !llvm.ptr) -> (i32)
-        func.return
+        func.func @$sym_name(%req : !llvm.ptr) -> () {
+            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+            %errcode = llvm.call @MPI_Wait(%req, %comm) : (!llvm.ptr, !llvm.ptr) -> (i32)
+            func.return
         }
     """)
     #! format: on
