@@ -4,7 +4,7 @@ using Reactant: MLIR
 using Reactant.MLIR: IR
 using Reactant.MLIR.IR: @mlir_str
 using Reactant.MLIR.Dialects: mpi, func, llvm, enzymexla
-using Reactant.Ops: mlir_stacktrace
+using Reactant.Ops: mlir_stacktrace, mlir_type
 using ..ReactantMPIExt: TracedRequest
 using MPI: MPI
 
@@ -328,7 +328,7 @@ function send(
             %count = llvm.load %count_ptr : !llvm.ptr -> i32
             %dest = llvm.load %dest_ptr : !llvm.ptr -> i32
             %tag = llvm.load %tag_ptr : !llvm.ptr -> i32
-            %status = llvm.call @MPI_Send(%buf, %count, %datatype, %dest, %tag, %comm) : (!llvm.ptr) -> (i32)
+            %errcode = llvm.call @MPI_Send(%buf, %count, %datatype, %dest, %tag, %comm) : (!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr) -> (i32)
             func.return
         }
     """)
@@ -336,12 +336,15 @@ function send(
 
     count = Reactant.Ops.constant(length(buf))
 
-    return enzymexla.jit_call(
+    enzymexla.jit_call(
         IR.Value[buf.mlir_data, count.mlir_data, tag.mlir_data, dest.mlir_data];
         fn=sym_attr,
-        result_0=IR.Type[],
+        result_0=IR.Type[mlir_type(buf), mlir_type(count), mlir_type(tag), mlir_type(dest)],
+        output_operand_aliases=IR.Attribute(IR.Attribute[]),
         location,
     )
+
+    return nothing
 end
 
 # TODO need c-function for creating MLIR `mpi.request` type?
