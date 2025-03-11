@@ -67,22 +67,29 @@ function comm_size(; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LIN
     IR.inject!(sym_name, """
         func.func @$sym_name(%size_ptr : !llvm.ptr) -> () {
             %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-            %errcode = llvm.call @MPI_Comm_rank(%comm, %size_ptr) : (!llvm.ptr, !llvm.ptr) -> (i32)
+            %errcode = llvm.call @MPI_Comm_size(%comm, %size_ptr) : (!llvm.ptr, !llvm.ptr) -> (i32)
             func.return
         }
     """)
     #! format: on
 
-    comm = Reactant.Ops.constant(Base.unsafe_convert(Cint, comm))
-    value_out = Reactant.Ops.constant(fill(Cint(-1)))
-    inputs = IR.Value[comm.mlir_data, value_out.mlir_data]
+    size_placeholder = Reactant.Ops.constant(fill(Cint(-1)))
+    output_operand_aliases = IR.Attribute([
+        IR.Attribute(
+            MLIR.API.stablehloOutputOperandAliasGet(
+                MLIR.IR.context(), 0, C_NULL, 0, 0, C_NULL
+            ),
+        ),
+    ])
 
-    tensor_int_type = IR.TensorType(Int[], IR.Type(Cint))
-    signature = IR.Type[tensor_int_type, tensor_int_type]
-
-    # TODO output_operand_aliases
     res = IR.result(
-        enzymexla.jit_call(inputs; fn=sym_attr, result_0=signature, location), 2
+        enzymexla.jit_call(
+            IR.Value[size_placeholder.mlir_data];
+            fn=sym_attr,
+            result_0=[IR.TensorType(Int[], IR.Type(Cint))],
+            output_operand_aliases,
+            location,
+        ),
     )
     return TracedRNumber{Cint}((), res)
 end
