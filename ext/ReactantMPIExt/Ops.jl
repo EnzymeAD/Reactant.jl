@@ -176,36 +176,36 @@ function inject_mpi_datatype!(datatype)
     elseif datatype == MPI.UNSIGNED
         IR.inject!("MPI_UNSIGNED", "llvm.mlir.global constant @MPI_UNSIGNED() : !llvm.ptr")
         return "MPI_UNSIGNED"
-    elseif datatype == MPI.FLOAT_INT
-        IR.inject!(
-            "MPI_FLOAT_INT", "llvm.mlir.global constant @MPI_FLOAT_INT() : !llvm.ptr"
-        )
-        return "MPI_FLOAT_INT"
-    elseif datatype == MPI.DOUBLE_INT
-        IR.inject!(
-            "MPI_DOUBLE_INT", "llvm.mlir.global constant @MPI_DOUBLE_INT() : !llvm.ptr"
-        )
-        return "MPI_DOUBLE_INT"
-    elseif datatype == MPI.LONG_DOUBLE_INT
-        IR.inject!(
-            "MPI_LONG_DOUBLE_INT",
-            "llvm.mlir.global constant @MPI_LONG_DOUBLE_INT() : !llvm.ptr",
-        )
-        return "MPI_LONG_DOUBLE_INT"
-    elseif datatype == MPI.LONG_INT
-        IR.inject!("MPI_LONG_INT", "llvm.mlir.global constant @MPI_LONG_INT() : !llvm.ptr")
-        return "MPI_LONG_INT"
-    elseif datatype == MPI.SHORT_INT
-        IR.inject!(
-            "MPI_SHORT_INT", "llvm.mlir.global constant @MPI_SHORT_INT() : !llvm.ptr"
-        )
-        return "MPI_SHORT_INT"
-    elseif datatype == MPI.UB
-        IR.inject!("MPI_UB", "llvm.mlir.global constant @MPI_UB() : !llvm.ptr")
-        return "MPI_UB"
-    elseif datatype == MPI.LB
-        IR.inject!("MPI_LB", "llvm.mlir.global constant @MPI_LB() : !llvm.ptr")
-        return "MPI_LB"
+        # elseif datatype == MPI.FLOAT_INT
+        #     IR.inject!(
+        #         "MPI_FLOAT_INT", "llvm.mlir.global constant @MPI_FLOAT_INT() : !llvm.ptr"
+        #     )
+        #     return "MPI_FLOAT_INT"
+        # elseif datatype == MPI.DOUBLE_INT
+        #     IR.inject!(
+        #         "MPI_DOUBLE_INT", "llvm.mlir.global constant @MPI_DOUBLE_INT() : !llvm.ptr"
+        #     )
+        #     return "MPI_DOUBLE_INT"
+        # elseif datatype == MPI.LONG_DOUBLE_INT
+        #     IR.inject!(
+        #         "MPI_LONG_DOUBLE_INT",
+        #         "llvm.mlir.global constant @MPI_LONG_DOUBLE_INT() : !llvm.ptr",
+        #     )
+        #     return "MPI_LONG_DOUBLE_INT"
+        # elseif datatype == MPI.LONG_INT
+        #     IR.inject!("MPI_LONG_INT", "llvm.mlir.global constant @MPI_LONG_INT() : !llvm.ptr")
+        #     return "MPI_LONG_INT"
+        # elseif datatype == MPI.SHORT_INT
+        #     IR.inject!(
+        #         "MPI_SHORT_INT", "llvm.mlir.global constant @MPI_SHORT_INT() : !llvm.ptr"
+        #     )
+        #     return "MPI_SHORT_INT"
+        # elseif datatype == MPI.UB
+        #     IR.inject!("MPI_UB", "llvm.mlir.global constant @MPI_UB() : !llvm.ptr")
+        #     return "MPI_UB"
+        # elseif datatype == MPI.LB
+        #     IR.inject!("MPI_LB", "llvm.mlir.global constant @MPI_LB() : !llvm.ptr")
+        #     return "MPI_LB"
     elseif datatype == MPI.WCHAR
         IR.inject!("MPI_WCHAR", "llvm.mlir.global constant @MPI_WCHAR() : !llvm.ptr")
         return "MPI_WCHAR"
