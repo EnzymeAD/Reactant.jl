@@ -22,8 +22,6 @@ function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LIN
     sym_name = "enzymexla_wrapper_MPI_Comm_rank"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    # dirty hack: since MPI constants are i32, we pass the info as the pointer and then bitcast
-    # DONT LOAD FROM THEM!
     IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
     IR.inject!("MPI_Comm_rank", "llvm.func @MPI_Comm_rank(!llvm.ptr, !llvm.ptr) -> i32")
 
@@ -62,8 +60,6 @@ function comm_size(; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LIN
     sym_name = "enzymexla_wrapper_MPI_Comm_size"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    # dirty hack: since MPI constants are i32, we pass the info as the pointer and then bitcast
-    # DONT LOAD FROM THEM!
     IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
     IR.inject!("MPI_Comm_size", "llvm.func @MPI_Comm_size(!llvm.ptr, !llvm.ptr) -> i32")
 
@@ -95,8 +91,6 @@ function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__)
     sym_name = "enzymexla_wrapper_MPI_Barrier"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    # dirty hack: since MPI constants are i32, we pass the info as the pointer and then bitcast
-    # DONT LOAD FROM THEM!
     IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
     IR.inject!("MPI_Barrier", "llvm.func @MPI_Barrier(!llvm.ptr) -> i32")
 
@@ -407,8 +401,6 @@ function wait(
     sym_name = "enzymexla_wrapper_MPI_Wait"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    # dirty hack: since MPI constants are i32, we pass the info as the pointer and then bitcast
-    # DONT LOAD FROM THEM!
     IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
     IR.inject!("MPI_Wait", "llvm.func @MPI_Wait(!llvm.ptr, !llvm.ptr) -> i32")
 
