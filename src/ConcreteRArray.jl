@@ -441,3 +441,10 @@ function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
     fn(a, val, idxs...)
     return a
 end
+
+function Base.fill!(x::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, val)
+    idxs = ntuple(Returns(Colon()), ndims(x))
+    fn = compile(mysetindex!, (x, val, idxs...))
+    fn(x, val, idxs...)
+    return x
+end
