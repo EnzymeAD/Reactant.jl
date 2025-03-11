@@ -8,12 +8,14 @@ mutable struct Client <: XLA.AbstractClient
 end
 
 function XLA.free_client(client::Client)
+    @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
         @ccall MLIR.API.mlir_c.ifrt_FreeClient(client.client::Ptr{Cvoid})::Cvoid
     end
 end
 
 function XLA.num_devices(client::Client)
+    @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
         return @ccall MLIR.API.mlir_c.ifrt_client_device_count(
             client.client::Ptr{Cvoid}
@@ -22,6 +24,7 @@ function XLA.num_devices(client::Client)
 end
 
 function XLA.num_addressable_devices(client::Client)
+    @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
         return @ccall MLIR.API.mlir_c.ifrt_client_addressable_device_count(
             client.client::Ptr{Cvoid}
@@ -30,6 +33,7 @@ function XLA.num_addressable_devices(client::Client)
 end
 
 function XLA.process_index(client::Client)
+    @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
         return @ccall MLIR.API.mlir_c.ifrt_ClientProcessIndex(
             client.client::Ptr{Cvoid}
@@ -38,6 +42,7 @@ function XLA.process_index(client::Client)
 end
 
 function XLA.get_device(client::Client, idx)
+    @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
         return Device(
             @ccall MLIR.API.mlir_c.ifrt_client_lookup_device(
@@ -48,6 +53,7 @@ function XLA.get_device(client::Client, idx)
 end
 
 function XLA.get_addressable_device(client::Client, idx)
+    @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
         return Device(
             @ccall MLIR.API.mlir_c.ifrt_client_lookup_addressable_device(
@@ -58,6 +64,7 @@ function XLA.get_addressable_device(client::Client, idx)
 end
 
 function XLA.platform_name(client::Client)
+    @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
         str = @ccall MLIR.API.mlir_c.ifrt_ClientGetPlatformName(
             client.client::Ptr{Cvoid}
@@ -67,6 +74,7 @@ function XLA.platform_name(client::Client)
 end
 
 function XLA.devices(client::Client)
+    @assert client.client != C_NULL "Client is null"
     ndevices = Int(XLA.num_devices(client))
     devices = Ref{NTuple{ndevices,Ptr{Cvoid}}}()
     GC.@preserve client devices begin
@@ -78,6 +86,7 @@ function XLA.devices(client::Client)
 end
 
 function XLA.addressable_devices(client::Client)
+    @assert client.client != C_NULL "Client is null"
     naddressable_devices = Int(XLA.num_addressable_devices(client))
     addressable_devices = Ref{NTuple{naddressable_devices,Ptr{Cvoid}}}()
     GC.@preserve client addressable_devices begin

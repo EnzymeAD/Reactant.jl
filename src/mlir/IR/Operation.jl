@@ -274,7 +274,7 @@ This will return true if the dialect is loaded and the operation is registered w
 is_registered(opname; context::Context=context()) =
     API.mlirContextIsRegisteredOperation(context, opname)
 
-function create_operation(
+function create_operation_common(
     name,
     loc;
     results=nothing,
@@ -320,10 +320,20 @@ function create_operation(
         if mlirIsNull(op)
             error("Create Operation '$name' failed")
         end
-        res = Operation(op, true)
-        if _has_block()
-            push!(block(), res)
-        end
-        return res
+        return Operation(op, true)
     end
+end
+
+function create_operation(args...; kwargs...)
+    res = create_operation_common(args...; kwargs...)
+    if _has_block()
+        push!(block(), res)
+    end
+    return res
+end
+
+function create_operation_at_front(args...; kwargs...)
+    res = create_operation_common(args...; kwargs...)
+    Base.pushfirst!(block(), res)
+    return res
 end

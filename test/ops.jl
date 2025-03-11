@@ -500,7 +500,7 @@ end
 end
 
 @testset "partition_id" begin
-    @test @jit(Ops.partition_id()) isa ConcretePJRTNumber{UInt32}
+    @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
 end
 
 @testset "popcnt" begin
@@ -540,7 +540,7 @@ end
 end
 
 @testset "replica_id" begin
-    @test @jit(Ops.partition_id()) isa ConcretePJRTNumber{UInt32}
+    @test @jit(Ops.partition_id()) isa ConcreteRNumber{UInt32}
 end
 
 @testset "reshape" begin
@@ -1070,4 +1070,53 @@ end
     y_reactant = Reactant.to_rarray(y)
 
     @test Reactant.@jit(f_multiple_hlo_calls(x_reactant, y_reactant))[1] ≈ (x .+ y) .* y
+end
+
+@testset "reduce" begin
+    # stablehlo reduce collapse the dimension so that (1,3) beomces (3, )
+    # while Julia reduce retains (1, 3). The test will fail despite elements being equal
+    function squeeze_dims(r)
+        return dropdims(r; dims=tuple(findall(size(r) .== 1)...))
+    end
+
+    # Floating point operation is not associative
+    A = rand(Int64, 3, 4, 5)
+    A_ra = Reactant.to_rarray(A)
+    init = 1
+    init_ra = @jit Reactant.Ops.constant(init)
+    dims = [2]
+    r_hlo = @jit Reactant.Ops.reduce(A_ra, init_ra, dims, *)
+    r = reduce(*, A; dims=dims, init=init)
+    @test r_hlo ≈ squeeze_dims(r)
+
+    dims = [1, 3]
+    init = 0
+    init_ra = @jit Reactant.Ops.constant(init)
+    r_hlo = @jit Reactant.Ops.reduce(A_ra, init_ra, dims, +)
+    r = reduce(+, A; dims=dims, init=init)
+    @test r_hlo ≈ squeeze_dims(r)
+
+    dims = [1, 2, 3]
+    r_hlo = @jit Reactant.Ops.reduce(A_ra, init_ra, dims, +)
+    r = reduce(+, A; dims=dims, init=init)
+    @test r_hlo ≈ squeeze_dims(r)
+end
+
+@testset "const dedup" begin
+    x = Reactant.to_rarray([11, 12, 13, 14])
+    function const_dedup(x)
+        c1 = [1, 2, 3, 4]
+        y1 = (x .+ c1)
+        c2 = [1, 2, 3, 4]
+        y2 = (x .+ c2)
+        c1[1] = 6
+        return y1 .* y2 .* c1
+    end
+
+    mod = @code_hlo optimize = false const_dedup(x)
+    hlo_ir = repr(mod)
+    csts = collect(x for x in eachsplit(hlo_ir, "\n") if occursin("stablehlo.constant", x))
+    @test length(csts) == 2
+    @test occursin("1, 2, 3, 4", csts[1])
+    @test occursin("6, 2, 3, 4", csts[2])
 end

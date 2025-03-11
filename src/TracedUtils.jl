@@ -162,6 +162,7 @@ function make_mlir_fn(
     construct_function_without_args::Bool=false,
     do_transpose=true,
     input_shardings=nothing, # This is not meant to be used by the user.
+    runtime=nothing,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -175,6 +176,7 @@ function make_mlir_fn(
             do_transpose,
             args_in_result,
             input_shardings,
+            runtime,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
@@ -192,6 +194,7 @@ function make_mlir_fn(
             (:args, i),
             concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
             toscalar,
+            runtime,
         )
     end
 
@@ -223,7 +226,9 @@ function make_mlir_fn(
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
     for (k, v) in seen_args
-        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber)
+        if (
+            k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
+        ) && hasfield(typeof(k), :sharding)
             if Reactant.Sharding.is_sharded(k)
                 Reactant.Ops.mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
@@ -244,6 +249,7 @@ function make_mlir_fn(
 
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
+    Ops.activate_constant_context!(fnbody)
 
     @assert MLIR.IR._has_block()
 
@@ -265,6 +271,7 @@ function make_mlir_fn(
         end
     finally
         MLIR.IR.deactivate!(fnbody)
+        Ops.deactivate_constant_context!(fnbody)
     end
 
     # check which arguments have been mutated
@@ -284,7 +291,8 @@ function make_mlir_fn(
         seen_results,
         result,
         (:result,),
-        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath,
+        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath;
+        runtime,
     )
 
     # marks buffers to be donated
@@ -293,7 +301,8 @@ function make_mlir_fn(
             seen_results,
             traced_args[i],
             concretein ? (:resargs, i) : (),
-            Reactant.TracedTrack,
+            Reactant.TracedTrack;
+            runtime,
         )
     end
 
