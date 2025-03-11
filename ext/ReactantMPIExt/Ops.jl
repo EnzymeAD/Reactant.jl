@@ -111,12 +111,10 @@ function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__)
     """)
     #! format: on
 
-    tensor_int_type = IR.TensorType(Int[], IR.Type(Cint))
-    signature = IR.Type[tensor_int_type]
-
-    comm = Reactant.Ops.constant(Base.unsafe_convert(Cint, comm))
-    inputs = [comm.mlir_data]
-    enzymexla.jit_call(inputs; fn=sym_attr, result_0=signature, location)
+    output_operand_aliases = IR.Attribute(IR.Attribute[])
+    enzymexla.jit_call(
+        IR.Value[]; fn=sym_attr, result_0=IR.Type[], output_operand_aliases, location
+    )
 
     return nothing
 end
