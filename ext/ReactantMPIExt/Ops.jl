@@ -299,21 +299,50 @@ function convert_julia_type_to_mpi_datatype(T::Type)
     end
 end
 
-# TODO emit wrapper if not found
 function send(
     buf::TracedRArray,
     tag::TracedRNumber,
     dest::TracedRNumber;
     location=mlir_stacktrace("mpi.send", @__FILE__, @__LINE__),
 )
-    # return mpi.send(buf.mlir_data, tag.mlir_data, dest.mlir_data; location)
+    T = Reactant.unwrapped_eltype(buf)
+    mpi_datatype = convert_julia_type_to_mpi_datatype(T)
+    mpi_datatype_name = inject_mpi_datatype(mpi_datatype)
+
+    sym_name = "enzymexla_wrapper_MPI_Send_$(mpi_datatype_name)"
+    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
     # TODO emit constant for size and datatype, and pass as args
-    inputs = IR.Value[buf.mlir_data, tag.mlir_data, dest.mlir_data]
-    sym = IR.FlatSymbolRefAttribute("enzymexla_wrapper_MPI_Send")
-    rettype = IR.Type[]
 
-    return enzymexla.jit_call(inputs; fn=sym, result_0=rettype, location)
+    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+    IR.inject!(
+        "MPI_Send",
+        "llvm.func @MPI_Send(!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr) -> i32",
+    )
+
+    #! format: off
+    # TODO
+    IR.inject!(sym_name, """
+        func.func @$sym_name(%buf : !llvm.ptr, %count_ptr : !llvm.ptr, %dest_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr) -> () {
+            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+            %datatype = llvm.mlir.addressof @$(mpi_datatype_name) : !llvm.ptr
+            %count = llvm.load %count_ptr : !llvm.ptr -> i32
+            %dest = llvm.load %dest_ptr : !llvm.ptr -> i32
+            %tag = llvm.load %tag_ptr : !llvm.ptr -> i32
+            %status = llvm.call @MPI_Send(%buf, %count, %datatype, %dest, %tag, %comm) : (!llvm.ptr) -> (i32)
+            func.return
+        }
+    """)
+    #! format: on
+
+    count = Reactant.Ops.constant(length(buf))
+
+    return enzymexla.jit_call(
+        IR.Value[buf.mlir_data, count.mlir_data, tag.mlir_data, dest.mlir_data];
+        fn=sym_attr,
+        result_0=IR.Type[],
+        location,
+    )
 end
 
 # TODO need c-function for creating MLIR `mpi.request` type?
