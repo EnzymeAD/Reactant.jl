@@ -495,29 +495,15 @@ function Base.mapreduce(
     rdims = dims == (:) ? collect(Int64, 1:N) : collect(Int64, dims)
 
     reduction_result = Ops.reduce(inp, init, rdims, op)
-    redT = unwrapped_eltype(reduction_result)
-
-    toonedims = Int[]
-    outdims = Int[]
-    for i in 1:N
-        tmp = if i ∈ rdims
-            1
-        else
-            sz = size(A, i)
-            push!(outdims, sz)
-            sz
-        end
-        push!(toonedims, tmp)
-    end
 
     if dims != (:)
-        reduction_result = Ops.reshape(reduction_result, toonedims...)
+        reduction_result = Ops.reshape(
+            reduction_result, Int64[i ∈ rdims ? 1 : size(A, i) for i in 1:N]
+        )
     else
-        if length(outdims) == 0
-            reduction_result = TracedRNumber{redT}((), reduction_result.mlir_data)
-        else
-            reduction_result = TracedRArray{redT,length(outdims)}((), red, (outdims...,))
-        end
+        reduction_result = TracedRNumber{unwrapped_eltype(reduction_result)}(
+            (), reduction_result.mlir_data
+        )
     end
 
     original_init === nothing && return reduction_result
