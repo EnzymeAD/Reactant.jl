@@ -2416,7 +2416,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
 """
 @noinline function reduce(
     x::TracedRArray{T},
-    init_values::Union{TracedRNumber{T}, Nothing},
+    init_values::Union{TracedRNumber{T},Nothing},
     dimensions::Vector{Int},
     fn::Function;
     location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
