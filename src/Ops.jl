@@ -2424,25 +2424,31 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     fn::Function;
     location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
 ) where {T}
+    elT = T
     if init_values === nothing
-        if fn === min
-            init = typemax(T)
-        elseif fn === max
-            init = typemin(T)
+        if fn === min || fn === Base.FastMath.min_fast
+            init = typemax(elT)
+        elseif fn === max || fn === Base.FastMath.max_fast
+            init = typemin(elT)
         else
-            init = Base.reduce_empty(Base.BottomRF(fn), T)
+            init = Base.reduce_empty(Base.BottomRF(fn), elT)
         end
 
-        init_values = Reactant.TracedUtils.promote_to(TracedRNumber{T}, init)
+        initT = unwrapped_eltype(typeof(init))
+        if initT != elT # Bool, etc. reductions
+            elT = promote_type(initT, elT)
+            x = elT.(x)
+        end
+        init_values = Reactant.TracedUtils.promote_to(TracedRNumber{elT}, init)
     end
 
     reduced_shape = Tuple(deleteat!(collect(size(x)), dimensions))
 
-    result_type = mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)
+    result_type = mlir_type(TracedRArray{elT,length(reduced_shape)}, reduced_shape)
 
     sample_inputs = [
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
+        Reactant.TracedUtils.promote_to(TracedRNumber{elT}, 0),
+        Reactant.TracedUtils.promote_to(TracedRNumber{elT}, 0),
     ]
 
     func =
@@ -2457,7 +2463,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
         ).f
     @assert MLIR.IR.nregions(func) == 1
     ftype = MLIR.IR.Type(MLIR.IR.attr(func, "function_type"))
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(T)) "$fn return type is not tensor<i1>"
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(elT)) "$fn return type is not tensor<i1>"
     fn = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(fn, MLIR.IR.region(func, 1))
     MLIR.IR.rmfromparent!(func)
@@ -2475,7 +2481,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
         ),
     )
 
-    return TracedRArray{T,length(reduced_shape)}((), res, reduced_shape)
+    return TracedRArray{elT,length(reduced_shape)}((), res, reduced_shape)
 end
 
 end # module Ops
