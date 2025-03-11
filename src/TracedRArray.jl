@@ -468,49 +468,29 @@ function Base.mapreduce(
     dims=:,
     init=nothing,
 ) where {T,N}
-    A = materialize_traced_array(A)
+    inp = broadcast(f, materialize_traced_array(A))
 
-    dims isa Int && (dims = [dims])
+    dims isa Number && (dims = (dims,))
 
-    op_in_T = Core.Compiler.return_type(f, Tuple{T})
-
-    original_init = init
-
-    if op === min
-        init = typemax(op_in_T)
-    elseif op === max
-        init = typemin(op_in_T)
-    else
-        init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
+    if init !== nothing && typeof(init) != unwrapped_eltype(inp)
+        inp = typeof(init).(inp)
     end
-
-    if typeof(init) != op_in_T
-        op_in_T = typeof(init)
-        A = typeof(init).(A)
-    end
-    init = TracedUtils.promote_to(TracedRNumber{T}, init)
-
-    inp = broadcast(f, A)
 
     rdims = dims == (:) ? collect(Int64, 1:N) : collect(Int64, dims)
 
-    reduction_result = Ops.reduce(inp, init, rdims, op)
+    reduction_result = Ops.reduce(inp, nothing, rdims, op)
 
-    if dims != (:)
-        reduction_result = Ops.reshape(
-            reduction_result, Int64[i ∈ rdims ? 1 : size(A, i) for i in 1:N]
-        )
+    reduction_result = if dims != (:)
+        Ops.reshape(reduction_result, Int64[i ∈ rdims ? 1 : size(A, i) for i in 1:N])
     else
-        reduction_result = TracedRNumber{unwrapped_eltype(reduction_result)}(
-            (), reduction_result.mlir_data
-        )
+        TracedRNumber{unwrapped_eltype(reduction_result)}((), reduction_result.mlir_data)
     end
 
-    original_init === nothing && return reduction_result
-    return broadcast(op, reduction_result, original_init)
+    init === nothing && return reduction_result
+    return broadcast(op, reduction_result, init)
 end
 
-function Base.mapreducedim!(
+function Base._mapreducedim!(
     @nospecialize(f),
     @nospecialize(op),
     @nospecialize(R::AnyTracedRArray),
@@ -522,9 +502,11 @@ function Base.mapreducedim!(
         @assert sR == 1
         return i
     end
+
+    isempty(A) && return R
+
     tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
-    # set_mlir_data!(R, get_mlir_data(tmp))
-    R .= op.(R, tmp) # match native Julia's behavior
+    R .= op.(R, tmp)
     return R
 end
 
