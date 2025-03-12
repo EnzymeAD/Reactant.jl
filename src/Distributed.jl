@@ -126,8 +126,10 @@ is_env_present(::OpenMPIORTEEnvDetector) = haskey(ENV, _ORTE_URI)
 is_env_present(::OpenMPIPMIXEnvDetector) = any(Base.Fix1(haskey, ENV), _PMIX_SERVER_URI)
 
 function get_coordinator_address(::OpenMPIORTEEnvDetector, ::Integer)
-    orte_uri = ENV[_ORTE_URI]
+    return _get_coordinator_address_from_orte_uri(ENV[_ORTE_URI])
+end
 
+function _get_coordinator_address_from_orte_uri(orte_uri)
     job_id = parse(Int, split(orte_uri, '.'; limit=2)[1])
     port = job_id % 2^12 + (65535 - 2^12 + 1)
 
@@ -143,10 +145,14 @@ function get_coordinator_address(::OpenMPIORTEEnvDetector, ::Integer)
 end
 
 function get_coordinator_address(::OpenMPIPMIXEnvDetector, ::Integer)
-    varname = findfirst(Base.Fix1(haskey, ENV), _PMIX_SERVER_URI)
-    pmix_uri = ENV[_PMIX_SERVER_URI[varname]]
+    return _get_coordinator_address_from_pmix_uri(
+        ENV[_PMIX_SERVER_URI[findfirst(Base.Fix1(haskey, ENV), _PMIX_SERVER_URI)]]
+    )
+end
 
-    job_id = parse(Int, split(split(pmix_uri, '-'; limit=3)[3], "@"; limit=2)[1])
+function _get_coordinator_address_from_pmix_uri(pmix_uri)
+    job_id_str = first(split(last(split(pmix_uri, '-'; limit=3)), "@"; limit=2))
+    job_id = parse(Int, job_id_str)
     port = job_id % 2^12 + (65535 - 2^12 + 1)
 
     launcher_ip_match = match(r"tcp4://(.+?):|tcp6://\[(.+?)\]", pmix_uri)
