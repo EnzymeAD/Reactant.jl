@@ -8,6 +8,7 @@ function initialize(;
     coordinator_address::Union{Nothing,String}=nothing,
     num_processes::Union{Nothing,Integer}=nothing,
     process_id::Union{Nothing,Integer}=nothing,
+    single_gpu_per_process::Bool=true,
     local_gpu_device_ids::Union{Nothing,Vector{Int}}=nothing,
     initialization_timeout_in_seconds::Integer=300,
     kwargs...,
@@ -20,6 +21,7 @@ function initialize(;
         process_id,
         local_gpu_device_ids,
         initialization_timeout_in_seconds,
+        single_gpu_per_process,
     )
 
     @debug "Detected Reactant distributed params" coordinator_address num_processes process_id local_gpu_device_ids
@@ -43,6 +45,8 @@ struct OpenMPIPMIXEnvDetector <: AbstractOMPIClusterEnvDetector end
 
 struct MPIEnvDetector <: AbstractClusterEnvDetector end
 
+struct SlurmEnvDetector <: AbstractClusterEnvDetector end
+
 # Based on https://github.com/jax-ml/jax/blob/b0117366686ab084d38ad2657d9a2ae3a581ca7e/jax/_src/clusters/cluster.py
 
 is_env_present(::AbstractClusterEnvDetector) = false
@@ -53,12 +57,18 @@ function get_process_id end
 function get_local_process_id end
 
 function auto_detect_unset_distributed_params(;
-    detector_list=[OpenMPIORTEEnvDetector(), OpenMPIPMIXEnvDetector(), MPIEnvDetector()],
+    detector_list=[
+        OpenMPIORTEEnvDetector(),
+        OpenMPIPMIXEnvDetector(),
+        MPIEnvDetector(),
+        SlurmEnvDetector(),
+    ],
     coordinator_address::Union{Nothing,String}=nothing,
     num_processes::Union{Nothing,Integer}=nothing,
     process_id::Union{Nothing,Integer}=nothing,
     local_gpu_device_ids::Union{Nothing,Vector{Int}}=nothing,
     initialization_timeout_in_seconds::Integer=300,
+    single_gpu_per_process::Bool=true,
 )
     if all(
         Base.Fix2(!==, nothing),
@@ -91,7 +101,7 @@ function auto_detect_unset_distributed_params(;
         process_id = get_process_id(detector)
     end
 
-    if local_gpu_device_ids === nothing
+    if local_gpu_device_ids === nothing && single_gpu_per_process
         local_gpu_device_ids = [get_local_process_id(detector)]
     end
 
@@ -158,5 +168,44 @@ get_process_id(::AbstractOMPIClusterEnvDetector) = parse(Int, ENV[_OMPI_PROCESS_
 function get_local_process_id(::AbstractOMPIClusterEnvDetector)
     return parse(Int, ENV[_OMPI_LOCAL_PROCESS_ID])
 end
+
+# SlurmEnvDetector
+# Based on https://github.com/jax-ml/jax/blob/d89835acbacec938971400d6fa54ea6dd5efe76c/jax/_src/clusters/slurm_cluster.py#L3
+const _SLURM_JOB_ID = "SLURM_JOB_ID"
+const _SLURM_NODELIST = "SLURM_STEP_NODELIST"
+const _SLURM_PROCESS_COUNT = "SLURM_NTASKS"
+const _SLURM_PROCESS_ID = "SLURM_PROCID"
+const _SLURM_LOCAL_PROCESS_ID = "SLURM_LOCALID"
+const _SLURM_NUM_NODES = "SLURM_STEP_NUM_NODES"
+
+is_env_present(::SlurmEnvDetector) = haskey(ENV, _SLURM_JOB_ID)
+
+function get_coordinator_address(::SlurmEnvDetector, ::Integer)
+    port = parse(Int, ENV[_SLURM_JOB_ID]) % 2^12 + (65535 - 2^12 + 1)
+
+    # Parse the first hostname of the job
+    # If we are looking for 'node001',
+    # node_list potential formats are 'node001', 'node001,host2',
+    # 'node[001-0015],host2', and 'node[001,007-015],host2'.
+    node_list = ENV[_SLURM_NODELIST]
+    ind = findfirst(Base.Fix2(in, (',', '[')), node_list)
+    ind = isnothing(ind) ? length(node_list) : ind
+
+    if ind == length(node_list) || node_list[ind] == ',' # 'node001' or 'node001,host2'
+        return "$(node_list[1:ind-1]):$(port)"
+    else # Formats: 'node[001-0015],host2' or 'node[001,007-015],host2'
+        prefix = node_list[1:(ind - 1)]
+        suffix = node_list[(ind + 1):end]
+        ind2 = findfirst(Base.Fix2(in, (',', '-')), suffix)
+        ind2 = isnothing(ind2) ? length(suffix) : ind2
+        return "$(prefix)$(suffix[1:ind2-1]):$(port)"
+    end
+end
+
+get_process_count(::SlurmEnvDetector) = parse(Int, ENV[_SLURM_PROCESS_COUNT])
+
+get_process_id(::SlurmEnvDetector) = parse(Int, ENV[_SLURM_PROCESS_ID])
+
+get_local_process_id(::SlurmEnvDetector) = parse(Int, ENV[_SLURM_LOCAL_PROCESS_ID])
 
 end
