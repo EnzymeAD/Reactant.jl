@@ -58,10 +58,10 @@ function get_local_process_id end
 
 function auto_detect_unset_distributed_params(;
     detector_list=[
+        SlurmEnvDetector(),
         OpenMPIORTEEnvDetector(),
         OpenMPIPMIXEnvDetector(),
         MPIEnvDetector(),
-        SlurmEnvDetector(),
     ],
     coordinator_address::Union{Nothing,String}=nothing,
     num_processes::Union{Nothing,Integer}=nothing,
