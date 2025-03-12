@@ -672,70 +672,9 @@ function raising!(f, is_raising::Bool)
     end
 end
 
-function compile_mlir!(
-    mod,
-    f,
-    args,
-    callcache=Dict{
-        Vector,
-        @NamedTuple{
-            f_name::String,
-            mlir_result_types::Vector{MLIR.IR.Type},
-            traced_result::Any,
-            mutated_args::Vector{Int},
-        }
-    }(),
-    sdycache=IdDict{
-        Reactant.Sharding.Mesh,
-        @NamedTuple{
-            sym_name::MLIR.IR.Attribute,
-            mesh_attr::MLIR.IR.Attribute,
-            mesh_op::MLIR.IR.Operation,
-        }
-    }();
-    optimize::Union{Bool,Symbol}=true,
-    no_nan::Bool=false,
-    backend="gpu",
-    fn_kwargs=(),
-    raise::Union{Bool,String}=false,
-    input_shardings=nothing,
-    runtime::Union{Val{:PJRT},Val{:IFRT}},
+function run_reactant_pipeline!(
+    mod; optimize, no_nan, raise::Union{Bool,String}=false, backend
 )
-    # Explicitly don't use block! to avoid creating a closure, which creates
-    # both compile-time and relocatability issues
-
-    MLIR.IR.activate!(mod)
-    MLIR.IR.activate!(MLIR.IR.body(mod))
-    activate_callcache!(callcache)
-    activate_sdycache!(sdycache)
-
-    # Save in the TLS whether we are raising.  We identify that condition by
-    # checking whether the user set an explicit list of passes, or chose
-    # `raise=true` to use the default passes.
-    is_raising = raise isa String || raise
-    activate_raising!(is_raising)
-
-    mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(
-            f, args, fn_kwargs, "main", true; input_shardings, runtime
-        )
-    finally
-        deactivate_raising!(is_raising)
-        deactivate_sdycache!(sdycache)
-        deactivate_callcache!(callcache)
-        MLIR.IR.deactivate!(MLIR.IR.body(mod))
-        MLIR.IR.deactivate!(mod)
-    end
-    (; fnwrapped, traced_result, seen_args, ret, linear_args, in_tys, linear_results) =
-        mlir_fn_res
-    compiled_f = mlir_fn_res.f
-
-    concrete_seen = OrderedIdDict()
-
-    concrete_result = make_tracer(
-        concrete_seen, traced_result, ("result",), TracedToConcrete; runtime
-    )
-
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
     toolkit = ""
@@ -926,6 +865,75 @@ function compile_mlir!(
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
     end
+
+    return mod
+end
+
+function compile_mlir!(
+    mod,
+    f,
+    args,
+    callcache=Dict{
+        Vector,
+        @NamedTuple{
+            f_name::String,
+            mlir_result_types::Vector{MLIR.IR.Type},
+            traced_result::Any,
+            mutated_args::Vector{Int},
+        }
+    }(),
+    sdycache=IdDict{
+        Reactant.Sharding.Mesh,
+        @NamedTuple{
+            sym_name::MLIR.IR.Attribute,
+            mesh_attr::MLIR.IR.Attribute,
+            mesh_op::MLIR.IR.Operation,
+        }
+    }();
+    optimize::Union{Bool,Symbol}=true,
+    no_nan::Bool=false,
+    backend="gpu",
+    fn_kwargs=(),
+    raise::Union{Bool,String}=false,
+    input_shardings=nothing,
+    runtime::Union{Val{:PJRT},Val{:IFRT}},
+)
+    # Explicitly don't use block! to avoid creating a closure, which creates
+    # both compile-time and relocatability issues
+
+    MLIR.IR.activate!(mod)
+    MLIR.IR.activate!(MLIR.IR.body(mod))
+    activate_callcache!(callcache)
+    activate_sdycache!(sdycache)
+
+    # Save in the TLS whether we are raising.  We identify that condition by
+    # checking whether the user set an explicit list of passes, or chose
+    # `raise=true` to use the default passes.
+    is_raising = raise isa String || raise
+    activate_raising!(is_raising)
+
+    mlir_fn_res = try
+        Reactant.TracedUtils.make_mlir_fn(
+            f, args, fn_kwargs, "main", true; input_shardings, runtime
+        )
+    finally
+        deactivate_raising!(is_raising)
+        deactivate_sdycache!(sdycache)
+        deactivate_callcache!(callcache)
+        MLIR.IR.deactivate!(MLIR.IR.body(mod))
+        MLIR.IR.deactivate!(mod)
+    end
+    (; fnwrapped, traced_result, seen_args, ret, linear_args, in_tys, linear_results) =
+        mlir_fn_res
+    compiled_f = mlir_fn_res.f
+
+    concrete_seen = OrderedIdDict()
+
+    concrete_result = make_tracer(
+        concrete_seen, traced_result, ("result",), TracedToConcrete; runtime
+    )
+
+    run_reactant_pipeline!(mod; optimize, no_nan, raise, backend)
 
     preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
