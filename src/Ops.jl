@@ -36,6 +36,7 @@ end
 
 const DEBUG_MODE::Ref{Bool} = Ref(false)
 const LARGE_CONSTANT_THRESHOLD = Ref(100 << 20) # 100 MiB
+const LARGE_CONSTANT_RAISE_ERROR = Ref(false)
 
 function with_debug(f)
     old = DEBUG_MODE[]
@@ -90,8 +91,12 @@ end
     x::DenseArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
     if sizeof(x) > LARGE_CONSTANT_THRESHOLD[]
-        location = with_debug() do
-            mlir_stacktrace("constant", @__FILE__, @__LINE__)
+        if LARGE_CONSTANT_RAISE_ERROR[]
+            error("Large constant array of size $(sizeof(x))")
+        else
+            location = with_debug() do
+                mlir_stacktrace("constant", @__FILE__, @__LINE__)
+            end
         end
     end
 
