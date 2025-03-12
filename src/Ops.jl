@@ -36,7 +36,7 @@ end
 
 const DEBUG_MODE::Ref{Bool} = Ref(false)
 const LARGE_CONSTANT_THRESHOLD = Ref(100 << 20) # 100 MiB
-const LARGE_CONSTANT_RAISE_ERROR = Ref(false)
+const LARGE_CONSTANT_RAISE_ERROR = Ref(true)
 
 function with_debug(f)
     old = DEBUG_MODE[]
