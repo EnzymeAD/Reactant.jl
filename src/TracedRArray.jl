@@ -1084,4 +1084,11 @@ function Base.findmax(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
     return (values, linear_indices)
 end
 
+Base.map(f, x::AnyTracedRArray) = f.(x)
+
+function Base.map!(f, y::AnyTracedRArray, x::AbstractArray)
+    y .= f.(x)
+    return y
+end
+
 end
