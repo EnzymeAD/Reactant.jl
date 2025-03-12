@@ -60,8 +60,9 @@ function auto_detect_unset_distributed_params(;
     detector_list=[
         SlurmEnvDetector(),
         OpenMPIORTEEnvDetector(),
-        OpenMPIPMIXEnvDetector(),
         MPIEnvDetector(),
+        # Keep this at the end since parsing for this is a bit flaky
+        OpenMPIPMIXEnvDetector(),
     ],
     coordinator_address::Union{Nothing,String}=nothing,
     num_processes::Union{Nothing,Integer}=nothing,
@@ -118,18 +119,18 @@ const _PMIX_SERVER_URI = (
     "PMIX_SERVER_URI41",
     "PMIX_SERVER_URI21",
 )
+const _PMIX_NAMESPACE = "PMIX_NAMESPACE"
+const _PRTERUN = "PRTE_LAUNCHED"
+const _PMIX_VERSION = "PMIX_VERSION"
 const _OMPI_PROCESS_COUNT = "OMPI_COMM_WORLD_SIZE"
 const _OMPI_PROCESS_ID = "OMPI_COMM_WORLD_RANK"
 const _OMPI_LOCAL_PROCESS_ID = "OMPI_COMM_WORLD_LOCAL_RANK"
 
 is_env_present(::OpenMPIORTEEnvDetector) = haskey(ENV, _ORTE_URI)
-is_env_present(::OpenMPIPMIXEnvDetector) = any(Base.Fix1(haskey, ENV), _PMIX_SERVER_URI)
+is_env_present(::OpenMPIPMIXEnvDetector) = haskey(ENV, _PMIX_NAMESPACE)
 
 function get_coordinator_address(::OpenMPIORTEEnvDetector, ::Integer)
-    return _get_coordinator_address_from_orte_uri(ENV[_ORTE_URI])
-end
-
-function _get_coordinator_address_from_orte_uri(orte_uri)
+    orte_uri = ENV[_ORTE_URI]
     job_id = parse(Int, split(orte_uri, '.'; limit=2)[1])
     port = job_id % 2^12 + (65535 - 2^12 + 1)
 
@@ -144,15 +145,48 @@ function _get_coordinator_address_from_orte_uri(orte_uri)
     return "$(launcher_ip):$(port)"
 end
 
-function get_coordinator_address(::OpenMPIPMIXEnvDetector, ::Integer)
-    return _get_coordinator_address_from_pmix_uri(
-        ENV[_PMIX_SERVER_URI[findfirst(Base.Fix1(haskey, ENV), _PMIX_SERVER_URI)]]
-    )
+function _throw_pmix_env_error(msg)
+    msg = msg * " Open an issue on Reactant with the relevant PMIX Enviroment Variables \
+                 (you might want to obfuscate identifiable variables from this log \
+                 before opening an issue)\n\n"
+    for (var, val) in [var => val for (var, val) in ENV if startswith(var, "PMIX")]
+        msg *= "    * $var => $val.\n"
+    end
+    return error(msg)
 end
 
-function _get_coordinator_address_from_pmix_uri(pmix_uri)
-    job_id_str = first(split(last(split(pmix_uri, '-'; limit=3)), "@"; limit=2))
-    job_id = parse(Int, job_id_str)
+function get_coordinator_address(::OpenMPIPMIXEnvDetector, ::Integer)
+    pmix_version = parse(VersionNumber, ENV[_PMIX_VERSION])
+    pmix_uri = ENV[_PMIX_SERVER_URI[findfirst(Base.Fix1(haskey, ENV), _PMIX_SERVER_URI)]]
+    @debug "PMIX VERSION: $(pmix_version)"
+    if v"5" ≤ pmix_version < v"6"
+        return get_coordinator_address_pmixv5(pmix_uri)
+    elseif v"2" ≤ pmix_version < v"4"
+        return get_coordinator_address_pmixv2_or_3(pmix_uri)
+    else
+        _throw_pmix_env_error("Unsupported PMIX version: $(pmix_version).")
+    end
+end
+
+function get_coordinator_address_pmixv2_or_3(pmix_uri)
+    pre_semicolon = first(split(pmix_uri, ";"))
+    if startswith(pre_semicolon, "pmix-server.")
+        job_id = parse(Int, first(split(last(split(pre_semicolon, '.'; limit=2)))))
+    elseif contains(pre_semicolon, ".")
+        job_id = parse(Int, first(split(pre_semicolon, '.')))
+    else
+        _throw_pmix_env_error("Could not parse coordinator address from Open MPI \
+                               environment.")
+    end
+    return get_coordinator_address_from_pmix_uri(pmix_uri, job_id)
+end
+
+function get_coordinator_address_pmixv5(pmix_uri)
+    job_id = parse(Int, first(split(last(split(pmix_uri, '-'; limit=3)), "@"; limit=2)))
+    return get_coordinator_address_from_pmix_uri(pmix_uri, job_id)
+end
+
+function get_coordinator_address_from_pmix_uri(pmix_uri, job_id)
     port = job_id % 2^12 + (65535 - 2^12 + 1)
 
     launcher_ip_match = match(r"tcp4://(.+?):|tcp6://\[(.+?)\]", pmix_uri)
@@ -195,11 +229,13 @@ function get_coordinator_address(::SlurmEnvDetector, ::Integer)
     # 'node[001-0015],host2', and 'node[001,007-015],host2'.
     node_list = ENV[_SLURM_NODELIST]
     ind = findfirst(Base.Fix2(in, (',', '[')), node_list)
-    ind = isnothing(ind) ? length(node_list) : ind
+    ind = isnothing(ind) ? length(node_list) + 1 : ind
 
-    if ind == length(node_list) || node_list[ind] == ',' # 'node001' or 'node001,host2'
+    if ind == length(node_list) + 1 || node_list[ind] == ','
+        # 'node001' or 'node001,host2'
         return "$(node_list[1:ind-1]):$(port)"
-    else # Formats: 'node[001-0015],host2' or 'node[001,007-015],host2'
+    else
+        # 'node[001-0015],host2' or 'node[001,007-015],host2'
         prefix = node_list[1:(ind - 1)]
         suffix = node_list[(ind + 1):end]
         ind2 = findfirst(Base.Fix2(in, (',', '-')), suffix)
