@@ -720,7 +720,7 @@ function backend(; throw_error::Bool=true)
     if !(haskey(task_local_storage(), key) && !Base.isempty(task_local_storage(key)))
         throw_error && error("No Reactant backend context")
     end
-    return last(task_local_storage(key)::Vector{Bool})
+    return last(task_local_storage(key)::Vector{String})
 end
 
 function backend!(f, backend::String)
