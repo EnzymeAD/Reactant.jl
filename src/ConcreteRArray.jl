@@ -457,8 +457,13 @@ function Base.mapreducedim!(
     return R
 end
 
+function mymap!(f, R, A)
+    map!(f, R, A)
+    return nothing
+end
+
 function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::AbstractArray)
-    fn = compile(Base.map!, (f, R, A))
+    fn = compile(mymap!, (f, R, A))
     fn(f, R, A)
     return R
 end
