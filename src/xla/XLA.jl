@@ -228,7 +228,7 @@ end
 function download_tpu(dataset_dir::String)
     if !isfile(dataset_dir * "/libtpu.so")
         Downloads.download(
-            "https://storage.googleapis.com/cloud-tpu-tpuvm-artifacts/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20240829-py3-none-any.whl",
+            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250313+nightly-py3-none-manylinux_2_31_x86_64.whl",
             dataset_dir * "/tpu.zip",
         )
         run(`unzip -qq $(dataset_dir*"/tpu.zip") -d $(dataset_dir)/tmp`)
