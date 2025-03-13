@@ -32,8 +32,11 @@ pages = [
         "Getting Started" => "introduction/index.md",
         "Configuration" => "introduction/configuration.md",
     ],
-    "Tutorials" =>
-        ["Overview" => "tutorials/index.md", "Profiling" => "tutorials/profiling.md"],
+    "Tutorials" => [
+        "Overview" => "tutorials/index.md",
+        "Profiling" => "tutorials/profiling.md",
+        "Distributed" => "tutorials/multihost.md",
+    ],
     "API Reference" => [
         "Reactant API" => "api/api.md",
         "Ops" => "api/ops.md",

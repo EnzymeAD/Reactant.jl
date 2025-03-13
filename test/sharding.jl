@@ -25,11 +25,10 @@ end
         cdata_sharded2 = Reactant.to_rarray(data; sharding=data_sharding2)
         cdata_sharded3 = Reactant.to_rarray(data; sharding=data_sharding3)
 
-        @test data ≈
-            Array(cdata) ≈
-            Array(cdata_sharded) ≈
-            Array(cdata_sharded2) ≈
-            Array(cdata_sharded3)
+        @test data ≈ Array(cdata)
+        @test data ≈ Array(cdata_sharded)
+        @test data ≈ Array(cdata_sharded2)
+        @test data ≈ Array(cdata_sharded3)
 
         @test cdata_sharded.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
         @test cdata_sharded2.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
