@@ -840,8 +840,16 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     }
   }
 
-  auto exec = MyValueOrThrow(client->Compile(cmod_op, options));
-  return exec.release();
+  auto exec_err = client->Compile(cmod_op, options);
+  
+  if (!exec_err.ok()) {
+    std::string err_str;
+    llvm::raw_string_ostream err_stream(err_str);
+    err_stream << cmod_op << "\n";
+    err_stream << exec_err.status().ToString();
+    ReactantThrowError(err_stream.str().c_str());
+  }
+  return std::move(exec_err).value().release();
 }
 
 extern "C" void
@@ -1076,11 +1084,10 @@ extern "C" void InitializePasses(MlirDialectRegistry creg) {
   enzyme::registerenzymexlaPasses();
 
   // Register the standard passes we want.
-  mlir::registerCSEPass();
+  mlir::registerTransformsPasses();
   mlir::registerLowerAffinePass();
   mlir::registerSCCPPass();
   mlir::registerInlinerPass();
-  mlir::registerCanonicalizerPass();
   mlir::registerSymbolDCEPass();
   mlir::registerLoopInvariantCodeMotionPass();
   mlir::registerConvertSCFToOpenMPPass();

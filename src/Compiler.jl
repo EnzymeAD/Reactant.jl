@@ -712,6 +712,9 @@ function compile_mlir!(
     # Save in the TLS whether we are raising.  We identify that condition by
     # checking whether the user set an explicit list of passes, or chose
     # `raise=true` to use the default passes.
+    if backend == "tpu" && raise isa Bool
+        raise = true
+    end
     is_raising = raise isa String || raise
     activate_raising!(is_raising)
 
@@ -743,9 +746,13 @@ function compile_mlir!(
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
 
-    if backend == "cpu"
+    if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
-        jit = "lower-jit{openmp=true backend=cpu},symbol-dce"
+        if backend == "tpu"
+            jit = "lower-jit{openmp=true backend=cpu},symbol-dce,strip-debuginfo"
+        else
+            jit = "lower-jit{openmp=true backend=cpu},symbol-dce"
+        end
     elseif DEBUG_KERNEL[]
         curesulthandler = dlsym(
             Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
