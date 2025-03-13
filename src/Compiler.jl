@@ -743,7 +743,7 @@ function compile_mlir!(
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
 
-    if backend == "cpu"
+    if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
         jit = "lower-jit{openmp=true backend=cpu},symbol-dce"
     elseif DEBUG_KERNEL[]
