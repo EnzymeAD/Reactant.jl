@@ -134,6 +134,10 @@ function should_rewrite_call(@nospecialize(ft))
         return false
     end
 
+    if ft <: typeof(ReactantCore.notrace)
+        return false
+    end
+
     # Avoid the 1.10 stackoverflow
     if ft <: typeof(Base.typed_hvcat)
         return false
@@ -534,7 +538,6 @@ function call_prologue(f, args...)
         input_shardings,
     )
     
-    MLIR.IR.activate!(fnbody)
     
     for (i, arg) in enumerate(callee_linear_args)
         TracedUtils.set_mlir_data!(arg, MLIR.IR.argument(fnbody, i))
@@ -562,6 +565,8 @@ end
 @inline get_traced_args_from_temp1((cond, prologue_result)) = prologue_result.traced_args
 @inline get_cond_from_temp1((cond, prologue_result)) = false # cond
 @inline get_traced_result_from_prologue_result((cond, prologue_result)) = prologue_result.traced_result
+@inline activate_fnbody((cond, prologue_result)) = MLIR.IR.activate!(prologue_result.fnbody)
+@inline deactivate_fnbody((cond, prologue_result)) = MLIR.IR.deactivate!(prologue_result.fnbody)
 
 @kwdef struct CachedPrologueResult
     f_name
@@ -599,7 +604,6 @@ function call_epilogue(
     if !cached
         (; fnbody, traced_args, callee_linear_args, original_paths, sym_visibility, original_args, name, mod, temp_func, in_tys, mlir_caller_args, caller_linear_args, cache_key, traced_args_to_shardings) = prologue_result
 
-        MLIR.IR.deactivate!(fnbody)
         
         concretein = false
         args_in_result = :all
@@ -939,10 +943,11 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
         cond = Core.SSAValue(length(overdubbed_code))
         dest = length(overdubbed_code) + 6
-        push!(overdubbed_code, Core.GotoIfNot(cond, dest)) # jump if call was cached
+        push!(overdubbed_code, Core.GotoIfNot(cond, dest)) # jump if call was not cached
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
         # function was cached:
+        # push!(overdubbed_code, nothing)
         push!(overdubbed_code, Expr(:call, println, "function was cached"))
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
@@ -957,35 +962,77 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
         # function was not cached:
+        push!(code_info.slotnames, :tryfinallystate)
+        push!(code_info.slotflags, zero(UInt8))
+        tryfinally_slot = Core.SlotNumber(length(code_info.slotnames))
+
+        push!(code_info.slotnames, :tryresult)
+        push!(code_info.slotflags, zero(UInt8))
+        tryresult_slot = Core.SlotNumber(length(code_info.slotnames))
+
+        # push!(overdubbed_code, nothing)
         push!(overdubbed_code, Expr(:call, println, "function was not cached"))
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
         push!(overdubbed_code, Expr(:call, get_traced_args_from_temp1, temp1_output))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         traced_args = Core.SSAValue(length(overdubbed_code))
-        
-        push!(overdubbed_code, Expr(:call, Core._apply_iterate, Base.iterate, oc, traced_args))
+
+        push!(overdubbed_code, Expr(:call, activate_fnbody, temp1_output))
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
-        push!(overdubbed_code, Expr(:(=), ocres_slot, Core.SSAValue(length(overdubbed_code))))
+        catch_dest = length(overdubbed_code) + 7
+        enterval = Core.SSAValue(length(push!(overdubbed_code, Core.EnterNode(catch_dest))))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        #== try block =====================================================#
+        push!(overdubbed_code, Expr(:(=), tryfinally_slot, -1))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:(=), ocres_slot, Expr(:call, Core._apply_iterate, Base.iterate, oc, traced_args)))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:(=), tryfinally_slot, 1)) # indicate that no error occured
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:leave, enterval))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        finally_dest = length(overdubbed_code) + 3
+        push!(overdubbed_code, Core.GotoNode(finally_dest))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:(=), tryfinally_slot, 2)) # indicate that error occured
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        #== finally block =================================================#
+
+        push!(overdubbed_code, Expr(:call, deactivate_fnbody, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        error_cond = Core.SSAValue(length(push!(overdubbed_code, Expr(:call, ===, tryfinally_slot, 2)))) # check if error occured
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        exitdest = length(overdubbed_code) + 3
+        push!(overdubbed_code, Core.GotoIfNot(error_cond, exitdest))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:call, Base.rethrow))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        #==================================================================#
+
+        push!(overdubbed_code, ocres_slot)
         push!(overdubbed_codelocs, code_info.codelocs[1])
     else
         push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
         push!(overdubbed_codelocs, code_info.codelocs[1])
     end
-    
-    
+
     ocres = Core.SSAValue(length(overdubbed_code))
-
-    if TRACE_CALLS[]
-        push!(overdubbed_code, ocres_slot)
-        push!(overdubbed_codelocs, code_info.codelocs[1])
-
-        ocres = Core.SSAValue(length(overdubbed_code))
-
+    
+    if TRACE_CALLS[]    
         push!(overdubbed_code, Expr(:call, call_epilogue, ocres, temp1_output))
         push!(overdubbed_codelocs, code_info.codelocs[1])
-        
         ocres = Core.SSAValue(length(overdubbed_code))
     end
 
