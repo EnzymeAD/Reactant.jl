@@ -111,7 +111,8 @@ function should_rewrite_call(@nospecialize(ft))
             if has_ancestor(mod, Reactant.Ops) ||
                 has_ancestor(mod, Reactant.TracedUtils) ||
                 has_ancestor(mod, Reactant.MLIR) ||
-                has_ancestor(mod, Reactant.TracedRandom)
+                has_ancestor(mod, Reactant.TracedRandom) ||
+                has_ancestor(mod, Reactant.TracedRArrayOverrides)
                 return false
             end
             if string(mod) == "CUDA"
