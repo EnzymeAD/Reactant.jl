@@ -114,6 +114,7 @@ get_ancestor_indices(::TracedRArray, indices...) = indices
 function get_ancestor_indices(x::WrappedTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
+get_ancestor_indices(x::WrappedTracedRArray, indices::CartesianIndex) = get_ancestor_indices(x, Tuple(indices)...)
 
 function batch_ty(width, mlirty)
     return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
@@ -192,7 +193,6 @@ function placeholder_func(
         sym_visibility = MLIR.IR.Attribute("private")
     end
 
-    ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
 
     # Insert meshes for the sharded arguments
@@ -418,6 +418,8 @@ function make_mlir_fn(
     mesh_cache = Reactant.Compiler.sdycache()
     is_sharded = !isempty(mesh_cache)
 
+    ctx = MLIR.IR.context()
+
     if is_sharded
         unique_meshes = keys(mesh_cache)
 
@@ -441,7 +443,7 @@ function make_mlir_fn(
                     sharding, ctx, sym_name, mesh_attr
                 )
                 MLIR.API.mlirFuncSetArgAttr(
-                    func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
+                    final_func, i - 1, "sdy.sharding", linear_arg_shardings[i]
                 )
             end
         end

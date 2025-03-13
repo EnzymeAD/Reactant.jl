@@ -337,7 +337,7 @@ Base.@nospecializeinfer function traced_type_inner(
             Sharding.ndevices(sharding),
             Sharding.shard_type(typeof(sharding), 0),
         }
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedToTypes
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode ==TracedSetPathInPlace || mode == TracedToTypes
         return T
     else
         throw("Abstract RNumber cannot be made concrete in mode $mode")
