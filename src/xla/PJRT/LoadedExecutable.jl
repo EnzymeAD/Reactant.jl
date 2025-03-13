@@ -310,10 +310,3 @@ end
         end
     end
 end
-
-function XLA.cost_analysis(exec::LoadedExecutable)
-    hlo_modules = XLA.get_hlo_modules(exec)
-    analysis = XLA.cost_analysis.((XLA.client(exec),), hlo_modules)
-    length(analysis) == 1 && return only(analysis)
-    return analysis
-end

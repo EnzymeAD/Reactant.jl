@@ -7,6 +7,8 @@ mutable struct Client <: XLA.AbstractClient
     end
 end
 
+const NullClient = Client(C_NULL; skip_check=true)
+
 function XLA.free_client(client::Client)
     @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
