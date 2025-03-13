@@ -1076,11 +1076,10 @@ extern "C" void InitializePasses(MlirDialectRegistry creg) {
   enzyme::registerenzymexlaPasses();
 
   // Register the standard passes we want.
-  mlir::registerCSEPass();
+  mlir::registerTransformsPasses();
   mlir::registerLowerAffinePass();
   mlir::registerSCCPPass();
   mlir::registerInlinerPass();
-  mlir::registerCanonicalizerPass();
   mlir::registerSymbolDCEPass();
   mlir::registerLoopInvariantCodeMotionPass();
   mlir::registerConvertSCFToOpenMPPass();
