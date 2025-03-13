@@ -93,6 +93,16 @@ function XLA.platform_name(client::Client)
     return XLA.unsafe_string_and_free(str)
 end
 
+function XLA.cost_analysis(client::Client, hlo_module::XLA.HloModule)
+    GC.@preserve client hlo_module begin
+        ref = Ref{XLA.HloCostAnalysisProperties}()
+        @ccall MLIR.API.mlir_c.pjrt_hlo_module_cost_analysis_properties(
+            client.client::Ptr{Cvoid}, hlo_module.ptr::Ptr{Cvoid}, ref::Ptr{Cvoid}
+        )::Cvoid
+        return ref[]
+    end
+end
+
 # Different Backends
 const cpu_client_count = Ref(0)
 const gpu_client_count = Ref(0)
