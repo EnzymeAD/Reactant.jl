@@ -508,16 +508,16 @@ function call_prologue(f, args...)
     end
     original_paths = [Reactant.TracedUtils.get_paths(arg) for arg in caller_linear_args]
     
-    seen = Dict()
+    # seen = Dict()
     cache_key = []
-    Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
-    cache = Reactant.Compiler.callcache()
-    if haskey(cache, cache_key)
-        cached = true
-        (; f_name, mlir_result_types, linear_args, traced_result, linear_results, ret) = cache[cache_key]
-        return cached, CachedPrologueResult(; f_name, out_tys=mlir_result_types, traced_result, linear_results, ret, mlir_caller_args, original_paths, original_args=args, caller_linear_args=linear_args)
-        # return cached, CachedEpilogueResult(f_name, mlir_result_types, linear_args, traced_result, linear_results, ret)
-    end
+    # Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
+    # cache = Reactant.Compiler.callcache()
+    # if haskey(cache, cache_key)
+    #     cached = true
+    #     (; f_name, mlir_result_types, linear_args, traced_result, linear_results, ret) = cache[cache_key]
+    #     return cached, CachedPrologueResult(; f_name, out_tys=mlir_result_types, traced_result, linear_results, ret, mlir_caller_args, original_paths, original_args=args, caller_linear_args=linear_args)
+    #     # return cached, CachedEpilogueResult(f_name, mlir_result_types, linear_args, traced_result, linear_results, ret)
+    # end
 
     N = length(args)
     seen_args, traced_args, callee_linear_args = TracedUtils.prepare_args(
@@ -560,7 +560,7 @@ end
 
 # @inline get_traced_args_from_temp1((cond, mod, temp_func, in_tys, fnbody, sym_visibility, original_args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths)) = traced_args
 @inline get_traced_args_from_temp1((cond, prologue_result)) = prologue_result.traced_args
-@inline get_cond_from_temp1((cond, prologue_result)) = cond
+@inline get_cond_from_temp1((cond, prologue_result)) = false # cond
 @inline get_traced_result_from_prologue_result((cond, prologue_result)) = prologue_result.traced_result
 
 @kwdef struct CachedPrologueResult
@@ -596,7 +596,7 @@ end
 function call_epilogue(
     result, (cached, prologue_result)
 )
-    if prologue_result isa UncachedPrologueResult
+    if !cached
         (; fnbody, traced_args, callee_linear_args, original_paths, sym_visibility, original_args, name, mod, temp_func, in_tys, mlir_caller_args, caller_linear_args, cache_key, traced_args_to_shardings) = prologue_result
 
         MLIR.IR.deactivate!(fnbody)
@@ -630,8 +630,8 @@ function call_epilogue(
         name = TracedUtils.__lookup_unique_name_in_module(mod, name)
         final_func = TracedUtils.final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
 
-        cache = Reactant.Compiler.callcache()
-        cache[cache_key] = (; f_name=name, mlir_result_types=out_tys, linear_args=caller_linear_args, traced_result, linear_results, ret)
+        # cache = Reactant.Compiler.callcache()
+        # cache[cache_key] = (; f_name=name, mlir_result_types=out_tys, linear_args=caller_linear_args, traced_result, linear_results, ret)
     else
         @assert prologue_result isa CachedPrologueResult "Got type $(typeof(prologue_result))"
         (; f_name, out_tys, traced_result, linear_results, ret, original_paths, original_args, mlir_caller_args, caller_linear_args) = prologue_result
@@ -643,6 +643,9 @@ function call_epilogue(
     )
 
     mlir_results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
+    for (caller_arg, mlir_caller_arg) in zip(caller_linear_args, mlir_caller_args)
+        Reactant.TracedUtils.set_mlir_data!(caller_arg, mlir_caller_arg)
+    end
     for (i, v) in enumerate(linear_results)
         @assert v isa Reactant.TracedType
         # this mutates `traced_result`, which is what we want:
