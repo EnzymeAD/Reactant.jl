@@ -26,7 +26,7 @@ Parses an operation from the string and transfers ownership to the caller.
 function Base.parse(
     ::Core.Type{Operation},
     code;
-    verify::Bool = false,
+    verify::Bool=false,
     context::Context=context(),
     block=Block(),
     location::Location=Location(),
