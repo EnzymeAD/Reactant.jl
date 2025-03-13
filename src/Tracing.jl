@@ -60,8 +60,12 @@ Base.@nospecializeinfer function traced_type_inner(
         return ConcretePJRTNumber{
             T,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), 0)
         }
-    elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath || mode == TracedSetPathInPlace) &&
-        T <: track_numbers
+    elseif (
+        mode == NoStopTracedTrack ||
+        mode == TracedTrack ||
+        mode == TracedSetPath ||
+        mode == TracedSetPathInPlace
+    ) && T <: track_numbers
         return TracedRNumber{T}
     end
     return T
@@ -305,7 +309,11 @@ Base.@nospecializeinfer function traced_type_inner(
             Sharding.ndevices(sharding),
             Sharding.shard_type(typeof(sharding), T.parameters[2]),
         }
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedSetPathInPlace || mode == TracedToTypes
+    elseif mode == TracedTrack ||
+        mode == NoStopTracedTrack ||
+        mode == TracedSetPath ||
+        mode == TracedSetPathInPlace ||
+        mode == TracedToTypes
         return T
     else
         throw("Abstract RArray cannot be made concrete in mode $mode")
@@ -337,7 +345,11 @@ Base.@nospecializeinfer function traced_type_inner(
             Sharding.ndevices(sharding),
             Sharding.shard_type(typeof(sharding), 0),
         }
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode ==TracedSetPathInPlace || mode == TracedToTypes
+    elseif mode == TracedTrack ||
+        mode == NoStopTracedTrack ||
+        mode == TracedSetPath ||
+        mode == TracedSetPathInPlace ||
+        mode == TracedToTypes
         return T
     else
         throw("Abstract RNumber cannot be made concrete in mode $mode")
@@ -357,7 +369,11 @@ Base.@nospecializeinfer function traced_type_inner(
         return ConcreteRNG{
             traced_type_inner(TracedRArray{UInt64,1}, seen, mode, track_numbers, sharding)
         }
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedSetPathInPlace || mode == TracedToTypes
+    elseif mode == TracedTrack ||
+        mode == NoStopTracedTrack ||
+        mode == TracedSetPath ||
+        mode == TracedSetPathInPlace ||
+        mode == TracedToTypes
         return T
     else
         throw("Unsupported mode: $mode")
@@ -960,7 +976,8 @@ function make_tracer(
         return nothing
     end
     if mode == TracedTrack || mode == TracedSetPathInPlace
-        newpaths = mode == TracedSetPathInPlace ? (path, ) : (TracedUtils.get_paths(prev)..., path)
+        newpaths =
+            mode == TracedSetPathInPlace ? (path,) : (TracedUtils.get_paths(prev)..., path)
         TracedUtils.set_paths!(prev, newpaths)
         if !haskey(seen, prev)
             return seen[prev] = prev
@@ -1032,7 +1049,8 @@ function make_tracer(
         return nothing
     end
     if mode == TracedTrack || mode == TracedSetPathInPlace
-        newpaths = mode == TracedSetPathInPlace ? (path, ) : (TracedUtils.get_paths(prev)..., path)
+        newpaths =
+            mode == TracedSetPathInPlace ? (path,) : (TracedUtils.get_paths(prev)..., path)
         TracedUtils.set_paths!(prev, newpaths)
         if !haskey(seen, prev)
             return seen[prev] = prev
@@ -1089,7 +1107,8 @@ function make_tracer(
         throw("Cannot have MissingTracedValue as function call argument.")
     end
     if mode == TracedTrack || mode == TracedSetPathInPlace
-        newpaths = mode == TracedSetPathInPlace ? (path, ) : (TracedUtils.get_paths(prev)..., path)
+        newpaths =
+            mode == TracedSetPathInPlace ? (path,) : (TracedUtils.get_paths(prev)..., path)
         TracedUtils.set_paths!(prev, newpaths)
         if !haskey(seen, prev)
             return seen[prev] = prev
@@ -1134,7 +1153,9 @@ function make_tracer(
         if mode == ArrayToConcrete
             return ConcretePJRTNumber(prev; sharding)
         else
-            if mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPathInPlace
+            if mode == TracedTrack ||
+                mode == NoStopTracedTrack ||
+                mode == TracedSetPathInPlace
                 res = TracedRNumber{RT}(
                     (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
                 )
@@ -1172,13 +1193,13 @@ function make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...)
     return prev
 end
 @static if VERSION >= v"1.11"
-function make_tracer(seen, prev::Memory, @nospecialize(path), mode; kwargs...)
-    if mode == TracedToTypes
-        push!(path, prev)
-        return nothing
+    function make_tracer(seen, prev::Memory, @nospecialize(path), mode; kwargs...)
+        if mode == TracedToTypes
+            push!(path, prev)
+            return nothing
+        end
+        return prev
     end
-    return prev
-end
 end
 
 function make_tracer(

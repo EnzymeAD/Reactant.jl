@@ -398,23 +398,20 @@ end
 end
 
 #concat ops
-@noinline function concat(
-    inputs::TracedRArray...;
-    dim::Integer
-)
+@noinline function concat(inputs::TracedRArray...; dim::Integer)
     T = unwrapped_eltype(first(inputs))
     @assert all(unwrapped_eltype.(inputs) .== T) "All inputs must have the same element type"
-    catdims = Base.dims2cat((dim, ))
+    catdims = Base.dims2cat((dim,))
     shape = Base.cat_size_shape(catdims, inputs...)
 
-    return TracedRArray{T, length(shape)}(
+    return TracedRArray{T,length(shape)}(
         (),
         MLIR.IR.result(
             stablehlo.concatenate(
                 collect(Reactant.TracedUtils.get_mlir_data.(inputs));
                 result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(T)),
-                dimension=dim - 1
-            )
+                dimension=dim - 1,
+            ),
         ),
         shape,
     )
@@ -2151,16 +2148,24 @@ end
     else
         f_name = String(gensym(Symbol(f)))
         temp = Reactant.TracedUtils.make_mlir_fn(
-            f, args, (), f_name, false; args_in_result=:all, do_transpose=false, mutate_traced_args=true
+            f,
+            args,
+            (),
+            f_name,
+            false;
+            args_in_result=:all,
+            do_transpose=false,
+            mutate_traced_args=true,
         )
         (; traced_result, linear_results, ret, linear_args) = temp
         final_func = temp.f
         mlir_result_types = [
             MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
         ]
-        cache[cache_key] = (; f_name, mlir_result_types, linear_args, traced_result, linear_results, ret)
+        cache[cache_key] = (;
+            f_name, mlir_result_types, linear_args, traced_result, linear_results, ret
+        )
     end
-
 
     call_op = MLIR.Dialects.func.call(
         mlir_caller_args;

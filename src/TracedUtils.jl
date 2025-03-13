@@ -114,7 +114,9 @@ get_ancestor_indices(::TracedRArray, indices...) = indices
 function get_ancestor_indices(x::WrappedTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
-get_ancestor_indices(x::WrappedTracedRArray, indices::CartesianIndex) = get_ancestor_indices(x, Tuple(indices)...)
+function get_ancestor_indices(x::WrappedTracedRArray, indices::CartesianIndex)
+    return get_ancestor_indices(x, Tuple(indices)...)
+end
 
 function batch_ty(width, mlirty)
     return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
@@ -154,14 +156,14 @@ function prepare_args(args, concretein, toscalar, mutate_traced_args)
     N = length(args)
     seen_args = OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
-    mode = concretein ? Reactant.ConcreteToTraced : (mutate_traced_args ? Reactant.TracedSetPathInPlace : Reactant.TracedSetPath)
+    mode = if concretein
+        Reactant.ConcreteToTraced
+    else
+        (mutate_traced_args ? Reactant.TracedSetPathInPlace : Reactant.TracedSetPath)
+    end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args,
-            args[i],
-            (:args, i),
-            mode;
-            toscalar,
+            seen_args, args[i], (:args, i), mode; toscalar
         )
     end
 
@@ -273,11 +275,7 @@ function prepare_results(
 end
 
 function create_return!(
-    fnbody,
-    linear_results,
-    args_in_result,
-    do_transpose,
-    return_dialect,
+    fnbody, linear_results, args_in_result, do_transpose, return_dialect
 )
     MLIR.IR.activate!(fnbody)
     try
@@ -336,22 +334,21 @@ function make_mlir_fn(
     do_transpose=true,
     mutate_traced_args=false,
     input_shardings=nothing, # This is not meant to be used by the user.
-
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
-        mlir_fn_res =  make_mlir_fn(
-                Reactant.apply,
-                (f, args...),
-                kwargs,
-                name,
-                concretein;
-                toscalar,
-                return_dialect,
-                do_transpose,
-                args_in_result,
-                input_shardings,
-                mutate_traced_args,
-            )
+        mlir_fn_res = make_mlir_fn(
+            Reactant.apply,
+            (f, args...),
+            kwargs,
+            name,
+            concretein;
+            toscalar,
+            return_dialect,
+            do_transpose,
+            args_in_result,
+            input_shardings,
+            mutate_traced_args,
+        )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
     end
@@ -364,13 +361,7 @@ function make_mlir_fn(
     )
 
     mod, temp_func, fnbody, in_tys, sym_visibility, traced_args_to_shardings = placeholder_func(
-        name,
-        linear_args,
-        seen_args,
-        toscalar,
-        do_transpose,
-        concretein,
-        input_shardings
+        name, linear_args, seen_args, toscalar, do_transpose, concretein, input_shardings
     )
 
     # Explicitly don't use block! to avoid creating a closure, which creates
@@ -401,15 +392,11 @@ function make_mlir_fn(
         args_in_result,
         do_transpose,
         mutate_traced_args,
-        traced_args_to_shardings
+        traced_args_to_shardings,
     )
 
     ret = create_return!(
-        fnbody,
-        linear_results,
-        args_in_result,
-        do_transpose,
-        return_dialect,
+        fnbody, linear_results, args_in_result, do_transpose, return_dialect
     )
 
     name = __lookup_unique_name_in_module(mod, name)

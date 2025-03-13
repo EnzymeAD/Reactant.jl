@@ -258,7 +258,8 @@ function overload_autodiff(
     mlir_fn_res = TracedUtils.make_mlir_fn(
         primf, primargs, (), string(f) * "_autodiff", false
     )
-    (; traced_result, result, seen_args, ret, linear_args, in_tys, linear_results) = mlir_fn_res
+    (; traced_result, result, seen_args, ret, linear_args, in_tys, linear_results) =
+        mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 

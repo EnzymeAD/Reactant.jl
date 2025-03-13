@@ -491,7 +491,7 @@ function call_prologue(f, args...)
     input_shardings = nothing
 
     name = String(Symbol(f))
-    
+
     seen_cache = Reactant.OrderedIdDict()
     make_tracer(
         seen_cache,
@@ -508,10 +508,10 @@ function call_prologue(f, args...)
         push!(caller_linear_args, v)
         push!(mlir_caller_args, v.mlir_data)
         # make tracer inserted `()` into the path, here we remove it:
-        v.paths = v.paths[1:end-1]
+        v.paths = v.paths[1:(end - 1)]
     end
     original_paths = [Reactant.TracedUtils.get_paths(arg) for arg in caller_linear_args]
-    
+
     # seen = Dict()
     cache_key = []
     # Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
@@ -537,13 +537,13 @@ function call_prologue(f, args...)
         concretein,
         input_shardings,
     )
-    
-    
+
     for (i, arg) in enumerate(callee_linear_args)
         TracedUtils.set_mlir_data!(arg, MLIR.IR.argument(fnbody, i))
     end
 
-    return cached, UncachedPrologueResult(;
+    return cached,
+    UncachedPrologueResult(;
         fnbody,
         traced_args,
         callee_linear_args,
@@ -564,9 +564,11 @@ end
 # @inline get_traced_args_from_temp1((cond, mod, temp_func, in_tys, fnbody, sym_visibility, original_args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths)) = traced_args
 @inline get_traced_args_from_temp1((cond, prologue_result)) = prologue_result.traced_args
 @inline get_cond_from_temp1((cond, prologue_result)) = false # cond
-@inline get_traced_result_from_prologue_result((cond, prologue_result)) = prologue_result.traced_result
+@inline get_traced_result_from_prologue_result((cond, prologue_result)) =
+    prologue_result.traced_result
 @inline activate_fnbody((cond, prologue_result)) = MLIR.IR.activate!(prologue_result.fnbody)
-@inline deactivate_fnbody((cond, prologue_result)) = MLIR.IR.deactivate!(prologue_result.fnbody)
+@inline deactivate_fnbody((cond, prologue_result)) =
+    MLIR.IR.deactivate!(prologue_result.fnbody)
 
 @kwdef struct CachedPrologueResult
     f_name
@@ -597,20 +599,31 @@ end
     traced_args_to_shardings
 end
 
-
-function call_epilogue(
-    result, (cached, prologue_result)
-)
+function call_epilogue(result, (cached, prologue_result))
     if !cached
-        (; fnbody, traced_args, callee_linear_args, original_paths, sym_visibility, original_args, name, mod, temp_func, in_tys, mlir_caller_args, caller_linear_args, cache_key, traced_args_to_shardings) = prologue_result
+        (;
+            fnbody,
+            traced_args,
+            callee_linear_args,
+            original_paths,
+            sym_visibility,
+            original_args,
+            name,
+            mod,
+            temp_func,
+            in_tys,
+            mlir_caller_args,
+            caller_linear_args,
+            cache_key,
+            traced_args_to_shardings,
+        ) = prologue_result
 
-        
         concretein = false
         args_in_result = :all
         do_transpose = false
         return_dialect = :func
         mutate_traced_args = true
-        
+
         seen_result, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
             result,
             traced_args,
@@ -620,25 +633,32 @@ function call_epilogue(
             args_in_result,
             do_transpose,
             mutate_traced_args,
-            traced_args_to_shardings
+            traced_args_to_shardings,
         )
-        
+
         ret = TracedUtils.create_return!(
-            fnbody, 
-            linear_results,
-            args_in_result,
-            do_transpose,
-            return_dialect,
+            fnbody, linear_results, args_in_result, do_transpose, return_dialect
         )
-    
         name = TracedUtils.__lookup_unique_name_in_module(mod, name)
-        final_func = TracedUtils.final_func!(temp_func, mod, name, in_tys, out_tys, sym_visibility)
+        final_func = TracedUtils.final_func!(
+            temp_func, mod, name, in_tys, out_tys, sym_visibility
+        )
 
         # cache = Reactant.Compiler.callcache()
         # cache[cache_key] = (; f_name=name, mlir_result_types=out_tys, linear_args=caller_linear_args, traced_result, linear_results, ret)
     else
         @assert prologue_result isa CachedPrologueResult "Got type $(typeof(prologue_result))"
-        (; f_name, out_tys, traced_result, linear_results, ret, original_paths, original_args, mlir_caller_args, caller_linear_args) = prologue_result
+        (;
+            f_name,
+            out_tys,
+            traced_result,
+            linear_results,
+            ret,
+            original_paths,
+            original_args,
+            mlir_caller_args,
+            caller_linear_args,
+        ) = prologue_result
         name = f_name
     end
 
@@ -657,7 +677,9 @@ function call_epilogue(
         for p in Reactant.TracedUtils.get_paths(v)
             if length(p) > 0
                 if p[1] == :resargs && !MLIR.IR.is_block_arg(mlir_results[i])
-                    Reactant.TracedUtils.set!(original_args, p[2:end], MLIR.IR.result(call_op, i))
+                    Reactant.TracedUtils.set!(
+                        original_args, p[2:end], MLIR.IR.result(call_op, i)
+                    )
                 end
             end
         end
@@ -951,10 +973,15 @@ function call_with_reactant_generator(
         push!(overdubbed_code, Expr(:call, println, "function was cached"))
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
-        push!(overdubbed_code, Expr(:call, get_traced_result_from_prologue_result, temp1_output))
+        push!(
+            overdubbed_code,
+            Expr(:call, get_traced_result_from_prologue_result, temp1_output),
+        )
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
-        push!(overdubbed_code, Expr(:(=), ocres_slot, Core.SSAValue(length(overdubbed_code))))
+        push!(
+            overdubbed_code, Expr(:(=), ocres_slot, Core.SSAValue(length(overdubbed_code)))
+        )
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
         exitdest = length(overdubbed_code) + 6
@@ -989,7 +1016,14 @@ function call_with_reactant_generator(
         push!(overdubbed_code, Expr(:(=), tryfinally_slot, -1))
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
-        push!(overdubbed_code, Expr(:(=), ocres_slot, Expr(:call, Core._apply_iterate, Base.iterate, oc, traced_args)))
+        push!(
+            overdubbed_code,
+            Expr(
+                :(=),
+                ocres_slot,
+                Expr(:call, Core._apply_iterate, Base.iterate, oc, traced_args),
+            ),
+        )
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
         push!(overdubbed_code, Expr(:(=), tryfinally_slot, 1)) # indicate that no error occured
@@ -1010,7 +1044,9 @@ function call_with_reactant_generator(
         push!(overdubbed_code, Expr(:call, deactivate_fnbody, temp1_output))
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
-        error_cond = Core.SSAValue(length(push!(overdubbed_code, Expr(:call, ===, tryfinally_slot, 2)))) # check if error occured
+        error_cond = Core.SSAValue(
+            length(push!(overdubbed_code, Expr(:call, ===, tryfinally_slot, 2)))
+        ) # check if error occured
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
         exitdest = length(overdubbed_code) + 3
@@ -1029,8 +1065,8 @@ function call_with_reactant_generator(
     end
 
     ocres = Core.SSAValue(length(overdubbed_code))
-    
-    if TRACE_CALLS[]    
+
+    if TRACE_CALLS[]
         push!(overdubbed_code, Expr(:call, call_epilogue, ocres, temp1_output))
         push!(overdubbed_codelocs, code_info.codelocs[1])
         ocres = Core.SSAValue(length(overdubbed_code))
