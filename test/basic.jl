@@ -938,3 +938,14 @@ end
         rv
     )
 end
+
+@testset "map!" begin
+    x = randn(Float32, 2, 3)
+    y = zeros(Float32, 2, 3)
+
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @test Array(@jit(map!(abs2, y_ra, x_ra))) ≈ map!(abs2, y, x)
+    @test Array(y_ra) ≈ y
+end
