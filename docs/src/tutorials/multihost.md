@@ -43,17 +43,10 @@ will run on multiple devices across multiple nodes.
 #SBATCH --constraint=gpu
 
 export JULIA_DEBUG="Reactant,Reactant_jll"
-
-srun --preserve-env bash ./matmul.sh
-```
-
-```bash [matmul.sh]
-#!/bin/bash -l
-
 # Important else XLA might hang indefinitely
 unset no_proxy http_proxy https_proxy NO_PROXY HTTP_PROXY HTTPS_PROXY
 
-julia --project=. --threads=auto matmul_sharded.jl
+srun --preserve-env julia --project=. --threads=auto matmul_sharded.jl
 ```
 
 ```julia [matmul_sharded.jl]
