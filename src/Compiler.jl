@@ -748,7 +748,11 @@ function compile_mlir!(
 
     if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
-        jit = "lower-jit{openmp=true backend=cpu},symbol-dce"
+	if backend == "tpu"
+           jit = "lower-jit{openmp=true backend=cpu},symbol-dce,strip-debuginfo"
+        else
+           jit = "lower-jit{openmp=true backend=cpu},symbol-dce"
+        end
     elseif DEBUG_KERNEL[]
         curesulthandler = dlsym(
             Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
