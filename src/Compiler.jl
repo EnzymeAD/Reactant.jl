@@ -712,10 +712,10 @@ function compile_mlir!(
     # Save in the TLS whether we are raising.  We identify that condition by
     # checking whether the user set an explicit list of passes, or chose
     # `raise=true` to use the default passes.
-    is_raising = raise isa String || raise
-    if backend == "tpu"
-	is_raising = true
+    if backend == "tpu" && raise isa Bool
+	raise = true
     end
+    is_raising = raise isa String || raise
     activate_raising!(is_raising)
 
     mlir_fn_res = try
