@@ -393,14 +393,6 @@ buffer_on_cpu(::Any) = true
 buffer_on_cpu(x::ConcretePJRTArray) = all(XLA.buffer_on_cpu, x.data)
 buffer_on_cpu(x::ConcreteIFRTArray) = XLA.buffer_on_cpu(x.data)
 
-function Ops.constant(x::AbstractConcreteArray; kwargs...)
-    return Ops.constant(Base.convert(Array, x); kwargs...)
-end
-
-function Ops.constant(x::AbstractConcreteNumber{T}; kwargs...) where {T}
-    return Ops.constant(Base.convert(T, x); kwargs...)
-end
-
 function Base.zero(x::ConcretePJRTArray{T,N}) where {T,N}
     return ConcretePJRTArray(
         zeros(T, size(x)...); client=XLA.client(x), device=XLA.device(x), x.sharding
@@ -462,5 +454,16 @@ function Base.mapreducedim!(
 )
     fn = compile(mymapreducedim!, (f, op, R, A))
     fn(f, op, R, A)
+    return R
+end
+
+function mymap!(f, R, A)
+    map!(f, R, A)
+    return nothing
+end
+
+function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::AbstractArray)
+    fn = compile(mymap!, (f, R, A))
+    fn(f, R, A)
     return R
 end

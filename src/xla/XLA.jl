@@ -184,8 +184,9 @@ for runtime in (:PJRT, :IFRT)
         state.default_client = cpu
 
         # Try TPU if possible, then try GPU (CUDA)
+	if !Reactant.precompiling()
         @static if !Sys.isapple()
-            if Reactant.has_tpu()
+	    if Reactant.has_tpu()
                 dataset_dir = @get_scratch!("libtpu")
                 download_tpu(dataset_dir)
                 try
@@ -202,7 +203,6 @@ for runtime in (:PJRT, :IFRT)
                     println(stdout, e)
                 end
             else
-                if !Reactant.precompiling()
                     try
                         if was_initialized && haskey(state.clients, "gpu")
                             XLA.free_client(state.clients["gpu"])
