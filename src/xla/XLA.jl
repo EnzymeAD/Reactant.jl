@@ -217,9 +217,9 @@ for runtime in (:PJRT, :IFRT)
                     catch e
                         println(stdout, e)
                     end
+                end
             end
         end
-end
 
         return nothing
     end

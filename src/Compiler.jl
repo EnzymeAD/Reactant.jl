@@ -713,7 +713,7 @@ function compile_mlir!(
     # checking whether the user set an explicit list of passes, or chose
     # `raise=true` to use the default passes.
     if backend == "tpu" && raise isa Bool
-	raise = true
+        raise = true
     end
     is_raising = raise isa String || raise
     activate_raising!(is_raising)
