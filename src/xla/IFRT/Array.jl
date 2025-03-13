@@ -140,9 +140,7 @@ end
 function XLA.to_host(buffer::Array, data, reactant_sharding)
     reactant_sharding = Reactant.Sharding.unwrap_shardinfo(reactant_sharding)
 
-    if is_single_device_sharding(XLA.sharding(buffer)) ||
-        is_fully_replicated(XLA.sharding(buffer)) ||
-        reactant_sharding isa Reactant.Sharding.NoSharding
+    if reactant_sharding isa Reactant.Sharding.NoSharding
         GC.@preserve buffer data begin
             @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
                 buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
