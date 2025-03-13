@@ -13,6 +13,11 @@ function initialize(;
     initialization_timeout_in_seconds::Integer=300,
     kwargs...,
 )
+    if isinteractive()
+        @warn "Reactant.Distributed.initialize() should not be called in interactive mode. \
+               Use Reactant.Distributed.initialize() in a script instead."
+    end
+
     @assert !initialized[] "`Distributed.initialize` has already been called"
 
     (coordinator_address, num_processes, process_id, local_gpu_device_ids) = auto_detect_unset_distributed_params(;
