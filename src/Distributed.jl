@@ -1,7 +1,6 @@
 module Distributed
 
 using ..Reactant: Reactant
-using HTTP
 
 const initialized = Ref(false)
 
@@ -268,9 +267,17 @@ get_local_process_id(::SlurmEnvDetector) = parse(Int, ENV[_SLURM_LOCAL_PROCESS_I
 # Based on https://github.com/jax-ml/jax/blob/d89835acbacec938971400d6fa54ea6dd5efe76c/jax/_src/clusters/cloud_tpu_cluster.py
 
 const _TPU_COORDINATOR_PORT = "8476"
-const _TPU_METADATA_RESPONSE_CODE_SUCCESS = "200"
 
-## Shared Detection Code
+function _get_num_slices(::AbstractCloudTPUEnvDetector)
+    Reactant.TPUUtils.has_megascale_address() || return 0
+    return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_NUM_SLICES"))
+end
+
+function _get_slice_id(::AbstractCloudTPUEnvDetector)
+    Reactant.TPUUtils.has_megascale_address() || return 0
+    return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_SLICE_ID"))
+end
+
 
 function _get_process_id_in_slice end
 function _get_worker_list_in_slice end

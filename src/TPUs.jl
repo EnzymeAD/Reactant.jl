@@ -3,6 +3,7 @@ module TPUUtils
 using Reactant: Reactant
 using EnumX: @enumx
 using Scratch: @get_scratch!
+using HTTP
 
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
@@ -130,7 +131,7 @@ function cloud_tpu_init!()
     ENV["GRPC_VERBOSITY"] = get(ENV, "GRPC_VERBOSITY", "ERROR")
     ENV["TPU_ML_PLATFORM"] = get(ENV, "TPU_ML_PLATFORM", "Reactant")
     ENV["TPU_ML_PLATFORM_VERSION"] = get(
-        ENV, "TPU_ML_PLATFORM_VERSION", version.__version__
+        ENV, "TPU_ML_PLATFORM_VERSION", pkgversion(Reactant)
     )
     ENV["ENABLE_RUNTIME_UPTIME_TELEMETRY"] = get(
         ENV, "ENABLE_RUNTIME_UPTIME_TELEMETRY", "1"
@@ -151,5 +152,66 @@ function cloud_tpu_init!()
     )
     return nothing
 end
+
+const _TPU_METADATA_RESPONSE_CODE_SUCCESS = 200
+
+function get_metadata(key)
+    # Based on https://github.com/tensorflow/tensorflow/pull/40317
+    gce_metadata_endpoint =
+        "http://" * get(ENV, "GCE_METADATA_IP", "metadata.google.internal")
+    retry_count = 0
+    retry_seconds = 0.500
+    api_resp = nothing
+
+    while retry_count < 6
+        try
+            api_resp = HTTP.get(
+                "$(gce_metadata_endpoint)/computeMetadata/v1/instance/attributes/$(key)",
+                ["Metadata-Flavor" => "Google"];
+                connect_timeout=60,
+                readtimeout=60,
+            )
+
+            HTTP.status(api_resp) == _TPU_METADATA_RESPONSE_CODE_SUCCESS && break
+        catch err
+            @warn "Error while trying to get metadata['$(key)']. Tried \
+                   [$(retry_count) / 6] times" err
+        end
+
+        retry_count += 1
+        sleep(retry_seconds)
+    end
+
+    if api_resp === nothing
+        throw(ErrorException("Getting metadata['$(key)'] failed for 6 tries"))
+    end
+
+    return String(api_resp.body), HTTP.status(api_resp)
+end
+
+const TPU_ENV = Dict{String,String}()
+
+function get_tpu_env_value(key)
+    haskey(ENV, key) && return ENV[key]
+    haskey(TPU_ENV, key) && return TPU_ENV[key]
+
+    tpu_env_data = first(get_metadata("tpu-env"))
+    key_value_pairs = split(tpu_env_data, "\n")
+    for key_value_pair in key_value_pairs
+        # Typical line is MEGASCALE_NUM_SLICES: '2'
+        if contains(key_value_pair, ':')
+            row_key, value = split(key_value_pair, ':'; limit=2)
+            row_key = strip(row_key)
+            if row_key == key
+                value = strip(value, "'")
+                TPU_ENV[key] = value # cache to avoid multiple calls to get_metadata
+                return value
+            end
+        end
+    end
+    return nothing
+end
+
+has_megascale_address() = _get_tpu_env_value("MEGASCALE_COORDINATOR_ADDRESS") !== nothing
 
 end
