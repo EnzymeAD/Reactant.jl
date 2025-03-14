@@ -505,13 +505,13 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         if DUMP_LLVMIR[]
             push!(
                 passes,
-                "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true}",
+                "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
             )
         else
-            push!(passes, "sroa-wrappers{instcombine=false instsimplify=true}")
+            push!(passes, "sroa-wrappers{instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}")
         end
         push!(passes, "canonicalize")
-        push!(passes, "sroa-wrappers{instcombine=false instsimplify=true}")
+        push!(passes, "sroa-wrappers{instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}")
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
         push!(passes, "remove-duplicate-func-def")
@@ -640,6 +640,7 @@ end
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 const OpenMP = Ref{Bool}(true)
+const SROA_ATTRIBUTOR = Ref{Bool}(true)
 
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do
