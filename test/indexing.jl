@@ -309,7 +309,11 @@ end
 
     res = @jit write_with_broadcast1!(x_ra, y_ra)
 
-    @test res.data[1] === x_ra.data[1]
+    if res.data isa Tuple
+        @test res.data[1] === x_ra.data[1]
+    else
+        @test res.data === x_ra.data
+    end
 
     res = Array(res)
     y = Array(y_ra)
@@ -320,7 +324,11 @@ end
 
     res = @jit write_with_broadcast2!(x_ra, y_ra)
 
-    @test res.data[1] === x_ra.data[1]
+    if res.data isa Tuple
+        @test res.data[1] === x_ra.data[1]
+    else
+        @test res.data === x_ra.data
+    end
 
     res = Array(res)
     y = Array(y_ra)
@@ -336,4 +344,38 @@ end
     fn(x, idx) = @allowscalar x[idx]
 
     @test @jit(fn(x_ra, idx)) ≈ fn(x, idx)
+end
+
+@testset "ConcreteRArray view fill!" begin
+    x = Reactant.to_rarray(rand(2, 3))
+    x_view = view(x, 1:2, 1:2)
+
+    fill!(x_view, 0.0)
+    @test all(Array(x)[1:2, 1:2] .== 0)
+end
+
+@testset "ConcreteRArray mapreducedim!" begin
+    dest = ones(3, 1)
+    x = rand(3, 3)
+    dest_ra = Reactant.to_rarray(dest)
+    x_ra = Reactant.to_rarray(x)
+
+    Base.mapreducedim!(sin, +, dest_ra, x_ra)
+    Base.mapreducedim!(sin, +, dest, x)
+
+    @test dest_ra ≈ dest
+end
+
+@testset "ConcreteRArray destination view mapreducedim" begin
+    parent = ones(3, 1)
+    x = rand(2, 3)
+    parent_ra = Reactant.to_rarray(parent)
+    x_ra = Reactant.to_rarray(x)
+
+    dest_ra = @view parent_ra[1:2, 1:1]
+    Base.mapreducedim!(sin, +, dest_ra, x_ra)
+    dest = @view parent[1:2, 1:1]
+    Base.mapreducedim!(sin, +, dest, x)
+
+    @test parent_ra ≈ parent
 end

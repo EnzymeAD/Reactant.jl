@@ -31,6 +31,7 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Transform/Transforms/Passes.h"
 #include "mlir/InitAllPasses.h"
+#include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassRegistry.h"
 #include "mlir/Transforms/Passes.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
@@ -132,6 +133,10 @@
 #include "xla/python/ifrt_proxy/client/registry.h"
 #include "xla/python/ifrt_proxy/server/grpc_server.h"
 
+// Cost Analysis
+#include "xla/hlo/ir/hlo_module.h"
+#include "xla/service/hlo_cost_analysis.h"
+
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
@@ -189,6 +194,7 @@ using reactant::HeldValue;
 using HeldPjRtClient = HeldValue<std::shared_ptr<xla::PjRtClient>>;
 using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
 using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
+using HeldHloModule = HeldValue<std::shared_ptr<xla::HloModule>>;
 
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -224,6 +230,28 @@ extern "C" MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
                                                          double imag) {
   return wrap(complex::NumberAttr::getChecked(
       unwrap(loc), cast<ComplexType>(unwrap(type)), real, imag));
+}
+
+extern "C" bool mlirOperationInject(MlirContext ctx, MlirBlock block,
+                                    MlirStringRef code, MlirLocation location,
+                                    bool verify_after_parse) {
+  ParserConfig config(unwrap(ctx), verify_after_parse);
+  if (failed(parseSourceString(unwrap(code), unwrap(block), config)))
+    return false;
+  return true;
+}
+
+extern "C" MlirOperation mlirOperationParse(MlirContext ctx, MlirBlock block,
+                                            MlirStringRef code,
+                                            MlirLocation location,
+                                            bool verify_after_parse) {
+  ParserConfig config(unwrap(ctx), verify_after_parse);
+  if (failed(parseSourceString(unwrap(code), unwrap(block), config)))
+    return MlirOperation{nullptr};
+  return MlirOperation{
+      mlir::detail::constructContainerOpForParserIfNecessary<Operation *>(
+          unwrap(block), config.getContext(), unwrap(location))
+          .release()};
 }
 
 // TODO mlirComplexAttrGetnValue
@@ -817,8 +845,16 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     }
   }
 
-  auto exec = MyValueOrThrow(client->Compile(cmod_op, options));
-  return exec.release();
+  auto exec_err = client->Compile(cmod_op, options);
+
+  if (!exec_err.ok()) {
+    std::string err_str;
+    llvm::raw_string_ostream err_stream(err_str);
+    err_stream << cmod_op << "\n";
+    err_stream << exec_err.status().ToString();
+    ReactantThrowError(err_stream.str().c_str());
+  }
+  return std::move(exec_err).value().release();
 }
 
 extern "C" void
@@ -1040,6 +1076,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::stablehlo::StablehloDialect>();
   context.loadDialect<mlir::chlo::ChloDialect>();
   context.loadDialect<mlir::sdy::SdyDialect>();
+  context.loadDialect<mlir::LLVM::LLVMDialect>();
 }
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
@@ -1052,11 +1089,10 @@ extern "C" void InitializePasses(MlirDialectRegistry creg) {
   enzyme::registerenzymexlaPasses();
 
   // Register the standard passes we want.
-  mlir::registerCSEPass();
+  mlir::registerTransformsPasses();
   mlir::registerLowerAffinePass();
   mlir::registerSCCPPass();
   mlir::registerInlinerPass();
-  mlir::registerCanonicalizerPass();
   mlir::registerSymbolDCEPass();
   mlir::registerLoopInvariantCodeMotionPass();
   mlir::registerConvertSCFToOpenMPPass();
@@ -1376,15 +1412,11 @@ PjRtLoadedExecutableGetHloModules(xla::PjRtLoadedExecutable *exec,
   }
 }
 
-extern "C" const char *
-HloModuleToString(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+extern "C" const char *HloModuleToString(HeldHloModule *hlo_module) {
   return cstr_from_string(hlo_module->obj()->ToString());
 }
 
-extern "C" void
-FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
-  delete hlo_module;
-}
+extern "C" void FreeHloModule(HeldHloModule *hlo_module) { delete hlo_module; }
 
 #pragma region IfRtClient
 
@@ -1480,12 +1512,12 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
 }
 
 extern "C" ifrt::Client *ifrt_pjrt_make_client(
-    HeldPjRtClient *pjrt_client, int node_id, int num_nodes,
+    PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
     std::string key_prefix,
     std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store) {
   ifrt::PjRtClient::CreateOptions options;
-  options.pjrt_client = pjrt_client->obj();
+  options.pjrt_client = std::shared_ptr<PjRtClient>(pjrt_client);
 
   if (num_nodes > 1) {
     if (distributed_runtime_client == nullptr) {
@@ -1508,14 +1540,6 @@ extern "C" ifrt::Client *ifrt_pjrt_make_client(
   options.num_processes = num_nodes;
 
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
-}
-
-extern "C" HeldPjRtClient *pjrt_make_cpu_client_shared(
-    uint8_t asynchronous, int node_id,
-    std::optional<std::shared_ptr<xla::cpu::CpuCollectives>> collectives) {
-  PjRtClient *client =
-      MakeCPUClientInternal(asynchronous, node_id, collectives);
-  return reactant::capture(std::shared_ptr<PjRtClient>(client));
 }
 
 const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
@@ -1562,8 +1586,8 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
     }
   }
 
-  HeldPjRtClient *pjrt_client =
-      pjrt_make_cpu_client_shared(asynchronous, node_id, collectives);
+  PjRtClient *pjrt_client =
+      MakeCPUClientInternal(asynchronous, node_id, collectives);
   if (pjrt_client == nullptr)
     return nullptr;
   return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
@@ -1571,21 +1595,11 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
                                kv_store);
 }
 
-extern "C" HeldPjRtClient *pjrt_make_gpu_client_shared(
-    int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
-    double memory_fraction, bool preallocate, const char *platform_name,
-    const char **error, void *distributed_runtime_client) {
-  PjRtClient *client = MakeGPUClient(
-      node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
-      preallocate, platform_name, error, distributed_runtime_client);
-  return reactant::capture(std::shared_ptr<PjRtClient>(client));
-}
-
 extern "C" ifrt::Client *ifrt_make_pjrt_gpu_client(
     int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
     double memory_fraction, bool preallocate, const char *platform_name,
     const char **error, void *distributed_runtime_client) {
-  HeldPjRtClient *pjrt_client = pjrt_make_gpu_client_shared(
+  PjRtClient *pjrt_client = MakeGPUClient(
       node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
       preallocate, platform_name, error, distributed_runtime_client);
   if (pjrt_client == nullptr)
@@ -1596,16 +1610,10 @@ extern "C" ifrt::Client *ifrt_make_pjrt_gpu_client(
                                kv_store);
 }
 
-extern "C" HeldPjRtClient *pjrt_make_tpu_client_shared(const char *tpu_path,
-                                                       const char **error) {
-  PjRtClient *client = MakeTPUClient(tpu_path, error);
-  return reactant::capture(std::shared_ptr<PjRtClient>(client));
-}
-
 extern "C" ifrt::Client *
 ifrt_make_pjrt_tpu_client(const char *tpu_path, const char **error, int node_id,
                           int num_nodes, void *distributed_runtime_client) {
-  HeldPjRtClient *pjrt_client = pjrt_make_tpu_client_shared(tpu_path, error);
+  PjRtClient *pjrt_client = MakeTPUClient(tpu_path, error);
   if (pjrt_client == nullptr)
     return nullptr;
   std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
@@ -1977,6 +1985,33 @@ extern "C" void ifrt_sharding_to_device_list(
   }
 }
 
+extern "C" void ifrt_sharding_to_index_domains(
+    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding,
+    int64_t *array_size_list, int32_t array_size_len,
+    int64_t *index_domain_origins, int64_t *index_domain_shapes) {
+  std::vector<int64_t> array_size(array_size_len);
+  for (int i = 0; i < array_size_len; i++) {
+    array_size[i] = array_size_list[i];
+  }
+  auto array_size_span = absl::MakeSpan(array_size);
+  auto array_shape = xla::ifrt::Shape(array_size_span);
+
+  std::vector<ifrt::IndexDomain> index_domains =
+      MyValueOrThrow(sharding->obj()->IndexDomains(array_shape));
+
+  for (int i = 0; i < index_domains.size(); i++) {
+    auto index_domain = index_domains[i];
+    absl::Span<const int64_t> origin = index_domain.origin().elements();
+    absl::Span<const int64_t> shape = index_domain.shape().dims();
+
+    for (int j = 0; j < origin.size(); j++) {
+      auto idx = i * origin.size() + j;
+      index_domain_origins[idx] = origin[j];
+      index_domain_shapes[idx] = shape[j];
+    }
+  }
+}
+
 #pragma endregion
 
 typedef ifrt::Future<> IfRtFutureType;
@@ -2278,6 +2313,61 @@ ifrt_loaded_executable_get_hlo_modules(ifrt::LoadedExecutable *exec,
 extern "C" int32_t
 ifrt_loaded_executable_num_devices(ifrt::LoadedExecutable *exec) {
   return static_cast<int32_t>(exec->num_devices());
+}
+
+#pragma endregion
+
+#pragma region CostAnalysis
+
+struct JLHloCostAnalysisProperties {
+  float flops;
+  float transcendentals;
+  float bytes_accessed;
+  float optimal_seconds;
+  float utilization;
+  float operand0_utilization;
+  float operand1_utilization;
+  float operand0_bytes_accessed;
+  float operand1_bytes_accessed;
+  float output_root_bytes_accessed;
+  float reserved0;
+};
+
+extern "C" void pjrt_hlo_module_cost_analysis_properties(
+    PjRtClient *client, HeldHloModule *hlo_module,
+    JLHloCostAnalysisProperties *jlproperties) {
+  auto analysis = MyValueOrThrow(client->GetHloCostAnalysis());
+  auto err = hlo_module->obj()->entry_computation()->Accept(analysis.get());
+  if (!err.ok()) {
+    ReactantThrowError(err.ToString().c_str());
+  }
+  auto properties = analysis->properties();
+
+  jlproperties->flops = properties["flops"];
+  jlproperties->transcendentals = properties["transcendentals"];
+  jlproperties->bytes_accessed = properties["bytes accessed"];
+  jlproperties->optimal_seconds = properties["optimal seconds"];
+  jlproperties->utilization = properties["utilization"];
+  jlproperties->operand0_utilization = properties.operand_utilization(0);
+  jlproperties->operand1_utilization = properties.operand_utilization(1);
+  jlproperties->operand0_bytes_accessed = properties.operand_bytes_accessed(0);
+  jlproperties->operand1_bytes_accessed = properties.operand_bytes_accessed(1);
+  jlproperties->output_root_bytes_accessed = properties.output_bytes_accessed();
+  jlproperties->reserved0 = 0.0;
+  return;
+}
+
+extern "C" void ifrt_hlo_module_cost_analysis_properties(
+    ifrt::Client *client, HeldHloModule *hlo_module,
+    JLHloCostAnalysisProperties *jlproperties) {
+  if (llvm::isa<ifrt::PjRtClient>(client)) {
+    auto ifrt_pjrt_client = llvm::dyn_cast<ifrt::PjRtClient>(client);
+    return pjrt_hlo_module_cost_analysis_properties(
+        ifrt_pjrt_client->pjrt_client(), hlo_module, jlproperties);
+  }
+  ReactantThrowError(("Cost analysis not supported for this client: " +
+                      std::string(client->runtime_type()))
+                         .c_str());
 }
 
 #pragma endregion

@@ -152,7 +152,7 @@ mutable struct CompiledMlirFnResult{
     sharding_mesh::M
 end
 
-function prepare_args(args, concretein, toscalar, mutate_traced_args)
+function prepare_args(args, concretein, toscalar, mutate_traced_args, runtime)
     N = length(args)
     seen_args = OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
@@ -163,7 +163,12 @@ function prepare_args(args, concretein, toscalar, mutate_traced_args)
     end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, args[i], (:args, i), mode; toscalar
+            seen_args,
+            args[i],
+            (:args, i),
+            mode;
+            toscalar,
+            runtime,
         )
     end
 
@@ -200,7 +205,9 @@ function placeholder_func(
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
     for (k, v) in seen_args
-        if (k isa Reactant.ConcretePJRTArray || k isa Reactant.ConcretePJRTNumber)
+        if (
+            k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
+        ) && hasfield(typeof(k), :sharding)
             if Reactant.Sharding.is_sharded(k)
                 Reactant.Ops.mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
@@ -222,8 +229,6 @@ function placeholder_func(
     fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
     push!(MLIR.IR.region(func, 1), fnbody)
 
-    @assert MLIR.IR._has_block()
-
     return mod, func, fnbody, in_tys, sym_visibility, traced_args_to_shardings
 end
 
@@ -237,6 +242,7 @@ function prepare_results(
     do_transpose,
     mutate_traced_args,
     traced_args_to_shardings,
+    runtime
 )
     N = length(traced_args)
     # check which arguments have been mutated
@@ -247,14 +253,16 @@ function prepare_results(
         seen_results,
         result,
         (:result,),
-        (concretein || mutate_traced_args) ? Reactant.TracedTrack : Reactant.TracedSetPath,
+        (concretein || mutate_traced_args) ? Reactant.TracedTrack : Reactant.TracedSetPath;
+        runtime,
     )
     for i in 1:N
         Reactant.make_tracer(
             seen_results,
             traced_args[i],
             (concretein || mutate_traced_args) ? (:resargs, i) : (),
-            Reactant.TracedTrack,
+            Reactant.TracedTrack;
+            runtime,
         )
     end
 
@@ -334,6 +342,7 @@ function make_mlir_fn(
     do_transpose=true,
     mutate_traced_args=false,
     input_shardings=nothing, # This is not meant to be used by the user.
+    runtime=nothing,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -346,8 +355,9 @@ function make_mlir_fn(
             return_dialect,
             do_transpose,
             args_in_result,
-            input_shardings,
             mutate_traced_args,
+            input_shardings,
+            runtime,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
@@ -357,7 +367,7 @@ function make_mlir_fn(
 
     N = length(args)
     seen_args, traced_args, linear_args = prepare_args(
-        args, concretein, toscalar, mutate_traced_args
+        args, concretein, toscalar, mutate_traced_args, runtime
     )
 
     mod, temp_func, fnbody, in_tys, sym_visibility, traced_args_to_shardings = placeholder_func(
@@ -366,7 +376,11 @@ function make_mlir_fn(
 
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
+    @assert MLIR.IR._has_block()
+
     MLIR.IR.activate!(fnbody)
+    Ops.activate_constant_context!(fnbody)
+
     result = try
         for (i, arg) in enumerate(linear_args)
             raw_arg = MLIR.IR.argument(fnbody, i)
@@ -380,6 +394,7 @@ function make_mlir_fn(
             Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
         end
     finally
+        Ops.deactivate_constant_context!(fnbody)
         MLIR.IR.deactivate!(fnbody)
     end
 
@@ -393,6 +408,7 @@ function make_mlir_fn(
         do_transpose,
         mutate_traced_args,
         traced_args_to_shardings,
+        runtime
     )
 
     ret = create_return!(

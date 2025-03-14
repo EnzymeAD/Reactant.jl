@@ -2,7 +2,7 @@
 CollapsedDocStrings = true
 ```
 
-# Sharding API
+# [Sharding API](@id sharding-api)
 
 `Reactant.Sharding` module provides a high-level API to construct MLIR operations with
 support for sharding.

@@ -59,16 +59,25 @@ end
 
 @setup_workload begin
     initialize_dialect()
-    client = XLA.PJRT.CPUClient(; checkcount=false)
+
+    if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+        client = XLA.PJRT.CPUClient(; checkcount=false)
+    elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
+        client = XLA.IFRT.CPUClient(; checkcount=false)
+    else
+        error("Unsupported runtime: $(XLA.REACTANT_XLA_RUNTIME)")
+    end
+
     @compile_workload begin
         @static if precompilation_supported()
-            x = ConcretePJRTNumber(2.0; client)
+            x = ConcreteRNumber(2.0; client)
             Reactant.compile(sin, (x,); client, optimize=:all)
 
-            y = ConcretePJRTArray([2.0]; client)
+            y = ConcreteRArray([2.0]; client)
             Reactant.compile(Base.sum, (y,); client, optimize=:all)
         end
     end
+
     XLA.free_client(client)
     client.client = C_NULL
     deinitialize_dialect()

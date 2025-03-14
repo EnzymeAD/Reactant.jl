@@ -134,10 +134,6 @@ function should_rewrite_call(@nospecialize(ft))
         return false
     end
 
-    if ft <: typeof(ReactantCore.notrace)
-        return false
-    end
-
     # Avoid the 1.10 stackoverflow
     if ft <: typeof(Base.typed_hvcat)
         return false
@@ -489,6 +485,7 @@ function call_prologue(f, args...)
     do_transpose = false
     mutate_traced_args = true
     input_shardings = nothing
+    runtime=nothing
 
     name = String(Symbol(f))
 
@@ -525,7 +522,7 @@ function call_prologue(f, args...)
 
     N = length(args)
     seen_args, traced_args, callee_linear_args = TracedUtils.prepare_args(
-        args, concretein, toscalar, mutate_traced_args
+        args, concretein, toscalar, mutate_traced_args, runtime
     )
 
     mod, temp_func, fnbody, in_tys, sym_visibility, traced_args_to_shardings = TracedUtils.placeholder_func(
@@ -564,11 +561,15 @@ end
 # @inline get_traced_args_from_temp1((cond, mod, temp_func, in_tys, fnbody, sym_visibility, original_args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths)) = traced_args
 @inline get_traced_args_from_temp1((cond, prologue_result)) = prologue_result.traced_args
 @inline get_cond_from_temp1((cond, prologue_result)) = false # cond
-@inline get_traced_result_from_prologue_result((cond, prologue_result)) =
-    prologue_result.traced_result
-@inline activate_fnbody((cond, prologue_result)) = MLIR.IR.activate!(prologue_result.fnbody)
-@inline deactivate_fnbody((cond, prologue_result)) =
+@inline get_traced_result_from_prologue_result((cond, prologue_result)) = prologue_result.traced_result
+@inline function activate_fnbody((cond, prologue_result))
+    MLIR.IR.activate!(prologue_result.fnbody)
+    Ops.activate_constant_context!(prologue_result.fnbody)
+end
+@inline function deactivate_fnbody((cond, prologue_result))
+    Ops.deactivate_constant_context!(prologue_result.fnbody)
     MLIR.IR.deactivate!(prologue_result.fnbody)
+end
 
 @kwdef struct CachedPrologueResult
     f_name
@@ -623,6 +624,7 @@ function call_epilogue(result, (cached, prologue_result))
         do_transpose = false
         return_dialect = :func
         mutate_traced_args = true
+        runtime=nothing
 
         seen_result, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
             result,
@@ -634,6 +636,7 @@ function call_epilogue(result, (cached, prologue_result))
             do_transpose,
             mutate_traced_args,
             traced_args_to_shardings,
+            runtime
         )
 
         ret = TracedUtils.create_return!(

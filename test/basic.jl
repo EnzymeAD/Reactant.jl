@@ -46,8 +46,8 @@ sinexpbc(x) = sinexp.(x)
     a = Reactant.to_rarray(x)
 
     c_res = @allowscalar sinexpbc(a)
+    @test c_res isa ConcreteRArray
     @test c_res ≈ r_res
-
     @test @jit(sinexpbc(a)) ≈ r_res
 end
 
@@ -358,8 +358,6 @@ end
 end
 
 @testset "repeat" begin
-    fn_inner(x, counts) = repeat(x; inner=counts)
-
     @testset for (size, counts) in Iterators.product(
         [(2,), (2, 3), (2, 3, 4), (2, 3, 4, 5)],
         [(), (1,), (2,), (2, 1), (1, 2), (2, 2), (2, 2, 2), (1, 1, 1, 1, 1)],
@@ -373,7 +371,8 @@ end
         length(counts) < length(size) && continue
 
         @testset "inner repeat" begin
-            @test (@jit fn_inner(Reactant.to_rarray(x), counts)) == fn_inner(x, counts)
+            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ==
+                repeat(x; inner=counts)
         end
     end
 end
@@ -425,18 +424,18 @@ end
         x_ra = Reactant.to_rarray(x; track_numbers=Number)
         f2 = @compile f1(x_ra)
         @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) ≈ 5 * 5.2
-        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) isa ConcretePJRTNumber
+        @test f2(Reactant.to_rarray((5, 5.2); track_numbers=Number)) isa ConcreteRNumber
 
         x_ra = Reactant.to_rarray(x)
         f3 = @compile f1(x_ra)
         @test f3(Reactant.to_rarray((5, 5.2))) ≈ f1(x)
-        @test !(f3(Reactant.to_rarray((5, 5.2))) isa ConcretePJRTNumber)
+        @test !(f3(Reactant.to_rarray((5, 5.2))) isa ConcreteRNumber)
         @test f3(Reactant.to_rarray((5, 5.2))) isa Number
 
         x_ra = Reactant.to_rarray(x; track_numbers=Int)
         f4 = @compile f1(x_ra)
         @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) ≈ 5 * 3.14
-        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) isa ConcretePJRTNumber
+        @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) isa ConcreteRNumber
     end
 
     @testset "Mixed" begin
@@ -471,20 +470,20 @@ relu(x) = relu.(x)
 end
 
 @testset "concrete number to julia number" begin
-    x = ConcreteRNumber(3.14)
+    x = Reactant.to_rarray(3.14; track_numbers=Number)
     @test Float32(x) isa Float32
     @test Float64(x) isa Float64
     @test_throws InexactError Int(x)
 
-    x = ConcreteRNumber(3)
+    x = Reactant.to_rarray(3; track_numbers=Number)
     @test Float32(x) isa Float32
     @test Float64(x) isa Float64
     @test Int(x) isa Int
-    @test float(x) isa ConcretePJRTNumber{Float64}
+    @test float(x) isa ConcreteRNumber{Float64}
 end
 
 @testset "concrete number with fill" begin
-    x = ConcreteRNumber(10)
+    x = Reactant.to_rarray(10; track_numbers=Number)
     x_ra = @jit fill(x, (10, 10))
     @test fill(x, (10, 10)) == Array(x_ra)
 end
@@ -512,14 +511,13 @@ end
     end
 end
 
-@testset "$op" for op in [:round, :ceil, :floor]
+@testset for op in [round, ceil, floor]
     for x in (rand(Float32, (3, 3)), rand(Float64))
-        intop = gensym("int_$op")
-        @eval begin
-            @test @jit($op.(ConcretePJRTNumber.($x))) == $op.($x)
-            $intop(x) = $op(Int, x)
-            @test @jit($intop.(ConcretePJRTNumber.($x))) == $intop.($x)
-        end
+        intop = Base.Fix1(op, Int)
+        x_ra = Reactant.to_rarray.(x; track_numbers=Number)
+
+        @test @jit(op.(x_ra)) ≈ op.(x)
+        @test @jit(intop.(x_ra)) ≈ intop.(x)
     end
 end
 
@@ -533,7 +531,7 @@ end
     using ArrayInterface
 
     x_res = collect(reshape(1.0:4.0, 2, 1, 2))
-    x_ca = ConcretePJRTNumber.(x_res)
+    x_ca = Reactant.to_rarray.(x_res; track_numbers=Number)
 
     y_ca1 = @allowscalar ArrayInterface.aos_to_soa(x_ca)
     @test y_ca1 ≈ x_res
@@ -563,7 +561,7 @@ end
     x = 5
     x_ra = ConcreteRNumber(x)
 
-    @testset "ConcretePJRTNumber" begin
+    @testset "ConcreteRNumber" begin
         y = collect(x_ra)
         @test y isa Array{Int,0}
     end
@@ -598,12 +596,12 @@ end
     )
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
-    ) isa ConcretePJRTNumber{Float64}
+    ) isa ConcreteRNumber{Float64}
     @test 0.0f0 ==
         @jit ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
-    ) isa ConcretePJRTNumber{Float32}
+    ) isa ConcreteRNumber{Float32}
 
     cond = ConcreteRNumber(true)
     x = ConcreteRNumber(1.0)
@@ -627,30 +625,34 @@ end
 
 @testset "Preserve Aliasing" begin
     x = Reactant.to_rarray([3])
-    T = Any[nothing]
 
-    function ip(m, T)
-        @allowscalar m[1] = 2
-        T[1] = m
-        return m
+    if x isa ConcretePJRTArray
+        # For IFRT arrays we don't have unsafe_buffer_pointer implemented
+        T = Any[nothing]
+
+        function ip(m, T)
+            @allowscalar m[1] = 2
+            T[1] = m
+            return m
+        end
+
+        res = @jit ip(x, T)
+        @test @allowscalar res[1] == 2
+        @test @allowscalar x[1] == 2
+        @test @allowscalar T[1][1] == 2
+
+        ptr_x = Base.unsafe_convert(
+            Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(x.data[1].buffer)
+        )
+        ptr_res = Base.unsafe_convert(
+            Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(res.data[1].buffer)
+        )
+        ptr_T1 = Base.unsafe_convert(
+            Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(T[1].data[1].buffer)
+        )
+
+        @test ptr_x == ptr_res == ptr_T1
     end
-
-    res = @jit ip(x, T)
-    @test @allowscalar res[1] == 2
-    @test @allowscalar x[1] == 2
-    @test @allowscalar T[1][1] == 2
-
-    ptr_x = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(x.data[1].buffer)
-    )
-    ptr_res = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(res.data[1].buffer)
-    )
-    ptr_T1 = Base.unsafe_convert(
-        Ptr{Float64}, Reactant.XLA.unsafe_buffer_pointer(T[1].data[1].buffer)
-    )
-
-    @test ptr_x == ptr_res == ptr_T1
 end
 
 @testset "eltype conversion inside interpreter" begin
@@ -659,10 +661,12 @@ end
         return x .* eta, eta
     end
 
-    res = @jit test_convert(Reactant.to_rarray(rand(4, 2)), ConcreteRNumber(3.0f0))
+    res = @jit test_convert(
+        Reactant.to_rarray(rand(4, 2)), Reactant.to_rarray(3.0f0; track_numbers=Number)
+    )
 
     @test res[1] isa ConcreteRArray{Float64,2}
-    @test res[2] isa ConcretePJRTNumber{Float64}
+    @test res[2] isa ConcreteRNumber{Float64}
 end
 
 @testset "stack" begin
@@ -671,21 +675,16 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    s1(x) = stack((x, x))
-    s2(x) = stack((x, x); dims=2)
-    s3(x, y) = stack((x, y); dims=2)
-    s4(x, y) = stack((x, y, x); dims=1)
-
-    @test @jit(s1(x_ra)) ≈ s1(x)
-    @test @jit(s2(x_ra)) ≈ s2(x)
-    @test @jit(s3(x_ra, y_ra)) ≈ s3(x, y)
-    @test @jit(s4(x_ra, y_ra)) ≈ s4(x, y)
+    @test @jit(stack((x_ra, x_ra))) ≈ stack((x, x))
+    @test @jit(stack((x_ra, x_ra); dims=2)) ≈ stack((x, x); dims=2)
+    @test @jit(stack((x_ra, y_ra); dims=2)) ≈ stack((x, y); dims=2)
+    @test @jit(stack((x_ra, y_ra, x_ra); dims=1)) ≈ stack((x, y, x); dims=1)
 
     # Test that we don't hit illegal instruction; `x` is intentionally not a traced array
-    @test @jit(s1(x)) isa Any
-    @test @jit(s2(x)) isa Any
-    @test @jit(s3(x, y)) isa Any
-    @test @jit(s4(x, y)) isa Any
+    @test @jit(stack((x, x))) isa Any
+    @test @jit(stack((x, x); dims=2)) isa Any
+    @test @jit(stack((x, y); dims=2)) isa Any
+    @test @jit(stack((x, y, x); dims=1)) isa Any
 end
 
 @testset "unstable stack" begin
@@ -753,14 +752,14 @@ end
 
     @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
         @test @jit(fn.(x_ra)) ≈ fn.(x)
-        @test @jit(fn.(x_ra)) isa ConcretePJRTNumber{Float32}
+        @test @jit(fn.(x_ra)) isa ConcreteRNumber{Float32}
     end
     @testset for fn in (sincospi, sincos)
         res = @jit fn(x_ra)
         @test res[1] ≈ fn(x)[1]
         @test res[2] ≈ fn(x)[2]
-        @test res[1] isa ConcretePJRTNumber{Float32}
-        @test res[2] isa ConcretePJRTNumber{Float32}
+        @test res[1] isa ConcreteRNumber{Float32}
+        @test res[2] isa ConcreteRNumber{Float32}
     end
 end
 
@@ -938,4 +937,46 @@ end
     @test_throws Reactant.MLIR.IR.AddPipelineException @jit raise = "this_pass-does_not_ExisT" exp.(
         rv
     )
+end
+
+@testset "mapreduce with init" begin
+    x = reshape(collect(Float32, 1:12), 3, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    init = 3.0
+    init_ra = Reactant.to_rarray(init; track_numbers=Number)
+
+    fn(x, init; kwargs...) = sum(x; init, kwargs...)
+
+    @test @jit(fn(x_ra, init_ra; dims=2)) ≈ fn(x, init; dims=2)
+end
+
+@testset "map!" begin
+    x = randn(Float32, 2, 3)
+    y = zeros(Float32, 2, 3)
+
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @test Array(@jit(map!(abs2, y_ra, x_ra))) ≈ map!(abs2, y, x)
+    @test Array(y_ra) ≈ y
+end
+
+@testset "ConcreteRArray inplace broadcast" begin
+    x = Reactant.to_rarray(zeros(Float32, 2, 3))
+    y = Reactant.to_rarray(reshape(collect(Float32, 1:6), 2, 3))
+
+    x .= y ./ 2
+
+    @test Array(x) ≈ Array(y) ./ 2
+
+    x = zeros(Float32, 2, 3)
+    x .= y ./ 2
+
+    @test Array(x) ≈ Array(y) ./ 2
+
+    x = view(zeros(Float32, 2, 5), :, 1:3)
+    x .= y ./ 2
+
+    @test Array(x) ≈ Array(y) ./ 2
 end
