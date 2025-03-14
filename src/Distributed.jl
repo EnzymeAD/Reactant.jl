@@ -335,13 +335,11 @@ end
 
 function _get_num_slices(::AbstractCloudTPUEnvDetector)
     Reactant.TPUUtils.has_megascale_address() || return 1
-    @show Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_NUM_SLICES")
     return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_NUM_SLICES"))
 end
 
 function _get_slice_id(::AbstractCloudTPUEnvDetector)
     Reactant.TPUUtils.has_megascale_address() || return 0
-    @show Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_SLICE_ID")
     return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_SLICE_ID"))
 end
 
@@ -380,7 +378,6 @@ end
 
 function _get_worker_list_in_slice(::GceTPUCluster)
     workers = split(first(Reactant.TPUUtils.get_metadata("worker-network-endpoints")), ',')
-    @show workers
     return [split(w, ':')[3] for w in workers]
 end
 
