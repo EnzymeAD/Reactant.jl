@@ -57,10 +57,14 @@ function Base.isempty(x::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray
     return isempty(ancestor(x))
 end
 
-function Base.convert(::Type{<:Array}, X::ConcretePJRTArray{T,N}) where {T,N}
-    if Sharding.is_sharded(X)
-        data = Array{T,N}(undef, size(X)...)
+function Base.convert(::Type{<:Array}, X::AbstractConcreteArray{T,N}) where {T,N}
+    data = Array{T,N}(undef, size(X)...)
+    write_to_host_buffer!(data, X)
+    return data
+end
 
+function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,N}
+    if Sharding.is_sharded(X)
         completed = Set{eltype(X.sharding.device_to_array_slices)}()
         for idx in 1:length(X.data)
             slice = X.sharding.device_to_array_slices[idx]
@@ -73,19 +77,15 @@ function Base.convert(::Type{<:Array}, X::ConcretePJRTArray{T,N}) where {T,N}
             XLA.to_host(X.data[idx], data_slice, Reactant.Sharding.NoSharding())
             data[slice...] .= data_slice
         end
-
-        return data
     else
-        data = Array{T,N}(undef, size(X)...)
         XLA.to_host(XLA.synced_buffer(only(X.data)), data, Reactant.Sharding.NoSharding())
-        return data
     end
+    return nothing
 end
 
-function Base.convert(::Type{<:Array}, X::ConcreteIFRTArray{T,N}) where {T,N}
-    data = zeros(T, size(X)...)
+function write_to_host_buffer!(data::Array, X::ConcreteIFRTArray{T,N}) where {T,N}
     XLA.to_host(X.data, data, X.sharding)
-    return data
+    return nothing
 end
 
 function Base.convert(
@@ -347,7 +347,9 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
                 ),
             )
         end
-        aux = copyto!(similar(Array{ElType}, axes(bc)), bc)
+        aux = copyto!(
+            similar(Array{ElType}, axes(bc)), convert(Broadcast.Broadcasted{Nothing}, bc)
+        )
         return ConcretePJRTArray(aux) # XXX: result should be on correct device?
     end
 
@@ -365,6 +367,32 @@ end
 function Base.copyto!(dest::AbstractConcreteArray, src::AbstractConcreteArray)
     dest.data = src.data
     return dest
+end
+
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    @eval begin
+        function Base.copyto!(
+            dest::AbstractConcreteArray,
+            src::Broadcast.Broadcasted{Broadcast.ArrayStyle{$(aType)}},
+        )
+            dest.data = copy(src).data
+            return dest
+        end
+
+        function Base.copyto!(
+            dest::Array, src::Broadcast.Broadcasted{Broadcast.ArrayStyle{$(aType)}}
+        )
+            write_to_host_buffer!(dest, copy(src))
+            return dest
+        end
+
+        function Base.copyto!(
+            dest::AbstractArray, src::Broadcast.Broadcasted{Broadcast.ArrayStyle{$(aType)}}
+        )
+            copyto!(dest, convert(Array, copy(src)))
+            return dest
+        end
+    end
 end
 
 Base.collect(x::AbstractConcreteArray) = convert(Array, x)

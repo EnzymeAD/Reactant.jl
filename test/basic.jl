@@ -961,3 +961,22 @@ end
     @test Array(@jit(map!(abs2, y_ra, x_ra))) ≈ map!(abs2, y, x)
     @test Array(y_ra) ≈ y
 end
+
+@testset "ConcreteRArray inplace broadcast" begin
+    x = Reactant.to_rarray(zeros(Float32, 2, 3))
+    y = Reactant.to_rarray(reshape(collect(Float32, 1:6), 2, 3))
+
+    x .= y ./ 2
+
+    @test Array(x) ≈ Array(y) ./ 2
+
+    x = zeros(Float32, 2, 3)
+    x .= y ./ 2
+
+    @test Array(x) ≈ Array(y) ./ 2
+
+    x = view(zeros(Float32, 2, 5), :, 1:3)
+    x .= y ./ 2
+
+    @test Array(x) ≈ Array(y) ./ 2
+end
