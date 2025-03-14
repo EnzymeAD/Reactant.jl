@@ -81,13 +81,22 @@ display(res)
 
 :::
 
-## Example GCloud Setup for Multi-Host Matrix Multiplication on TPU v6
+## Example Google Cloud Setup for Multi-Host Matrix Multiplication on TPU v6
 
-For more details lookup the details in the official Cloud TPU documentation.
+For more details lookup the details in the
+[official Cloud TPU documentation](https://cloud.google.com/tpu/docs). For an introduction
+to Cloud TPU MultiSlice refer to the
+[official docs](https://cloud.google.com/tpu/docs/multislice-introduction).
+
+!!! tip "Setup a Google Cloud Account"
+
+    As a pre-requisite to this example, users need to setup a Google Cloud Account as
+    detailed in
+    [Set up the Cloud TPU environment](https://cloud.google.com/tpu/docs/setup-gcp-account).
 
 ::: code-group
 
-```julia [Common Julia Code]
+```julia [Sharded Matrix Multiply]
 using Reactant
 
 Reactant.Distributed.initialize()
@@ -105,65 +114,26 @@ res = @jit x_ra * y_ra
 display(res)
 ```
 
-```bash [Single-Slice Multi-Host]
+```bash [Single-Slice Multi-Host Env Vars]
 export QR_ID=sharded-single-slice-reactant-test
 export PROJECT=<project name>
 export ZONE=asia-northeast1-b
 export RUNTIME_VERSION=v2-alpha-tpuv6e
 export ACCELERATOR_TYPE=v6e-16
 export SLICE_COUNT=1 # [!code highlight]
-
-gcloud config set project $PROJECT
-gcloud config set compute/zone $ZONE
-
-gcloud compute tpus queued-resources \
-    create ${QR_ID} \
-    --project=${PROJECT} \
-    --zone=${ZONE} \
-    --accelerator-type ${ACCELERATOR_TYPE} \
-    --runtime-version ${RUNTIME_VERSION} \
-    --node-count ${SLICE_COUNT}
-
-# Create a Project.toml file and a LocalPreferences.toml
-echo "[deps]\nReactant = \"3c362404-f566-11ee-1572-e11a4b42c853\"" > Project.toml;
-echo "[Reactant]\nxla_runtime = \"IFRT\"" > LocalPreferences.toml;
-
-# Copy these files to all the workers
-gcloud compute tpus queued-resources scp ./LocalPreferences.toml ${QR_ID}: \
-    --worker=all --node=all \
-    --zone=${ZONE} --project=${PROJECT}
-gcloud compute tpus queued-resources scp ./Project.toml ${QR_ID}: \
-    --worker=all --node=all \
-    --zone=${ZONE} --project=${PROJECT}
-
-# Install Julia and Project Dependencies
-gcloud compute tpus queued-resources ssh ${QR_ID} \
-    --worker=all --node=all \
-    --zone=${ZONE} --project=${PROJECT} \
-    --command="
-        wget --quiet https://julialang-s3.julialang.org/bin/linux/x64/1.11/julia-1.11.4-linux-x86_64.tar.gz;
-        tar xzf julia-1.11.4-linux-x86_64.tar.gz;
-        rm julia-1.11.4-linux-x86_64.tar.gz;
-        unset LD_PRELOAD;
-        ./julia-1.11.4/bin/julia --project=. --threads=auto -e '
-            using Pkg;
-            Pkg.instantiate();
-            Pkg.precompile();'"
-
-# Run the sharding code
-gcloud compute tpus queued-resources ssh ${QR_ID} \
-    --worker=all --node=all \
-    --zone=${ZONE} --project=${PROJECT} \
-    --command="LD_PRELOAD='' ./julia-1.11.4/bin/julia --project=. --threads=auto <code>"
 ```
 
-```bash [Multi-Slice Multi-Host]
+```bash [Multi-Slice Multi-Host Env Vars]
 export QR_ID=sharded-single-slice-reactant-test
 export PROJECT=<project name>
 export ZONE=asia-northeast1-b
 export RUNTIME_VERSION=v2-alpha-tpuv6e
 export ACCELERATOR_TYPE=v6e-16
 export SLICE_COUNT=2 # [!code highlight]
+```
+
+```bash [Common Bash Script]
+# Remember to set the Environment Variables first
 
 gcloud config set project $PROJECT
 gcloud config set compute/zone $ZONE
@@ -207,6 +177,10 @@ gcloud compute tpus queued-resources ssh ${QR_ID} \
     --worker=all --node=all \
     --zone=${ZONE} --project=${PROJECT} \
     --command="LD_PRELOAD='' ./julia-1.11.4/bin/julia --project=. --threads=auto <code>"
+
+# Don't forget to delete the queued resources
+gcloud compute tpus queued-resources delete ${QR_ID} \
+    --project ${PROJECT} --zone ${ZONE} --force --async
 ```
 
 :::
