@@ -1013,7 +1013,12 @@ function call_with_reactant_generator(
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
         catch_dest = length(overdubbed_code) + 7
-        enterval = Core.SSAValue(length(push!(overdubbed_code, Core.EnterNode(catch_dest))))
+        enter = @static if VERSION < v"1.11"
+            Expr(:enter, catch_dest)
+        else
+            Core.EnterNode(catch_dest)
+        end
+        enterval = Core.SSAValue(length(push!(overdubbed_code, enter)))
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
         #== try block =====================================================#
@@ -1036,8 +1041,15 @@ function call_with_reactant_generator(
         push!(overdubbed_code, Expr(:leave, enterval))
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
-        finally_dest = length(overdubbed_code) + 3
+        finally_dest = length(overdubbed_code) + 4
         push!(overdubbed_code, Core.GotoNode(finally_dest))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        @static if VERSION < v"1.11"
+            push!(overdubbed_code, Expr(:leave, enterval))
+        else
+            push!(overdubbed_code, nothing)
+        end
         push!(overdubbed_codelocs, code_info.codelocs[1])
 
         push!(overdubbed_code, Expr(:(=), tryfinally_slot, 2)) # indicate that error occured
