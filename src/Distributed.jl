@@ -295,7 +295,7 @@ function _wait_for_coordinator(
     coordinator_retry_secs = 5
     while !coordinator_found && time() < max_time
         try
-            ip_address = getaddrinfo(coordinator_address, IPv4)
+            ip_address = getaddrinfo(coordinator_address)
             @debug "Found coordinator with address $(coordinator_address)"
             return nothing
         catch err
