@@ -980,3 +980,25 @@ end
 
     @test Array(x) ≈ Array(y) ./ 2
 end
+
+function fractional_idx(times, t)
+    n₂ = searchsortedfirst(times, t)
+    n₁ = max(1, n₂ - 1)
+    Nt = length(times)
+    n₂ = min(Nt, n₂)
+
+    t₁ = times[n₁]
+    t₂ = times[n₂]
+
+    ñ = (t - t₁) / (t₂ - t₁)
+
+    return ñ, n₁, n₂
+end
+
+@testset "Fractional index" begin
+    times = 0:0.01:4.5
+    res = @jit fractional_idx(times, ConcreteRNumber(2.143))
+    @test res[1] == 0.29999999999997334
+    @test res[2] == 215
+    @test res[3] == 216
+end
