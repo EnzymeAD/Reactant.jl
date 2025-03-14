@@ -41,10 +41,14 @@ struct CuTracedRNumber{T,A} <: Number
     end
 end
 
-function Base.convert(::Type{T}, RN::CuTracedRNumber{T}) where {T}
+function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     align = alignment(RN)
     Base.unsafe_convert(Core.LLVMPtr{T,A}, x)
     return @inbounds unsafe_load(pointer(RN), index, Val(align))
+end
+
+function Base.convert(::Type{T}, RN::CuTracedRNumber) where T
+    Base.convert(T, Base.getindex(RN))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
@@ -391,7 +395,7 @@ function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) whe
 end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRNumber{T}) where {T}
-    res = CuTracedRNumber{T,N,CUDA.AS.Global,size(xs)}(xs)
+    res = CuTracedRNumber{T,CUDA.AS.Global}(xs)
     return res
 end
 
