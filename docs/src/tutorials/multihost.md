@@ -99,7 +99,7 @@ First setup the Environment Variables based on the configuration that you want t
 ::: code-group
 
 ```bash [Single-Slice Multi-Host]
-export QR_ID=sharded-single-slice-reactant-test
+export QR_ID=sharded-single-slice-reactant-test # [!code highlight]
 export PROJECT=<project name>
 export ZONE=asia-northeast1-b
 export RUNTIME_VERSION=v2-alpha-tpuv6e
@@ -108,7 +108,7 @@ export SLICE_COUNT=1 # [!code highlight]
 ```
 
 ```bash [Multi-Slice Multi-Host]
-export QR_ID=sharded-single-slice-reactant-test
+export QR_ID=sharded-multi-slice-reactant-test # [!code highlight]
 export PROJECT=<project name>
 export ZONE=asia-northeast1-b
 export RUNTIME_VERSION=v2-alpha-tpuv6e
