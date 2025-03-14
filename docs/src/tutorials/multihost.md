@@ -94,6 +94,30 @@ to Cloud TPU MultiSlice refer to the
     detailed in
     [Set up the Cloud TPU environment](https://cloud.google.com/tpu/docs/setup-gcp-account).
 
+First setup the Environment Variables based on the configuration that you want to run.
+
+::: code-group
+
+```bash [Single-Slice Multi-Host]
+export QR_ID=sharded-single-slice-reactant-test
+export PROJECT=<project name>
+export ZONE=asia-northeast1-b
+export RUNTIME_VERSION=v2-alpha-tpuv6e
+export ACCELERATOR_TYPE=v6e-16
+export SLICE_COUNT=1 # [!code highlight]
+```
+
+```bash [Multi-Slice Multi-Host]
+export QR_ID=sharded-single-slice-reactant-test
+export PROJECT=<project name>
+export ZONE=asia-northeast1-b
+export RUNTIME_VERSION=v2-alpha-tpuv6e
+export ACCELERATOR_TYPE=v6e-16
+export SLICE_COUNT=2 # [!code highlight]
+```
+
+:::
+
 ::: code-group
 
 ```julia [Sharded Matrix Multiply]
@@ -114,25 +138,7 @@ res = @jit x_ra * y_ra
 display(res)
 ```
 
-```bash [Single-Slice Multi-Host Env Vars]
-export QR_ID=sharded-single-slice-reactant-test
-export PROJECT=<project name>
-export ZONE=asia-northeast1-b
-export RUNTIME_VERSION=v2-alpha-tpuv6e
-export ACCELERATOR_TYPE=v6e-16
-export SLICE_COUNT=1 # [!code highlight]
-```
-
-```bash [Multi-Slice Multi-Host Env Vars]
-export QR_ID=sharded-single-slice-reactant-test
-export PROJECT=<project name>
-export ZONE=asia-northeast1-b
-export RUNTIME_VERSION=v2-alpha-tpuv6e
-export ACCELERATOR_TYPE=v6e-16
-export SLICE_COUNT=2 # [!code highlight]
-```
-
-```bash [Common Bash Script]
+```bash [Bash Script]
 # Remember to set the Environment Variables first
 
 gcloud config set project $PROJECT
