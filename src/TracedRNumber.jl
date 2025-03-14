@@ -374,6 +374,12 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
     end
 end
 
+# matches convert methods
+# also determines floor, ceil, round
+Base.trunc(::Type{Signed}, x::TracedRNumber{<:IEEEFloat}) = Base.trunc(Int,x)
+Base.trunc(::Type{Unsigned}, x::TracedRNumber{<:IEEEFloat}) = Base.trunc(UInt,x)
+Base.trunc(::Type{Integer}, x::TracedRNumber{<:IEEEFloat}) = Base.trunc(Int,x)
+
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
     return trunc(T, Base.round(x))
 end
