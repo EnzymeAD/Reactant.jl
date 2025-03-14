@@ -387,19 +387,24 @@ end
 
 # matches convert methods
 # also determines floor, ceil, round
-Base.trunc(::Type{Signed}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(Int,x)
-Base.trunc(::Type{Unsigned}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(UInt,x)
-Base.trunc(::Type{Integer}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(Int,x)
+Base.trunc(::Type{Signed}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(Int, x)
+Base.trunc(::Type{Unsigned}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(UInt, x)
+Base.trunc(::Type{Integer}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(Int, x)
 
-function Base.getindex(r::Union{Base.StepRangeLen,Base.LinRange}, i::TracedRNumber{<:Integer})
+function Base.getindex(
+    r::Union{Base.StepRangeLen,Base.LinRange}, i::TracedRNumber{<:Integer}
+)
     @inline
     i isa TracedRNumber{Bool} && throw(ArgumentError("invalid index: $i of type Bool"))
     # @boundscheck checkbounds(r, i)
-    Base.unsafe_getindex(r, i)
+    return Base.unsafe_getindex(r, i)
 end
 
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
-function Base.unsafe_getindex(r::Base.StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision}, i::TracedRNumber{<:Integer}) where T
+function Base.unsafe_getindex(
+    r::Base.StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision},
+    i::TracedRNumber{<:Integer},
+) where {T}
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
     @inline
     i isa TracedRNumber{Bool} && throw(ArgumentError("invalid index: $i of type Bool"))
@@ -409,26 +414,33 @@ function Base.unsafe_getindex(r::Base.StepRangeLen{T,<:Base.TwicePrecision,<:Bas
         TracedRNumber{typeof(r.offset)}
     end
     u = Base.convert(OT, i)::OT - r.offset
-    shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
+    shift_hi, shift_lo = u * r.step.hi, u * r.step.lo
     x_hi, x_lo = Base.add12(r.ref.hi, shift_hi)
     T2 = if T isa TracedRNumber
         T
     else
         TracedRNumber{T}
     end
-    T2(x_hi + (x_lo + (shift_lo + r.ref.lo)))
+    return T2(x_hi + (x_lo + (shift_lo + r.ref.lo)))
 end
 
-function Base.searchsortedfirst(a::AbstractRange{<:Real},
-                                x::TracedRNumber{<:Real}, o::Base.DirectOrdering)::TracedRNumber{keytype(a)}
+function Base.searchsortedfirst(
+    a::AbstractRange{<:Real}, x::TracedRNumber{<:Real}, o::Base.DirectOrdering
+)::TracedRNumber{keytype(a)}
 
     # require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     n = round(Int, (x - f) / h + 1)
 
-    return ifelse(!Base.Order.lt(o, f, x), 1,
-           ifelse(h == 0 || Base.Order.lt(o, l, x), length(a) + 1,
-           ifelse(Base.Order.lt(o, a[n], x), n + 1, n)))
+    return ifelse(
+        !Base.Order.lt(o, f, x),
+        1,
+        ifelse(
+            h == 0 || Base.Order.lt(o, l, x),
+            length(a) + 1,
+            ifelse(Base.Order.lt(o, a[n], x), n + 1, n),
+        ),
+    )
 end
 
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
