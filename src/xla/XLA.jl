@@ -187,7 +187,7 @@ for runtime in (:PJRT, :IFRT)
         if !Reactant.precompiling()
             @static if !Sys.isapple()
                 if Reactant.has_tpu()
-                    Reactant.TPUUtils.download_libtpu()
+                    Reactant.TPUUtils.download_libtpu_if_needed()
                     try
                         if was_initialized && haskey(state.clients, "tpu")
                             XLA.free_client(state.clients["tpu"])

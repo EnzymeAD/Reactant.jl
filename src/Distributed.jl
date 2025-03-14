@@ -278,12 +278,66 @@ function _get_slice_id(::AbstractCloudTPUEnvDetector)
     return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_SLICE_ID"))
 end
 
-
 function _get_process_id_in_slice end
 function _get_worker_list_in_slice end
 
 ## GceTPUCluster
 
+function is_env_present(::GceTPUCluster)
+    if !Reactant.TPUUtils.RUNNING_IN_CLOUD_TPU_VM[]
+        @debug "Did not detect cloud TPU VM"
+        return false
+    end
+
+    if haskey(ENV, "TPU_SKIP_MDS_QUERY")
+        @debug "TPU_SKIP_MDS_QUERY is set to True, so it's probably not a GCE TPU cluster."
+        return false
+    end
+
+    metadata_response, metadata_code = Reactant.TPUUtils.get_metadata("agent-worker-number")
+    if metadata_code == Reactant.TPUUtils._TPU_METADATA_RESPONSE_CODE_SUCCESS
+        @debug "Gce Tpu Cluster detected for Reactant Distributed System"
+        return true
+    else
+        @debug "Did not detect Gce Tpu Cluster since agent-worker-number is not set in \
+                metadata"
+        @debug "Metadata code: $metadata_code"
+        @debug "Metadata response: $metadata_response"
+        return false
+    end
+end
+
+function _get_process_id_in_slice(::GceTPUCluster)
+    return parse(Int, first(Reactant.TPUUtils.get_metadata("agent-worker-number")))
+end
+
+function _get_worker_list_in_slice(::GceTPUCluster)
+    workers = split(first(Reactant.TPUUtils.get_metadata("worker-network-endpoints")), ',')
+    return [split(w, ':')[3] for w in workers]
+end
+
 ## GkeTPUCluster
+
+function is_env_present(::GkeTPUCluster)
+    if Reactant.TPUUtils.RUNNING_IN_CLOUD_TPU_VM[] && haskey(ENV, "TPU_WORKER_HOSTNAMES")
+        @debug "Detected GKE TPU cluster for Reactant Distributed System"
+        return true
+    end
+
+    if !Reactant.TPUUtils.RUNNING_IN_CLOUD_TPU_VM[]
+        @debug "Did not detect cloud TPU VM"
+        return false
+    end
+
+    @debug "TPU_WORKER_HOSTNAMES is not set, so it's not a GKE TPU cluster."
+    return false
+end
+
+function _get_process_id_in_slice(::GkeTPUCluster)
+    @assert haskey(ENV, "TPU_WORKER_ID") "TPU_WORKER_ID is not set in the environment."
+    return parse(Int, ENV["TPU_WORKER_ID"])
+end
+
+_get_worker_list_in_slice(::GkeTPUCluster) = split(ENV["TPU_WORKER_HOSTNAMES"], ',')
 
 end

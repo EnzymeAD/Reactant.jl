@@ -30,7 +30,8 @@ end
 
 get_libtpu_dir() = libtpu_dir[]
 
-function download_libtpu_if_needed(path)
+function download_libtpu_if_needed(path = nothing)
+    path === nothing && (path = get_libtpu_dir())
     @assert path !== nothing "libtpu_dir is not set!"
     if !isfile(path * "/libtpu.so")
         Downloads.download(
@@ -189,11 +190,8 @@ function get_metadata(key)
     return String(api_resp.body), HTTP.status(api_resp)
 end
 
-const TPU_ENV = Dict{String,String}()
-
 function get_tpu_env_value(key)
     haskey(ENV, key) && return ENV[key]
-    haskey(TPU_ENV, key) && return TPU_ENV[key]
 
     tpu_env_data = first(get_metadata("tpu-env"))
     key_value_pairs = split(tpu_env_data, "\n")
@@ -201,12 +199,7 @@ function get_tpu_env_value(key)
         # Typical line is MEGASCALE_NUM_SLICES: '2'
         if contains(key_value_pair, ':')
             row_key, value = split(key_value_pair, ':'; limit=2)
-            row_key = strip(row_key)
-            if row_key == key
-                value = strip(value, "'")
-                TPU_ENV[key] = value # cache to avoid multiple calls to get_metadata
-                return value
-            end
+            strip(row_key) == key && return strip(value, "'")
         end
     end
     return nothing
