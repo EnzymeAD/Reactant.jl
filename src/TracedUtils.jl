@@ -163,12 +163,7 @@ function prepare_args(args, concretein, toscalar, mutate_traced_args, runtime)
     end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args,
-            args[i],
-            (:args, i),
-            mode;
-            toscalar,
-            runtime,
+            seen_args, args[i], (:args, i), mode; toscalar, runtime
         )
     end
 
@@ -242,7 +237,7 @@ function prepare_results(
     do_transpose,
     mutate_traced_args,
     traced_args_to_shardings,
-    runtime
+    runtime,
 )
     N = length(traced_args)
     # check which arguments have been mutated
@@ -408,7 +403,7 @@ function make_mlir_fn(
         do_transpose,
         mutate_traced_args,
         traced_args_to_shardings,
-        runtime
+        runtime,
     )
 
     ret = create_return!(
