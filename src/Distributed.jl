@@ -286,14 +286,14 @@ end
 function _wait_for_coordinator(
     coordinator_address::AbstractString, timeout_in_seconds::Integer
 )
-    coordinator_found = true
+    coordinator_found = false
     max_time = time() + timeout_in_seconds
     coordinator_retry_secs = 5
     while !coordinator_found && time() < max_time
         try
             ip_address = getaddrinfo(coordinator_address, IPv4)
-            coordinator_found = true
             @debug "Found coordinator with address $(coordinator_address)"
+            return
         catch err
             @debug "Error while trying to connect to coordinator_address \
                     $(coordinator_address). Retrying in $(coordinator_retry_secs) \
