@@ -194,7 +194,7 @@ for runtime in (:PJRT, :IFRT)
                             XLA.$(runtime).tpu_client_count[] -= 1
                         end
                         tpu = $(runtime).TPUClient(;
-                            tpu_path=dataset_dir * "/libtpu.so", common_kwargs...
+                            tpu_path=Reactant.TPUUtils.get_libtpu_path(), common_kwargs...
                         )
                         state.clients["tpu"] = tpu
                         state.default_client = tpu
