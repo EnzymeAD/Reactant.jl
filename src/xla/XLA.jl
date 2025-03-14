@@ -184,25 +184,25 @@ for runtime in (:PJRT, :IFRT)
         state.default_client = cpu
 
         # Try TPU if possible, then try GPU (CUDA)
-	if !Reactant.precompiling()
-        @static if !Sys.isapple()
-	    if Reactant.has_tpu()
-                dataset_dir = @get_scratch!("libtpu")
-                download_tpu(dataset_dir)
-                try
-                    if was_initialized && haskey(state.clients, "tpu")
-                        XLA.free_client(state.clients["tpu"])
-                        XLA.$(runtime).tpu_client_count[] -= 1
+        if !Reactant.precompiling()
+            @static if !Sys.isapple()
+                if Reactant.has_tpu()
+                    dataset_dir = @get_scratch!("libtpu")
+                    download_tpu(dataset_dir)
+                    try
+                        if was_initialized && haskey(state.clients, "tpu")
+                            XLA.free_client(state.clients["tpu"])
+                            XLA.$(runtime).tpu_client_count[] -= 1
+                        end
+                        tpu = $(runtime).TPUClient(;
+                            tpu_path=dataset_dir * "/libtpu.so", common_kwargs...
+                        )
+                        state.clients["tpu"] = tpu
+                        state.default_client = tpu
+                    catch e
+                        println(stdout, e)
                     end
-                    tpu = $(runtime).TPUClient(;
-                        tpu_path=dataset_dir * "/libtpu.so", common_kwargs...
-                    )
-                    state.clients["tpu"] = tpu
-                    state.default_client = tpu
-                catch e
-                    println(stdout, e)
-                end
-            else
+                else
                     try
                         if was_initialized && haskey(state.clients, "gpu")
                             XLA.free_client(state.clients["gpu"])
