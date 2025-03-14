@@ -639,7 +639,7 @@ end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
-const OpenMP[] = Ref{Bool}(true)
+const OpenMP = Ref{Bool}(true)
 
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do
