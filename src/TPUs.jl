@@ -32,7 +32,7 @@ get_libtpu_dir() = libtpu_dir[]
 
 get_libtpu_path() = get_libtpu_dir() * "/libtpu.so"
 
-function download_libtpu_if_needed(path = nothing)
+function download_libtpu_if_needed(path=nothing)
     path === nothing && (path = get_libtpu_dir())
     @assert path !== nothing "libtpu_dir is not set!"
     if !isfile(path * "/libtpu.so")
