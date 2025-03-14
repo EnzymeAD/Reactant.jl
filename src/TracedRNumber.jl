@@ -376,9 +376,9 @@ end
 
 # matches convert methods
 # also determines floor, ceil, round
-Base.trunc(::Type{Signed}, x::TracedRNumber{<:IEEEFloat}) = Base.trunc(Int,x)
-Base.trunc(::Type{Unsigned}, x::TracedRNumber{<:IEEEFloat}) = Base.trunc(UInt,x)
-Base.trunc(::Type{Integer}, x::TracedRNumber{<:IEEEFloat}) = Base.trunc(Int,x)
+Base.trunc(::Type{Signed}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(Int,x)
+Base.trunc(::Type{Unsigned}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(UInt,x)
+Base.trunc(::Type{Integer}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(Int,x)
 
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
     return trunc(T, Base.round(x))
