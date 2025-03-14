@@ -1,4 +1,4 @@
-# [Multi-Host Environments](@ref distributed)
+# [Multi-Host Environments](@id distributed)
 
 !!! tip "Use XLA IFRT Runtime"
 
