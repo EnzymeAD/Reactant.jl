@@ -278,7 +278,7 @@ function get_coordinator_address(
         first(_get_worker_list_in_slice(env))
     end
     coordinator_address = split(coordinator_address, ':')[1]
-    @debug "DTPU Cluster using coordinator address: $(coordinator_address)"
+    @debug "TPU Cluster using coordinator address: $(coordinator_address)"
     _wait_for_coordinator(coordinator_address, timeout_in_seconds)
     return "$(coordinator_address):$(_TPU_COORDINATOR_PORT)"
 end
