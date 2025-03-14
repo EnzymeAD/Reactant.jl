@@ -187,8 +187,7 @@ for runtime in (:PJRT, :IFRT)
         if !Reactant.precompiling()
             @static if !Sys.isapple()
                 if Reactant.has_tpu()
-                    dataset_dir = @get_scratch!("libtpu")
-                    download_tpu(dataset_dir)
+                    Reactant.TPUUtils.download_libtpu()
                     try
                         if was_initialized && haskey(state.clients, "tpu")
                             XLA.free_client(state.clients["tpu"])
@@ -222,19 +221,6 @@ for runtime in (:PJRT, :IFRT)
         end
 
         return nothing
-    end
-end
-
-function download_tpu(dataset_dir::String)
-    if !isfile(dataset_dir * "/libtpu.so")
-        Downloads.download(
-            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250313+nightly-py3-none-manylinux_2_31_x86_64.whl",
-            dataset_dir * "/tpu.zip",
-        )
-        run(`unzip -qq $(dataset_dir*"/tpu.zip") -d $(dataset_dir)/tmp`)
-        run(`mv $(dataset_dir)/tmp/libtpu/libtpu.so $(dataset_dir)/libtpu.so`)
-        rm(dataset_dir * "/tmp"; recursive=true)
-        rm(dataset_dir * "/tpu.zip"; recursive=true)
     end
 end
 

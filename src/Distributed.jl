@@ -1,6 +1,7 @@
 module Distributed
 
 using ..Reactant: Reactant
+using HTTP
 
 const initialized = Ref(false)
 
@@ -52,6 +53,11 @@ struct MPIEnvDetector <: AbstractClusterEnvDetector end
 
 struct SlurmEnvDetector <: AbstractClusterEnvDetector end
 
+abstract type AbstractCloudTPUEnvDetector <: AbstractClusterEnvDetector end
+
+struct GceTPUCluster <: AbstractCloudTPUEnvDetector end
+struct GkeTPUCluster <: AbstractCloudTPUEnvDetector end
+
 # Based on https://github.com/jax-ml/jax/blob/b0117366686ab084d38ad2657d9a2ae3a581ca7e/jax/_src/clusters/cluster.py
 
 is_env_present(::AbstractClusterEnvDetector) = false
@@ -68,6 +74,9 @@ function auto_detect_unset_distributed_params(;
         MPIEnvDetector(),
         # Keep this at the end since parsing for this is a bit flaky
         OpenMPIPMIXEnvDetector(),
+        # Cloud TPU environments
+        GkeTPUCluster(),
+        GceTPUCluster(),
     ],
     coordinator_address::Union{Nothing,String}=nothing,
     num_processes::Union{Nothing,Integer}=nothing,
@@ -254,5 +263,20 @@ get_process_count(::SlurmEnvDetector) = parse(Int, ENV[_SLURM_PROCESS_COUNT])
 get_process_id(::SlurmEnvDetector) = parse(Int, ENV[_SLURM_PROCESS_ID])
 
 get_local_process_id(::SlurmEnvDetector) = parse(Int, ENV[_SLURM_LOCAL_PROCESS_ID])
+
+# TPU Environment Detectors
+# Based on https://github.com/jax-ml/jax/blob/d89835acbacec938971400d6fa54ea6dd5efe76c/jax/_src/clusters/cloud_tpu_cluster.py
+
+const _TPU_COORDINATOR_PORT = "8476"
+const _TPU_METADATA_RESPONSE_CODE_SUCCESS = "200"
+
+## Shared Detection Code
+
+function _get_process_id_in_slice end
+function _get_worker_list_in_slice end
+
+## GceTPUCluster
+
+## GkeTPUCluster
 
 end
