@@ -283,23 +283,26 @@ function get_coordinator_address(
     end
     coordinator_address = split(coordinator_address, ':')[1]
     @debug "TPU Cluster using coordinator address: $(coordinator_address)"
-    _wait_for_coordinator(coordinator_address, timeout_in_seconds)
+    _wait_for_coordinator(env, coordinator_address, timeout_in_seconds)
     return "$(coordinator_address):$(_TPU_COORDINATOR_PORT)"
 end
 
 function _wait_for_coordinator(
-    coordinator_address::AbstractString, timeout_in_seconds::Integer
+    env::AbstractCloudTPUEnvDetector,
+    coordinator_address::AbstractString,
+    timeout_in_seconds::Integer,
 )
     coordinator_found = false
     max_time = time() + timeout_in_seconds
     coordinator_retry_secs = 5
+    pid = get_process_id(env)
     while !coordinator_found && time() < max_time
         try
-            ip_address = getaddrinfo(coordinator_address)
-            @debug "Found coordinator with address $(coordinator_address)"
+            ip_address = getaddrinfo(coordinator_address, IPv4)
+            @debug "[PID $(pid)] Found coordinator with address $(coordinator_address)"
             return nothing
         catch err
-            @debug "Error while trying to connect to coordinator_address \
+            @debug "[PID $(pid)] Error while trying to connect to coordinator_address \
                     $(coordinator_address). Retrying in $(coordinator_retry_secs) \
                     seconds." err
             sleep(coordinator_retry_secs)
