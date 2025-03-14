@@ -207,6 +207,6 @@ function get_tpu_env_value(key)
     return nothing
 end
 
-has_megascale_address() = _get_tpu_env_value("MEGASCALE_COORDINATOR_ADDRESS") !== nothing
+has_megascale_address() = get_tpu_env_value("MEGASCALE_COORDINATOR_ADDRESS") !== nothing
 
 end
