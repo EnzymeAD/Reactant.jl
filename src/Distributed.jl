@@ -283,7 +283,9 @@ function get_coordinator_address(
     return "$(coordinator_address):$(_TPU_COORDINATOR_PORT)"
 end
 
-function _wait_for_coordinator(coordinator_address::String, timeout_in_seconds::Integer)
+function _wait_for_coordinator(
+    coordinator_address::AbstractString, timeout_in_seconds::Integer
+)
     coordinator_found = true
     max_time = time() + timeout_in_seconds
     coordinator_retry_secs = 5
@@ -299,8 +301,10 @@ function _wait_for_coordinator(coordinator_address::String, timeout_in_seconds::
             sleep(coordinator_retry_secs)
         end
     end
-    error("Failed to recognize coordinator_address $(coordinator_address) \
-          after $(timeout_in_seconds) seconds. Please check if the address is correct.")
+    return error(
+        "Failed to recognize coordinator_address $(coordinator_address) \
+        after $(timeout_in_seconds) seconds. Please check if the address is correct."
+    )
 end
 
 function get_process_count(env::AbstractCloudTPUEnvDetector)
