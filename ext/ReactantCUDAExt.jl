@@ -29,8 +29,30 @@ struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     end
 end
 
+struct CuTracedRNumber{T,A} <: Number
+    ptr::Core.LLVMPtr{T,A}
+
+    function CuTracedRNumber{T,A}(xs::TracedRNumber) where {T,A}
+        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.context()]
+        push!(gc_vec, xs)
+        @assert gc_vec[end] === xs
+        ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
+        return new(ptr)
+    end
+end
+
+function Base.convert(::Type{T}, RN::CuTracedRNumber{T}) where {T}
+    align = alignment(RN)
+    Base.unsafe_convert(Core.LLVMPtr{T,A}, x)
+    return @inbounds unsafe_load(pointer(RN), index, Val(align))
+end
+
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
     CUDA.Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+end
+
+function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
+    CUDA.Printf.@printf(io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a)))
 end
 
 ## array interface
@@ -43,6 +65,9 @@ function Base.pointer(x::CuTracedArray{T,<:Any,A}) where {T,A}
 end
 @inline function Base.pointer(x::CuTracedArray{T,<:Any,A}, i::Integer) where {T,A}
     return Base.unsafe_convert(Core.LLVMPtr{T,A}, x) + Base._memory_offset(x, i)
+end
+function Base.pointer(x::CuTracedRNumber{T,A}) where {T,A}
+    return Base.unsafe_convert(Core.LLVMPtr{T,A}, x)
 end
 
 ## conversions
@@ -58,6 +83,14 @@ end
 #       (cfr. shared memory and its wider-than-datatype alignment)
 
 @generated function alignment(::CuTracedArray{T}) where {T}
+    if Base.isbitsunion(T)
+        _, sz, al = Base.uniontype_layout(T)
+        al
+    else
+        Base.datatype_alignment(T)
+    end
+end
+@generated function alignment(::CuTracedRNumber{T}) where {T}
     if Base.isbitsunion(T)
         _, sz, al = Base.uniontype_layout(T)
         al
@@ -354,6 +387,11 @@ end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
     res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(xs)
+    return res
+end
+
+function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRNumber{T}) where {T}
+    res = CuTracedRNumber{T,N,CUDA.AS.Global,size(xs)}(xs)
     return res
 end
 
@@ -787,6 +825,15 @@ function Reactant.make_tracer(
     return prev
 end
 
+function Reactant.make_tracer(
+    seen, @nospecialize(prev::CuTracedRNumber), @nospecialize(path), mode; kwargs...
+)
+    x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
+    x = x::TracedRNumber
+    Reactant.make_tracer(seen, x, path, mode; kwargs...)
+    return prev
+end
+
 function get_field_offset(T::Type, path)
     offset = 0
     current_type = T
@@ -836,7 +883,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
     aliases = MLIR.IR.Attribute[]
-    rarrays = TracedRArray[]
 
     fname = func.entry
 
@@ -1092,6 +1138,17 @@ end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(A::Type{<:CuTracedArray}),
+    seen,
+    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+)
+    return A
+end
+
+Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @nospecialize(A::Type{<:CuTracedRNumber}),
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
