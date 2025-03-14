@@ -65,7 +65,8 @@ is_env_present(::AbstractClusterEnvDetector) = false
 function get_coordinator_address end
 function get_process_count end
 function get_process_id end
-function get_local_process_id end
+
+get_local_process_id(::AbstractClusterEnvDetector) = nothing
 
 function auto_detect_unset_distributed_params(;
     detector_list=[
@@ -117,7 +118,10 @@ function auto_detect_unset_distributed_params(;
     end
 
     if local_gpu_device_ids === nothing && single_gpu_per_process
-        local_gpu_device_ids = [get_local_process_id(detector)]
+        detected_local_process_id = get_local_process_id(detector)
+        if detected_local_process_id !== nothing
+            local_gpu_device_ids = [detected_local_process_id]
+        end
     end
 
     return coordinator_address, num_processes, process_id, local_gpu_device_ids
