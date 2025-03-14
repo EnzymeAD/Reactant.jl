@@ -92,7 +92,11 @@ function tokw(ndrange, workgroupsize, obj, args...)
 end
 
 function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
-    @jit tokw(ndrange, workgroupsize, obj, args...)
+    if Reactant.precompiling()
+        @code_hlo optimize=false tokw(ndrange, workgroupsize, obj, args...)
+    else
+        @jit tokw(ndrange, workgroupsize, obj, args...)
+    end
 end
 
 end
