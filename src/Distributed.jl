@@ -331,7 +331,7 @@ function get_process_id(env::AbstractCloudTPUEnvDetector)
 end
 
 function _get_num_slices(::AbstractCloudTPUEnvDetector)
-    Reactant.TPUUtils.has_megascale_address() || return 0
+    Reactant.TPUUtils.has_megascale_address() || return 1
     return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_NUM_SLICES"))
 end
 
