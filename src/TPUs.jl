@@ -201,7 +201,7 @@ function get_tpu_env_value(key)
         # Typical line is MEGASCALE_NUM_SLICES: '2'
         if contains(key_value_pair, ':')
             row_key, value = split(key_value_pair, ':'; limit=2)
-            strip(row_key) == key && return strip(value, "'")
+            strip(row_key) == key && return strip(value, '\'')
         end
     end
     return nothing
