@@ -22,7 +22,7 @@ function matmul!(output, a)
 end
 
 # https://github.com/EnzymeAD/Reactant.jl/issues/614
-const skip_non_cuda_tests = true
+const skip_non_cuda_tests = VERSION == v"1.11.3"
 
 @static if !Sys.isapple()
     @testset "KernelAbstractions Matmul" begin
