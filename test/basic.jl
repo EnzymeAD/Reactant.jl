@@ -980,3 +980,11 @@ end
 
     @test Array(x) ≈ Array(y) ./ 2
 end
+
+@testset "Hlo Cost Analysis" begin
+    x_ra = Reactant.to_rarray(rand(4, 4))
+    mul_comp = @compile x_ra * x_ra
+    cost = Reactant.XLA.cost_analysis(mul_comp)
+
+    @test cost isa Reactant.XLA.HloCostAnalysisProperties
+end

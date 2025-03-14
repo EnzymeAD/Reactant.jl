@@ -46,7 +46,7 @@ for runtime in (:PJRT, :IFRT)
     @eval @kwdef mutable struct $(backend_state) <: AbstractBackendState
         initialized::Bool = false
         clients::Dict{String,$(runtime).Client} = Dict{String,$(runtime).Client}()
-        default_client::$(runtime).Client = $(runtime).Client(C_NULL; skip_check=true)
+        default_client::$(runtime).Client = $(runtime).NullClient
     end
 end
 
