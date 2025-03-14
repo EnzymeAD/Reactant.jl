@@ -639,6 +639,7 @@ end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
+const OpenMP[] = Ref{Bool}(true)
 
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do
@@ -749,9 +750,9 @@ function compile_mlir!(
     if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu"
-            jit = "lower-jit{openmp=true backend=cpu},symbol-dce,strip-debuginfo"
+            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
         else
-            jit = "lower-jit{openmp=true backend=cpu},symbol-dce"
+            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
         end
     elseif DEBUG_KERNEL[]
         curesulthandler = dlsym(
