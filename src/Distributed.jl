@@ -293,7 +293,7 @@ function _wait_for_coordinator(
         try
             ip_address = getaddrinfo(coordinator_address, IPv4)
             @debug "Found coordinator with address $(coordinator_address)"
-            return
+            return nothing
         catch err
             @debug "Error while trying to connect to coordinator_address \
                     $(coordinator_address). Retrying in $(coordinator_retry_secs) \

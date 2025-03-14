@@ -3,7 +3,6 @@ module XLA
 using ..Reactant: Reactant, MLIR
 using Reactant_jll
 using Libdl
-using Scratch, Downloads
 using EnumX: @enumx
 using Preferences: load_preference
 using Enzyme
