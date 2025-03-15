@@ -329,12 +329,10 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
         [:($(var) = $(MissingTracedValue)()) for var in non_existant_true_branch_vars]...,
     )
 
-    if_result = gensym(:if_result)
-
     true_branch_fn = :(($(all_input_vars...),) -> begin
-        $if_result = $(true_block)
+        $(true_block)
         $(true_branch_extras)
-        return ($if_result, $(all_output_vars...))
+        return ($(all_output_vars...),)
     end)
     true_branch_fn = cleanup_expr_to_avoid_boxing(
         true_branch_fn, true_branch_fn_name, all_vars
@@ -350,9 +348,9 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     )
 
     false_branch_fn = :(($(all_input_vars...),) -> begin
-        $if_result = $(false_block)
+        $(false_block)
         $(false_branch_extras)
-        return ($if_result, $(all_output_vars...))
+        return ($(all_output_vars...),)
     end)
     false_branch_fn = cleanup_expr_to_avoid_boxing(
         false_branch_fn, false_branch_fn_name, all_vars
@@ -364,13 +362,12 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     reactant_code_block = quote
         $(true_branch_fn)
         $(false_branch_fn)
-        ($if_result, $(all_output_vars...)) = $(traced_if)(
+        ($(all_output_vars...),) = $(traced_if)(
             $(cond_name),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
             ($(all_input_vars...),),
         )
-        $if_result
     end
 
     non_reactant_code_block = Expr(:if, cond_name, original_expr.args[2])
