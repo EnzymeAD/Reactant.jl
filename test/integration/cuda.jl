@@ -154,3 +154,24 @@ end
     @jit mul_number!(A, B)
     @test all(Array(A) .≈ oA .* 3.1)
 end
+
+function searchsorted_kernel!(x, y)
+    i = threadIdx().x
+    times = 0:0.01:4.5
+    z = searchsortedfirst(times, y)
+    x[i] = z
+    return nothing
+end
+
+function searchsorted!(x, y)
+    @cuda blocks = 1 threads = length(x) searchsorted_kernel!(x, y)
+    return nothing
+end
+
+@testset "Search sorted" begin
+    oA = collect(Float64, 1:1:64)
+    A = Reactant.to_rarray(oA)
+    B = ConcreteRNumber(3.1)
+    @jit searchsorted!(A, B)
+    @test all(Array(A) .≈ 311)
+end
