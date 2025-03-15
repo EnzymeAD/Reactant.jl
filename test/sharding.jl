@@ -262,3 +262,34 @@ end
         [2, 1],        #=iota_transpose_perm=#
     ) == [0, 2, 4, 6, 1, 3, 5, 7]
 end
+
+@testset "Sharding with Mutation" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(Reactant.addressable_devices(), 2, 2, 2), (:x, :y, :z))
+
+        x_ra = Reactant.to_rarray(
+            randn(Float32, 4, 5); sharding=Sharding.NamedSharding(mesh, ((:x, :y), :z))
+        )
+
+        y_ra = Reactant.to_rarray(randn(Float32, 5, 4); sharding=Sharding.NoSharding())
+
+        function fn(x, y)
+            z = x * y
+            y[1:2, 1:2] .= 1
+            return z
+        end
+
+        y_ra_arr = Array(y_ra)
+        x_ra_arr = Array(x_ra)
+        z_ra_arr = fn(x_ra_arr, y_ra_arr)
+
+        z_ra = @jit fn(x_ra, y_ra)
+        y_ra_final = Array(y_ra)
+
+        @test z_ra_arr ≈ Array(z_ra)
+        @test y_ra_final[1:2, 1:2] ≈ y_ra_arr[1:2, 1:2]
+        @test all(y_ra_final[1:2, 1:2] .== 1)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end

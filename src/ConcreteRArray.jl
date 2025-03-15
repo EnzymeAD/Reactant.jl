@@ -251,6 +251,18 @@ function Base.getindex(a::ConcreteIFRTArray, args::Vararg{Int,N}) where {N}
     return convert(Array, a)[args...]
 end
 
+# This doesn't follow the semantics of getindex with ranges. It is mostly meant to be used
+# inside Compiler.jl
+@inline function _fast_slice(
+    a::AbstractConcreteArray{T,N}, args::Vararg{UnitRange,N}
+) where {T,N}
+    # Avoid slicing all-together
+    args == ntuple(Base.Fix1(UnitRange, 1) ∘ Base.Fix1(size, a), N) && return a
+    # For all other cases do a compile
+    fn = compile(getindex, (a, args...))
+    return fn(a, args...)
+end
+
 function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
     setindex!(a, v, args...)
     return nothing
