@@ -135,3 +135,22 @@ end
         @test all(Array(b) .== 12)
     end
 end
+
+function mul_number_kernel!(x, y)
+    i = threadIdx().x
+    x[i] *= y
+    return nothing
+end
+
+function mul_number!(x, y)
+    @cuda blocks = 1 threads = length(x) mul_number_kernel!(x, y)
+    return nothing
+end
+
+@testset "Mul Number" begin
+    oA = collect(Float64, 1:1:64)
+    A = Reactant.to_rarray(oA)
+    B = ConcreteRNumber(3.1)
+    @jit mul_number!(A, B)
+    @test all(Array(A) .≈ oA .* 3.1)
+end
