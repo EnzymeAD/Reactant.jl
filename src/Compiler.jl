@@ -737,9 +737,24 @@ function compile_mlir!(
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
     end
-    (; fnwrapped, traced_result, seen_args, ret, linear_args, in_tys, linear_results) =
-        mlir_fn_res
+    (;
+        fnwrapped,
+        traced_result,
+        seen_args,
+        ret,
+        linear_args,
+        in_tys,
+        linear_results,
+        is_sharded,
+    ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
+
+    # Custom Kernels without Raising will lead to suboptimal codegen for is_sharded, force
+    # raising
+    if is_sharded
+        is_raising = true
+        raise isa Bool && (raise = true)
+    end
 
     concrete_seen = OrderedIdDict()
 
