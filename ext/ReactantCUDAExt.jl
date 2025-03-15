@@ -55,6 +55,12 @@ function Base.promote_rule(
 ) where {T,T2}
     return Base.promote_rule(T, T2)
 end
+function Base.promote_rule(::Type{Any}, ::Type{<:CuTracedRNumber})
+    return Any
+end
+function Base.promote_rule(::Type{<:CuTracedRNumber}, ::Type{Any})
+    return Any
+end
 function Base.promote_rule(::Type{T2}, ::Type{<:CuTracedRNumber{T}}) where {T,T2}
     return Base.promote_rule(T, T2)
 end
@@ -966,7 +972,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
-    allargs = [func.f, args...]
+    allargs = Any[func.f, args...]
     for a in allargs
         if sizeof(a) == 0
             push!(allocs, nothing)
