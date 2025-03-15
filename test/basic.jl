@@ -990,3 +990,11 @@ end
     @test res[2] == 215
     @test res[3] == 216
 end
+
+mulpi(x) = π * x 
+
+@testset "Irrational promotion" begin
+    x = Reactant.to_rarray(ones(2))
+    y = @jit mulpi(x)
+    @test y .≈ π
+end

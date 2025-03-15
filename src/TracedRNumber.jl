@@ -59,6 +59,14 @@ function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{S}) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
 
+function Base.promote_rule(T::Type{<:AbstractIrrational}, ::Type{Reactant.TracedRNumber{S}}) where {S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+
+function Base.promote_rule(::Type{Reactant.TracedRNumber{S}}, T::Type{<:AbstractIrrational}) where {S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+
 # NOTE: This is inconsistent with the behavior of `convert` but we do it since it is a very
 #       common usecase
 TracedRNumber{T}(x::TracedRNumber{T}) where {T} = x
