@@ -46,3 +46,9 @@ Reactant.Profiler.@annotate
 Reactant.devices
 Reactant.addressable_devices
 ```
+
+## Tracing
+
+```@docs
+Reactant.@leaf
+```

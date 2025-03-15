@@ -9,7 +9,7 @@ abstract type AbstractConcreteArray{T,N} <: RArray{T,N} end
 # Traced Types
 
 ## MissingTracedValue -- defined in ReactantCore
-@leaf MissingTracedValue
+Functors.@leaf MissingTracedValue
 
 ## TracedRNumber
 mutable struct TracedRNumber{T} <: RNumber{T}
@@ -26,7 +26,7 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
-@leaf TracedRNumber
+Functors.@leaf TracedRNumber
 
 ## TracedRArray
 mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
@@ -45,7 +45,7 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     end
 end
 
-@leaf TracedRArray
+Functors.@leaf TracedRArray
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
 const WrappedTracedRArray{T,N} = WrappedArray{
@@ -79,7 +79,7 @@ function ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
     return ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
 end
 
-@leaf ConcretePJRTNumber
+Functors.@leaf ConcretePJRTNumber
 
 function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcretePJRTArray(fill(convert(T, data)); kwargs...)
@@ -115,7 +115,7 @@ mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: AbstractConcret
     sharding::S
 end
 
-@leaf ConcretePJRTArray
+Functors.@leaf ConcretePJRTArray
 Adapt.parent_type(::Type{<:ConcretePJRTArray{T,N}}) where {T,N} = ConcretePJRTArray{T,N}
 function Adapt.parent_type(::Type{ConcretePJRTArray{T,N,D,S}}) where {T,N,D,S}
     return ConcretePJRTArray{T,N,D,S}
