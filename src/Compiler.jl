@@ -1817,6 +1817,8 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
     device::DeviceTy
 end
 
+XLA.cost_analysis(thunk::Thunk) = XLA.cost_analysis(thunk.exec)
+
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
 function Base.showerror(
