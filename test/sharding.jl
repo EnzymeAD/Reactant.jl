@@ -284,10 +284,11 @@ end
         z_ra_arr = fn(x_ra_arr, y_ra_arr)
 
         z_ra = @jit fn(x_ra, y_ra)
+        y_ra_final = Array(y_ra)
 
         @test z_ra_arr ≈ Array(z_ra)
-        @test y_ra[1:2, 1:2] ≈ y_ra_arr[1:2, 1:2]
-        @test all(y_ra[1:2, 1:2] .== 1)
+        @test y_ra_final[1:2, 1:2] ≈ y_ra_arr[1:2, 1:2]
+        @test all(y_ra_final[1:2, 1:2] .== 1)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
