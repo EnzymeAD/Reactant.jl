@@ -539,12 +539,12 @@ function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     return mod
 end
 
-const context_gc_vector = Dict{MLIR.IR.Context,Vector{TracedRArray}}()
+const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedRNumber}}}()
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
     ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
+    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     result = MLIR.IR.context!(ctx) do
         mod = parse(MLIR.IR.Module, source)
@@ -558,7 +558,7 @@ end
 
 function compile_mlir(f, args; client=nothing, kwargs...)
     ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
+    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
@@ -1660,7 +1660,7 @@ end
 function compile_xla(f, args; client=nothing, kwargs...)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
+    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
