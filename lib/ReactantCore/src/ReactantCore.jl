@@ -280,7 +280,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     true_branch_fn_name = gensym(:true_branch)
 
     else_block, discard_vars, _ = if length(expr.args) == 3
-        if expr.args[3].head != :elseif
+        if !(expr.args[3] isa Expr) || expr.args[3].head != :elseif
             expr.args[3], [], nothing
         else
             trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1)
