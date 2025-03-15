@@ -996,5 +996,5 @@ mulpi(x) = π * x
 @testset "Irrational promotion" begin
     x = Reactant.to_rarray(ones(2))
     y = @jit mulpi(x)
-    @test y .≈ π
+    @test all(y .≈ π)
 end
