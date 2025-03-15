@@ -155,7 +155,6 @@ end
     @test all(Array(A) .≈ oA .* 3.1)
 end
 
-
 function searchsorted_kernel!(x, y)
     i = threadIdx().x
     times = 0:0.01:4.5
