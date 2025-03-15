@@ -43,7 +43,7 @@ end
 
 function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     align = alignment(RN)
-    Base.unsafe_convert(Core.LLVMPtr{T,A}, x)
+    Base.unsafe_convert(Core.LLVMPtr{T,A}, RN)
     return @inbounds unsafe_load(pointer(RN), index, Val(align))
 end
 
