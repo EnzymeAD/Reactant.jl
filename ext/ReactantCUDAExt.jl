@@ -50,6 +50,9 @@ end
 function Base.convert(::Type{T}, RN::CuTracedRNumber) where T
     Base.convert(T, Base.getindex(RN))
 end
+function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
+    Base.convert(T, Base.getindex(RN))
+end
 
 Base.promote_rule(::Type{T}, ::Type{<:CuTracedRNumber{T}}) where {T} = T
 Base.promote_rule(::Type{<:CuTracedRNumber{T}}, ::Type{T}) where {T} = T
