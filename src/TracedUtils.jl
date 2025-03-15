@@ -226,9 +226,7 @@ function make_mlir_fn(
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
     for (k, v) in seen_args
-        if (
-            k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
-        ) && hasfield(typeof(k), :sharding)
+        if k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
             if Reactant.Sharding.is_sharded(k)
                 Reactant.Ops.mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
@@ -372,6 +370,18 @@ function make_mlir_fn(
         num_partitions = length(sharding_mesh)
 
         linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
+
+        # If an argument is mutated but is not sharded (aka sharding is NoSharding), we
+        # need to force a replicated sharding.
+        for i in mutated_args
+            arg = linear_args[i]
+            if !haskey(traced_args_to_shardings, arg)
+                # Force a replicated sharding
+                traced_args_to_shardings[arg] = Reactant.Sharding.NamedSharding(
+                    sharding_mesh, ntuple(Returns(nothing), ndims(arg))
+                )
+            end
+        end
 
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)

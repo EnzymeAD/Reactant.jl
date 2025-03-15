@@ -42,12 +42,32 @@ end
     @nospecialize(obj::AbstractArray{T}), field, val
 ) where {T}
     ancestor_obj = ancestor(obj)
-    (isbitstype(T) || ancestor_obj isa RArray) && return Base.setfield!(obj, field, val)
+    (isbitstype(T) || ancestor_obj isa RArray) && return setfield_carray!(obj, field, val)
     return Base.setindex!(obj, val, field)
 end
 
 @inline function traced_setfield!(@nospecialize(obj::Dict), field, val)
     return Base.setindex!(obj, field, val)
+end
+
+# fallback
+@inline function setfield_carray!(obj, field, val)
+    return Base.setfield!(obj, field, val)
+end
+
+@inline function setfield_carray!(obj::ConcretePJRTArray, field, val)
+    if field !== :data || typeof(val) == typeof(getfield(obj, field))
+        return Base.setfield!(obj, field, val)
+    end
+
+    # This case is triggered if the user had provided an unsharded input (NoSharding), but
+    # we had to replicate it before feeding it to XLA
+    @assert !Reactant.Sharding.is_sharded(obj) "Expected unsharded input. Open an issue on \
+                                                Reactant.jl with a MWE."
+    devices = Reactant.XLA.device.(val)
+    device = Reactant.XLA.device(only(obj.data))
+    idx = findfirst(isequal(device), devices)
+    return Base.setfield!(obj, field, (val[idx],))
 end
 
 function create_result(
@@ -1289,20 +1309,40 @@ function codegen_flatten!(
                     device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
                         condensed_op_sharding, size(carg), mesh.logical_device_ids
                     )
+
+                    # Extract the buffer_slice
+                    buf_slice = Dict{eltype(device_to_array_slices),Symbol}()
+                    counter = 0
+                    for j in 1:length(mesh)
+                        sliced_buf = Symbol(:sliced_buf_, i, :_, counter)
+                        slice = device_to_array_slices[j]
+                        haskey(buf_slice, slice) && continue
+                        counter += 1
+                        push!(
+                            flatten_code,
+                            :(
+                                $sliced_buf = only(
+                                    Reactant._fast_slice($usbuf, $(slice...)).data
+                                )
+                            ),
+                        )
+                        buf_slice[slice] = sliced_buf
+                    end
+
                     for j in 1:length(mesh)
                         device_id = mesh.logical_device_ids[j]
                         buf = Symbol(:buf_, i, :_, device_id)
                         slice = device_to_array_slices[j]
-                        push!(
-                            flatten_code,
-                            :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
-                        )
                         sbuf = Symbol(:s, buf)
-                        device = XLA.get_device(client, device_id)
                         push!(flatten_names, sbuf)
                         push!(
                             flatten_code,
-                            :($sbuf = XLA.copy_buffer_to_device($buf, $device)),
+                            :(
+                                $sbuf = XLA.copy_buffer_to_device(
+                                    XLA.synced_buffer($(buf_slice[slice])),
+                                    $(XLA.get_device(client, device_id)),
+                                )
+                            ),
                         )
                     end
                 end
