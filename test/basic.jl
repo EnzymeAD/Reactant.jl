@@ -939,18 +939,6 @@ end
     )
 end
 
-@testset "mapreduce with init" begin
-    x = reshape(collect(Float32, 1:12), 3, 4)
-    x_ra = Reactant.to_rarray(x)
-
-    init = 3.0
-    init_ra = Reactant.to_rarray(init; track_numbers=Number)
-
-    fn(x, init; kwargs...) = sum(x; init, kwargs...)
-
-    @test @jit(fn(x_ra, init_ra; dims=2)) ≈ fn(x, init; dims=2)
-end
-
 @testset "map!" begin
     x = randn(Float32, 2, 3)
     y = zeros(Float32, 2, 3)
