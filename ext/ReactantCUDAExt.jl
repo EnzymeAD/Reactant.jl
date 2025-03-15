@@ -50,6 +50,10 @@ function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
     return Base.convert(T, Base.getindex(RN))
 end
 
+Base.isless(a::CuTracedRNumber, b::CuTracedRNumber) = Base.isless(a[], b[])
+Base.isless(a, b::CuTracedRNumber) = Base.isless(a, b[])
+Base.isless(a::CuTracedRNumber, b) = Base.isless(a[], b)
+
 function Base.promote_rule(
     ::Type{<:CuTracedRNumber{T}}, ::Type{<:CuTracedRNumber{T2}}
 ) where {T,T2}
