@@ -16,6 +16,10 @@ function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 end
 
+function Base.rtoldefault(T::Type{<:TracedRNumber})
+    return T(Base.rtoldefault(unwrapped_eltype(T)))
+end
+
 function Base.isfinite(x::TracedRNumber{<:Complex})
     return isfinite(real(x)) & isfinite(imag(x))
 end
