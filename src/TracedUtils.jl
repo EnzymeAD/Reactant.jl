@@ -641,9 +641,13 @@ function broadcast_to_size(arg::Base.RefValue, rsize)
     return arg
 end
 
-broadcast_to_size(arg::AbstractIrrational, rsize) = broadcast_to_size(Base.convert(Float64, arg), rsize)
+function broadcast_to_size(arg::AbstractIrrational, rsize)
+    return broadcast_to_size(Base.convert(Float64, arg), rsize)
+end
 
-broadcast_to_size(arg::ReactantPrimitive, rsize) = Ops.constant(Base.fill(arg, Tuple(rsize)))
+function broadcast_to_size(arg::ReactantPrimitive, rsize)
+    return Ops.constant(Base.fill(arg, Tuple(rsize)))
+end
 
 function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     length(rsize) == 0 && return arg
