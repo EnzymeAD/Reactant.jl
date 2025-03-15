@@ -43,12 +43,9 @@ end
 
 function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     align = alignment(RN)
-    return @inbounds unsafe_load(pointer(RN), index, Val(align))
+    return @inbounds unsafe_load(RN.ptr, 1, Val(align))
 end
 
-function Base.convert(::Type{T}, RN::CuTracedRNumber) where T
-    Base.convert(T, Base.getindex(RN))
-end
 function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
     Base.convert(T, Base.getindex(RN))
 end
@@ -75,9 +72,6 @@ function Base.pointer(x::CuTracedArray{T,<:Any,A}) where {T,A}
 end
 @inline function Base.pointer(x::CuTracedArray{T,<:Any,A}, i::Integer) where {T,A}
     return Base.unsafe_convert(Core.LLVMPtr{T,A}, x) + Base._memory_offset(x, i)
-end
-function Base.pointer(x::CuTracedRNumber{T,A}) where {T,A}
-    return Base.unsafe_convert(Core.LLVMPtr{T,A}, x)
 end
 
 ## conversions
