@@ -54,8 +54,9 @@ function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
     Base.convert(T, Base.getindex(RN))
 end
 
-Base.promote_rule(::Type{T}, ::Type{<:CuTracedRNumber{T}}) where {T} = T
-Base.promote_rule(::Type{<:CuTracedRNumber{T}}, ::Type{T}) where {T} = T
+Base.promote_rule(::Type{<:CuTracedRNumber{T}}, ::Type{<:CuTracedRNumber{T2}}) where {T, T2} = Base.promote_rule(T, T2)
+Base.promote_rule(::Type{T2}, ::Type{<:CuTracedRNumber{T}}) where {T, T2} = Base.promote_rule(T, T2)
+Base.promote_rule(::Type{<:CuTracedRNumber{T}}, ::Type{T2}) where {T, T2} = Base.promote_rule(T, T2)
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
     CUDA.Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
