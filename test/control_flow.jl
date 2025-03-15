@@ -775,7 +775,8 @@ end
 end
 
 function ternary_max(x, y)
-    @trace x > y ? x : y
+    @trace result = x > y ? x : y
+    result
 end
 
 @testset "ternary operator return value" begin

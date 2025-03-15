@@ -261,9 +261,15 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     condition_vars = [ExpressionExplorer.compute_symbols_state(cond_expr).references...]
 
     true_block = if store_last_line !== nothing
-        @assert expr.args[2].head == :block "currently we only support blocks"
-        true_last_line = expr.args[2].args[end]
-        remaining_lines = expr.args[2].args[1:(end - 1)]
+        if expr.args[2] isa Expr
+            @assert expr.args[2].head == :block "currently we only support blocks"
+            expr.args[2] = Expr(:block, expr.args[2].args...)
+            true_last_line = expr.args[2].args[end]
+            remaining_lines = expr.args[2].args[1:(end - 1)]
+        else
+            true_last_line = expr.args[2]
+            remaining_lines = []
+        end
         quote
             $(remaining_lines...)
             $(store_last_line) = $(true_last_line)
@@ -299,9 +305,14 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
     discard_vars = unique(discard_vars_from_expansion) ∪ discard_vars
 
     false_block = if store_last_line !== nothing
-        @assert else_block.head == :block "currently we only support blocks"
-        false_last_line = else_block.args[end]
-        remaining_lines = else_block.args[1:(end - 1)]
+        if else_block isa Expr
+            @assert else_block.head == :block "currently we only support blocks"
+            false_last_line = else_block.args[end]
+            remaining_lines = else_block.args[1:(end - 1)]
+        else
+            false_last_line = else_block
+            remaining_lines = []
+        end
         quote
             $(remaining_lines...)
             $(store_last_line) = $(false_last_line)
