@@ -722,6 +722,8 @@ function compile_mlir!(
         }
     }();
     optimize::Union{Bool,Symbol}=true,
+    # default refers to letting XLA handle the shardy inport/propagation/export
+    shardy_passes::Symbol=:to_mhlo_shardings, # [:default, :to_mhlo_shardings]
     no_nan::Bool=false,
     backend="gpu",
     fn_kwargs=(),
@@ -977,6 +979,34 @@ function compile_mlir!(
         error("Invalid optimize option: $(Meta.quot(optimize))")
     end
 
+    # shardy passes
+    use_shardy_partitioner = false
+    if is_sharded
+        if shardy_passes == :default
+            # If `:default` is passed in, we will run a pass to export the sharding
+            # inside the corresponding compile function for IFRT/PJRT. This keeps the
+            # sharding readable.
+            use_shardy_partitioner = true
+        elseif shardy_passes == :to_mhlo_shardings
+            # Convert all shardy ops to corresponding mhlo attrs/ops that can be consumed by
+            # XLA (note we need to set `use_shardy_partitioner` to `false` in the options)
+            # TODO: Use https://github.com/openxla/shardy/blob/01d3205086132d1bdf0867e911c05f489918431d/shardy/dialect/sdy/transforms/propagation/propagation_pipeline.cc#L28 to pass in the options
+            run_pass_pipeline!(
+                mod,
+                join(
+                    ["sdy-propagation-pipeline", "xla-sdy-stablehlo-export-pipeline"], ','
+                ),
+            )
+
+            # Run our optimization passes here -- we need to be careful to not apply folding
+            # here since that violates the semantics of `sdy.constant` which was converted to
+            # `stablehlo.constant` by the previous pass.
+            run_pass_pipeline!(mod, join(["canonicalize", "cse"], ','))
+        else
+            error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
+        end
+    end
+
     preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
@@ -1040,6 +1070,7 @@ function compile_mlir!(
         concrete_result,
         mlir_fn_res.sharding_mesh,
         mlir_fn_res.mutated_args,
+        use_shardy_partitioner,
     )
 end
 
@@ -1050,7 +1081,11 @@ See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :raise => false
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :shardy_passes => :(:default),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1074,7 +1109,11 @@ See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :raise => false
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :shardy_passes => :(:default),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1098,7 +1137,11 @@ See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :raise => false
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :shardy_passes => :(:to_mhlo_shardings),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1125,6 +1168,7 @@ macro compile(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :shardy_passes => :(:to_mhlo_shardings),
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1141,6 +1185,7 @@ macro jit(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :shardy_passes => :(:to_mhlo_shardings),
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
@@ -1166,6 +1211,7 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
             options[option_name] = option.args[2]
         end
     end
+
     call = only(args)
     f_symbol = gensym(:f)
     args_symbol = gensym(:args)
@@ -1207,18 +1253,20 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
         error("Invalid function call: $(call)")
     end
 
-    return quote
-        $(f_symbol) = $(fname)
-        $(args_symbol) = $(args_rhs)
-        $(kwargs_symbol) = (; $(kwargs_rhs...))
-        $(compiled_symbol) = $(compiler)(
-            $(f_symbol),
-            $(args_symbol);
-            fn_kwargs=$(kwargs_symbol),
-            $(Expr.(:kw, keys(options), values(options))...),
-        )
-    end,
-    (; compiled=compiled_symbol, args=args_symbol)
+    return (
+        quote
+            $(f_symbol) = $(fname)
+            $(args_symbol) = $(args_rhs)
+            $(kwargs_symbol) = (; $(kwargs_rhs...))
+            $(compiled_symbol) = $(compiler)(
+                $(f_symbol),
+                $(args_symbol);
+                fn_kwargs=$(kwargs_symbol),
+                $(Expr.(:kw, keys(options), values(options))...),
+            )
+        end,
+        (; compiled=compiled_symbol, args=args_symbol),
+    )
 end
 
 """
@@ -1765,6 +1813,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
             global_device_ids,
             mlir_fn_res.num_replicas,
             mlir_fn_res.num_partitions,
+            mlir_fn_res.use_shardy_partitioner,
         )
 
         return mod, exec, mlir_fn_res, device, client
