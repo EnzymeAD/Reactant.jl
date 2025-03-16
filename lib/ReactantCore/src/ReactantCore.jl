@@ -6,7 +6,13 @@ using MacroTools: MacroTools
 export @trace, within_compile, MissingTracedValue
 
 # Traits
-is_traced(x) = false
+function is_traced(x::T) where T
+    if isprimitivetype(x)
+        return false
+    else
+        return any(is_traced, getfield.(Ref(x), fieldnames(T)))
+    end
+end
 
 # New Type signifying that a value is missing
 mutable struct MissingTracedValue
