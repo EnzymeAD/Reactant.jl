@@ -63,6 +63,7 @@ export default defineConfig({
         items: [
           {text: "Overview", link: "/tutorials/"},
           {text: "Profiling", link: "/tutorials/profiling"},
+          {text: "Distributed", link: "/tutorials/multihost"},
         ],
       },
       {
@@ -122,6 +123,7 @@ export default defineConfig({
         items: [
           { text: "Overview", link: "/tutorials/" },
           { text: "Profiling", link: "/tutorials/profiling" },
+          { text: "Distributed", link: "/tutorials/multihost" },
         ],
       },
       "/api/": {

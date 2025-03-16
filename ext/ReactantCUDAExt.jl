@@ -29,8 +29,57 @@ struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     end
 end
 
+struct CuTracedRNumber{T,A} <: Number
+    ptr::Core.LLVMPtr{T,A}
+
+    function CuTracedRNumber{T,A}(xs::TracedRNumber) where {T,A}
+        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.context()]
+        push!(gc_vec, xs)
+        @assert gc_vec[end] === xs
+        ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
+        return new(ptr)
+    end
+end
+
+function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
+    align = alignment(RN)
+    return @inbounds unsafe_load(RN.ptr, 1, Val(align))
+end
+
+function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
+    return Base.convert(T, Base.getindex(RN))
+end
+
+Base.isless(a::CuTracedRNumber, b::CuTracedRNumber) = Base.isless(a[], b[])
+Base.isless(a, b::CuTracedRNumber) = Base.isless(a, b[])
+Base.isless(a::CuTracedRNumber, b) = Base.isless(a[], b)
+
+function Base.promote_rule(
+    ::Type{<:CuTracedRNumber{T}}, ::Type{<:CuTracedRNumber{T2}}
+) where {T,T2}
+    return Base.promote_rule(T, T2)
+end
+function Base.promote_rule(::Type{Any}, ::Type{<:CuTracedRNumber})
+    return Any
+end
+function Base.promote_rule(::Type{<:CuTracedRNumber}, ::Type{Any})
+    return Any
+end
+function Base.promote_rule(::Type{T2}, ::Type{<:CuTracedRNumber{T}}) where {T,T2}
+    return Base.promote_rule(T, T2)
+end
+function Base.promote_rule(::Type{<:CuTracedRNumber{T}}, ::Type{T2}) where {T,T2}
+    return Base.promote_rule(T, T2)
+end
+
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
     CUDA.Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+end
+
+function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
+    CUDA.Printf.@printf(
+        io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a))
+    )
 end
 
 ## array interface
@@ -58,6 +107,14 @@ end
 #       (cfr. shared memory and its wider-than-datatype alignment)
 
 @generated function alignment(::CuTracedArray{T}) where {T}
+    if Base.isbitsunion(T)
+        _, sz, al = Base.uniontype_layout(T)
+        al
+    else
+        Base.datatype_alignment(T)
+    end
+end
+@generated function alignment(::CuTracedRNumber{T}) where {T}
     if Base.isbitsunion(T)
         _, sz, al = Base.uniontype_layout(T)
         al
@@ -354,6 +411,11 @@ end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
     res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(xs)
+    return res
+end
+
+function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRNumber{T}) where {T}
+    res = CuTracedRNumber{T,CUDA.AS.Global}(xs)
     return res
 end
 
@@ -787,6 +849,15 @@ function Reactant.make_tracer(
     return prev
 end
 
+function Reactant.make_tracer(
+    seen, @nospecialize(prev::CuTracedRNumber), @nospecialize(path), mode; kwargs...
+)
+    x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
+    x = x::TracedRNumber
+    Reactant.make_tracer(seen, x, path, mode; kwargs...)
+    return prev
+end
+
 function get_field_offset(T::Type, path)
     offset = 0
     current_type = T
@@ -836,7 +907,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
     aliases = MLIR.IR.Attribute[]
-    rarrays = TracedRArray[]
 
     fname = func.entry
 
@@ -906,7 +976,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
-    allargs = [func.f, args...]
+    allargs = Any[func.f, args...]
     for a in allargs
         if sizeof(a) == 0
             push!(allocs, nothing)
@@ -1093,8 +1163,21 @@ end
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(A::Type{<:CuTracedArray}),
     seen,
-    mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type)
+    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+)
+    return A
+end
+
+Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @nospecialize(A::Type{<:CuTracedRNumber}),
+    seen,
+    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     return A
 end
@@ -1104,28 +1187,34 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding)
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     T = eltype(A)
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
-        if !Reactant.Sharding.is_sharded(sharding)
-            return Reactant.ConcretePJRTArray{T,N,1,Reactant.Sharding.NoShardInfo}
-        else
-            error("TODO: implement sharding")
-        end
-    else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding)
-        if TT === T
-            return A
-        else
-            return Array{
-                Reactant.traced_type_inner(
-                    T, seen, mode, track_numbers, Base.getproperty(sharding, 1)
-                ),
+        if runtime isa Val{:PJRT}
+            return Reactant.ConcretePJRTArray{
+                T,
                 N,
+                Reactant.Sharding.ndevices(sharding),
+                Reactant.Sharding.shard_type(typeof(sharding), N),
+            }
+        elseif runtime isa Val{:IFRT}
+            return Reactant.ConcreteIFRTArray{
+                T,N,Reactant.Sharding.shard_type(typeof(sharding), N)
             }
         end
+        error("Unsupported runtime $runtime")
+    else
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+        TT === T && return A
+        return Array{
+            Reactant.traced_type_inner(
+                T, seen, mode, track_numbers, Base.getproperty(sharding, 1), runtime
+            ),
+            N,
+        }
     end
 end
 
@@ -1136,6 +1225,7 @@ function Reactant.make_tracer(
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+    @nospecialize(runtime),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1145,9 +1235,14 @@ function Reactant.make_tracer(
         return seen[prev]
     end
     if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
-        return seen[prev] = Reactant.ConcretePJRTArray(Array(prev); sharding)
+        if runtime isa Val{:PJRT}
+            return seen[prev] = Reactant.ConcretePJRTArray(Array(prev); sharding)
+        elseif runtime isa Val{:IFRT}
+            return seen[prev] = Reactant.ConcreteIFRTArray(Array(prev); sharding)
+        end
+        error("Unsupported runtime $runtime")
     end
-    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding)
+    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
     if TT === eltype(RT)
         return prev
     end
@@ -1164,6 +1259,7 @@ function Reactant.make_tracer(
                 mode;
                 track_numbers,
                 sharding=Base.getproperty(sharding, I),
+                runtime,
                 kwargs...,
             )
             if pv !== nv
@@ -1192,7 +1288,15 @@ end
 @static if !Sys.isapple()
     Reactant.PrecompileTools.@setup_workload begin
         Reactant.initialize_dialect()
-        client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+
+        if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
+            client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+        elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
+            client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
+        else
+            error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
+        end
+
         Reactant.PrecompileTools.@compile_workload begin
             @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
                 function square_kernel!(x)
@@ -1205,10 +1309,11 @@ end
                     CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
                     return nothing
                 end
-                y = Reactant.ConcretePJRTArray([2.0]; client)
+                y = Reactant.ConcreteRArray([2.0]; client)
                 Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
             end
         end
+
         Reactant.XLA.free_client(client)
         client.client = C_NULL
         Reactant.deinitialize_dialect()

@@ -10,20 +10,15 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
             x2 = Reactant.to_rarray(x)
 
             res = @jit sum(x2)
-            @test res isa @NamedTuple{a::ConcreteRNumber{Float64,1,Sharding.NoShardInfo}}
+            @test res isa NamedTuple
+            @test res.a isa ConcreteRNumber{Float64}
             @test isapprox(res.a, sum(x.a))
         end
 
         @testset "Array" begin
             x = [1 2; 3 4; 5 6]
-            x2 = Reactant.to_rarray(x)
-
-            # TODO remove `x2` when #196 is fixed
-            f = Reactant.compile((x2,)) do _
-                x
-            end
-
-            @test f(x2) ≈ x
+            f = Reactant.compile(() -> x, ())
+            @test f() ≈ x
         end
     end
 
@@ -48,8 +43,8 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
         y1 = @jit ftype1(a_ra)
         y2 = @jit ftype2(a_ra)
 
-        @test y1 isa Reactant.ConcretePJRTArray{Float64,2}
-        @test y2 isa Reactant.ConcretePJRTArray{Float32,2}
+        @test y1 isa Reactant.ConcreteRArray{Float64,2}
+        @test y2 isa Reactant.ConcreteRArray{Float32,2}
 
         @test y1 ≈ Float64.(a)
         @test y2 ≈ Float32.(a)

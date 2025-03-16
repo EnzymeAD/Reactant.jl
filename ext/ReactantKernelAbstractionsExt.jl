@@ -24,10 +24,10 @@ end
 
 KA.allocate(n::ReactantBackend, ::Type{T}, dims::Tuple) where {T} = KA.zeros(b, T, dims)
 function KA.zeros(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    return ConcretePJRTArray(zeros(T, dims))
+    return Reactant.to_rarray(zeros(T, dims))
 end
 function KA.ones(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    return ConcretePJRTArray(ones(T, dims))
+    return Reactant.to_rarray(ones(T, dims))
 end
 
 KA.get_backend(::Reactant.AnyTracedRArray) = ReactantBackend()
@@ -37,7 +37,9 @@ function KA.synchronize(::ReactantBackend) end
 Adapt.adapt_storage(::ReactantBackend, a::Array) = a
 Adapt.adapt_storage(::ReactantBackend, a::Reactant.AnyTracedRArray) = a
 Adapt.adapt_storage(::ReactantBackend, a::Reactant.AnyConcretePJRTArray) = a
+Adapt.adapt_storage(::ReactantBackend, a::Reactant.AnyConcreteIFRTArray) = a
 Adapt.adapt_storage(::KA.CPU, a::Reactant.AnyConcretePJRTArray) = convert(Array, a)
+Adapt.adapt_storage(::KA.CPU, a::Reactant.AnyConcreteIFRTArray) = convert(Array, a)
 
 ## memory operations
 
@@ -90,7 +92,12 @@ function tokw(ndrange, workgroupsize, obj, args...)
 end
 
 function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
-    @jit tokw(ndrange, workgroupsize, obj, args...)
+    if Reactant.precompiling()
+        @code_hlo optimize = false tokw(ndrange, workgroupsize, obj, args...)
+    else
+        @jit tokw(ndrange, workgroupsize, obj, args...)
+    end
+    return nothing
 end
 
 end

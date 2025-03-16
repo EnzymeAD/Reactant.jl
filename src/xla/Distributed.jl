@@ -129,7 +129,7 @@ function update!(
     coordinator_address::String,
     num_processes::Int,
     process_id::Int,
-    local_gpu_device_ids::Vector{Int},
+    local_gpu_device_ids::Union{Nothing,Vector{Int}},
     coordinator_bind_address::Union{Nothing,String}=nothing,
     cluster_register_timeout_in_minutes::Integer=60,
     rpc_timeout_in_seconds::Integer=120,
@@ -141,7 +141,9 @@ function update!(
     @assert 0 ≤ process_id < num_processes
 
     state.coordinator_address = coordinator_address
-    state.local_gpu_device_ids = local_gpu_device_ids
+    if local_gpu_device_ids !== nothing
+        state.local_gpu_device_ids = local_gpu_device_ids
+    end
     state.process_id = process_id
     state.num_processes = num_processes
 

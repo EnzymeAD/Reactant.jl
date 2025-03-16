@@ -115,9 +115,10 @@ function Base.eltype(buffer::Array)
     end
 end
 
-function XLA.device(::Array)
-    return error("IFRT.Array can be sharded/replicated across multiple devices. Hence, \
-                  `XLA.device` is not defined.")
+function XLA.device(buffer::Array)
+    devices = XLA.devices(XLA.sharding(buffer))
+    length(devices) == 1 && return only(devices)
+    return nothing
 end
 
 function XLA.client(buffer::Array)
@@ -136,33 +137,37 @@ function XLA.buffer_on_cpu(::Array)
     return error("IFRT.Array does not support `XLA.buffer_on_cpu`")
 end
 
-function XLA.to_host(buffer::Array, data)
-    sharding = XLA.sharding(buffer)
-    all_devices = XLA.devices(sharding)
+function XLA.to_host(buffer::Array, data, reactant_sharding)
+    reactant_sharding = Reactant.Sharding.unwrap_shardinfo(reactant_sharding)
 
-    if length(all_devices) == 1
-        GC.@preserve buffer data begin
+    # While some client implementations might support directly copying to host, but we
+    # avoid the complexity of supporting that for now.
+    single_device_arrays = disassemble_into_single_device_arrays(buffer, true)
+
+    if reactant_sharding isa Reactant.Sharding.NoSharding
+        data_buffer = first(single_device_arrays)
+        GC.@preserve data_buffer data begin
             @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
-                buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
+                data_buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
             )::Cvoid
         end
-        return nothing
+        return data
     end
 
-    if any(!is_addressable, all_devices)
+    @assert reactant_sharding isa Reactant.Sharding.HloSharding
+    client = XLA.client(buffer)
+    all_devices = XLA.get_device.((client,), reactant_sharding.mesh.device_ids)
+
+    if any(!XLA.is_addressable, all_devices)
         @warn "Not all devices are addressable. Currently we only fill in the data for \
                addressable devices. Remaining slices of data in `data` are left \
                untouched."
     end
 
-    # While some client implementations might support directly copying to host, but we 
-    # avoid the complexity of supporting that for now.
-    single_device_arrays = disassemble_into_single_device_arrays(buffer, true)
-
     array_slices, _ = XLA.sharding_to_concrete_array_indices(
-        convert(XLA.HloSharding, sharding),
+        convert(XLA.CondensedOpSharding, reactant_sharding.hlo_sharding),
         size(data),
-        collect(Int64, 0:(length(all_devices) - 1)),
+        reactant_sharding.mesh.logical_device_ids,
     )
     array_slices = [
         slice for
@@ -172,9 +177,9 @@ function XLA.to_host(buffer::Array, data)
     @assert length(array_slices) == length(single_device_arrays)
 
     for (slice, arr) in zip(array_slices, single_device_arrays)
-        data_slice = data[slice...]
-        XLA.to_host(arr, data_slice)
-        data[slice...] .= data_slice
+        data_slice = data isa Base.RefValue ? data : data[slice...]
+        XLA.to_host(arr, data_slice, Reactant.Sharding.NoSharding())
+        data isa Base.RefValue || (data[slice...] .= data_slice)
     end
     return nothing
 end
