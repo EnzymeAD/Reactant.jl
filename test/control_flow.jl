@@ -790,7 +790,9 @@ struct MaybeTraced
 end
 
 @testset "is_traced of struct" begin
-    containstraced = MaybeTraced(MaybeTraced(Reactant.TracedRArray{Float64, 1}((), nothing, (3, ))))
+    containstraced = MaybeTraced(
+        MaybeTraced(Reactant.TracedRArray{Float64,1}((), nothing, (3,)))
+    )
     @test Reactant.ReactantCore.is_traced(containstraced) == true
     doesnotcontaintraced = MaybeTraced(MaybeTraced(3))
     @test Reactant.ReactantCore.is_traced(doesnotcontaintraced) == false

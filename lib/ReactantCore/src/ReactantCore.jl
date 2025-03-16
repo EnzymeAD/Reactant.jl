@@ -6,7 +6,7 @@ using MacroTools: MacroTools
 export @trace, within_compile, MissingTracedValue
 
 # Traits
-function is_traced(x::T) where T
+function is_traced(x::T) where {T}
     if isprimitivetype(x)
         return false
     else
