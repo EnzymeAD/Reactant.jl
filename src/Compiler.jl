@@ -722,7 +722,8 @@ function compile_mlir!(
         }
     }();
     optimize::Union{Bool,Symbol}=true,
-    shardy_passes::Symbol=:default, # [:default, :to_mhlo_shardings]
+    # default refers to letting XLA handle the shardy inport/propagation/export
+    shardy_passes::Symbol=:to_mhlo_shardings, # [:default, :to_mhlo_shardings]
     no_nan::Bool=false,
     backend="gpu",
     fn_kwargs=(),
@@ -1140,7 +1141,7 @@ macro code_xla(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:default),
+        :shardy_passes => :(:to_mhlo_shardings),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1167,7 +1168,7 @@ macro compile(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:default),
+        :shardy_passes => :(:to_mhlo_shardings),
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1184,7 +1185,7 @@ macro jit(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:default),
+        :shardy_passes => :(:to_mhlo_shardings),
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...

@@ -127,8 +127,8 @@ end
         x_ra = Reactant.to_rarray(
             x; sharding=Sharding.NamedSharding(mesh, (("data", "model"), nothing))
         )
-        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
-        @test Reactant.to_number(@jit sum(x_ra)) ≈ sum(x)
+        @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit shardy_passes = :default sum(x_ra)) ≈ sum(x)
 
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test3(x_ra)) ≈ fn_test3(x)
         @test Reactant.to_number(@jit shardy_passes = :to_mhlo_shardings sum(x_ra)) ≈ sum(x)
@@ -148,8 +148,8 @@ end
             ),
         )
 
-        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
-        @test Reactant.to_number(@jit sum(x_ra)) ≈ sum(x)
+        @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit shardy_passes = :default sum(x_ra)) ≈ sum(x)
 
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test3(x_ra)) ≈ fn_test3(x)
         @test Reactant.to_number(@jit shardy_passes = :to_mhlo_shardings sum(x_ra)) ≈ sum(x)
@@ -245,7 +245,7 @@ end
             x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
         )
 
-        @test Array(@jit sum(x_ra; dims=2)) ≈ sum(x; dims=2)
+        @test Array(@jit shardy_passes = :default sum(x_ra; dims=2)) ≈ sum(x; dims=2)
         @test Array(@jit shardy_passes = :to_mhlo_shardings sum(x_ra; dims=2)) ≈
             sum(x; dims=2)
 
@@ -254,7 +254,7 @@ end
             x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
         )
 
-        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test2(x_ra)) ≈ fn_test2(x)
     else
         @warn "Not enough addressable devices to run sharding tests"
@@ -304,7 +304,7 @@ end
         x_ra_arr = Array(x_ra)
         z_ra_arr = fn(x_ra_arr, y_ra_arr)
 
-        z_ra = @jit fn(x_ra, y_ra)
+        z_ra = @jit shardy_passes = :default fn(x_ra, y_ra)
         y_ra_final = Array(y_ra)
 
         @test z_ra_arr ≈ Array(z_ra)
