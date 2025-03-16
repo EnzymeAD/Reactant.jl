@@ -16,6 +16,10 @@ function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 end
 
+function Base.rtoldefault(T::Type{<:TracedRNumber})
+    return T(Base.rtoldefault(unwrapped_eltype(T)))
+end
+
 function Base.isfinite(x::TracedRNumber{<:Complex})
     return isfinite(real(x)) & isfinite(imag(x))
 end
@@ -56,6 +60,18 @@ function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
 end
 
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{S}) where {T,S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+
+function Base.promote_rule(
+    T::Type{<:AbstractIrrational}, ::Type{Reactant.TracedRNumber{S}}
+) where {S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+
+function Base.promote_rule(
+    ::Type{Reactant.TracedRNumber{S}}, T::Type{<:AbstractIrrational}
+) where {S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
 

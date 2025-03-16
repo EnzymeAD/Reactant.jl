@@ -969,6 +969,14 @@ end
     @test Array(x) ≈ Array(y) ./ 2
 end
 
+@testset "Hlo Cost Analysis" begin
+    x_ra = Reactant.to_rarray(rand(4, 4))
+    mul_comp = @compile x_ra * x_ra
+    cost = Reactant.XLA.cost_analysis(mul_comp)
+
+    @test cost isa Reactant.XLA.HloCostAnalysisProperties
+end
+
 function fractional_idx(times, t)
     n₂ = searchsortedfirst(times, t)
     n₁ = max(1, n₂ - 1)
@@ -989,4 +997,12 @@ end
     @test res[1] == 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
+end
+
+mulpi(x) = π * x
+
+@testset "Irrational promotion" begin
+    x = Reactant.to_rarray(ones(2))
+    y = @jit mulpi(x)
+    @test all(Array(y) .≈ π)
 end

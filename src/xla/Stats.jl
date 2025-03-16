@@ -45,12 +45,34 @@ struct AllocatorStats
     peak_pool_bytes::Union{Nothing,Int64}
 end
 
+function Base.show(io::IO, ::MIME"text/plain", stats::AllocatorStats)
+    return print(
+        io,
+        """
+        AllocatorStats
+        --------------
+        num_allocs: $(stats.num_allocs)
+        bytes_in_use: $(stats.bytes_in_use)
+        peak_bytes_in_use: $(stats.peak_bytes_in_use)
+        largest_alloc_size: $(stats.largest_alloc_size)
+        bytes_limit: $(stats.bytes_limit)
+        bytes_reserved: $(stats.bytes_reserved)
+        peak_bytes_reserved: $(stats.peak_bytes_reserved)
+        bytes_reservable_limit: $(stats.bytes_reservable_limit)
+        largest_free_block_bytes: $(stats.largest_free_block_bytes)
+        pool_bytes: $(stats.pool_bytes)
+        peak_pool_bytes: $(stats.peak_pool_bytes)
+        """,
+    )
+end
+
 """
   allocatorstats([device])
 
 Return an [`AllocatorStats`](@ref) instance with information about the device specific allocator.
 
 !!! warning
+
     This method is currently not implemented for the CPU device.
 """
 function allocatorstats(device::AbstractDevice=XLA.default_device(XLA.default_backend()))
@@ -75,3 +97,47 @@ function allocatorstats(device::AbstractDevice=XLA.default_device(XLA.default_ba
         stats.peak_pool_bytes == nullopt ? nothing : stats.peak_pool_bytes,
     )
 end
+
+# To keep in sync with JLHloCostAnalysisProperties in ReactantExtra/API.cpp
+struct HloCostAnalysisProperties
+    flops::Cfloat
+    transcendentals::Cfloat
+    bytes_accessed::Cfloat
+    optimal_seconds::Cfloat
+    utilization::Cfloat
+    operand0_utilization::Cfloat
+    operand1_utilization::Cfloat
+    operand0_bytes_accessed::Cfloat
+    operand1_bytes_accessed::Cfloat
+    output_root_bytes_accessed::Cfloat
+    reserved0::Cfloat
+end
+
+function Base.show(io::IO, ::MIME"text/plain", cost_analysis::HloCostAnalysisProperties)
+    return print(
+        io,
+        """
+        HloCostAnalysisProperties
+        -------------------------
+        FLOPS: $(cost_analysis.flops)
+        Transcendentals: $(cost_analysis.transcendentals)
+        Bytes Accessed: $(cost_analysis.bytes_accessed)
+        Optimal Seconds: $(cost_analysis.optimal_seconds)
+        Utilization: $(cost_analysis.utilization)
+        Operand 0 Utilization: $(cost_analysis.operand0_utilization)
+        Operand 1 Utilization: $(cost_analysis.operand1_utilization)
+        Operand 0 Bytes Accessed: $(cost_analysis.operand0_bytes_accessed)
+        Operand 1 Bytes Accessed: $(cost_analysis.operand1_bytes_accessed)
+        Output Root Bytes Accessed: $(cost_analysis.output_root_bytes_accessed)
+        Reserved 0: $(cost_analysis.reserved0)
+        """,
+    )
+end
+
+"""
+    cost_analysis(::AbstractLoadedExecutable)
+    cost_analysis(::Reactant.Thunk)
+
+Returns a HloCostAnalysisProperties object with the cost analysis of the loaded executable.
+"""
+function cost_analysis end
