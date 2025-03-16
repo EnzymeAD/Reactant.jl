@@ -89,9 +89,11 @@
 
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
+#include "shardy/dialect/sdy/transforms/passes.h"
 #include "shardy/integrations/c/attributes.h"
 #include "xla/pjrt/mlir_to_hlo.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
+#include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_export.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_import.h"
 
 // IFRT
@@ -780,7 +782,8 @@ extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
                                            const int64_t *mesh_ids,
                                            int64_t num_mesh_ids,
-                                           const char *xla_gpu_cuda_data_dir) {
+                                           const char *xla_gpu_cuda_data_dir,
+                                           bool use_shardy_partitioner) {
   xla::CompileOptions options;
   options.executable_build_options.mutable_debug_options()
       ->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
@@ -792,7 +795,8 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
     options.executable_build_options.set_num_partitions(num_mesh_ids);
 
     options.executable_build_options.set_use_spmd_partitioning(true);
-    options.executable_build_options.set_use_shardy_partitioner(true);
+    options.executable_build_options.set_use_shardy_partitioner(
+        use_shardy_partitioner);
 
     // auto partitioning for GPUs is not available in open source version of XLA
     // options.executable_build_options.set_use_auto_spmd_partitioning(true);
@@ -832,12 +836,14 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
 extern "C" xla::PjRtLoadedExecutable *
 ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
               bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
-              const char *xla_gpu_cuda_data_dir) {
-  CompileOptions options = GenerateCompileOptions(
-      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner) {
+  CompileOptions options =
+      GenerateCompileOptions(device_id, is_sharded, mesh_ids, num_mesh_ids,
+                             xla_gpu_cuda_data_dir, use_shardy_partitioner);
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-  if (is_sharded) {
+
+  if (is_sharded && use_shardy_partitioner) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -1123,6 +1129,10 @@ extern "C" void InitializePasses(MlirDialectRegistry creg) {
   // xla + shardy specific passes
   xla::sdy::registerSdyRoundTripExportPipeline();
   xla::sdy::registerSdyRoundTripImportPipeline();
+  mlir::sdy::registerAllSdyPassesAndPipelines();
+  xla::sdy::registerStablehloExportPipeline();
+  xla::sdy::registerStablehloImportPipeline();
+  xla::sdy::registerStablehloImportShardingsPass();
 }
 
 extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
@@ -1363,14 +1373,15 @@ ifrt_pjrt_array_create(ifrt::PjRtClient *client,
 extern "C" xla::ifrt::LoadedExecutable *
 ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
-             const char *xla_gpu_cuda_data_dir) {
-  xla::CompileOptions compile_options = GenerateCompileOptions(
-      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner) {
+  xla::CompileOptions compile_options =
+      GenerateCompileOptions(device_id, is_sharded, mesh_ids, num_mesh_ids,
+                             xla_gpu_cuda_data_dir, use_shardy_partitioner);
   auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
       xla::ifrt::XlaCompileOptions(compile_options));
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-  if (is_sharded) {
+  if (is_sharded && use_shardy_partitioner) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
