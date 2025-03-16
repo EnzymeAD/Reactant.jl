@@ -75,6 +75,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Random" include("integration/random.jl")
         @safetestset "Python" include("integration/python.jl")
         @safetestset "MPI" begin
+            using MPI
             nranks = 2
             run(`$(mpiexec()) -nranks $n $(Base.julia_cmd()) integration/mpi.jl`)
         end
