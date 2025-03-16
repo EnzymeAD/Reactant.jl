@@ -1129,14 +1129,17 @@ end
     # Function which would use the `constant` object
     f!(v) = v .+= constant
     default_threshold = Ops.LARGE_CONSTANT_THRESHOLD[]
+    default_raise_error = Ops.LARGE_CONSTANT_RAISE_ERROR[]
     try
         Ops.LARGE_CONSTANT_THRESHOLD[] = N
+        Ops.LARGE_CONSTANT_RAISE_ERROR[] = true
         @compile f!(vr)
     catch err
         @test err.msg == "Generating a constant larger than $(N) bytes."
     finally
         # Restore threshold
         Ops.LARGE_CONSTANT_THRESHOLD[] = default_threshold
+        Ops.LARGE_CONSTANT_RAISE_ERROR[] = default_raise_error
     end
     # Make sure we can now compile the function
     fr! = @compile f!(vr)
