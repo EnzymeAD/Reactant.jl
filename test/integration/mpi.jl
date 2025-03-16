@@ -1,5 +1,7 @@
 using Test, MPI, Reactant
 
+MPI.Init()
+
 @testset "Comm_rank" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
@@ -18,3 +20,5 @@ end
     nranks = MPI.Comm_size(comm)
     @test nranks == @jit MPI.Allreduce(x, MPI.SUM, MPI.COMM_WORLD)
 end
+
+MPI.Finalize()
