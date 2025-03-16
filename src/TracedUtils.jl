@@ -148,6 +148,7 @@ mutable struct CompiledMlirFnResult{
     concrete_result::CR
     sharding_mesh::M
     mutated_args::MA
+    use_shardy_partitioner::Bool
 end
 
 function make_mlir_fn(
@@ -434,6 +435,7 @@ function make_mlir_fn(
         nothing,
         sharding_mesh,
         mutated_args,
+        true,
     )
 end
 
