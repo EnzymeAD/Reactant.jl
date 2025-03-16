@@ -6,12 +6,17 @@ using MacroTools: MacroTools
 export @trace, within_compile, MissingTracedValue
 
 # Traits
-function is_traced(x::T) where {T}
-    if isprimitivetype(x)
-        return false
-    else
-        return any(is_traced, getfield.(Ref(x), fieldnames(T)))
+function is_traced(x::T, seen=IdSet()) where T
+    if !isprimitivetype(x)
+        for fn in fieldnames(T)
+            f = getfield(x, fn)
+            if !(f in seen)
+                push!(seen, f)
+                is_traced(f, seen) && return true
+            end
+        end
     end
+    return false
 end
 
 # New Type signifying that a value is missing
