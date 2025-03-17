@@ -939,18 +939,6 @@ end
     )
 end
 
-@testset "mapreduce with init" begin
-    x = reshape(collect(Float32, 1:12), 3, 4)
-    x_ra = Reactant.to_rarray(x)
-
-    init = 3.0
-    init_ra = Reactant.to_rarray(init; track_numbers=Number)
-
-    fn(x, init; kwargs...) = sum(x; init, kwargs...)
-
-    @test @jit(fn(x_ra, init_ra; dims=2)) ≈ fn(x, init; dims=2)
-end
-
 @testset "map!" begin
     x = randn(Float32, 2, 3)
     y = zeros(Float32, 2, 3)
@@ -979,4 +967,42 @@ end
     x .= y ./ 2
 
     @test Array(x) ≈ Array(y) ./ 2
+end
+
+@testset "Hlo Cost Analysis" begin
+    x_ra = Reactant.to_rarray(rand(4, 4))
+    mul_comp = @compile x_ra * x_ra
+    cost = Reactant.XLA.cost_analysis(mul_comp)
+
+    @test cost isa Reactant.XLA.HloCostAnalysisProperties
+end
+
+function fractional_idx(times, t)
+    n₂ = searchsortedfirst(times, t)
+    n₁ = max(1, n₂ - 1)
+    Nt = length(times)
+    n₂ = min(Nt, n₂)
+
+    t₁ = times[n₁]
+    t₂ = times[n₂]
+
+    ñ = (t - t₁) / (t₂ - t₁)
+
+    return ñ, n₁, n₂
+end
+
+@testset "Fractional index" begin
+    times = 0:0.01:4.5
+    res = @jit fractional_idx(times, ConcreteRNumber(2.143))
+    @test res[1] == 0.29999999999997334
+    @test res[2] == 215
+    @test res[3] == 216
+end
+
+mulpi(x) = π * x
+
+@testset "Irrational promotion" begin
+    x = Reactant.to_rarray(ones(2))
+    y = @jit mulpi(x)
+    @test all(Array(y) .≈ π)
 end

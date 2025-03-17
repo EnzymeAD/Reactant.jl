@@ -133,7 +133,7 @@ function transpose_val(val)
 end
 
 mutable struct CompiledMlirFnResult{
-    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh}
+    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA
 }
     fnwrapped::Bool
     f::F
@@ -150,6 +150,8 @@ mutable struct CompiledMlirFnResult{
     preserved_args::PA
     concrete_result::CR
     sharding_mesh::M
+    mutated_args::MA
+    use_shardy_partitioner::Bool
 end
 
 function prepare_args(args, concretein, toscalar, mutate_traced_args, runtime)
@@ -200,9 +202,7 @@ function placeholder_func(
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
     for (k, v) in seen_args
-        if (
-            k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
-        ) && hasfield(typeof(k), :sharding)
+        if k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
             if Reactant.Sharding.is_sharded(k)
                 Reactant.Ops.mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
@@ -233,6 +233,7 @@ function prepare_results(
     linear_args,
     fnbody,
     concretein,
+    construct_function_without_args,
     args_in_result,
     do_transpose,
     mutate_traced_args,
@@ -241,6 +242,15 @@ function prepare_results(
 )
     N = length(traced_args)
     # check which arguments have been mutated
+    mutated_args = Int[]
+    if !construct_function_without_args
+        for (i, arg) in enumerate(linear_args)
+            if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
+                # mutation occured!
+                push!(mutated_args, i)
+            end
+        end
+    end
 
     seen_results = OrderedIdDict()
 
@@ -274,7 +284,7 @@ function prepare_results(
         [Ops.mlir_type(arg) for arg in linear_results]
     end
 
-    return seen_results, traced_result, linear_results, out_tys
+    return seen_results, traced_result, linear_results, out_tys, mutated_args
 end
 
 function create_return!(
@@ -393,12 +403,13 @@ function make_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    _, traced_result, linear_results, out_tys = prepare_results(
+    _, traced_result, linear_results, out_tys, mutated_args = prepare_results(
         result,
         traced_args,
         linear_args,
         fnbody,
         concretein,
+        construct_function_without_args,
         args_in_result,
         do_transpose,
         mutate_traced_args,
@@ -432,6 +443,18 @@ function make_mlir_fn(
 
         linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
 
+        # If an argument is mutated but is not sharded (aka sharding is NoSharding), we
+        # need to force a replicated sharding.
+        for i in mutated_args
+            arg = linear_args[i]
+            if !haskey(traced_args_to_shardings, arg)
+                # Force a replicated sharding
+                traced_args_to_shardings[arg] = Reactant.Sharding.NamedSharding(
+                    sharding_mesh, ntuple(Returns(nothing), ndims(arg))
+                )
+            end
+        end
+
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
@@ -446,19 +469,19 @@ function make_mlir_fn(
             end
         end
 
-        # # Ensure the sharding of the mutated arguments is propagated to the results
-        # result_not_replicated = falses(length(linear_results))
-        # for i in mutated_args
-        #     arg = linear_args[i]
-        #     if has_residx(arg) && haskey(traced_args_to_shardings, arg)
-        #         residx = findfirst(Base.Fix1(===, arg), linear_results)
-        #         @assert residx !== nothing
-        #         result_not_replicated[residx] = true
-        #         MLIR.API.mlirFuncSetResultAttr(
-        #             func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
-        #         )
-        #     end
-        # end
+        # Ensure the sharding of the mutated arguments is propagated to the results
+        result_not_replicated = falses(length(linear_results))
+        for i in mutated_args
+            arg = linear_args[i]
+            if has_residx(arg) && haskey(traced_args_to_shardings, arg)
+                residx = findfirst(Base.Fix1(===, arg), linear_results)
+                @assert residx !== nothing
+                result_not_replicated[residx] = true
+                MLIR.API.mlirFuncSetResultAttr(
+                    func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
+                )
+            end
+        end
     else
         sharding_mesh = nothing
     end
@@ -479,6 +502,8 @@ function make_mlir_fn(
         nothing,
         nothing,
         sharding_mesh,
+        mutated_args,
+        true,
     )
 end
 
@@ -708,7 +733,13 @@ function broadcast_to_size(arg::Base.RefValue, rsize)
     return arg
 end
 
-broadcast_to_size(arg::Number, rsize) = Ops.constant(Base.fill(arg, Tuple(rsize)))
+function broadcast_to_size(arg::AbstractIrrational, rsize)
+    return broadcast_to_size(Base.convert(Float64, arg), rsize)
+end
+
+function broadcast_to_size(arg::ReactantPrimitive, rsize)
+    return Ops.constant(Base.fill(arg, Tuple(rsize)))
+end
 
 function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     length(rsize) == 0 && return arg

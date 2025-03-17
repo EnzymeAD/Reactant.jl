@@ -773,3 +773,14 @@ end
     @test simulation.clock.iteration == 3
     @test simulation.stop_iteration == 3
 end
+
+function ternary_max(x, y)
+    @trace result = x > y ? x : y
+    return result
+end
+
+@testset "ternary operator return value" begin
+    a, b = ConcreteRNumber(1), ConcreteRNumber(2)
+
+    @test (@jit ternary_max(a, b)) == 2
+end

@@ -621,18 +621,20 @@ function call_epilogue(result, (cached, prologue_result))
         ) = prologue_result
 
         concretein = false
+        construct_function_without_args = false
         args_in_result = :all
         do_transpose = false
         return_dialect = :func
         mutate_traced_args = true
         runtime = nothing
 
-        seen_result, traced_result, linear_results, out_tys = TracedUtils.prepare_results(
+        seen_result, traced_result, linear_results, out_tys, mutated_args = TracedUtils.prepare_results(
             result,
             traced_args,
             callee_linear_args,
             fnbody,
             concretein,
+            construct_function_without_args,
             args_in_result,
             do_transpose,
             mutate_traced_args,

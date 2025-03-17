@@ -16,6 +16,10 @@ function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 end
 
+function Base.rtoldefault(T::Type{<:TracedRNumber})
+    return T(Base.rtoldefault(unwrapped_eltype(T)))
+end
+
 function Base.isfinite(x::TracedRNumber{<:Complex})
     return isfinite(real(x)) & isfinite(imag(x))
 end
@@ -56,6 +60,18 @@ function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
 end
 
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{S}) where {T,S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+
+function Base.promote_rule(
+    T::Type{<:AbstractIrrational}, ::Type{Reactant.TracedRNumber{S}}
+) where {S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+
+function Base.promote_rule(
+    ::Type{Reactant.TracedRNumber{S}}, T::Type{<:AbstractIrrational}
+) where {S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
 
@@ -227,6 +243,17 @@ function Base.ifelse(
     return Ops.select(pred, x, y)
 end
 
+function Base.ifelse(
+    @nospecialize(pred::TracedRNumber{Bool}),
+    @nospecialize(x::Tuple),
+    @nospecialize(y::Tuple)
+)
+    @assert length(x) == length(y)
+    ntuple(Val(length(x))) do i
+        Base.ifelse(pred, x[i], y[i])
+    end
+end
+
 for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
     T = promote_type(T1, T2)
     @eval begin
@@ -372,6 +399,64 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             end
         end
     end
+end
+
+# matches convert methods
+# also determines floor, ceil, round
+Base.trunc(::Type{Signed}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(Int, x)
+Base.trunc(::Type{Unsigned}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(UInt, x)
+Base.trunc(::Type{Integer}, x::TracedRNumber{<:Base.IEEEFloat}) = Base.trunc(Int, x)
+
+function Base.getindex(
+    r::Union{Base.StepRangeLen,Base.LinRange}, i::TracedRNumber{<:Integer}
+)
+    @inline
+    i isa TracedRNumber{Bool} && throw(ArgumentError("invalid index: $i of type Bool"))
+    # @boundscheck checkbounds(r, i)
+    return Base.unsafe_getindex(r, i)
+end
+
+# This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
+function Base.unsafe_getindex(
+    r::Base.StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision},
+    i::TracedRNumber{<:Integer},
+) where {T}
+    # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
+    @inline
+    i isa TracedRNumber{Bool} && throw(ArgumentError("invalid index: $i of type Bool"))
+    OT = if r.offset isa TracedRNumber
+        typeof(r.offset)
+    else
+        TracedRNumber{typeof(r.offset)}
+    end
+    u = Base.convert(OT, i)::OT - r.offset
+    shift_hi, shift_lo = u * r.step.hi, u * r.step.lo
+    x_hi, x_lo = Base.add12(r.ref.hi, shift_hi)
+    T2 = if T isa TracedRNumber
+        T
+    else
+        TracedRNumber{T}
+    end
+    return T2(x_hi + (x_lo + (shift_lo + r.ref.lo)))
+end
+
+function Base.searchsortedfirst(
+    a::AbstractRange{<:Real}, x::TracedRNumber{<:Real}, o::Base.DirectOrdering
+)::TracedRNumber{keytype(a)}
+
+    # require_one_based_indexing(a)
+    f, h, l = first(a), step(a), last(a)
+    n = round(Int, (x - f) / h + 1)
+
+    return ifelse(
+        !Base.Order.lt(o, f, x),
+        1,
+        ifelse(
+            h == 0 || Base.Order.lt(o, l, x),
+            length(a) + 1,
+            ifelse(Base.Order.lt(o, a[n], x), n + 1, n),
+        ),
+    )
 end
 
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
