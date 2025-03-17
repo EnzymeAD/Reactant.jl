@@ -798,7 +798,12 @@ end
     doesnotcontaintraced = MaybeTraced(MaybeTraced(3))
     @test Reactant.ReactantCore.is_traced(doesnotcontaintraced) == false
 
-    recursivetraced = MaybeTraced((1, "string", MaybeTraced(nothing), MaybeTraced(Reactant.TracedRArray{Float64, 1}((), nothing, (3, )))))
+    recursivetraced = MaybeTraced((
+        1,
+        "string",
+        MaybeTraced(nothing),
+        MaybeTraced(Reactant.TracedRArray{Float64,1}((), nothing, (3,))),
+    ))
     recursivetraced.x[3].x = recursivetraced
     @test Reactant.ReactantCore.is_traced(recursivetraced) == true
 

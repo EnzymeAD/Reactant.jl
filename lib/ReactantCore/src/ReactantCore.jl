@@ -6,7 +6,11 @@ using MacroTools: MacroTools
 export @trace, within_compile, MissingTracedValue
 
 # Traits
-function is_traced(x::T, seen=(@static if VERSION > v"1.11"; IdSet(); else; Set{UInt}(); end)) where T
+function is_traced(x::T, seen=(@static if VERSION > v"1.11"
+    IdSet()
+else
+    Set{UInt}()
+end)) where {T}
     if !isprimitivetype(x)
         for fn in fieldnames(T)
             f = getfield(x, fn)
