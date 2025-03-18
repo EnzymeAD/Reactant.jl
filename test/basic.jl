@@ -1014,3 +1014,9 @@ end
     @test Array(x_ra) ==
         [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
 end
+
+@testset "copy(::Broadcast.Broadcasted{ArrayStyle{ConcreteRArray}})" begin
+    x_ra = Reactant.to_rarray(ones(4, 4))
+    res = copy(Broadcast.broadcasted(-, Broadcast.broadcasted(+, x_ra, 1)))
+    @test res ≈ -(Array(x_ra) .+ 1)
+end
