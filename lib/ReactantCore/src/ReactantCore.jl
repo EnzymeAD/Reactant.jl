@@ -6,25 +6,12 @@ using MacroTools: MacroTools
 export @trace, within_compile, MissingTracedValue
 
 # Traits
-function is_traced((@nospecialize x::T), seen=(@static if VERSION > v"1.11"
-    IdSet()
-else
-    Set{UInt}()
-end)) where {T}
+function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
     if !isprimitivetype(x)
         for fn in fieldnames(T)
             f = getfield(x, fn)
-            already_seen = @static if VERSION > v"1.11"
-                f in seen
-            else
-                objectid(f) in seen
-            end
-            if !already_seen
-                @static if VERSION > v"1.11"
-                    push!(seen, f)
-                else
-                    push!(seen, objectid(f))
-                end
+            if !(f in seen)
+                push!(seen, f)
                 is_traced(f, seen) && return true
             end
         end
