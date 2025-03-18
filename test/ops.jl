@@ -1136,7 +1136,7 @@ end
         @compile f!(vr)
     catch err
         @test err.msg ==
-            "Generating a constant of 16 bytes, which larger than the 5 bytes threshold"
+            "Generating a constant of 40 bytes, which larger than the 5 bytes threshold"
     finally
         # Restore threshold
         Ops.LARGE_CONSTANT_THRESHOLD[] = default_threshold
