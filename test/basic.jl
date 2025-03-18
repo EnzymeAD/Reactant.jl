@@ -1006,3 +1006,11 @@ mulpi(x) = π * x
     y = @jit mulpi(x)
     @test all(Array(y) .≈ π)
 end
+
+@testset "copyto! ConcreteArray" begin
+    x_ra = Reactant.to_rarray(ones(4, 4))
+    y_ra = Reactant.to_rarray(zeros(2, 2))
+    copyto!(view(x_ra, 1:2, 1:2), y_ra)
+    @test Array(x_ra) ==
+        [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
+end
