@@ -63,7 +63,8 @@ function Base.getindex(
     a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
     GPUArraysCore.assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
-    return Ops.reshape(Ops.dynamic_slice(a, collect(Int32, index), ones(Int32, N)), Int[])
+    res = Ops.reshape(Ops.dynamic_slice(a, [index...], ones(Int32, N)), Int[])
+    return TracedRNumber{T}((), res.mlir_data)
 end
 
 Base.getindex(a::TracedRArray{T,0}) where {T} = TracedRNumber{T}((), a.mlir_data)
@@ -194,9 +195,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         return Ops.reshape(res, result_size)
     end
 
-    x = Ops.dynamic_slice(
-        a, collect(Int32, first.(indices)), collect(Int32, length.(indices))
-    )
+    x = Ops.dynamic_slice(a, [first.(indices)...], [length.(indices)...])
     ddims = findall(indices) do idx
         return idx isa Integer || idx isa TracedRNumber{<:Integer}
     end
