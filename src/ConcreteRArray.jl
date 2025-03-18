@@ -405,6 +405,10 @@ function Base.copyto!(dest::AbstractConcreteArray, src::AbstractConcreteArray)
     return dest
 end
 
+function Base.copyto!(dest::AbstractConcreteArray, src::AbstractArray)
+    copyto!(dest, to_rarray(src))
+end
+
 function mycopyto!(dest, src)
     dest .= src # use broadcasting instead of copyto!
     return nothing
