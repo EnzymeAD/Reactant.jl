@@ -1837,3 +1837,52 @@ end
     end
     return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding, runtime)
 end
+
+function Reactant.traced_type_inner(
+    @nospecialize(RT::Type{<:StepRangeLen}),
+    seen,
+    mode::Reactant.TraceMode,
+    track_numbers::Type,
+    sharding,
+    runtime
+)
+    if !(Number <: track_numbers)
+        modified_track_numbers = Number
+    else
+        modified_track_numbers = track_numbers
+    end
+    T, R, S, L = RT.parameters
+    return TracedStepRangeLen{
+        Reactant.traced_type_inner(T, seen, mode, modified_track_numbers, sharding, runtime),
+        Reactant.traced_type_inner(R, seen, mode, modified_track_numbers, sharding, runtime),
+        Reactant.traced_type_inner(S, seen, mode, modified_track_numbers, sharding, runtime),
+        Reactant.traced_type_inner(L, seen, mode, track_numbers, sharding, runtime),
+    }
+end
+
+
+function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::StepRangeLen),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    Reactant.Sharding.is_sharded(sharding) && error("Cannot specify sharding for StepRangeLen")
+    if mode == Reactant.TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.ref, path, mode; kwargs...)
+        make_tracer(seen, prev.step, path, mode; kwargs...)
+        make_tracer(seen, prev.len, path, mode; kwargs...)
+        make_tracer(seen, prev.offset, path, mode; kwargs...)
+        return nothing
+    end
+    return TracedStepRangeLen(
+        Reactant.make_tracer(seen, prev.ref, Reactant.append_path(path, :ref), mode; kwargs..., track_numbers=Number),
+        Reactant.make_tracer(seen, prev.step, Reactant.append_path(path, :step), mode; kwargs..., track_numbers=Number),
+        Reactant.make_tracer(seen, prev.len, Reactant.append_path(path, :len), mode; kwargs...),
+        Reactant.make_tracer(seen, prev.offset, Reactant.append_path(path, :offset), mode; kwargs...),
+    )
+end
+
