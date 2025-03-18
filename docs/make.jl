@@ -36,6 +36,7 @@ pages = [
         "Overview" => "tutorials/index.md",
         "Profiling" => "tutorials/profiling.md",
         "Distributed" => "tutorials/multihost.md",
+        "Local build" => "tutorials/local-build.md",
     ],
     "API Reference" => [
         "Reactant API" => "api/api.md",

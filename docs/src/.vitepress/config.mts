@@ -64,6 +64,7 @@ export default defineConfig({
           {text: "Overview", link: "/tutorials/"},
           {text: "Profiling", link: "/tutorials/profiling"},
           {text: "Distributed", link: "/tutorials/multihost"},
+          {text: "Local build", link: "/tutorials/local-build"},
         ],
       },
       {
@@ -124,6 +125,7 @@ export default defineConfig({
           { text: "Overview", link: "/tutorials/" },
           { text: "Profiling", link: "/tutorials/profiling" },
           { text: "Distributed", link: "/tutorials/multihost" },
+          { text: "Local build", link: "/tutorials/local-build" },
         ],
       },
       "/api/": {
