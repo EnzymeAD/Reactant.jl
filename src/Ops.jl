@@ -402,7 +402,7 @@ end
 end
 
 # shape ops
-function reshape(x::TracedRArray, dims...; kwargs...)
+function reshape(x::TracedRArray, dims::Integer...; kwargs...)
     return reshape(x, collect(dims); kwargs...)
 end
 
@@ -2503,28 +2503,39 @@ end
 @noinline function dynamic_update_slice(
     operand::TracedRArray{T,N},
     update::TracedRArray{T},
-    start_indices::Vector{TracedRNumber{Int}};
+    start_indices::Vector;
     location=mlir_stacktrace("dynamic_update_slice", @__FILE__, @__LINE__),
 ) where {T,N}
     start_indices = [
-        convert(
-            TracedRNumber{Int32},
-            subtract(
-                index, Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, 1); location
-            );
-            location,
-        ).mlir_data for index in start_indices
+        convert(TracedRNumber{Int32}, index - 1; location).mlir_data for
+        index in start_indices
     ]
     res = MLIR.IR.result(
         stablehlo.dynamic_update_slice(
-            operand.mlir_data,
-            update.mlir_data,
-            start_indices;
-            location
+            operand.mlir_data, update.mlir_data, start_indices; location
         ),
-        1
+        1,
     )
     return TracedRArray{T,N}((), res, size(res))
+end
+
+@noinline function dynamic_slice(
+    operand::TracedRArray{T,N},
+    start_indices::Vector,
+    slice_sizes::Vector;
+    location=mlir_stacktrace("dynamic_slice", @__FILE__, @__LINE__),
+) where {T,N}
+    start_indices = [
+        convert(TracedRNumber{Int32}, index - 1; location).mlir_data for
+        index in start_indices
+    ]
+    slice_sizes = [
+        convert(TracedRNumber{Int32}, index; location).mlir_data for index in slice_sizes
+    ]
+    res = MLIR.IR.result(
+        stablehlo.dynamic_slice(operand.mlir_data, start_indices; slice_sizes, location), 1
+    )
+    return TracedRArray{T,ndims(res)}((), res, size(res))
 end
 
 end # module Ops

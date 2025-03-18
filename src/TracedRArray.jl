@@ -63,22 +63,7 @@ function Base.getindex(
     a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
     GPUArraysCore.assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
-
-    start_indices = [
-        TracedUtils.promote_to(TracedRNumber{Int}, i - 1).mlir_data for i in index
-    ]
-    slice_sizes = [Int64(1) for _ in index]
-
-    res1 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dynamic_slice(a.mlir_data, start_indices; slice_sizes), 1
-    )
-    res2 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.reshape(
-            res1; result_0=MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(res1)))
-        ),
-        1,
-    )
-    return TracedRNumber{T}((), res2)
+    return Ops.reshape(Ops.dynamic_slice(a, collect(Int32, index), ones(Int32, N)), Int[])
 end
 
 Base.getindex(a::TracedRArray{T,0}) where {T} = TracedRNumber{T}((), a.mlir_data)
@@ -209,15 +194,9 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         return Ops.reshape(res, result_size)
     end
 
-    start_indices = map(indices) do i
-        return TracedUtils.promote_to(TracedRNumber{Int}, first(i) - 1).mlir_data
-    end
-    slice_sizes = [Int64(length(i)) for i in indices]
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dynamic_slice(a.mlir_data, start_indices; slice_sizes), 1
+    x = Ops.dynamic_slice(
+        a, collect(Int32, first.(indices)), collect(Int32, length.(indices))
     )
-
-    x = TracedRArray{T,N}((), res, Tuple(length.(indices)))
     ddims = findall(indices) do idx
         return idx isa Integer || idx isa TracedRNumber{<:Integer}
     end
