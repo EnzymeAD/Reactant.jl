@@ -381,6 +381,19 @@ function Base.copyto!(dest::AbstractConcreteArray, src::AbstractConcreteArray)
     return dest
 end
 
+function mycopyto!(dest, src)
+    dest .= src # use broadcasting instead of copyto!
+    return nothing
+end
+
+function Base.copyto!(
+    dest::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, src::AbstractConcreteArray
+)
+    fn = compile(mycopyto!, (dest, src))
+    fn(dest, src)
+    return dest
+end
+
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     @eval begin
         function Base.copyto!(
