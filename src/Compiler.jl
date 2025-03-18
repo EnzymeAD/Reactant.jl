@@ -490,6 +490,8 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "log_const_prop<1>",
         "log_plus_one_const_prop<1>",
         "binop_const_simplify",
+        "is_finite_const_prop",
+        "not_const_prop",
         "transpose_broadcast_in_dim_to_broadcast_in_dim",
         "not_select_simplify",
         "scatter_update_computation_const_prop",
