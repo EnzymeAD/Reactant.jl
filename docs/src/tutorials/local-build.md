@@ -1,8 +1,8 @@
-## Local build of ReactantExtra
+# [Local build of ReactantExtra](@ref local-build)
 
-The script in this directory can be used to do local builds of ReactantExtra, including debug builds.
+In the `deps/` subdirectory of the Reactant repository there is a script to do local builds of ReactantExtra, including debug builds.
 
-### Requirements
+## Requirements
 
 * Julia.  If you don't have it already, you can obtain it from the [official Julia website](https://julialang.org/downloads/)
 * A reasonably recent C/C++ compiler, ideally GCC 12+.
@@ -12,20 +12,20 @@ The script in this directory can be used to do local builds of ReactantExtra, in
   Binutils `ld` won't work, don't even try using it.
   You can obtain `mold` for your platform from the [latest `rui314/mold` release](https://github.com/rui314/mold/releases/latest) and put the `mold` executable in `PATH`
 
-### Building
+## Building
 
-At a high-level, you can run the commands
+At a high-level, after you `cd` to the `deps/` directory you can run the commands
 
-```
-julia --project -e 'using Pkg; Pkg.instantiate()' # needed only the first time to install Julia's deps
+```bash
+julia --project -e 'using Pkg; Pkg.instantiate()' # needed only the first time to install dependencies for this script
 julia -O0 --color=yes --project build_local.jl
 ```
 
-There are a few of options you may want to use.
+There are a few of options you may want to use to tweak the build.
 For more information run the command (what's show below may not be up to date, run the command locally to see the options available to you):
 
 ```console
-% julia --project build_local.jl --help
+% julia -O0 --project build_local.jl --help
 usage: build_local.jl [--debug] [--backend BACKEND]
                       [--gcc_host_compiler_path GCC_HOST_COMPILER_PATH]
                       [--cc CC]
@@ -61,13 +61,13 @@ optional arguments:
 
 If you try to do the build on certain systems where there are in place restrictions on the number of processes or memory that your user can use (for example login node of clusters), you may have to limit the number of parallel jobs used by Bazel.
 By default Bazel would try to use the maximum number of CPUs available on the system, if you need reduce that pass the `--jobs JOBS` flag option.
-The Bazel server may be terminated abruptly if using too much memory (e.g. if concurrent compiler processes are cumulatively using too much memory), also in this case reducing the number of parallel jobs may be beneficial.
+The Bazel server may be terminated abruptly if using too much memory (e.g. if concurrent compiler processes are cumulatively using a large amount of memory), also in this case reducing the number of parallel jobs may be beneficial.
 
 ### CUDA debug build
 
-A CUDA debug build (`--debug --backend=cuda`) requires a recent GCC compiler and also a fast linker (see requirements above).
-You can tell GCC to use either `lld` or `mold` with `--extraopt '--linkopt=-fuse-ld=Lld'` or `--extraopt '--linkopt=-fuse-ld=mold'` respectively.
-NOTE: the option `-fuse-ld=mold` was added in GCC 12, if you're trying to use an older version you can have some luck by making a symlink `ld` pointing to `mold` in `PATH`, with higher precendce than Binutils `ld`.
+A CUDA debug build (`--debug --backend=cuda`) requires a recent GCC compiler (at least v12) and also a fast linker (see requirements above).
+You can tell GCC to use either `lld` or `mold` with `--extraopt '--linkopt=-fuse-ld=lld'` or `--extraopt '--linkopt=-fuse-ld=mold'` respectively.
+NOTE: the option `-fuse-ld=mold` was added in GCC 12, if you're trying to use an older version you can have some luck by making a symlink named `ld` pointing to `mold` in `PATH`, with higher precendce than Binutils `ld`.
 
 ### Using ccache
 
