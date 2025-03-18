@@ -36,6 +36,7 @@ end
 
 const DEBUG_MODE::Ref{Bool} = Ref(false)
 const LARGE_CONSTANT_THRESHOLD = Ref(100 << 20) # 100 MiB
+const LARGE_CONSTANT_RAISE_ERROR = Ref(true)
 
 function with_debug(f)
     old = DEBUG_MODE[]
@@ -89,8 +90,18 @@ end
 @noinline function constant(
     x::DenseArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
-    sizeof(x) > LARGE_CONSTANT_THRESHOLD[] &&
-        error("Generating a constant larger than $(LARGE_CONSTANT_THRESHOLD[]) bytes.")
+    if sizeof(x) > LARGE_CONSTANT_THRESHOLD[]
+        if LARGE_CONSTANT_RAISE_ERROR[]
+            error(
+                "Generating a constant of $(sizeof(x)) bytes, which larger than the $(LARGE_CONSTANT_THRESHOLD[]) bytes threshold",
+            )
+        else
+            location = with_debug() do
+                mlir_stacktrace("constant", @__FILE__, @__LINE__)
+            end
+        end
+    end
+
     value = MLIR.IR.DenseElementsAttribute(x)
     constants = constant_context()[2]
     if haskey(constants, value)
