@@ -341,6 +341,7 @@ end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}})
+    bc = Broadcast.flatten(bc)
     for x in bc.args
         x isa ConcretePJRTArray && wait(x)
     end
@@ -365,7 +366,6 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
         return ConcretePJRTArray(aux) # XXX: result should be on correct device?
     end
 
-    bc = Broadcast.flatten(bc)
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
     return fn(bc.args...)
 end
