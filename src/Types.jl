@@ -289,7 +289,7 @@ function ConcreteIFRTArray(
                    arguments will be ignored."
         end
     end
-    sharded_data, sharding = sharding(client, device, data)
+    sharded_data, sharding = sharding(client, nothing, data)
     return ConcreteIFRTArray{T,N}(sharded_data, size(data), sharding)
 end
 
