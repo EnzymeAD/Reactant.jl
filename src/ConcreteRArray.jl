@@ -365,11 +365,13 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
         return ConcretePJRTArray(aux) # XXX: result should be on correct device?
     end
 
+    bc = Broadcast.flatten(bc)
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
     return fn(bc.args...)
 end
 
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}})
+    bc = Broadcast.flatten(bc)
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
     return fn(bc.args...)
 end
