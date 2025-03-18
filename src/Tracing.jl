@@ -561,9 +561,8 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
 ) where {T, N, P, I, L}
     P2 = Reactant.traced_type_inner(P, seen, mode, track_numbers, sharding, runtime)
     I2 = Reactant.traced_type_inner(I, seen, mode, track_numbers, sharding, runtime)
-    L2 = Reactant.traced_type_inner(L, seen, mode, track_numbers, sharding, runtime)
     T2 = eltype(P2)
-    return SubArray{T2, N, P2, I2, L2}
+    return SubArray{T2, N, P2, I2, L}
 end
 
 for P in (Ptr, Core.LLVMPtr, Base.RefValue)
