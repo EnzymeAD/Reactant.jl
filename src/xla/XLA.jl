@@ -3,7 +3,6 @@ module XLA
 using ..Reactant: Reactant, MLIR
 using Reactant_jll
 using Libdl
-using Scratch, Downloads
 using EnumX: @enumx
 using Preferences: load_preference
 using Enzyme
@@ -47,7 +46,7 @@ for runtime in (:PJRT, :IFRT)
     @eval @kwdef mutable struct $(backend_state) <: AbstractBackendState
         initialized::Bool = false
         clients::Dict{String,$(runtime).Client} = Dict{String,$(runtime).Client}()
-        default_client::$(runtime).Client = $(runtime).Client(C_NULL; skip_check=true)
+        default_client::$(runtime).Client = $(runtime).NullClient
     end
 end
 
@@ -184,25 +183,24 @@ for runtime in (:PJRT, :IFRT)
         state.default_client = cpu
 
         # Try TPU if possible, then try GPU (CUDA)
-        @static if !Sys.isapple()
-            if Reactant.has_tpu()
-                dataset_dir = @get_scratch!("libtpu")
-                download_tpu(dataset_dir)
-                try
-                    if was_initialized && haskey(state.clients, "tpu")
-                        XLA.free_client(state.clients["tpu"])
-                        XLA.$(runtime).tpu_client_count[] -= 1
+        if !Reactant.precompiling()
+            @static if !Sys.isapple()
+                if Reactant.has_tpu()
+                    Reactant.TPUUtils.download_libtpu_if_needed()
+                    try
+                        if was_initialized && haskey(state.clients, "tpu")
+                            XLA.free_client(state.clients["tpu"])
+                            XLA.$(runtime).tpu_client_count[] -= 1
+                        end
+                        tpu = $(runtime).TPUClient(;
+                            tpu_path=Reactant.TPUUtils.get_libtpu_path(), common_kwargs...
+                        )
+                        state.clients["tpu"] = tpu
+                        state.default_client = tpu
+                    catch e
+                        println(stdout, e)
                     end
-                    tpu = $(runtime).TPUClient(;
-                        tpu_path=dataset_dir * "/libtpu.so", common_kwargs...
-                    )
-                    state.clients["tpu"] = tpu
-                    state.default_client = tpu
-                catch e
-                    println(stdout, e)
-                end
-            else
-                if !Reactant.precompiling()
+                else
                     try
                         if was_initialized && haskey(state.clients, "gpu")
                             XLA.free_client(state.clients["gpu"])
@@ -222,19 +220,6 @@ for runtime in (:PJRT, :IFRT)
         end
 
         return nothing
-    end
-end
-
-function download_tpu(dataset_dir::String)
-    if !isfile(dataset_dir * "/libtpu.so")
-        Downloads.download(
-            "https://storage.googleapis.com/cloud-tpu-tpuvm-artifacts/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20240829-py3-none-any.whl",
-            dataset_dir * "/tpu.zip",
-        )
-        run(`unzip -qq $(dataset_dir*"/tpu.zip") -d $(dataset_dir)/tmp`)
-        run(`mv $(dataset_dir)/tmp/libtpu/libtpu.so $(dataset_dir)/libtpu.so`)
-        rm(dataset_dir * "/tmp"; recursive=true)
-        rm(dataset_dir * "/tpu.zip"; recursive=true)
     end
 end
 

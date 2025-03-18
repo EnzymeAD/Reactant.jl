@@ -23,12 +23,6 @@ end
     return map(synced_buffer, buffers)
 end
 
-function Base.show(io::IO, mime::MIME"text/plain", buffer::B) where {B<:AbstractBuffer}
-    print(io, "$(B) storing ")
-    show(io, mime, convert(Array, buffer))
-    return nothing
-end
-
 # Async Buffers
 abstract type AbstractAsyncBuffer <: AbstractBuffer end
 

@@ -73,6 +73,7 @@ function XLA.compile(
     num_parameters::Int64,
     num_replicas::Int64,
     num_partitions::Int64,
+    use_shardy_partitioner::Bool,
 )
     device_id = is_sharded ? Int64(-1) : Int64(XLA.device_ordinal(device))
     GC.@preserve client mod begin
@@ -84,6 +85,7 @@ function XLA.compile(
             global_device_ids::Ptr{Clong},
             length(global_device_ids)::Clong,
             XLA.CUDA_DATA_DIR[]::Cstring,
+            use_shardy_partitioner::Bool,
         )::Ptr{Cvoid}
     end
     return LoadedExecutable(

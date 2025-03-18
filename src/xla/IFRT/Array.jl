@@ -138,16 +138,22 @@ function XLA.buffer_on_cpu(::Array)
 end
 
 function XLA.to_host(buffer::Array, data, reactant_sharding)
-    if length(XLA.devices(XLA.sharding(buffer))) == 1
-        GC.@preserve buffer data begin
+    reactant_sharding = Reactant.Sharding.unwrap_shardinfo(reactant_sharding)
+
+    # While some client implementations might support directly copying to host, but we
+    # avoid the complexity of supporting that for now.
+    single_device_arrays = disassemble_into_single_device_arrays(buffer, true)
+
+    if reactant_sharding isa Reactant.Sharding.NoSharding
+        data_buffer = first(single_device_arrays)
+        GC.@preserve data_buffer data begin
             @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
-                buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
+                data_buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
             )::Cvoid
         end
         return data
     end
 
-    reactant_sharding = Reactant.Sharding.unwrap_shardinfo(reactant_sharding)
     @assert reactant_sharding isa Reactant.Sharding.HloSharding
     client = XLA.client(buffer)
     all_devices = XLA.get_device.((client,), reactant_sharding.mesh.device_ids)
@@ -157,10 +163,6 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
                addressable devices. Remaining slices of data in `data` are left \
                untouched."
     end
-
-    # While some client implementations might support directly copying to host, but we 
-    # avoid the complexity of supporting that for now.
-    single_device_arrays = disassemble_into_single_device_arrays(buffer, true)
 
     array_slices, _ = XLA.sharding_to_concrete_array_indices(
         convert(XLA.CondensedOpSharding, reactant_sharding.hlo_sharding),

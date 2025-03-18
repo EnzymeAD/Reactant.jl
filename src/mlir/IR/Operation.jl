@@ -135,6 +135,13 @@ function operand(operation::Operation, i=1)
 end
 
 """
+    operands(op)
+
+Return an array of all operands of the operation.
+"""
+operands(op) = IR.Value[operand(op, i) for i in 1:noperands(op)]
+
+"""
     operand!(op, i, value)
 
 Sets the `i`-th operand of the operation.

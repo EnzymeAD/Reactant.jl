@@ -148,6 +148,7 @@ mutable struct CompiledMlirFnResult{
     concrete_result::CR
     sharding_mesh::M
     mutated_args::MA
+    use_shardy_partitioner::Bool
 end
 
 function make_mlir_fn(
@@ -226,9 +227,7 @@ function make_mlir_fn(
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
     for (k, v) in seen_args
-        if (
-            k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
-        ) && hasfield(typeof(k), :sharding)
+        if k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
             if Reactant.Sharding.is_sharded(k)
                 Reactant.Ops.mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
@@ -373,6 +372,18 @@ function make_mlir_fn(
 
         linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
 
+        # If an argument is mutated but is not sharded (aka sharding is NoSharding), we
+        # need to force a replicated sharding.
+        for i in mutated_args
+            arg = linear_args[i]
+            if !haskey(traced_args_to_shardings, arg)
+                # Force a replicated sharding
+                traced_args_to_shardings[arg] = Reactant.Sharding.NamedSharding(
+                    sharding_mesh, ntuple(Returns(nothing), ndims(arg))
+                )
+            end
+        end
+
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
@@ -424,6 +435,7 @@ function make_mlir_fn(
         nothing,
         sharding_mesh,
         mutated_args,
+        true,
     )
 end
 
@@ -641,7 +653,13 @@ function broadcast_to_size(arg::Base.RefValue, rsize)
     return arg
 end
 
-broadcast_to_size(arg::Number, rsize) = Ops.constant(Base.fill(arg, Tuple(rsize)))
+function broadcast_to_size(arg::AbstractIrrational, rsize)
+    return broadcast_to_size(Base.convert(Float64, arg), rsize)
+end
+
+function broadcast_to_size(arg::ReactantPrimitive, rsize)
+    return Ops.constant(Base.fill(arg, Tuple(rsize)))
+end
 
 function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     length(rsize) == 0 && return arg

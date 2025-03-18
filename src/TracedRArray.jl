@@ -468,29 +468,100 @@ function Base.mapreduce(
     dims=:,
     init=nothing,
 ) where {T,N}
-    inp = broadcast(f, materialize_traced_array(A))
+    A = materialize_traced_array(A)
 
-    dims isa Number && (dims = (dims,))
-
-    if init !== nothing && typeof(init) != unwrapped_eltype(inp)
-        inp = typeof(init).(inp)
+    if dims isa Int
+        dims = [dims]
     end
 
-    rdims = dims == (:) ? collect(Int64, 1:N) : collect(Int64, dims)
+    op_in_T = Core.Compiler.return_type(f, Tuple{T})
 
-    reduction_result = Ops.reduce(inp, nothing, rdims, op)
+    if init === nothing
+        if op === min
+            init = typemax(op_in_T)
+        elseif op === max
+            init = typemin(op_in_T)
+        else
+            init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
+        end
 
-    reduction_result = if dims != (:)
-        Ops.reshape(reduction_result, Int64[i ∈ rdims ? 1 : size(A, i) for i in 1:N])
+        if typeof(init) != op_in_T
+            op_in_T = typeof(init)
+            A = typeof(init).(A)
+        end
+    end
+
+    init = [TracedUtils.broadcast_to_size(init, ()).mlir_data]
+
+    inp = [broadcast(f, A).mlir_data]
+
+    rdims = Int64[]
+
+    if dims == (:)
+        for i in 0:(N - 1)
+            push!(rdims, i)
+        end
     else
-        TracedRNumber{unwrapped_eltype(reduction_result)}((), reduction_result.mlir_data)
+        for i in dims
+            push!(rdims, i - 1)
+        end
     end
 
-    init === nothing && return reduction_result
-    return broadcast(op, reduction_result, init)
+    in_tys = [
+        MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(inp[1]))),
+        MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(init[1]))),
+    ]
+
+    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location(), MLIR.IR.Location()])
+
+    args = (
+        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 1)),
+        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 2)),
+    )
+
+    resty = MLIR.IR.block!(fnbody) do
+        tmp = TracedUtils.broadcast_to_size(op(args...), ())
+        Ops.return_(tmp)
+        return eltype(MLIR.IR.type(tmp.mlir_data))
+    end
+
+    toonedims = Int[]
+    outdims = Int[]
+    for i in 1:N
+        tmp = if in(i - 1, rdims)
+            1
+        else
+            sz = size(A, i)
+            push!(outdims, sz)
+            sz
+        end
+        push!(toonedims, tmp)
+    end
+
+    TT = MLIR.IR.Type[MLIR.IR.TensorType(outdims, resty)]
+
+    body = MLIR.IR.Region()
+    push!(body, fnbody)
+    red = MLIR.Dialects.stablehlo.reduce(
+        inp, init; result_0=TT, dimensions=MLIR.IR.DenseArrayAttribute(rdims), body
+    )
+
+    red = MLIR.IR.result(red, 1)
+    redT = eltype(MLIR.IR.julia_type(MLIR.IR.type(red)))
+
+    if dims != (:)
+        red = Ops.reshape(TracedRArray(red), toonedims...)
+    else
+        if length(outdims) == 0
+            red = TracedRNumber{redT}((), red)
+        else
+            red = TracedRArray{redT,length(outdims)}((), red, (outdims...,))
+        end
+    end
+    return red
 end
 
-function Base._mapreducedim!(
+function Base.mapreducedim!(
     @nospecialize(f),
     @nospecialize(op),
     @nospecialize(R::AnyTracedRArray),
@@ -502,11 +573,9 @@ function Base._mapreducedim!(
         @assert sR == 1
         return i
     end
-
-    isempty(A) && return R
-
     tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
-    R .= op.(R, tmp)
+    # set_mlir_data!(R, get_mlir_data(tmp))
+    R .= op.(R, tmp) # match native Julia's behavior
     return R
 end
 

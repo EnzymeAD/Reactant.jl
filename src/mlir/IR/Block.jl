@@ -86,6 +86,19 @@ push_argument!(block::Block, type; location::Location=Location()) =
     Value(API.mlirBlockAddArgument(block, type, location))
 
 """
+    erase_argument!(block, i)
+
+Erase argument `i` of the block. Returns the block.
+"""
+function erase_argument!(block, i)
+    if i ∉ 1:nargs(block)
+        throw(BoundsError(block, i))
+    end
+    API.mlirBlockEraseArgument(block, i - 1)
+    return block
+end
+
+"""
     first_op(block)
 
 Returns the first operation in the block or `nothing` if empty.

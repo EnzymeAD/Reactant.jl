@@ -315,7 +315,7 @@ function standardize_sharding(sharding::DimsSharding, x::Union{AbstractArray,Num
 end
 
 function (sharding::DimsSharding)(
-    client::XLA.AbstractClient, device::Nothing, x::Union{AbstractArray,Number}
+    client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
 )
     return (standardize_sharding(sharding, x))(client, device, x)
 end

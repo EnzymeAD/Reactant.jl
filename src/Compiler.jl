@@ -42,12 +42,32 @@ end
     @nospecialize(obj::AbstractArray{T}), field, val
 ) where {T}
     ancestor_obj = ancestor(obj)
-    (isbitstype(T) || ancestor_obj isa RArray) && return Base.setfield!(obj, field, val)
+    (isbitstype(T) || ancestor_obj isa RArray) && return setfield_carray!(obj, field, val)
     return Base.setindex!(obj, val, field)
 end
 
 @inline function traced_setfield!(@nospecialize(obj::Dict), field, val)
     return Base.setindex!(obj, field, val)
+end
+
+# fallback
+@inline function setfield_carray!(obj, field, val)
+    return Base.setfield!(obj, field, val)
+end
+
+@inline function setfield_carray!(obj::ConcretePJRTArray, field, val)
+    if field !== :data || typeof(val) == typeof(getfield(obj, field))
+        return Base.setfield!(obj, field, val)
+    end
+
+    # This case is triggered if the user had provided an unsharded input (NoSharding), but
+    # we had to replicate it before feeding it to XLA
+    @assert !Reactant.Sharding.is_sharded(obj) "Expected unsharded input. Open an issue on \
+                                                Reactant.jl with a MWE."
+    devices = Reactant.XLA.device.(val)
+    device = Reactant.XLA.device(only(obj.data))
+    idx = findfirst(isequal(device), devices)
+    return Base.setfield!(obj, field, (val[idx],))
 end
 
 function create_result(
@@ -470,6 +490,8 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "log_const_prop<1>",
         "log_plus_one_const_prop<1>",
         "binop_const_simplify",
+        "is_finite_const_prop",
+        "not_const_prop",
         "transpose_broadcast_in_dim_to_broadcast_in_dim",
         "not_select_simplify",
         "scatter_update_computation_const_prop",
@@ -505,13 +527,19 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         if DUMP_LLVMIR[]
             push!(
                 passes,
-                "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true}",
+                "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
             )
         else
-            push!(passes, "sroa-wrappers{instcombine=false instsimplify=true}")
+            push!(
+                passes,
+                "sroa-wrappers{instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
+            )
         end
         push!(passes, "canonicalize")
-        push!(passes, "sroa-wrappers{instcombine=false instsimplify=true}")
+        push!(
+            passes,
+            "sroa-wrappers{instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
+        )
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
         push!(passes, "remove-duplicate-func-def")
@@ -533,12 +561,12 @@ function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     return mod
 end
 
-const context_gc_vector = Dict{MLIR.IR.Context,Vector{TracedRArray}}()
+const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedRNumber}}}()
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
     ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
+    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     result = MLIR.IR.context!(ctx) do
         mod = parse(MLIR.IR.Module, source)
@@ -552,7 +580,7 @@ end
 
 function compile_mlir(f, args; client=nothing, kwargs...)
     ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
+    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
@@ -639,6 +667,8 @@ end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
+const OpenMP = Ref{Bool}(true)
+const SROA_ATTRIBUTOR = Ref{Bool}(true)
 
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do
@@ -694,6 +724,8 @@ function compile_mlir!(
         }
     }();
     optimize::Union{Bool,Symbol}=true,
+    # default refers to letting XLA handle the shardy inport/propagation/export
+    shardy_passes::Symbol=:to_mhlo_shardings, # [:default, :to_mhlo_shardings]
     no_nan::Bool=false,
     backend="gpu",
     fn_kwargs=(),
@@ -712,6 +744,9 @@ function compile_mlir!(
     # Save in the TLS whether we are raising.  We identify that condition by
     # checking whether the user set an explicit list of passes, or chose
     # `raise=true` to use the default passes.
+    if backend == "tpu" && raise isa Bool
+        raise = true
+    end
     is_raising = raise isa String || raise
     activate_raising!(is_raising)
 
@@ -726,9 +761,24 @@ function compile_mlir!(
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
     end
-    (; fnwrapped, traced_result, seen_args, ret, linear_args, in_tys, linear_results) =
-        mlir_fn_res
+    (;
+        fnwrapped,
+        traced_result,
+        seen_args,
+        ret,
+        linear_args,
+        in_tys,
+        linear_results,
+        is_sharded,
+    ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
+
+    # Custom Kernels without Raising will lead to suboptimal codegen for is_sharded, force
+    # raising
+    if is_sharded
+        is_raising = true
+        raise isa Bool && (raise = true)
+    end
 
     concrete_seen = OrderedIdDict()
 
@@ -743,9 +793,13 @@ function compile_mlir!(
         toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
     end
 
-    if backend == "cpu"
+    if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
-        jit = "lower-jit{openmp=true backend=cpu},symbol-dce"
+        if backend == "tpu"
+            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
+        else
+            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
+        end
     elseif DEBUG_KERNEL[]
         curesulthandler = dlsym(
             Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
@@ -927,6 +981,34 @@ function compile_mlir!(
         error("Invalid optimize option: $(Meta.quot(optimize))")
     end
 
+    # shardy passes
+    use_shardy_partitioner = false
+    if is_sharded
+        if shardy_passes == :default
+            # If `:default` is passed in, we will run a pass to export the sharding
+            # inside the corresponding compile function for IFRT/PJRT. This keeps the
+            # sharding readable.
+            use_shardy_partitioner = true
+        elseif shardy_passes == :to_mhlo_shardings
+            # Convert all shardy ops to corresponding mhlo attrs/ops that can be consumed by
+            # XLA (note we need to set `use_shardy_partitioner` to `false` in the options)
+            # TODO: Use https://github.com/openxla/shardy/blob/01d3205086132d1bdf0867e911c05f489918431d/shardy/dialect/sdy/transforms/propagation/propagation_pipeline.cc#L28 to pass in the options
+            run_pass_pipeline!(
+                mod,
+                join(
+                    ["sdy-propagation-pipeline", "xla-sdy-stablehlo-export-pipeline"], ','
+                ),
+            )
+
+            # Run our optimization passes here -- we need to be careful to not apply folding
+            # here since that violates the semantics of `sdy.constant` which was converted to
+            # `stablehlo.constant` by the previous pass.
+            run_pass_pipeline!(mod, join(["canonicalize", "cse"], ','))
+        else
+            error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
+        end
+    end
+
     preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
@@ -990,6 +1072,7 @@ function compile_mlir!(
         concrete_result,
         mlir_fn_res.sharding_mesh,
         mlir_fn_res.mutated_args,
+        use_shardy_partitioner,
     )
 end
 
@@ -1000,7 +1083,11 @@ See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :raise => false
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :shardy_passes => :(:default),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1024,7 +1111,11 @@ See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :raise => false
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :shardy_passes => :(:default),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1048,7 +1139,11 @@ See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :raise => false
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :shardy_passes => :(:to_mhlo_shardings),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1075,6 +1170,7 @@ macro compile(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :shardy_passes => :(:to_mhlo_shardings),
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1091,6 +1187,7 @@ macro jit(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :shardy_passes => :(:to_mhlo_shardings),
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
@@ -1116,6 +1213,7 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
             options[option_name] = option.args[2]
         end
     end
+
     call = only(args)
     f_symbol = gensym(:f)
     args_symbol = gensym(:args)
@@ -1157,18 +1255,20 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
         error("Invalid function call: $(call)")
     end
 
-    return quote
-        $(f_symbol) = $(fname)
-        $(args_symbol) = $(args_rhs)
-        $(kwargs_symbol) = (; $(kwargs_rhs...))
-        $(compiled_symbol) = $(compiler)(
-            $(f_symbol),
-            $(args_symbol);
-            fn_kwargs=$(kwargs_symbol),
-            $(Expr.(:kw, keys(options), values(options))...),
-        )
-    end,
-    (; compiled=compiled_symbol, args=args_symbol)
+    return (
+        quote
+            $(f_symbol) = $(fname)
+            $(args_symbol) = $(args_rhs)
+            $(kwargs_symbol) = (; $(kwargs_rhs...))
+            $(compiled_symbol) = $(compiler)(
+                $(f_symbol),
+                $(args_symbol);
+                fn_kwargs=$(kwargs_symbol),
+                $(Expr.(:kw, keys(options), values(options))...),
+            )
+        end,
+        (; compiled=compiled_symbol, args=args_symbol),
+    )
 end
 
 """
@@ -1259,20 +1359,40 @@ function codegen_flatten!(
                     device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
                         condensed_op_sharding, size(carg), mesh.logical_device_ids
                     )
+
+                    # Extract the buffer_slice
+                    buf_slice = Dict{eltype(device_to_array_slices),Symbol}()
+                    counter = 0
+                    for j in 1:length(mesh)
+                        sliced_buf = Symbol(:sliced_buf_, i, :_, counter)
+                        slice = device_to_array_slices[j]
+                        haskey(buf_slice, slice) && continue
+                        counter += 1
+                        push!(
+                            flatten_code,
+                            :(
+                                $sliced_buf = only(
+                                    Reactant._fast_slice($usbuf, $(slice...)).data
+                                )
+                            ),
+                        )
+                        buf_slice[slice] = sliced_buf
+                    end
+
                     for j in 1:length(mesh)
                         device_id = mesh.logical_device_ids[j]
                         buf = Symbol(:buf_, i, :_, device_id)
                         slice = device_to_array_slices[j]
-                        push!(
-                            flatten_code,
-                            :($buf = XLA.synced_buffer(only($usbuf[$(slice)...].data))),
-                        )
                         sbuf = Symbol(:s, buf)
-                        device = XLA.get_device(client, device_id)
                         push!(flatten_names, sbuf)
                         push!(
                             flatten_code,
-                            :($sbuf = XLA.copy_buffer_to_device($buf, $device)),
+                            :(
+                                $sbuf = XLA.copy_buffer_to_device(
+                                    XLA.synced_buffer($(buf_slice[slice])),
+                                    $(XLA.get_device(client, device_id)),
+                                )
+                            ),
                         )
                     end
                 end
@@ -1645,7 +1765,7 @@ end
 function compile_xla(f, args; client=nothing, kwargs...)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{TracedRArray}(undef, 0)
+    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
@@ -1695,6 +1815,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
             global_device_ids,
             mlir_fn_res.num_replicas,
             mlir_fn_res.num_partitions,
+            mlir_fn_res.use_shardy_partitioner,
         )
 
         return mod, exec, mlir_fn_res, device, client
@@ -1801,6 +1922,8 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
     exec::ExecTy
     device::DeviceTy
 end
+
+XLA.cost_analysis(thunk::Thunk) = XLA.cost_analysis(thunk.exec)
 
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 

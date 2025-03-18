@@ -473,6 +473,7 @@ cc_library(
 "-Wl,-exported_symbol,_PjRtLoadedExecutableNumReplicas",
 "-Wl,-exported_symbol,_PjRtLoadedExecutableNumPartitions",
 "-Wl,-exported_symbol,_ifrt_*",
+"-Wl,-exported_symbol,_pjrt_*",
 "-Wl,-exported_symbol,_reactant_*",
 "-Wl,-exported_symbol,_free_op_sharding",
 "-Wl,-exported_symbol,_free_hlo_sharding",

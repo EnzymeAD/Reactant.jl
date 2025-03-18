@@ -163,8 +163,10 @@ function ConcretePJRTArray(
         sdata, sharding = sharding(client, device, data)
         return ConcretePJRTArray{T,N,1,typeof(sharding)}(sdata, size(data), sharding)
     end
-    @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, \
-                                                   `device` and `idx` cannot be specified!"
+    if device !== nothing || idx !== nothing
+        @warn "`device` and `idx` specified for non-`NoSharding` sharding. These arguments \
+               will be ignored."
+    end
     sharded_data, sharding = sharding(client, nothing, data)
     return ConcretePJRTArray{T,N,length(sharded_data),typeof(sharding)}(
         sharded_data, size(data), sharding
@@ -282,11 +284,12 @@ function ConcreteIFRTArray(
             end
         end
     else
-        @assert device === nothing && idx === nothing "If `sharding` is not `NoSharding`, \
-                                                       `device` and `idx` cannot be \
-                                                       specified!"
+        if device !== nothing || idx !== nothing
+            @warn "`device` and `idx` specified for non-`NoSharding` sharding. These \
+                   arguments will be ignored."
+        end
     end
-    sharded_data, sharding = sharding(client, device, data)
+    sharded_data, sharding = sharding(client, nothing, data)
     return ConcreteIFRTArray{T,N}(sharded_data, size(data), sharding)
 end
 

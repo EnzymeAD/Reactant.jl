@@ -1,4 +1,3 @@
-# Currently an extremely simple test
 using Reactant, Test
 
 const addressable_devices = Reactant.addressable_devices()
@@ -25,11 +24,10 @@ end
         cdata_sharded2 = Reactant.to_rarray(data; sharding=data_sharding2)
         cdata_sharded3 = Reactant.to_rarray(data; sharding=data_sharding3)
 
-        @test data ≈
-            Array(cdata) ≈
-            Array(cdata_sharded) ≈
-            Array(cdata_sharded2) ≈
-            Array(cdata_sharded3)
+        @test data ≈ Array(cdata)
+        @test data ≈ Array(cdata_sharded)
+        @test data ≈ Array(cdata_sharded2)
+        @test data ≈ Array(cdata_sharded3)
 
         @test cdata_sharded.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
         @test cdata_sharded2.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
@@ -114,6 +112,9 @@ end
         )
         @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
         @test Reactant.to_number(@jit sum(x_ra)) ≈ sum(x)
+
+        @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test3(x_ra)) ≈ fn_test3(x)
+        @test Reactant.to_number(@jit shardy_passes = :to_mhlo_shardings sum(x_ra)) ≈ sum(x)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
@@ -126,8 +127,11 @@ end
         x_ra = Reactant.to_rarray(
             x; sharding=Sharding.NamedSharding(mesh, (("data", "model"), nothing))
         )
-        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
-        @test Reactant.to_number(@jit sum(x_ra)) ≈ sum(x)
+        @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit shardy_passes = :default sum(x_ra)) ≈ sum(x)
+
+        @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test3(x_ra)) ≈ fn_test3(x)
+        @test Reactant.to_number(@jit shardy_passes = :to_mhlo_shardings sum(x_ra)) ≈ sum(x)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
@@ -143,8 +147,12 @@ end
                 mesh, ("model", nothing); is_closed=(false, false)
             ),
         )
-        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
-        @test Reactant.to_number(@jit sum(x_ra)) ≈ sum(x)
+
+        @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit shardy_passes = :default sum(x_ra)) ≈ sum(x)
+
+        @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test3(x_ra)) ≈ fn_test3(x)
+        @test Reactant.to_number(@jit shardy_passes = :to_mhlo_shardings sum(x_ra)) ≈ sum(x)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
@@ -194,6 +202,9 @@ end
 
         hlo = @code_hlo fn_with_constraint(x_ra)
         @test contains(repr(hlo), "sharding_constraint")
+        hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
+        @test !contains(repr(hlo), "sharding_constraint")
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 3
 
         z = Reactant.to_rarray(x; sharding=constraint)
         res = @jit fn_with_constraint(x_ra)
@@ -209,6 +220,11 @@ end
 
         hlo = @code_hlo fn_with_constraint(x_ra_no_sharding)
         @test contains(repr(hlo), "sharding_constraint")
+        hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(
+            x_ra_no_sharding
+        )
+        @test !contains(repr(hlo), "sharding_constraint")
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 3
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
         @test x .+ x ≈ Array(res)
@@ -229,14 +245,17 @@ end
             x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
         )
 
-        @test Array(@jit sum(x_ra; dims=2)) ≈ sum(x; dims=2)
+        @test Array(@jit shardy_passes = :default sum(x_ra; dims=2)) ≈ sum(x; dims=2)
+        @test Array(@jit shardy_passes = :to_mhlo_shardings sum(x_ra; dims=2)) ≈
+            sum(x; dims=2)
 
         x = reshape(collect(Float32, 1:25), 5, 5)
         x_ra = Reactant.to_rarray(
             x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
         )
 
-        @test Array(@jit fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test2(x_ra)) ≈ fn_test2(x)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
@@ -262,4 +281,43 @@ end
         [4, 2],        #=iota_reshape_dims=#
         [2, 1],        #=iota_transpose_perm=#
     ) == [0, 2, 4, 6, 1, 3, 5, 7]
+end
+
+@testset "Sharding with Mutation" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(Reactant.addressable_devices(), 2, 2, 2), (:x, :y, :z))
+
+        x_ra = Reactant.to_rarray(
+            randn(Float32, 4, 5); sharding=Sharding.NamedSharding(mesh, ((:x, :y), :z))
+        )
+
+        y_ra_arr = randn(Float32, 5, 4)
+        y_ra = Reactant.to_rarray(y_ra_arr; sharding=Sharding.NoSharding())
+        y_ra_2 = Reactant.to_rarray(y_ra_arr; sharding=Sharding.NoSharding())
+
+        function fn(x, y)
+            z = x * y
+            y[1:2, 1:2] .= 1
+            return z
+        end
+
+        x_ra_arr = Array(x_ra)
+        z_ra_arr = fn(x_ra_arr, y_ra_arr)
+
+        z_ra = @jit shardy_passes = :default fn(x_ra, y_ra)
+        y_ra_final = Array(y_ra)
+
+        @test z_ra_arr ≈ Array(z_ra)
+        @test y_ra_final[1:2, 1:2] ≈ y_ra_arr[1:2, 1:2]
+        @test all(y_ra_final[1:2, 1:2] .== 1)
+
+        z_ra2 = @jit shardy_passes = :to_mhlo_shardings fn(x_ra, y_ra_2)
+        y_ra_final2 = Array(y_ra_2)
+
+        @test z_ra_arr ≈ Array(z_ra2)
+        @test y_ra_final[1:2, 1:2] ≈ y_ra_arr[1:2, 1:2]
+        @test all(y_ra_final[1:2, 1:2] .== 1)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
 end

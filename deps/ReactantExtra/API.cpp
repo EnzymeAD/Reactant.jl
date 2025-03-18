@@ -89,9 +89,11 @@
 
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
+#include "shardy/dialect/sdy/transforms/passes.h"
 #include "shardy/integrations/c/attributes.h"
 #include "xla/pjrt/mlir_to_hlo.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
+#include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_export.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_import.h"
 
 // IFRT
@@ -132,6 +134,10 @@
 // IFRT - Proxy (RPC)
 #include "xla/python/ifrt_proxy/client/registry.h"
 #include "xla/python/ifrt_proxy/server/grpc_server.h"
+
+// Cost Analysis
+#include "xla/hlo/ir/hlo_module.h"
+#include "xla/service/hlo_cost_analysis.h"
 
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
@@ -190,6 +196,7 @@ using reactant::HeldValue;
 using HeldPjRtClient = HeldValue<std::shared_ptr<xla::PjRtClient>>;
 using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
 using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
+using HeldHloModule = HeldValue<std::shared_ptr<xla::HloModule>>;
 
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -775,7 +782,8 @@ extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
                                            const int64_t *mesh_ids,
                                            int64_t num_mesh_ids,
-                                           const char *xla_gpu_cuda_data_dir) {
+                                           const char *xla_gpu_cuda_data_dir,
+                                           bool use_shardy_partitioner) {
   xla::CompileOptions options;
   options.executable_build_options.mutable_debug_options()
       ->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
@@ -787,7 +795,8 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
     options.executable_build_options.set_num_partitions(num_mesh_ids);
 
     options.executable_build_options.set_use_spmd_partitioning(true);
-    options.executable_build_options.set_use_shardy_partitioner(true);
+    options.executable_build_options.set_use_shardy_partitioner(
+        use_shardy_partitioner);
 
     // auto partitioning for GPUs is not available in open source version of XLA
     // options.executable_build_options.set_use_auto_spmd_partitioning(true);
@@ -827,12 +836,14 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
 extern "C" xla::PjRtLoadedExecutable *
 ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
               bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
-              const char *xla_gpu_cuda_data_dir) {
-  CompileOptions options = GenerateCompileOptions(
-      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner) {
+  CompileOptions options =
+      GenerateCompileOptions(device_id, is_sharded, mesh_ids, num_mesh_ids,
+                             xla_gpu_cuda_data_dir, use_shardy_partitioner);
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-  if (is_sharded) {
+
+  if (is_sharded && use_shardy_partitioner) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -840,8 +851,16 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     }
   }
 
-  auto exec = MyValueOrThrow(client->Compile(cmod_op, options));
-  return exec.release();
+  auto exec_err = client->Compile(cmod_op, options);
+
+  if (!exec_err.ok()) {
+    std::string err_str;
+    llvm::raw_string_ostream err_stream(err_str);
+    err_stream << cmod_op << "\n";
+    err_stream << exec_err.status().ToString();
+    ReactantThrowError(err_stream.str().c_str());
+  }
+  return std::move(exec_err).value().release();
 }
 
 extern "C" void
@@ -1076,11 +1095,10 @@ extern "C" void InitializePasses(MlirDialectRegistry creg) {
   enzyme::registerenzymexlaPasses();
 
   // Register the standard passes we want.
-  mlir::registerCSEPass();
+  mlir::registerTransformsPasses();
   mlir::registerLowerAffinePass();
   mlir::registerSCCPPass();
   mlir::registerInlinerPass();
-  mlir::registerCanonicalizerPass();
   mlir::registerSymbolDCEPass();
   mlir::registerLoopInvariantCodeMotionPass();
   mlir::registerConvertSCFToOpenMPPass();
@@ -1111,6 +1129,10 @@ extern "C" void InitializePasses(MlirDialectRegistry creg) {
   // xla + shardy specific passes
   xla::sdy::registerSdyRoundTripExportPipeline();
   xla::sdy::registerSdyRoundTripImportPipeline();
+  mlir::sdy::registerAllSdyPassesAndPipelines();
+  xla::sdy::registerStablehloExportPipeline();
+  xla::sdy::registerStablehloImportPipeline();
+  xla::sdy::registerStablehloImportShardingsPass();
 }
 
 extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
@@ -1351,14 +1373,15 @@ ifrt_pjrt_array_create(ifrt::PjRtClient *client,
 extern "C" xla::ifrt::LoadedExecutable *
 ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
-             const char *xla_gpu_cuda_data_dir) {
-  xla::CompileOptions compile_options = GenerateCompileOptions(
-      device_id, is_sharded, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir);
+             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner) {
+  xla::CompileOptions compile_options =
+      GenerateCompileOptions(device_id, is_sharded, mesh_ids, num_mesh_ids,
+                             xla_gpu_cuda_data_dir, use_shardy_partitioner);
   auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
       xla::ifrt::XlaCompileOptions(compile_options));
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-  if (is_sharded) {
+  if (is_sharded && use_shardy_partitioner) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -1400,15 +1423,11 @@ PjRtLoadedExecutableGetHloModules(xla::PjRtLoadedExecutable *exec,
   }
 }
 
-extern "C" const char *
-HloModuleToString(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
+extern "C" const char *HloModuleToString(HeldHloModule *hlo_module) {
   return cstr_from_string(hlo_module->obj()->ToString());
 }
 
-extern "C" void
-FreeHloModule(HeldValue<std::shared_ptr<xla::HloModule>> *hlo_module) {
-  delete hlo_module;
-}
+extern "C" void FreeHloModule(HeldHloModule *hlo_module) { delete hlo_module; }
 
 #pragma region IfRtClient
 
@@ -2305,6 +2324,61 @@ ifrt_loaded_executable_get_hlo_modules(ifrt::LoadedExecutable *exec,
 extern "C" int32_t
 ifrt_loaded_executable_num_devices(ifrt::LoadedExecutable *exec) {
   return static_cast<int32_t>(exec->num_devices());
+}
+
+#pragma endregion
+
+#pragma region CostAnalysis
+
+struct JLHloCostAnalysisProperties {
+  float flops;
+  float transcendentals;
+  float bytes_accessed;
+  float optimal_seconds;
+  float utilization;
+  float operand0_utilization;
+  float operand1_utilization;
+  float operand0_bytes_accessed;
+  float operand1_bytes_accessed;
+  float output_root_bytes_accessed;
+  float reserved0;
+};
+
+extern "C" void pjrt_hlo_module_cost_analysis_properties(
+    PjRtClient *client, HeldHloModule *hlo_module,
+    JLHloCostAnalysisProperties *jlproperties) {
+  auto analysis = MyValueOrThrow(client->GetHloCostAnalysis());
+  auto err = hlo_module->obj()->entry_computation()->Accept(analysis.get());
+  if (!err.ok()) {
+    ReactantThrowError(err.ToString().c_str());
+  }
+  auto properties = analysis->properties();
+
+  jlproperties->flops = properties["flops"];
+  jlproperties->transcendentals = properties["transcendentals"];
+  jlproperties->bytes_accessed = properties["bytes accessed"];
+  jlproperties->optimal_seconds = properties["optimal seconds"];
+  jlproperties->utilization = properties["utilization"];
+  jlproperties->operand0_utilization = properties.operand_utilization(0);
+  jlproperties->operand1_utilization = properties.operand_utilization(1);
+  jlproperties->operand0_bytes_accessed = properties.operand_bytes_accessed(0);
+  jlproperties->operand1_bytes_accessed = properties.operand_bytes_accessed(1);
+  jlproperties->output_root_bytes_accessed = properties.output_bytes_accessed();
+  jlproperties->reserved0 = 0.0;
+  return;
+}
+
+extern "C" void ifrt_hlo_module_cost_analysis_properties(
+    ifrt::Client *client, HeldHloModule *hlo_module,
+    JLHloCostAnalysisProperties *jlproperties) {
+  if (llvm::isa<ifrt::PjRtClient>(client)) {
+    auto ifrt_pjrt_client = llvm::dyn_cast<ifrt::PjRtClient>(client);
+    return pjrt_hlo_module_cost_analysis_properties(
+        ifrt_pjrt_client->pjrt_client(), hlo_module, jlproperties);
+  }
+  ReactantThrowError(("Cost analysis not supported for this client: " +
+                      std::string(client->runtime_type()))
+                         .c_str());
 }
 
 #pragma endregion
