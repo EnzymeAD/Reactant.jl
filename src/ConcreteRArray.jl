@@ -418,7 +418,7 @@ function Base.copyto!(
     return dest
 end
 
-function Base.copyto!(dest::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, src::AbstractArray)
+function Base.copyto!(dest::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, src::Array)
     copyto!(dest, to_rarray(src))
 end
 
