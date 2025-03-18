@@ -658,7 +658,7 @@ function broadcast_to_size(arg::AbstractIrrational, rsize)
 end
 
 function broadcast_to_size(arg::ReactantPrimitive, rsize)
-    return Ops.constant(Base.fill(arg, Tuple(rsize)))
+    return Ops.fill(arg, rsize)
 end
 
 function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
