@@ -92,7 +92,9 @@ end
 ) where {T,N}
     if sizeof(x) > LARGE_CONSTANT_THRESHOLD[]
         if LARGE_CONSTANT_RAISE_ERROR[]
-            error("Large constant array of size $(sizeof(x))")
+            error(
+                "Generating a constant of $(sizeof(x)) bytes, which larger than the $(LARGE_CONSTANT_THRESHOLD[]) bytes threshold",
+            )
         else
             location = with_debug() do
                 mlir_stacktrace("constant", @__FILE__, @__LINE__)
