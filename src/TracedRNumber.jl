@@ -424,9 +424,129 @@ function Base.getindex(
     return Base.unsafe_getindex(r, i)
 end
 
+struct TracedStepRangeLen{T, R, S, L} <: AbstractRange{T}
+    ref::R
+    step::S
+    len::L
+    offset::L
+end
+
+# constructors and interface implementation copied from range.jl
+TracedStepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
+    TracedStepRangeLen{T,R,S,promote_type(Int,typeof(len))}(ref, step, len, offset)
+TracedStepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
+    TracedStepRangeLen{typeof(ref+zero(step)),R,S,promote_type(Int,typeof(len))}(ref, step, len, offset)
+TracedStepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
+    TracedStepRangeLen{T,R,S,promote_type(Int,typeof(len))}(ref, step, len, offset)
+
+Base.isempty(r::TracedStepRangeLen) = length(r) == 0
+Base.step(r::TracedStepRangeLen) = r.step
+Base.step_hp(r::TracedStepRangeLen) = r.step
+Base.length(r::TracedStepRangeLen) = r.len
+Base.first(r::TracedStepRangeLen) = Base.unsafe_getindex(r, 1)
+Base.last(r::TracedStepRangeLen) = Base.unsafe_getindex(r, r.len)
+function Base.iterate(r::TracedStepRangeLen, i::Integer=1)
+    @inline
+    i += oneunit(i)
+    length(r) < i && return nothing
+    Base.unsafe_getindex(r, i), i
+end
+function Base.unsafe_getindex(
+    r::TracedStepRangeLen{T},
+    i::Integer,
+) where {T}
+    u = oftype(r.offset, i) - r.offset
+    @warn T r.ref + u*r.step
+    T(r.ref + u*r.step)
+end
+function getindex(r::TracedStepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
+    @inline
+    @boundscheck checkbounds(r, s)
+
+    len = length(s)
+    sstep = Base.step_hp(s)
+    rstep = Base.step_hp(r)
+    L = typeof(len)
+    if S === Bool
+        rstep *= one(sstep)
+        if len == 0
+            return TracedStepRangeLen{T}(first(r), rstep, zero(L), oneunit(L))
+        elseif len == 1
+            if first(s)
+                return TracedStepRangeLen{T}(first(r), rstep, oneunit(L), oneunit(L))
+            else
+                return TracedStepRangeLen{T}(first(r), rstep, zero(L), oneunit(L))
+            end
+        else # len == 2
+            return TracedStepRangeLen{T}(last(r), rstep, oneunit(L), oneunit(L))
+        end
+    else
+        # Find closest approach to offset by s
+        ind = LinearIndices(s)
+        offset = L(max(min(1 + round(L, (r.offset - first(s))/sstep), last(ind)), first(ind)))
+        ref = Base._getindex_hiprec(r, first(s) + (offset - oneunit(offset)) * sstep)
+        return TracedStepRangeLen{T}(ref, rstep*sstep, len, offset)
+    end
+end
+function Base._getindex_hiprec(r::TracedStepRangeLen, i::Integer)  # without rounding by T
+    u = oftype(r.offset, i) - r.offset
+    r.ref + u*r.step
+end
+Base.:(==)(r::T, s::T) where {T<:TracedStepRangeLen} =
+    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s)))
+
+# TODO: if there ever comes a ReactantStepRange:
+# ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T}
+
+Base.:-(r::TracedStepRangeLen{T,R,S,L}) where {T,R,S,L} =
+TracedStepRangeLen{T,R,S,L}(-r.ref, -r.step, r.len, r.offset)
+
+# TODO: promotion from StepRangeLen{T} to TracedStepRangeLen{T}?
+function Base.promote_rule(::Type{TracedStepRangeLen{T1,R1,S1,L1}},::Type{TracedStepRangeLen{T2,R2,S2,L2}}) where {T1,T2,R1,R2,S1,S2,L1,L2}
+    R, S, L = promote_type(R1, R2), promote_type(S1, S2), promote_type(L1, L2)
+    Base.el_same(promote_type(T1, T2), TracedStepRangeLen{T1,R,S,L}, TracedStepRangeLen{T2,R,S,L})
+end
+TracedStepRangeLen{T,R,S,L}(r::TracedStepRangeLen{T,R,S,L}) where {T,R,S,L} = r
+TracedStepRangeLen{T,R,S,L}(r::TracedStepRangeLen) where {T,R,S,L} =
+    TracedStepRangeLen{T,R,S,L}(convert(R, r.ref), convert(S, r.step), convert(L, r.len), convert(L, r.offset))
+TracedStepRangeLen{T}(r::TracedStepRangeLen) where {T} =
+    TracedStepRangeLen(convert(T, r.ref), convert(T, r.step), r.len, r.offset)
+Base.promote_rule(a::Type{TracedStepRangeLen{T,R,S,L}}, ::Type{OR}) where {T,R,S,L,OR<:AbstractRange} =
+    promote_rule(a, TracedStepRangeLen{eltype(OR), eltype(OR), eltype(OR), Int})
+TracedStepRangeLen{T,R,S,L}(r::AbstractRange) where {T,R,S,L} =
+    TracedStepRangeLen{T,R,S,L}(R(first(r)), S(step(r)), length(r))
+TracedStepRangeLen{T}(r::AbstractRange) where {T} =
+    TracedStepRangeLen(T(first(r)), T(step(r)), length(r))
+TracedStepRangeLen(r::AbstractRange) = TracedStepRangeLen{eltype(r)}(r)
+
+Base.promote_rule(::Type{LinRange{A,L}}, b::Type{TracedStepRangeLen{T2,R2,S2,L2}}) where {A,L,T2,R2,S2,L2} =
+    promote_rule(TracedStepRangeLen{A,A,A,L}, b)
+
+function Base._reverse(r::TracedStepRangeLen, ::Colon)
+    # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
+    # invalid. As `reverse(r)` is also empty, any offset would work so we keep
+    # `r.offset`
+    offset = isempty(r) ? r.offset : length(r)-r.offset+1
+    return typeof(r)(r.ref, negate(r.step), length(r), offset)
+end
+
+# TODO: +, - for TracedStepRangeLen (see Base._define_range_op)
+
+import Base.TwicePrecision
+
+(::Type{T})(x::TwicePrecision) where {T<:Union{Reactant.ConcreteRNumber, Reactant.TracedRNumber}} = (T(x.hi) + T(x.lo))::T
+
+
+Base.nbitslen(r::TracedStepRangeLen) = Base.nbitslen(eltype(r), length(r), r.offset)
+TracedStepRangeLen(ref::TwicePrecision{T}, step::TwicePrecision{T},
+             len::Integer, offset::Integer=1) where {T} =
+    TracedStepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}(ref, step, len, offset)
+
+
+
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function Base.unsafe_getindex(
-    r::Base.StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision},
+    r::Union{Base.StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision}, TracedStepRangeLen{T, <:Base.TwicePrecision, <:Base.TwicePrecision, <:Base.TwicePrecision}},
     i::TracedRNumber{<:Integer},
 ) where {T}
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
