@@ -932,6 +932,81 @@ function make_tracer(
 end
 append_path(@nospecialize(path), i) = (path..., i)
 
+function make_tracer_via_immutable_constructor(
+    seen,
+    @nospecialize(prev),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    kwargs...,
+)
+    RT = Core.Typeof(prev)
+    if haskey(seen, prev)
+        if mode == TracedToTypes
+            id = seen[prev]
+            push!(path, id)
+            return nothing
+        elseif mode != NoStopTracedTrack && haskey(seen, prev)
+            return seen[prev]
+        end
+    elseif mode == TracedToTypes
+        push!(path, RT)
+        seen[prev] = VisitedObject(length(seen) + 1)
+    end
+    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime)
+    @assert !Base.isabstracttype(RT)
+    @assert Base.isconcretetype(RT)
+    nf = fieldcount(RT)
+
+    @assert !ismutabletype(TT)
+
+    if nf == 0
+        if mode == TracedToTypes
+            push!(path, prev)
+            return nothing
+        end
+        return prev
+    end
+
+    flds = Vector{Any}(undef, nf)
+    changed = false
+    for i in 1:nf
+        if isdefined(prev, i)
+            newpath = mode == TracedToTypes ? path : append_path(path, i)
+            xi = Base.getfield(prev, i)
+            xi2 = make_tracer(
+                seen,
+                xi,
+                newpath,
+                mode;
+                track_numbers,
+                sharding=Base.getproperty(sharding, i),
+                runtime,
+                kwargs...,
+            )
+            if xi !== xi2
+                changed = true
+            end
+            flds[i] = xi2
+        else
+            nf = i - 1 # rest of tail must be undefined values
+            break
+        end
+    end
+    if mode == TracedToTypes
+        return nothing
+    end
+    if !changed
+        seen[prev] = prev
+        return prev
+    end
+    y = TT(flds...)
+    seen[prev] = y
+    return y
+end
+
 function make_tracer(
     seen,
     @nospecialize(prev),
