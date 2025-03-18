@@ -2500,4 +2500,31 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     return TracedRArray{T,length(reduced_shape)}((), res, reduced_shape)
 end
 
+@noinline function dynamic_update_slice(
+    operand::TracedRArray{T,N},
+    update::TracedRArray{T},
+    start_indices::Vector{TracedRNumber{Int}};
+    location=mlir_stacktrace("dynamic_update_slice", @__FILE__, @__LINE__),
+) where {T,N}
+    start_indices = [
+        convert(
+            TracedRNumber{Int32},
+            subtract(
+                index, Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, 1); location
+            );
+            location,
+        ).mlir_data for index in start_indices
+    ]
+    res = MLIR.IR.result(
+        stablehlo.dynamic_update_slice(
+            operand.mlir_data,
+            update.mlir_data,
+            start_indices;
+            location
+        ),
+        1
+    )
+    return TracedRArray{T,N}((), res, size(res))
+end
+
 end # module Ops
