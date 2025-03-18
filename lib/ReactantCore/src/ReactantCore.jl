@@ -6,7 +6,7 @@ using MacroTools: MacroTools
 export @trace, within_compile, MissingTracedValue
 
 # Traits
-function is_traced(x::T, seen=(@static if VERSION > v"1.11"
+function is_traced((@nospecialize x::T), seen=(@static if VERSION > v"1.11"
     IdSet()
 else
     Set{UInt}()
