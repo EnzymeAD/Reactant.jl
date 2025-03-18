@@ -22,6 +22,7 @@ using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_tra
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore, @allowscalar
 
+ReactantCore.is_traced(::TracedRArray, seen) = true
 ReactantCore.is_traced(::TracedRArray) = true
 
 Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)

@@ -4,6 +4,7 @@ using ..Reactant:
     Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
 using ReactantCore
 
+ReactantCore.is_traced(::TracedRNumber, seen) = true
 ReactantCore.is_traced(::TracedRNumber) = true
 
 Base.getindex(a::TracedRNumber{T}) where {T} = a

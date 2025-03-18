@@ -784,3 +784,30 @@ end
 
     @test (@jit ternary_max(a, b)) == 2
 end
+
+mutable struct MaybeTraced
+    x
+end
+
+@testset "is_traced of struct" begin
+    containstraced = MaybeTraced(
+        MaybeTraced(Reactant.TracedRArray{Float64,1}((), nothing, (3,)))
+    )
+    @test Reactant.ReactantCore.is_traced(containstraced)
+
+    doesnotcontaintraced = MaybeTraced(MaybeTraced(3))
+    @test !Reactant.ReactantCore.is_traced(doesnotcontaintraced)
+
+    recursivetraced = MaybeTraced((
+        1,
+        "string",
+        MaybeTraced(nothing),
+        MaybeTraced(Reactant.TracedRArray{Float64,1}((), nothing, (3,))),
+    ))
+    recursivetraced.x[3].x = recursivetraced
+    @test Reactant.ReactantCore.is_traced(recursivetraced)
+
+    recursivenottraced = MaybeTraced((1, "string", MaybeTraced(nothing)))
+    recursivenottraced.x[3].x = recursivenottraced
+    @test !Reactant.ReactantCore.is_traced(recursivenottraced)
+end
