@@ -1055,6 +1055,17 @@ function compile_mlir!(
     MLIR.API.mlirOperationDestroy(compiled_f.operation)
     compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
 
+    # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
+    # check which arguments were donated.
+    preserved_args_idx = last.(preserved_args)
+    for (i, arg) in enumerate(linear_args)
+        if i ∉ preserved_args_idx
+            MLIR.API.mlirFuncSetArgAttr(
+                func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
+            )
+        end
+    end
+
     return Reactant.TracedUtils.CompiledMlirFnResult(
         fnwrapped,
         func3,

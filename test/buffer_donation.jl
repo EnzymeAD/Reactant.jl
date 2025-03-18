@@ -17,6 +17,8 @@ end
     b = Reactant.to_rarray(3 * ones(2, 2))
     @jit(donate_fill_x_with_2(a, b))
     @test convert(Array, a) == 2 * ones(2, 2)
+    hlo = @code_hlo(donate_fill_x_with_2(a, b))
+    @test length(findall("reactant.donated", repr(hlo))) == 1
 
     (; preserved_args) = Reactant.Compiler.compile_xla(donate_fill_x_with_2, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
@@ -26,6 +28,8 @@ end
     b = Reactant.to_rarray(3 * ones(2, 2))
     @jit(donate_inplace_mul(a, b))
     @test convert(Array, a) == 6 * ones(2, 2)
+    hlo = @code_hlo(donate_inplace_mul(a, b))
+    @test length(findall("reactant.donated", repr(hlo))) == 1
 
     (; preserved_args) = Reactant.Compiler.compile_xla(donate_inplace_mul, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
