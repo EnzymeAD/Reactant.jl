@@ -402,7 +402,7 @@ end
 end
 
 # shape ops
-function reshape(x::TracedRArray, dims...; kwargs...)
+@noinline function reshape(x::TracedRArray, dims::Integer...; kwargs...)
     return reshape(x, collect(dims); kwargs...)
 end
 
@@ -2498,6 +2498,47 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     )
 
     return TracedRArray{T,length(reduced_shape)}((), res, reduced_shape)
+end
+
+@noinline function dynamic_update_slice(
+    operand::TracedRArray{T,N},
+    update::TracedRArray{T},
+    start_indices::Vector;
+    location=mlir_stacktrace("dynamic_update_slice", @__FILE__, @__LINE__),
+) where {T,N}
+    start_indices = [
+        Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, index - 1).mlir_data for
+        index in start_indices
+    ]
+    res = MLIR.IR.result(
+        stablehlo.dynamic_update_slice(
+            operand.mlir_data, update.mlir_data, start_indices; location
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, size(res))
+end
+
+@noinline function dynamic_slice(
+    operand::TracedRArray{T,N},
+    start_indices::Vector,
+    slice_sizes::Vector;
+    location=mlir_stacktrace("dynamic_slice", @__FILE__, @__LINE__),
+) where {T,N}
+    start_indices = [
+        Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, index - 1).mlir_data for
+        index in start_indices
+    ]
+    res = MLIR.IR.result(
+        stablehlo.dynamic_slice(
+            operand.mlir_data,
+            start_indices;
+            slice_sizes=collect(Int64, slice_sizes),
+            location,
+        ),
+        1,
+    )
+    return TracedRArray{T,ndims(res)}((), res, size(res))
 end
 
 end # module Ops

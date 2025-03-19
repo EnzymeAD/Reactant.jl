@@ -63,22 +63,8 @@ function Base.getindex(
     a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
     GPUArraysCore.assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
-
-    start_indices = [
-        TracedUtils.promote_to(TracedRNumber{Int}, i - 1).mlir_data for i in index
-    ]
-    slice_sizes = [Int64(1) for _ in index]
-
-    res1 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dynamic_slice(a.mlir_data, start_indices; slice_sizes), 1
-    )
-    res2 = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.reshape(
-            res1; result_0=MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(res1)))
-        ),
-        1,
-    )
-    return TracedRNumber{T}((), res2)
+    res = Ops.reshape(Ops.dynamic_slice(a, [index...], ones(Int32, N)), Int[])
+    return TracedRNumber{T}((), res.mlir_data)
 end
 
 Base.getindex(a::TracedRArray{T,0}) where {T} = TracedRNumber{T}((), a.mlir_data)
@@ -209,15 +195,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         return Ops.reshape(res, result_size)
     end
 
-    start_indices = map(indices) do i
-        return TracedUtils.promote_to(TracedRNumber{Int}, first(i) - 1).mlir_data
-    end
-    slice_sizes = [Int64(length(i)) for i in indices]
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dynamic_slice(a.mlir_data, start_indices; slice_sizes), 1
-    )
-
-    x = TracedRArray{T,N}((), res, Tuple(length.(indices)))
+    x = Ops.dynamic_slice(a, [first.(indices)...], [length.(indices)...])
     ddims = findall(indices) do idx
         return idx isa Integer || idx isa TracedRNumber{<:Integer}
     end
@@ -389,18 +367,12 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         end
     end
 
-    indices = [
-        (
-            TracedUtils.promote_to(TracedRNumber{Int}, i isa Colon ? 1 : first(i)) - 1
-        ).mlir_data for i in indices
-    ]
-    res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dynamic_update_slice(
-            a.mlir_data, TracedUtils.get_mlir_data(v), indices
-        ),
-        1,
+    set_mlir_data!(
+        a,
+        Ops.dynamic_update_slice(
+            a, v, [i isa Colon ? 1 : first(i) for i in indices]
+        ).mlir_data,
     )
-    set_mlir_data!(a, res)
     return v
 end
 
