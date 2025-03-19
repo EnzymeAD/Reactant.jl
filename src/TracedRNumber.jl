@@ -490,19 +490,8 @@ end
 
 errorcount = Ref(0)
 
-function Base.unsafe_getindex(r::TracedStepRangeLen{T}, i::Integer) where {T}
+function Base.unsafe_getindex(r::TracedStepRangeLen{T}, i::Union{I, TracedRNumber{<:I}}) where {T, I<:Integer}
     u = oftype(r.offset, i) - r.offset
-    # @warn T typeof(r.ref + u*r.step)
-    # @warn T typeof(r.ref) typeof(u) typeof(r.step)
-    # test = r.ref*u
-    # @info which(*, (typeof(r.ref), typeof(u)))
-    # @info typeof(test)
-    # return r.ref + u*r.step
-    # errorcount[] += 1
-    # if errorcount[] == 1
-    #     errorcount[] = 0
-    #     error("stop")
-    # end
     return T(r.ref + u * r.step)
 end
 function getindex(r::TracedStepRangeLen{T}, s::OrdinalRange{S}) where {T,S<:Integer}

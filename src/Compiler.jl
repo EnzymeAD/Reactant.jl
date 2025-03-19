@@ -1472,11 +1472,6 @@ function codegen_flatten!(
     is_sharded &&
         runtime isa Val{:PJRT} &&
         (flatten_names = vcat(eachrow(reshape(flatten_names, length(mesh), :))...))
-    Core.println("####")
-    Core.println("$(quote
-        $(flatten_code...)
-    end)")
-    Core.println("####")
     return flatten_names, flatten_code
 end
 
@@ -1918,8 +1913,6 @@ function compile(f, args; sync=false, kwargs...)
         $(unflatten_code...)
         return result
     end
-
-    Core.println("$body")
 
     return register_thunk(
         fname,
