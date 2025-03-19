@@ -262,6 +262,21 @@ function Base.ifelse(
     end
 end
 
+function Base.:*(x::Base.TwicePrecision{T}, y::Base.TwicePrecision{T}) where {T<:TracedRNumber}
+    zh, zl = Base.mul12(x.hi, y.hi)
+    hi, lo = Base.canonicalize2(zh, (x.hi * y.lo + x.lo * y.hi) + zl)
+    hi = ifelse(iszero(zh) | !isfinite(zh), zh, hi)
+    lo = ifelse(iszero(zl) | !isfinite(zl), zl, lo)
+    
+    return Base.TwicePrecision{T}(hi, lo)
+end
+
+function Base.:+(x::Base.TwicePrecision{T}, y::Base.TwicePrecision{T}) where {T<:TracedRNumber}
+    r = x.hi + y.hi
+    @trace s = abs(x.hi) > abs(y.hi) ? begin; (((x.hi - r) + y.hi) + y.lo) + x.lo; end : begin; (((y.hi - r) + x.hi) + x.lo) + y.lo; end
+    Base.TwicePrecision(Base.canonicalize2(r, s)...)
+end
+
 for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
     T = promote_type(T1, T2)
     @eval begin
@@ -451,12 +466,25 @@ function Base.iterate(r::TracedStepRangeLen, i::Integer=1)
     length(r) < i && return nothing
     Base.unsafe_getindex(r, i), i
 end
+
+errorcount = Ref(0)
+
 function Base.unsafe_getindex(
     r::TracedStepRangeLen{T},
     i::Integer,
 ) where {T}
     u = oftype(r.offset, i) - r.offset
-    @warn T r.ref + u*r.step
+    # @warn T typeof(r.ref + u*r.step)
+    # @warn T typeof(r.ref) typeof(u) typeof(r.step)
+    # test = r.ref*u
+    # @info which(*, (typeof(r.ref), typeof(u)))
+    # @info typeof(test)
+    # return r.ref + u*r.step
+    # errorcount[] += 1
+    # if errorcount[] == 1
+    #     errorcount[] = 0
+    #     error("stop")
+    # end
     T(r.ref + u*r.step)
 end
 function getindex(r::TracedStepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
