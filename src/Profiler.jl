@@ -14,10 +14,14 @@ to automatically generate a perfetto url to visualize the trace.
 
 ```julia
 with_profiler("./traces/") do
-    compiled_func = @compile myfunc(x, y, z)
+    compiled_func = @compile sync=true myfunc(x, y, z)
     compiled_func(x, y, z)
 end
 ```
+
+!!! note
+    When profiling compiled functions make sure to [`@compile`](@ref) with the `sync=true` option so that the compiled execution is captured by the profiler.
+
 """
 function with_profiler(
     f,
@@ -26,8 +30,10 @@ function with_profiler(
     trace_host=true,
     create_perfetto_link=false,
 )
-    device_tracer_level = UInt32(trace_device ? 1 : 0)
-    host_tracer_level = UInt32(trace_host ? 2 : 0)
+    device_tracer_level =
+        trace_device isa Bool ? UInt32(trace_device ? 1 : 0) : UInt32(trace_device)
+    host_tracer_level =
+        trace_host isa Bool ? UInt32(trace_host ? 2 : 0) : UInt32(trace_host)
     profiler = @ccall Reactant.MLIR.API.mlir_c.CreateProfilerSession(
         device_tracer_level::UInt32, host_tracer_level::UInt32
     )::Ptr{Cvoid}
