@@ -33,7 +33,8 @@ end
 end
 
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
-    (isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange) && return Base.getfield(obj, field)
+    (isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange) &&
+        return Base.getfield(obj, field)
     return Base.getindex(obj, field)
 end
 

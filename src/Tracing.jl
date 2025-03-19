@@ -1844,7 +1844,7 @@ function Reactant.traced_type_inner(
     mode::Reactant.TraceMode,
     track_numbers::Type,
     sharding,
-    runtime
+    runtime,
 )
     if !(Number <: track_numbers)
         modified_track_numbers = Number
@@ -1853,13 +1853,18 @@ function Reactant.traced_type_inner(
     end
     T, R, S, L = RT.parameters
     return TracedRNumberOverrides.TracedStepRangeLen{
-        Reactant.traced_type_inner(T, seen, mode, modified_track_numbers, sharding, runtime),
-        Reactant.traced_type_inner(R, seen, mode, modified_track_numbers, sharding, runtime),
-        Reactant.traced_type_inner(S, seen, mode, modified_track_numbers, sharding, runtime),
+        Reactant.traced_type_inner(
+            T, seen, mode, modified_track_numbers, sharding, runtime
+        ),
+        Reactant.traced_type_inner(
+            R, seen, mode, modified_track_numbers, sharding, runtime
+        ),
+        Reactant.traced_type_inner(
+            S, seen, mode, modified_track_numbers, sharding, runtime
+        ),
         Reactant.traced_type_inner(L, seen, mode, track_numbers, sharding, runtime),
     }
 end
-
 
 function Reactant.make_tracer(
     seen,
@@ -1869,7 +1874,8 @@ function Reactant.make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
-    Reactant.Sharding.is_sharded(sharding) && error("Cannot specify sharding for StepRangeLen")
+    Reactant.Sharding.is_sharded(sharding) &&
+        error("Cannot specify sharding for StepRangeLen")
     if mode == Reactant.TracedToTypes
         push!(path, Core.Typeof(prev))
         make_tracer(seen, prev.ref, path, mode; kwargs...)
@@ -1879,10 +1885,27 @@ function Reactant.make_tracer(
         return nothing
     end
     return TracedRNumberOverrides.TracedStepRangeLen(
-        Reactant.make_tracer(seen, prev.ref, Reactant.append_path(path, :ref), mode; kwargs..., track_numbers=Number),
-        Reactant.make_tracer(seen, prev.step, Reactant.append_path(path, :step), mode; kwargs..., track_numbers=Number),
-        Reactant.make_tracer(seen, prev.len, Reactant.append_path(path, :len), mode; kwargs...),
-        Reactant.make_tracer(seen, prev.offset, Reactant.append_path(path, :offset), mode; kwargs...),
+        Reactant.make_tracer(
+            seen,
+            prev.ref,
+            Reactant.append_path(path, :ref),
+            mode;
+            kwargs...,
+            track_numbers=Number,
+        ),
+        Reactant.make_tracer(
+            seen,
+            prev.step,
+            Reactant.append_path(path, :step),
+            mode;
+            kwargs...,
+            track_numbers=Number,
+        ),
+        Reactant.make_tracer(
+            seen, prev.len, Reactant.append_path(path, :len), mode; kwargs...
+        ),
+        Reactant.make_tracer(
+            seen, prev.offset, Reactant.append_path(path, :offset), mode; kwargs...
+        ),
     )
 end
-
