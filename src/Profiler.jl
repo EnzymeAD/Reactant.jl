@@ -13,8 +13,11 @@ from the function. The `create_perfetto_link` parameter can be used
 to automatically generate a perfetto url to visualize the trace.
 
 ```julia
+compiled_func = with_profiler("./traces") do
+    @compile sync=true myfunc(x, y, z)
+end
+
 with_profiler("./traces/") do
-    compiled_func = @compile sync=true myfunc(x, y, z)
     compiled_func(x, y, z)
 end
 ```
