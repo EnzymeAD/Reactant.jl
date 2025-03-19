@@ -88,6 +88,13 @@ end
 function get_shardy_tensor_sharding_attribute end
 
 """
+    sharding_to_array_slices(sharding, size_x; client=nothing)
+
+Given a sharding and an array size, returns the device to array slices mapping.
+"""
+function sharding_to_array_slices end
+
+"""
     NoSharding()
 
 Sharding annotation that indicates that the array is not sharded.
@@ -114,6 +121,8 @@ function (::NoSharding)(client::XLA.IFRT.Client, device, x::Union{AbstractArray,
     device === nothing && (device = XLA.default_device(client))
     return XLA.IFRT.AsyncArray(client, x, device), ShardInfo(NoSharding(), nothing)
 end
+
+sharding_to_array_slices(::NoSharding, size_x; client=nothing) = Base.OneTo.(size_x)
 
 """
     NamedSharding(
@@ -208,6 +217,39 @@ function (sharding::NamedSharding)(
     return HloSharding(sharding, client, device, x)
 end
 
+# This doesn't account for the size of the input so in-presence of padding this will be
+# incorrect. Hence always use the HloSharding constructor.
+function generate_hlo_sharding_from_tensor_attribute(sharding::NamedSharding)
+    if MLIR.IR._has_context()
+        ctx = MLIR.IR.context()
+    else
+        ctx = MLIR.IR.Context(Reactant.registry[], false)
+        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    end
+
+    MLIR.IR.context!(ctx) do
+        mesh_op = Reactant.Ops.mesh(
+            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+        )
+
+        tensor_sharding_attr = get_shardy_tensor_sharding_attribute(
+            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr; do_transpose=true
+        )
+
+        return HloSharding(
+            XLA.HloSharding(
+                @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
+                    tensor_sharding_attr.attribute::MLIR.API.MlirAttribute,
+                    mesh_op.mesh_attr.attribute::MLIR.API.MlirAttribute,
+                )::Ptr{Cvoid}
+            ),
+            sharding.mesh,
+            sharding.is_closed,
+            sharding.priority,
+        )
+    end
+end
+
 function get_shardy_tensor_sharding_attribute(
     sharding::NamedSharding, ctx, mesh_name, mesh_attr; do_transpose=true
 )
@@ -239,6 +281,12 @@ function get_shardy_tensor_sharding_attribute(
             0,
             MLIR.API.MlirAttribute[],
         ),
+    )
+end
+
+function sharding_to_array_slices(sharding::NamedSharding, size_x; client=nothing)
+    return sharding_to_array_slices(
+        generate_hlo_sharding_from_tensor_attribute(sharding), size_x; client
     )
 end
 
@@ -288,24 +336,25 @@ end
     return shard_type(HloSharding{M,N}, N)
 end
 
-function standardize_sharding(sharding::DimsSharding, x::Union{AbstractArray,Number})
+function standardize_sharding(sharding::DimsSharding, size_x)
+    N = length(size_x)
     final_dims = map(sharding.dims) do d
         @assert !iszero(d) "dims cannot contain 0"
-        return ifelse(d < 0, ndims(x) + d + 1, d)
+        return ifelse(d < 0, N + d + 1, d)
     end
 
-    dim_indices = ntuple(i -> findfirst(==(i), final_dims), ndims(x))
-    partition_spec = ntuple(ndims(x)) do i
+    dim_indices = ntuple(i -> findfirst(==(i), final_dims), N)
+    partition_spec = ntuple(N) do i
         dim_index = dim_indices[i]
         dim_index === nothing && return nothing # replicated dimension
         return sharding.partition_spec[dim_index]
     end
-    is_closed = ntuple(ndims(x)) do i
+    is_closed = ntuple(N) do i
         dim_index = dim_indices[i]
         dim_index === nothing && return true # replicated dimension
         return sharding.is_closed[dim_index]
     end
-    priority = ntuple(ndims(x)) do i
+    priority = ntuple(N) do i
         dim_index = dim_indices[i]
         dim_index === nothing && return -1 # replicated dimension
         return sharding.priority[dim_index]
@@ -317,7 +366,11 @@ end
 function (sharding::DimsSharding)(
     client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
 )
-    return (standardize_sharding(sharding, x))(client, device, x)
+    return (standardize_sharding(sharding, size(x)))(client, device, x)
+end
+
+function sharding_to_array_slices(sharding::DimsSharding, size_x; client=nothing)
+    return sharding_to_array_slices(standardize_sharding(sharding, size_x), size_x; client)
 end
 
 # HloSharding
@@ -344,74 +397,46 @@ end
     return ShardInfo{HloSharding{D1,D2},Vector{NTuple{N,UnitRange{Int64}}}}
 end
 
-# This doesn't account for the size of the input so in-presence of padding this will be
-# incorrect. Hence always use the HloSharding constructor.
-function generate_hlo_sharding_from_tensor_attribute(sharding::NamedSharding)
-    if MLIR.IR._has_context()
-        ctx = MLIR.IR.context()
-    else
-        ctx = MLIR.IR.Context(Reactant.registry[], false)
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    end
-
-    MLIR.IR.context!(ctx) do
-        mesh_op = Reactant.Ops.mesh(
-            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
-        )
-
-        tensor_sharding_attr = get_shardy_tensor_sharding_attribute(
-            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr; do_transpose=true
-        )
-
-        return HloSharding(
-            XLA.HloSharding(
-                @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                    tensor_sharding_attr.attribute::MLIR.API.MlirAttribute,
-                    mesh_op.mesh_attr.attribute::MLIR.API.MlirAttribute,
-                )::Ptr{Cvoid}
-            ),
-            sharding.mesh,
-            sharding.is_closed,
-            sharding.priority,
-        )
-    end
-end
-
-function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
-    hlo_sharding = generate_hlo_sharding_from_tensor_attribute(sharding)
-
+function sharding_to_array_slices(sharding::HloSharding, size_x; client=nothing)
     # Check if the input needs to be padded. If so this sharding is not valid and we
     # need to request the tensor sharding from XLA
-    condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
+    condensed_op_sharding = convert(XLA.CondensedOpSharding, sharding.hlo_sharding)
     device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
-        condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
+        condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
     )
 
     if needs_padding
-        # Compile a dummy function to get the tensor sharding
-        tmp = if x isa Number
-            Reactant.ConcretePJRTNumber(zero(eltype(x)))
+        kws = client === nothing ? (;) : (; client)
+        tmp = if length(size_x) == 0
+            Reactant.ConcreteRNumber(zero(Float32); kws...)
         else
-            Reactant.ConcretePJRTArray(ones(eltype(x), size(x)...))
+            Reactant.ConcreteRArray(ones(Float32, size_x...); kws...)
         end
         _, exec, _, _, _ = Reactant.Compiler.compile_xla(
             Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
         )
+
         xla_hlo_sharding = convert(
             Reactant.XLA.HloSharding, only(Reactant.XLA.get_parameter_shardings(exec))
         )
-        hlo_sharding = HloSharding(
-            xla_hlo_sharding,
-            hlo_sharding.mesh,
-            hlo_sharding.is_closed,
-            hlo_sharding.priority,
+        sharding = HloSharding(
+            xla_hlo_sharding, sharding.mesh, sharding.is_closed, sharding.priority
         )
 
-        condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
+        condensed_op_sharding = convert(XLA.CondensedOpSharding, sharding.hlo_sharding)
         device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
-            condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
+            condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
         )
+
+        @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl"
     end
+
+    return device_to_array_slices
+end
+
+function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
+    hlo_sharding = generate_hlo_sharding_from_tensor_attribute(sharding)
+    device_to_array_slices = sharding_to_array_slices(hlo_sharding, size(x); client)
 
     data = ntuple(length(hlo_sharding.mesh)) do i
         XLA.PJRT.AsyncBuffer(
@@ -426,39 +451,7 @@ end
 
 function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
     hlo_sharding = generate_hlo_sharding_from_tensor_attribute(sharding)
-
-    # Check if the input needs to be padded. If so this sharding is not valid and we
-    # need to request the tensor sharding from XLA
-    condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
-    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
-        condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
-    )
-
-    if needs_padding
-        # Compile a dummy function to get the tensor sharding
-        tmp = if x isa Number
-            Reactant.ConcreteIFRTNumber(zero(eltype(x)))
-        else
-            Reactant.ConcreteIFRTArray(ones(eltype(x), size(x)...))
-        end
-        _, exec, _, _, _ = Reactant.Compiler.compile_xla(
-            Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
-        )
-        xla_hlo_sharding = convert(
-            Reactant.XLA.HloSharding, only(Reactant.XLA.get_parameter_shardings(exec))
-        )
-        hlo_sharding = HloSharding(
-            xla_hlo_sharding,
-            hlo_sharding.mesh,
-            hlo_sharding.is_closed,
-            hlo_sharding.priority,
-        )
-
-        condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
-        device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
-            condensed_op_sharding, size(x), hlo_sharding.mesh.logical_device_ids
-        )
-    end
+    device_to_array_slices = sharding_to_array_slices(hlo_sharding, size(x); client)
 
     ifrt_sharding = XLA.IFRT.Sharding(
         vec(Reactant.XLA.get_device.((client,), hlo_sharding.mesh.device_ids)),
@@ -471,12 +464,7 @@ end
 function (sharding::HloSharding)(
     client::XLA.PJRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
-    condensed_op_sharding = convert(XLA.CondensedOpSharding, sharding.hlo_sharding)
-
-    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
-        condensed_op_sharding, size(x), sharding.mesh.logical_device_ids
-    )
-    @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl"
+    device_to_array_slices = sharding_to_array_slices(sharding, size(x); client)
 
     data = ntuple(length(sharding.mesh)) do i
         XLA.PJRT.AsyncBuffer(
@@ -492,12 +480,7 @@ end
 function (sharding::HloSharding)(
     client::XLA.IFRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
-    condensed_op_sharding = convert(XLA.CondensedOpSharding, sharding.hlo_sharding)
-
-    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
-        condensed_op_sharding, size(x), sharding.mesh.logical_device_ids
-    )
-    @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl"
+    device_to_array_slices = sharding_to_array_slices(sharding, size(x); client)
 
     ifrt_sharding = XLA.IFRT.Sharding(
         vec(Reactant.XLA.get_device.((client,), sharding.mesh.device_ids)),
@@ -551,6 +534,10 @@ function (sharding::ShardInfo)(
     client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
 )
     return (sharding.sharding)(client, device, x)
+end
+
+function sharding_to_array_slices(sharding::ShardInfo, size_x; client=nothing)
+    return sharding_to_array_slices(sharding.sharding, size_x; client)
 end
 
 const NoShardInfo = ShardInfo{NoSharding,Nothing}
