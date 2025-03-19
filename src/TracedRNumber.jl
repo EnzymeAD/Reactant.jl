@@ -17,6 +17,13 @@ function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
 end
 
+function Base.typemin(::Type{TracedRNumber{T}}) where {T}
+    return TracedUtils.promote_to(TracedRNumber{T}, typemin(T))
+end
+function Base.typemax(::Type{TracedRNumber{T}}) where {T}
+    return TracedUtils.promote_to(TracedRNumber{T}, typemax(T))
+end
+
 function Base.rtoldefault(T::Type{<:TracedRNumber})
     return T(Base.rtoldefault(unwrapped_eltype(T)))
 end
