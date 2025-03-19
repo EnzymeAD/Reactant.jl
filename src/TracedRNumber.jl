@@ -653,7 +653,7 @@ function Base.unsafe_getindex(
 end
 
 function Base.searchsortedfirst(
-    a::AbstractRange{<:Real}, x::TracedRNumber{<:Real}, o::Base.DirectOrdering
+    a::AbstractRange{<:Union{Real, TracedRNumber}}, x::TracedRNumber{<:Real}, o::Base.DirectOrdering
 )::TracedRNumber{keytype(a)}
 
     # require_one_based_indexing(a)
@@ -664,7 +664,7 @@ function Base.searchsortedfirst(
         !Base.Order.lt(o, f, x),
         1,
         ifelse(
-            h == 0 || Base.Order.lt(o, l, x),
+            (h == 0) | Base.Order.lt(o, l, x),
             length(a) + 1,
             ifelse(Base.Order.lt(o, a[n], x), n + 1, n),
         ),
