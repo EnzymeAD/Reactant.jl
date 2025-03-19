@@ -1020,3 +1020,13 @@ end
     res = copy(Broadcast.broadcasted(-, Broadcast.broadcasted(+, x_ra, 1)))
     @test res ≈ -(Array(x_ra) .+ 1)
 end
+
+@testset "typemin/typemax" begin
+    fn(x) = [typemin(eltype(x)), typemax(eltype(x))]
+
+    x_ra = Reactant.to_rarray(ones(4))
+    @test @jit(fn(x_ra)) == fn(ones(4))
+
+    x_ra = Reactant.to_rarray(ones(Int, 4))
+    @test @jit(fn(x_ra)) == fn(ones(Int, 4))
+end
