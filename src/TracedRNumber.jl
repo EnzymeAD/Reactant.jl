@@ -309,7 +309,31 @@ for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
+        function Base.:&(x::TracedRNumber{<:$(T1)}, y::$(T2))
+            return Ops.and(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.:&(x::$(T1), y::TracedRNumber{<:$(T2)})
+            return Ops.and(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
         function Base.:|(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+            return Ops.or(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.:|(x::TracedRNumber{<:$(T1)}, y::$(T2))
+            return Ops.or(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.:|(x::$(T1), y::TracedRNumber{<:$(T2)})
             return Ops.or(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
@@ -321,17 +345,21 @@ for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
+        function Base.xor(x::TracedRNumber{<:$(T1)}, y::$(T2))
+            return Ops.xor(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.xor(x::$(T1), y::TracedRNumber{<:$(T2)})
+            return Ops.xor(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
         Base.:!(x::TracedRNumber{<:$(T1)}) = Ops.not(x)
     end
 end
-Base.:&(x::Bool, y::TracedRNumber{Bool}) = x ? y : false
-Base.:&(x::TracedRNumber{Bool}, y::Bool) = y & x
-
-Base.:|(x::Bool, y::TracedRNumber{Bool}) = x ? true : y
-Base.:|(x::TracedRNumber{Bool}, y::Bool) = y | x
-
-Base.xor(x::Bool, y::TracedRNumber{Bool}) = x ? !y : y
-Base.xor(x::TracedRNumber{Bool}, y::Bool) = xor(y, x)
 
 function Base.literal_pow(
     ::Base.RefValue{typeof(^)}, x::TracedRNumber{T}, ::Base.RefValue{Val{P}}
