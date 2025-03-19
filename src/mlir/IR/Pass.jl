@@ -79,7 +79,7 @@ function run!(pm::PassManager, mod::Module)
         dir = mktempdir()
         path = joinpath(dir, "module.mlir")
         open(path, "w") do io
-            show(io, mod)
+            show(IOContext(io, :debug => true), mod)
         end
         @error "Dumped module to " * path
         throw("failed to run pass manager on module")
