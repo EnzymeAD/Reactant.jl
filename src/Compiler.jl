@@ -1449,7 +1449,7 @@ function codegen_flatten!(
                         quote
                             $(data_sym) = similar(
                                 $(Array{Reactant.unwrapped_eltype(carg),ndims(carg)}),
-                                $(size(carg))
+                                $(size(carg)),
                             )
                             $(XLA.to_host)(
                                 XLA.synced_buffer($usbuf), $(data_sym), $(carg.sharding)
