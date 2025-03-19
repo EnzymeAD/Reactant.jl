@@ -251,6 +251,12 @@ function Base.getindex(a::ConcreteIFRTArray, args::Vararg{Int,N}) where {N}
     return convert(Array, a)[args...]
 end
 
+function Base.getindex(
+    a::Union{ConcreteIFRTArray,ConcretePJRTArray}, args::Vararg{Any,N}
+) where {N}
+    return compile(getindex, (a, args...))(a, args...)
+end
+
 # This doesn't follow the semantics of getindex with ranges. It is mostly meant to be used
 # inside Compiler.jl
 @inline function _fast_slice(
