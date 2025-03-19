@@ -4,6 +4,8 @@ using ..Reactant:
     Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
 using ReactantCore
 
+import Base.TwicePrecision
+
 ReactantCore.is_traced(::TracedRNumber, seen) = true
 ReactantCore.is_traced(::TracedRNumber) = true
 
@@ -289,7 +291,7 @@ function Base.:+(
     return Base.TwicePrecision(Base.canonicalize2(r, s)...)
 end
 
-function Base.:*(x::TwicePrecision, v::Number)
+function Base.:*(x::TwicePrecision{<:TracedRNumber}, v::Number)
     @trace result = if v == 0
         TwicePrecision(x.hi*v, x.lo*v)
     else
@@ -497,8 +499,6 @@ function Base.iterate(r::TracedStepRangeLen, i::Integer=1)
     return Base.unsafe_getindex(r, i), i
 end
 
-errorcount = Ref(0)
-
 function _tracedsteprangelen_unsafe_getindex(r::AbstractRange{T}, i) where {T}
     u = oftype(r.offset, i) - r.offset
     return T(r.ref + u * r.step)
@@ -600,19 +600,27 @@ end
 
 # TODO: +, - for TracedStepRangeLen (see Base._define_range_op)
 
-import Base.TwicePrecision
+function (::Type{T})(
+    x::TwicePrecision
+) where {T<:Reactant.TracedRNumber}
+    return (T(x.hi) + T(x.lo))::T
+end
 
 function (::Type{T})(
     x::TwicePrecision
-) where {T<:Union{Reactant.ConcreteRNumber,Reactant.TracedRNumber}}
-    return (T(x.hi) + T(x.lo))::T
+) where {T<:Reactant.ConcreteRNumber}
+    return Reactant.ConcreteRNumber(T(x.hi) - T(x.lo))::T
 end
+
 
 Base.nbitslen(r::TracedStepRangeLen) = Base.nbitslen(eltype(r), length(r), r.offset)
 function TracedStepRangeLen(
     ref::TwicePrecision{T}, step::TwicePrecision{T}, len, offset=1
 ) where {T}
     return TracedStepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}(ref, step, len, offset)
+end
+function Base.step(r::TracedStepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T}
+    T(r.step)
 end
 
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
