@@ -293,9 +293,9 @@ end
 
 function Base.:*(x::TwicePrecision, v::TracedRNumber)
     @trace result = if v == 0
-        TwicePrecision(x.hi*v, x.lo*v)
+        TwicePrecision(x.hi * v, x.lo * v)
     else
-        x * TwicePrecision(oftype(x.hi*v, v))
+        x * TwicePrecision(oftype(x.hi * v, v))
     end
     return result
 end
@@ -332,7 +332,6 @@ Base.:|(x::TracedRNumber{Bool}, y::Bool) = y | x
 
 Base.xor(x::Bool, y::TracedRNumber{Bool}) = x ? !y : y
 Base.xor(x::TracedRNumber{Bool}, y::Bool) = xor(y, x)
-
 
 function Base.literal_pow(
     ::Base.RefValue{typeof(^)}, x::TracedRNumber{T}, ::Base.RefValue{Val{P}}
@@ -479,9 +478,7 @@ struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
 end
 
 # constructors and interface implementation copied from range.jl
-function TracedStepRangeLen{T,R,S}(
-    ref::R, step::S, len, offset=1
-) where {T,R,S}
+function TracedStepRangeLen{T,R,S}(ref::R, step::S, len, offset=1) where {T,R,S}
     return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
 end
 function TracedStepRangeLen(ref::R, step::S, len, offset=1) where {R,S}
@@ -508,7 +505,9 @@ function Base.iterate(r::TracedStepRangeLen, i::Integer=1)
     return Base.unsafe_getindex(r, i), i
 end
 
-function _tracedsteprangelen_unsafe_getindex(r::AbstractRange{T}, i::Union{I, TracedRNumber{I}}) where {T, I}
+function _tracedsteprangelen_unsafe_getindex(
+    r::AbstractRange{T}, i::Union{I,TracedRNumber{I}}
+) where {T,I}
     u = if i isa TracedRNumber
         if !(T isa TracedRNumber)
             finalT = TracedRNumber{T}
@@ -520,8 +519,12 @@ function _tracedsteprangelen_unsafe_getindex(r::AbstractRange{T}, i::Union{I, Tr
     end
     return finalT(r.ref + u * r.step)
 end
-Base.unsafe_getindex(r::TracedStepRangeLen, i::Integer) = _tracedsteprangelen_unsafe_getindex(r, i)
-Base.unsafe_getindex(r::TracedStepRangeLen, i::TracedRNumber{<:Integer}) = _tracedsteprangelen_unsafe_getindex(r, i)
+function Base.unsafe_getindex(r::TracedStepRangeLen, i::Integer)
+    return _tracedsteprangelen_unsafe_getindex(r, i)
+end
+function Base.unsafe_getindex(r::TracedStepRangeLen, i::TracedRNumber{<:Integer})
+    return _tracedsteprangelen_unsafe_getindex(r, i)
+end
 Base.getindex(r::TracedStepRangeLen, i::TracedRNumber) = Base.unsafe_getindex(r, i)
 function getindex(r::TracedStepRangeLen{T}, s::OrdinalRange{S}) where {T,S<:Integer}
     @inline
@@ -617,18 +620,13 @@ end
 
 # TODO: +, - for TracedStepRangeLen (see Base._define_range_op)
 
-function (::Type{T})(
-    x::TwicePrecision
-) where {T<:Reactant.TracedRNumber}
+function (::Type{T})(x::TwicePrecision) where {T<:Reactant.TracedRNumber}
     return (T(x.hi) + T(x.lo))::T
 end
 
-function (::Type{T})(
-    x::TwicePrecision
-) where {T<:Reactant.ConcreteRNumber}
+function (::Type{T})(x::TwicePrecision) where {T<:Reactant.ConcreteRNumber}
     return Reactant.ConcreteRNumber(T(x.hi) - T(x.lo))::T
 end
-
 
 Base.nbitslen(r::TracedStepRangeLen) = Base.nbitslen(eltype(r), length(r), r.offset)
 function TracedStepRangeLen(
@@ -637,7 +635,7 @@ function TracedStepRangeLen(
     return TracedStepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}(ref, step, len, offset)
 end
 function Base.step(r::TracedStepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T}
-    T(r.step)
+    return T(r.step)
 end
 
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
@@ -670,7 +668,9 @@ function Base.unsafe_getindex(
 end
 
 function Base.searchsortedfirst(
-    a::AbstractRange{<:Union{Real, TracedRNumber}}, x::TracedRNumber{<:Real}, o::Base.DirectOrdering
+    a::AbstractRange{<:Union{Real,TracedRNumber}},
+    x::TracedRNumber{<:Real},
+    o::Base.DirectOrdering,
 )::TracedRNumber{keytype(a)}
 
     # require_one_based_indexing(a)
