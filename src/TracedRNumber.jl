@@ -289,6 +289,15 @@ function Base.:+(
     return Base.TwicePrecision(Base.canonicalize2(r, s)...)
 end
 
+function Base.:*(x::TwicePrecision, v::Number)
+    @trace result = if v == 0
+        TwicePrecision(x.hi*v, x.lo*v)
+    else
+        x * TwicePrecision(oftype(x.hi*v, v))
+    end
+    return result
+end
+
 for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
     T = promote_type(T1, T2)
     @eval begin
@@ -460,19 +469,19 @@ end
 
 # constructors and interface implementation copied from range.jl
 function TracedStepRangeLen{T,R,S}(
-    ref::R, step::S, len::Integer, offset::Integer=1
+    ref::R, step::S, len, offset=1
 ) where {T,R,S}
-    return TracedStepRangeLen{T,R,S,promote_type(Int, typeof(len))}(ref, step, len, offset)
+    return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
 end
-function TracedStepRangeLen(ref::R, step::S, len::Integer, offset::Integer=1) where {R,S}
-    return TracedStepRangeLen{typeof(ref + zero(step)),R,S,promote_type(Int, typeof(len))}(
+function TracedStepRangeLen(ref::R, step::S, len, offset=1) where {R,S}
+    return TracedStepRangeLen{typeof(ref + zero(step)),R,S,typeof(len)}(
         ref, step, len, offset
     )
 end
 function TracedStepRangeLen{T}(
     ref::R, step::S, len::Integer, offset::Integer=1
 ) where {T,R,S}
-    return TracedStepRangeLen{T,R,S,promote_type(Int, typeof(len))}(ref, step, len, offset)
+    return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
 end
 
 Base.isempty(r::TracedStepRangeLen) = length(r) == 0
@@ -490,10 +499,13 @@ end
 
 errorcount = Ref(0)
 
-function Base.unsafe_getindex(r::TracedStepRangeLen{T}, i::Union{I, TracedRNumber{<:I}}) where {T, I<:Integer}
+function _tracedsteprangelen_unsafe_getindex(r::AbstractRange{T}, i) where {T}
     u = oftype(r.offset, i) - r.offset
     return T(r.ref + u * r.step)
 end
+Base.unsafe_getindex(r::TracedStepRangeLen, i::Integer) = _tracedsteprangelen_unsafe_getindex(r, i)
+Base.unsafe_getindex(r::TracedStepRangeLen, i::TracedRNumber{<:Integer}) = _tracedsteprangelen_unsafe_getindex(r, i)
+Base.getindex(r::TracedStepRangeLen, i::TracedRNumber) = Base.unsafe_getindex(r, i)
 function getindex(r::TracedStepRangeLen{T}, s::OrdinalRange{S}) where {T,S<:Integer}
     @inline
     @boundscheck checkbounds(r, s)
@@ -598,7 +610,7 @@ end
 
 Base.nbitslen(r::TracedStepRangeLen) = Base.nbitslen(eltype(r), length(r), r.offset)
 function TracedStepRangeLen(
-    ref::TwicePrecision{T}, step::TwicePrecision{T}, len::Integer, offset::Integer=1
+    ref::TwicePrecision{T}, step::TwicePrecision{T}, len, offset=1
 ) where {T}
     return TracedStepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}(ref, step, len, offset)
 end

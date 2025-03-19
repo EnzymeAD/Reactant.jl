@@ -1862,7 +1862,7 @@ function Reactant.traced_type_inner(
         Reactant.traced_type_inner(
             S, seen, mode, modified_track_numbers, sharding, runtime
         ),
-        Reactant.traced_type_inner(L, seen, mode, track_numbers, sharding, runtime),
+        Reactant.traced_type_inner(L, seen, mode, modified_track_numbers, sharding, runtime),
     }
 end
 
@@ -1902,10 +1902,10 @@ function Reactant.make_tracer(
             track_numbers=Number,
         ),
         Reactant.make_tracer(
-            seen, prev.len, Reactant.append_path(path, :len), mode; kwargs...
+            seen, prev.len, Reactant.append_path(path, :len), mode; kwargs..., track_numbers=Number
         ),
         Reactant.make_tracer(
-            seen, prev.offset, Reactant.append_path(path, :offset), mode; kwargs...
+            seen, prev.offset, Reactant.append_path(path, :offset), mode; kwargs..., track_numbers=Number
         ),
     )
 end
