@@ -157,6 +157,10 @@ end
         xscalar = x[1]
         @test xscalar ≈ @jit Ops.constant(xscalar)
     end
+
+    x = [ConcreteRNumber(1), ConcreteRNumber(2), ConcreteRNumber(3)]
+    x_full = [1, 2, 3]
+    @test x ≈ @jit Ops.constant(x)
 end
 
 @testset "cosine" begin

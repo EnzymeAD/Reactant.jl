@@ -155,6 +155,12 @@ end
     return constant(Base.convert(T, x); kwargs...)
 end
 
+@noinline function constant(
+    x::Array{TracedRNumber{T},N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
+) where {T,N}
+    return reshape(vcat(x...), size(x)...; location)
+end
+
 function fill(
     v, dims::Base.DimOrInd...; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
 )
