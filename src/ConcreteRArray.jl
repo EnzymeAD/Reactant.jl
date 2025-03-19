@@ -263,6 +263,8 @@ end
     return fn(a, args...)
 end
 
+@inline _fast_slice(a::AbstractConcreteNumber) = a
+
 function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
     setindex!(a, v, args...)
     return nothing

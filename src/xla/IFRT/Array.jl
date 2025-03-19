@@ -12,7 +12,7 @@ function Array(
     array::Base.Array{T,N},
     device::Device=XLA.default_device(client),
     memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
-) where {T,N}
+) where {T<:Reactant.ReactantPrimitive,N}
     sizear = collect(Int64, reverse(size(array)))
     buffer = GC.@preserve array sizear begin
         @ccall MLIR.API.mlir_c.ifrt_client_make_single_shard_array_from_host_buffer(
@@ -29,7 +29,9 @@ function Array(
     return Array(buffer)
 end
 
-function Array(client::Client, array::Base.Array{T,N}, sharding::Sharding) where {T,N}
+function Array(
+    client::Client, array::Base.Array{T,N}, sharding::Sharding
+) where {T<:Reactant.ReactantPrimitive,N}
     sizear = collect(Int64, reverse(size(array)))
 
     if is_single_device_sharding(sharding) || is_fully_replicated(sharding)
@@ -74,7 +76,9 @@ function Array(client::Client, array::Base.Array{T,N}, sharding::Sharding) where
     return Array(buffer)
 end
 
-function Array(client::Client, array::Base.Array{T,N}, sharding) where {T,N}
+function Array(
+    client::Client, array::Base.Array{T,N}, sharding
+) where {T<:Reactant.ReactantPrimitive,N}
     @assert sharding isa Reactant.Sharding.AbstractSharding
     if !(sharding isa Reactant.Sharding.HloSharding)
         sharding = convert(Reactant.Sharding.HloSharding, sharding)
