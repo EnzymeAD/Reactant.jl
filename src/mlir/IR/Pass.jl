@@ -78,9 +78,9 @@ function run!(pm::PassManager, mod::Module)
     if isfailure(status)
         dir = mktempdir()
         path = joinpath(dir, "module.mlir")
-        io = open(path, "w")
-        println(io, repr(mod))
-        close(io)
+        open(path, "w") do io
+            show(io, mod)
+        end
         @error "Dumped module to " * path
         throw("failed to run pass manager on module")
     end
