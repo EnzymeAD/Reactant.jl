@@ -79,6 +79,10 @@ function run!(pm::PassManager, mod::Module)
         dir = mktempdir()
         path = joinpath(dir, "module.mlir")
         open(path, "w") do io
+            println(io, "// Pass pipeline:")
+            print(io, "// ")
+            print_pass_pipeline(io, OpPassManager(pm))
+            println(io)
             show(IOContext(io, :debug => true), mod)
         end
         @error "Dumped module to " * path
@@ -124,13 +128,29 @@ OpPassManager(opm::OpPassManager, opname) =
 
 Base.convert(::Core.Type{API.MlirOpPassManager}, op_pass::OpPassManager) = op_pass.op_pass
 
-function Base.show(io::IO, op_pass::OpPassManager)
+"""
+    pass_pipeline(opPassManager) -> String
+
+Returns the pass pipeline.
+"""
+pass_pipeline(op_pass::OpPassManager) = sprint(print_pass_pipeline, op_pass)
+
+"""
+    print_pass_pipeline(io::IO, opPassManager)
+
+Prints the pass pipeline to the IO.
+"""
+function print_pass_pipeline(io::IO, op_pass::OpPassManager)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
-    println(io, "OpPassManager(\"\"\"")
     API.mlirPrintPassPipeline(op_pass, c_print_callback, ref)
-    println(io)
-    return print(io, "\"\"\")")
+    return io
+end
+
+function Base.show(io::IO, op_pass::OpPassManager)
+    println(io, "OpPassManager(\"\"\"")
+    print_pass_pipeline(io, opm)
+    return print(io, "\n\"\"\")")
 end
 
 struct AddPipelineException <: Exception
@@ -163,19 +183,15 @@ function add_owned_pass!(opm::OpPassManager, pass)
 end
 
 """
-    parse(passManager, pipeline)
+    parse(opPassManager, pipeline)
 
 Parse a textual MLIR pass pipeline and add it to the provided `OpPassManager`.
 """
 function Base.parse(opm::OpPassManager, pipeline::String)
+    io = IOBuffer()
+    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     result = LogicalResult(
-        if true
-            io = IOBuffer()
-            c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
-            API.mlirParsePassPipeline(opm, pipeline, c_print_callback, Ref(io))
-        else
-            API.mlirParsePassPipeline(opm, pipeline)
-        end,
+        API.mlirParsePassPipeline(opm, pipeline, c_print_callback, Ref(io))
     )
 
     if isfailure(result)
@@ -185,7 +201,7 @@ function Base.parse(opm::OpPassManager, pipeline::String)
 end
 
 """
-    add_pipeline!(passManager, pipelineElements, callback, userData)
+    add_pipeline!(opPassManager, pipeline)
 
 Parse a sequence of textual MLIR pass pipeline elements and add them to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
 """
