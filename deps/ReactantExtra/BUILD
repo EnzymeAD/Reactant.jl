@@ -1,6 +1,6 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
-# load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
+load("//:toolchain/yggdrasil.bzl", "ygg_cc_toolchain")
 licenses(["notice"])
 
 load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
@@ -10,13 +10,15 @@ package(
     default_visibility = ["//:__subpackages__"],
 )
 
+ygg_cc_toolchain()
+
 cc_toolchain_suite(
     name = "ygg_cross_compile_toolchain_suite",
     toolchains = {
-        "k8": ":ygg_x86_toolchain",
-        "darwin": ":ygg_x86_toolchain",
-        "darwin_arm64": ":ygg_x86_toolchain",
-        "aarch64": ":ygg_aarch64_toolchain",
+        "k8": ":ygg_target_toolchain", # ":ygg_x86_toolchain",
+        "darwin": ":ygg_target_toolchain", # ":ygg_x86_toolchain",
+        "darwin_arm64": ":ygg_target_toolchain", # ":ygg_x86_toolchain",
+        "aarch64": ":ygg_target_toolchain", # ":ygg_aarch64_toolchain",
     },
 )
 
