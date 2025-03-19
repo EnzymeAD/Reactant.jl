@@ -33,4 +33,17 @@ function Base.getindex(
     return getindex(parent(x), offset_indices...)
 end
 
+parentindex(r::OffsetArrays.IdOffsetRange, i) = i .- r.offset 
+function Base.getindex(a::OffsetArray{<:Reactant.TracedRNumber, N}, indices::Vararg{Union{Int, AbstractArray},N}) where {N}
+    J = map(parentindex, axes(a), indices)
+    parent(a)[J...]
+end
+
+function Base.getindex(a::OffsetVector{<:Reactant.TracedRNumber}, indices::Int)
+    J = parentindex(Base.axes1(a), indices)
+    parent(a)[J]
+end
+
+Reactant.Adapt.parent_type(::Type{OffsetArray{<:Any, <:Any, AA}}) where AA = AA
+
 end

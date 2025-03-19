@@ -19,20 +19,30 @@ using ..Reactant:
 using ReactantCore: MissingTracedValue, is_traced
 using Functors: Functors
 
+"""
+    materialize_traced_array(AbstractArray{<:TracedRNumber})::TracedRArray
+
+Given an AbstractArray{TracedRNumber}, return or create an equivalent TracedRArray.
+
+"""
 materialize_traced_array(x::TracedRArray) = x
 
-materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
+function materialize_traced_array(x::SubArray{<:TracedRNumber})
+    y = materialize_traced_array(x.parent)
+    z = SubArray(y, x.indices)
+    z[axes(z)...]
+end
 
 function materialize_traced_array(
-    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}
-) where {T,N,M}
+    x::Base.ReshapedArray{<:TracedRNumber}
+)
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
 function materialize_traced_array(
-    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}
-) where {T,N,perm,iperm}
-    return permutedims(parent(x), perm)
+    x::PermutedDimsArray{<:TracedRNumber, <:Any, perm}
+) where perm
+    return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
@@ -629,11 +639,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 end
 
 function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
-    if Reactant.ancestor(arg) isa TracedRArray
-        return broadcast_to_size(materialize_traced_array(arg), rsize)
-    end
-    return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
+    return broadcast_to_size(materialize_traced_array(arg), rsize)
 end
+
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
 
 broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
@@ -666,7 +674,7 @@ function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     return broadcast_to_size_internal(TracedRArray{T,0}((), get_mlir_data(arg), ()), rsize)
 end
 
-function broadcast_to_size(arg::AnyTracedRArray{T,0}, rsize) where {T}
+function broadcast_to_size(arg::AbstractArray{TracedRNumber{T},0}, rsize) where {T}
     arg = materialize_traced_array(arg)
     return broadcast_to_size(TracedRNumber{T}((), get_mlir_data(arg)), rsize)
 end
