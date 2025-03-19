@@ -32,6 +32,12 @@ end
     return Base.getfield(obj, field)
 end
 
+@inline function traced_getfield(
+    @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}), field
+)
+    return Base.getfield(obj, field)
+end
+
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
     (isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange) &&
         return Base.getfield(obj, field)
@@ -39,12 +45,21 @@ end
 end
 
 @inline traced_setfield!(@nospecialize(obj), field, val) = Base.setfield!(obj, field, val)
+
 @inline function traced_setfield!(
     @nospecialize(obj::AbstractArray{T}), field, val
 ) where {T}
     ancestor_obj = ancestor(obj)
     (isbitstype(T) || ancestor_obj isa RArray) && return setfield_carray!(obj, field, val)
     return Base.setindex!(obj, val, field)
+end
+
+@inline function traced_setfield!(
+    @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}),
+    field,
+    val,
+)
+    return setfield_carray!(obj, field, val)
 end
 
 @inline function traced_setfield!(@nospecialize(obj::Dict), field, val)
@@ -116,7 +131,7 @@ function create_result(
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path) # restore sharding
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
             )
@@ -129,7 +144,7 @@ function create_result(
     end
 
     # We will set the data for this later
-    if path_to_shard_info !== nothing # restore sharding
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path) # restore sharding
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -146,7 +161,7 @@ function create_result(
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path) # restore sharding
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
             )
@@ -157,7 +172,7 @@ function create_result(
     end
 
     # We will set the data for this later
-    if path_to_shard_info !== nothing # restore sharding
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path) # restore sharding
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -176,7 +191,7 @@ function create_result(
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path) # restore sharding
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
             )
@@ -188,7 +203,7 @@ function create_result(
         end
     end
 
-    if path_to_shard_info !== nothing # restore sharding
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path) # restore sharding
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -208,7 +223,7 @@ function create_result(
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path) # restore sharding
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
             )
@@ -220,7 +235,7 @@ function create_result(
         end
     end
 
-    if path_to_shard_info !== nothing # restore sharding
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path) # restore sharding
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -293,6 +308,16 @@ function create_result(
         )
     end
     return :($D([$(elems...)]))
+end
+
+function create_result(
+    tocopy::Reactant.XLA.AbstractDevice,
+    path,
+    result_stores,
+    path_to_shard_info,
+    sharding_mesh,
+)
+    return Meta.quot(:($(tocopy)))
 end
 
 function create_result(
