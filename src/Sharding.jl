@@ -85,6 +85,13 @@ function (T::AbstractSharding)(::XLA.AbstractClient, device, ::Union{AbstractArr
     )
 end
 
+# By default we use same sharding for all leaf nodes
+Base.getproperty(sharding::AbstractSharding, name) = sharding
+function Base.getproperty(sharding::AbstractSharding, name::Symbol)
+    name ∈ fieldnames(typeof(sharding)) && return getfield(sharding, name)
+    return sharding
+end
+
 function get_shardy_tensor_sharding_attribute end
 
 """
@@ -106,10 +113,6 @@ struct NoSharding <: AbstractSharding end
 @inline ndevices(::NoSharding) = 1
 
 @inline shard_type(::Type{NoSharding}, _) = ShardInfo{NoSharding,Nothing}
-
-# This allows us to mark entire branches as NoSharding
-Base.getproperty(::NoSharding, x) = NoSharding()
-Base.getproperty(::NoSharding, x::Symbol) = NoSharding()
 
 function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,Number})
     device === nothing && (device = XLA.default_device(client))
@@ -523,7 +526,7 @@ end
 
 function Base.getproperty(sharding::ShardInfo, name::Symbol)
     name ∈ (:sharding, :device_to_array_slices) && return getfield(sharding, name)
-    return getproperty(sharding.sharding, name)
+    return getproperty(unwrap_shardinfo(sharding), name)
 end
 
 function get_shardy_tensor_sharding_attribute(sharding::ShardInfo, args...; kwargs...)
