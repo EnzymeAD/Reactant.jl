@@ -134,6 +134,12 @@ end
 end
 
 @noinline function constant(
+    x::Array{TracedRNumber{T},N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
+) where {T,N}
+    return reshape(vcat(x...), size(x)...; location)
+end
+
+@noinline function constant(
     x::AbstractArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
     return constant(collect(x); location)
