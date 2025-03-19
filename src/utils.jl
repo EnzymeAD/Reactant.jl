@@ -111,7 +111,8 @@ function should_rewrite_call(@nospecialize(ft))
             if has_ancestor(mod, Reactant.Ops) ||
                 has_ancestor(mod, Reactant.TracedUtils) ||
                 has_ancestor(mod, Reactant.MLIR) ||
-                has_ancestor(mod, Reactant.TracedRandom)
+                has_ancestor(mod, Reactant.TracedRandom) ||
+                has_ancestor(mod, Reactant.TracedRArrayOverrides)
                 return false
             end
             if string(mod) == "CUDA"
@@ -448,6 +449,7 @@ function safe_print(name, x)
 end
 
 const DEBUG_INTERP = Ref(false)
+const TRACE_CALLS = Ref(true)
 
 # Rewrite type unstable calls to recurse into call_with_reactant to ensure
 # they continue to use our interpreter. Reset the derived return type
@@ -473,6 +475,227 @@ function rewrite_insts!(ir, interp, guaranteed_error)
         end
     end
     return ir, any_changed
+end
+
+function call_prologue(f, args...)
+    cached = false
+
+    concretein = false
+    toscalar = false
+    do_transpose = false
+    mutate_traced_args = true
+    input_shardings = nothing
+    runtime = nothing
+
+    name = String(Symbol(f))
+
+    seen_cache = Reactant.OrderedIdDict()
+    make_tracer(
+        seen_cache,
+        args,
+        (), # we have to insert something here, but we remove it immediately below.
+        TracedTrack;
+        toscalar=false,
+        track_numbers=Union{}, # TODO: track_numbers?
+    )
+    mlir_caller_args = Reactant.MLIR.IR.Value[]
+    caller_linear_args = []
+    for (k, v) in seen_cache
+        v isa TracedType || continue
+        push!(caller_linear_args, v)
+        push!(mlir_caller_args, v.mlir_data)
+        # make tracer inserted `()` into the path, here we remove it:
+        v.paths = v.paths[1:(end - 1)]
+    end
+    original_paths = [Reactant.TracedUtils.get_paths(arg) for arg in caller_linear_args]
+
+    # seen = Dict()
+    cache_key = []
+    # Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
+    # cache = Reactant.Compiler.callcache()
+    # if haskey(cache, cache_key)
+    #     cached = true
+    #     (; f_name, mlir_result_types, linear_args, traced_result, linear_results, ret) = cache[cache_key]
+    #     return cached, CachedPrologueResult(; f_name, out_tys=mlir_result_types, traced_result, linear_results, ret, mlir_caller_args, original_paths, original_args=args, caller_linear_args=linear_args)
+    #     # return cached, CachedEpilogueResult(f_name, mlir_result_types, linear_args, traced_result, linear_results, ret)
+    # end
+
+    N = length(args)
+    seen_args, traced_args, callee_linear_args = TracedUtils.prepare_args(
+        args, concretein, toscalar, mutate_traced_args, runtime
+    )
+
+    mod, temp_func, fnbody, in_tys, sym_visibility, traced_args_to_shardings = TracedUtils.placeholder_func(
+        name,
+        callee_linear_args,
+        seen_args,
+        toscalar,
+        do_transpose,
+        concretein,
+        input_shardings,
+    )
+
+    for (i, arg) in enumerate(callee_linear_args)
+        TracedUtils.set_mlir_data!(arg, MLIR.IR.argument(fnbody, i))
+    end
+
+    return cached,
+    UncachedPrologueResult(;
+        fnbody,
+        traced_args,
+        callee_linear_args,
+        original_paths,
+        sym_visibility,
+        original_args=args,
+        name,
+        mod,
+        temp_func,
+        in_tys,
+        mlir_caller_args,
+        caller_linear_args,
+        cache_key,
+        traced_args_to_shardings,
+    )
+end
+
+# @inline get_traced_args_from_temp1((cond, mod, temp_func, in_tys, fnbody, sym_visibility, original_args, mlir_caller_args, traced_args, callee_linear_args, caller_linear_args, name, original_paths)) = traced_args
+@inline get_traced_args_from_temp1((cond, prologue_result)) = prologue_result.traced_args
+@inline get_cond_from_temp1((cond, prologue_result)) = false # cond
+@inline get_traced_result_from_prologue_result((cond, prologue_result)) =
+    prologue_result.traced_result
+@inline function activate_fnbody((cond, prologue_result))
+    MLIR.IR.activate!(prologue_result.fnbody)
+    return Ops.activate_constant_context!(prologue_result.fnbody)
+end
+@inline function deactivate_fnbody((cond, prologue_result))
+    Ops.deactivate_constant_context!(prologue_result.fnbody)
+    return MLIR.IR.deactivate!(prologue_result.fnbody)
+end
+
+@kwdef struct CachedPrologueResult
+    f_name
+    out_tys
+    traced_result
+    linear_results
+    ret
+    mlir_caller_args
+    original_paths
+    original_args
+    caller_linear_args
+end
+
+@kwdef struct UncachedPrologueResult
+    fnbody
+    traced_args
+    callee_linear_args
+    original_paths
+    sym_visibility
+    original_args
+    name
+    mod
+    temp_func
+    in_tys
+    mlir_caller_args
+    caller_linear_args
+    cache_key
+    traced_args_to_shardings
+end
+
+function call_epilogue(result, (cached, prologue_result))
+    if !cached
+        (;
+            fnbody,
+            traced_args,
+            callee_linear_args,
+            original_paths,
+            sym_visibility,
+            original_args,
+            name,
+            mod,
+            temp_func,
+            in_tys,
+            mlir_caller_args,
+            caller_linear_args,
+            cache_key,
+            traced_args_to_shardings,
+        ) = prologue_result
+
+        concretein = false
+        construct_function_without_args = false
+        args_in_result = :all
+        do_transpose = false
+        return_dialect = :func
+        mutate_traced_args = true
+        runtime = nothing
+
+        seen_result, traced_result, linear_results, out_tys, mutated_args = TracedUtils.prepare_results(
+            result,
+            traced_args,
+            callee_linear_args,
+            fnbody,
+            concretein,
+            construct_function_without_args,
+            args_in_result,
+            do_transpose,
+            mutate_traced_args,
+            traced_args_to_shardings,
+            runtime,
+        )
+
+        ret = TracedUtils.create_return!(
+            fnbody, linear_results, args_in_result, do_transpose, return_dialect
+        )
+        name = TracedUtils.__lookup_unique_name_in_module(mod, name)
+        final_func = TracedUtils.final_func!(
+            temp_func, mod, name, in_tys, out_tys, sym_visibility
+        )
+
+        # cache = Reactant.Compiler.callcache()
+        # cache[cache_key] = (; f_name=name, mlir_result_types=out_tys, linear_args=caller_linear_args, traced_result, linear_results, ret)
+    else
+        @assert prologue_result isa CachedPrologueResult "Got type $(typeof(prologue_result))"
+        (;
+            f_name,
+            out_tys,
+            traced_result,
+            linear_results,
+            ret,
+            original_paths,
+            original_args,
+            mlir_caller_args,
+            caller_linear_args,
+        ) = prologue_result
+        name = f_name
+    end
+
+    call_op = MLIR.Dialects.func.call(
+        mlir_caller_args; result_0=out_tys, callee=MLIR.IR.FlatSymbolRefAttribute(name)
+    )
+
+    mlir_results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
+    for (caller_arg, mlir_caller_arg) in zip(caller_linear_args, mlir_caller_args)
+        Reactant.TracedUtils.set_mlir_data!(caller_arg, mlir_caller_arg)
+    end
+    for (i, v) in enumerate(linear_results)
+        @assert v isa Reactant.TracedType
+        # this mutates `traced_result`, which is what we want:
+        Reactant.TracedUtils.set_mlir_data!(v, MLIR.IR.result(call_op, i))
+        for p in Reactant.TracedUtils.get_paths(v)
+            if length(p) > 0
+                if p[1] == :resargs && !MLIR.IR.is_block_arg(mlir_results[i])
+                    Reactant.TracedUtils.set!(
+                        original_args, p[2:end], MLIR.IR.result(call_op, i)
+                    )
+                end
+            end
+        end
+        Reactant.TracedUtils.set_paths!(v, ())
+    end
+    for (arg, paths) in zip(caller_linear_args, original_paths)
+        Reactant.TracedUtils.set_paths!(arg, paths)
+    end
+
+    return traced_result
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -733,10 +956,144 @@ function call_with_reactant_generator(
         Core.SSAValue(length(overdubbed_code))
     end
 
-    push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
-    push!(overdubbed_codelocs, code_info.codelocs[1])
+    if TRACE_CALLS[]
+        push!(code_info.slotnames, :ocres)
+        push!(code_info.slotflags, zero(UInt8))
+        ocres_slot = Core.SlotNumber(length(code_info.slotnames))
+        push!(overdubbed_code, Core.NewvarNode(ocres_slot))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:call, call_prologue, fn_args...))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        temp1_output = Core.SSAValue(length(overdubbed_code))
+
+        push!(overdubbed_code, Expr(:call, get_cond_from_temp1, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        cond = Core.SSAValue(length(overdubbed_code))
+        dest = length(overdubbed_code) + 6
+        push!(overdubbed_code, Core.GotoIfNot(cond, dest)) # jump if call was not cached
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        # function was cached:
+        # push!(overdubbed_code, nothing)
+        push!(overdubbed_code, Expr(:call, println, "function was cached"))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(
+            overdubbed_code,
+            Expr(:call, get_traced_result_from_prologue_result, temp1_output),
+        )
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(
+            overdubbed_code, Expr(:(=), ocres_slot, Core.SSAValue(length(overdubbed_code)))
+        )
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        exitdest = length(overdubbed_code) + 6
+        push!(overdubbed_code, Core.GotoNode(exitdest))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        # function was not cached:
+        push!(code_info.slotnames, :tryfinallystate)
+        push!(code_info.slotflags, zero(UInt8))
+        tryfinally_slot = Core.SlotNumber(length(code_info.slotnames))
+
+        push!(code_info.slotnames, :tryresult)
+        push!(code_info.slotflags, zero(UInt8))
+        tryresult_slot = Core.SlotNumber(length(code_info.slotnames))
+
+        # push!(overdubbed_code, nothing)
+        push!(overdubbed_code, Expr(:call, println, "function was not cached"))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:call, get_traced_args_from_temp1, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        traced_args = Core.SSAValue(length(overdubbed_code))
+
+        push!(overdubbed_code, Expr(:call, activate_fnbody, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        catch_dest = length(overdubbed_code) + 7
+        enter = @static if VERSION < v"1.11"
+            Expr(:enter, catch_dest)
+        else
+            Core.EnterNode(catch_dest)
+        end
+        push!(overdubbed_code, enter)
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        @static if VERSION < v"1.11"
+            enterval = 1
+        else
+            enterval = Core.SSAValue(length(overdubbed_code))
+        end
+
+        #== try block =====================================================#
+        push!(overdubbed_code, Expr(:(=), tryfinally_slot, -1))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(
+            overdubbed_code,
+            Expr(
+                :(=),
+                ocres_slot,
+                Expr(:call, Core._apply_iterate, Base.iterate, oc, traced_args),
+            ),
+        )
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:(=), tryfinally_slot, 1)) # indicate that no error occured
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:leave, enterval))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        finally_dest = length(overdubbed_code) + 4
+        push!(overdubbed_code, Core.GotoNode(finally_dest))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        @static if VERSION < v"1.11"
+            push!(overdubbed_code, Expr(:leave, enterval))
+        else
+            push!(overdubbed_code, nothing)
+        end
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:(=), tryfinally_slot, 2)) # indicate that error occured
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        #== finally block =================================================#
+
+        push!(overdubbed_code, Expr(:call, deactivate_fnbody, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        error_cond = Core.SSAValue(
+            length(push!(overdubbed_code, Expr(:call, GlobalRef(@__MODULE__, :(===)), tryfinally_slot, 2)))
+        ) # check if error occured
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        exitdest = length(overdubbed_code) + 3
+        push!(overdubbed_code, Core.GotoIfNot(error_cond, exitdest))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+
+        push!(overdubbed_code, Expr(:call, GlobalRef(@__MODULE__, :rethrow)))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        #==================================================================#
+
+        push!(overdubbed_code, ocres_slot)
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+    else
+        push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+    end
 
     ocres = Core.SSAValue(length(overdubbed_code))
+
+    if TRACE_CALLS[]
+        push!(overdubbed_code, Expr(:call, call_epilogue, ocres, temp1_output))
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        ocres = Core.SSAValue(length(overdubbed_code))
+    end
 
     if DEBUG_INTERP[]
         push!(overdubbed_code, Expr(:call, safe_print, "ocres", ocres))

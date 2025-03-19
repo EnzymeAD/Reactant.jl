@@ -579,14 +579,14 @@ function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
+    return Ops.fill(zero(unwrapped_eltype(T)), dims)
 end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
+    return Ops.fill(zero(unwrapped_eltype(T)), dims)
 end
 
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
@@ -704,13 +704,13 @@ function Base._typed_hvncat(
     end
 
     for d in 1:N
-        Bs = Array{Any,N - d}(undef, size(As)[2:end]...)
+        Bs = []
 
-        for (i, col) in
-            zip(eachindex(Bs), eachslice(As; dims=Tuple(2:ndims(As)), drop=true))
+        for col in eachslice(As; dims=Tuple(2:ndims(As)), drop=true)
             # TODO row_first affects the flattening?
-            Bs[i] = Base._cat_t(d, T, col...)
+            push!(Bs, Base._cat_t(d, T, col...))
         end
+        Bs = reshape(Bs, size(As)[2:end]...)
 
         As = Bs
     end
@@ -737,20 +737,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
 
     # convert to the target eltype
     X = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{RT,length(shape)}), X)
-
-    return TracedRArray{RT,length(shape)}(
-        (),
-        MLIR.IR.result(
-            # TODO maybe we should do some conversion?
-            MLIR.Dialects.stablehlo.concatenate(
-                collect(TracedUtils.get_mlir_data.(X));
-                result_0=MLIR.IR.TensorType(shape, MLIR.IR.Type(RT)),
-                dimension=dims - 1, # stablehlo expects this to be zero-indexed
-            ),
-            1,
-        ),
-        shape,
-    )
+    return Ops.concat(X...; dim=dims)
 end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))

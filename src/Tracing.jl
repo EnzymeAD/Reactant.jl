@@ -5,6 +5,7 @@
     ArrayToConcrete = 4
     TracedSetPath = 5
     TracedToTypes = 6
+    TracedSetPathInPlace = 8
     NoStopTracedTrack = 7
 end
 
@@ -63,8 +64,12 @@ Base.@nospecializeinfer function traced_type_inner(
         else
             error("Unsupported runtime $runtime")
         end
-    elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) &&
-        T <: track_numbers
+    elseif (
+        mode == NoStopTracedTrack ||
+        mode == TracedTrack ||
+        mode == TracedSetPath ||
+        mode == TracedSetPathInPlace
+    ) && T <: track_numbers
         return TracedRNumber{T}
     end
     return T
@@ -389,7 +394,11 @@ Base.@nospecializeinfer function traced_type_inner(
             }
         end
         error("Unsupported runtime $runtime")
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack ||
+        mode == NoStopTracedTrack ||
+        mode == TracedSetPath ||
+        mode == TracedSetPathInPlace ||
+        mode == TracedToTypes
         return T
     else
         throw("Abstract RArray cannot be made concrete in mode $mode")
@@ -407,34 +416,21 @@ Base.@nospecializeinfer function traced_type_inner(
     if mode == ConcreteToTraced
         throw("TracedRNumber cannot be traced")
     elseif mode == TracedToConcrete
-        if runtime isa Val{:PJRT}
-            if T isa UnionAll
-                return UnionAll(
+        if T isa UnionAll
+            return UnionAll(
+                T.var,
+                ConcretePJRTNumber{
                     T.var,
-                    ConcretePJRTNumber{
-                        T.var,
-                        Sharding.ndevices(sharding),
-                        Sharding.shard_type(typeof(sharding), 0),
-                    },
-                )
-            end
-            return ConcretePJRTNumber{
-                T.parameters[1],
-                Sharding.ndevices(sharding),
-                Sharding.shard_type(typeof(sharding), 0),
-            }
-        elseif runtime isa Val{:IFRT}
-            if T isa UnionAll
-                return UnionAll(
-                    T.var,
-                    ConcreteIFRTNumber{T.var,Sharding.shard_type(typeof(sharding), 0)},
-                )
-            end
-            return ConcreteIFRTNumber{
-                T.parameters[1],Sharding.shard_type(typeof(sharding), 0)
-            }
+                    Sharding.ndevices(sharding),
+                    Sharding.shard_type(typeof(sharding), 0),
+                },
+            )
         end
-        error("Unsupported runtime $runtime")
+        return ConcretePJRTNumber{
+            T.parameters[1],
+            Sharding.ndevices(sharding),
+            Sharding.shard_type(typeof(sharding), 0),
+        }
     elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         return T
     else
@@ -458,7 +454,11 @@ Base.@nospecializeinfer function traced_type_inner(
                 TracedRArray{UInt64,1}, seen, mode, track_numbers, sharding, runtime
             ),
         }
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack ||
+        mode == NoStopTracedTrack ||
+        mode == TracedSetPath ||
+        mode == TracedSetPathInPlace ||
+        mode == TracedToTypes
         return T
     else
         throw("Unsupported mode: $mode")
@@ -1210,11 +1210,20 @@ function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == TracedToTypes
-        push!(path, MLIR.IR.type(prev.mlir_data))
+        # for TracedRArrays, we check for objectid equality because make_mlir_fn gets rid of duplicate TracedRArrays.
+        # i.e. (a, a) should hash differently than (a, b) when a and b are different TracedRArrays.
+        if haskey(seen, objectid(prev))
+            push!(path, seen[objectid(prev)])
+        else
+            push!(path, MLIR.IR.type(prev.mlir_data))
+            seen[objectid(prev)] = VisitedObject(length(seen) + 1)
+        end
         return nothing
     end
-    if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+    if mode == TracedTrack || mode == TracedSetPathInPlace
+        newpaths =
+            mode == TracedSetPathInPlace ? (path,) : (TracedUtils.get_paths(prev)..., path)
+        TracedUtils.set_paths!(prev, newpaths)
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -1287,11 +1296,20 @@ function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == TracedToTypes
-        push!(path, MLIR.IR.type(prev.mlir_data))
+        # for TracedRArrays, we check for objectid equality because make_mlir_fn gets rid of duplicate TracedRArrays.
+        # i.e. (a, a) should hash differently than (a, b) when a and b are different TracedRArrays.
+        if haskey(seen, objectid(prev))
+            push!(path, seen[objectid(prev)])
+        else
+            push!(path, MLIR.IR.type(prev.mlir_data))
+            seen[objectid(prev)] = VisitedObject(length(seen) + 1)
+        end
         return nothing
     end
-    if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+    if mode == TracedTrack || mode == TracedSetPathInPlace
+        newpaths =
+            mode == TracedSetPathInPlace ? (path,) : (TracedUtils.get_paths(prev)..., path)
+        TracedUtils.set_paths!(prev, newpaths)
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -1358,8 +1376,10 @@ function make_tracer(
     if mode == TracedToTypes
         throw("Cannot have MissingTracedValue as function call argument.")
     end
-    if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+    if mode == TracedTrack || mode == TracedSetPathInPlace
+        newpaths =
+            mode == TracedSetPathInPlace ? (path,) : (TracedUtils.get_paths(prev)..., path)
+        TracedUtils.set_paths!(prev, newpaths)
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
@@ -1406,7 +1426,9 @@ function make_tracer(
             runtime isa Val{:IFRT} && return ConcreteIFRTNumber(prev; sharding)
             error("Unsupported runtime $runtime")
         else
-            if mode == TracedTrack || mode == NoStopTracedTrack
+            if mode == TracedTrack ||
+                mode == NoStopTracedTrack ||
+                mode == TracedSetPathInPlace
                 res = TracedRNumber{RT}(
                     (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
                 )
@@ -1442,6 +1464,15 @@ function make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...)
         return nothing
     end
     return prev
+end
+@static if VERSION >= v"1.11"
+    function make_tracer(seen, prev::Memory, @nospecialize(path), mode; kwargs...)
+        if mode == TracedToTypes
+            push!(path, prev)
+            return nothing
+        end
+        return prev
+    end
 end
 
 function make_tracer(

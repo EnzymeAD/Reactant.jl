@@ -711,8 +711,10 @@ function compile_mlir!(
         @NamedTuple{
             f_name::String,
             mlir_result_types::Vector{MLIR.IR.Type},
+            linear_args::Vector{TracedType},
             traced_result::Any,
-            mutated_args::Vector{Int},
+            linear_results::Vector{TracedType},
+            ret::MLIR.IR.Operation,
         }
     }(),
     sdycache=IdDict{
@@ -764,6 +766,7 @@ function compile_mlir!(
     (;
         fnwrapped,
         traced_result,
+        result,
         seen_args,
         ret,
         linear_args,
