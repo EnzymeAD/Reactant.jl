@@ -291,7 +291,7 @@ function Base.:+(
     return Base.TwicePrecision(Base.canonicalize2(r, s)...)
 end
 
-function Base.:*(x::TwicePrecision{<:TracedRNumber}, v::Number)
+function Base.:*(x::TwicePrecision, v::TracedRNumber)
     @trace result = if v == 0
         TwicePrecision(x.hi*v, x.lo*v)
     else
@@ -324,6 +324,15 @@ for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
         Base.:!(x::TracedRNumber{<:$(T1)}) = Ops.not(x)
     end
 end
+Base.:&(x::Bool, y::TracedRNumber{Bool}) = x ? y : false
+Base.:&(x::TracedRNumber{Bool}, y::Bool) = y & x
+
+Base.:|(x::Bool, y::TracedRNumber{Bool}) = x ? true : y
+Base.:|(x::TracedRNumber{Bool}, y::Bool) = y | x
+
+Base.xor(x::Bool, y::TracedRNumber{Bool}) = x ? !y : y
+Base.xor(x::TracedRNumber{Bool}, y::Bool) = xor(y, x)
+
 
 function Base.literal_pow(
     ::Base.RefValue{typeof(^)}, x::TracedRNumber{T}, ::Base.RefValue{Val{P}}
@@ -499,9 +508,17 @@ function Base.iterate(r::TracedStepRangeLen, i::Integer=1)
     return Base.unsafe_getindex(r, i), i
 end
 
-function _tracedsteprangelen_unsafe_getindex(r::AbstractRange{T}, i) where {T}
-    u = oftype(r.offset, i) - r.offset
-    return T(r.ref + u * r.step)
+function _tracedsteprangelen_unsafe_getindex(r::AbstractRange{T}, i::Union{I, TracedRNumber{I}}) where {T, I}
+    u = if i isa TracedRNumber
+        if !(T isa TracedRNumber)
+            finalT = TracedRNumber{T}
+        end
+        convert(TracedRNumber{typeof(r.offset)}, i) - r.offset
+    else
+        finalT = T
+        oftype(r.offset, i) - r.offset
+    end
+    return finalT(r.ref + u * r.step)
 end
 Base.unsafe_getindex(r::TracedStepRangeLen, i::Integer) = _tracedsteprangelen_unsafe_getindex(r, i)
 Base.unsafe_getindex(r::TracedStepRangeLen, i::TracedRNumber{<:Integer}) = _tracedsteprangelen_unsafe_getindex(r, i)
