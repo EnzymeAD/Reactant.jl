@@ -1715,8 +1715,10 @@ extern "C" bool ifrt_DeviceIsAddressable(ifrt::Device *device) {
   return device->IsAddressable();
 }
 
-tsl::RCReference<ifrt::DeviceList> ifrt_CreateDeviceListFromDevices(
-    ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices) {
+static xla::ifrt::RCReferenceWrapper<ifrt::DeviceList>
+ifrt_CreateDeviceListFromDevices(ifrt::Client *client,
+                                 ifrt::Device **device_list,
+                                 int32_t num_devices) {
   absl::Span<ifrt::Device *const> devices(device_list, num_devices);
   return client->MakeDeviceList(devices);
 }
