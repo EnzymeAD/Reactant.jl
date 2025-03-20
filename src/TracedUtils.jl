@@ -45,6 +45,10 @@ function materialize_traced_array(
     return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
+function materialize_traced_array(x::AbstractArray{TracedRNumber{T}})
+    return Reactant.aos_to_soa(x)
+end
+
 get_mlir_data(x::TracedRNumber) = x.mlir_data
 set_mlir_data!(x::TracedRNumber, data) = (x.mlir_data = data; return x)
 get_paths(x::TracedRNumber) = x.paths
