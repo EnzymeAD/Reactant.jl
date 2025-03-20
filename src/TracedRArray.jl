@@ -8,7 +8,6 @@ using ..Reactant:
     Reactant,
     TracedRArray,
     TracedRNumber,
-    WrappedTracedRArray,
     AnyTracedRArray,
     AnyTracedRVector,
     Ops,
@@ -49,10 +48,8 @@ function Base.convert(::Type{TracedRArray{T,N}}, x::AbstractArray) where {T,N}
         eltype(x) == T && return x
         return Ops.convert(TracedRArray{T,N}, x)
     end
-    x isa WrappedTracedRArray &&
-        return convert(TracedRArray{T,N}, materialize_traced_array(x))
     if eltype(x) <: TracedRNumber
-        return convert(TracedRArray{T,N}, aos_to_soa(x))
+        return convert(TracedRArray{T,N}, aos_to_soa(materialize_traced_array(x)))
     end
     return convert(TracedRArray{T,N}, Ops.constant(collect(x)))
 end
@@ -204,11 +201,11 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 end
 
 # Prevent ambiguity
-function Base.getindex(a::WrappedTracedRArray, index::Union{Int,TracedRNumber{Int}}...)
+function Base.getindex(a::AnyTracedRArray, index::Union{Int,TracedRNumber{Int}}...)
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...)
 end
 
-function Base.getindex(a::WrappedTracedRArray, indices...)
+function Base.getindex(a::AnyTracedRArray, indices...)
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
 end
 
@@ -437,7 +434,7 @@ end
 function Base.mapreduce(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(A::AbstractArray{<:TracedRNumber{T},N});
+    @nospecialize(A::AnyTracedRArray{T,N});
     dims=:,
     init=nothing,
 ) where {T,N}
@@ -537,7 +534,7 @@ end
 function Base.mapreducedim!(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(R::AbstractArray{<:TracedRNumber{T},N}),
+    @nospecialize(R::AnyTracedRArray{T,N}),
     A::Base.AbstractArrayOrBroadcasted,
 ) where {T,N}
     @assert length(size(R)) == length(size(A))
@@ -652,7 +649,7 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     return dest
 end
 
-function _copyto!(dest::AbstractArray{<:TracedRNumber}, bc::Broadcasted)
+function _copyto!(dest::Array{<:TracedRNumber}, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
 

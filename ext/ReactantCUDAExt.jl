@@ -1,8 +1,7 @@
 module ReactantCUDAExt
 
 using CUDA
-using Reactant:
-    Reactant, TracedRArray, AnyTracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
+using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
 using Reactant.Compiler: raising
 using ReactantCore: @trace
 using GPUCompiler: GPUCompiler

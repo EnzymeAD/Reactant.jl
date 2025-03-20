@@ -48,16 +48,9 @@ end
 @leaf TracedRArray
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
-const WrappedTracedRArray{T,N} = WrappedArray{
-    TracedRNumber{T},N,TracedRArray,TracedRArray{T,N}
-}
-const AnyTracedRArray{T,N} = Union{TracedRArray{T,N},WrappedTracedRArray{T,N}}
+const AnyTracedRArray{T,N} = AbstractArray{<:TracedRNumber{T},N}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
-const AnyTracedRMatrix{T} = Union{
-    AnyTracedRArray{T,2},
-    LinearAlgebra.Diagonal{TracedRNumber{T},TracedRArray{T,1}},
-    LinearAlgebra.Tridiagonal{TracedRNumber{T},TracedRArray{T,1}},
-}
+const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
 ## TracedRNG

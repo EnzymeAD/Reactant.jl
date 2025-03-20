@@ -10,7 +10,6 @@ using ..Reactant:
     RNumber,
     TracedRArray,
     TracedRNumber,
-    WrappedTracedRArray,
     AnyTracedRArray,
     MissingTracedValue,
     OrderedIdDict,
@@ -21,7 +20,7 @@ using Functors: Functors
 
 materialize_traced_array(x::TracedRArray) = x
 
-materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
+materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
 
 function materialize_traced_array(
     x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}
@@ -111,7 +110,7 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
 end
 
 get_ancestor_indices(::TracedRArray, indices...) = indices
-function get_ancestor_indices(x::WrappedTracedRArray, indices...)
+function get_ancestor_indices(x::AnyTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
@@ -629,13 +628,15 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
+function broadcast_to_size(arg::AnyTracedRArray, rsize)
     if Reactant.ancestor(arg) isa TracedRArray
         return broadcast_to_size(materialize_traced_array(arg), rsize)
     end
     return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
 end
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
+
+broadcast_to_size(arg::TracedRArray, rsize) = broadcast_to_size_internal(arg, rsize)
 
 broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
 function broadcast_to_size(arg::UnitRange, rsize)
@@ -670,12 +671,6 @@ end
 function broadcast_to_size(arg::AnyTracedRArray{T,0}, rsize) where {T}
     arg = materialize_traced_array(arg)
     return broadcast_to_size(TracedRNumber{T}((), get_mlir_data(arg)), rsize)
-end
-
-function broadcast_to_size(arg::AnyTracedRArray, rsize)
-    arg = materialize_traced_array(arg)
-    size(arg) == Tuple(rsize) && return arg
-    return broadcast_to_size_internal(arg, rsize)
 end
 
 function broadcast_to_size(arg::Broadcast.Extruded, rsize)

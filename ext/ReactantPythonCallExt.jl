@@ -1,7 +1,7 @@
 module ReactantPythonCallExt
 
 using PythonCall
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
+using Reactant: Reactant, TracedRArra, MLIR, TracedRNumber
 using ReactantCore: @trace
 
 using PythonCall
