@@ -290,7 +290,7 @@ function make_mlir_fn(
         seen_results,
         result,
         (:result,),
-        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath;
+        concretein ? Reactant.NoStopTracedTrack : Reactant.TracedSetPath;
         runtime,
     )
 
@@ -300,7 +300,7 @@ function make_mlir_fn(
             seen_results,
             traced_args[i],
             concretein ? (:resargs, i) : (),
-            Reactant.TracedTrack;
+            Reactant.NoStopTracedTrack;
             runtime,
         )
     end
@@ -311,6 +311,7 @@ function make_mlir_fn(
         (args_in_result != :all && has_argidx(v)) && continue
         push!(linear_results, v)
     end
+
     if args_in_result == :mutated
         append!(linear_results, linear_args[mutated_args])
     end
