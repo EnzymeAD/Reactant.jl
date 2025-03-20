@@ -77,13 +77,8 @@ unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
 unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 
-unwrapped_eltype(::Type{<:RArray{T,N}}) where {T,N} = T
 unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
-unwrapped_eltype(::Type{<:AnyTracedRArray{T,N}}) where {T,N} = T
-
-unwrapped_eltype(::RArray{T,N}) where {T,N} = T
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
-unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
