@@ -805,6 +805,32 @@ function pack_subelements(
     )
 end
 
+function reciprocal(
+    input::Value;
+    output=nothing::Union{Nothing,IR.Type},
+    approx=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(output) && push!(op_ty_results, output)
+    !isnothing(approx) && push!(attributes, namedattribute("approx", approx))
+
+    return create_operation(
+        "tpu.reciprocal",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function region(; results::Vector{IR.Type}, region::Region, location=Location())
     op_ty_results = IR.Type[results...,]
     operands = Value[]
