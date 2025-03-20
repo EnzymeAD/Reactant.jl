@@ -537,9 +537,9 @@ end
 function Base.mapreducedim!(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(R::AnyTracedRArray),
+    @nospecialize(R::AbstractArray{<:TracedRNumber{T},N}),
     A::Base.AbstractArrayOrBroadcasted,
-)
+) where {T,N}
     @assert length(size(R)) == length(size(A))
     dims = map(enumerate(zip(size(R), size(A)))) do (i, (sR, sA))
         sR == sA && return nothing
