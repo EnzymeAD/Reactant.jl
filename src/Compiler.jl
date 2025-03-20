@@ -33,7 +33,8 @@ end
 end
 
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
-    (isbitstype(T) || ancestor(obj) isa RArray) && return Base.getfield(obj, field)
+    (isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange) &&
+        return Base.getfield(obj, field)
     return Base.getindex(obj, field)
 end
 
@@ -1472,7 +1473,6 @@ function codegen_flatten!(
     is_sharded &&
         runtime isa Val{:PJRT} &&
         (flatten_names = vcat(eachrow(reshape(flatten_names, length(mesh), :))...))
-
     return flatten_names, flatten_code
 end
 
