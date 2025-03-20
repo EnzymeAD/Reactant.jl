@@ -536,7 +536,6 @@ end
 function _tracedsteprangelen_unsafe_getindex(
     r::AbstractRange{T}, i::Union{I,TracedRNumber{I}}
 ) where {T,I}
-    # @info "r: $(typeof(r))\ni: $(typeof(i))"
     finalT = T
     offsetT = typeof(r.offset)
     if i isa TracedRNumber
