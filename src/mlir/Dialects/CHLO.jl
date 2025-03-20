@@ -78,14 +78,16 @@ end
 
 Returns `AsinAcosKernel(operand)` element-wise.
 
+```
 If
   w = _asin_acos_kernel(z)
   w\' = _asin_acos_kernel(I * z)
-then
+Then
   asin(z) = complex(atan2(z.real, w.real), sign(z.imag) * w.imag)
   acos(z) = complex(atan2(w.real, z.real), -sign(z.imag) * w.imag)
   asinh(z) = complex(sign(z.real) * w\'.imag, atan2(z.imag, w\'.real))
   acosh(z) = complex(w.imag, sign(z.imag) * atan2(w.real, z.real))
+```
 
 This op is used as an intermediate value in decompositions and
 should never be constructed directly by frameworks or consumed by
@@ -1423,19 +1425,18 @@ function ragged_dot(
     lhs::Value,
     rhs::Value,
     group_sizes::Value;
-    result=nothing::Union{Nothing,IR.Type},
+    result::IR.Type,
     ragged_dot_dimension_numbers,
     precision_config=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[]
+    op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs, group_sizes]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute(
         "ragged_dot_dimension_numbers", ragged_dot_dimension_numbers
     ),]
-    !isnothing(result) && push!(op_ty_results, result)
     !isnothing(precision_config) &&
         push!(attributes, namedattribute("precision_config", precision_config))
 
@@ -1446,8 +1447,8 @@ function ragged_dot(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -1543,14 +1544,16 @@ end
 """
 `top_k`
 
-If the input is a vector (rank-1), finds the `k` largest entries in the vector
-and outputs their values and indices as vectors.  Thus `values[j]` is the
-`j`-th largest entry in `input`, and its index is `indices[j]`.
+If the input is a vector (rank-1), finds the `k` largest entries in the
+vector and outputs their values and indices as vectors.  Thus `values[j]` is
+the `j`-th largest entry in `input`, and its index is `indices[j]`.
 
 For matrices (resp. higher rank input), computes the top `k` entries in each
 row (resp. vector along the last dimension).  Thus,
 
-    values.shape = indices.shape = input.shape[:-1] + [k]
+```
+values.shape = indices.shape = input.shape[:-1] + [k]
+```
 
 If two elements are equal, the lower-index element appears first.
 """
