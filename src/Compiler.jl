@@ -1010,6 +1010,8 @@ function compile_mlir!(
         end
     end
 
+    run_pass_pipeline!(mod, "print{debug=true}")
+
     preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
