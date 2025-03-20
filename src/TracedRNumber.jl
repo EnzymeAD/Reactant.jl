@@ -3,6 +3,7 @@ module TracedRNumberOverrides
 using ..Reactant:
     Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
 using ReactantCore
+using Adapt
 
 import Base.TwicePrecision
 
@@ -504,6 +505,8 @@ struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
     len::L
     offset::L
 end
+
+Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L} = TracedStepRangeLen{T,R,S,L}
 
 # constructors and interface implementation copied from range.jl
 function TracedStepRangeLen{T,R,S}(ref::R, step::S, len, offset=1) where {T,R,S}
