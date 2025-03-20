@@ -506,7 +506,9 @@ struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
     offset::L
 end
 
-Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L} = TracedStepRangeLen{T,R,S,L}
+function Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L}
+    return TracedStepRangeLen{T,R,S,L}
+end
 
 # constructors and interface implementation copied from range.jl
 function TracedStepRangeLen{T,R,S}(ref::R, step::S, len, offset=1) where {T,R,S}
