@@ -1007,8 +1007,6 @@ function make_tracer_via_immutable_constructor(
     return y
 end
 
-using InteractiveUtils
-
 function make_tracer_unknown(
     seen,
     @nospecialize(prev),
@@ -1116,7 +1114,6 @@ function make_tracer_unknown(
         seen[prev] = prev
         return prev
     end
-    @show TT
     y = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), TT, flds, nf)
     seen[prev] = y
     return y
