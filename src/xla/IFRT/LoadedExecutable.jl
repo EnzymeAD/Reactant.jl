@@ -41,7 +41,9 @@ for (jlop, xlaop, field) in (
     ),
 )
     @eval function XLA.$(jlop)(exec::LoadedExecutable)
-        exec.is_sharded || return XLA.OpSharding[]
+        if !exec.is_sharded || iszero(exec.$(field))
+            return XLA.OpSharding[]
+        end
 
         op_shardings = Ref{NTuple{exec.$(field),Ptr{Cvoid}}}()
 

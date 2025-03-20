@@ -202,6 +202,34 @@ function disassemble_into_single_device_arrays(array::Array, only_addressable_de
     return [Array(unsafe_load(arrays, i)) for i in 1:narrays[]]
 end
 
+function replicate_array_to_all_devices(array::Array, sharding, mesh)
+    is_fully_replicated(XLA.sharding(array)) && return array
+
+    hlo_sharding = Reactant.Sharding.HloSharding(
+        convert(XLA.HloSharding, sharding),
+        mesh,
+        ntuple(Returns(1), ndims(array)),
+        ntuple(Returns(-1), ndims(array)),
+    )
+    shard_info = Reactant.Sharding.ShardInfo(
+        hlo_sharding, Reactant.Sharding.sharding_to_array_slices(hlo_sharding, size(array))
+    )
+    sharding_constraint = Reactant.Sharding.NamedSharding(
+        mesh, ntuple(Returns(nothing), ndims(array))
+    )
+    data = Reactant.ConcreteIFRTArray{eltype(array),ndims(array), typeof(shard_info)}(
+        AsyncArray(array, nothing), size(array), shard_info
+    )
+
+    fn(x) = Reactant.Ops.sharding_constraint(x, sharding_constraint)
+
+    fn_compiled = Reactant.compile((data,)) do x
+        return Reactant.Ops.sharding_constraint(x, sharding_constraint)
+    end
+
+    return fn_compiled(data).data.buffer
+end
+
 function XLA.unsafe_buffer_pointer(::Array)
     return error("IFRT.Array does not support `XLA.unsafe_buffer_pointer`")
 end
