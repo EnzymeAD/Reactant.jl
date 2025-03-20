@@ -2384,3 +2384,7 @@ extern "C" void ifrt_hlo_module_cost_analysis_properties(
 }
 
 #pragma endregion
+
+extern "C" bool pjrt_device_is_addressable(PjRtDevice *device) {
+  return device->IsAddressable();
+}
