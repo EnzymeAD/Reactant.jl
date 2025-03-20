@@ -44,6 +44,4 @@ function Base.getindex(a::OffsetVector{<:Reactant.TracedRNumber}, indices::Int)
     parent(a)[J]
 end
 
-Reactant.Adapt.parent_type(::Type{OffsetArray{<:Any, <:Any, AA}}) where AA = AA
-
 end
