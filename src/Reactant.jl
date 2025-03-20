@@ -140,6 +140,7 @@ use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(::TracedRNG) = true
+use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
