@@ -1030,3 +1030,21 @@ end
     x_ra = Reactant.to_rarray(ones(Int, 4))
     @test @jit(fn(x_ra)) == fn(ones(Int, 4))
 end
+
+@testset "Module printing" begin
+    for opt in (true, false, :before_jit), debug in (true, false)
+        v = collect(Float32(1):Float32(64))
+        vr = Reactant.to_rarray(v)
+        mod = @code_hlo optimize = opt log.(vr)
+
+        # Store the module as a string with different debug options.
+        io = IOBuffer()
+        show(IOContext(io, :debug => debug), mod)
+        mod_string = String(take!(io))
+
+        # Test that we can parse back the string as an MLIR module, compile it
+        # and get correct results.
+        res = @jit(Reactant.Ops.hlo_call(mod_string, vr))[1]
+        @test res ≈ log.(v)
+    end
+end
