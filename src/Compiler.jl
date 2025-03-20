@@ -283,13 +283,18 @@ function generate_unresharded_ifrt_array(
     size_arr,
 ) where {T}
     single_device_arrays = Reactant.XLA.IFRT.disassemble_into_single_device_arrays(
-        Reactant.XLA.IFRT.replicate_array_to_all_devices(arr, output_sharding, mesh), true
+        Reactant.XLA.IFRT.replicate_array_to_all_devices(
+            arr, output_sharding, mesh, size_arr
+        ),
+        true,
     )
     devs = Reactant.XLA.device.(single_device_arrays)
     idx = findfirst(isequal(target_device), devs)
-    return ConcreteIFRTArray{T,N}(
-        Reactant.XLA.IFRT.AsyncArray(single_device_arrays[idx], nothing), size(arr)
-    )
+    res_arr = Reactant.XLA.IFRT.AsyncArray(single_device_arrays[idx], nothing)
+    res_arr_size = reverse(size(res_arr))
+    @assert size_arr == res_arr_size "Expected size of array to be $(size_arr), but got \
+                                      $(res_arr_size)"
+    return ConcreteIFRTArray{T,N}(res_arr, size_arr)
 end
 
 function create_result(tocopy::Array{T,N}, path, args...) where {T,N}

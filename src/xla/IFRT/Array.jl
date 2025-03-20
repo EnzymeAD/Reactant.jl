@@ -162,6 +162,7 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
     client = XLA.client(buffer)
     all_devices = XLA.get_device.((client,), reactant_sharding.mesh.device_ids)
 
+    # TODO: Test if the below logic for replication works for distributed cases as well
     if any(!XLA.is_addressable, all_devices)
         @warn "Not all devices are addressable. Currently we only fill in the data for \
                addressable devices. Remaining slices of data in `data` are left \
@@ -202,23 +203,23 @@ function disassemble_into_single_device_arrays(array::Array, only_addressable_de
     return [Array(unsafe_load(arrays, i)) for i in 1:narrays[]]
 end
 
-function replicate_array_to_all_devices(array::Array, sharding, mesh)
+function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     is_fully_replicated(XLA.sharding(array)) && return array
 
     hlo_sharding = Reactant.Sharding.HloSharding(
         convert(XLA.HloSharding, sharding),
         mesh,
-        ntuple(Returns(1), ndims(array)),
-        ntuple(Returns(-1), ndims(array)),
+        ntuple(Returns(1), length(size_arr)),
+        ntuple(Returns(-1), length(size_arr)),
     )
     shard_info = Reactant.Sharding.ShardInfo(
-        hlo_sharding, Reactant.Sharding.sharding_to_array_slices(hlo_sharding, size(array))
+        hlo_sharding, Reactant.Sharding.sharding_to_array_slices(hlo_sharding, size_arr)
     )
     sharding_constraint = Reactant.Sharding.NamedSharding(
-        mesh, ntuple(Returns(nothing), ndims(array))
+        mesh, ntuple(Returns(nothing), length(size_arr))
     )
-    data = Reactant.ConcreteIFRTArray{eltype(array),ndims(array), typeof(shard_info)}(
-        AsyncArray(array, nothing), size(array), shard_info
+    data = Reactant.ConcreteIFRTArray{eltype(array),length(size_arr),typeof(shard_info)}(
+        AsyncArray(array, nothing), size_arr, shard_info
     )
 
     fn(x) = Reactant.Ops.sharding_constraint(x, sharding_constraint)
