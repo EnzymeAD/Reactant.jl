@@ -74,6 +74,11 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "SpecialFunctions" include("integration/special_functions.jl")
         @safetestset "Random" include("integration/random.jl")
         @safetestset "Python" include("integration/python.jl")
+        @safetestset "MPI" begin
+            using MPI
+            nranks = 2
+            run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+        end
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
