@@ -209,13 +209,12 @@ end
         @test contains(repr(hlo), "sharding_constraint")
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 3
 
         z = Reactant.to_rarray(x; sharding=constraint)
         res = @jit fn_with_constraint(x_ra)
 
         @test x .+ x ≈ Array(res)
-
         @test string(z.sharding.sharding.hlo_sharding) ==
             string(res.sharding.sharding.hlo_sharding)
         @test string(res.sharding.sharding.hlo_sharding) !=
@@ -230,7 +229,7 @@ end
             x_ra_no_sharding
         )
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 3
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
         @test x .+ x ≈ Array(res)
