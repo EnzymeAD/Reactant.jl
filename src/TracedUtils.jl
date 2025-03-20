@@ -632,13 +632,21 @@ function broadcast_to_size(arg::AnyTracedRArray, rsize)
     if Reactant.ancestor(arg) isa TracedRArray
         return broadcast_to_size(materialize_traced_array(arg), rsize)
     end
-    return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
+    return broadcast_to_size(Reactant.aos_to_soa(arg), rsize)
 end
-broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
 
 broadcast_to_size(arg::TracedRArray, rsize) = broadcast_to_size_internal(arg, rsize)
 
+broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
+
+function broadcast_to_size(arg::AbstractRange{<:TracedRNumber}, rsize)
+    return broadcast_to_size(collect(arg), rsize)
+end
 broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
+
+function broadcast_to_size(arg::UnitRange{<:TracedRNumber}, rsize)
+    return @invoke broadcast_to_size(arg::UnitRange, rsize)
+end
 function broadcast_to_size(arg::UnitRange, rsize)
     # For small inputs this will be automatically optimized away, and for large ranges
     # helps reduce the IR size

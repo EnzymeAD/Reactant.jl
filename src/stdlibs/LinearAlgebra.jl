@@ -425,4 +425,20 @@ function LinearAlgebra.axpby!(
     return y
 end
 
+# Base.fill!
+# TODO: remove once auto-tracing conditionals are supported
+function Base.fill!(
+    A::Union{
+        Diagonal{<:TracedRNumber},
+        Bidiagonal{<:TracedRNumber},
+        Tridiagonal{<:TracedRNumber},
+        SymTridiagonal{<:TracedRNumber},
+    },
+    x,
+)
+    xT = convert(eltype(A), x)
+    LinearAlgebra.fillstored!(A, xT)
+    return A
+end
+
 end

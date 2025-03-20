@@ -209,6 +209,13 @@ function Base.getindex(a::AnyTracedRArray, indices...)
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
 end
 
+function Base.getindex(a::AbstractRange{<:TracedRNumber}, index::Integer)
+    return @invoke Base.getindex(a::AbstractRange, index::Integer)
+end
+function Base.getindex(a::AbstractRange{<:TracedRNumber}, index::Int64)
+    return @invoke Base.getindex(a::AbstractRange, index::Integer)
+end
+
 ## Specialize certain dispatches for better codegen
 for aType in (
     WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}} where {T,N,M},
