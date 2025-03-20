@@ -32,13 +32,13 @@ function TracedUtils.materialize_traced_array(
 end
 
 function TracedUtils.materialize_traced_array(
-    x::Diagonal{TracedRNumber{T},AbstractArray{<:Any,1}}
+    x::Diagonal{TracedRNumber{T},<:AbstractArray{<:Any,1}}
 ) where {T}
     return diagm(materialize_traced_array(parent(x)))
 end
 
 function TracedUtils.materialize_traced_array(
-    x::Tridiagonal{TracedRNumber{T},AbstractArray{<:Any,1}}
+    x::Tridiagonal{TracedRNumber{T},<:AbstractArray{<:Any,1}}
 ) where {T}
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
 end
@@ -47,7 +47,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
     uAT = Symbol(:Unit, AT)
     @eval begin
         function TracedUtils.materialize_traced_array(
-            x::$(AT){TracedRNumber{T},AbstractArray{<:Any,2}}
+            x::$(AT){TracedRNumber{T},<:AbstractArray{<:Any,2}}
         ) where {T}
             m, n = size(x)
             px = TracedUtils.materialize_traced_array(parent(x))
@@ -58,7 +58,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
         end
 
         function TracedUtils.materialize_traced_array(
-            x::$(uAT){TracedRNumber{T},AbstractArray{<:Any,2}}
+            x::$(uAT){TracedRNumber{T},<:AbstractArray{<:Any,2}}
         ) where {T}
             m, n = size(x)
             px = TracedUtils.materialize_traced_array(parent(x))
@@ -72,7 +72,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
 end
 
 function TracedUtils.materialize_traced_array(
-    x::Symmetric{TracedRNumber{T},AbstractArray{<:Any,2}}
+    x::Symmetric{TracedRNumber{T},<:AbstractArray{<:Any,2}}
 ) where {T}
     m, n = size(x)
     row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
