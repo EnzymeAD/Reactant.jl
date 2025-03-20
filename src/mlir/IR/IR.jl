@@ -132,6 +132,6 @@ function verifyall(operation::Operation; debug=false)
         end
     end
 end
-verifyall(module_::IR.Module; debug=false) = verifyall(Operation(module_); debug)
+verifyall(module_::Module; debug=false) = verifyall(Operation(module_); debug)
 
 end # module IR

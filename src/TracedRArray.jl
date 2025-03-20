@@ -1,6 +1,6 @@
 module TracedRArrayOverrides
 
-using Adapt: WrappedReshapedArray, WrappedArray
+using Adapt: WrappedReshapedArray
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
@@ -563,7 +563,7 @@ function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2
     return A
 end
 
-struct AbstractReactantArrayStyle{N} <: Base.Broadcast.AbstractArrayStyle{N} end
+struct AbstractReactantArrayStyle{N} <: AbstractArrayStyle{N} end
 
 AbstractReactantArrayStyle(::Val{N}) where {N} = AbstractReactantArrayStyle{N}()
 AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle{N}()

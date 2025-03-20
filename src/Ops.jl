@@ -1838,7 +1838,7 @@ end
     true_fn_args = true_fn_names[1]
 
     MLIR.IR.activate!(true_fn_body)
-    Ops.activate_constant_context!(true_fn_body)
+    activate_constant_context!(true_fn_body)
     tb_result = try
         for (i, arg) in enumerate(tb_linear_args)
             # find the right path to index the traced arg.
@@ -1862,7 +1862,7 @@ end
         end
         Reactant.call_with_reactant(true_fn, tb_traced_args...)
     finally
-        Ops.deactivate_constant_context!(true_fn_body)
+        deactivate_constant_context!(true_fn_body)
         MLIR.IR.deactivate!(true_fn_body)
     end
 
@@ -2385,7 +2385,7 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
         (input = constant(input; location))
 
     cache = Reactant.Compiler.sdycache()
-    haskey(cache, sharding.mesh) || Ops.mesh(sharding.mesh; location)
+    haskey(cache, sharding.mesh) || mesh(sharding.mesh; location)
     (; sym_name, mesh_attr) = cache[sharding.mesh]
     tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
         sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=false

@@ -182,15 +182,7 @@ function Enzyme.make_zero(
     return res
 end
 
-using .Compiler:
-    @compile,
-    @code_hlo,
-    @code_mhlo,
-    @jit,
-    @code_xla,
-    traced_getfield,
-    create_result,
-    compile
+using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
 export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,

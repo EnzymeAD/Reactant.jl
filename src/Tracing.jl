@@ -1730,7 +1730,7 @@ end
     @nospecialize(runtime)
 )
     return make_tracer(
-        OrderedIdDict(), x, (), Reactant.ArrayToConcrete; track_numbers, sharding, runtime
+        OrderedIdDict(), x, (), ArrayToConcrete; track_numbers, sharding, runtime
     )
 end
 
