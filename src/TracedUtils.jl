@@ -45,7 +45,7 @@ function materialize_traced_array(
     return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
-function materialize_traced_array(x::AbstractArray{TracedRNumber{T}})
+function materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where T
     return Reactant.aos_to_soa(x)
 end
 
