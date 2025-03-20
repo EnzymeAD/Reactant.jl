@@ -81,7 +81,18 @@ unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 
 aos_to_soa(x::AbstractArray) = x
-aos_to_soa(x::AnyTracedRArray) = x
+
+aos_to_soa(x::TracedRArray) = x
+function aos_to_soa(x::AnyTracedRArray{T}) where {T}
+    ancestor(x) isa TracedRArray && return x
+    for i in eachindex(x)
+        if !isassigned(x, i)
+            x[i] = TracedUtils.promote_to(T, 0)
+        end
+    end
+    return Ops.reshape(vcat(x...), size(x)...)
+end
+
 function aos_to_soa(x::AbstractArray{<:ConcretePJRTNumber{T}}) where {T}
     all_clients = XLA.client.(x)
     @assert allequal(all_clients)
@@ -115,14 +126,6 @@ function aos_to_soa(x::AbstractArray{<:ConcreteIFRTNumber{T}}) where {T}
     )
     x_c .= x
     return x_c
-end
-function aos_to_soa(x::AbstractArray{TracedRNumber{T}}) where {T}
-    for i in eachindex(x)
-        if !isassigned(x, i)
-            x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
-        end
-    end
-    return Ops.reshape(vcat(x...), size(x)...)
 end
 
 include("Ops.jl")
