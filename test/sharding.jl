@@ -100,6 +100,11 @@ fn_test3(x) = sum(x; dims=1)
 
             @test Array(@jit(predict(samples_ra, w1_ra, w2_ra))) ≈ predict(samples, w1, w2)
         end
+
+        @testset "No Crash" begin
+            y_ra = Reactant.to_rarray(2.0; track_numbers=Number)
+            @test Array(@jit(./(x, y_ra))) ≈ x ./ 2.0
+        end
     end
 end
 

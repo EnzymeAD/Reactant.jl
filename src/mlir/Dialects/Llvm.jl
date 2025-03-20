@@ -415,6 +415,8 @@ function call_intrinsic(
     fastmathFlags=nothing,
     op_bundle_sizes,
     op_bundle_tags=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -430,6 +432,8 @@ function call_intrinsic(
         push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
     !isnothing(op_bundle_tags) &&
         push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
 
     return create_operation(
         "llvm.call_intrinsic",
