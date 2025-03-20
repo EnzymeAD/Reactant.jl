@@ -224,7 +224,7 @@ function Base.show(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     return nothing
 end
 
-function Base.getindex(a::ConcretePJRTArray{T}, args::Vararg{Int,N}) where {T,N}
+function Base.getindex(a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}) where {T,N}
     isempty(a) && throw("Cannot getindex from empty buffer")
 
     wait(a)
@@ -246,14 +246,14 @@ function Base.getindex(a::ConcretePJRTArray{T}, args::Vararg{Int,N}) where {T,N}
     return convert(Array, a)[args...]
 end
 
-function Base.getindex(a::ConcreteIFRTArray, args::Vararg{Int,N}) where {N}
+function Base.getindex(a::ConcreteIFRTArray{T,N}, args::Vararg{Int,N}) where {T,N}
     GPUArraysCore.assertscalar("getindex(::ConcreteIFRTArray, ::Vararg{Int, N})")
     return convert(Array, a)[args...]
 end
 
 function Base.getindex(
-    a::Union{ConcreteIFRTArray,ConcretePJRTArray}, args::Vararg{Any,N}
-) where {N}
+    a::Union{ConcreteIFRTArray{T,N},ConcretePJRTArray{T,N}}, args::Vararg{Any,N}
+) where {T,N}
     return compile(getindex, (a, args...))(a, args...)
 end
 
