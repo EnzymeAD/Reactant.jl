@@ -112,6 +112,10 @@ function synchronize(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
     return nothing
 end
 
+function to_number(tp::Base.TwicePrecision)
+    return Base.TwicePrecision(to_number(tp.hi), to_number(tp.lo))
+end
+
 to_number(x::Number) = x
 
 function to_number(X::ConcretePJRTScalar{T}) where {T}
