@@ -69,6 +69,10 @@ function TracedRArray(data::MLIR.IR.Value)
     return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
 end
 
+isa_traced_soa(_) = false
+isa_traced_soa(::TracedRArray) = true
+isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
+
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
 unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
@@ -84,7 +88,7 @@ aos_to_soa(x::AbstractArray) = x
 
 aos_to_soa(x::TracedRArray) = x
 function aos_to_soa(x::AnyTracedRArray{T}) where {T}
-    ancestor(x) isa TracedRArray && return x
+    isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
             x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)

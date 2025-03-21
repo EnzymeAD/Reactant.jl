@@ -17,9 +17,22 @@ using ..Reactant:
 using ReactantCore: MissingTracedValue, is_traced
 using Functors: Functors
 
+materialize_traced_array(x::AbstractArray) = x
+
 materialize_traced_array(x::TracedRArray) = x
 
 materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
+
+function materialize_traced_array(x::AbstractRange{<:TracedRNumber})
+    return Reactant.aos_to_soa(collect(x))
+end
+
+function materialize_traced_array(x::UnitRange{<:TracedRNumber})
+    return Ops.add(
+        Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1),
+        Ops.fill(first(x), [length(x)]),
+    )
+end
 
 function materialize_traced_array(x::SubArray{TracedRNumber{T}}) where {T}
     z = SubArray(materialize_traced_array(parent(x)), x.indices)
@@ -631,7 +644,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 end
 
 function broadcast_to_size(arg::AnyTracedRArray, rsize)
-    if Reactant.ancestor(arg) isa TracedRArray
+    if Reactant.isa_traced_soa(Reactant.ancestor(arg))
         return broadcast_to_size(materialize_traced_array(arg), rsize)
     end
     x = Reactant.aos_to_soa(arg)
