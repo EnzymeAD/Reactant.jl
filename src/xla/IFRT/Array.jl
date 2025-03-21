@@ -32,23 +32,6 @@ end
 function Array(
     client::Client, array::Base.Array{T,N}, sharding::Sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
-    sizear = collect(Int64, reverse(size(array)))
-
-    if is_single_device_sharding(sharding) || is_fully_replicated(sharding)
-        buffer = GC.@preserve array sizear begin
-            @ccall MLIR.API.mlir_c.ifrt_client_make_array_from_host_buffer(
-                client.client::Ptr{Cvoid},
-                array::Ptr{T},
-                XLA.primitive_type(T)::Cint,
-                N::Csize_t,
-                sizear::Ptr{Int64},
-                sharding.ptr::Ptr{Cvoid},
-                0::Cint, # kAlwaysCopy
-            )::Ptr{Cvoid}
-        end
-        return Array(buffer)
-    end
-
     all_devices = XLA.devices(sharding)
     array_slices, _ = XLA.sharding_to_concrete_array_indices(
         convert(XLA.HloSharding, sharding),
