@@ -53,6 +53,11 @@ Base.isless(a::CuTracedRNumber, b::CuTracedRNumber) = Base.isless(a[], b[])
 Base.isless(a, b::CuTracedRNumber) = Base.isless(a, b[])
 Base.isless(a::CuTracedRNumber, b) = Base.isless(a[], b)
 
+Base.one(a::CuTracedRNumber) = one(a[])
+Base.one(::Type{<:CuTracedRNumber{T, A}}) where {T, A} = one(T)
+Base.zero(a::CuTracedRNumber) = zero(a[])
+Base.zero(::Type{<:CuTracedRNumber{T, A}}) where {T, A} = zero(T)
+
 function Base.promote_rule(
     ::Type{<:CuTracedRNumber{T}}, ::Type{<:CuTracedRNumber{T2}}
 ) where {T,T2}
