@@ -429,6 +429,13 @@ function Adapt.adapt_storage(::ReactantKernelAdaptor, r::TracedStepRangeLen)
     )
 end
 
+function Adapt.adapt_storage(::ReactantKernelAdaptor, r::Base.TwicePrecision)
+    return Base.TwicePrecision(
+        Adapt.adapt(ReactantKernelAdaptor(), r.hi),
+        Adapt.adapt(ReactantKernelAdaptor(), r.lo),
+    )
+end
+
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
 # and not the operation itself).
 struct LLVMFunc{F,tt}
