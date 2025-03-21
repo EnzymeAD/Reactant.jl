@@ -25,6 +25,12 @@ end
 
 Base.strides(x::AbstractConcreteArray) = Base.size_to_strides(1, size(x)...)
 
+@static if isdefined(Base, :unchecked_oneto)
+    function Base.unchecked_oneto(x::AbstractConcreteNumber{<:Integer})
+        return Base.unchecked_oneto(to_number(x))
+    end
+end
+
 # Ensure the device and client are the same as the input
 for numType in (:ConcretePJRTNumber, :ConcreteIFRTNumber)
     @eval function Base.float(x::$(numType){T}) where {T}

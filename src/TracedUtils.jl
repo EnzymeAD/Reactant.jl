@@ -186,7 +186,8 @@ function make_mlir_fn(
     args_in_result::Symbol=:all,
     construct_function_without_args::Bool=false,
     do_transpose=true,
-    input_shardings=nothing, # This is not meant to be used by the user.
+    input_shardings=nothing,  # This is not meant to be used by the user.
+    output_shardings=nothing, # This is not meant to be used by the user.
     runtime=nothing,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
@@ -201,6 +202,7 @@ function make_mlir_fn(
             do_transpose,
             args_in_result,
             input_shardings,
+            output_shardings,
             runtime,
         )
         mlir_fn_res.fnwrapped = true
@@ -434,6 +436,25 @@ function make_mlir_fn(
                 MLIR.API.mlirFuncSetResultAttr(
                     func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
                 )
+            end
+        end
+
+        # XXX: Generalize the output shardings and expose it to the user
+        # output_shardings is a Int -> Sharding mapping
+        if output_shardings !== nothing
+            for (i, arg) in enumerate(linear_results)
+                if haskey(output_shardings, i)
+                    sharding = output_shardings[i]
+                    (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
+                    MLIR.API.mlirFuncSetResultAttr(
+                        func2,
+                        i - 1,
+                        "sdy.sharding",
+                        Reactant.Sharding.get_shardy_tensor_sharding_attribute(
+                            sharding, ctx, sym_name, mesh_attr
+                        ),
+                    )
+                end
             end
         end
     else

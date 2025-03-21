@@ -32,3 +32,5 @@ function XLA.get_local_device_id(device::Device)
         )::Cint
     end
 end
+
+# TODO: Expose is addressable for pjrt devices in ReactantExtra

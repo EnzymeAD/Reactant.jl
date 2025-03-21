@@ -5,6 +5,27 @@ using Sockets
 
 const initialized = Ref(false)
 
+"""
+    local_rank()
+
+Returns the local rank of the current process.
+"""
+local_rank() = Reactant.XLA.global_state.process_id
+
+"""
+    num_processes()
+
+Returns the number of processes.
+"""
+num_processes() = Reactant.XLA.global_state.num_processes
+
+"""
+    is_initialized()
+
+Returns `true` if the distributed environment has been initialized.
+"""
+is_initialized() = initialized[]
+
 function initialize(;
     coordinator_address::Union{Nothing,String}=nothing,
     num_processes::Union{Nothing,Integer}=nothing,

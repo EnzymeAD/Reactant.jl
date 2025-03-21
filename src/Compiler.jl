@@ -32,6 +32,18 @@ end
     return Base.getfield(obj, field)
 end
 
+@inline function traced_getfield(
+    @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}), field
+)
+    return Base.getfield(obj, field)
+end
+
+@inline function traced_getfield(
+    @nospecialize(obj::Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}), field
+)
+    return Base.getindex(obj, field)
+end
+
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
     (isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange) &&
         return Base.getfield(obj, field)
@@ -39,12 +51,21 @@ end
 end
 
 @inline traced_setfield!(@nospecialize(obj), field, val) = Base.setfield!(obj, field, val)
+
 @inline function traced_setfield!(
     @nospecialize(obj::AbstractArray{T}), field, val
 ) where {T}
     ancestor_obj = ancestor(obj)
     (isbitstype(T) || ancestor_obj isa RArray) && return setfield_carray!(obj, field, val)
     return Base.setindex!(obj, val, field)
+end
+
+@inline function traced_setfield!(
+    @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}),
+    field,
+    val,
+)
+    return setfield_carray!(obj, field, val)
 end
 
 @inline function traced_setfield!(@nospecialize(obj::Dict), field, val)
@@ -71,9 +92,7 @@ end
     return Base.setfield!(obj, field, (val[idx],))
 end
 
-function create_result(
-    tocopy::T, path, result_stores, path_to_shard_info, sharding_mesh
-) where {T}
+function create_result(tocopy::T, path, args...) where {T}
     if !isstructtype(typeof(tocopy))
         error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
     end
@@ -84,13 +103,7 @@ function create_result(
         # If the field is undefined we don't set it. A common example for this is `du2`
         # for Tridiagonal
         isdefined(tocopy, i) || continue
-        ev = create_result(
-            getfield(tocopy, i),
-            append_path(path, i),
-            result_stores,
-            path_to_shard_info,
-            sharding_mesh,
-        )
+        ev = create_result(getfield(tocopy, i), append_path(path, i), args...)
         push!(elems, ev)
     end
 
@@ -112,11 +125,15 @@ function create_result(
     result_stores,
     path_to_shard_info,
     sharding_mesh,
+    to_unreshard_results,
 ) where {T,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                error("TODO: Not yet Implemented. Use IFRT for this.")
+            end
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
             )
@@ -129,7 +146,10 @@ function create_result(
     end
 
     # We will set the data for this later
-    if path_to_shard_info !== nothing # restore sharding
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        if haskey(to_unreshard_results, path)
+            error("TODO: Not yet Implemented. Use IFRT for this.")
+        end
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -141,12 +161,20 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcreteIFRTNumber{T,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcreteIFRTNumber{T,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    sharding_mesh,
+    to_unreshard_results,
 ) where {T,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                error("TODO: Not yet Implemented.")
+            end
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
             )
@@ -157,7 +185,10 @@ function create_result(
     end
 
     # We will set the data for this later
-    if path_to_shard_info !== nothing # restore sharding
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        if haskey(to_unreshard_results, path)
+            error("TODO: Not yet Implemented.")
+        end
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -172,11 +203,15 @@ function create_result(
     result_stores,
     path_to_shard_info,
     sharding_mesh,
+    to_unreshard_results,
 ) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                error("TODO: Not yet Implemented. Use IFRT for this.")
+            end
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
             )
@@ -188,7 +223,11 @@ function create_result(
         end
     end
 
-    if path_to_shard_info !== nothing # restore sharding
+    # We will set the data for this later
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        if haskey(to_unreshard_results, path)
+            error("TODO: Not yet Implemented. Use IFRT for this.")
+        end
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -196,19 +235,28 @@ function create_result(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
     end
-    # We will set the data for this later
     return :(ConcretePJRTArray{$T,$N,$D,$S}(
         $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
     ))
 end
 
 function create_result(
-    tocopy::ConcreteIFRTArray{T,N,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcreteIFRTArray{T,N,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    sharding_mesh,
+    to_unreshard_results,
 ) where {T,N,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                return :(generate_unresharded_ifrt_array(
+                    $(restore), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
+                ))
+            end
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
             )
@@ -216,11 +264,17 @@ function create_result(
                 $(restore), $(tocopy.shape), $sharding
             ))
         else
-            return :(ConcreteIFRTArray{$T,$N}($restore, $(tocopy.shape)))
+            return :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
         end
     end
 
-    if path_to_shard_info !== nothing # restore sharding
+    # We will set the data for this later
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        if haskey(to_unreshard_results, path)
+            return :(generate_unresharded_ifrt_array(
+                $(tocopy.data), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
+            ))
+        end
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -228,79 +282,72 @@ function create_result(
             $(tocopy.data), $(tocopy.shape), $sharding
         ))
     end
-    # We will set the data for this later
     return :(ConcreteIFRTArray{$T,$N,$S}(
         $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
     ))
 end
 
-function create_result(
-    tocopy::Array{T,N}, path, result_stores, path_to_shard_info, sharding_mesh
-) where {T,N}
+function generate_unresharded_ifrt_array(
+    arr::Reactant.XLA.IFRT.AsyncArray,
+    (target_device, output_sharding, mesh),
+    ::Type{T},
+    N::Integer,
+    size_arr,
+) where {T}
+    single_device_arrays = Reactant.XLA.IFRT.disassemble_into_single_device_arrays(
+        Reactant.XLA.IFRT.replicate_array_to_all_devices(
+            arr, output_sharding, mesh, size_arr
+        ),
+        true,
+    )
+    devs = Reactant.XLA.device.(single_device_arrays)
+    idx = findfirst(isequal(target_device), devs)
+    res_arr = Reactant.XLA.IFRT.AsyncArray(single_device_arrays[idx], nothing)
+    res_arr_size = reverse(size(res_arr))
+    @assert size_arr == res_arr_size "Expected size of array to be $(size_arr), but got \
+                                      $(res_arr_size)"
+    return ConcreteIFRTArray{T,N}(res_arr, size_arr)
+end
+
+function create_result(tocopy::Array{T,N}, path, args...) where {T,N}
     elems = Expr[]
     for (i, v) in enumerate(tocopy)
-        push!(
-            elems,
-            create_result(
-                v, append_path(path, i), result_stores, path_to_shard_info, sharding_mesh
-            ),
-        )
+        push!(elems, create_result(v, append_path(path, i), args...))
     end
     # TODO is there a way to not call `reshape` here? what expr is used for array literals?
     return :(reshape($T[$(elems...)], $(size(tocopy))...))
 end
 
-function create_result(
-    tocopy::Tuple, path, result_stores, path_to_shard_info, sharding_mesh
-)
+function create_result(tocopy::Tuple, path, args...)
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
-        push!(
-            elems,
-            create_result(
-                v, append_path(path, k), result_stores, path_to_shard_info, sharding_mesh
-            ),
-        )
+        push!(elems, create_result(v, append_path(path, k), args...))
     end
     return :(($(elems...),))
 end
 
-function create_result(
-    tocopy::NamedTuple{K,T}, path, result_stores, path_to_shard_info, sharding_mesh
-) where {K,T}
+function create_result(tocopy::NamedTuple{K,T}, path, args...) where {K,T}
     elems = Union{Symbol,Expr}[]
     for (i, (k, v)) in enumerate(pairs(tocopy))
-        push!(
-            elems,
-            create_result(
-                v, append_path(path, i), result_stores, path_to_shard_info, sharding_mesh
-            ),
-        )
+        push!(elems, create_result(v, append_path(path, i), args...))
     end
     return :(NamedTuple{$K}(($(elems...),)))
 end
 
-function create_result(
-    tocopy::D, path, result_stores, path_to_shard_info, sharding_mesh
-) where {K,V,D<:AbstractDict{K,V}}
+function create_result(tocopy::D, path, args...) where {K,V,D<:AbstractDict{K,V}}
     elems = Expr[]
     for (i, p) in enumerate(pairs(tocopy))
-        push!(
-            elems,
-            create_result(
-                p, append_path(path, i), result_stores, path_to_shard_info, sharding_mesh
-            ),
-        )
+        push!(elems, create_result(p, append_path(path, i), args...))
     end
     return :($D([$(elems...)]))
 end
 
+function create_result(tocopy::Reactant.XLA.AbstractDevice, args...)
+    return Meta.quot(:($(tocopy)))
+end
+
 function create_result(
-    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
-    path,
-    result_stores,
-    path_to_shard_info,
-    sharding_mesh,
+    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char}, args...
 )
     return Meta.quot(tocopy)
 end
@@ -732,6 +779,8 @@ function compile_mlir!(
     fn_kwargs=(),
     raise::Union{Bool,String}=false,
     input_shardings=nothing,
+    output_shardings=nothing,
+    do_transpose=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
@@ -753,7 +802,15 @@ function compile_mlir!(
 
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(
-            f, args, fn_kwargs, "main", true; input_shardings, runtime
+            f,
+            args,
+            fn_kwargs,
+            "main",
+            true;
+            input_shardings,
+            output_shardings,
+            runtime,
+            do_transpose,
         )
     finally
         deactivate_raising!(is_raising)
@@ -1283,6 +1340,10 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
     )
 end
 
+function assert_mismatched_sharding(hlo_sharding_from_input, hlo_sharding_from_executable)
+    @assert hlo_sharding_from_executable == hlo_sharding_from_input "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+end
+
 """
     codegen_flatten!
 
@@ -1314,6 +1375,7 @@ function codegen_flatten!(
     flatten_names = Symbol[]
     flatten_code = Expr[]
     runtime = XLA.runtime(client)
+    resharded_inputs = Dict{Tuple,Any}()
 
     if is_sharded
         inv_seen_args = Reactant.OrderedIdDict()
@@ -1351,12 +1413,14 @@ function codegen_flatten!(
                 condensed_op_sharding = convert(
                     XLA.CondensedOpSharding, linear_parameter_shardings[i]
                 )
+                hlo_sharding_from_executable = convert(
+                    XLA.HloSharding, condensed_op_sharding
+                )
                 if Reactant.Sharding.is_sharded(carg)
-                    arg_condensed_op_sharding = convert(
-                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
-                    )
                     # Check if the sharding provided is same as the one we have
-                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                    assert_mismatched_sharding(
+                        carg.sharding.sharding.hlo_sharding, hlo_sharding_from_executable
+                    )
 
                     push!(flatten_code, :($usbuf = $flatcode.data))
                     for j in 1:length(mesh)
@@ -1367,6 +1431,10 @@ function codegen_flatten!(
                         )
                     end
                 else
+                    resharded_inputs[path[3:end]] = (
+                        Reactant.XLA.device(carg), condensed_op_sharding, mesh
+                    )
+
                     push!(flatten_code, :($usbuf = $flatcode))
                     device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
                         condensed_op_sharding, size(carg), mesh.logical_device_ids
@@ -1428,14 +1496,21 @@ function codegen_flatten!(
                 condensed_op_sharding = convert(
                     XLA.CondensedOpSharding, linear_parameter_shardings[i]
                 )
+                hlo_sharding_from_executable = convert(
+                    XLA.HloSharding, condensed_op_sharding
+                )
+
                 if Reactant.Sharding.is_sharded(carg)
-                    arg_condensed_op_sharding = convert(
-                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
-                    )
                     # Check if the sharding provided is same as the one we have
-                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                    assert_mismatched_sharding(
+                        carg.sharding.sharding.hlo_sharding, hlo_sharding_from_executable
+                    )
                     push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
                 else
+                    resharded_inputs[path[3:end]] = (
+                        Reactant.XLA.device(carg), condensed_op_sharding, mesh
+                    )
+
                     # XXX: Currently we copy to host and then make the transfer to the
                     #      sharded devices. This is not ideal, we might be able to do a
                     #      device-to-device transfer, maybe using reshard?
@@ -1473,7 +1548,8 @@ function codegen_flatten!(
     is_sharded &&
         runtime isa Val{:PJRT} &&
         (flatten_names = vcat(eachrow(reshape(flatten_names, length(mesh), :))...))
-    return flatten_names, flatten_code
+
+    return flatten_names, flatten_code, resharded_inputs
 end
 
 """
@@ -1493,6 +1569,7 @@ function codegen_unflatten!(
     linear_result_shard_info,
     sharding_mesh,
     client,
+    resharded_inputs,
 )
     cache_dict = gensym("cache_dict")
     has_cache_dict = false
@@ -1510,6 +1587,8 @@ function codegen_unflatten!(
     end
     ctypes = Union{arrtype,numtype}
 
+    to_unreshard_results = Dict{Tuple,Any}()
+
     # mutate the result stores to point to the correct concrete results
     for (concrete_res_name, result, shard_info) in
         zip(concretized_res_names, linear_results, linear_result_shard_info)
@@ -1523,6 +1602,15 @@ function codegen_unflatten!(
             if path[1] == :result
                 unflatcode = :result
                 path = path[2:end]
+
+                if Reactant.TracedUtils.has_argidx(result)
+                    _, argidx = Reactant.TracedUtils.get_argidx(result)
+                    arg_path = argidx[3:end]
+                    if haskey(resharded_inputs, arg_path)
+                        to_unreshard_results[path] = resharded_inputs[arg_path]
+                    end
+                end
+
                 result_stores[path] = concrete_res_name
                 if path_to_shard_info !== nothing
                     path_to_shard_info[path] = shard_info
@@ -1592,7 +1680,12 @@ function codegen_unflatten!(
 
     prevkeys = collect(keys(result_stores))
     result_code = create_result(
-        concrete_result, (), result_stores, path_to_shard_info, sharding_mesh
+        concrete_result,
+        (),
+        result_stores,
+        path_to_shard_info,
+        sharding_mesh,
+        to_unreshard_results,
     )
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
@@ -1853,7 +1946,7 @@ function compile(f, args; sync=false, kwargs...)
     path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Tuple}() : nothing
 
     # generate Julia `Thunk` code
-    flatten_arg_names, flatten_code = codegen_flatten!(
+    flatten_arg_names, flatten_code, resharded_inputs = codegen_flatten!(
         linear_args,
         seen_args,
         result_stores,
@@ -1893,6 +1986,7 @@ function compile(f, args; sync=false, kwargs...)
         linear_result_shard_info,
         mlir_fn_res.sharding_mesh,
         client,
+        resharded_inputs,
     )
 
     sync_call = if sync

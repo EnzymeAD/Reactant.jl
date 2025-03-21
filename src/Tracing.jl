@@ -1094,7 +1094,7 @@ function make_tracer_unknown(
                 newpath,
                 mode;
                 track_numbers,
-                sharding=Base.getproperty(sharding, i),
+                sharding=getproperty(sharding, i),
                 runtime,
                 kwargs...,
             )

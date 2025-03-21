@@ -512,7 +512,7 @@ end
 end
 
 @testset for op in [round, ceil, floor]
-    for x in (rand(Float32, (3, 3)), rand(Float64))
+    @testset "$(typeof(x)) : $(size(x))" for x in (rand(Float32, (3, 3)), rand(Float64))
         intop = Base.Fix1(op, Int)
         x_ra = Reactant.to_rarray.(x; track_numbers=Number)
 
