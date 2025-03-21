@@ -419,17 +419,6 @@ function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRNumber{T}) wher
     return res
 end
 
-import Reactant.TracedRNumberOverrides.TracedStepRangeLen
-
-function Adapt.adapt_storage(::ReactantKernelAdaptor, r::TracedStepRangeLen)
-    return TracedStepRangeLen(
-        Adapt.adapt(ReactantKernelAdaptor(), r.ref),
-        Adapt.adapt(ReactantKernelAdaptor(), r.step),
-        Adapt.adapt(ReactantKernelAdaptor(), r.len),
-        Adapt.adapt(ReactantKernelAdaptor(), r.offset),
-    )
-end
-
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
 # and not the operation itself).
 struct LLVMFunc{F,tt}
