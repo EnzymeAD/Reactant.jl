@@ -95,9 +95,13 @@ end
 function get_shardy_tensor_sharding_attribute end
 
 """
-    sharding_to_array_slices(sharding, size_x; client=nothing)
+    sharding_to_array_slices(
+        sharding, size_x; client=nothing, return_updated_sharding=Val(false)
+    )
 
-Given a sharding and an array size, returns the device to array slices mapping.
+Given a sharding and an array size, returns the device to array slices mapping. If
+`return_updated_sharding` is `Val(true)`, the updated sharding is returned as well (for
+inputs requiring padding).
 """
 function sharding_to_array_slices end
 
@@ -125,7 +129,13 @@ function (::NoSharding)(client::XLA.IFRT.Client, device, x::Union{AbstractArray,
     return XLA.IFRT.AsyncArray(client, x, device), ShardInfo(NoSharding(), nothing)
 end
 
-sharding_to_array_slices(::NoSharding, size_x; client=nothing) = Base.OneTo.(size_x)
+function sharding_to_array_slices(
+    sharding::NoSharding, size_x; client=nothing, return_updated_sharding=Val(false)
+)
+    slices = Base.OneTo.(size_x)
+    return_updated_sharding isa Val{true} && return (slices, sharding)
+    return slices
+end
 
 """
     NamedSharding(
@@ -287,9 +297,9 @@ function get_shardy_tensor_sharding_attribute(
     )
 end
 
-function sharding_to_array_slices(sharding::NamedSharding, size_x; client=nothing)
+function sharding_to_array_slices(sharding::NamedSharding, size_x; kwargs...)
     return sharding_to_array_slices(
-        generate_hlo_sharding_from_tensor_attribute(sharding), size_x; client
+        generate_hlo_sharding_from_tensor_attribute(sharding), size_x; kwargs...
     )
 end
 
@@ -372,8 +382,10 @@ function (sharding::DimsSharding)(
     return (standardize_sharding(sharding, size(x)))(client, device, x)
 end
 
-function sharding_to_array_slices(sharding::DimsSharding, size_x; client=nothing)
-    return sharding_to_array_slices(standardize_sharding(sharding, size_x), size_x; client)
+function sharding_to_array_slices(sharding::DimsSharding, size_x; kwargs...)
+    return sharding_to_array_slices(
+        standardize_sharding(sharding, size_x), size_x; kwargs...
+    )
 end
 
 # HloSharding
@@ -400,7 +412,9 @@ end
     return ShardInfo{HloSharding{D1,D2},Vector{NTuple{N,UnitRange{Int64}}}}
 end
 
-function sharding_to_array_slices(sharding::HloSharding, size_x; client=nothing)
+function sharding_to_array_slices(
+    sharding::HloSharding, size_x; client=nothing, return_updated_sharding=Val(false)
+)
     # Check if the input needs to be padded. If so this sharding is not valid and we
     # need to request the tensor sharding from XLA
     condensed_op_sharding = convert(XLA.CondensedOpSharding, sharding.hlo_sharding)
@@ -434,12 +448,15 @@ function sharding_to_array_slices(sharding::HloSharding, size_x; client=nothing)
         @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl"
     end
 
+    return_updated_sharding isa Val{true} && return (device_to_array_slices, sharding)
     return device_to_array_slices
 end
 
 function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
     hlo_sharding = generate_hlo_sharding_from_tensor_attribute(sharding)
-    device_to_array_slices = sharding_to_array_slices(hlo_sharding, size(x); client)
+    device_to_array_slices, hlo_sharding = sharding_to_array_slices(
+        hlo_sharding, size(x); client, return_updated_sharding=Val(true)
+    )
 
     data = ntuple(length(hlo_sharding.mesh)) do i
         XLA.PJRT.AsyncBuffer(
@@ -539,8 +556,8 @@ function (sharding::ShardInfo)(
     return (sharding.sharding)(client, device, x)
 end
 
-function sharding_to_array_slices(sharding::ShardInfo, size_x; client=nothing)
-    return sharding_to_array_slices(sharding.sharding, size_x; client)
+function sharding_to_array_slices(sharding::ShardInfo, size_x; kwargs...)
+    return sharding_to_array_slices(sharding.sharding, size_x; kwargs...)
 end
 
 const NoShardInfo = ShardInfo{NoSharding,Nothing}

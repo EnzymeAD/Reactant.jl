@@ -1334,6 +1334,10 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
     )
 end
 
+function assert_mismatched_sharding(hlo_sharding_from_input, hlo_sharding_from_executable)
+    @assert hlo_sharding_from_executable == hlo_sharding_from_input "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+end
+
 """
     codegen_flatten!
 
@@ -1403,12 +1407,14 @@ function codegen_flatten!(
                 condensed_op_sharding = convert(
                     XLA.CondensedOpSharding, linear_parameter_shardings[i]
                 )
+                hlo_sharding_from_executable = convert(
+                    XLA.HloSharding, condensed_op_sharding
+                )
                 if Reactant.Sharding.is_sharded(carg)
-                    arg_condensed_op_sharding = convert(
-                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
-                    )
                     # Check if the sharding provided is same as the one we have
-                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                    assert_mismatched_sharding(
+                        carg.sharding.sharding.hlo_sharding, hlo_sharding_from_executable
+                    )
 
                     push!(flatten_code, :($usbuf = $flatcode.data))
                     for j in 1:length(mesh)
@@ -1484,12 +1490,15 @@ function codegen_flatten!(
                 condensed_op_sharding = convert(
                     XLA.CondensedOpSharding, linear_parameter_shardings[i]
                 )
+                hlo_sharding_from_executable = convert(
+                    XLA.HloSharding, condensed_op_sharding
+                )
+
                 if Reactant.Sharding.is_sharded(carg)
-                    arg_condensed_op_sharding = convert(
-                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
-                    )
                     # Check if the sharding provided is same as the one we have
-                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                    assert_mismatched_sharding(
+                        carg.sharding.sharding.hlo_sharding, hlo_sharding_from_executable
+                    )
                     push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
                 else
                     resharded_inputs[path[3:end]] = (

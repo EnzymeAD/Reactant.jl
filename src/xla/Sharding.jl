@@ -326,6 +326,11 @@ mutable struct HloSharding
     end
 end
 
+# TODO: implement equality from the C++ side
+function Base.:(==)(hsharding1::HloSharding, hsharding2::HloSharding)
+    return string(hsharding1) == string(hsharding2)
+end
+
 function free_hlo_sharding(hlo_sharding::HloSharding)
     @ccall MLIR.API.mlir_c.free_hlo_sharding(hlo_sharding.ptr::Ptr{Cvoid})::Cvoid
 end
@@ -367,7 +372,7 @@ function Base.string(hlo_sharding::HloSharding)
     return unsafe_string_and_free(str)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", hlo_sharding::HloSharding)
+function Base.show(io::IO, hlo_sharding::HloSharding)
     print(io, "XLA.HloSharding(\"", string(hlo_sharding), "\")")
     return nothing
 end
