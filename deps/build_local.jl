@@ -195,6 +195,5 @@ set_preferences!(
     joinpath(dirname(@__DIR__), "LocalPreferences.toml"),
     "Reactant_jll",
     "libReactantExtra_path" => lib_path,
-    "libReactantDialects_path" => joinpath(source_dir, "bazel-bin");
     force=true,
 )
