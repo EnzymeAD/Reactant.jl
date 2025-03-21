@@ -1,6 +1,6 @@
 module TracedRArrayOverrides
 
-using Adapt: WrappedReshapedArray
+using Adapt: WrappedReshapedArray, WrappedArray
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
@@ -201,19 +201,15 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 end
 
 # Prevent ambiguity
-function Base.getindex(a::AnyTracedRArray, index::Union{Int,TracedRNumber{Int}}...)
+# We only do it for specific arrays to avoid going down this path for most arrays
+function Base.getindex(
+    a::WrappedArray{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}...
+) where {T}
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...)
 end
 
-function Base.getindex(a::AnyTracedRArray, indices...)
+function Base.getindex(a::WrappedArray{TracedRNumber{T}}, indices...) where {T}
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
-end
-
-function Base.getindex(a::AbstractRange{<:TracedRNumber}, index::Integer)
-    return @invoke Base.getindex(a::AbstractRange, index::Integer)
-end
-function Base.getindex(a::AbstractRange{<:TracedRNumber}, index::Int64)
-    return @invoke Base.getindex(a::AbstractRange, index::Integer)
 end
 
 ## Specialize certain dispatches for better codegen
@@ -772,12 +768,10 @@ Base._any(f, x::AnyTracedRArray, dims::Colon) = mapreduce(f, |, x; dims)
 
 # outer repeat
 function Base._RepeatInnerOuter.repeat_outer(
-    x::AnyTracedRArray{T,N}, counts::NTuple{M,Int}
-) where {T,N,M}
-    P = max(N, M) # potentially padded
-
+    x::AnyTracedRArray{T,N}, counts::NTuple{N,Any}
+) where {T,N}
     # (d1, d2, ..., dP) -> (d1, 1, d2, 1, ..., dP, 1)
-    interleaved_size = ones(Int, 2P)
+    interleaved_size = ones(Int, 2N)
     interleaved_size[1:2:(2N)] .= size(x)
 
     x_interleaved = reshape(materialize_traced_array(x), interleaved_size...)
@@ -796,7 +790,7 @@ end
 
 # inner repeat
 function Base._RepeatInnerOuter.repeat_inner(
-    x::AnyTracedRArray{T,N}, counts::NTuple{M,Int}
+    x::AnyTracedRArray{T,N}, counts::NTuple{M,Any}
 ) where {T,N,M}
     P = max(N, M) # potentially padded
 
