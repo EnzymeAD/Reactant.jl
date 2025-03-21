@@ -35,6 +35,12 @@ end
 @inline function traced_getfield(
     @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}), field
 )
+    return Base.getfield(obj, field)
+end
+
+@inline function traced_getfield(
+    @nospecialize(obj::Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}), field
+)
     return Base.getindex(obj, field)
 end
 

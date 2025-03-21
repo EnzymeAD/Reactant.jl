@@ -453,9 +453,11 @@ function sharding_to_array_slices(
 end
 
 function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
-    hlo_sharding = generate_hlo_sharding_from_tensor_attribute(sharding)
     device_to_array_slices, hlo_sharding = sharding_to_array_slices(
-        hlo_sharding, size(x); client, return_updated_sharding=Val(true)
+        generate_hlo_sharding_from_tensor_attribute(sharding),
+        size(x);
+        client,
+        return_updated_sharding=Val(true),
     )
 
     data = ntuple(length(hlo_sharding.mesh)) do i
@@ -470,8 +472,12 @@ function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
 end
 
 function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
-    hlo_sharding = generate_hlo_sharding_from_tensor_attribute(sharding)
-    device_to_array_slices = sharding_to_array_slices(hlo_sharding, size(x); client)
+    device_to_array_slices, hlo_sharding = sharding_to_array_slices(
+        generate_hlo_sharding_from_tensor_attribute(sharding),
+        size(x);
+        client,
+        return_updated_sharding=Val(true),
+    )
 
     ifrt_sharding = XLA.IFRT.Sharding(
         vec(Reactant.XLA.get_device.((client,), hlo_sharding.mesh.device_ids)),
