@@ -87,7 +87,9 @@ unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 aos_to_soa(x::AbstractArray) = x
 
 aos_to_soa(x::TracedRArray) = x
-function aos_to_soa(x::AnyTracedRArray{T}) where {T}
+aos_to_soa(x::AnyTracedRArray) = x
+
+function aos_to_soa(x::Array{<:TracedRNumber})
     isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
