@@ -33,9 +33,7 @@ function materialize_traced_array(x::SubArray{<:TracedRNumber})
     return z[axes(z)...]
 end
 
-function materialize_traced_array(
-    x::Base.ReshapedArray{<:TracedRNumber}
-)
+function materialize_traced_array(x::Base.ReshapedArray{<:TracedRNumber})
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
