@@ -87,7 +87,7 @@ function aos_to_soa(x::AnyTracedRArray{T}) where {T}
     ancestor(x) isa TracedRArray && return x
     for i in eachindex(x)
         if !isassigned(x, i)
-            x[i] = TracedUtils.promote_to(T, 0)
+            x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
         end
     end
     return Ops.reshape(vcat(x...), size(x)...)

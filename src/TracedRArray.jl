@@ -205,11 +205,27 @@ end
 function Base.getindex(
     a::WrappedArray{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}...
 ) where {T}
-    return getindex(materialize_traced_array(a), index...)
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...)
 end
 
 function Base.getindex(a::WrappedArray{TracedRNumber{T}}, indices...) where {T}
-    return getindex(materialize_traced_array(a), indices...)
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
+end
+
+## Specialize certain dispatches for better codegen
+for aType in (
+    Base.ReshapedArray{TracedRNumber{T}} where {T},
+    PermutedDimsArray{TracedRNumber{T}} where {T},
+)
+    @eval begin
+        function Base.getindex(a::$aType, indices::Union{Int,TracedRNumber{Int}}...)
+            return getindex(materialize_traced_array(a), indices...)
+        end
+
+        function Base.getindex(a::$aType, indices...)
+            return getindex(materialize_traced_array(a), indices...)
+        end
+    end
 end
 
 function maybe_assert_scalar_setindexing(
