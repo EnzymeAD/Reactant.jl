@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
 
@@ -143,6 +145,8 @@
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace mlir;
 using namespace llvm;
@@ -2381,6 +2385,18 @@ extern "C" void ifrt_hlo_module_cost_analysis_properties(
   ReactantThrowError(("Cost analysis not supported for this client: " +
                       std::string(client->runtime_type()))
                          .c_str());
+}
+
+extern "C" void dump_operation(Operation *op, const char *filename) {
+  std::error_code EC;
+  llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Text);
+
+  if (EC) {
+    std::cerr << "Error opening file: " << EC.message() << std::endl;
+    return;
+  }
+
+  file << *op << "\n";
 }
 
 #pragma endregion
