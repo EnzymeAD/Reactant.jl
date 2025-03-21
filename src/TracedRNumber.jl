@@ -723,6 +723,14 @@ function Base.searchsortedfirst(
     )
 end
 
+function Base.searchsortedfirst(
+    a::AbstractRange{<:TracedRNumber},
+    x::Real,
+    o::Base.DirectOrdering,
+)::TracedRNumber{keytype(a)}
+    Base.searchsortedfirst(a, TracedRNumber(x), o)
+end
+
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
     return trunc(T, Base.round(x))
 end
