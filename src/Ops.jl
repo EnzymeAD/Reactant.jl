@@ -293,39 +293,31 @@ for (dialect, op) in [
 end
 
 @noinline function conj(
-    x::TracedRArray{T,N};
-    location=mlir_stacktrace("conj", @__FILE__, @__LINE__),
+    x::TracedRArray{T,N}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
 ) where {T<:Complex,N}
     res = MLIR.IR.result(
-        chlo.conj(
-            x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location
-        ),
+        chlo.conj(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
     )
     return TracedRArray{T,N}((), res, size(x))
 end
 
 @noinline function conj(
-    x::TracedRNumber{T};
-    location=mlir_stacktrace("conj", @__FILE__, @__LINE__),
+    x::TracedRNumber{T}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
 ) where {T<:Complex}
     res = MLIR.IR.result(
-        chlo.conj(
-            x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location
-        ),
+        chlo.conj(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
     )
     return TracedRNumber{T}((), res)
 end
 
 @noinline function conj(
-    x::TracedRArray{T,N};
-    location=mlir_stacktrace("conj", @__FILE__, @__LINE__),
+    x::TracedRArray{T,N}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
 ) where {T<:Real,N}
     return TracedRArray{T,N}((), x.mlir_data, size(x))
 end
 
 @noinline function conj(
-    x::TracedRNumber{T};
-    location=mlir_stacktrace("conj", @__FILE__, @__LINE__),
+    x::TracedRNumber{T}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
 ) where {T<:Real}
     return TracedRNumber{T}((), x.mlir_data)
 end

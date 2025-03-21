@@ -1129,7 +1129,9 @@ function make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 )
-    make_tracer_unknown(seen, prev, path, mode; track_numbers, sharding, runtime, kwargs...)
+    return make_tracer_unknown(
+        seen, prev, path, mode; track_numbers, sharding, runtime, kwargs...
+    )
 end
 
 function make_tracer(

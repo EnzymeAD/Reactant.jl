@@ -30,7 +30,7 @@ materialize_traced_array(x::TracedRArray) = x
 function materialize_traced_array(x::SubArray{<:TracedRNumber})
     y = materialize_traced_array(x.parent)
     z = SubArray(y, x.indices)
-    z[axes(z)...]
+    return z[axes(z)...]
 end
 
 function materialize_traced_array(
@@ -40,12 +40,12 @@ function materialize_traced_array(
 end
 
 function materialize_traced_array(
-    x::PermutedDimsArray{<:TracedRNumber, <:Any, perm}
-) where perm
+    x::PermutedDimsArray{<:TracedRNumber,<:Any,perm}
+) where {perm}
     return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
-function materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where T
+function materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where {T}
     return Reactant.aos_to_soa(x)
 end
 
