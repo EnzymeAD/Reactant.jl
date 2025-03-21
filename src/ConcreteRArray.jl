@@ -25,8 +25,10 @@ end
 
 Base.strides(x::AbstractConcreteArray) = Base.size_to_strides(1, size(x)...)
 
-function Base.unchecked_oneto(x::AbstractConcreteNumber{<:Integer})
-    return Base.unchecked_oneto(to_number(x))
+@static if isdefined(Base, :unchecked_oneto)
+    function Base.unchecked_oneto(x::AbstractConcreteNumber{<:Integer})
+        return Base.unchecked_oneto(to_number(x))
+    end
 end
 
 # Ensure the device and client are the same as the input

@@ -9,6 +9,15 @@ end
 
 function Array(
     client::Client,
+    array::Reactant.ReactantPrimitive,
+    device::Device=XLA.default_device(client),
+    memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
+)
+    return Array(client, fill(array), device, memory_kind)
+end
+
+function Array(
+    client::Client,
     array::Base.Array{T,N},
     device::Device=XLA.default_device(client),
     memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
