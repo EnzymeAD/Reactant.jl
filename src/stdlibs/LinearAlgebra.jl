@@ -19,7 +19,7 @@ using LinearAlgebra
 # Various Wrapper Arrays defined in LinearAlgebra
 function TracedUtils.materialize_traced_array(
     x::Transpose{TracedRNumber{T}}
-) where {T,N}
+) where {T}
     px = TracedUtils.materialize_traced_array(parent(x))
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
@@ -27,7 +27,7 @@ end
 
 function TracedUtils.materialize_traced_array(
     x::Adjoint{TracedRNumber{T}}
-) where {T,N}
+) where {T}
     return Ops.conj(materialize_traced_array(transpose(parent(x))))
 end
 
