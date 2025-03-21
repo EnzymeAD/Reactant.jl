@@ -158,6 +158,8 @@ for jlop in (
     end
 end
 
+Base.:^(x::AbstractConcreteNumber, y::Integer) = ^(to_number(x), y)
+
 for jlop in (:(Base.isnan), :(Base.isfinite)),
     T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
 
