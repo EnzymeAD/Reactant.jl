@@ -30,8 +30,10 @@ function materialize_traced_array(x::Base.ReshapedArray{TracedRNumber{T}}) where
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
-function materialize_traced_array(x::PermutedDimsArray{TracedRNumber{T}}) where {T}
-    return permutedims(materialize_traced_array(parent(x)), x.perm)
+function materialize_traced_array(
+    x::PermutedDimsArray{TracedRNumber{T},N,perm}
+) where {T,N,perm}
+    return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
@@ -109,6 +111,7 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
 end
 
 get_ancestor_indices(::TracedRArray, indices...) = indices
+get_ancestor_indices(::Array{<:TracedRNumber}, indices...) = indices
 function get_ancestor_indices(x::AnyTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
