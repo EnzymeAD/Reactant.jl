@@ -855,7 +855,7 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     }
   }
 
-  auto exec_err = client->Compile(cmod_op, options);
+  auto exec_err = client->CompileAndLoad(cmod_op, options);
 
   if (!exec_err.ok()) {
     std::string err_str;
