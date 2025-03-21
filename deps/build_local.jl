@@ -147,7 +147,7 @@ for opt in parsed_args["extraopt"]
     push!(build_cmd_list, opt)
 end
 # Some versions of GCC can't deal with some components of XLA, disable them if necessary.
-if cc_is_gcc && build_backend == "cuda"
+if cc_is_gcc
     arch = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform())
     if arch == "x86_64"
         if gcc_version < v"13"
