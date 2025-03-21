@@ -17,6 +17,12 @@ using ..Reactant:
 using ReactantCore: MissingTracedValue, is_traced
 using Functors: Functors
 
+"""
+    materialize_traced_array(AbstractArray{<:TracedRNumber})::TracedRArray
+
+Given an AbstractArray{TracedRNumber}, return or create an equivalent TracedRArray.
+
+"""
 materialize_traced_array(x::AbstractArray) = x
 
 materialize_traced_array(x::TracedRArray) = x
@@ -47,6 +53,10 @@ function materialize_traced_array(
     x::PermutedDimsArray{TracedRNumber{T},N,perm}
 ) where {T,N,perm}
     return permutedims(materialize_traced_array(parent(x)), perm)
+end
+
+function materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where {T}
+    return Reactant.aos_to_soa(x)
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
@@ -693,7 +703,7 @@ function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     return broadcast_to_size_internal(TracedRArray{T,0}((), get_mlir_data(arg), ()), rsize)
 end
 
-function broadcast_to_size(arg::AnyTracedRArray{T,0}, rsize) where {T}
+function broadcast_to_size(arg::AbstractArray{TracedRNumber{T},0}, rsize) where {T}
     arg = materialize_traced_array(arg)
     return broadcast_to_size(TracedRNumber{T}((), get_mlir_data(arg)), rsize)
 end

@@ -1007,7 +1007,7 @@ function make_tracer_via_immutable_constructor(
     return y
 end
 
-function make_tracer(
+function make_tracer_unknown(
     seen,
     @nospecialize(prev),
     @nospecialize(path),
@@ -1117,6 +1117,21 @@ function make_tracer(
     y = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), TT, flds, nf)
     seen[prev] = y
     return y
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    kwargs...,
+)
+    return make_tracer_unknown(
+        seen, prev, path, mode; track_numbers, sharding, runtime, kwargs...
+    )
 end
 
 function make_tracer(

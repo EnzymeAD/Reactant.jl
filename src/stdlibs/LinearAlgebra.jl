@@ -20,7 +20,7 @@ using LinearAlgebra
 function TracedUtils.materialize_traced_array(
     x::Transpose{TracedRNumber{T},<:AnyTracedRArray}
 ) where {T}
-    px = materialize_traced_array(parent(x))
+    px = TracedUtils.materialize_traced_array(parent(x))
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
 end
@@ -28,7 +28,7 @@ end
 function TracedUtils.materialize_traced_array(
     x::Adjoint{TracedRNumber{T},<:AnyTracedRArray}
 ) where {T}
-    return conj(materialize_traced_array(transpose(materialize_traced_array(parent(x)))))
+    return Ops.conj(materialize_traced_array(transpose(materialize_traced_array(parent(x)))))
 end
 
 function TracedUtils.materialize_traced_array(
@@ -50,20 +50,22 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
             x::$(AT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
+            px = TracedUtils.materialize_traced_array(parent(x))
             row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
             col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
             indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(comp))
-            return Ops.select(indicator, parent(x), zero(parent(x)))
+            return Ops.select(indicator, px, zero(px))
         end
 
         function TracedUtils.materialize_traced_array(
             x::$(uAT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
+            px = TracedUtils.materialize_traced_array(parent(x))
             row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
             col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
             nondiag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="NE")
-            x = materialize_traced_array($(AT)(parent(x)))
+            x = materialize_traced_array($(AT)(px))
             return Ops.select(nondiag_indicator, x, one.(x))
         end
     end
