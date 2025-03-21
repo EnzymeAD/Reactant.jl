@@ -1,6 +1,6 @@
 module TracedRArrayOverrides
 
-using Adapt: WrappedReshapedArray, WrappedArray
+using Adapt: WrappedArray
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
@@ -159,7 +159,6 @@ function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {
 end
 
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
-    @show indices
     indices = TracedUtils.normalize_indices(a, indices...)
 
     use_gather_getindex = false
@@ -206,29 +205,11 @@ end
 function Base.getindex(
     a::WrappedArray{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}...
 ) where {T}
-    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...)
+    return getindex(materialize_traced_array(a), index...)
 end
 
 function Base.getindex(a::WrappedArray{TracedRNumber{T}}, indices...) where {T}
-    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
-end
-
-## Specialize certain dispatches for better codegen
-for aType in (
-    WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}} where {T,N,M},
-    PermutedDimsArray{
-        TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}
-    } where {T,N,perm,iperm},
-)
-    @eval begin
-        function Base.getindex(a::$aType, indices::Union{Int,TracedRNumber{Int}}...)
-            return getindex(materialize_traced_array(a), indices...)
-        end
-
-        function Base.getindex(a::$aType, indices...)
-            return getindex(materialize_traced_array(a), indices...)
-        end
-    end
+    return getindex(materialize_traced_array(a), indices...)
 end
 
 function maybe_assert_scalar_setindexing(
