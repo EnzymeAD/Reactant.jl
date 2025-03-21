@@ -28,7 +28,9 @@ end
 function TracedUtils.materialize_traced_array(
     x::Adjoint{TracedRNumber{T},<:AnyTracedRArray}
 ) where {T}
-    return Ops.conj(materialize_traced_array(transpose(materialize_traced_array(parent(x)))))
+    return Ops.conj(
+        materialize_traced_array(transpose(materialize_traced_array(parent(x))))
+    )
 end
 
 function TracedUtils.materialize_traced_array(
