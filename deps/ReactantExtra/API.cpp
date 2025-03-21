@@ -837,7 +837,7 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
   return options;
 }
 
-extern "C" xla::PjRtLoadedExecutable *
+extern "C" xla::PjRtExecutable *
 ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
               bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
               const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner) {
