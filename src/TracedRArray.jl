@@ -432,7 +432,7 @@ for (jlop, hloop, hlocomp, merge) in
     end
 end
 
-function Base.mapreduce(
+function overloaded_mapreduce(
     @nospecialize(f),
     @nospecialize(op),
     @nospecialize(A::AnyTracedRArray{T,N});
@@ -545,7 +545,6 @@ function Base.mapreducedim!(
         return i
     end
     tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
-    # set_mlir_data!(R, get_mlir_data(tmp))
     R .= op.(R, tmp) # match native Julia's behavior
     return R
 end

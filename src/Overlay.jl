@@ -159,3 +159,16 @@ end
         Base.inferencebarrier(Base._unique_dims)(A, dims)
     end
 end
+
+# overlay mapreduce since users often do a reduction over empty collections which can have a
+# Union{} type. Since Union{} <: TracedRNumber it goes through our dispatch, and here we
+# explicitly prevent it from going through our dispatch.
+@reactant_overlay @noinline function Base.mapreduce(
+    f, op, A::AbstractArray{T}; kwargs...
+) where {T}
+    if T <: TracedRNumber && T !== Union{}
+        return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)
+    else
+        return Base.inferencebarrier(Base.mapreduce)(f, op, A; kwargs...)
+    end
+end
