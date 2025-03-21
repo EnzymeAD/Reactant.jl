@@ -1,13 +1,13 @@
 module TracedLinearAlgebra
 
 using ..Reactant:
+    Reactant,
     TracedRArray,
     TracedRNumber,
     AnyTracedRArray,
     AnyTracedRMatrix,
     AnyTracedRVector,
     AnyTracedRVecOrMat,
-    WrappedTracedRArray,
     unwrapped_eltype,
     Ops,
     MLIR
@@ -17,24 +17,30 @@ using ..TracedUtils: TracedUtils, get_mlir_data, materialize_traced_array, set_m
 using LinearAlgebra
 
 # Various Wrapper Arrays defined in LinearAlgebra
-function TracedUtils.materialize_traced_array(x::Transpose{TracedRNumber{T}}) where {T}
+function TracedUtils.materialize_traced_array(
+    x::Transpose{TracedRNumber{T},<:AnyTracedRArray}
+) where {T}
     px = TracedUtils.materialize_traced_array(parent(x))
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
 end
 
-function TracedUtils.materialize_traced_array(x::Adjoint{TracedRNumber{T}}) where {T}
-    return Ops.conj(materialize_traced_array(transpose(parent(x))))
+function TracedUtils.materialize_traced_array(
+    x::Adjoint{TracedRNumber{T},<:AnyTracedRArray}
+) where {T}
+    return Ops.conj(
+        materialize_traced_array(transpose(materialize_traced_array(parent(x))))
+    )
 end
 
 function TracedUtils.materialize_traced_array(
-    x::Diagonal{TracedRNumber{T},<:AbstractArray{<:Any,1}}
+    x::Diagonal{TracedRNumber{T},<:AnyTracedRVector}
 ) where {T}
     return diagm(materialize_traced_array(parent(x)))
 end
 
 function TracedUtils.materialize_traced_array(
-    x::Tridiagonal{TracedRNumber{T},<:AbstractArray{<:Any,1}}
+    x::Tridiagonal{TracedRNumber{T},<:AnyTracedRVector}
 ) where {T}
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
 end
@@ -43,7 +49,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
     uAT = Symbol(:Unit, AT)
     @eval begin
         function TracedUtils.materialize_traced_array(
-            x::$(AT){TracedRNumber{T},<:AbstractArray{<:Any,2}}
+            x::$(AT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
             px = TracedUtils.materialize_traced_array(parent(x))
@@ -54,7 +60,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
         end
 
         function TracedUtils.materialize_traced_array(
-            x::$(uAT){TracedRNumber{T},<:AbstractArray{<:Any,2}}
+            x::$(uAT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
             px = TracedUtils.materialize_traced_array(parent(x))
@@ -68,7 +74,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
 end
 
 function TracedUtils.materialize_traced_array(
-    x::Symmetric{TracedRNumber{T},<:AbstractArray{<:Any,2}}
+    x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}
 ) where {T}
     m, n = size(x)
     row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
@@ -126,7 +132,7 @@ for (AT, dcomp, ocomp) in (
     (:UnitUpperTriangular, "LT", "GE"),
 )
     @eval function TracedUtils.set_mlir_data!(
-        x::$(AT){TracedRNumber{T},TracedRArray{T,2}}, data
+        x::$(AT){TracedRNumber{T},<:AnyTracedRMatrix}, data
     ) where {T}
         tdata = TracedRArray{T}(data)
         z = zero(tdata)
@@ -138,13 +144,13 @@ for (AT, dcomp, ocomp) in (
         res = Ops.add(
             Ops.select(data_indicator, tdata, z), Ops.select(original_indicator, x.data, z)
         )
-        set_mlir_data!(x.data, res.mlir_data)
+        set_mlir_data!(parent(x), res.mlir_data)
         return x
     end
 end
 
 function TracedUtils.set_mlir_data!(
-    x::Symmetric{TracedRNumber{T},TracedRArray{T,2}}, data
+    x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}, data
 ) where {T}
     if x.uplo == 'L'
         set_mlir_data!(LowerTriangular(parent(x)), data)
@@ -155,14 +161,16 @@ function TracedUtils.set_mlir_data!(
 end
 
 function TracedUtils.set_mlir_data!(
-    x::Tridiagonal{TracedRNumber{T},TracedRArray{T,1}}, data
+    x::Tridiagonal{TracedRNumber{T},<:AnyTracedRVector}, data
 ) where {T}
     tdata = TracedRArray{T}(data)
-    set_mlir_data!(x.dl, diag(tdata, -1).mlir_data)
-    set_mlir_data!(x.d, diag(tdata, 0).mlir_data)
-    set_mlir_data!(x.du, diag(tdata, 1).mlir_data)
+    set_mlir_data!(x.dl, materialize_traced_array(diag(tdata, -1)).mlir_data)
+    set_mlir_data!(x.d, materialize_traced_array(diag(tdata, 0)).mlir_data)
+    set_mlir_data!(x.du, materialize_traced_array(diag(tdata, 1)).mlir_data)
     return x
 end
+
+Reactant.aos_to_soa(x::Tridiagonal{TracedRNumber{T}}) where {T} = x
 
 # Core functions
 function overloaded_mul!(
@@ -322,14 +330,7 @@ function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
 end
 
 function LinearAlgebra.ldiv!(
-    B::Union{
-        AbstractArray{<:TracedRNumber{T},1},
-        AbstractArray{<:TracedRNumber{T},2},
-        AnyTracedRArray{T,1},
-        AnyTracedRArray{T,2},
-    },
-    D::Diagonal,
-    A::AbstractVecOrMat,
+    B::Union{AnyTracedRArray{T,1},AnyTracedRArray{T,2}}, D::Diagonal, A::AbstractVecOrMat
 ) where {T}
     LinearAlgebra.require_one_based_indexing(A, B)
     dd = D.diag
@@ -430,5 +431,42 @@ function LinearAlgebra.axpby!(
     set_mlir_data!(y, get_mlir_data(Ops.add(ax, by)))
     return y
 end
+
+# -------------
+# TODO: The following currently drop several safety checks that are present in LinearAlgebra
+#       Once we have auto if tracing we can remove them.
+
+# Base.fill!
+function Base.fill!(
+    A::Union{
+        Diagonal{<:TracedRNumber},
+        Bidiagonal{<:TracedRNumber},
+        Tridiagonal{<:TracedRNumber},
+        SymTridiagonal{<:TracedRNumber},
+    },
+    x,
+)
+    xT = convert(eltype(A), x)
+    LinearAlgebra.fillstored!(A, xT)
+    return A
+end
+
+# Structured Broadcast
+function Base.copyto!(
+    dest::Union{
+        Diagonal{<:TracedRNumber},
+        Bidiagonal{<:TracedRNumber},
+        Tridiagonal{<:TracedRNumber},
+        SymTridiagonal{<:TracedRNumber},
+        LowerTriangular{<:TracedRNumber},
+        UpperTriangular{<:TracedRNumber},
+    },
+    bc::Broadcast.Broadcasted{<:LinearAlgebra.StructuredMatrixStyle},
+)
+    copyto!(dest, convert(Broadcast.Broadcasted{Nothing}, bc))
+    return dest
+end
+
+#-------------
 
 end

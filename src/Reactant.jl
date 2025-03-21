@@ -69,6 +69,10 @@ function TracedRArray(data::MLIR.IR.Value)
     return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
 end
 
+isa_traced_soa(_) = false
+isa_traced_soa(::TracedRArray) = true
+isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
+
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
 unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
@@ -77,16 +81,22 @@ unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
 unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 
-unwrapped_eltype(::Type{<:RArray{T,N}}) where {T,N} = T
 unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
-unwrapped_eltype(::Type{<:AnyTracedRArray{T,N}}) where {T,N} = T
-
-unwrapped_eltype(::RArray{T,N}) where {T,N} = T
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
-unwrapped_eltype(::AnyTracedRArray{T,N}) where {T,N} = T
 
 aos_to_soa(x::AbstractArray) = x
-aos_to_soa(x::AnyTracedRArray) = x
+
+aos_to_soa(x::TracedRArray) = x
+function aos_to_soa(x::AnyTracedRArray{T}) where {T}
+    isa_traced_soa(ancestor(x)) && return x
+    for i in eachindex(x)
+        if !isassigned(x, i)
+            x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
+        end
+    end
+    return Ops.reshape(vcat(x...), size(x)...)
+end
+
 function aos_to_soa(x::AbstractArray{<:ConcretePJRTNumber{T}}) where {T}
     all_clients = XLA.client.(x)
     @assert allequal(all_clients)
@@ -121,14 +131,6 @@ function aos_to_soa(x::AbstractArray{<:ConcreteIFRTNumber{T}}) where {T}
     x_c .= x
     return x_c
 end
-function aos_to_soa(x::AbstractArray{TracedRNumber{T}}) where {T}
-    for i in eachindex(x)
-        if !isassigned(x, i)
-            x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
-        end
-    end
-    return Ops.reshape(vcat(x...), size(x)...)
-end
 
 include("Ops.jl")
 include("TracedUtils.jl")
@@ -145,6 +147,7 @@ use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(::TracedRNG) = true
+use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
@@ -182,15 +185,7 @@ function Enzyme.make_zero(
     return res
 end
 
-using .Compiler:
-    @compile,
-    @code_hlo,
-    @code_mhlo,
-    @jit,
-    @code_xla,
-    traced_getfield,
-    create_result,
-    compile
+using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
 export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,

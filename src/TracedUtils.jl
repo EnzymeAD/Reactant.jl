@@ -3,14 +3,12 @@
 # within compilation. However, it means these functions are a _lot_ faster to compile.
 module TracedUtils
 
-using Adapt: Adapt, WrappedReshapedArray
 using ..Reactant:
     Reactant,
     MLIR,
     RNumber,
     TracedRArray,
     TracedRNumber,
-    WrappedTracedRArray,
     AnyTracedRArray,
     MissingTracedValue,
     OrderedIdDict,
@@ -25,21 +23,35 @@ using Functors: Functors
 Given an AbstractArray{TracedRNumber}, return or create an equivalent TracedRArray.
 
 """
+materialize_traced_array(x::AbstractArray) = x
+
 materialize_traced_array(x::TracedRArray) = x
 
-function materialize_traced_array(x::SubArray{<:TracedRNumber})
-    y = materialize_traced_array(x.parent)
-    z = SubArray(y, x.indices)
+materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
+
+function materialize_traced_array(x::AbstractRange{<:TracedRNumber})
+    return Reactant.aos_to_soa(collect(x))
+end
+
+function materialize_traced_array(x::UnitRange{<:TracedRNumber})
+    return Ops.add(
+        Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1),
+        Ops.fill(first(x), [length(x)]),
+    )
+end
+
+function materialize_traced_array(x::SubArray{TracedRNumber{T}}) where {T}
+    z = SubArray(materialize_traced_array(parent(x)), x.indices)
     return z[axes(z)...]
 end
 
-function materialize_traced_array(x::Base.ReshapedArray{<:TracedRNumber})
+function materialize_traced_array(x::Base.ReshapedArray{TracedRNumber{T}}) where {T}
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
 function materialize_traced_array(
-    x::PermutedDimsArray{<:TracedRNumber,<:Any,perm}
-) where {perm}
+    x::PermutedDimsArray{TracedRNumber{T},N,perm}
+) where {T,N,perm}
     return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
@@ -65,17 +77,16 @@ function set_mlir_data!(x::TracedRArray, data)
     return x
 end
 
-function set_mlir_data!(
-    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, data
-) where {T,N,M}
-    res_mlir_data = Ops.reshape(TracedRArray{T}(data), size(parent(x))...).mlir_data
-    set_mlir_data!(parent(x), res_mlir_data)
+function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
+    set_mlir_data!(
+        parent(x), get_mlir_data(Ops.reshape(TracedRArray{T}(data), size(parent(x))...))
+    )
     return x
 end
 
 function get_ancestor_indices(
-    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, indices...
-) where {T,N,M}
+    x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
+) where {T,N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = normalize_indices(x, indices...)
     if any(is_traced, indices)
@@ -110,9 +121,9 @@ function get_ancestor_indices(
 end
 
 function set_mlir_data!(
-    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}, data
+    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm}, data
 ) where {T,N,perm,iperm}
-    parent(x).mlir_data = permutedims(TracedRArray{T}(data), iperm).mlir_data
+    set_mlir_data!(parent(x), get_mlir_data(permutedims(TracedRArray{T}(data), iperm)))
     return x
 end
 
@@ -123,7 +134,8 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
 end
 
 get_ancestor_indices(::TracedRArray, indices...) = indices
-function get_ancestor_indices(x::WrappedTracedRArray, indices...)
+get_ancestor_indices(::Array{<:TracedRNumber}, indices...) = indices
+function get_ancestor_indices(x::AnyTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
@@ -641,13 +653,27 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
-    return broadcast_to_size(materialize_traced_array(arg), rsize)
+function broadcast_to_size(arg::AnyTracedRArray, rsize)
+    if Reactant.isa_traced_soa(Reactant.ancestor(arg))
+        return broadcast_to_size(materialize_traced_array(arg), rsize)
+    end
+    x = Reactant.aos_to_soa(arg)
+    x === arg && return broadcast_to_size(materialize_traced_array(arg), rsize)
+    return broadcast_to_size(x, rsize)
 end
+
+broadcast_to_size(arg::TracedRArray, rsize) = broadcast_to_size_internal(arg, rsize)
 
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
 
+function broadcast_to_size(arg::AbstractRange{<:TracedRNumber}, rsize)
+    return broadcast_to_size(collect(arg), rsize)
+end
 broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
+
+function broadcast_to_size(arg::UnitRange{<:TracedRNumber}, rsize)
+    return @invoke broadcast_to_size(arg::UnitRange, rsize)
+end
 function broadcast_to_size(arg::UnitRange, rsize)
     # For small inputs this will be automatically optimized away, and for large ranges
     # helps reduce the IR size
@@ -680,12 +706,6 @@ end
 function broadcast_to_size(arg::AbstractArray{TracedRNumber{T},0}, rsize) where {T}
     arg = materialize_traced_array(arg)
     return broadcast_to_size(TracedRNumber{T}((), get_mlir_data(arg)), rsize)
-end
-
-function broadcast_to_size(arg::AnyTracedRArray, rsize)
-    arg = materialize_traced_array(arg)
-    size(arg) == Tuple(rsize) && return arg
-    return broadcast_to_size_internal(arg, rsize)
 end
 
 function broadcast_to_size(arg::Broadcast.Extruded, rsize)

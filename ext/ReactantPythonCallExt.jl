@@ -1,10 +1,7 @@
 module ReactantPythonCallExt
 
 using PythonCall
-using Reactant: Reactant, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber
-using ReactantCore: @trace
-
-using PythonCall
+using Reactant: Reactant, TracedRArray
 
 const jaxptr = Ref{Py}()
 
@@ -26,9 +23,7 @@ const NUMPY_SIMPLE_TYPES = Dict(
     ComplexF64 => :complex128,
 )
 
-function PythonCall.pycall(
-    f::Py, arg0::Reactant.TracedRArray, argNs::Reactant.TracedRArray...; kwargs...
-)
+function PythonCall.pycall(f::Py, arg0::TracedRArray, argNs::TracedRArray...; kwargs...)
     jax = jaxptr[]
     numpy = jax.numpy
     inputs = map((arg0, argNs...)) do arg

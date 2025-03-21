@@ -170,7 +170,7 @@ end
 function fill(
     v, dims::NTuple{N,Integer}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
 ) where {N}
-    return fill(v, collect(dims); location)
+    return fill(v, collect(Int64, dims); location)
 end
 function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__))
     return fill(v, Int[]; location)
@@ -432,7 +432,7 @@ end
 
 # shape ops
 @noinline function reshape(x::TracedRArray, dims::Integer...; kwargs...)
-    return reshape(x, collect(dims); kwargs...)
+    return reshape(x, collect(Int64, dims); kwargs...)
 end
 
 @noinline function reshape(
@@ -442,9 +442,9 @@ end
 ) where {T,N}
     # HLO reshape semantics collapse the opposite way
     res1 = transpose(x, Int64[N:-1:1...])
-    restype = mlir_type(TracedRArray{T,length(dims)}, collect(Base.reverse(dims)))
+    restype = mlir_type(TracedRArray{T,length(dims)}, collect(Int64, Base.reverse(dims)))
     res = MLIR.IR.result(stablehlo.reshape(res1.mlir_data; result_0=restype, location))
-    result = TracedRArray{T,length(dims)}((), res, collect(Base.reverse(dims)))
+    result = TracedRArray{T,length(dims)}((), res, collect(Int64, Base.reverse(dims)))
     # NOTE this last `transpose` is required for consistency with Julia's column-major order
     # do not remove, as it will be optimized away by the compiler
     return transpose(result, Int64[length(dims):-1:1...])
@@ -488,7 +488,7 @@ end
     permutation;
     location=mlir_stacktrace("transpose", @__FILE__, @__LINE__),
 ) where {T,N}
-    rsize = permute!(collect(size(x)), permutation)
+    rsize = permute!(collect(Int64, size(x)), permutation)
     permutation = permutation .- 1
     result = mlir_type(TracedRArray{T,N}, rsize)
     permutation = MLIR.IR.DenseArrayAttribute(permutation)
@@ -655,14 +655,14 @@ end
     elseif type == "RFFT"
         @assert T <: Real
         Tout = Complex{T}
-        rsize = let rsize = collect(size(x))
+        rsize = let rsize = collect(Int64, size(x))
             rsize[end] = rsize[end] == 0 ? 0 : rsize[end] ÷ 2 + 1
             Tuple(rsize)
         end
     elseif type == "IRFFT"
         @assert T <: Complex
         Tout = Base.real(T)
-        rsize = let rsize = collect(size(x))
+        rsize = let rsize = collect(Int64, size(x))
             rsize[(end - Base.length(length) + 1):end] = length
             Tuple(rsize)
         end
@@ -1255,7 +1255,7 @@ end
         stablehlo.reverse(
             x.mlir_data;
             result=mlir_type(TracedRArray{T,N}, size(x)),
-            dimensions=MLIR.IR.DenseArrayAttribute(collect(dimensions .- 1)),
+            dimensions=MLIR.IR.DenseArrayAttribute(collect(Int64, dimensions .- 1)),
             location,
         ),
     )
@@ -1867,7 +1867,7 @@ end
     true_fn_args = true_fn_names[1]
 
     MLIR.IR.activate!(true_fn_body)
-    Ops.activate_constant_context!(true_fn_body)
+    activate_constant_context!(true_fn_body)
     tb_result = try
         for (i, arg) in enumerate(tb_linear_args)
             # find the right path to index the traced arg.
@@ -1891,7 +1891,7 @@ end
         end
         Reactant.call_with_reactant(true_fn, tb_traced_args...)
     finally
-        Ops.deactivate_constant_context!(true_fn_body)
+        deactivate_constant_context!(true_fn_body)
         MLIR.IR.deactivate!(true_fn_body)
     end
 
@@ -2414,7 +2414,7 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
         (input = constant(input; location))
 
     cache = Reactant.Compiler.sdycache()
-    haskey(cache, sharding.mesh) || Ops.mesh(sharding.mesh; location)
+    haskey(cache, sharding.mesh) || mesh(sharding.mesh; location)
     (; sym_name, mesh_attr) = cache[sharding.mesh]
     tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
         sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=false
@@ -2481,7 +2481,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     fn::Function,
     location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
 ) where {T}
-    reduced_shape = Tuple(deleteat!(collect(size(x)), dimensions))
+    reduced_shape = Tuple(deleteat!(collect(Int64, size(x)), dimensions))
 
     result_type = mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)
 

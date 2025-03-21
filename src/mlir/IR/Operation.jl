@@ -139,7 +139,7 @@ end
 
 Return an array of all operands of the operation.
 """
-operands(op) = IR.Value[operand(op, i) for i in 1:noperands(op)]
+operands(op) = Value[operand(op, i) for i in 1:noperands(op)]
 
 """
     operand!(op, i, value)
