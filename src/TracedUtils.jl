@@ -22,7 +22,7 @@ materialize_traced_array(x::TracedRArray) = x
 materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
 
 function materialize_traced_array(x::SubArray{TracedRNumber{T}}) where {T}
-    z = SubArray(materialize_traced_array(parent(x)), x.indices...)
+    z = SubArray(materialize_traced_array(parent(x)), x.indices)
     return z[axes(z)...]
 end
 

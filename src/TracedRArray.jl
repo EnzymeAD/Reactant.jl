@@ -760,7 +760,7 @@ function Base._RepeatInnerOuter.repeat_outer(
 
     # (d1, 1, d2, 1, ..., dP, 1) -> (d1, r1, d2, r2, ..., dP, rP)
     broadcast_target_size = interleaved_size
-    broadcast_target_size[2:2:(2M)] .= counts
+    broadcast_target_size[2:2:(2N)] .= counts
 
     x_broadcasted = TracedUtils.broadcast_to_size(x_interleaved, broadcast_target_size)
 
