@@ -1,6 +1,7 @@
 module TracedLinearAlgebra
 
 using ..Reactant:
+    Reactant,
     TracedRArray,
     TracedRNumber,
     AnyTracedRArray,
@@ -164,6 +165,8 @@ function TracedUtils.set_mlir_data!(
     set_mlir_data!(x.du, materialize_traced_array(diag(tdata, 1)).mlir_data)
     return x
 end
+
+Reactant.aos_to_soa(x::Tridiagonal{TracedRNumber{T}}) where {T} = x
 
 # Core functions
 function overloaded_mul!(
@@ -425,8 +428,11 @@ function LinearAlgebra.axpby!(
     return y
 end
 
+# -------------
+# TODO: The following currently drop several safety checks that are present in LinearAlgebra
+#       Once we have auto if tracing we can remove them.
+
 # Base.fill!
-# TODO: remove once auto-tracing conditionals are supported
 function Base.fill!(
     A::Union{
         Diagonal{<:TracedRNumber},
@@ -440,5 +446,23 @@ function Base.fill!(
     LinearAlgebra.fillstored!(A, xT)
     return A
 end
+
+# Structured Broadcast
+function Base.copyto!(
+    dest::Union{
+        Diagonal{<:TracedRNumber},
+        Bidiagonal{<:TracedRNumber},
+        Tridiagonal{<:TracedRNumber},
+        SymTridiagonal{<:TracedRNumber},
+        LowerTriangular{<:TracedRNumber},
+        UpperTriangular{<:TracedRNumber},
+    },
+    bc::Broadcast.Broadcasted{<:LinearAlgebra.StructuredMatrixStyle},
+)
+    copyto!(dest, convert(Broadcast.Broadcasted{Nothing}, bc))
+    return dest
+end
+
+#-------------
 
 end

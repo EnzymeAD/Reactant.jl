@@ -632,7 +632,9 @@ function broadcast_to_size(arg::AnyTracedRArray, rsize)
     if Reactant.ancestor(arg) isa TracedRArray
         return broadcast_to_size(materialize_traced_array(arg), rsize)
     end
-    return broadcast_to_size(Reactant.aos_to_soa(arg), rsize)
+    x = Reactant.aos_to_soa(arg)
+    x === arg && return broadcast_to_size(materialize_traced_array(arg), rsize)
+    return broadcast_to_size(x, rsize)
 end
 
 broadcast_to_size(arg::TracedRArray, rsize) = broadcast_to_size_internal(arg, rsize)
