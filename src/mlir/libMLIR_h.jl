@@ -477,6 +477,24 @@ function mlirContextSetThreadPool(context, threadPool)
 end
 
 """
+    mlirContextGetNumThreads(context)
+
+Gets the number of threads of the thread pool of the context when multithreading is enabled. Returns 1 if no multithreading.
+"""
+function mlirContextGetNumThreads(context)
+    @ccall mlir_c.mlirContextGetNumThreads(context::MlirContext)::Cuint
+end
+
+"""
+    mlirContextGetThreadPool(context)
+
+Gets the thread pool of the context when enabled multithreading, otherwise an assertion is raised.
+"""
+function mlirContextGetThreadPool(context)
+    @ccall mlir_c.mlirContextGetThreadPool(context::MlirContext)::MlirLlvmThreadPool
+end
+
+"""
     mlirDialectGetContext(dialect)
 
 Returns the context that owns the dialect.
@@ -629,6 +647,71 @@ function mlirLocationFileLineColRangeGet(
 end
 
 """
+    mlirLocationFileLineColRangeGetFilename(location)
+
+Getter for filename of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetFilename(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetFilename(
+        location::MlirLocation
+    )::MlirIdentifier
+end
+
+"""
+    mlirLocationFileLineColRangeGetStartLine(location)
+
+Getter for start\\_line of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetStartLine(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetStartLine(location::MlirLocation)::Cint
+end
+
+"""
+    mlirLocationFileLineColRangeGetStartColumn(location)
+
+Getter for start\\_column of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetStartColumn(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetStartColumn(location::MlirLocation)::Cint
+end
+
+"""
+    mlirLocationFileLineColRangeGetEndLine(location)
+
+Getter for end\\_line of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetEndLine(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetEndLine(location::MlirLocation)::Cint
+end
+
+"""
+    mlirLocationFileLineColRangeGetEndColumn(location)
+
+Getter for end\\_column of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetEndColumn(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetEndColumn(location::MlirLocation)::Cint
+end
+
+"""
+    mlirLocationFileLineColRangeGetTypeID()
+
+TypeID Getter for FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetTypeID()
+    @ccall mlir_c.mlirLocationFileLineColRangeGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsAFileLineColRange(location)
+
+Checks whether the given location is an FileLineColRange.
+"""
+function mlirLocationIsAFileLineColRange(location)
+    @ccall mlir_c.mlirLocationIsAFileLineColRange(location::MlirLocation)::Bool
+end
+
+"""
     mlirLocationCallSiteGet(callee, caller)
 
 Creates a call site location with a callee and a caller.
@@ -637,6 +720,42 @@ function mlirLocationCallSiteGet(callee, caller)
     @ccall mlir_c.mlirLocationCallSiteGet(
         callee::MlirLocation, caller::MlirLocation
     )::MlirLocation
+end
+
+"""
+    mlirLocationCallSiteGetCallee(location)
+
+Getter for callee of CallSite.
+"""
+function mlirLocationCallSiteGetCallee(location)
+    @ccall mlir_c.mlirLocationCallSiteGetCallee(location::MlirLocation)::MlirLocation
+end
+
+"""
+    mlirLocationCallSiteGetCaller(location)
+
+Getter for caller of CallSite.
+"""
+function mlirLocationCallSiteGetCaller(location)
+    @ccall mlir_c.mlirLocationCallSiteGetCaller(location::MlirLocation)::MlirLocation
+end
+
+"""
+    mlirLocationCallSiteGetTypeID()
+
+TypeID Getter for CallSite.
+"""
+function mlirLocationCallSiteGetTypeID()
+    @ccall mlir_c.mlirLocationCallSiteGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsACallSite(location)
+
+Checks whether the given location is an CallSite.
+"""
+function mlirLocationIsACallSite(location)
+    @ccall mlir_c.mlirLocationIsACallSite(location::MlirLocation)::Bool
 end
 
 """
@@ -654,6 +773,53 @@ function mlirLocationFusedGet(ctx, nLocations, locations, metadata)
 end
 
 """
+    mlirLocationFusedGetNumLocations(location)
+
+Getter for number of locations fused together.
+"""
+function mlirLocationFusedGetNumLocations(location)
+    @ccall mlir_c.mlirLocationFusedGetNumLocations(location::MlirLocation)::Cuint
+end
+
+"""
+    mlirLocationFusedGetLocations(location, locationsCPtr)
+
+Getter for locations of Fused. Requires pre-allocated memory of #fusedLocations X sizeof([`MlirLocation`](@ref)).
+"""
+function mlirLocationFusedGetLocations(location, locationsCPtr)
+    @ccall mlir_c.mlirLocationFusedGetLocations(
+        location::MlirLocation, locationsCPtr::Ptr{MlirLocation}
+    )::Cvoid
+end
+
+"""
+    mlirLocationFusedGetMetadata(location)
+
+Getter for metadata of Fused.
+"""
+function mlirLocationFusedGetMetadata(location)
+    @ccall mlir_c.mlirLocationFusedGetMetadata(location::MlirLocation)::MlirAttribute
+end
+
+"""
+    mlirLocationFusedGetTypeID()
+
+TypeID Getter for Fused.
+"""
+function mlirLocationFusedGetTypeID()
+    @ccall mlir_c.mlirLocationFusedGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsAFused(location)
+
+Checks whether the given location is an Fused.
+"""
+function mlirLocationIsAFused(location)
+    @ccall mlir_c.mlirLocationIsAFused(location::MlirLocation)::Bool
+end
+
+"""
     mlirLocationNameGet(context, name, childLoc)
 
 Creates a name location owned by the given context. Providing null location for childLoc is allowed and if childLoc is null location, then the behavior is the same as having unknown child location.
@@ -662,6 +828,42 @@ function mlirLocationNameGet(context, name, childLoc)
     @ccall mlir_c.mlirLocationNameGet(
         context::MlirContext, name::MlirStringRef, childLoc::MlirLocation
     )::MlirLocation
+end
+
+"""
+    mlirLocationNameGetName(location)
+
+Getter for name of Name.
+"""
+function mlirLocationNameGetName(location)
+    @ccall mlir_c.mlirLocationNameGetName(location::MlirLocation)::MlirIdentifier
+end
+
+"""
+    mlirLocationNameGetChildLoc(location)
+
+Getter for childLoc of Name.
+"""
+function mlirLocationNameGetChildLoc(location)
+    @ccall mlir_c.mlirLocationNameGetChildLoc(location::MlirLocation)::MlirLocation
+end
+
+"""
+    mlirLocationNameGetTypeID()
+
+TypeID Getter for Name.
+"""
+function mlirLocationNameGetTypeID()
+    @ccall mlir_c.mlirLocationNameGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsAName(location)
+
+Checks whether the given location is an Name.
+"""
+function mlirLocationIsAName(location)
+    @ccall mlir_c.mlirLocationIsAName(location::MlirLocation)::Bool
 end
 
 """
@@ -2022,6 +2224,24 @@ function mlirValueReplaceAllUsesExcept(of, with, numExceptions, exceptions)
         numExceptions::intptr_t,
         exceptions::Ptr{MlirOperation},
     )::Cvoid
+end
+
+"""
+    mlirValueGetLocation(v)
+
+Gets the location of the value.
+"""
+function mlirValueGetLocation(v)
+    @ccall mlir_c.mlirValueGetLocation(v::MlirValue)::MlirLocation
+end
+
+"""
+    mlirValueGetContext(v)
+
+Gets the context that a value was created with.
+"""
+function mlirValueGetContext(v)
+    @ccall mlir_c.mlirValueGetContext(v::MlirValue)::MlirContext
 end
 
 """
