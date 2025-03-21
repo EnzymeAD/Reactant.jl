@@ -40,6 +40,8 @@ struct CuTracedRNumber{T,A} <: Number
     end
 end
 
+CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
+
 function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     align = alignment(RN)
     return @inbounds unsafe_load(RN.ptr, 1, Val(align))
@@ -49,14 +51,18 @@ function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
     return Base.convert(T, Base.getindex(RN))
 end
 
+Base.convert(::Type{<:CuTracedRNumber{T}}, x::Number) where {T} = T(x)
+
+Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
+
 Base.isless(a::CuTracedRNumber, b::CuTracedRNumber) = Base.isless(a[], b[])
 Base.isless(a, b::CuTracedRNumber) = Base.isless(a, b[])
 Base.isless(a::CuTracedRNumber, b) = Base.isless(a[], b)
 
 Base.one(a::CuTracedRNumber) = one(a[])
-Base.one(::Type{<:CuTracedRNumber{T, A}}) where {T, A} = one(T)
+Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
 Base.zero(a::CuTracedRNumber) = zero(a[])
-Base.zero(::Type{<:CuTracedRNumber{T, A}}) where {T, A} = zero(T)
+Base.zero(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = zero(T)
 
 function Base.promote_rule(
     ::Type{<:CuTracedRNumber{T}}, ::Type{<:CuTracedRNumber{T2}}
