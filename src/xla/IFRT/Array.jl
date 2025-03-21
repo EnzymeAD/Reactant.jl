@@ -150,6 +150,9 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
 
     if reactant_sharding isa Reactant.Sharding.NoSharding
         data_buffer = first(single_device_arrays)
+        data_buffer_shape = reverse(size(data_buffer))
+        @assert size(data) == data_buffer_shape "Expected data to be of size \
+                                                 $(size(data)), got $(data_buffer_shape)"
         GC.@preserve data_buffer data begin
             @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
                 data_buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
@@ -162,30 +165,33 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
     client = XLA.client(buffer)
     all_devices = XLA.get_device.((client,), reactant_sharding.mesh.device_ids)
 
-    # TODO: Test if the below logic for replication works for distributed cases as well
-    if any(!XLA.is_addressable, all_devices)
-        @warn "Not all devices are addressable. Currently we only fill in the data for \
-               addressable devices. Remaining slices of data in `data` are left \
-               untouched."
+    if any(XLA.is_addressable, all_devices)
+        # Take a fast path if all devices are addressable
+        array_slices, _ = XLA.sharding_to_concrete_array_indices(
+            convert(XLA.CondensedOpSharding, reactant_sharding.hlo_sharding),
+            size(data),
+            reactant_sharding.mesh.logical_device_ids,
+        )
+        array_slices = [
+            slice for
+            (device, slice) in zip(all_devices, array_slices) if XLA.is_addressable(device)
+        ]
+
+        @assert length(array_slices) == length(single_device_arrays)
+
+        for (slice, arr) in zip(array_slices, single_device_arrays)
+            data_slice = data isa Base.RefValue ? data : data[slice...]
+            XLA.to_host(arr, data_slice, Reactant.Sharding.NoSharding())
+            data isa Base.RefValue || (data[slice...] .= data_slice)
+        end
     end
 
-    array_slices, _ = XLA.sharding_to_concrete_array_indices(
-        convert(XLA.CondensedOpSharding, reactant_sharding.hlo_sharding),
-        size(data),
-        reactant_sharding.mesh.logical_device_ids,
+    # Here we need to copy data from all the processes to the host
+    arr = replicate_array_to_all_devices(
+        buffer, reactant_sharding, reactant_sharding.mesh, size(data)
     )
-    array_slices = [
-        slice for
-        (device, slice) in zip(all_devices, array_slices) if XLA.is_addressable(device)
-    ]
+    XLA.to_host(arr, data, Reactant.Sharding.NoSharding())
 
-    @assert length(array_slices) == length(single_device_arrays)
-
-    for (slice, arr) in zip(array_slices, single_device_arrays)
-        data_slice = data isa Base.RefValue ? data : data[slice...]
-        XLA.to_host(arr, data_slice, Reactant.Sharding.NoSharding())
-        data isa Base.RefValue || (data[slice...] .= data_slice)
-    end
     return nothing
 end
 
@@ -206,27 +212,36 @@ end
 function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     is_fully_replicated(XLA.sharding(array)) && return array
 
-    hlo_sharding = Reactant.Sharding.HloSharding(
-        convert(XLA.HloSharding, sharding),
-        mesh,
-        ntuple(Returns(1), length(size_arr)),
-        ntuple(Returns(-1), length(size_arr)),
-    )
+    if sharding isa Reactant.Sharding.HloSharding
+        hlo_sharding = sharding
+    else
+        hlo_sharding = Reactant.Sharding.HloSharding(
+            convert(XLA.HloSharding, sharding),
+            mesh,
+            ntuple(Returns(1), length(size_arr)),
+            ntuple(Returns(-1), length(size_arr)),
+        )
+    end
+
     shard_info = Reactant.Sharding.ShardInfo(
         hlo_sharding, Reactant.Sharding.sharding_to_array_slices(hlo_sharding, size_arr)
     )
     sharding_constraint = Reactant.Sharding.NamedSharding(
         mesh, ntuple(Returns(nothing), length(size_arr))
     )
+
     data = Reactant.ConcreteIFRTArray{eltype(array),length(size_arr),typeof(shard_info)}(
         AsyncArray(array, nothing), size_arr, shard_info
     )
 
-    fn(x) = Reactant.Ops.sharding_constraint(x, sharding_constraint)
-
-    fn_compiled = Reactant.compile((data,)) do x
-        return Reactant.Ops.sharding_constraint(x, sharding_constraint)
-    end
+    # TODO: Directly write the MLIR for this part??
+    fn_compiled = Reactant.compile(
+        identity,
+        (data,);
+        shardy_passes=:to_mhlo_shardings,
+        optimize=false,
+        output_shardings=Dict(1 => sharding_constraint),
+    )
 
     return fn_compiled(data).data.buffer
 end

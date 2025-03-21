@@ -126,7 +126,7 @@ function create_result(
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                error("XXX: Implement This")
+                error("TODO: Not yet Implemented. Use IFRT for this.")
             end
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
@@ -141,6 +141,9 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        if haskey(to_unreshard_results, path)
+            error("TODO: Not yet Implemented. Use IFRT for this.")
+        end
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -164,7 +167,7 @@ function create_result(
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                error("XXX: Implement This")
+                error("TODO: Not yet Implemented.")
             end
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
@@ -177,6 +180,9 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        if haskey(to_unreshard_results, path)
+            error("TODO: Not yet Implemented.")
+        end
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
         )
@@ -198,7 +204,7 @@ function create_result(
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                error("XXX: Implement This")
+                error("TODO: Not yet Implemented. Use IFRT for this.")
             end
             sharding = __reconstruct_shardinfo(
                 path, path_to_shard_info, sharding_mesh, ndims(tocopy)
@@ -214,7 +220,7 @@ function create_result(
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         if haskey(to_unreshard_results, path)
-            error("XXX: Implement This")
+            error("TODO: Not yet Implemented. Use IFRT for this.")
         end
         sharding = __reconstruct_shardinfo(
             path, path_to_shard_info, sharding_mesh, ndims(tocopy)
@@ -767,6 +773,8 @@ function compile_mlir!(
     fn_kwargs=(),
     raise::Union{Bool,String}=false,
     input_shardings=nothing,
+    output_shardings=nothing,
+    do_transpose=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
@@ -788,7 +796,15 @@ function compile_mlir!(
 
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(
-            f, args, fn_kwargs, "main", true; input_shardings, runtime
+            f,
+            args,
+            fn_kwargs,
+            "main",
+            true;
+            input_shardings,
+            output_shardings,
+            runtime,
+            do_transpose,
         )
     finally
         deactivate_raising!(is_raising)
