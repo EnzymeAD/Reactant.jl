@@ -177,7 +177,9 @@ function should_rewrite_call(@nospecialize(ft))
         ft <: typeof(Base.show_delim_array) ||
         ft <: typeof(Base.sprint) ||
         ft <: typeof(Adapt.adapt_structure) ||
-        ft <: typeof(Base.Core.is_top_bit_set)
+        ft <: typeof(Core.is_top_bit_set) ||
+        ft <: typeof(Base.setindex_widen_up_to) ||
+        ft <: typeof(Base.typejoin)
         return false
     end
 
