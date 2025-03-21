@@ -159,6 +159,7 @@ function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {
 end
 
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
+    @show indices
     indices = TracedUtils.normalize_indices(a, indices...)
 
     use_gather_getindex = false
@@ -830,23 +831,30 @@ function Base.sort(x::AnyTracedRArray; alg=missing, order=missing, kwargs...)
     return sort!(copy(x); alg, order, kwargs...)
 end
 function Base.sort(x::AnyTracedRVector; alg=missing, order=missing, kwargs...)
-    return sort!(copy(x); alg, order, dims=1, kwargs...)
+    return sort!(copy(x); alg, order, kwargs...)
+end
+
+function Base.sort!(
+    x::AnyTracedRVector; lt=isless, by=identity, rev::Bool=false, alg=missing, order=missing
+)
+    @assert alg === missing "Reactant doesn't support `alg` kwarg for `sort!`"
+    @assert order === missing "Reactant doesn't support `order` kwarg for `sort!`"
+
+    comparator = rev ? (a, b) -> !lt(by(a), by(b)) : (a, b) -> lt(by(a), by(b))
+    res = only(Ops.sort(materialize_traced_array(x); comparator, dimension=1))
+    set_mlir_data!(x, get_mlir_data(res))
+    return x
 end
 
 function Base.sort!(
     x::AnyTracedRArray;
-    dims::Union{Integer,Nothing}=nothing,
+    dims::Integer,
     lt=isless,
     by=identity,
     rev::Bool=false,
     alg=missing,
     order=missing,
 )
-    if dims === nothing
-        @assert ndims(x) == 1
-        dims = 1
-    end
-
     @assert alg === missing "Reactant doesn't support `alg` kwarg for `sort!`"
     @assert order === missing "Reactant doesn't support `order` kwarg for `sort!`"
 
