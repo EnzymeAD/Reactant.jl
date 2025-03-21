@@ -1,3 +1,61 @@
+function traced_type_inner end
+function make_tracer end
+
+"""
+    @leaf type [make_tracer = true]
+
+This marks a type as a leaf type for the purposes of tracing in reactant. This means that
+we won't recurse into the type and it will be left untouched.
+"""
+macro leaf(args...)
+    @assert length(args) ≥ 1
+    orig_type, args = args[1], args[2:end]
+
+    options = Dict{Symbol,Any}()
+    while length(args) ≥ 1
+        if !Meta.isexpr(args[1], :(=))
+            error("Invalid argument $(args[1])")
+        end
+        options[args[1].args[1]] = args[1].args[2]
+        args = args[2:end]
+    end
+
+    subtype = Meta.isexpr(orig_type, :(<:))
+    type = subtype ? orig_type.args[1] : orig_type
+
+    traced_type_inner_expr = quote
+        Base.@nospecializeinfer function Reactant.traced_type_inner(
+            @nospecialize(T::Type{$(orig_type)}),
+            seen,
+            @nospecialize(mode::$(TraceMode)),
+            @nospecialize(track_numbers::Type),
+            @nospecialize(sharding),
+            @nospecialize(runtime),
+        )
+            return T
+        end
+    end
+
+    make_tracer_expr = if get(options, :make_tracer, true)
+        quote
+            function Reactant.make_tracer(
+                seen, @nospecialize(prev::$(type)), @nospecialize(path), mode; kwargs...
+            )
+                return prev
+            end
+        end
+    else
+        :()
+    end
+
+    return esc(
+        quote
+            $traced_type_inner_expr
+            $make_tracer_expr
+        end,
+    )
+end
+
 @enum TraceMode begin
     ConcreteToTraced = 1
     TracedTrack = 2
@@ -14,17 +72,16 @@ end
 
 function traced_type_inner end
 
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{Union{}}), @nospecialize(args...)
-)
-    return T
+for T in (Symbol, Union{})
+    @eval begin
+        @leaf $T make_tracer = false
+    end
 end
 
 for T in (
     DataType,
     Module,
     Nothing,
-    Symbol,
     AbstractChar,
     AbstractString,
     AbstractFloat,
@@ -32,17 +89,10 @@ for T in (
     RNumber,
     Val,
     VersionNumber,
+    Base.ExceptionStack,
+    Core.MethodInstance,
 )
-    @eval Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(T::Type{<:$T}),
-        seen,
-        @nospecialize(mode::TraceMode),
-        @nospecialize(track_numbers::Type),
-        @nospecialize(sharding),
-        @nospecialize(runtime)
-    )
-        return T
-    end
+    @eval @leaf <:$T
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -921,15 +971,6 @@ function Base.showerror(io::IO, err::NoFieldMatchError)
     end
 end
 
-function make_tracer(
-    seen,
-    @nospecialize(prev::Union{Base.ExceptionStack,Core.MethodInstance}),
-    @nospecialize(path),
-    mode;
-    kwargs...,
-)
-    return prev
-end
 append_path(@nospecialize(path), i) = (path..., i)
 
 function make_tracer_via_immutable_constructor(
