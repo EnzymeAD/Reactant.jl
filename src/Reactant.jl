@@ -89,7 +89,7 @@ aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::TracedRArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
 
-function aos_to_soa(x::Array{T}) where {T<:TracedRNumber}
+function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
