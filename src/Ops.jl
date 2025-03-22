@@ -48,28 +48,49 @@ function with_debug(f)
     end
 end
 
-function check_operands_in_same_region(op, operands::Vector{MLIR.IR.Value})
-    parent_regions = map(parent_region, operands)
+get_parent_region(v::MLIR.IR.Value) = MLIR.IR.parent_region(v)
+get_parent_region(op::MLIR.IR.Operation) = MLIR.IR.parent_region(op)
+
+function check_all_in_same_region(args::Union{Vector, Tuple})
+    parent_regions = map(check_all_in_same_region, args)
     @assert allequal(parent_regions) "Operands must be in the same region"
-    return first(parent_regions) == parent_region(op)
+    return
 end
 
+# automatically inserts a `@noinline`
 macro checked(ex)
     # parse the function definition
     @assert Meta.isexpr(ex, :function)
     sig = ex.args[1]
     @assert Meta.isexpr(sig, :call)
+
+    fn_args = Symbol[]
+    for sym in sig.args[2:end]
+        if sym isa Symbol
+            push!(fn_args, sym)
+        elseif Meta.isexpr(sym, :(::))
+            push!(fn_args, sym.args[1])
+        elseif Meta.isexpr(sym, :kw)
+            if sym.args[1] isa Symbol
+                push!(fn_args, sym.args[1])
+            elseif Meta.isexpr(sym.args[1], :(::))
+                push!(fn_args, sym.args[1].args[1])
+            else
+                error("Unsupported argument type: $(sym.args[1])")
+            end
+        end
+    end
+
     body = ex.args[2]
     @assert Meta.isexpr(body, :block)
 
     # make sure these functions are inlined
-    pushfirst!(body.args, Expr(:meta, :inline))
+    pushfirst!(body.args, Expr(:meta, :noinline))
 
     # generate a "safe" version that performs a check
     safe_body = quote
-        @inline
-        # TODO: define `check`
-        check() do
+        @noinline
+        check($(fn_args...)) do
             $body
         end
     end
@@ -81,6 +102,12 @@ macro checked(ex)
     unchecked_def = Expr(:function, unchecked_sig, body)
 
     return esc(:($safe_def, $unchecked_def))
+end
+
+function check(f::Function, args...)
+    result = f()
+    check_all_in_same_region([args, result])
+    return result
 end
 
 @noinline function mlir_stacktrace(name, file, line)::MLIR.IR.Location
