@@ -51,7 +51,22 @@ function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
     return Base.convert(T, Base.getindex(RN))
 end
 
-Base.:/(a::CuTracedRNumber, b::CuTracedRNumber) = (a[]) / (b[])
+
+for jlop in (
+    :(Base.min),
+    :(Base.max),
+    :(Base.:+),
+    :(Base.:-),
+    :(Base.:*),
+    :(Base.:/),
+    :(Base.:^),
+    :(Base.rem),
+)
+    @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
+    @inline $jlop(a::CuTracedRNumber, b) = $jlop(a[], b)
+    @inline $jlop(a, b::CuTracedRNumber) = $jlop(a, b[])
+end
+
 
 Base.convert(CT::Type{<:CuTracedRNumber{T}}, x::Number) where {T} = CT(Base.convert(TracedRNumber{T}, x))
 
