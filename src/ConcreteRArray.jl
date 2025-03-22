@@ -416,6 +416,10 @@ function Base.copyto!(
     return dest
 end
 
+function Base.copyto!(dest::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, src::Array)
+    copyto!(dest, to_rarray(src))
+end
+    return copyto!(dest, to_rarray(src))
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     @eval begin
         function Base.copyto!(
