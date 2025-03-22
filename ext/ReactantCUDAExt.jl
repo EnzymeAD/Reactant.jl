@@ -51,7 +51,6 @@ function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
     return Base.convert(T, Base.getindex(RN))
 end
 
-
 for jlop in (
     :(Base.min),
     :(Base.max),
@@ -63,30 +62,49 @@ for jlop in (
     :(Base.rem),
 )
     @eval begin
-    @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
-    @inline $jlop(a::CuTracedRNumber, b) = $jlop(a[], b)
-    @inline $jlop(a, b::CuTracedRNumber) = $jlop(a, b[])
+        @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
+        @inline $jlop(a::CuTracedRNumber, b) = $jlop(a[], b)
+        @inline $jlop(a, b::CuTracedRNumber) = $jlop(a, b[])
     end
 end
 
+function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
+    return CT(
+        Base.llvmcall(
+            (
+                """define double addrspace(1)* @entry(double %d) alwaysinline {
+          %a = alloca double
+          store double %a, double* %a
+          %ac = addrspacecast double* %a to double addrspace(1)*
+          ret double addrspace(1)* %ac
+                    }
+      """,
+                "entry",
+            ),
+            CT,
+            Tuple{Float64},
+        ),
+    )
+end
 
-Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number) = CT(Base.llvmcall(
-            ("""define double addrspace(1)* @entry(double %d) alwaysinline {
-		     %a = alloca double
-		     store double %a, double* %a
-		     %ac = addrspacecast double* %a to double addrspace(1)*
-		     ret double addrspace(1)* %ac
-                 }
-		 """, "entry"), CT, Tuple{Float64}))
-
-Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number) = CT(Base.llvmcall(
-            ("""define float addrspace(1)* @entry(float %d) alwaysinline {
-		     %a = alloca float
-		     store float %a, float* %a
-		     %ac = addrspacecast float* %a to float addrspace(1)*
-		     ret float addrspace(1)* %ac
-                 }
-		 """, "entry"), CT, Tuple{Float32}))
+function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
+    return CT(
+        Base.llvmcall(
+            (
+                """define float addrspace(1)* @entry(float %d) alwaysinline {
+          %a = alloca float
+          store float %a, float* %a
+          %ac = addrspacecast float* %a to float addrspace(1)*
+          ret float addrspace(1)* %ac
+                    }
+      """,
+                "entry",
+            ),
+            CT,
+            Tuple{Float32},
+        ),
+    )
+end
 
 Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
 
