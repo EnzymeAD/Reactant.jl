@@ -919,7 +919,19 @@ function Base.showerror(io::IO, err::NoFieldMatchError)
         origty = fieldtype(err.origty, i)
         name = fieldname(err.origty, i)
         attemptty = fieldtype(err.besteffort, i)
-        println(io, "name=", name, " idx=", i, " Derived: ", subty, " Existing: ", origty, " Best Attempt: ", attemptty)
+        println(
+            io,
+            "name=",
+            name,
+            " idx=",
+            i,
+            " Derived: ",
+            subty,
+            " Existing: ",
+            origty,
+            " Best Attempt: ",
+            attemptty,
+        )
     end
 end
 
