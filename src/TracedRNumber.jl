@@ -499,11 +499,22 @@ function Base.getindex(
     return Base.unsafe_getindex(r, i)
 end
 
+function unitrange_last(start::Integer, stop::Integer)
+    return ifelse(stop >= start, stop, convert(typeof(stop), start - oneunit(start - stop)))
+end
+function unitrange_last(start, stop)
+    return ifelse(
+        stop >= start,
+        convert(typeof(stop), start + floor(stop - start)),
+        convert(typeof(stop), start - oneunit(start - stop)),
+    )
+end
+
 struct TracedUnitRange{T} <: AbstractUnitRange{T}
     start::T
     stop::T
     function TracedUnitRange{T}(start::T, stop::T) where {T}
-        return new(start, Base.unitrange_last(start, stop))
+        return new(start, unitrange_last(start, stop))
     end
 end
 function TracedUnitRange{T}(start, stop) where {T}
