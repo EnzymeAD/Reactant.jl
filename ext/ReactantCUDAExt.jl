@@ -70,16 +70,16 @@ for jlop in (
 end
 
 
-Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number) where {T,1} = CT(Base.llvmcall(
+Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number) = CT(Base.llvmcall(
             ("""define double addrspace(1)* @entry(double %d) alwaysinline {
 		     %a = alloca double
 		     store double %a, double* %a
 		     %ac = addrspacecast double* %a to double addrspace(1)*
 		     ret double addrspace(1)* %ac
                  }
-		 """, "entry"), CT, Tuple{Float32}))
+		 """, "entry"), CT, Tuple{Float64}))
 
-Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number) where {T,1} = CT(Base.llvmcall(
+Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number) = CT(Base.llvmcall(
             ("""define float addrspace(1)* @entry(float %d) alwaysinline {
 		     %a = alloca float
 		     store float %a, float* %a
