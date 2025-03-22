@@ -66,10 +66,8 @@ for jlop in (
 )
     @eval begin
         @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
-        @inline $jlop(a::CuTracedRNumber{T,A}, b::Number) where {T,A} =
-            $jlop(a, convert(CuTracedRNumber{T,A}, b))
-        @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} =
-            $jlop(convert(CuTracedRNumber{T,A}, a), b)
+        @inline $jlop(a::CuTracedRNumber{T,A}, b::Number) where {T,A} = $jlop(a[], b)
+        @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
     end
 end
 
