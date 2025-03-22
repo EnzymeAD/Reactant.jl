@@ -1007,6 +1007,15 @@ end
     @test res[3] == 216
 end
 
+function unitrange_test(r, i)
+    return r[i]
+end
+@testset "Unitrange" begin
+    x = Reactant.to_rarray(2:10)
+    (@jit unitrange_test(x, 3)) == 4
+    # (@jit unitrange_test(x, Reactant.ConcreteRNumber(3))) == 4
+end
+
 mulpi(x) = π * x
 
 @testset "Irrational promotion" begin
