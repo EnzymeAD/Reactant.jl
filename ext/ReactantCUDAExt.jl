@@ -63,9 +63,6 @@ for jlop in (
     :(Base.:/),
     :(Base.:^),
     :(Base.rem),
-    :(Base.isless),
-    :(Base.:(==)),
-    :(Base.:(!=)),
 )
     @eval begin
         @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
@@ -84,6 +81,14 @@ end
 for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
     @eval begin
         @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
+    end
+end
+
+for jlop in (:(Base.isless), :(Base.:(==)), :(Base.:(!=)))
+    @eval begin
+        @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
+        @inline $jlop(a::CuTracedRNumber{T,A}, b) where {T,A} = $jlop(a[], b)
+        @inline $jlop(a, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
     end
 end
 
