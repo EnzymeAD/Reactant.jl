@@ -125,7 +125,9 @@ function __init__()
         end
 
         if haskey(ENV, "XLA_REACTANT_GPU_PREALLOCATE")
-            XLA_REACTANT_GPU_PREALLOCATE[] = parse(Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"])
+            XLA_REACTANT_GPU_PREALLOCATE[] = parse(
+                Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"]
+            )
             @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[]
         end
 
@@ -144,7 +146,8 @@ function __init__()
             lljit = Enzyme.LLVM.JuliaOJIT()
             jd_main = Enzyme.LLVM.JITDylib(lljit)
 
-            for name in ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
+            for name in
+                ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
                 ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
                 Enzyme.LLVM.define(
                     jd_main,
