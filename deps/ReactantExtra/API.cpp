@@ -2387,6 +2387,8 @@ extern "C" void ifrt_hlo_module_cost_analysis_properties(
                          .c_str());
 }
 
+#pragma endregion
+
 extern "C" void dump_operation(Operation *op, const char *filename) {
   std::error_code EC;
   llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Text);
@@ -2396,10 +2398,8 @@ extern "C" void dump_operation(Operation *op, const char *filename) {
     return;
   }
 
-  file << *op << "\n";
+  op->print(file, mlir::OpPrintingFlags().enableDebugInfo(true, false));
 }
-
-#pragma endregion
 
 extern "C" bool pjrt_device_is_addressable(PjRtDevice *device) {
   return device->IsAddressable();
