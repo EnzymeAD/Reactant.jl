@@ -63,32 +63,20 @@ for jlop in (
     :(Base.:/),
     :(Base.:^),
     :(Base.rem),
+    :(Base.isless),
+    :(Base.:(==)),
+    :(Base.:(!=)),
 )
     @eval begin
         @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
-<<<<<<< HEAD
         @inline $jlop(a::CuTracedRNumber{T,A}, b::Number) where {T,A} = $jlop(a[], b)
         @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
-=======
-        @inline $jlop(a::CuTracedRNumber{T,A}, b::Number) where {T,A} =
-            $jlop(a, convert(CuTracedRNumber{T,A}, b))
-        @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} =
-            $jlop(convert(CuTracedRNumber{T,A}, a), b)
->>>>>>> 24d2ff49 (Apply suggestions from code review)
     end
 end
 
 for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
     @eval begin
         @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
-    end
-end
-
-for jlop in (:(Base.isless), :(Base.:(==)), :(Base.:(!=)))
-    @eval begin
-        @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
-        @inline $jlop(a::CuTracedRNumber{T,A}, b) where {T,A} = $jlop(a[], b)
-        @inline $jlop(a, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
     end
 end
 
