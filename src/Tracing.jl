@@ -917,7 +917,21 @@ function Base.showerror(io::IO, err::NoFieldMatchError)
     )
     for (i, subty) in zip(1:fieldcount(err.origty), err.subTys)
         origty = fieldtype(err.origty, i)
-        println(io, "idx=", i, " Derived: ", subty, " Existing: ", origty)
+        name = fieldname(err.origty, i)
+        attemptty = fieldtype(err.besteffort, i)
+        println(
+            io,
+            "name=",
+            name,
+            " idx=",
+            i,
+            " Derived: ",
+            subty,
+            " Existing: ",
+            origty,
+            " Best Attempt: ",
+            attemptty,
+        )
     end
 end
 
