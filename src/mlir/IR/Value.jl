@@ -66,6 +66,8 @@ function owner(value::Value)
     end
 end
 
+parent_region(value::Value) = parent_region(owner(value))
+
 """
     block_arg_num(value)
 

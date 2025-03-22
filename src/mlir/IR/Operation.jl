@@ -69,6 +69,13 @@ parent_op(operation::Operation) =
     Operation(API.mlirOperationGetParentOperation(operation), false)
 
 """
+    parent_region(op)
+
+Gets the region that owns this operation.
+"""
+parent_region(operation::Operation) = parent_region(block(operation))
+
+"""
     rmfromparent!(op)
 
 Removes the given operation from its parent block. The operation is not destroyed.

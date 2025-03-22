@@ -48,6 +48,41 @@ function with_debug(f)
     end
 end
 
+function check_operands_in_same_region(op, operands::Vector{MLIR.IR.Value})
+    parent_regions = map(parent_region, operands)
+    @assert allequal(parent_regions) "Operands must be in the same region"
+    return first(parent_regions) == parent_region(op)
+end
+
+macro checked(ex)
+    # parse the function definition
+    @assert Meta.isexpr(ex, :function)
+    sig = ex.args[1]
+    @assert Meta.isexpr(sig, :call)
+    body = ex.args[2]
+    @assert Meta.isexpr(body, :block)
+
+    # make sure these functions are inlined
+    pushfirst!(body.args, Expr(:meta, :inline))
+
+    # generate a "safe" version that performs a check
+    safe_body = quote
+        @inline
+        # TODO: define `check`
+        check() do
+            $body
+        end
+    end
+    safe_sig = Expr(:call, sig.args[1], sig.args[2:end]...)
+    safe_def = Expr(:function, safe_sig, safe_body)
+
+    # generate a "unchecked" version that returns the error code instead
+    unchecked_sig = Expr(:call, Symbol("unchecked_", sig.args[1]), sig.args[2:end]...)
+    unchecked_def = Expr(:function, unchecked_sig, body)
+
+    return esc(:($safe_def, $unchecked_def))
+end
+
 @noinline function mlir_stacktrace(name, file, line)::MLIR.IR.Location
     # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
     if !DEBUG_MODE[]

@@ -979,6 +979,7 @@ function get_field_offset(T::Type, path)
     return offset
 end
 
+# TODO: Move to a proper Ops.kernel_call at some point
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(true),
