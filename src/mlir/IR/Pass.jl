@@ -64,6 +64,8 @@ function enable_verifier!(pm, enable=true)
     return pm
 end
 
+const DUMP_MLIR_DIR = Ref{Union{Nothing,String}}(nothing)
+
 """
     run!(passManager, module)
 
@@ -76,16 +78,28 @@ function run!(pm::PassManager, mod::Module)
         API.mlirPassManagerRun(pm, mod)
     end)
     if isfailure(status)
-        dir = mktempdir()
-        path = joinpath(dir, "module.mlir")
-        open(path, "w") do io
-            println(io, "// Pass pipeline:")
-            print(io, "// ")
-            print_pass_pipeline(io, OpPassManager(pm))
-            println(io)
-            show(IOContext(io, :debug => true), mod)
+        # If `DUMP_MLIR_DIR` is `nothing`, create a persistent new temp
+        # directory, otherwise use the provided path.
+        dir = if isnothing(DUMP_MLIR_DIR[])
+            mktempdir(; prefix="reactant_", cleanup=false)
+        else
+            DUMP_MLIR_DIR[]
         end
-        @error "Dumped module to " * path
+        try
+            # Make sure the directory exists
+            mkpath(dir)
+            path = tempname(dir; cleanup=false) * ".mlir"
+            open(path, "w") do io
+                println(io, "// Pass pipeline:")
+                print(io, "// ")
+                print_pass_pipeline(io, OpPassManager(pm))
+                println(io)
+                show(IOContext(io, :debug => true), mod)
+            end
+            @error "Dumped module to " * path
+        catch err
+            @error "Couldn't save MLIR module" exception = err
+        end
         throw("failed to run pass manager on module")
     end
     return mod
