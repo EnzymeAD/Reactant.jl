@@ -104,53 +104,58 @@ function update_global_state!(args...; kwargs...)
 end
 
 function __init__()
-    # This must be the very first thing initialized (otherwise we can't throw errors)
-    errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
-    unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
+    if Reactant_jll.is_available()
+        # This must be the very first thing initialized (otherwise we can't throw errors)
+        errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
+        unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
 
-    initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
-    ccall(initLogs, Cvoid, ())
-    # Add most log level
-    # SetLogLevel(0)
+        initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
+        ccall(initLogs, Cvoid, ())
+        # Add most log level
+        # SetLogLevel(0)
 
-    if haskey(ENV, "XLA_REACTANT_GPU_MEM_FRACTION")
-        XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
-            Float64, ENV["XLA_REACTANT_GPU_MEM_FRACTION"]
-        )
-        @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[]
-        if XLA_REACTANT_GPU_MEM_FRACTION[] > 1 || XLA_REACTANT_GPU_MEM_FRACTION[] < 0
-            error("XLA_REACTANT_GPU_MEM_FRACTION must be between 0 and 1")
-        end
-    end
-
-    if haskey(ENV, "XLA_REACTANT_GPU_PREALLOCATE")
-        XLA_REACTANT_GPU_PREALLOCATE[] = parse(Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"])
-        @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[]
-    end
-
-    if haskey(ENV, "REACTANT_VISIBLE_GPU_DEVICES")
-        global_state.local_gpu_device_ids =
-            parse.(Int, split(ENV["REACTANT_VISIBLE_GPU_DEVICES"], ","))
-        @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids
-    end
-
-    @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME
-
-    @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
-    @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
-
-    @static if !Sys.isapple()
-        lljit = Enzyme.LLVM.JuliaOJIT()
-        jd_main = Enzyme.LLVM.JITDylib(lljit)
-
-        for name in ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
-            ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-            Enzyme.LLVM.define(
-                jd_main,
-                Enzyme.Compiler.JIT.absolute_symbol_materialization(
-                    Enzyme.LLVM.mangle(lljit, name), ptr
-                ),
+        if haskey(ENV, "XLA_REACTANT_GPU_MEM_FRACTION")
+            XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
+                Float64, ENV["XLA_REACTANT_GPU_MEM_FRACTION"]
             )
+            @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[]
+            if XLA_REACTANT_GPU_MEM_FRACTION[] > 1 || XLA_REACTANT_GPU_MEM_FRACTION[] < 0
+                error("XLA_REACTANT_GPU_MEM_FRACTION must be between 0 and 1")
+            end
+        end
+
+        if haskey(ENV, "XLA_REACTANT_GPU_PREALLOCATE")
+            XLA_REACTANT_GPU_PREALLOCATE[] = parse(
+                Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"]
+            )
+            @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[]
+        end
+
+        if haskey(ENV, "REACTANT_VISIBLE_GPU_DEVICES")
+            global_state.local_gpu_device_ids =
+                parse.(Int, split(ENV["REACTANT_VISIBLE_GPU_DEVICES"], ","))
+            @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids
+        end
+
+        @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME
+
+        @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
+        @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
+
+        @static if !Sys.isapple()
+            lljit = Enzyme.LLVM.JuliaOJIT()
+            jd_main = Enzyme.LLVM.JITDylib(lljit)
+
+            for name in
+                ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
+                ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+                Enzyme.LLVM.define(
+                    jd_main,
+                    Enzyme.Compiler.JIT.absolute_symbol_materialization(
+                        Enzyme.LLVM.mangle(lljit, name), ptr
+                    ),
+                )
+            end
         end
     end
 
