@@ -112,6 +112,10 @@ function synchronize(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
     return nothing
 end
 
+function to_number(tp::Base.TwicePrecision)
+    return Base.TwicePrecision(to_number(tp.hi), to_number(tp.lo))
+end
+
 to_number(x::Number) = x
 
 function to_number(X::ConcretePJRTScalar{T}) where {T}
@@ -153,6 +157,8 @@ for jlop in (
         $(jlop)(x::Number, y::$(T)) = $(jlop)(x, to_number(y))
     end
 end
+
+Base.:^(x::AbstractConcreteNumber, y::Integer) = ^(to_number(x), y)
 
 for jlop in (:(Base.isnan), :(Base.isfinite)),
     T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})

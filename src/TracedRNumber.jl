@@ -506,6 +506,15 @@ struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
     offset::L
 end
 
+function Base.Array(x::TracedStepRangeLen{<:Reactant.AbstractConcreteNumber})
+    return StepRangeLen(
+        Reactant.to_number(x.ref),
+        Reactant.to_number(x.step),
+        Reactant.to_number(x.len),
+        Reactant.to_number(x.offset),
+    )
+end
+
 function Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L}
     return TracedStepRangeLen{T,R,S,L}
 end
