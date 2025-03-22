@@ -502,37 +502,54 @@ end
 struct TracedUnitRange{T} <: AbstractUnitRange{T}
     start::T
     stop::T
-    TracedUnitRange{T}(start::T, stop::T) where {T} = new(start, Base.unitrange_last(start, stop))
+    function TracedUnitRange{T}(start::T, stop::T) where {T}
+        return new(start, Base.unitrange_last(start, stop))
+    end
 end
-TracedUnitRange{T}(start, stop) where T = TracedUnitRange{T}(convert(T, start), convert(T, stop))
-TracedUnitRange(start::T, stop::T) where T = TracedUnitRange{T}(start, stop)
+function TracedUnitRange{T}(start, stop) where {T}
+    return TracedUnitRange{T}(convert(T, start), convert(T, stop))
+end
+TracedUnitRange(start::T, stop::T) where {T} = TracedUnitRange{T}(start, stop)
 function TracedUnitRange(start, stop)
     startstop_promoted = promote(start, stop)
     not_sametype((start, stop), startstop_promoted)
-    TracedUnitRange(startstop_promoted...)
+    return TracedUnitRange(startstop_promoted...)
 end
-Base._in_unit_range(v::TracedUnitRange, val, i::Union{Integer, TracedRNumber{<:Integer}}) = (i > 0) & (val <= v.stop) & (val >= v.start)
+function Base._in_unit_range(
+    v::TracedUnitRange, val, i::Union{Integer,TracedRNumber{<:Integer}}
+)
+    return (i > 0) & (val <= v.stop) & (val >= v.start)
+end
 
-function Base._getindex(v::TracedUnitRange{T}, i::Union{Integer, TracedRNumber{<:Integer}}) where T
+function Base._getindex(
+    v::TracedUnitRange{T}, i::Union{Integer,TracedRNumber{<:Integer}}
+) where {T}
     val = convert(T, v.start + (i - oneunit(i)))
     # TODO: we should have error messages at some point.
     # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
-    val
+    return val
 end
 Base.getindex(r::TracedUnitRange, i::TracedRNumber) = Base._getindex(r, i)
 
-Base.promote_rule(a::Type{TracedUnitRange{T1}}, b::Type{TracedUnitRange{T2}}) where {T1,T2} =
-    el_same(promote_type(T1, T2), a, b)
+function Base.promote_rule(
+    a::Type{TracedUnitRange{T1}}, b::Type{TracedUnitRange{T2}}
+) where {T1,T2}
+    return el_same(promote_type(T1, T2), a, b)
+end
 TracedUnitRange{T}(r::TracedUnitRange{T}) where {T<:Real} = r
 TracedUnitRange{T}(r::TracedUnitRange) where {T<:Real} = TracedUnitRange{T}(r.start, r.stop)
 
-Base.promote_rule(a::Type{TracedUnitRange{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
-    promote_rule(a, TracedUnitRange{eltype(UR)})
-TracedUnitRange{T}(r::AbstractUnitRange) where {T<:Real} = TracedUnitRange{T}(first(r), last(r))
+function Base.promote_rule(
+    a::Type{TracedUnitRange{T1}}, ::Type{UR}
+) where {T1,UR<:AbstractUnitRange}
+    return promote_rule(a, TracedUnitRange{eltype(UR)})
+end
+function TracedUnitRange{T}(r::AbstractUnitRange) where {T<:Real}
+    return TracedUnitRange{T}(first(r), last(r))
+end
 TracedUnitRange(r::AbstractUnitRange) = TracedUnitRange(first(r), last(r))
 
 AbstractUnitRange{T}(r::TracedUnitRange) where {T} = TracedUnitRange{T}(r)
-
 
 struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
     ref::R

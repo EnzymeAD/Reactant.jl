@@ -1867,11 +1867,9 @@ function Reactant.traced_type_inner(
         modified_track_numbers = track_numbers
     end
 
-    (T, ) = RT.parameters
+    (T,) = RT.parameters
     return TracedRNumberOverrides.TracedUnitRange{
-        Reactant.traced_type_inner(
-            T, seen, mode, modified_track_numbers, sharding, runtime
-        ),
+        Reactant.traced_type_inner(T, seen, mode, modified_track_numbers, sharding, runtime)
     }
 end
 
@@ -1883,8 +1881,7 @@ function Reactant.make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
-    Reactant.Sharding.is_sharded(sharding) &&
-        error("Cannot specify sharding for UnitRange")
+    Reactant.Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
     if mode == Reactant.TracedToTypes
         push!(path, Core.Typeof(prev))
         make_tracer(seen, prev.start, path, mode; kwargs...)
@@ -1907,7 +1904,7 @@ function Reactant.make_tracer(
             mode;
             kwargs...,
             track_numbers=Number,
-        )
+        ),
     )
 end
 
