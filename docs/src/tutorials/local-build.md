@@ -1,4 +1,4 @@
-# [Local build of ReactantExtra](@ref local-build)
+# [Local build of ReactantExtra](@id local-build)
 
 In the `deps/` subdirectory of the Reactant repository there is a script to do local builds of ReactantExtra, including debug builds.
 
@@ -61,7 +61,14 @@ optional arguments:
 
 If you try to do the build on certain systems where there are in place restrictions on the number of processes or memory that your user can use (for example login node of clusters), you may have to limit the number of parallel jobs used by Bazel.
 By default Bazel would try to use the maximum number of CPUs available on the system, if you need reduce that pass the `--jobs JOBS` flag option.
-The Bazel server may be terminated abruptly if using too much memory (e.g. if concurrent compiler processes are cumulatively using a large amount of memory), also in this case reducing the number of parallel jobs may be beneficial.
+If the Bazel server is terminated abruptly with an error which looks like
+
+```
+Server terminated abruptly (error code: 14, error message: 'Socket closed', log file: '/path/to/server/jvm.out')
+```
+
+that may be due to the fact that the build process was using too many resources (e.g. if concurrent compiler processes are cumulatively using too much memory or too many threads).
+Also in this case reducing the number of parallel jobs may be beneficial.
 
 ### CUDA debug build
 
@@ -72,8 +79,8 @@ NOTE: the option `-fuse-ld=mold` was added in GCC 12, if you're trying to use an
 ### Optimised build with debug symbols
 
 Unoptimised builds of Reactant can be _extremely_ slow at runtime.
-You may have more luck by doing an optimised build but retain (don't strip) the debug symbols, which in Bazel can achieved with the options `--strip never --copt -g -c opt`.
-To do that using this `build_local.jl` script pass the options `--extraopt '--strip never' --copt -g` (optimised builds are the default, unless you use `--debug`).
+You may have more luck by doing an optimised build but retain (don't strip) the debug symbols, which in Bazel can achieved with the options `--strip=never --copt -g -c opt`.
+To do that using this `build_local.jl` script pass the options `--extraopt '--strip=never' --copt -g` (optimised builds are the default, unless you use `--debug`).
 
 ### Using ccache
 
