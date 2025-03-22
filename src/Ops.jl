@@ -1756,7 +1756,8 @@ end
             seen_args,
             args[i],
             (),
-            Reactant.NoStopTracedTrack, #; track_numbers=Number
+            Reactant.NoStopTracedTrack;
+            track_numbers=Number
         )
     end
 
