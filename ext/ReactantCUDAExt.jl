@@ -38,7 +38,6 @@ struct CuTracedRNumber{T,A} <: Number
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
-    
     function CuTracedRNumber{T,A}(ptr::Core.LLVMPtr{T,A}) where {T,A}
         return new(ptr)
     end
@@ -83,9 +82,9 @@ function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
       """,
                 "entry",
             ),
-            Core.LLVMPtr{Float64, 1},
+            Core.LLVMPtr{Float64,1},
             Tuple{Float64},
-            Base.convert(Float64, x)
+            Base.convert(Float64, x),
         ),
     )
 end
@@ -105,7 +104,7 @@ function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
             ),
             Core.LLVMPtr{Float32,1},
             Tuple{Float32},
-            Base.convert(Float32, x)
+            Base.convert(Float32, x),
         ),
     )
 end
