@@ -62,9 +62,11 @@ for jlop in (
     :(Base.:^),
     :(Base.rem),
 )
+    @eval begin
     @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
     @inline $jlop(a::CuTracedRNumber, b) = $jlop(a[], b)
     @inline $jlop(a, b::CuTracedRNumber) = $jlop(a, b[])
+    end
 end
 
 
