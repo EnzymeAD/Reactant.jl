@@ -1013,7 +1013,7 @@ end
 @testset "Unitrange" begin
     x = Reactant.to_rarray(2:10)
     (@jit unitrange_test(x, 3)) == 4
-    # (@jit unitrange_test(x, Reactant.ConcreteRNumber(3))) == 4
+    (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
 end
 
 mulpi(x) = π * x
