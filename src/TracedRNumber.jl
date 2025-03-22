@@ -499,23 +499,24 @@ function Base.getindex(
     return Base.unsafe_getindex(r, i)
 end
 
-struct TracedUnitRange{T<:Union{TracedRNumber{<:Real}, Real}} <: AbstractUnitRange{T}
+struct TracedUnitRange{T} <: AbstractUnitRange{T}
     start::T
     stop::T
-    TracedUnitRange{T}(start::T, stop::T) where {T} = new(start, unitrange_last(start, stop))
+    TracedUnitRange{T}(start::T, stop::T) where {T} = new(start, Base.unitrange_last(start, stop))
 end
 TracedUnitRange{T}(start, stop) where T = TracedUnitRange{T}(convert(T, start), convert(T, stop))
-TracedUnitRange(start::T, stop::T) where T = v{T}(start, stop)
+TracedUnitRange(start::T, stop::T) where T = TracedUnitRange{T}(start, stop)
 function TracedUnitRange(start, stop)
     startstop_promoted = promote(start, stop)
     not_sametype((start, stop), startstop_promoted)
     TracedUnitRange(startstop_promoted...)
 end
-Base._in_unit_range(v::TracedUnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
+Base._in_unit_range(v::TracedUnitRange, val, i::Union{Integer, TracedRNumber{<:Integer}}) = (i > 0) & (val <= v.stop) & (val >= v.start)
 
 function Base._getindex(v::TracedUnitRange{T}, i::Integer) where T
     val = convert(T, v.start + (i - oneunit(i)))
-    @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
+    # TODO: we should have error messages at some point.
+    # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
     val
 end
 

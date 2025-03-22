@@ -1880,6 +1880,7 @@ function Reactant.make_tracer(
     @nospecialize(prev::UnitRange),
     @nospecialize(path),
     mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
     Reactant.Sharding.is_sharded(sharding) &&
@@ -1893,7 +1894,7 @@ function Reactant.make_tracer(
     return TracedRNumberOverrides.TracedUnitRange(
         Reactant.make_tracer(
             seen,
-            prev.stop,
+            prev.start,
             Reactant.append_path(path, :start),
             mode;
             kwargs...,
@@ -1945,16 +1946,17 @@ function Reactant.make_tracer(
     @nospecialize(prev::StepRangeLen),
     @nospecialize(path),
     mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
     Reactant.Sharding.is_sharded(sharding) &&
         error("Cannot specify sharding for StepRangeLen")
     if mode == Reactant.TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.ref, path, mode; kwargs...)
-        make_tracer(seen, prev.step, path, mode; kwargs...)
-        make_tracer(seen, prev.len, path, mode; kwargs...)
-        make_tracer(seen, prev.offset, path, mode; kwargs...)
+        make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.len, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
         return nothing
     end
     return TracedRNumberOverrides.TracedStepRangeLen(
@@ -1963,6 +1965,7 @@ function Reactant.make_tracer(
             prev.ref,
             Reactant.append_path(path, :ref),
             mode;
+            sharding,
             kwargs...,
             track_numbers=Number,
         ),
@@ -1971,6 +1974,7 @@ function Reactant.make_tracer(
             prev.step,
             Reactant.append_path(path, :step),
             mode;
+            sharding,
             kwargs...,
             track_numbers=Number,
         ),
@@ -1979,6 +1983,7 @@ function Reactant.make_tracer(
             prev.len,
             Reactant.append_path(path, :len),
             mode;
+            sharding,
             kwargs...,
             track_numbers=Number,
         ),
@@ -1987,6 +1992,7 @@ function Reactant.make_tracer(
             prev.offset,
             Reactant.append_path(path, :offset),
             mode;
+            sharding,
             kwargs...,
             track_numbers=Number,
         ),
