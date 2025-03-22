@@ -71,7 +71,7 @@ end
 
 
 Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number) where {T,1} = CT(Base.llvmcall(
-            $("""define double addrspace(1)* @entry(double %d) alwaysinline {
+            ("""define double addrspace(1)* @entry(double %d) alwaysinline {
 		     %a = alloca double
 		     store double %a, double* %a
 		     %ac = addrspacecast double* %a to double addrspace(1)*
@@ -80,7 +80,7 @@ Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number) where {T,1} = CT(B
 		 """, "entry"), CT, Tuple{Float32}))
 
 Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number) where {T,1} = CT(Base.llvmcall(
-            $("""define float addrspace(1)* @entry(float %d) alwaysinline {
+            ("""define float addrspace(1)* @entry(float %d) alwaysinline {
 		     %a = alloca float
 		     store float %a, float* %a
 		     %ac = addrspacecast float* %a to float addrspace(1)*
