@@ -69,16 +69,11 @@ for jlop in (
     end
 end
 
-
-for jlop in (
-    :(Base.:+),
-    :(Base.:-),
-)
+for jlop in (:(Base.:+), :(Base.:-))
     @eval begin
         @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
     end
 end
-
 
 function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
     return CT(
