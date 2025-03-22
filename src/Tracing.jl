@@ -1854,6 +1854,63 @@ end
 end
 
 function Reactant.traced_type_inner(
+    @nospecialize(RT::Type{<:UnitRange{<:RNumber}}),
+    seen,
+    mode::Reactant.TraceMode,
+    track_numbers::Type,
+    sharding,
+    runtime,
+)
+    if !(Number <: track_numbers)
+        modified_track_numbers = Number
+    else
+        modified_track_numbers = track_numbers
+    end
+
+    (T, ) = RT.parameters
+    return TracedRNumberOverrides.TracedUnitRange{
+        Reactant.traced_type_inner(
+            T, seen, mode, modified_track_numbers, sharding, runtime
+        ),
+    }
+end
+
+function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::UnitRange),
+    @nospecialize(path),
+    mode;
+    kwargs...,
+)
+    Reactant.Sharding.is_sharded(sharding) &&
+        error("Cannot specify sharding for UnitRange")
+    if mode == Reactant.TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.start, path, mode; kwargs...)
+        make_tracer(seen, prev.stop, path, mode; kwargs...)
+        return nothing
+    end
+    return TracedRNumberOverrides.TracedUnitRange(
+        Reactant.make_tracer(
+            seen,
+            prev.stop,
+            Reactant.append_path(path, :start),
+            mode;
+            kwargs...,
+            track_numbers=Number,
+        ),
+        Reactant.make_tracer(
+            seen,
+            prev.stop,
+            Reactant.append_path(path, :stop),
+            mode;
+            kwargs...,
+            track_numbers=Number,
+        )
+    )
+end
+
+function Reactant.traced_type_inner(
     @nospecialize(RT::Type{<:StepRangeLen}),
     seen,
     mode::Reactant.TraceMode,
@@ -1888,7 +1945,6 @@ function Reactant.make_tracer(
     @nospecialize(prev::StepRangeLen),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
     Reactant.Sharding.is_sharded(sharding) &&
