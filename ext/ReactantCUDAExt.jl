@@ -38,6 +38,10 @@ struct CuTracedRNumber{T,A} <: Number
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
+    
+    function CuTracedRNumber{T,A}(ptr::Core.LLVMPtr{T,A}) where {T,A}
+        return new(ptr)
+    end
 end
 
 CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
@@ -63,8 +67,6 @@ for jlop in (
 )
     @eval begin
         @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
-        @inline $jlop(a::CuTracedRNumber, b) = $jlop(a[], b)
-        @inline $jlop(a, b::CuTracedRNumber) = $jlop(a, b[])
     end
 end
 
@@ -74,15 +76,16 @@ function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
             (
                 """define double addrspace(1)* @entry(double %d) alwaysinline {
           %a = alloca double
-          store double %a, double* %a
+          store double %d, double* %a
           %ac = addrspacecast double* %a to double addrspace(1)*
           ret double addrspace(1)* %ac
                     }
       """,
                 "entry",
             ),
-            CT,
+            Core.LLVMPtr{Float64, 1},
             Tuple{Float64},
+            Base.convert(Float64, x)
         ),
     )
 end
@@ -93,15 +96,16 @@ function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
             (
                 """define float addrspace(1)* @entry(float %d) alwaysinline {
           %a = alloca float
-          store float %a, float* %a
+          store float %d, float* %a
           %ac = addrspacecast float* %a to float addrspace(1)*
           ret float addrspace(1)* %ac
                     }
       """,
                 "entry",
             ),
-            CT,
+            Core.LLVMPtr{Float32,1},
             Tuple{Float32},
+            Base.convert(Float32, x)
         ),
     )
 end
