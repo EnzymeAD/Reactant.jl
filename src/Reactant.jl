@@ -252,8 +252,12 @@ function initialize_ptrs()
 end
 
 function __init__()
-    initialize_ptrs()
-    initialize_dialect()
+    if Reactant_jll.is_available()
+        initialize_ptrs()
+        initialize_dialect()
+    else
+        @warn "Reactant_jll isn't availble for your platform $(Reactant_jll.host_platform)"
+    end
     return nothing
 end
 
