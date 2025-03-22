@@ -51,7 +51,7 @@ function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
     return Base.convert(T, Base.getindex(RN))
 end
 
-Base.convert(::Type{<:CuTracedRNumber{T}}, x::Number) where {T} = T(x)
+Base.convert(CT::Type{<:CuTracedRNumber{T}}, x::Number) where {T} = CT(Base.convert(TracedRNumber{T}, x))
 
 Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
 
