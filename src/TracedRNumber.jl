@@ -535,14 +535,18 @@ function Base._in_unit_range(
     return (i > 0) & (val <= v.stop) & (val >= v.start)
 end
 
-function Base._getindex(
-    v::TracedUnitRange{T}, i::Union{Integer,TracedRNumber{<:Integer}}
-) where {T}
+function _traced_unitrange_getindex(v::TracedUnitRange{T}, i) where {T}
     val = convert(T, v.start + (i - oneunit(i)))
     # TODO: we should have error messages at some point.
     # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
     return val
 end
+
+Base._getindex(
+    v::TracedUnitRange, i::TracedRNumber{<:Integer}
+) =  _traced_unitrange_getindex(v, i)
+Base._getindex(v::TracedUnitRange, i::Integer) = _traced_unitrange_getindex(v, i)
+
 Base.getindex(r::TracedUnitRange, i::TracedRNumber) = Base._getindex(r, i)
 
 function Base.promote_rule(
