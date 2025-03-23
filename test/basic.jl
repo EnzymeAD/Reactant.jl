@@ -993,6 +993,7 @@ end
 
 @testset "Fractional index" begin
     times = 0:0.01:4.5
+    @test times isa Base.StepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
     @test res[1] == 0.29999999999997334
     @test res[2] == 215
@@ -1000,7 +1001,8 @@ end
 end
 
 @testset "Traced fractional index" begin
-    times = Reactant.to_rarray(0:0.01:4.5)
+    times = Reactant.to_rarray(0:0.01:4.5; track_numbers=Number)
+    @test times isa Reactant.TracedRNumberOverrides.TracedStepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
     @test res[1] == 0.29999999999997334
     @test res[2] == 215

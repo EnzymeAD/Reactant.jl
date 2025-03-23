@@ -1977,8 +1977,7 @@ function Reactant.make_tracer(
         Reactant.append_path(path, :len),
         mode;
         sharding,
-        kwargs...,
-        track_numbers=Number,
+        kwargs...
     )
     newoffset = Reactant.make_tracer(
         seen,
@@ -1986,8 +1985,7 @@ function Reactant.make_tracer(
         Reactant.append_path(path, :offset),
         mode;
         sharding,
-        kwargs...,
-        track_numbers=Number,
+        kwargs...
     )
     if typeof(newref) == typeof(prev.ref) &&
         typeof(newstep) == typeof(prev.step) &&
