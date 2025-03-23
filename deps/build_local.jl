@@ -194,6 +194,6 @@ using Preferences
 set_preferences!(
     joinpath(dirname(@__DIR__), "LocalPreferences.toml"),
     "Reactant_jll",
-    "libReactantExtra_path" => lib_path,
+    "libReactantExtra_path" => lib_path;
     force=true,
 )
