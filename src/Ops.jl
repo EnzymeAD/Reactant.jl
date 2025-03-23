@@ -996,7 +996,9 @@ end
     return TracedRNumber{UInt32}((), res)
 end
 
-@noinline function replica_id(; location=mlir_stacktrace("replica_id", @__FILE__, @__LINE__))
+@noinline function replica_id(;
+    location=mlir_stacktrace("replica_id", @__FILE__, @__LINE__)
+)
     res = MLIR.IR.result(stablehlo.replica_id(; location))
     return TracedRNumber{UInt32}((), res)
 end
