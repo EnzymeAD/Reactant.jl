@@ -1861,11 +1861,8 @@ function Reactant.traced_type_inner(
     sharding,
     runtime,
 )
-
     (T,) = RT.parameters
-    newT = Reactant.traced_type_inner(
-        T, seen, mode, track_numbers, sharding, runtime
-    )
+    newT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
     if T == newT
         return RT
     else
@@ -1889,18 +1886,10 @@ function Reactant.make_tracer(
         return nothing
     end
     newstart = Reactant.make_tracer(
-        seen,
-        prev.start,
-        Reactant.append_path(path, :start),
-        mode;
-        kwargs...,
+        seen, prev.start, Reactant.append_path(path, :start), mode; kwargs...
     )
     newstop = Reactant.make_tracer(
-        seen,
-        prev.stop,
-        Reactant.append_path(path, :stop),
-        mode;
-        kwargs...,
+        seen, prev.stop, Reactant.append_path(path, :stop), mode; kwargs...
     )
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
@@ -1918,18 +1907,10 @@ function Reactant.traced_type_inner(
     runtime,
 )
     T, R, S, L = RT.parameters
-    newT = Reactant.traced_type_inner(
-        T, seen, mode, track_numbers, sharding, runtime
-    )
-    newR = Reactant.traced_type_inner(
-        R, seen, mode, track_numbers, sharding, runtime
-    )
-    newS = Reactant.traced_type_inner(
-        S, seen, mode, track_numbers, sharding, runtime
-    )
-    newL = Reactant.traced_type_inner(
-        L, seen, mode, track_numbers, sharding, runtime
-    )
+    newT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    newR = Reactant.traced_type_inner(R, seen, mode, track_numbers, sharding, runtime)
+    newS = Reactant.traced_type_inner(S, seen, mode, track_numbers, sharding, runtime)
+    newL = Reactant.traced_type_inner(L, seen, mode, track_numbers, sharding, runtime)
     if T == newT && R == newR && S == newS && L == newL
         return RT
     else
@@ -1956,36 +1937,16 @@ function Reactant.make_tracer(
         return nothing
     end
     newref = Reactant.make_tracer(
-        seen,
-        prev.ref,
-        Reactant.append_path(path, :ref),
-        mode;
-        sharding,
-        kwargs...,
+        seen, prev.ref, Reactant.append_path(path, :ref), mode; sharding, kwargs...
     )
     newstep = Reactant.make_tracer(
-        seen,
-        prev.step,
-        Reactant.append_path(path, :step),
-        mode;
-        sharding,
-        kwargs...,
+        seen, prev.step, Reactant.append_path(path, :step), mode; sharding, kwargs...
     )
     newlen = Reactant.make_tracer(
-        seen,
-        prev.len,
-        Reactant.append_path(path, :len),
-        mode;
-        sharding,
-        kwargs...
+        seen, prev.len, Reactant.append_path(path, :len), mode; sharding, kwargs...
     )
     newoffset = Reactant.make_tracer(
-        seen,
-        prev.offset,
-        Reactant.append_path(path, :offset),
-        mode;
-        sharding,
-        kwargs...
+        seen, prev.offset, Reactant.append_path(path, :offset), mode; sharding, kwargs...
     )
     if typeof(newref) == typeof(prev.ref) &&
         typeof(newstep) == typeof(prev.step) &&

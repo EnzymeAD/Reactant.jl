@@ -545,9 +545,9 @@ function _traced_unitrange_getindex(v::TracedUnitRange{T}, i) where {T}
     return val
 end
 
-Base._getindex(
-    v::TracedUnitRange, i::TracedRNumber{<:Integer}
-) =  _traced_unitrange_getindex(v, i)
+function Base._getindex(v::TracedUnitRange, i::TracedRNumber{<:Integer})
+    return _traced_unitrange_getindex(v, i)
+end
 Base.getindex(v::TracedUnitRange, i::Integer) = _traced_unitrange_getindex(v, i)
 Base.getindex(r::TracedUnitRange, i::TracedRNumber) = Base._getindex(r, i)
 function Base.getindex(r::Base.UnitRange, i::I) where {I<:TracedRNumber{<:Integer}}
