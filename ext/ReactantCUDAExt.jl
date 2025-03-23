@@ -80,6 +80,12 @@ for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isi
     end
 end
 
+@static if isdefined(Base, :unchecked_oneto)
+    function Base.unchecked_oneto(x::CuTracedRNumber{<:Integer})
+        return Base.unchecked_oneto(x[])
+    end
+end
+
 function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
     return CT(
         Base.llvmcall(
