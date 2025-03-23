@@ -1054,12 +1054,7 @@ function compile_mlir!(
             run_pass_pipeline!(
                 mod,
                 join(
-                    [
-                        "sdy-propagation-pipeline",
-                        "sdy-close-shardings",
-                        "xla-sdy-stablehlo-export-pipeline",
-                    ],
-                    ',',
+                    ["sdy-propagation-pipeline", "xla-sdy-stablehlo-export-pipeline"], ','
                 ),
             )
 
