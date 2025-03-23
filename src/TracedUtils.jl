@@ -211,18 +211,36 @@ function make_mlir_fn(
 
     num_partitions, num_replicas = 1, 1
 
+    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
+        return MLIR.Dialects.func.func_(;
+            sym_name=name * "_tmp",
+            function_type=MLIR.IR.FunctionType(in_tys, []),
+            body=MLIR.IR.Region(),
+        )
+    end
+
+    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
+    push!(MLIR.IR.region(func, 1), fnbody)
+    Ops.activate_constant_context!(fnbody)
+
     N = length(args)
     seen_args = OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
-    for i in 1:N
-        @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args,
-            args[i],
-            (:args, i),
-            concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
-            toscalar,
-            runtime,
-        )
+
+    try
+        for i in 1:N
+            @inbounds traced_args[i] = Reactant.make_tracer(
+                seen_args,
+                args[i],
+                (:args, i),
+                concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
+                toscalar,
+                runtime,
+            )
+        end
+    finally
+        MLIR.IR.deactivate!(fnbody)
+        Ops.deactivate_constant_context!(fnbody)
     end
 
     linear_args = Reactant.TracedType[]
@@ -264,17 +282,6 @@ function make_mlir_fn(
         end
     end
 
-    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
-            sym_name=name * "_tmp",
-            function_type=MLIR.IR.FunctionType(in_tys, []),
-            body=MLIR.IR.Region(),
-        )
-    end
-
-    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
-    push!(MLIR.IR.region(func, 1), fnbody)
-    Ops.activate_constant_context!(fnbody)
 
     @assert MLIR.IR._has_block()
 
