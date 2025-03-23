@@ -2404,3 +2404,7 @@ extern "C" void dump_operation(Operation *op, const char *filename) {
 extern "C" bool pjrt_device_is_addressable(PjRtDevice *device) {
   return device->IsAddressable();
 }
+
+extern "C" mlir::Operation *mlirGetParentOfTypeFunctionOp(mlir::Operation *op) {
+  return op->getParentOfType<mlir::FunctionOpInterface>();
+}
