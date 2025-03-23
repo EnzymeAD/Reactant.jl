@@ -326,9 +326,12 @@ mutable struct HloSharding
     end
 end
 
-# TODO: implement equality from the C++ side
 function Base.:(==)(hsharding1::HloSharding, hsharding2::HloSharding)
-    return string(hsharding1) == string(hsharding2)
+    GC.@preserve hsharding1 hsharding2 begin
+        return @ccall MLIR.API.mlir_c.hlo_sharding_check_eq(
+            hsharding1.ptr::Ptr{Cvoid}, hsharding2.ptr::Ptr{Cvoid}
+        )::Bool
+    end
 end
 
 function free_hlo_sharding(hlo_sharding::HloSharding)
@@ -392,4 +395,35 @@ function compute_array_indices_and_hlo_sharding(
         ),
         sharding,
     )
+end
+
+
+function tile_assignment_dimensions(hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_dimensions_size(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    dimensions = Vector{Int64}(undef, ndims)
+    GC.@preserve hlo_sharding dimensions begin
+        @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_dimensions(
+            hlo_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int64}, ndims::Int32
+        )::Cvoid
+    end
+    return dimensions
+end
+
+function tile_assignment_devices(hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_devices_size(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    devices = Vector{Int64}(undef, ndims)
+    GC.@preserve hlo_sharding devices begin
+        @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_devices(
+            hlo_sharding.ptr::Ptr{Cvoid}, devices::Ptr{Int64}, ndims::Int32
+        )::Cvoid
+    end
+    return devices
 end
