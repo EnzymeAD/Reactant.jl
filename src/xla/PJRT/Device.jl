@@ -33,4 +33,10 @@ function XLA.get_local_device_id(device::Device)
     end
 end
 
-# TODO: Expose is addressable for pjrt devices in ReactantExtra
+function XLA.is_addressable(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.pjrt_device_is_addressable(
+            device.device::Ptr{Cvoid}
+        )::Cint
+    end
+end

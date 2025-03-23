@@ -2256,6 +2256,12 @@ extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
     const bool *isClosed, const int64_t *priority) {
   const SmallDenseMap<int64_t, StringRef> deviceIdToMaximalMeshName =
       SmallDenseMap<int64_t, StringRef>();
+
+  llvm::errs() << "hloShardingToTensorShardingAttr\n";
+  llvm::errs() << "hloSharding: " << hloSharding->ToString() << "\n";
+  llvm::errs() << "meshName: " << meshName << "\n";
+  llvm::errs() << "meshAttr: " << meshAttr << "\n";
+
   mlir::sdy::TensorShardingAttr tensorShardingAttr =
       xla::sdy::convertToSdySharding(*hloSharding, meshAttr,
                                      deviceIdToMaximalMeshName, rank,
