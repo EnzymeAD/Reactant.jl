@@ -2406,5 +2406,5 @@ extern "C" bool pjrt_device_is_addressable(PjRtDevice *device) {
 }
 
 extern "C" mlir::Operation *mlirGetParentOfTypeFunctionOp(mlir::Operation *op) {
-  return op->getParentOfType<mlir::FuncOp>();
+  return op->getParentOfType<mlir::FunctionOpInterface>();
 }
