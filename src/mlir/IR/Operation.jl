@@ -354,7 +354,7 @@ end
 
 function get_parent_of_type_function_op(op::Operation)
     GC.@preserve op begin
-        funcop = @ccall mlir_c.mlirGetParentOfTypeFunctionOp(
+        funcop = @ccall API.mlir_c.mlirGetParentOfTypeFunctionOp(
             op::API.MlirOperation
         )::API.MlirOperation
     end

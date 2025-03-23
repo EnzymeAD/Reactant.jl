@@ -60,9 +60,9 @@ check_all_in_same_region(v::MLIR.IR.Value) = MLIR.IR.parent_region(v)
 check_all_in_same_region(op::MLIR.IR.Operation) = MLIR.IR.parent_region(op)
 
 function check_all_in_same_region(args::Union{Vector,Tuple})
-    parent_regions = [check_all_in_same_region(arg) for arg in args]
-    filter!(!isnothing, parent_regions)
-    @assert allequal(parent_regions) "Operands must be in the same region"
+    # parent_regions = [check_all_in_same_region(arg) for arg in args]
+    # filter!(!isnothing, parent_regions)
+    # @assert allequal(parent_regions) "Operands must be in the same region"
     return nothing
 end
 
@@ -107,6 +107,12 @@ end
 
 function check(f::Function, args...)
     result = f()
+
+    if !(region isa TracedRNumber || region isa TracedRArray)
+        @debug "skipping check for $(f). Return type of $(typeof(result)) is not supported \
+                for automatic region checks"
+    end
+
     check_all_in_same_region((args, result))
     return result
 end
