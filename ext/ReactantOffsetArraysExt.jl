@@ -1,7 +1,7 @@
 module ReactantOffsetArraysExt
 
 using OffsetArrays
-using OffsetArrays: OffsetArray
+using OffsetArrays: OffsetArray, OffsetVector
 using Reactant: Reactant, MLIR, Ops, TracedRArray, AbstractConcreteArray
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
@@ -32,6 +32,13 @@ function Base.getindex(
 ) where {T,N}
     offset_indices = [arg .- x.offsets[i] for (i, arg) in enumerate(args)]
     return getindex(parent(x), offset_indices...)
+end
+function Base.getindex(
+    x::OffsetVector{T,N,<:AbstractConcreteArray}, 
+    args::Union{Int,AbstractUnitRange{Int}}
+) where {T,N}
+    offset_indices = args .- x.offsets[1]
+    return getindex(parent(x), offset_indices)
 end
 
 parentindex(r::OffsetArrays.IdOffsetRange, i) = i .- r.offset
