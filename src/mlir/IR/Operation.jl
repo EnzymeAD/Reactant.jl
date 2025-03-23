@@ -351,3 +351,10 @@ function create_operation_at_front(args...; kwargs...)
     Base.pushfirst!(block(), res)
     return res
 end
+
+function get_parent_of_type_function_op(op::Operation)
+    GC.@preserve op begin
+        funcop = @ccall mlir_c.mlirGetParentOfTypeFunctionOp(op::Operation)::Ptr{Cvoid}
+    end
+    return Operation(funcop, false)
+end

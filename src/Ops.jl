@@ -107,7 +107,7 @@ end
 
 function check(f::Function, args...)
     result = f()
-    check_all_in_same_region([args, result])
+    check_all_in_same_region((args, result))
     return result
 end
 
