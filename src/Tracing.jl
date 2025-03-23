@@ -1854,7 +1854,7 @@ end
 end
 
 function Reactant.traced_type_inner(
-    @nospecialize(RT::Type{<:UnitRange{<:RNumber}}),
+    @nospecialize(RT::Type{<:UnitRange{<:ReactantPrimitive}}),
     seen,
     mode::Reactant.TraceMode,
     track_numbers::Type,
