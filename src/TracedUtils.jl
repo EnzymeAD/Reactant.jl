@@ -211,6 +211,9 @@ function make_mlir_fn(
 
     num_partitions, num_replicas = 1, 1
 
+    ctx = MLIR.IR.context()
+    mod = MLIR.IR.mmodule()
+    
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
@@ -264,9 +267,6 @@ function make_mlir_fn(
     if !concretein
         sym_visibility = MLIR.IR.Attribute("private")
     end
-
-    ctx = MLIR.IR.context()
-    mod = MLIR.IR.mmodule()
 
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
