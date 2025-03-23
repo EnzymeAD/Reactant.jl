@@ -435,27 +435,27 @@ end
 
 # Taken from https://github.com/jax-ml/jax/blob/4ca97ad7165453816bc543e941b357407283a59e/jax/_src/sharding_impls.py#L773
 # Converts an XLA.HloSharding to a PartitionSpec
+__size_to_strides(sizes) = reverse(Base.size_to_strides(1, reverse(sizes)...))
+
 function __unflatten_superdims(assignment)
     flat_assignment = collect(Int64, assignment)
     @assert first(flat_assignment) == 0 "First dimension must be 0"
     dims = Dims{2}[]
     while length(flat_assignment) > 1
         stride = flat_assignment[2]
-        i = 1
-        while i ≤ length(flat_assignment) && flat_assignment[i] == (i - 1) * stride
-            i += 1
+        i = findfirst(1:length(flat_assignment)) do i
+            flat_assignment[i] != (i - 1) * stride
         end
-        size = i - 1
+        size = i === nothing ? length(flat_assignment) : i - 1
         push!(dims, (size, stride))
+        @assert size > 1 "Ensure Progress"
         flat_assignment = @view flat_assignment[1:size:end]
     end
     return dims
 end
 
 function __explode_superdims(sizes, dims)
-    strides_to_sizes = Dict(
-        stride => size for (size, stride) in zip(sizes, Base.size_to_strides(1, sizes...))
-    )
+    strides_to_sizes = Dict(zip(__size_to_strides(sizes), sizes))
     final_dims = Dims{2}[]
     for (size, stride) in Iterators.reverse(dims)
         target_size = strides_to_sizes[stride]
@@ -468,6 +468,7 @@ function __explode_superdims(sizes, dims)
             stride *= target_size
             target_size = strides_to_sizes[stride]
         end
+        @show size, target_size
         @assert size == target_size "Expected size $size to be equal to target size \
                                      $target_size"
         push!(new_dims, (size, stride))
@@ -479,12 +480,8 @@ end
 function __unflatten_array(named_sizes, assignment)
     named_sizes = filter(p -> p.second != 1, named_sizes)
     sizes = collect(values(named_sizes))
-    strides = Base.size_to_strides(1, sizes...)
     dims = __explode_superdims(sizes, __unflatten_superdims(assignment))
-    dim_to_name = Dict(
-        (size, stride) => name for
-        (size, stride, name) in zip(sizes, strides, keys(named_sizes))
-    )
+    dim_to_name = Dict(zip(zip(sizes, __size_to_strides(sizes)), keys(named_sizes)))
     return [dim_to_name[d] for d in dims]
 end
 
@@ -503,12 +500,21 @@ function generate_partition_spec(hlo_sharding::HloSharding, mesh, size_arr)
 
     if is_tiled(hlo_sharding)
         mesh_shape = Dict(zip(mesh.axis_names, size(mesh)))
-        mesh_axis_order = __unflatten_array(
-            mesh_shape, tile_assignment_devices(hlo_sharding)
+
+        tile_dims = tile_assignment_dimensions(hlo_sharding)
+
+        tile_devices = tile_assignment_devices(hlo_sharding)
+        tile_devices = vec(
+            permutedims(
+                reshape(tile_devices, reverse(tile_dims)...), reverse(1:length(tile_dims))
+            ),
         )
+
+        mesh_axis_order = __unflatten_array(mesh_shape, tile_devices)
+
         axis_idx = 1
         partitions = Union{NTuple{<:Any,Symbol},Symbol,Nothing}[]
-        for dim_size in tile_assignment_dimensions(hlo_sharding)
+        for dim_size in tile_dims
             dim_partitions = Symbol[]
             while dim_size > 1
                 axis = mesh_axis_order[axis_idx]

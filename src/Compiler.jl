@@ -1054,7 +1054,12 @@ function compile_mlir!(
             run_pass_pipeline!(
                 mod,
                 join(
-                    ["sdy-propagation-pipeline", "xla-sdy-stablehlo-export-pipeline"], ','
+                    [
+                        "sdy-propagation-pipeline",
+                        "sdy-close-shardings",
+                        "xla-sdy-stablehlo-export-pipeline",
+                    ],
+                    ',',
                 ),
             )
 
@@ -2030,6 +2035,10 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
 end
 
 XLA.cost_analysis(thunk::Thunk) = XLA.cost_analysis(thunk.exec)
+
+XLA.get_output_shardings(thunk::Thunk) = XLA.get_output_shardings(thunk.exec)
+
+XLA.get_parameter_shardings(thunk::Thunk) = XLA.get_parameter_shardings(thunk.exec)
 
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
