@@ -312,23 +312,29 @@ function make_mlir_fn(
 
     seen_results = OrderedIdDict()
 
-    traced_result = Reactant.make_tracer(
-        seen_results,
-        result,
-        (:result,),
-        concretein ? Reactant.NoStopTracedTrack : Reactant.TracedSetPath;
-        runtime,
-    )
-
-    # marks buffers to be donated
-    for i in 1:N
-        Reactant.make_tracer(
+    MLIR.IR.activate!(fnbody)
+    traced_result = try
+        traced_result = Reactant.make_tracer(
             seen_results,
-            traced_args[i],
-            concretein ? (:resargs, i) : (),
-            Reactant.NoStopTracedTrack;
+            result,
+            (:result,),
+            concretein ? Reactant.NoStopTracedTrack : Reactant.TracedSetPath;
             runtime,
         )
+
+        # marks buffers to be donated
+        for i in 1:N
+            Reactant.make_tracer(
+                seen_results,
+                traced_args[i],
+                concretein ? (:resargs, i) : (),
+                Reactant.NoStopTracedTrack;
+                runtime,
+            )
+        end
+        traced_result
+    finally
+        MLIR.IR.deactivate!(fnbody)
     end
 
     linear_results = Reactant.TracedType[]
