@@ -14,8 +14,6 @@ using ..Reactant:
     MissingTracedValue,
     unwrapped_eltype
 using ReactantCore: ReactantCore
-
-using MacroTools: splitdef, combinedef
 using Functors: fmap
 
 function mlir_type(x::Union{RNumber,RArray})
@@ -49,72 +47,6 @@ function with_debug(f)
     finally
         DEBUG_MODE[] = old
     end
-end
-
-check_all_in_same_region(::Function) = nothing
-check_all_in_same_region(::AbstractArray) = nothing
-function check_all_in_same_region(x::Union{TracedRArray,TracedRNumber})
-    return check_all_in_same_region(x.mlir_data)
-end
-check_all_in_same_region(v::MLIR.IR.Value) = MLIR.IR.parent_region(v)
-check_all_in_same_region(op::MLIR.IR.Operation) = MLIR.IR.parent_region(op)
-
-function check_all_in_same_region(args::Union{Vector,Tuple})
-    # parent_regions = [check_all_in_same_region(arg) for arg in args]
-    # filter!(!isnothing, parent_regions)
-    # @assert allequal(parent_regions) "Operands must be in the same region"
-    return nothing
-end
-
-# automatically inserts a `@noinline`
-__get_arg_name(s::Symbol) = s
-function __get_arg_name(ex::Expr)
-    ex.head == :kw && return __get_arg_name(ex.args[1])
-    ex.head == :(::) && return __get_arg_name(ex.args[1])
-    ex.head == :(...) && return Expr(:(...), __get_arg_name(ex.args[1]))
-    ex.head == :curly && ex.args[1] == :Type && return nothing
-    return error("Unsupported argument type: $ex")
-end
-
-macro checked(ex)
-    fdef = splitdef(ex)
-    fn_args = [__get_arg_name(arg) for arg in fdef[:args]]
-    filter!(!isnothing, fn_args)
-
-    # make sure these functions are not inlined
-    original_name = fdef[:name]
-    fdef[:name] = Symbol(:unchecked_, fdef[:name])
-    fdef[:body] = quote
-        Expr(:meta, :noinline)
-        $(fdef[:body])
-    end
-
-    unsafe_fn = combinedef(fdef)
-
-    # generate a "safe" version that performs a check
-    fdef[:name] = original_name
-    fdef[:body] = quote
-        @noinline
-        check($(fn_args...)) do
-            $(fdef[:body])
-        end
-    end
-
-    safe_fn = combinedef(fdef)
-
-    return esc(:($safe_fn, $unsafe_fn))
-end
-
-function check(f::Function, args...)
-    result = f()
-
-    if !(region isa TracedRNumber || region isa TracedRArray)
-        @debug "skipping check for $(f). Return type of $(typeof(result)) is not supported \
-                for automatic region checks"
-    end
-
-    check_all_in_same_region((args, result))
-    return result
 end
 
 @noinline function mlir_stacktrace(name, file, line)::MLIR.IR.Location
@@ -156,7 +88,7 @@ function deactivate_constant_context!(blk::MLIR.IR.Block)
 end
 
 # constant ops
-@checked function constant(
+@noinline function constant(
     x::DenseArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
     if sizeof(x) > LARGE_CONSTANT_THRESHOLD[]
@@ -195,6 +127,11 @@ end
             result_inference=false,
         )
 
+        # parent_func_op = MLIR.IR.get_parent_of_type_function_op(cstop)
+        # if parent_func_op == C_NULL
+        #     error("Constant must be created inside a Function Op.")
+        # end
+
         res = MLIR.IR.result(cstop)
         tres = TracedRArray{T,N}((), res, size(x))
         constants[value] = tres
@@ -202,17 +139,17 @@ end
     end
 end
 
-@checked function constant(
+@noinline function constant(
     x::AbstractArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
     return constant(collect(x); location)
 end
 
-@checked function constant(x::Reactant.AbstractConcreteArray; kwargs...)
+@noinline function constant(x::Reactant.AbstractConcreteArray; kwargs...)
     return constant(Base.convert(Array, x); kwargs...)
 end
 
-@checked function constant(
+@noinline function constant(
     x::T; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T<:Number}
     x isa TracedRNumber && return x
@@ -220,7 +157,7 @@ end
     return TracedRNumber{T}((), res.mlir_data)
 end
 
-@checked function constant(x::Reactant.AbstractConcreteNumber{T}; kwargs...) where {T}
+@noinline function constant(x::Reactant.AbstractConcreteNumber{T}; kwargs...) where {T}
     return constant(Base.convert(T, x); kwargs...)
 end
 
@@ -261,7 +198,7 @@ for (T, mlir_func) in (
     (Float64, :mlirDenseElementsAttrDoubleSplatGet),
 )
     @eval begin
-        @checked function fill(
+        @noinline function fill(
             number::$T,
             shape::Vector{Int};
             location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
@@ -284,7 +221,7 @@ function _fill_element_attr(x::Complex)
     ])
 end
 
-@checked function fill(
+@noinline function fill(
     element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
 ) where {T}
     tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
@@ -335,7 +272,7 @@ for (dialect, op) in [
     (:chlo, :sinh),
 ]
     @eval begin
-        @checked function $op(
+        @noinline function $op(
             x::TracedRArray{T,N};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T,N}
@@ -347,7 +284,7 @@ for (dialect, op) in [
             return TracedRArray{T,N}((), res, size(x))
         end
 
-        @checked function $op(
+        @noinline function $op(
             x::TracedRNumber{T};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T}
@@ -361,7 +298,7 @@ for (dialect, op) in [
     end
 end
 
-@checked function conj(
+@noinline function conj(
     x::TracedRArray{T,N}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
 ) where {T<:Complex,N}
     res = MLIR.IR.result(
@@ -370,7 +307,7 @@ end
     return TracedRArray{T,N}((), res, size(x))
 end
 
-@checked function conj(
+@noinline function conj(
     x::TracedRNumber{T}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
 ) where {T<:Complex}
     res = MLIR.IR.result(
@@ -379,13 +316,13 @@ end
     return TracedRNumber{T}((), res)
 end
 
-@checked function conj(
+@noinline function conj(
     x::TracedRArray{T,N}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
 ) where {T<:Real,N}
     return TracedRArray{T,N}((), x.mlir_data, size(x))
 end
 
-@checked function conj(
+@noinline function conj(
     x::TracedRNumber{T}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
 ) where {T<:Real}
     return TracedRNumber{T}((), x.mlir_data)
@@ -413,7 +350,7 @@ for (dialect, op) in [
     (:chlo, :zeta),
 ]
     @eval begin
-        @checked function $op(
+        @noinline function $op(
             a::TracedRArray{T,N},
             b::TracedRArray{T,N};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
@@ -429,7 +366,7 @@ for (dialect, op) in [
             return TracedRArray{T,N}((), res, size(a))
         end
 
-        @checked function $op(
+        @noinline function $op(
             a::TracedRNumber{T},
             b::TracedRNumber{T};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
@@ -452,7 +389,7 @@ for (dialect, op) in
     [(:stablehlo, :is_finite), (:chlo, :is_inf), (:chlo, :is_neg_inf), (:chlo, :is_pos_inf)]
     result = dialect == :stablehlo ? :y : :result
     @eval begin
-        @checked function $op(
+        @noinline function $op(
             x::TracedRArray{T,N};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T,N}
@@ -466,7 +403,7 @@ for (dialect, op) in
             return TracedRArray{Bool,N}((), res, size(x))
         end
 
-        @checked function $op(
+        @noinline function $op(
             x::TracedRNumber{T};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T}
@@ -481,7 +418,7 @@ for (dialect, op) in
 end
 
 # fixes to default automated implementations
-@checked function abs(
+@noinline function abs(
     x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("abs", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
@@ -490,7 +427,7 @@ end
     return TracedRArray{T,N}((), res, size(x))
 end
 
-@checked function abs(
+@noinline function abs(
     x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("abs", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
@@ -500,11 +437,11 @@ end
 end
 
 # shape ops
-@checked function reshape(x::TracedRArray, dims::Integer...; kwargs...)
+@noinline function reshape(x::TracedRArray, dims::Integer...; kwargs...)
     return reshape(x, collect(Int64, dims); kwargs...)
 end
 
-@checked function reshape(
+@noinline function reshape(
     x::TracedRArray{T,N},
     dims::Vector{Int};
     location=mlir_stacktrace("reshape", @__FILE__, @__LINE__),
@@ -519,7 +456,7 @@ end
     return transpose(result, Int64[length(dims):-1:1...])
 end
 
-@checked function get_dimension_size(
+@noinline function get_dimension_size(
     x::TracedRArray{T,N},
     dim;
     location=mlir_stacktrace("get_dimension_size", @__FILE__, @__LINE__),
@@ -533,7 +470,7 @@ end
     return TracedRNumber{Int32}((), res)
 end
 
-@checked function set_dimension_size(
+@noinline function set_dimension_size(
     x::TracedRArray{T,N},
     size::TracedRNumber{Int},
     dim::Int;
@@ -552,7 +489,7 @@ end
     return TracedRArray{T,N}((), res, size(x))
 end
 
-@checked function transpose(
+@noinline function transpose(
     x::TracedRArray{T,N},
     permutation;
     location=mlir_stacktrace("transpose", @__FILE__, @__LINE__),
@@ -566,7 +503,7 @@ end
 end
 
 # indexing ops
-@checked function pad(
+@noinline function pad(
     x::TracedRArray{T,N},
     padding_value::TracedRNumber{T};
     low=Base.fill(0, N),
@@ -588,7 +525,7 @@ end
     return TracedRArray{T,N}((), res, rsize)
 end
 
-@checked function slice(
+@noinline function slice(
     x::TracedRArray{T,N},
     start_indices,
     limit_indices;
@@ -614,7 +551,7 @@ end
 end
 
 # numerics
-@checked function complex(
+@noinline function complex(
     real::TracedRArray{T,N},
     imag::TracedRArray{T,N};
     location=mlir_stacktrace("complex", @__FILE__, @__LINE__),
@@ -630,7 +567,7 @@ end
     return TracedRArray{Complex{T},N}((), res, size(real))
 end
 
-@checked function complex(
+@noinline function complex(
     real::TracedRNumber{T},
     imag::TracedRNumber{T};
     location=mlir_stacktrace("complex", @__FILE__, @__LINE__),
@@ -646,7 +583,7 @@ end
     return TracedRNumber{Complex{T}}((), res)
 end
 
-@checked function real(
+@noinline function real(
     x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
@@ -655,7 +592,7 @@ end
     return TracedRArray{T,N}((), res, size(x))
 end
 
-@checked function real(
+@noinline function real(
     x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
@@ -664,7 +601,7 @@ end
     return TracedRNumber{T}((), res)
 end
 
-@checked function imag(
+@noinline function imag(
     x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
@@ -673,7 +610,7 @@ end
     return TracedRArray{T,N}((), res, size(x))
 end
 
-@checked function imag(
+@noinline function imag(
     x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
@@ -696,7 +633,7 @@ end
 #     )
 #     return TracedRArray{T,N}((), res, size(x))
 # end
-@checked function bitcast_convert(
+@noinline function bitcast_convert(
     ::Type{U},
     x::TracedRNumber{T};
     location=mlir_stacktrace("bitcast_convert", @__FILE__, @__LINE__),
@@ -709,7 +646,7 @@ end
     return TracedRNumber{U}((), res)
 end
 
-@checked function fft(
+@noinline function fft(
     x::TracedRArray{T,N};
     type::String,
     length,
@@ -751,7 +688,7 @@ end
     return TracedRArray{Tout,N}((), res, rsize)
 end
 
-@checked function cholesky(
+@noinline function cholesky(
     x::TracedRArray{T,N};
     lower::Bool=false,
     location=mlir_stacktrace("cholesky", @__FILE__, @__LINE__),
@@ -765,7 +702,7 @@ end
     return TracedRArray{T,N}((), res, size(x))
 end
 
-@checked function clamp(
+@noinline function clamp(
     min::Union{TracedRNumber{T},TracedRArray{T,N}},
     x::TracedRArray{T,N},
     max::Union{TracedRNumber{T},TracedRArray{T,N}};
@@ -783,7 +720,7 @@ end
     return TracedRArray{T,N}((), res, size(x))
 end
 
-@checked function clamp(
+@noinline function clamp(
     min::TracedRNumber{T},
     x::TracedRNumber{T},
     max::TracedRNumber{T};
@@ -801,7 +738,7 @@ end
     return TracedRNumber{T}((), res)
 end
 
-@checked function clamp(
+@noinline function clamp(
     min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T
 ) where {T,N}
     return clamp(constant(min), x, constant(max))
@@ -837,7 +774,7 @@ end
 #     return TracedRArray{T,N}((), res, size(lhs))
 # end
 
-@checked function dot_general(
+@noinline function dot_general(
     lhs::TracedRArray{T},
     rhs::TracedRArray{T};
     contracting_dimensions,
@@ -994,7 +931,7 @@ end
     return TracedRArray{T,length(ressize)}((), res, ressize)
 end
 
-@checked function einsum(
+@noinline function einsum(
     lhs::TracedRArray{T},
     rhs::TracedRArray{T};
     equation::String,
@@ -1052,19 +989,19 @@ end
 # end
 
 # paralell ops
-@checked function partition_id(;
+@noinline function partition_id(;
     location=mlir_stacktrace("partition_id", @__FILE__, @__LINE__)
 )
     res = MLIR.IR.result(stablehlo.partition_id(; location))
     return TracedRNumber{UInt32}((), res)
 end
 
-@checked function replica_id(; location=mlir_stacktrace("replica_id", @__FILE__, @__LINE__))
+@noinline function replica_id(; location=mlir_stacktrace("replica_id", @__FILE__, @__LINE__))
     res = MLIR.IR.result(stablehlo.replica_id(; location))
     return TracedRNumber{UInt32}((), res)
 end
 
-@checked function after_all(
+@noinline function after_all(
     tokens...; location=mlir_stacktrace("after_all", @__FILE__, @__LINE__)
 )
     tokens = [token.mlir_data for token in tokens]
@@ -1072,7 +1009,7 @@ end
     return Token(res)
 end
 
-@checked function optimization_barrier(
+@noinline function optimization_barrier(
     operands::Union{TracedRNumber,TracedRArray}...;
     location=mlir_stacktrace("optimization_barrier", @__FILE__, @__LINE__),
 )
@@ -1093,7 +1030,7 @@ end
     )
 end
 
-@checked function outfeed(
+@noinline function outfeed(
     operands::Union{TracedRNumber,TracedRArray}...;
     token,
     config="",
@@ -1107,7 +1044,7 @@ end
     return Token(res)
 end
 
-@checked function send(
+@noinline function send(
     operands::Union{TracedRNumber,TracedRArray}...;
     token,
     channel_id::Int,
@@ -1130,7 +1067,7 @@ end
     return Token(res)
 end
 
-@checked function recv(
+@noinline function recv(
     results::Tuple{Type,Vector{Int}}...;
     token,
     channel_id::Int,
@@ -1205,7 +1142,7 @@ function broadcast_in_dim(
     return TracedRArray{T,Int64(length(result_size))}((), res, Tuple(result_size))
 end
 
-@checked function sort(
+@noinline function sort(
     xs::TracedRArray...;
     comparator,
     dimension=1,
@@ -1267,7 +1204,7 @@ end
     ]
 end
 
-@checked function top_k(
+@noinline function top_k(
     x::TracedRArray{T,N},
     k;
     dimension::Integer=N,
@@ -1300,7 +1237,7 @@ end
     return (; values, indices)
 end
 
-@checked function iota(
+@noinline function iota(
     T::Type,
     shape::Vector{Int};
     iota_dimension,
@@ -1313,7 +1250,7 @@ end
     return TracedRArray{T,N}((), res, shape)
 end
 
-@checked function reverse(
+@noinline function reverse(
     x::TracedRArray{T,N};
     dimensions,
     location=mlir_stacktrace("reverse", @__FILE__, @__LINE__),
@@ -1353,7 +1290,7 @@ distribution between 0 and 1. Returns a NamedTuple with the following fields:
 - `algorithm`: The algorithm to use for generating the random numbers. Defaults to
   "DEFAULT". Other options include "PHILOX" and "THREE_FRY".
 """
-@checked function rng_bit_generator(
+@noinline function rng_bit_generator(
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
@@ -1379,7 +1316,7 @@ distribution between 0 and 1. Returns a NamedTuple with the following fields:
     )
 end
 
-@checked function rng_bit_generator(
+@noinline function rng_bit_generator(
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
@@ -1420,7 +1357,7 @@ fields:
 - `algorithm`: The algorithm to use for generating the random numbers. Defaults to
   "DEFAULT". Other options include "PHILOX" and "THREE_FRY".
 """
-@checked function randn(
+@noinline function randn(
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
@@ -1462,7 +1399,7 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
 - `algorithm`: The algorithm to use for generating the random numbers. Defaults to
   "DEFAULT". Other options include "PHILOX" and "THREE_FRY".
 """
-@checked function randexp(
+@noinline function randexp(
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
@@ -1477,7 +1414,7 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
 end
 
 # functional ops
-@checked function return_(
+@noinline function return_(
     results::Union{TracedRArray,TracedRNumber}...;
     location=mlir_stacktrace("return_", @__FILE__, @__LINE__),
 )
@@ -1485,7 +1422,7 @@ end
 end
 
 # control flow ops
-@checked function select(
+@noinline function select(
     pred::Union{TracedRArray{Bool,N},TracedRNumber{Bool}},
     on_true::TracedRArray{T,N},
     on_false::TracedRArray{T,N},
@@ -1504,7 +1441,7 @@ end
     return TracedRArray{T,N}((), res, size(on_true))
 end
 
-@checked function select(
+@noinline function select(
     pred::TracedRNumber{Bool}, on_true::TracedRNumber{T}, on_false::TracedRNumber{T}
 ) where {T}
     res = MLIR.IR.result(
@@ -1519,7 +1456,7 @@ end
 end
 
 # comparison
-@checked function compare(
+@noinline function compare(
     lhs::AT,
     rhs::AT;
     comparison_direction::String,
@@ -1546,7 +1483,7 @@ end
 end
 
 # eltype conversion
-@checked function convert(
+@noinline function convert(
     ::Type{TracedRArray{T,N}},
     x::TracedRArray;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
@@ -1563,7 +1500,7 @@ end
     )
 end
 
-@checked function convert(
+@noinline function convert(
     ::Type{TracedRNumber{T}},
     x::TracedRNumber;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
@@ -1605,7 +1542,7 @@ julia> Reactant.@jit(
 (ConcretePJRTArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
 ```
 """
-@checked function hlo_call(
+@noinline function hlo_call(
     code,
     args...;
     func_name="main",
@@ -1707,7 +1644,7 @@ specified by `scatter_indices` to the values in `updates`. If the indices are co
 is recommended to directly use [`MLIR.Dialects.stablehlo.dynamic_update_slice`](@ref)
 instead.
 """
-@checked function scatter_setindex(
+@noinline function scatter_setindex(
     dest::TracedRArray{T,N},
     scatter_indices::TracedRArray{Int64,2},
     updates::TracedRArray{T2,1},
@@ -1770,7 +1707,7 @@ Uses [`MLIR.Dialects.stablehlo.gather`](@ref) to get the values of `src` at the 
 specified by `gather_indices`. If the indices are contiguous it is recommended to directly
 use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
 """
-@checked function gather_getindex(
+@noinline function gather_getindex(
     src::TracedRArray{T,N}, gather_indices::TracedRArray{Int64,2}
 ) where {T,N}
     @assert size(gather_indices, 2) == N
@@ -1811,7 +1748,7 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
     )
 end
 
-@checked function while_loop(cond_fn::CFn, body_fn::BFn, args...) where {CFn,BFn}
+@noinline function while_loop(cond_fn::CFn, body_fn::BFn, args...) where {CFn,BFn}
     # TODO: detect and prevent mutation within the condition
 
     # Make all the args traced or concrete
@@ -1877,7 +1814,7 @@ end
     end
 end
 
-@checked function if_condition(
+@noinline function if_condition(
     cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args...
 ) where {TFn,FFn}
     true_fn_names = (gensym(:true_fn_args), gensym(:true_result), gensym(:true_fn_resargs))
@@ -2283,7 +2220,7 @@ end
     return corrected_traced_results
 end
 
-@checked function call(f, args...)
+@noinline function call(f, args...)
     seen_cache = Reactant.OrderedIdDict()
     Reactant.make_tracer(
         seen_cache,
@@ -2390,7 +2327,7 @@ We return a NamedTuple with the following fields:
 - `mesh_attr`: `sdy::mlir::MeshAttr` representing the mesh.
 - `mesh_op`: The `sdy.mesh` operation.
 """
-@checked function mesh(
+@noinline function mesh(
     m::Reactant.Sharding.Mesh;
     mod::MLIR.IR.Module=MLIR.IR.mmodule(),
     sym_name::String="mesh",
@@ -2409,7 +2346,7 @@ We return a NamedTuple with the following fields:
     return result
 end
 
-@checked function mesh(
+@noinline function mesh(
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
     device_ids::AbstractVector{Int64};
     mod::MLIR.IR.Module=MLIR.IR.mmodule(),
@@ -2472,7 +2409,7 @@ end
 Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation with the given
 `input` and `sharding`.
 """
-@checked function sharding_constraint(
+@noinline function sharding_constraint(
     input::Union{AbstractArray,Number},
     sharding::Reactant.Sharding.AbstractSharding;
     location=mlir_stacktrace("sharding_constraint", @__FILE__, @__LINE__),
@@ -2541,7 +2478,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
       - Reduce along dimension 1 → `[(15 + 2) (21 + 2); (18 + 2) (24 + 2)]`
       - Reduce along dimension 3 → `[37 49]`
 """
-@checked function reduce(
+@noinline function reduce(
     x::TracedRArray{T},
     init_values::TracedRNumber{T},
     dimensions::Vector{Int},
@@ -2596,7 +2533,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     return TracedRArray{T,length(reduced_shape)}((), res, reduced_shape)
 end
 
-@checked function dynamic_update_slice(
+@noinline function dynamic_update_slice(
     operand::TracedRArray{T,N},
     update::TracedRArray{T},
     start_indices::Vector;
@@ -2615,7 +2552,7 @@ end
     return TracedRArray{T,N}((), res, size(res))
 end
 
-@checked function dynamic_slice(
+@noinline function dynamic_slice(
     operand::TracedRArray{T,N},
     start_indices::Vector,
     slice_sizes::Vector;
