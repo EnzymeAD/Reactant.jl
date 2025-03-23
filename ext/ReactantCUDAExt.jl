@@ -63,15 +63,26 @@ for jlop in (
     :(Base.:/),
     :(Base.:^),
     :(Base.rem),
+    :(Base.isless),
+    :(Base.:(==)),
+    :(Base.:(!=)),
 )
     @eval begin
         @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
+        @inline $jlop(a::CuTracedRNumber{T,A}, b::Number) where {T,A} = $jlop(a[], b)
+        @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
     end
 end
 
-for jlop in (:(Base.:+), :(Base.:-))
+for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
     @eval begin
         @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
+    end
+end
+
+@static if isdefined(Base, :unchecked_oneto)
+    function Base.unchecked_oneto(x::CuTracedRNumber{<:Integer})
+        return Base.unchecked_oneto(x[])
     end
 end
 
@@ -116,10 +127,6 @@ function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
 end
 
 Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
-
-Base.isless(a::CuTracedRNumber, b::CuTracedRNumber) = Base.isless(a[], b[])
-Base.isless(a, b::CuTracedRNumber) = Base.isless(a, b[])
-Base.isless(a::CuTracedRNumber, b) = Base.isless(a[], b)
 
 Base.one(a::CuTracedRNumber) = one(a[])
 Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
