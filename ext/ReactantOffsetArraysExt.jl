@@ -27,15 +27,14 @@ function Base.getindex(
     return getindex(parent(x), offset_indices...)
 end
 function Base.getindex(
-    x::OffsetArray{T,N,<:AbstractConcreteArray}, 
-    args::Vararg{Union{Int,AbstractUnitRange{Int}},N}
+    x::OffsetArray{T,N,<:AbstractConcreteArray},
+    args::Vararg{Union{Int,AbstractUnitRange{Int}},N},
 ) where {T,N}
     offset_indices = [arg .- x.offsets[i] for (i, arg) in enumerate(args)]
     return getindex(parent(x), offset_indices...)
 end
 function Base.getindex(
-    x::OffsetVector{T,<:AbstractConcreteArray}, 
-    args::Union{Int,AbstractUnitRange{Int}}
+    x::OffsetVector{T,<:AbstractConcreteArray}, args::Union{Int,AbstractUnitRange{Int}}
 ) where {T,N}
     offset_indices = args .- x.offsets[1]
     return getindex(parent(x), offset_indices)
