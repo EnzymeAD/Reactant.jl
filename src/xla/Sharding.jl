@@ -305,17 +305,6 @@ function compute_array_indices_and_hlo_sharding(
     )
 end
 
-# Helper function to get device sequence along a dimension
-function __get_device_sequence(arr, dim)
-    idx = ones(Int, ndims(arr))
-    sequence = Int[]
-    for i in 1:size(arr, dim)
-        idx[dim] = i
-        push!(sequence, arr[idx...])
-    end
-    return sequence
-end
-
 # xla::HloSharding
 mutable struct HloSharding
     ptr::Ptr{Cvoid}
@@ -397,7 +386,6 @@ function compute_array_indices_and_hlo_sharding(
     )
 end
 
-
 function tile_assignment_dimensions(hlo_sharding::HloSharding)
     GC.@preserve hlo_sharding begin
         ndims = @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_dimensions_size(
@@ -426,4 +414,127 @@ function tile_assignment_devices(hlo_sharding::HloSharding)
         )::Cvoid
     end
     return devices
+end
+
+for check in (:is_tiled, :is_maximal, :is_tuple, :is_replicated, :is_manual, :is_unknown)
+    cfn = Symbol(:hlo_sharding_, check)
+    @eval function $(check)(hlo_sharding::HloSharding)
+        GC.@preserve hlo_sharding begin
+            return @ccall MLIR.API.mlir_c.$(cfn)(hlo_sharding.ptr::Ptr{Cvoid})::Bool
+        end
+    end
+end
+
+function replicate_on_last_tile_dim(hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        return @ccall MLIR.API.mlir_c.hlo_sharding_replicate_on_last_tile_dim(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Bool
+    end
+end
+
+# Taken from https://github.com/jax-ml/jax/blob/4ca97ad7165453816bc543e941b357407283a59e/jax/_src/sharding_impls.py#L773
+# Converts an XLA.HloSharding to a PartitionSpec
+function __unflatten_superdims(assignment)
+    flat_assignment = collect(Int64, assignment)
+    @assert first(flat_assignment) == 0 "First dimension must be 0"
+    dims = Dims{2}[]
+    while length(flat_assignment) > 1
+        stride = flat_assignment[2]
+        i = 1
+        while i ≤ length(flat_assignment) && flat_assignment[i] == (i - 1) * stride
+            i += 1
+        end
+        size = i - 1
+        push!(dims, (size, stride))
+        flat_assignment = @view flat_assignment[1:size:end]
+    end
+    return dims
+end
+
+function __explode_superdims(sizes, dims)
+    strides_to_sizes = Dict(
+        stride => size for (size, stride) in zip(sizes, Base.size_to_strides(1, sizes...))
+    )
+    final_dims = Dims{2}[]
+    for (size, stride) in Iterators.reverse(dims)
+        target_size = strides_to_sizes[stride]
+        new_dims = Dims{2}[]
+        while size > target_size
+            @assert target_size > 1  # Ensure progress
+            @assert size % target_size == 0
+            push!(new_dims, (target_size, stride))
+            size ÷= target_size
+            stride *= target_size
+            target_size = strides_to_sizes[stride]
+        end
+        @assert size == target_size "Expected size $size to be equal to target size \
+                                     $target_size"
+        push!(new_dims, (size, stride))
+        append!(final_dims, reverse(new_dims))
+    end
+    return final_dims
+end
+
+function __unflatten_array(named_sizes, assignment)
+    named_sizes = filter(p -> p.second != 1, named_sizes)
+    sizes = collect(values(named_sizes))
+    strides = Base.size_to_strides(1, sizes...)
+    dims = __explode_superdims(sizes, __unflatten_superdims(assignment))
+    dim_to_name = Dict(
+        (size, stride) => name for
+        (size, stride, name) in zip(sizes, strides, keys(named_sizes))
+    )
+    return [dim_to_name[d] for d in dims]
+end
+
+function generate_partition_spec(hlo_sharding, args...)
+    return generate_partition_spec(convert(HloSharding, hlo_sharding), args...)
+end
+
+function generate_partition_spec(hlo_sharding::HloSharding, mesh, size_arr)
+    @assert mesh isa Reactant.Sharding.Mesh
+
+    is_replicated(hlo_sharding) && return ntuple(Returns(nothing), length(size_arr))
+
+    if is_maximal(hlo_sharding) && length(mesh) == 1
+        return ntuple(Returns(nothing), length(size_arr))
+    end
+
+    if is_tiled(hlo_sharding)
+        mesh_shape = Dict(zip(mesh.axis_names, size(mesh)))
+        mesh_axis_order = __unflatten_array(
+            mesh_shape, tile_assignment_devices(hlo_sharding)
+        )
+        axis_idx = 1
+        partitions = Union{NTuple{<:Any,Symbol},Symbol,Nothing}[]
+        for dim_size in tile_assignment_dimensions(hlo_sharding)
+            dim_partitions = Symbol[]
+            while dim_size > 1
+                axis = mesh_axis_order[axis_idx]
+                axis_idx += 1
+                axis_size = mesh_shape[axis]
+                @assert dim_size % axis_size == 0 "Expected dim_size $dim_size to be \
+                                                   divisible by axis_size $axis_size"
+                dim_size ÷= axis_size
+                push!(dim_partitions, axis)
+            end
+
+            if length(dim_partitions) == 0
+                push!(partitions, nothing)
+            elseif length(dim_partitions) == 1
+                push!(partitions, only(dim_partitions))
+            else
+                push!(partitions, Tuple(dim_partitions))
+            end
+        end
+
+        if replicate_on_last_tile_dim(hlo_sharding)
+            pop!(partitions)
+        end
+
+        return reverse(Tuple(partitions))
+    end
+
+    return error("Unhandled HLO sharding type. Please open a bug report!")
 end

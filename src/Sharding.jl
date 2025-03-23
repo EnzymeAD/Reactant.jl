@@ -246,7 +246,7 @@ function generate_hlo_sharding_from_tensor_attribute(sharding::NamedSharding)
         )
 
         tensor_sharding_attr = get_shardy_tensor_sharding_attribute(
-            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr; do_transpose=true
+            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, (); do_transpose=true
         )
 
         return HloSharding(
@@ -264,7 +264,7 @@ function generate_hlo_sharding_from_tensor_attribute(sharding::NamedSharding)
 end
 
 function get_shardy_tensor_sharding_attribute(
-    sharding::NamedSharding, ctx, mesh_name, mesh_attr; do_transpose=true
+    sharding::NamedSharding, ctx, mesh_name, mesh_attr, size_arr; do_transpose=true
 )
     dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(
         undef, length(sharding.partition_spec)
@@ -518,22 +518,21 @@ function (sharding::HloSharding)(
 end
 
 function get_shardy_tensor_sharding_attribute(
-    sharding::HloSharding, ctx, mesh_name, mesh_attr; kwargs...
+    sharding::HloSharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
 )
-    string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
-    GC.@preserve sharding begin
-        return MLIR.IR.Attribute(
-            @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
-                ctx::MLIR.API.MlirContext,
-                sharding.hlo_sharding.ptr::Ptr{Cvoid},
-                string_mesh_name.attribute::MLIR.API.MlirAttribute,
-                mesh_attr.attribute::MLIR.API.MlirAttribute,
-                Int64(length(sharding.is_closed))::Int64,
-                Bool[sharding.is_closed...]::Ptr{Bool},
-                Int64[sharding.priority...]::Ptr{Int64},
-            )::MLIR.API.MlirAttribute
-        )
-    end
+    partition_spec = Reactant.XLA.generate_partition_spec(
+        sharding.hlo_sharding, sharding.mesh, size_arr
+    )
+    named_sharding = NamedSharding(
+        sharding.mesh,
+        partition_spec;
+        is_closed=sharding.is_closed,
+        priority=sharding.priority,
+    )
+
+    return get_shardy_tensor_sharding_attribute(
+        named_sharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+    )
 end
 
 # Given Sharding + Array --> ShardInfo

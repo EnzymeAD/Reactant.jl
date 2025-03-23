@@ -423,7 +423,7 @@ function make_mlir_fn(
                 sharding = traced_args_to_shardings[arg]
                 (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
                 linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-                    sharding, ctx, sym_name, mesh_attr
+                    sharding, ctx, sym_name, mesh_attr, size(arg)
                 )
                 MLIR.API.mlirFuncSetArgAttr(
                     func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
@@ -457,7 +457,7 @@ function make_mlir_fn(
                         i - 1,
                         "sdy.sharding",
                         Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-                            sharding, ctx, sym_name, mesh_attr
+                            sharding, ctx, sym_name, mesh_attr, size(arg)
                         ),
                     )
                 end
