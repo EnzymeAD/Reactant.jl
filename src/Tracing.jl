@@ -1868,6 +1868,51 @@ end
 end
 
 function Reactant.traced_type_inner(
+    @nospecialize(RT::Type{<:UnitRange{<:ReactantPrimitive}}),
+    seen,
+    mode::Reactant.TraceMode,
+    track_numbers::Type,
+    sharding,
+    runtime,
+)
+    (T,) = RT.parameters
+    newT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    if T == newT
+        return RT
+    else
+        return TracedRNumberOverrides.TracedUnitRange{newT}
+    end
+end
+
+function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::UnitRange),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    Reactant.Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
+    if mode == Reactant.TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.start, path, mode; kwargs...)
+        make_tracer(seen, prev.stop, path, mode; kwargs...)
+        return nothing
+    end
+    newstart = Reactant.make_tracer(
+        seen, prev.start, Reactant.append_path(path, :start), mode; kwargs...
+    )
+    newstop = Reactant.make_tracer(
+        seen, prev.stop, Reactant.append_path(path, :stop), mode; kwargs...
+    )
+    if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
+        return prev
+    else
+        return TracedRNumberOverrides.TracedUnitRange(newstart, newstop)
+    end
+end
+
+function Reactant.traced_type_inner(
     @nospecialize(RT::Type{<:StepRangeLen}),
     seen,
     mode::Reactant.TraceMode,
@@ -1875,26 +1920,16 @@ function Reactant.traced_type_inner(
     sharding,
     runtime,
 )
-    if !(Number <: track_numbers)
-        modified_track_numbers = Number
-    else
-        modified_track_numbers = track_numbers
-    end
     T, R, S, L = RT.parameters
-    return TracedRNumberOverrides.TracedStepRangeLen{
-        Reactant.traced_type_inner(
-            T, seen, mode, modified_track_numbers, sharding, runtime
-        ),
-        Reactant.traced_type_inner(
-            R, seen, mode, modified_track_numbers, sharding, runtime
-        ),
-        Reactant.traced_type_inner(
-            S, seen, mode, modified_track_numbers, sharding, runtime
-        ),
-        Reactant.traced_type_inner(
-            L, seen, mode, modified_track_numbers, sharding, runtime
-        ),
-    }
+    newT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    newR = Reactant.traced_type_inner(R, seen, mode, track_numbers, sharding, runtime)
+    newS = Reactant.traced_type_inner(S, seen, mode, track_numbers, sharding, runtime)
+    newL = Reactant.traced_type_inner(L, seen, mode, track_numbers, sharding, runtime)
+    if T == newT && R == newR && S == newS && L == newL
+        return RT
+    else
+        return TracedRNumberOverrides.TracedStepRangeLen{newT,newR,newS,newL}
+    end
 end
 
 function Reactant.make_tracer(
@@ -1909,44 +1944,30 @@ function Reactant.make_tracer(
         error("Cannot specify sharding for StepRangeLen")
     if mode == Reactant.TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.ref, path, mode; kwargs...)
-        make_tracer(seen, prev.step, path, mode; kwargs...)
-        make_tracer(seen, prev.len, path, mode; kwargs...)
-        make_tracer(seen, prev.offset, path, mode; kwargs...)
+        make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.len, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
         return nothing
     end
-    return TracedRNumberOverrides.TracedStepRangeLen(
-        Reactant.make_tracer(
-            seen,
-            prev.ref,
-            Reactant.append_path(path, :ref),
-            mode;
-            kwargs...,
-            track_numbers=Number,
-        ),
-        Reactant.make_tracer(
-            seen,
-            prev.step,
-            Reactant.append_path(path, :step),
-            mode;
-            kwargs...,
-            track_numbers=Number,
-        ),
-        Reactant.make_tracer(
-            seen,
-            prev.len,
-            Reactant.append_path(path, :len),
-            mode;
-            kwargs...,
-            track_numbers=Number,
-        ),
-        Reactant.make_tracer(
-            seen,
-            prev.offset,
-            Reactant.append_path(path, :offset),
-            mode;
-            kwargs...,
-            track_numbers=Number,
-        ),
+    newref = Reactant.make_tracer(
+        seen, prev.ref, Reactant.append_path(path, :ref), mode; sharding, kwargs...
     )
+    newstep = Reactant.make_tracer(
+        seen, prev.step, Reactant.append_path(path, :step), mode; sharding, kwargs...
+    )
+    newlen = Reactant.make_tracer(
+        seen, prev.len, Reactant.append_path(path, :len), mode; sharding, kwargs...
+    )
+    newoffset = Reactant.make_tracer(
+        seen, prev.offset, Reactant.append_path(path, :offset), mode; sharding, kwargs...
+    )
+    if typeof(newref) == typeof(prev.ref) &&
+        typeof(newstep) == typeof(prev.step) &&
+        typeof(newlen) == typeof(prev.len) &&
+        typeof(newoffset) == typeof(prev.offset)
+        return prev
+    else
+        return TracedRNumberOverrides.TracedStepRangeLen(newref, newstep, newlen, newoffset)
+    end
 end
