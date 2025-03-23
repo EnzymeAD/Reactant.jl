@@ -1038,6 +1038,15 @@ end
         [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
 end
 
+@testset "copyto! TracedRArray" begin
+    x_ra = Reactant.to_rarray(ones(4, 4))
+    y_ra = Reactant.to_rarray(zeros(2, 2))
+    @jit copyto!(x_ra, 6, y_ra, 3, 2)
+    @test all(Array(x_ra)[begin:5] .== 1)
+    @test all(Array(x_ra)[6:6+1] .== 0)
+    @test all(Array(x_ra)[6+2:end] .== 1)
+end
+
 @testset "copy(::Broadcast.Broadcasted{ArrayStyle{ConcreteRArray}})" begin
     x_ra = Reactant.to_rarray(ones(4, 4))
     res = copy(Broadcast.broadcasted(-, Broadcast.broadcasted(+, x_ra, 1)))
