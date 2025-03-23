@@ -549,8 +549,13 @@ Base._getindex(
     v::TracedUnitRange, i::TracedRNumber{<:Integer}
 ) =  _traced_unitrange_getindex(v, i)
 Base._getindex(v::TracedUnitRange, i::Integer) = _traced_unitrange_getindex(v, i)
-
 Base.getindex(r::TracedUnitRange, i::TracedRNumber) = Base._getindex(r, i)
+function Base.getindex(r::Base.UnitRange, i::I) where {I<:TracedRNumber{<:Integer}}
+    val = convert(I, r.start + (i - oneunit(i)))
+    # TODO: we should have error messages at some point.
+    # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
+    return val
+end
 
 function Base.promote_rule(
     a::Type{TracedUnitRange{T1}}, b::Type{TracedUnitRange{T2}}
