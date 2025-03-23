@@ -37,7 +37,9 @@ end
 function Base.getindex(x::OffsetVector{T,<:AbstractConcreteArray}, index::Int) where {T}
     return getindex(parent(x), index - x.offsets[1])
 end
-function Base.getindex( x::OffsetVector{T,<:AbstractConcreteArray}, indices::AbstractUnitRange{Int}) where {T} 
+function function Base.getindex(
+    x::OffsetVector{T,<:AbstractConcreteArray}, indices::AbstractUnitRange{Int}
+) where {T}
     offset_indices = indices .- x.offsets[1]
     return getindex(parent(x), offset_indices)
 end
