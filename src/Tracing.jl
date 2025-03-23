@@ -1861,15 +1861,10 @@ function Reactant.traced_type_inner(
     sharding,
     runtime,
 )
-    if !(Number <: track_numbers)
-        modified_track_numbers = Number
-    else
-        modified_track_numbers = track_numbers
-    end
 
     (T,) = RT.parameters
     newT = Reactant.traced_type_inner(
-        T, seen, mode, modified_track_numbers, sharding, runtime
+        T, seen, mode, track_numbers, sharding, runtime
     )
     if T == newT
         return RT
@@ -1899,7 +1894,6 @@ function Reactant.make_tracer(
         Reactant.append_path(path, :start),
         mode;
         kwargs...,
-        track_numbers=Number,
     )
     newstop = Reactant.make_tracer(
         seen,
@@ -1907,7 +1901,6 @@ function Reactant.make_tracer(
         Reactant.append_path(path, :stop),
         mode;
         kwargs...,
-        track_numbers=Number,
     )
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
@@ -1924,23 +1917,18 @@ function Reactant.traced_type_inner(
     sharding,
     runtime,
 )
-    if !(Number <: track_numbers)
-        modified_track_numbers = Number
-    else
-        modified_track_numbers = track_numbers
-    end
     T, R, S, L = RT.parameters
     newT = Reactant.traced_type_inner(
-        T, seen, mode, modified_track_numbers, sharding, runtime
+        T, seen, mode, track_numbers, sharding, runtime
     )
     newR = Reactant.traced_type_inner(
-        R, seen, mode, modified_track_numbers, sharding, runtime
+        R, seen, mode, track_numbers, sharding, runtime
     )
     newS = Reactant.traced_type_inner(
-        S, seen, mode, modified_track_numbers, sharding, runtime
+        S, seen, mode, track_numbers, sharding, runtime
     )
     newL = Reactant.traced_type_inner(
-        L, seen, mode, modified_track_numbers, sharding, runtime
+        L, seen, mode, track_numbers, sharding, runtime
     )
     if T == newT && R == newR && S == newS && L == newL
         return RT
@@ -1974,7 +1962,6 @@ function Reactant.make_tracer(
         mode;
         sharding,
         kwargs...,
-        track_numbers=Number,
     )
     newstep = Reactant.make_tracer(
         seen,
@@ -1983,7 +1970,6 @@ function Reactant.make_tracer(
         mode;
         sharding,
         kwargs...,
-        track_numbers=Number,
     )
     newlen = Reactant.make_tracer(
         seen,
