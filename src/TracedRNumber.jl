@@ -520,6 +520,9 @@ struct TracedUnitRange{T} <: AbstractUnitRange{T}
         return new(start, unitrange_last(start, stop))
     end
 end
+function Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T}
+    return TracedUnitRange{T}
+end
 function TracedUnitRange{T}(start, stop) where {T}
     return TracedUnitRange{T}(convert(T, start), convert(T, stop))
 end
