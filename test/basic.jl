@@ -1042,9 +1042,11 @@ end
     x_ra = Reactant.to_rarray(ones(4, 4))
     y_ra = Reactant.to_rarray(zeros(2, 2))
     @jit copyto!(x_ra, 6, y_ra, 3, 2)
-    @test all(Array(x_ra)[begin:5] .== 1)
-    @test all(Array(x_ra)[6:6+1] .== 0)
-    @test all(Array(x_ra)[6+2:end] .== 1)
+
+    x = ones(4, 4)
+    y = zeros(2, 2)
+    copyto!(x, 6, y, 3, 2)
+    @test Array(x_ra) == x
 end
 
 @testset "copy(::Broadcast.Broadcasted{ArrayStyle{ConcreteRArray}})" begin

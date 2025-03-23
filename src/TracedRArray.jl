@@ -629,7 +629,7 @@ function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T,N}) where {T,
     return dest
 end
 function Base.copyto!(dest::Reactant.TracedRArray{T}, dstart::Integer, src::Reactant.TracedRArray{T}, sstart::Integer, n::Integer) where T
-    dest[dstart:(dstart + n - 1)] .= src[sstart:(sstart + n - 1)]
+    setindex!(dest, src[sstart:(sstart+n-1)], dstart:(dstart+n-1))
     return dest
 end
 
