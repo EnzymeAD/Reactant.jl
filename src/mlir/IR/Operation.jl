@@ -331,8 +331,20 @@ function create_operation_common(
     end
 end
 
+function create_operation_common_with_checks(args...; operands=nothing, kwargs...)
+    op = create_operation_common(args...; operands, kwargs...)
+    # if !isnothing(operands)
+    #     parent_function_op = get_parent_of_type_function_op(op)
+    #     if parent_function_op != C_NULL
+    #         function_op_region = parent_region(parent_function_op)
+    #         # TODO: add the checks
+    #     end
+    # end
+    return op
+end
+
 function create_operation(args...; kwargs...)
-    res = create_operation_common(args...; kwargs...)
+    res = create_operation_common_with_checks(args...; kwargs...)
     if _has_block()
         push!(block(), res)
     end
@@ -340,7 +352,17 @@ function create_operation(args...; kwargs...)
 end
 
 function create_operation_at_front(args...; kwargs...)
-    res = create_operation_common(args...; kwargs...)
+    res = create_operation_common_with_checks(args...; kwargs...)
     Base.pushfirst!(block(), res)
     return res
+end
+
+function get_parent_of_type_function_op(op::Operation)
+    GC.@preserve op begin
+        funcop = @ccall API.mlir_c.mlirGetParentOfTypeFunctionOp(
+            op::API.MlirOperation
+        )::API.MlirOperation
+    end
+    funcop.ptr == C_NULL && return C_NULL
+    return Operation(funcop, false)
 end

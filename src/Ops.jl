@@ -126,6 +126,11 @@ end
             result_inference=false,
         )
 
+        parent_func_op = MLIR.IR.get_parent_of_type_function_op(cstop)
+        if parent_func_op == C_NULL
+            error("Constant must be created inside a Function Op.")
+        end
+
         res = MLIR.IR.result(cstop)
         tres = TracedRArray{T,N}((), res, size(x))
         constants[value] = tres
