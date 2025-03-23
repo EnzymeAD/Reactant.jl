@@ -121,3 +121,5 @@ function Base.show(io::IO, value::Value)
         API.mlirValuePrint(value, c_print_callback, ref)
     end
 end
+
+parent_region(value::Value) = parent_region(owner(value))

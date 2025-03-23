@@ -69,6 +69,12 @@ parent_op(operation::Operation) =
     Operation(API.mlirOperationGetParentOperation(operation), false)
 
 """
+    parent_region(op)
+Gets the region that owns this operation.
+"""
+parent_region(operation::Operation) = parent_region(block(operation))
+
+"""
     rmfromparent!(op)
 
 Removes the given operation from its parent block. The operation is not destroyed.
@@ -333,13 +339,14 @@ end
 
 function create_operation_common_with_checks(args...; operands=nothing, kwargs...)
     op = create_operation_common(args...; operands, kwargs...)
-    # if !isnothing(operands)
-    #     parent_function_op = get_parent_of_type_function_op(op)
-    #     if parent_function_op != C_NULL
-    #         function_op_region = parent_region(parent_function_op)
-    #         # TODO: add the checks
-    #     end
-    # end
+    if !isnothing(operands)
+        parent_function_op = get_parent_of_type_function_op(op)
+        if parent_function_op != C_NULL
+            function_op_region = parent_region(parent_function_op)
+            operand_region = parent_region.(operands)
+            # TODO: add the checks
+        end
+    end
     return op
 end
 
