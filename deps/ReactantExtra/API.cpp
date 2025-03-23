@@ -2029,6 +2029,68 @@ extern "C" void ifrt_sharding_to_index_domains(
   }
 }
 
+extern "C" bool hlo_sharding_is_tuple(xla::HloSharding *hloSharding) {
+  return hloSharding->IsTuple();
+}
+
+extern "C" bool hlo_sharding_is_replicated(xla::HloSharding *hloSharding) {
+  return hloSharding->IsReplicated();
+}
+
+extern "C" bool hlo_sharding_is_manual(xla::HloSharding *hloSharding) {
+  return hloSharding->IsManual();
+}
+
+extern "C" bool hlo_sharding_is_unknown(xla::HloSharding *hloSharding) {
+  return hloSharding->IsUnknown();
+}
+
+extern "C" bool hlo_sharding_is_tiled(xla::HloSharding *hloSharding) {
+  return hloSharding->IsTiled();
+}
+
+extern "C" bool hlo_sharding_is_maximal(xla::HloSharding *hloSharding) {
+  return hloSharding->IsTileMaximal();
+}
+
+extern "C" bool
+hlo_sharding_replicate_on_last_tile_dim(xla::HloSharding *hloSharding) {
+  return hloSharding->ReplicateOnLastTileDim();
+}
+
+extern "C" int32_t
+hlo_sharding_tile_assignment_dimensions_size(xla::HloSharding *hloSharding) {
+  return static_cast<int32_t>(hloSharding->tile_assignment().num_dimensions());
+}
+
+extern "C" int32_t
+hlo_sharding_tile_assignment_devices_size(xla::HloSharding *hloSharding) {
+  return static_cast<int32_t>(hloSharding->tile_assignment().num_elements());
+}
+
+extern "C" void
+hlo_sharding_tile_assignment_dimensions(xla::HloSharding *hloSharding,
+                                        int64_t *dims, int32_t size) {
+  auto tileAssignmentDims = hloSharding->tile_assignment().dimensions();
+  for (int32_t i = 0; i < size; i++) {
+    dims[i] = tileAssignmentDims[i];
+  }
+}
+
+extern "C" void
+hlo_sharding_tile_assignment_devices(xla::HloSharding *hloSharding,
+                                     int64_t *devices, int32_t size) {
+  auto tileAssignmentDevices = hloSharding->tile_assignment().array().data();
+  for (int32_t i = 0; i < size; i++) {
+    devices[i] = tileAssignmentDevices[i];
+  }
+}
+
+extern "C" bool hlo_sharding_check_eq(xla::HloSharding *hloSharding,
+                                      xla::HloSharding *other) {
+  return *hloSharding == *other;
+}
+
 #pragma endregion
 
 typedef ifrt::Future<> IfRtFutureType;
