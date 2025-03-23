@@ -437,11 +437,14 @@ function Base.float(x::TracedRNumber{T}) where {T}
     return TracedUtils.promote_to(TracedRNumber{float(T)}, x)
 end
 
-using Reactant: ReactantFloat
+using Reactant: ReactantFloat, ReactantInt
 
 Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
+Base.round(A::TracedRNumber{<:ReactantInt}) = A
 Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
+Base.floor(A::TracedRNumber{<:ReactantInt}) = A
 Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
+Base.ceil(A::TracedRNumber{<:ReactantInt}) = A
 
 function Base.unsafe_trunc(
     T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}
