@@ -274,6 +274,15 @@ function Base.setindex!(
     return a
 end
 
+function Base.setindex!(a::Reactant.TracedRArray, v, indices::UnitRange{Int})
+    originalsz = size(a)
+    flattened = Ops.reshape(a, [prod(originalsz)])
+    result = Ops.dynamic_update_slice(flattened, v[begin:length(indices)], [first(indices)])
+    result = Ops.reshape(result, collect(originalsz))
+    set_mlir_data!(a, get_mlir_data(result))
+    return a
+end
+
 function Base.setindex!(a::TracedRArray{T,N}, v, indices) where {T,N}
     if !(indices isa TracedRArray)
         indices = collect(indices)
