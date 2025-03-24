@@ -86,7 +86,7 @@ function scalar_index_to_cartesian(
 ) where {T,N}
     idx = materialize_traced_array(idx)
     idx = Ops.subtract(idx, Ops.fill(T(1), size(idx)))
-    idxs = reshape(Ops.remainder(idx, Ops.fill(T(sz[1]), size(idx))), :, 1)
+    idxs = materialize_traced_array(reshape(Ops.remainder(idx, Ops.fill(T(sz[1]), size(idx))), :, 1))
     idx = Ops.divide(idx, Ops.fill(T(sz[1]), size(idx)))
     for i in 2:N
         idxs = hcat(idxs, Ops.remainder(idx, Ops.fill(T(sz[i]), size(idx))))
