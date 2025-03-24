@@ -83,13 +83,13 @@ end
 
 function scalar_index_to_cartesian(idx::AbstractVector{T}, sz::NTuple{N,Int}) where {T,N}
     idx = idx .- 1
-    idxs = materialize_traced_array(reshape(idx .% T(sz[1]), :, 1))
+    idxs = reshape(idx .% T(sz[1]), :, 1)
     idx = idx .÷ T(sz[1])
     for i in 2:N
         idxs = hcat(idxs, idx .% T(sz[i]))
         idx = idx .÷ T(sz[i])
     end
-    return idxs
+    return materialize_traced_array(idxs)
 end
 
 function scalar_index_to_cartesian(idx::T, sz::NTuple{N,Int}) where {T<:Number,N}
