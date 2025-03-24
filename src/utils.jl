@@ -191,7 +191,7 @@ end
 
 # by default, same as `should_rewrite_call`
 function should_rewrite_invoke(@nospecialize(ft), @nospecialize(args))
-    if ft <: typeof(repeat) && args == Tuple{String, Int64}
+    if ft <: typeof(repeat) && args == Tuple{String,Int64}
         return false
     end
     return should_rewrite_call(ft)
@@ -591,8 +591,14 @@ function call_with_reactant_generator(
 
     mi = mi::Core.MethodInstance
 
-
-    if !(is_reactant_method(mi) || (mi.def.sig isa DataType && !should_rewrite_invoke(mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}))) || guaranteed_error
+    if !(
+        is_reactant_method(mi) || (
+            mi.def.sig isa DataType &&
+            !should_rewrite_invoke(
+                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
+            )
+        )
+    ) || guaranteed_error
         ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
     end
 
