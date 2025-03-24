@@ -2012,8 +2012,19 @@ function compile(f, args; sync=false, kwargs...)
                 res_size,
                 mlir_fn_res.sharding_mesh.logical_device_ids,
             )
-            if output_reactant_shardings === missing ||
-                output_reactant_shardings[i] isa Reactant.Sharding.NoSharding
+
+            if output_reactant_shardings !== missing
+                reactant_sharding = output_reactant_shardings[i]
+                use_hlo_sharding =
+                    reactant_sharding isa Reactant.Sharding.NoSharding ||
+                    convert(
+                        Reactant.Sharding.HloSharding, reactant_sharding
+                    ).hlo_sharding != hlo_sharding
+            else
+                use_hlo_sharding = true
+            end
+
+            if use_hlo_sharding
                 linear_result_shard_info[i] = Reactant.Sharding.ShardInfo(
                     Reactant.Sharding.HloSharding(
                         hlo_sharding,
@@ -2024,7 +2035,6 @@ function compile(f, args; sync=false, kwargs...)
                     array_slices,
                 )
             else
-                assert_mismatched_sharding(output_reactant_shardings[i], hlo_sharding)
                 linear_result_shard_info[i] = Reactant.Sharding.ShardInfo(
                     output_reactant_shardings[i], array_slices
                 )

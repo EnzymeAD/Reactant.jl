@@ -374,7 +374,27 @@ function sharding_to_array_slices(
         hlo_sharding, size_x; return_updated_sharding=Val(true), kwargs...
     )
 
-    @assert hlo_sharding == hlo_sharding2 "TODO: Padding is not supported yet."
+    if hlo_sharding != hlo_sharding2
+        if MLIR.IR._has_context()
+            ctx = MLIR.IR.context()
+        else
+            ctx = MLIR.IR.Context(Reactant.registry[], false)
+            @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+        end
+
+        MLIR.IR.context!(ctx) do
+            mesh_op = Reactant.Ops.mesh(
+                sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+            )
+
+            tensor_sharding_attr, _ = get_tensor_sharding_attribute(
+                hlo_sharding2, ctx, mesh_op.sym_name, mesh_op.mesh_attr, (); dialect=:sdy
+            )
+            sharding = named_sharding_from_tensor_sharding_attr(
+                sharding.mesh, tensor_sharding_attr
+            )
+        end
+    end
 
     return_updated_sharding isa Val{true} && return (device_to_array_slices, sharding)
     return device_to_array_slices
@@ -503,10 +523,9 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
             sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
         )
 
-        tensor_sharding_attr, dialect = get_tensor_sharding_attribute(
-            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing
+        tensor_sharding_attr, _ = get_tensor_sharding_attribute(
+            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
         )
-        @assert dialect == :sdy "Expected dialect to be `sdy`, got $(dialect)"
 
         hlo_sharding = XLA.HloSharding(
             @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
@@ -644,8 +663,7 @@ function get_tensor_sharding_attribute(
 
     dialect == :auto && (dialect = :sdy)
 
-    if dialect == :sdy
-        # XXX: Not recommended path
+    if dialect == :sdy # XXX: Not recommended path
         string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
         GC.@preserve sharding begin
             attr = MLIR.IR.Attribute(
