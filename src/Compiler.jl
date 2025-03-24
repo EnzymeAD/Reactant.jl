@@ -110,12 +110,6 @@ function create_result(tocopy::T, path, args...) where {T}
     return Expr(:new, T, elems...)
 end
 
-function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh, N::Integer)
-    shardinfo = path_to_shard_info[path]
-    delete!(path_to_shard_info, path)
-    return shardinfo
-end
-
 function create_result(
     tocopy::ConcretePJRTNumber{T,D,S},
     path,
@@ -131,9 +125,7 @@ function create_result(
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
+            sharding = pop!(path_to_shard_info, path)
             return :(ConcretePJRTNumber{$T,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $sharding
             ))
@@ -147,9 +139,7 @@ function create_result(
         if haskey(to_unreshard_results, path)
             error("TODO: Not yet Implemented. Use IFRT for this.")
         end
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
+        sharding = pop!(path_to_shard_info, path)
         return :(ConcretePJRTNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data...,)), $sharding
         ))
@@ -172,9 +162,7 @@ function create_result(
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented.")
             end
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
+            sharding = pop!(path_to_shard_info, path)
             return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(restore), $sharding))
         else
             return :(ConcreteIFRTNumber{$T}($restore))
@@ -186,9 +174,7 @@ function create_result(
         if haskey(to_unreshard_results, path)
             error("TODO: Not yet Implemented.")
         end
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
+        sharding = pop!(path_to_shard_info, path)
         return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(tocopy.data), $sharding))
     end
     return :(ConcreteIFRTNumber{$T}($(tocopy.data)))
@@ -209,9 +195,7 @@ function create_result(
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
+            sharding = pop!(path_to_shard_info, path)
             return :(ConcretePJRTArray{$T,$N,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $(tocopy.shape), $sharding
             ))
@@ -225,9 +209,7 @@ function create_result(
         if haskey(to_unreshard_results, path)
             error("TODO: Not yet Implemented. Use IFRT for this.")
         end
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
+        sharding = pop!(path_to_shard_info, path)
         return :(ConcretePJRTArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
@@ -254,9 +236,7 @@ function create_result(
                     $(restore), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
                 ))
             end
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
+            sharding = pop!(path_to_shard_info, path)
             return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
                 $(restore), $(tocopy.shape), $sharding
             ))
@@ -272,9 +252,7 @@ function create_result(
                 $(tocopy.data), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
             ))
         end
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
+        sharding = pop!(path_to_shard_info, path)
         return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
             $(tocopy.data), $(tocopy.shape), $sharding
         ))
