@@ -153,18 +153,20 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
         return data
     end
 
-    if !(reactant_sharding isa Reactant.Sharding.HloSharding)
-        reactant_sharding = convert(Reactant.Sharding.HloSharding, reactant_sharding)
+    if reactant_sharding isa Reactant.Sharding.HloSharding
+        hlo_sharding = reactant_sharding.hlo_sharding
+    else
+        hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, reactant_sharding).hlo_sharding
     end
 
-    @assert reactant_sharding isa Reactant.Sharding.HloSharding
     client = XLA.client(buffer)
     all_devices = XLA.get_device.((client,), reactant_sharding.mesh.device_ids)
 
     if any(XLA.is_addressable, all_devices)
         # Take a fast path if all devices are addressable
         array_slices, _ = XLA.sharding_to_concrete_array_indices(
-            convert(XLA.CondensedOpSharding, reactant_sharding.hlo_sharding),
+            convert(XLA.CondensedOpSharding, hlo_sharding),
             size(data),
             reactant_sharding.mesh.logical_device_ids,
         )
@@ -209,10 +211,12 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     is_fully_replicated(XLA.sharding(array)) && return array
 
     if sharding isa Reactant.Sharding.AbstractSharding
-        hlo_sharding = convert(Reactant.Sharding.HloSharding, sharding)
+        hlo_sharding = convert(Reactant.Sharding.HloSharding, sharding).hlo_sharding
+        reactant_sharding = sharding
     else
-        hlo_sharding = Reactant.Sharding.HloSharding(
-            convert(XLA.HloSharding, sharding),
+        hlo_sharding = convert(XLA.HloSharding, sharding)
+        reactant_sharding = Reactant.Sharding.HloSharding(
+            hlo_sharding,
             mesh,
             ntuple(Returns(1), length(size_arr)),
             ntuple(Returns(-1), length(size_arr)),
@@ -220,7 +224,8 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     end
 
     shard_info = Reactant.Sharding.ShardInfo(
-        hlo_sharding, Reactant.Sharding.sharding_to_array_slices(hlo_sharding, size_arr)
+        reactant_sharding,
+        Reactant.Sharding.sharding_to_array_slices(reactant_sharding, size_arr),
     )
     sharding_constraint = Reactant.Sharding.NamedSharding(
         mesh, ntuple(Returns(nothing), length(size_arr))

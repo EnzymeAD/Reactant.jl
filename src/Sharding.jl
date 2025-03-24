@@ -187,10 +187,12 @@ struct NamedSharding{D1,D2,P<:Tuple} <: AbstractSharding
     partition_spec::P
     is_closed::NTuple{D2,Bool}
     priority::NTuple{D2,Int}
+    subaxes::Vector{Vector{Union{Nothing,Dims{2}}}}
 
     function NamedSharding(
         mesh::Mesh{D1},
         partition_spec::P;
+        subaxes=nothing,
         is_closed::NTuple{D2,Bool}=ntuple(Returns(true), length(partition_spec)),
         priority::NTuple{D2,Int}=ntuple(i -> -1, length(partition_spec)),
     ) where {D1,P<:Tuple,D2}
@@ -213,7 +215,30 @@ struct NamedSharding{D1,D2,P<:Tuple} <: AbstractSharding
         end
         @assert allunique(axis_names) "Duplicate axis names!"
 
-        return new{D1,D2,typeof(pspec)}(mesh, pspec, is_closed, priority)
+        if subaxes === nothing
+            subaxes = Vector{Vector{Union{Nothing,Dims{2}}}}(undef, length(partition_spec))
+            for (i, pspec) in enumerate(partition_spec)
+                if pspec === nothing
+                    subaxes[i] = [nothing]
+                else
+                    pspec = pspec isa Symbol ? (pspec,) : pspec
+                    subaxes[i] = [nothing for _ in pspec]
+                end
+            end
+        else
+            @assert length(subaxes) == length(partition_spec)
+            for (i, pspec) in enumerate(partition_spec)
+                if pspec === nothing
+                    @assert subaxes[i] === nothing || length(subaxes[i]) == 0
+                elseif pspec isa Symbol
+                    @assert length(subaxes[i]) == 1
+                else
+                    @assert length(pspec) == length(subaxes[i])
+                end
+            end
+        end
+
+        return new{D1,D2,typeof(pspec)}(mesh, pspec, is_closed, priority, subaxes)
     end
 end
 
@@ -227,6 +252,7 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
     )
     is_closed = Vector{Bool}(undef, ndims)
     priority = Vector{Int}(undef, ndims)
+    subaxes = Vector{Vector{Union{Nothing,Dims{2}}}}(undef, ndims)
     for i in 1:ndims
         dim_sharding_attr = MLIR.IR.Attribute(
             MLIR.API.sdyTensorShardingAttrGetDimShardingsElem(tensor_sharding_attr, i - 1)
@@ -234,6 +260,7 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
 
         naxes = MLIR.API.sdyDimensionShardingAttrGetAxesSize(dim_sharding_attr)
         axes = Vector{Symbol}(undef, naxes)
+        subaxes[i] = Vector{Union{Nothing,Dims{2}}}(undef, naxes)
         for j in 1:naxes
             axis_elem = MLIR.IR.Attribute(
                 MLIR.API.sdyDimensionShardingAttrGetAxesElem(dim_sharding_attr, j - 1)
@@ -242,8 +269,12 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
             subaxisinfo = MLIR.IR.Attribute(
                 MLIR.API.sdyAxisRefAttrGetSubAxisInfo(axis_elem)
             )
-            if subaxisinfo.attribute.ptr != C_NULL
-                error("subaxisinfo not supported yet")
+            if subaxisinfo.attribute.ptr == C_NULL
+                subaxes[i][j] = nothing
+            else
+                pre_size = MLIR.API.sdySubAxisInfoAttrGetPreSize(subaxisinfo)
+                actual_size = MLIR.API.sdySubAxisInfoAttrGetSize(subaxisinfo)
+                subaxes[i][j] = (Int64(pre_size), Int64(actual_size))
             end
 
             axis_name = Symbol(String(MLIR.API.sdyAxisRefAttrGetName(axis_elem)))
@@ -261,11 +292,13 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
         is_closed[i] = MLIR.API.sdyDimensionShardingAttrGetIsClosed(dim_sharding_attr)
         priority[i] = MLIR.API.sdyDimensionShardingAttrGetPriority(dim_sharding_attr)
     end
+    reverse!(subaxes)
 
     # Assuming `do_transpose` is true here
     return NamedSharding(
         mesh,
         reverse(Tuple(partition_spec));
+        subaxes,
         is_closed=Tuple(is_closed),
         priority=Tuple(priority),
     )
@@ -344,11 +377,16 @@ function get_tensor_sharding_attribute(
             axes = MLIR.IR.Attribute[]
         else
             names = name isa Symbol ? (name,) : name
-            axes = [
-                MLIR.API.sdyAxisRefAttrGet(
-                    ctx, String(name), MLIR.API.MlirAttribute(C_NULL)
-                ) for name in names
-            ]
+            subaxes = sharding.subaxes[j]
+            axes = Vector{MLIR.API.MlirAttribute}(undef, length(names))
+            for (i, (name, subaxisinfo)) in enumerate(zip(names, subaxes))
+                subaxisinfo = if subaxisinfo === nothing
+                    MLIR.API.MlirAttribute(C_NULL)
+                else
+                    MLIR.API.sdySubAxisInfoAttrGet(ctx, subaxisinfo[1], subaxisinfo[2])
+                end
+                axes[i] = MLIR.API.sdyAxisRefAttrGet(ctx, String(name), subaxisinfo)
+            end
         end
         dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
             ctx, length(axes), axes, sharding.is_closed[j], sharding.priority[j]
