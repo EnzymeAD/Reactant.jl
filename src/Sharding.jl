@@ -182,33 +182,40 @@ julia> sharding = NamedSharding(mesh, (nothing, nothing)); # fully replicated Ma
 
 See also: [`Sharding.NoSharding`](@ref)
 """
-struct NamedSharding{D1,D2,P<:Tuple} <: AbstractSharding
+struct NamedSharding{D1,D2} <: AbstractSharding
     mesh::Mesh{D1}
-    partition_spec::P
+    partition_spec::Vector{Vector{Union{Nothing,Symbol}}}
     is_closed::NTuple{D2,Bool}
     priority::NTuple{D2,Int}
     subaxes::Vector{Vector{Union{Nothing,Dims{2}}}}
 
     function NamedSharding(
         mesh::Mesh{D1},
-        partition_spec::P;
+        partition_spec;
         subaxes=nothing,
         is_closed::NTuple{D2,Bool}=ntuple(Returns(true), length(partition_spec)),
         priority::NTuple{D2,Int}=ntuple(i -> -1, length(partition_spec)),
-    ) where {D1,P<:Tuple,D2}
+    ) where {D1,D2}
         axis_names = Symbol[]
-        pspec = ()
-        for p in partition_spec
+
+        new_partition_spec = Vector{Vector{Union{Nothing,Symbol}}}(
+            undef, length(partition_spec)
+        )
+        @inbounds for (i, p) in enumerate(partition_spec)
             if p === nothing
-                pspec = (pspec..., nothing)
+                new_partition_spec[i] = [nothing]
             elseif p isa Tuple
-                @assert all(x -> x isa Symbol || x isa String, p)
-                sym_names = Symbol.(p)
-                append!(axis_names, sym_names)
-                pspec = (pspec..., sym_names)
+                new_partition_spec[i] = Vector{Union{Nothing,Symbol}}(undef, length(p))
+                for (j, pⱼ) in enumerate(p)
+                    @assert pⱼ isa Symbol || pⱼ isa String
+                    new_partition_spec[i][j] = Symbol(pⱼ)
+                    push!(axis_names, Symbol(pⱼ))
+                end
             elseif p isa Symbol || p isa String
                 push!(axis_names, Symbol(p))
-                pspec = (pspec..., Symbol(p))
+                new_partition_spec[i] = [Symbol(p)]
+            elseif p isa Vector
+                new_partition_spec[i] = copy(p)
             else
                 error("Unexpected partition spec $(partition_spec) [$(p)]")
             end
@@ -217,28 +224,20 @@ struct NamedSharding{D1,D2,P<:Tuple} <: AbstractSharding
 
         if subaxes === nothing
             subaxes = Vector{Vector{Union{Nothing,Dims{2}}}}(undef, length(partition_spec))
-            for (i, pspec) in enumerate(partition_spec)
-                if pspec === nothing
-                    subaxes[i] = [nothing]
-                else
-                    pspec = pspec isa Symbol ? (pspec,) : pspec
-                    subaxes[i] = [nothing for _ in pspec]
+            @inbounds for (i, pspec) in enumerate(new_partition_spec)
+                subaxes[i] = Vector{Union{Nothing,Dims{2}}}(undef, length(pspec))
+                for j in 1:length(pspec)
+                    subaxes[i][j] = nothing
                 end
             end
         else
-            @assert length(subaxes) == length(partition_spec)
-            for (i, pspec) in enumerate(partition_spec)
-                if pspec === nothing
-                    @assert subaxes[i] === nothing || length(subaxes[i]) == 0
-                elseif pspec isa Symbol
-                    @assert length(subaxes[i]) == 1
-                else
-                    @assert length(pspec) == length(subaxes[i])
-                end
+            @assert length(subaxes) == length(new_partition_spec)
+            for (i, pspec) in enumerate(new_partition_spec)
+                @assert length(pspec) == length(subaxes[i])
             end
         end
 
-        return new{D1,D2,typeof(pspec)}(mesh, pspec, is_closed, priority, subaxes)
+        return new{D1,D2}(mesh, new_partition_spec, is_closed, priority, subaxes)
     end
 end
 
@@ -247,9 +246,7 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
 
     ndims = MLIR.API.sdyTensorShardingAttrGetDimShardingsSize(tensor_sharding_attr)
 
-    partition_spec = Vector{Union{Nothing,Symbol,NTuple{<:Any,Union{Nothing,Symbol}}}}(
-        undef, ndims
-    )
+    partition_spec = Vector{Vector{Union{Nothing,Symbol}}}(undef, ndims)
     is_closed = Vector{Bool}(undef, ndims)
     priority = Vector{Int}(undef, ndims)
     subaxes = Vector{Vector{Union{Nothing,Dims{2}}}}(undef, ndims)
@@ -260,7 +257,13 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
 
         naxes = MLIR.API.sdyDimensionShardingAttrGetAxesSize(dim_sharding_attr)
         axes = Vector{Symbol}(undef, naxes)
-        subaxes[i] = Vector{Union{Nothing,Dims{2}}}(undef, naxes)
+
+        if naxes == 0
+            subaxes[i] = [nothing]
+        else
+            subaxes[i] = Vector{Union{Nothing,Dims{2}}}(undef, naxes)
+        end
+
         for j in 1:naxes
             axis_elem = MLIR.IR.Attribute(
                 MLIR.API.sdyDimensionShardingAttrGetAxesElem(dim_sharding_attr, j - 1)
@@ -282,34 +285,27 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
         end
 
         if naxes == 0
-            partition_spec[i] = nothing
-        elseif naxes == 1
-            partition_spec[i] = only(axes)
+            partition_spec[i] = [nothing]
         else
-            partition_spec[i] = Tuple(axes)
+            partition_spec[i] = axes
         end
 
         is_closed[i] = MLIR.API.sdyDimensionShardingAttrGetIsClosed(dim_sharding_attr)
         priority[i] = MLIR.API.sdyDimensionShardingAttrGetPriority(dim_sharding_attr)
     end
     reverse!(subaxes)
+    reverse!(partition_spec)
 
     # Assuming `do_transpose` is true here
     return NamedSharding(
-        mesh,
-        reverse(Tuple(partition_spec));
-        subaxes,
-        is_closed=Tuple(is_closed),
-        priority=Tuple(priority),
+        mesh, partition_spec; subaxes, is_closed=Tuple(is_closed), priority=Tuple(priority)
     )
 end
 
 @inline ndevices(sharding::NamedSharding) = length(sharding.mesh.device_ids)
 
-@inline function shard_type(::Type{NamedSharding{D1,D2,P}}, N) where {D1,D2,P}
-    # XXX: what happens on reshards?
-    # XXX: should we make partition_spec an array?
-    return ShardInfo{NamedSharding{D1,D2,P},Vector{NTuple{N,UnitRange{Int64}}}}
+@inline function shard_type(::Type{NamedSharding{D1,D2}}, N) where {D1,D2}
+    return ShardInfo{NamedSharding{D1,D2},Vector{NTuple{N,UnitRange{Int64}}}}
 end
 
 function (sharding::NamedSharding)(
@@ -372,22 +368,23 @@ function get_tensor_sharding_attribute(
     dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(
         undef, length(sharding.partition_spec)
     )
-    for (j, name) in enumerate(sharding.partition_spec)
-        if name === nothing
+    for (j, names) in enumerate(sharding.partition_spec)
+        if length(names) == 1 && names[1] === nothing
             axes = MLIR.IR.Attribute[]
         else
-            names = name isa Symbol ? (name,) : name
-            subaxes = sharding.subaxes[j]
             axes = Vector{MLIR.API.MlirAttribute}(undef, length(names))
-            for (i, (name, subaxisinfo)) in enumerate(zip(names, subaxes))
-                subaxisinfo = if subaxisinfo === nothing
-                    MLIR.API.MlirAttribute(C_NULL)
-                else
-                    MLIR.API.sdySubAxisInfoAttrGet(ctx, subaxisinfo[1], subaxisinfo[2])
-                end
-                axes[i] = MLIR.API.sdyAxisRefAttrGet(ctx, String(name), subaxisinfo)
-            end
         end
+
+        for (i, (name, subaxisinfo)) in enumerate(zip(names, sharding.subaxes[j]))
+            name === nothing && continue
+            subaxisinfo = if subaxisinfo === nothing
+                MLIR.API.MlirAttribute(C_NULL)
+            else
+                MLIR.API.sdySubAxisInfoAttrGet(ctx, subaxisinfo[1], subaxisinfo[2])
+            end
+            axes[i] = MLIR.API.sdyAxisRefAttrGet(ctx, String(name), subaxisinfo)
+        end
+
         dimension_sharding_attrs[j] = MLIR.API.sdyDimensionShardingAttrGet(
             ctx, length(axes), axes, sharding.is_closed[j], sharding.priority[j]
         )
@@ -517,7 +514,7 @@ end
 @inline ndevices(sharding::DimsSharding) = length(sharding.mesh.device_ids)
 
 @inline function shard_type(::Type{DimsSharding{M,D,P}}, N) where {M,D,P}
-    return shard_type(NamedSharding{M,D,P}, N)
+    return shard_type(NamedSharding{M,D}, N)
 end
 
 function standardize_sharding(sharding::DimsSharding, size_x)

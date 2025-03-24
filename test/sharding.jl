@@ -216,10 +216,15 @@ end
 
         @test x .+ x ≈ Array(res)
 
-        @test string(z.sharding.sharding.hlo_sharding) ==
-            string(res.sharding.sharding.hlo_sharding)
-        @test string(res.sharding.sharding.hlo_sharding) !=
-            string(x_ra.sharding.sharding.hlo_sharding)
+        z_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, z.sharding.sharding).hlo_sharding
+        res_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, res.sharding.sharding).hlo_sharding
+        x_ra_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, x_ra.sharding.sharding).hlo_sharding
+
+        @test string(z_hlo_sharding) == string(res_hlo_sharding)
+        @test string(res_hlo_sharding) != string(x_ra_hlo_sharding)
 
         # Test we can compile even when there is an intermediate sharding
         x_ra_no_sharding = Reactant.to_rarray(x)
@@ -234,10 +239,16 @@ end
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
         @test x .+ x ≈ Array(res)
-        @test string(z.sharding.sharding.hlo_sharding) ==
-            string(res.sharding.sharding.hlo_sharding)
-        @test string(res.sharding.sharding.hlo_sharding) !=
-            string(x_ra_no_sharding.sharding.sharding.hlo_sharding)
+
+        z_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, z.sharding.sharding).hlo_sharding
+        res_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, res.sharding.sharding).hlo_sharding
+        x_ra_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, x_ra.sharding.sharding).hlo_sharding
+
+        @test string(z_hlo_sharding) == string(res_hlo_sharding)
+        @test string(res_hlo_sharding) != string(x_ra_hlo_sharding)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
