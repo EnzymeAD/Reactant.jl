@@ -81,7 +81,9 @@ function generate_index_list(i1, is...)
     return list
 end
 
-function scalar_index_to_cartesian(idx::AbstractVector{TracedRNumber{T}}, sz::NTuple{N,Int}) where {T,N}
+function scalar_index_to_cartesian(
+    idx::AbstractVector{TracedRNumber{T}}, sz::NTuple{N,Int}
+) where {T,N}
     idx = materialize_traced_array(idx)
     idx = Ops.sub(idx, Ops.fill(T(1), size(idx)))
     idxs = reshape(Ops.remainder(idx, Ops.fill(T(sz[1]), size(idx))), :, 1)
