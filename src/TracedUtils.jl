@@ -154,7 +154,7 @@ function transpose_val(val)
 end
 
 mutable struct CompiledMlirFnResult{
-    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA
+    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA,RS
 }
     fnwrapped::Bool
     f::F
@@ -173,6 +173,7 @@ mutable struct CompiledMlirFnResult{
     sharding_mesh::M
     mutated_args::MA
     use_shardy_partitioner::Bool
+    result_shardings::RS
 end
 
 function make_mlir_fn(
@@ -403,7 +404,9 @@ function make_mlir_fn(
         sharding_mesh = first(unique_meshes)
         num_partitions = length(sharding_mesh)
 
-        linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
+        linear_arg_shardings = Vector{Tuple{MLIR.IR.Attribute,Symbol}}(
+            undef, length(linear_args)
+        )
 
         # If an argument is mutated but is not sharded (aka sharding is NoSharding), we
         # need to force a replicated sharding.
@@ -422,12 +425,17 @@ function make_mlir_fn(
             if haskey(traced_args_to_shardings, arg)
                 sharding = traced_args_to_shardings[arg]
                 (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
-                linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-                    sharding, ctx, sym_name, mesh_attr
+                attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
+                    sharding, ctx, sym_name, mesh_attr, size(arg)
                 )
-                MLIR.API.mlirFuncSetArgAttr(
-                    func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
-                )
+                linear_arg_shardings[i] = (attr, dialect)
+                if dialect == :sdy
+                    MLIR.API.mlirFuncSetArgAttr(func2, i - 1, "sdy.sharding", attr)
+                elseif dialect == :mhlo
+                    MLIR.API.mlirFuncSetArgAttr(func2, i - 1, "mhlo.sharding", attr)
+                else
+                    error("Unsupported dialect for tensor sharding: $(dialect)")
+                end
             end
         end
 
@@ -439,9 +447,14 @@ function make_mlir_fn(
                 residx = findfirst(Base.Fix1(===, arg), linear_results)
                 @assert residx !== nothing
                 result_not_replicated[residx] = true
-                MLIR.API.mlirFuncSetResultAttr(
-                    func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
-                )
+                attr, dialect = linear_arg_shardings[i]
+                if dialect == :sdy
+                    MLIR.API.mlirFuncSetResultAttr(func2, residx - 1, "sdy.sharding", attr)
+                elseif dialect == :mhlo
+                    MLIR.API.mlirFuncSetResultAttr(func2, residx - 1, "mhlo.sharding", attr)
+                else
+                    error("Unsupported dialect for tensor sharding: $(dialect)")
+                end
             end
         end
 
@@ -452,14 +465,16 @@ function make_mlir_fn(
                 if haskey(output_shardings, i)
                     sharding = output_shardings[i]
                     (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
-                    MLIR.API.mlirFuncSetResultAttr(
-                        func2,
-                        i - 1,
-                        "sdy.sharding",
-                        Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-                            sharding, ctx, sym_name, mesh_attr
-                        ),
+                    attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
+                        sharding, ctx, sym_name, mesh_attr, size(arg)
                     )
+                    if dialect == :sdy
+                        MLIR.API.mlirFuncSetResultAttr(func2, i - 1, "sdy.sharding", attr)
+                    elseif dialect == :mhlo
+                        MLIR.API.mlirFuncSetResultAttr(func2, i - 1, "mhlo.sharding", attr)
+                    else
+                        error("Unsupported dialect for tensor sharding: $(dialect)")
+                    end
                 end
             end
         end
@@ -488,6 +503,7 @@ function make_mlir_fn(
         sharding_mesh,
         mutated_args,
         true,
+        missing,
     )
 end
 

@@ -305,17 +305,6 @@ function compute_array_indices_and_hlo_sharding(
     )
 end
 
-# Helper function to get device sequence along a dimension
-function __get_device_sequence(arr, dim)
-    idx = ones(Int, ndims(arr))
-    sequence = Int[]
-    for i in 1:size(arr, dim)
-        idx[dim] = i
-        push!(sequence, arr[idx...])
-    end
-    return sequence
-end
-
 # xla::HloSharding
 mutable struct HloSharding
     ptr::Ptr{Cvoid}
@@ -326,9 +315,12 @@ mutable struct HloSharding
     end
 end
 
-# TODO: implement equality from the C++ side
 function Base.:(==)(hsharding1::HloSharding, hsharding2::HloSharding)
-    return string(hsharding1) == string(hsharding2)
+    GC.@preserve hsharding1 hsharding2 begin
+        return @ccall MLIR.API.mlir_c.hlo_sharding_check_eq(
+            hsharding1.ptr::Ptr{Cvoid}, hsharding2.ptr::Ptr{Cvoid}
+        )::Bool
+    end
 end
 
 function free_hlo_sharding(hlo_sharding::HloSharding)
@@ -392,4 +384,51 @@ function compute_array_indices_and_hlo_sharding(
         ),
         sharding,
     )
+end
+
+function tile_assignment_dimensions(hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_dimensions_size(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    dimensions = Vector{Int64}(undef, ndims)
+    GC.@preserve hlo_sharding dimensions begin
+        @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_dimensions(
+            hlo_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int64}, ndims::Int32
+        )::Cvoid
+    end
+    return dimensions
+end
+
+function tile_assignment_devices(hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_devices_size(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    devices = Vector{Int64}(undef, ndims)
+    GC.@preserve hlo_sharding devices begin
+        @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_devices(
+            hlo_sharding.ptr::Ptr{Cvoid}, devices::Ptr{Int64}, ndims::Int32
+        )::Cvoid
+    end
+    return devices
+end
+
+for check in (:is_tiled, :is_maximal, :is_tuple, :is_replicated, :is_manual, :is_unknown)
+    cfn = Symbol(:hlo_sharding_, check)
+    @eval function $(check)(hlo_sharding::HloSharding)
+        GC.@preserve hlo_sharding begin
+            return @ccall MLIR.API.mlir_c.$(cfn)(hlo_sharding.ptr::Ptr{Cvoid})::Bool
+        end
+    end
+end
+
+function replicate_on_last_tile_dim(hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        return @ccall MLIR.API.mlir_c.hlo_sharding_replicate_on_last_tile_dim(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Bool
+    end
 end

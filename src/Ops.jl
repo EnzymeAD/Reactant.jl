@@ -2414,9 +2414,12 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     cache = Reactant.Compiler.sdycache()
     haskey(cache, sharding.mesh) || mesh(sharding.mesh; location)
     (; sym_name, mesh_attr) = cache[sharding.mesh]
-    tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-        sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=false
+
+    tensor_sharding_attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
+        sharding, MLIR.IR.context(), sym_name, mesh_attr, size(input); do_transpose=false
     )
+    @assert dialect == :sdy "Expected dialect to be `sdy`, got $(dialect)"
+
     resharded_value = MLIR.IR.result(
         MLIR.Dialects.sdy.sharding_constraint(
             input.mlir_data; sharding=tensor_sharding_attr, location

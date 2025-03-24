@@ -110,15 +110,6 @@ function create_result(tocopy::T, path, args...) where {T}
     return Expr(:new, T, elems...)
 end
 
-function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh, N::Integer)
-    device_to_array_slices, hlo_sharding = path_to_shard_info[path]
-    delete!(path_to_shard_info, path)
-    sharding = Reactant.Sharding.HloSharding(
-        hlo_sharding, sharding_mesh, ntuple(Returns(true), N), ntuple(Returns(-1), N)
-    )
-    return Reactant.Sharding.ShardInfo(sharding, device_to_array_slices)
-end
-
 function create_result(
     tocopy::ConcretePJRTNumber{T,D,S},
     path,
@@ -134,9 +125,7 @@ function create_result(
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
+            sharding = pop!(path_to_shard_info, path)
             return :(ConcretePJRTNumber{$T,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $sharding
             ))
@@ -150,9 +139,7 @@ function create_result(
         if haskey(to_unreshard_results, path)
             error("TODO: Not yet Implemented. Use IFRT for this.")
         end
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
+        sharding = pop!(path_to_shard_info, path)
         return :(ConcretePJRTNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data...,)), $sharding
         ))
@@ -175,9 +162,7 @@ function create_result(
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented.")
             end
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
+            sharding = pop!(path_to_shard_info, path)
             return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(restore), $sharding))
         else
             return :(ConcreteIFRTNumber{$T}($restore))
@@ -189,9 +174,7 @@ function create_result(
         if haskey(to_unreshard_results, path)
             error("TODO: Not yet Implemented.")
         end
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
+        sharding = pop!(path_to_shard_info, path)
         return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(tocopy.data), $sharding))
     end
     return :(ConcreteIFRTNumber{$T}($(tocopy.data)))
@@ -212,9 +195,7 @@ function create_result(
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
+            sharding = pop!(path_to_shard_info, path)
             return :(ConcretePJRTArray{$T,$N,length($(restore)),$(typeof(sharding))}(
                 ($(restore)...,), $(tocopy.shape), $sharding
             ))
@@ -228,9 +209,7 @@ function create_result(
         if haskey(to_unreshard_results, path)
             error("TODO: Not yet Implemented. Use IFRT for this.")
         end
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
+        sharding = pop!(path_to_shard_info, path)
         return :(ConcretePJRTArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
         ))
@@ -257,9 +236,7 @@ function create_result(
                     $(restore), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
                 ))
             end
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
+            sharding = pop!(path_to_shard_info, path)
             return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
                 $(restore), $(tocopy.shape), $sharding
             ))
@@ -275,9 +252,7 @@ function create_result(
                 $(tocopy.data), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
             ))
         end
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
+        sharding = pop!(path_to_shard_info, path)
         return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
             $(tocopy.data), $(tocopy.shape), $sharding
         ))
@@ -1041,22 +1016,58 @@ function compile_mlir!(
 
     # shardy passes
     use_shardy_partitioner = false
+    result_shardings = missing
     if is_sharded
         if shardy_passes == :default
             # If `:default` is passed in, we will run a pass to export the sharding
             # inside the corresponding compile function for IFRT/PJRT. This keeps the
             # sharding readable.
             use_shardy_partitioner = true
-        elseif shardy_passes == :to_mhlo_shardings
-            # Convert all shardy ops to corresponding mhlo attrs/ops that can be consumed by
-            # XLA (note we need to set `use_shardy_partitioner` to `false` in the options)
-            # TODO: Use https://github.com/openxla/shardy/blob/01d3205086132d1bdf0867e911c05f489918431d/shardy/dialect/sdy/transforms/propagation/propagation_pipeline.cc#L28 to pass in the options
+        elseif shardy_passes == :no_stablehlo_export
             run_pass_pipeline!(
                 mod,
                 join(
-                    ["sdy-propagation-pipeline", "xla-sdy-stablehlo-export-pipeline"], ','
+                    [
+                        "sdy-propagation-pipeline",
+                        "sdy-close-shardings",
+                        "canonicalize",
+                        "cse",
+                    ],
+                    ",",
                 ),
             )
+        elseif shardy_passes == :to_mhlo_shardings
+            # Convert all shardy ops to corresponding mhlo attrs/ops that can be consumed by
+            # XLA (note we need to set `use_shardy_partitioner` to `false` in the options)
+            run_pass_pipeline!(
+                mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+            )
+
+            # Extract the result shardings from the compiled function
+            result_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
+            if result_attrs !== nothing
+                result_shardings = Vector{
+                    Union{Reactant.Sharding.NamedSharding,Reactant.Sharding.NoSharding}
+                }(
+                    undef, length(result_attrs)
+                )
+                for i in 1:length(result_attrs)
+                    result_attr = result_attrs[i - 1]
+                    @assert MLIR.IR.isdict(result_attr)
+                    mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
+                        result_attr, "sdy.sharding"
+                    )
+                    if mlir_attr.ptr == C_NULL
+                        result_shardings[i] = Reactant.Sharding.NoSharding()
+                    else
+                        result_shardings[i] = Reactant.Sharding.named_sharding_from_tensor_sharding_attr(
+                            mlir_fn_res.sharding_mesh, MLIR.IR.Attribute(mlir_attr)
+                        )
+                    end
+                end
+            end
+
+            run_pass_pipeline!(mod, join(["xla-sdy-stablehlo-export-pipeline"], ','))
 
             # Run our optimization passes here -- we need to be careful to not apply folding
             # here since that violates the semantics of `sdy.constant` which was converted to
@@ -1142,6 +1153,7 @@ function compile_mlir!(
         mlir_fn_res.sharding_mesh,
         mlir_fn_res.mutated_args,
         use_shardy_partitioner,
+        result_shardings,
     )
 end
 
@@ -1340,7 +1352,19 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
     )
 end
 
-function assert_mismatched_sharding(hlo_sharding_from_input, hlo_sharding_from_executable)
+function assert_mismatched_sharding(
+    sharding_from_input, hlo_sharding_from_executable::Reactant.XLA.HloSharding
+)
+    return assert_mismatched_sharding(
+        convert(Reactant.Sharding.HloSharding, sharding_from_input).hlo_sharding,
+        hlo_sharding_from_executable,
+    )
+end
+
+function assert_mismatched_sharding(
+    hlo_sharding_from_input::Reactant.XLA.HloSharding,
+    hlo_sharding_from_executable::Reactant.XLA.HloSharding,
+)
     @assert hlo_sharding_from_executable == hlo_sharding_from_input "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 end
 
@@ -1943,7 +1967,8 @@ function compile(f, args; sync=false, kwargs...)
     end
 
     result_stores = Dict{Tuple,Symbol}()
-    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Tuple}() : nothing
+    path_to_shard_info =
+        mlir_fn_res.is_sharded ? Dict{Tuple,Reactant.Sharding.ShardInfo}() : nothing
 
     # generate Julia `Thunk` code
     flatten_arg_names, flatten_code, resharded_inputs = codegen_flatten!(
@@ -1965,12 +1990,47 @@ function compile(f, args; sync=false, kwargs...)
     )
 
     linear_result_shard_info = if mlir_fn_res.is_sharded
-        output_shardings = XLA.get_output_shardings(exec)
-        XLA.compute_array_indices_and_hlo_sharding.(
-            output_shardings,
-            size.(mlir_fn_res.linear_results),
-            (mlir_fn_res.sharding_mesh.logical_device_ids,),
+        output_hlo_shardings = XLA.get_output_shardings(exec)
+        output_reactant_shardings = mlir_fn_res.result_shardings
+        local linear_result_shard_info = Vector{Reactant.Sharding.ShardInfo}(
+            undef, length(linear_results)
         )
+        for i in 1:length(linear_results)
+            res_size = size(mlir_fn_res.linear_results[i])
+            array_slices, hlo_sharding = XLA.compute_array_indices_and_hlo_sharding(
+                output_hlo_shardings[i],
+                res_size,
+                mlir_fn_res.sharding_mesh.logical_device_ids,
+            )
+
+            if output_reactant_shardings !== missing
+                reactant_sharding = output_reactant_shardings[i]
+                use_hlo_sharding =
+                    reactant_sharding isa Reactant.Sharding.NoSharding ||
+                    convert(
+                        Reactant.Sharding.HloSharding, reactant_sharding
+                    ).hlo_sharding != hlo_sharding
+            else
+                use_hlo_sharding = true
+            end
+
+            if use_hlo_sharding
+                linear_result_shard_info[i] = Reactant.Sharding.ShardInfo(
+                    Reactant.Sharding.HloSharding(
+                        hlo_sharding,
+                        mlir_fn_res.sharding_mesh,
+                        ntuple(Returns(true), length(res_size)),
+                        ntuple(Returns(-1), length(res_size)),
+                    ),
+                    array_slices,
+                )
+            else
+                linear_result_shard_info[i] = Reactant.Sharding.ShardInfo(
+                    output_reactant_shardings[i], array_slices
+                )
+            end
+        end
+        linear_result_shard_info
     else
         ntuple(Returns(nothing), length(linear_results))
     end
@@ -2030,6 +2090,10 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
 end
 
 XLA.cost_analysis(thunk::Thunk) = XLA.cost_analysis(thunk.exec)
+
+XLA.get_output_shardings(thunk::Thunk) = XLA.get_output_shardings(thunk.exec)
+
+XLA.get_parameter_shardings(thunk::Thunk) = XLA.get_parameter_shardings(thunk.exec)
 
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
