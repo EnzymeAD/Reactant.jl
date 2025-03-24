@@ -51,7 +51,7 @@ end
 for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
     uAT = Symbol(:Unit, AT)
     @eval begin
-        function materialize_traced_array(
+        function ReactantCore.materialize_traced_array(
             x::$(AT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
@@ -62,7 +62,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
             return Ops.select(indicator, px, zero(px))
         end
 
-        function materialize_traced_array(
+        function ReactantCore.materialize_traced_array(
             x::$(uAT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
