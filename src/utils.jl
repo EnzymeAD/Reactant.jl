@@ -179,7 +179,9 @@ function should_rewrite_call(@nospecialize(ft))
         ft <: typeof(Adapt.adapt_structure) ||
         ft <: typeof(Core.is_top_bit_set) ||
         ft <: typeof(Base.setindex_widen_up_to) ||
-        ft <: typeof(Base.typejoin)
+        ft <: typeof(Base.typejoin) ||
+        ft <: typeof(Base.argtype_decl) ||
+        ft <: typeof(Base.arg_decl_parts)
         return false
     end
 
