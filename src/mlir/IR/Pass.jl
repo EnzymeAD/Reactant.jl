@@ -66,6 +66,45 @@ end
 
 const DUMP_MLIR_DIR = Ref{Union{Nothing,String}}(nothing)
 
+# Utilities for dumping to a file the module of a failed compilation, useful for
+# debugging purposes.
+function compilation_failed_dump_mlir(mod::Module, pm::Union{Nothing,PassManager}=nothing)
+    try
+        # If `DUMP_MLIR_DIR` is `nothing`, create a persistent new temp
+        # directory, otherwise use the provided path.
+        dir = if isnothing(DUMP_MLIR_DIR[])
+            mkpath(tempdir())
+            mktempdir(; prefix="reactant_", cleanup=false)
+        else
+            DUMP_MLIR_DIR[]
+        end
+        # Make sure the directory exists
+        mkpath(dir)
+        path = tempname(dir; cleanup=false) * ".mlir"
+        open(path, "w") do io
+            if !isnothing(pm)
+                println(io, "// Pass pipeline:")
+                print(io, "// ")
+                print_pass_pipeline(io, OpPassManager(pm))
+                println(io)
+            end
+            show(IOContext(io, :debug => true), mod)
+        end
+        @error "Compilation failed, MLIR module written to $(path)"
+    catch err
+        @error "Couldn't save MLIR module" exception = err
+    end
+end
+
+function try_compile_dump_mlir(f, mod::Module, pm=nothing)
+    try
+        f()
+    catch
+        compilation_failed_dump_mlir(mod, pm)
+        rethrow()
+    end
+end
+
 """
     run!(passManager, module)
 
@@ -78,28 +117,7 @@ function run!(pm::PassManager, mod::Module)
         API.mlirPassManagerRun(pm, mod)
     end)
     if isfailure(status)
-        # If `DUMP_MLIR_DIR` is `nothing`, create a persistent new temp
-        # directory, otherwise use the provided path.
-        dir = if isnothing(DUMP_MLIR_DIR[])
-            mktempdir(; prefix="reactant_", cleanup=false)
-        else
-            DUMP_MLIR_DIR[]
-        end
-        try
-            # Make sure the directory exists
-            mkpath(dir)
-            path = tempname(dir; cleanup=false) * ".mlir"
-            open(path, "w") do io
-                println(io, "// Pass pipeline:")
-                print(io, "// ")
-                print_pass_pipeline(io, OpPassManager(pm))
-                println(io)
-                show(IOContext(io, :debug => true), mod)
-            end
-            @error "Dumped module to " * path
-        catch err
-            @error "Couldn't save MLIR module" exception = err
-        end
+        compilation_failed_dump_mlir(mod, pm)
         throw("failed to run pass manager on module")
     end
     return mod
