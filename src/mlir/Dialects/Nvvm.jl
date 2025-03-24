@@ -2631,6 +2631,42 @@ function mapa(a::Value, b::Value; res::IR.Type, location=Location())
 end
 
 """
+`match_sync`
+
+The `match.sync` op performs broadcast and compare of operand `val` across 
+all non-exited threads in `thread_mask` and returns a mask depending on the 
+kind and an optional predicate.
+
+The matching operation kinds are:
+- `any`: Returns a mask corresponding to the non-exited threads in the 
+`thread_mask` that have the same value of operand `val`.
+- `all`: Returns a mask and a predicate. If all non-exited threads in the 
+`thread_mask` have the same value of operand `val`, the predicate is set to 
+true and the mask corresponds to the non-exited threads in the 
+`thread_mask`. Otherwise, the predicate is set to false and the mask is 0.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-match-sync)
+"""
+function match_sync(thread_mask::Value, val::Value; res::IR.Type, kind, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[thread_mask, val]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
+
+    return create_operation(
+        "nvvm.match.sync",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `mma_sync`
 
 The `nvvm.mma.sync` operation collectively performs the operation
@@ -3159,6 +3195,80 @@ function tcgen05_fence(; kind, location=Location())
 end
 
 """
+`tcgen05_ld`
+
+Instruction `tcgen05.ld` asynchronously loads data from the Tensor Memory at
+the location specified by the 32-bit address operand `tmemAddr` into the
+destination register `res`, collectively across all threads of the warps.
+
+The `shape` and the `num` attribute together determines the total
+dimension of the data which is loaded from the Tensor Memory. The `shape`
+attribute indicates the base dimension of data to be accessed as described
+in the Data Movement Shape. The `num` attribute indicates the repeat
+factor on the base dimension resulting in the total dimension of the data
+that is accessed.
+
+The shape `16x32bx2` performs two accesses into Tensor Memory of the shape
+`16x32b`. The base address of the first access is specified by `tmemAddr`
+and the base address of the second access is specified by
+`tmemAddr + offset`, where `offset` is an immediate argument.
+
+The unit attribute `pack` can be used to pack two 16-bit
+elements from adjacent columns into a single 32-bit element during the load.
+
+The following table describes the size of the vector for various combinations
+of `num` and `shape` attributes
+|=====================================================================|
+| num/shape      |     16x32bx2/16x64b/32x32b |  16x128b   | 16x256b  |
+|=====================================================================|
+| x1             |          1                 |    2       |    4     |
+| x2             |          2                 |    4       |    8     |
+| x4             |          4                 |    8       |    16    |
+| x8             |          8                 |    16      |    32    |
+| x16            |          16                |    32      |    64    |
+| x32            |          32                |    64      |    128   |
+| x64            |          64                |    128     |    NA    |
+| x128           |          128               |    NA      |    NA    |
+|=====================================================================|
+
+# Example
+```mlir
+  nvvm.tcgen05.ld %tmemAddr, %offset pack {
+    shape = #nvvm.tcgen05_ldst_shape<shape_16x32bx2>,
+  } : <2xi32>
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instructions-tcgen05-st)
+"""
+function tcgen05_ld(
+    tmemAddr::Value,
+    offset=nothing::Union{Nothing,Value};
+    res::IR.Type,
+    pack=nothing,
+    shape,
+    location=Location(),
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[tmemAddr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("shape", shape),]
+    !isnothing(offset) && push!(operands, offset)
+    !isnothing(pack) && push!(attributes, namedattribute("pack", pack))
+
+    return create_operation(
+        "nvvm.tcgen05.ld",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `tcgen05_relinquish_alloc_permit`
 
 The `tcgen05.relinquish_alloc_permit` Op specifies that the CTA
@@ -3207,6 +3317,79 @@ function tcgen05_shift(taddr::Value; group=nothing, location=Location())
 
     return create_operation(
         "nvvm.tcgen05.shift",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`tcgen05_st`
+
+Instruction `tcgen05.st` asynchronously stores data from the source register `r`
+into the Tensor Memory at the location specified by the 32-bit address operand
+`tmemAddr`, collectively across all threads of the warps.
+
+The `shape` and the `num` attribute together determines the total dimension of
+the data which is stored to the Tensor Memory. The `shape` indicates the base
+dimension of data to be accessed. The `num` attribute indicates the repeat
+factor on the base dimension resulting in the total dimension of the data that
+is accessed.
+
+The shape `16x32bx2` performs two accesses into Tensor Memory of the shape
+`16x32b`. The base address of the first access is specified by `tmemAddr`
+and the base address of the second access is specified by
+`tmemAddr + offset`, where `offset` is an immediate argument.
+
+The unit attribute `unpack` can be used to unpack a 32-bit element
+in the register into two 16-bit elements and store them in adjacent columns.
+
+The following table describes the size of the vector for various combinations
+of `num` and `shape` attributes
+|=====================================================================|
+| num/shape      |     16x32bx2/16x64b/32x32b |  16x128b   | 16x256b  |
+|=====================================================================|
+| x1             |          1                 |    2       |    4     |
+| x2             |          2                 |    4       |    8     |
+| x4             |          4                 |    8       |    16    |
+| x8             |          8                 |    16      |    32    |
+| x16            |          16                |    32      |    64    |
+| x32            |          32                |    64      |    128   |
+| x64            |          64                |    128     |    NA    |
+| x128           |          128               |    NA      |    NA    |
+|=====================================================================|
+
+# Example
+```mlir
+  nvvm.tcgen05.st %tmemAddr, %val, %offset unpack {
+    shape = #nvvm.tcgen05_ldst_shape<shape_16x32bx2>,
+  } : <2xi32>
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instructions-tcgen05-st)
+"""
+function tcgen05_st(
+    tmemAddr::Value,
+    val::Value,
+    offset=nothing::Union{Nothing,Value};
+    unpack=nothing,
+    shape,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tmemAddr, val]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("shape", shape),]
+    !isnothing(offset) && push!(operands, offset)
+    !isnothing(unpack) && push!(attributes, namedattribute("unpack", unpack))
+
+    return create_operation(
+        "nvvm.tcgen05.st",
         location;
         operands,
         owned_regions,
