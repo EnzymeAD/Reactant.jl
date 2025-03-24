@@ -238,6 +238,14 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
             axis_elem = MLIR.IR.Attribute(
                 MLIR.API.sdyDimensionShardingAttrGetAxesElem(dim_sharding_attr, j - 1)
             )
+
+            subaxisinfo = MLIR.IR.Attribute(
+                MLIR.API.sdyAxisRefAttrGetSubAxisInfo(axis_elem)
+            )
+            if subaxisinfo.attribute.ptr != C_NULL
+                error("subaxisinfo not supported yet")
+            end
+
             axis_name = Symbol(String(MLIR.API.sdyAxisRefAttrGetName(axis_elem)))
             axes[j] = axis_name
         end
@@ -517,9 +525,9 @@ end
 # This stores the sharding information in the form of XLA.HloSharding, and provides a
 # central type for the final storage. It also potentially saves us the pain of not having
 # to regenerate the partition spec from the HloSharding.
-struct HloSharding{D1,D2} <: AbstractSharding
+struct HloSharding{D1,D2,PS} <: AbstractSharding
     hlo_sharding::XLA.HloSharding
-    parent_sharding # This is intentionally left un-parameterized
+    parent_sharding::PS
     mesh::Mesh{D1}
     is_closed::NTuple{D2,Bool}
     priority::NTuple{D2,Int}
@@ -532,7 +540,7 @@ struct HloSharding{D1,D2} <: AbstractSharding
         parent_sharding::Union{Nothing,AbstractSharding}=nothing,
     ) where {D1}
         @assert length(is_closed) == length(priority)
-        return new{D1,length(is_closed)}(
+        return new{D1,length(is_closed),typeof(parent_sharding)}(
             hlo_sharding, parent_sharding, mesh, is_closed, priority
         )
     end
@@ -570,8 +578,8 @@ end
 
 @inline ndevices(sharding::HloSharding) = length(sharding.mesh.device_ids)
 
-@inline function shard_type(::Type{HloSharding{D1,D2}}, N) where {D1,D2}
-    return ShardInfo{HloSharding{D1,D2},Vector{NTuple{N,UnitRange{Int64}}}}
+@inline function shard_type(::Type{HloSharding{D1,D2,PS}}, N) where {D1,D2,PS}
+    return ShardInfo{HloSharding{D1,D2,PS},Vector{NTuple{N,UnitRange{Int64}}}}
 end
 
 function sharding_to_array_slices(
