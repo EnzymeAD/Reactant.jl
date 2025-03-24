@@ -31,6 +31,19 @@ end
     # get_view_compiled = @compile get_view(x_concrete)
 end
 
+@testset "setindex: unitrange index" begin
+    x = rand(4, 4)
+    y = zeros(3, 2)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @jit setindex!(x_ra, y_ra, 6:11)
+    setindex!(x, y, 6:11)
+
+    @test x ≈ Array(x_ra)
+    @test y ≈ Array(y_ra)
+end
+
 function maskset!(y, x)
     y[:] = x
     return nothing
