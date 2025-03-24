@@ -14,48 +14,44 @@ using ..Reactant:
     OrderedIdDict,
     ReactantPrimitive,
     Ops
-using ReactantCore: MissingTracedValue, is_traced
+import ReactantCore
+using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
 using Functors: Functors
 
-"""
-    materialize_traced_array(AbstractArray{<:TracedRNumber})::TracedRArray
+ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
-Given an AbstractArray{TracedRNumber}, return or create an equivalent TracedRArray.
+ReactantCore.materialize_traced_array(x::TracedRArray) = x
 
-"""
-materialize_traced_array(x::AbstractArray) = x
+ReactantCore.materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
 
-materialize_traced_array(x::TracedRArray) = x
-
-materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
-
-function materialize_traced_array(x::AbstractRange{<:TracedRNumber})
+function ReactantCore.materialize_traced_array(x::AbstractRange{<:TracedRNumber})
+    @show typeof(x)
     return Reactant.aos_to_soa(collect(x))
 end
 
-function materialize_traced_array(x::UnitRange{<:TracedRNumber})
+function ReactantCore.materialize_traced_array(x::UnitRange{<:TracedRNumber})
     return Ops.add(
         Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1),
         Ops.fill(first(x), [length(x)]),
     )
 end
 
-function materialize_traced_array(x::SubArray{TracedRNumber{T}}) where {T}
+function ReactantCore.materialize_traced_array(x::SubArray{TracedRNumber{T}}) where {T}
     z = SubArray(materialize_traced_array(parent(x)), x.indices)
     return z[axes(z)...]
 end
 
-function materialize_traced_array(x::Base.ReshapedArray{TracedRNumber{T}}) where {T}
+function ReactantCore.materialize_traced_array(x::Base.ReshapedArray{TracedRNumber{T}}) where {T}
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
-function materialize_traced_array(
+function ReactantCore.materialize_traced_array(
     x::PermutedDimsArray{TracedRNumber{T},N,perm}
 ) where {T,N,perm}
     return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
-function materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where {T}
+function ReactantCore.materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where {T}
     return Reactant.aos_to_soa(x)
 end
 

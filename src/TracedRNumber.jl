@@ -575,6 +575,31 @@ function TracedUnitRange{T}(r::AbstractUnitRange) where {T<:Real}
 end
 TracedUnitRange(r::AbstractUnitRange) = TracedUnitRange(first(r), last(r))
 
+@inline function Base.length(r::TracedUnitRange{TracedRNumber{T}}) where T
+    start, stop = first(r), last(r)
+    a = Base.oneunit(Base.zero(stop) - Base.zero(start))
+    if a isa Signed
+        # Signed are allowed to go negative
+        Ops.select(stop >= start, a + stop - start, a)
+    else
+        Ops.select(stop >= start, a + stop - start, zero(a))
+    end
+end
+
+function Base._reshape(v::TracedUnitRange, dims::Dims{1})
+    Base.require_one_based_indexing(v)
+    len = dims[1]
+    # TODO support errors
+    # len == length(v) || Base._throw_dmrs(length(v), "length", len)
+    v
+end
+function Base._reshape(parent::TracedUnitRange, dims::Dims)
+    n = length(parent)
+    # TODO support errors
+    # prod(dims) == n || Base._throw_dmrs(n, "size", dims)
+    Base.__reshape((parent, IndexStyle(parent)), dims)
+end
+
 AbstractUnitRange{T}(r::TracedUnitRange) where {T} = TracedUnitRange{T}(r)
 
 struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}

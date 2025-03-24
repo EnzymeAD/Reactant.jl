@@ -12,20 +12,22 @@ using ..Reactant:
     Ops,
     MLIR
 
-using ..TracedUtils: TracedUtils, get_mlir_data, materialize_traced_array, set_mlir_data!
+using ReactantCore: materialize_traced_array
+
+using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 
 using LinearAlgebra
 
 # Various Wrapper Arrays defined in LinearAlgebra
-function TracedUtils.materialize_traced_array(
+function ReactantCore.materialize_traced_array(
     x::Transpose{TracedRNumber{T},<:AnyTracedRArray}
 ) where {T}
-    px = TracedUtils.materialize_traced_array(parent(x))
+    px = materialize_traced_array(parent(x))
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
 end
 
-function TracedUtils.materialize_traced_array(
+function ReactantCore.materialize_traced_array(
     x::Adjoint{TracedRNumber{T},<:AnyTracedRArray}
 ) where {T}
     return Ops.conj(
@@ -33,13 +35,13 @@ function TracedUtils.materialize_traced_array(
     )
 end
 
-function TracedUtils.materialize_traced_array(
+function ReactantCore.materialize_traced_array(
     x::Diagonal{TracedRNumber{T},<:AnyTracedRVector}
 ) where {T}
     return diagm(materialize_traced_array(parent(x)))
 end
 
-function TracedUtils.materialize_traced_array(
+function ReactantCore.materialize_traced_array(
     x::Tridiagonal{TracedRNumber{T},<:AnyTracedRVector}
 ) where {T}
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
@@ -48,22 +50,22 @@ end
 for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
     uAT = Symbol(:Unit, AT)
     @eval begin
-        function TracedUtils.materialize_traced_array(
+        function materialize_traced_array(
             x::$(AT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
-            px = TracedUtils.materialize_traced_array(parent(x))
+            px = materialize_traced_array(parent(x))
             row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
             col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
             indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(comp))
             return Ops.select(indicator, px, zero(px))
         end
 
-        function TracedUtils.materialize_traced_array(
+        function materialize_traced_array(
             x::$(uAT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
-            px = TracedUtils.materialize_traced_array(parent(x))
+            px = materialize_traced_array(parent(x))
             row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
             col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
             nondiag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="NE")
@@ -73,7 +75,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
     end
 end
 
-function TracedUtils.materialize_traced_array(
+function ReactantCore.materialize_traced_array(
     x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}
 ) where {T}
     m, n = size(x)

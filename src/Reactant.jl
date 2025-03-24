@@ -1,6 +1,6 @@
 module Reactant
 
-using ReactantCore: ReactantCore, @trace, within_compile, MissingTracedValue
+using ReactantCore: ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array
 
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
