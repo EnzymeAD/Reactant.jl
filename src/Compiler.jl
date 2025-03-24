@@ -1055,23 +1055,25 @@ function compile_mlir!(
 
             # Extract the result shardings from the compiled function
             result_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
-            result_shardings = Vector{
-                Union{Reactant.Sharding.NamedSharding,Reactant.Sharding.NoSharding}
-            }(
-                undef, length(result_attrs)
-            )
-            for i in 1:length(result_attrs)
-                result_attr = result_attrs[i - 1]
-                @assert MLIR.IR.isdict(result_attr)
-                mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
-                    result_attr, "sdy.sharding"
+            if result_attrs !== nothing
+                result_shardings = Vector{
+                    Union{Reactant.Sharding.NamedSharding,Reactant.Sharding.NoSharding}
+                }(
+                    undef, length(result_attrs)
                 )
-                if mlir_attr.ptr == C_NULL
-                    result_shardings[i] = Reactant.Sharding.NoSharding()
-                else
-                    result_shardings[i] = Reactant.Sharding.named_sharding_from_tensor_sharding_attr(
-                        mlir_fn_res.sharding_mesh, MLIR.IR.Attribute(mlir_attr)
+                for i in 1:length(result_attrs)
+                    result_attr = result_attrs[i - 1]
+                    @assert MLIR.IR.isdict(result_attr)
+                    mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
+                        result_attr, "sdy.sharding"
                     )
+                    if mlir_attr.ptr == C_NULL
+                        result_shardings[i] = Reactant.Sharding.NoSharding()
+                    else
+                        result_shardings[i] = Reactant.Sharding.named_sharding_from_tensor_sharding_attr(
+                            mlir_fn_res.sharding_mesh, MLIR.IR.Attribute(mlir_attr)
+                        )
+                    end
                 end
             end
 
