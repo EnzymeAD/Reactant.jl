@@ -1048,15 +1048,25 @@ function compile_mlir!(
             # sharding readable.
             use_shardy_partitioner = true
         elseif shardy_passes == :to_mhlo_shardings
+            @show MLIR.IR.attr(compiled_f, "res_attrs")
+
             # Convert all shardy ops to corresponding mhlo attrs/ops that can be consumed by
             # XLA (note we need to set `use_shardy_partitioner` to `false` in the options)
             # TODO: Use https://github.com/openxla/shardy/blob/01d3205086132d1bdf0867e911c05f489918431d/shardy/dialect/sdy/transforms/propagation/propagation_pipeline.cc#L28 to pass in the options
-            run_pass_pipeline!(
-                mod,
-                join(
-                    ["sdy-propagation-pipeline", "xla-sdy-stablehlo-export-pipeline"], ','
-                ),
-            )
+            run_pass_pipeline!(mod, join([
+                "sdy-propagation-pipeline",
+                "sdy-close-shardings",
+                # "xla-sdy-round-trip-export-pipeline"
+            ], ","))
+
+            display(mod)
+
+            @show MLIR.IR.attr(compiled_f, "res_attrs")[0]
+
+            run_pass_pipeline!(mod, join([
+                # "xla-sdy-round-trip-import-pipeline",
+                "xla-sdy-stablehlo-export-pipeline",
+            ], ','))
 
             # Run our optimization passes here -- we need to be careful to not apply folding
             # here since that violates the semantics of `sdy.constant` which was converted to

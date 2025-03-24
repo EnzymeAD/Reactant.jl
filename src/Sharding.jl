@@ -227,47 +227,35 @@ function (sharding::NamedSharding)(
     client::XLA.AbstractClient, device::Nothing, x::Union{AbstractArray,Number}
 )
     @assert length(sharding.partition_spec) == ndims(x)
-    return HloSharding(sharding, client, device, x)
-end
 
-# This doesn't account for the size of the input so in-presence of padding this will be
-# incorrect. Hence always use the HloSharding constructor.
-function generate_hlo_sharding_from_tensor_attribute(sharding::NamedSharding)
-    if MLIR.IR._has_context()
-        ctx = MLIR.IR.context()
-    else
-        ctx = MLIR.IR.Context(Reactant.registry[], false)
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    end
-
-    MLIR.IR.context!(ctx) do
-        mesh_op = Reactant.Ops.mesh(
-            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
-        )
-
-        tensor_sharding_attr, dialect = get_tensor_sharding_attribute(
-            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, (); do_transpose=true
-        )
-        @assert dialect == :sdy "Expected dialect to be `:sdy`, got $(dialect)"
-
-        return HloSharding(
-            XLA.HloSharding(
-                @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                    tensor_sharding_attr.attribute::MLIR.API.MlirAttribute,
-                    mesh_op.mesh_attr.attribute::MLIR.API.MlirAttribute,
-                )::Ptr{Cvoid}
-            ),
-            sharding.mesh,
-            sharding.is_closed,
-            sharding.priority,
-            sharding,
-        )
-    end
+    return SdySharding(sharding, client, device, x)
+    # return HloSharding(sharding, client, device, x)
 end
 
 function get_tensor_sharding_attribute(
-    sharding::NamedSharding, ctx, mesh_name, mesh_attr, size_arr; do_transpose=true
+    sharding::NamedSharding,
+    ctx,
+    mesh_name,
+    mesh_attr,
+    size_arr;
+    dialect=:auto,
+    do_transpose=true,
 )
+    dialect == :auto && (dialect = :sdy)
+    @assert dialect ∈ (:sdy, :mhlo)
+
+    if dialect == :mhlo
+        return get_tensor_sharding_attribute(
+            convert(HloSharding, sharding),
+            ctx,
+            mesh_name,
+            mesh_attr,
+            size_arr;
+            dialect,
+            do_transpose,
+        )
+    end
+
     dimension_sharding_attrs = Vector{MLIR.API.MlirAttribute}(
         undef, length(sharding.partition_spec)
     )
@@ -301,9 +289,7 @@ function get_tensor_sharding_attribute(
 end
 
 function sharding_to_array_slices(sharding::NamedSharding, size_x; kwargs...)
-    return sharding_to_array_slices(
-        generate_hlo_sharding_from_tensor_attribute(sharding), size_x; kwargs...
-    )
+    return sharding_to_array_slices(convert(HloSharding, sharding), size_x; kwargs...)
 end
 
 # TODO: Something like NamedDims.jl will allow us to support NamedDimsSharding similar to
@@ -391,13 +377,91 @@ function sharding_to_array_slices(sharding::DimsSharding, size_x; kwargs...)
     )
 end
 
+struct SdySharding{D1,D2} <: AbstractSharding
+    tensor_sharding_attr::MLIR.IR.Attribute # Is this safe?
+    mesh::Mesh{D1}
+    # XXX: not used for the attributes currently
+    is_closed::NTuple{D2,Bool}
+    priority::NTuple{D2,Int}
+
+    function SdySharding(
+        tensor_sharding_attr::MLIR.IR.Attribute, mesh::Mesh{D1}, is_closed, priority
+    ) where {D1}
+        @assert length(is_closed) == length(priority)
+        return new{D1,length(is_closed)}(tensor_sharding_attr, mesh, is_closed, priority)
+    end
+end
+
+function Base.convert(::Type{SdySharding}, sharding::NamedSharding)
+    if MLIR.IR._has_context()
+        ctx = MLIR.IR.context()
+    else
+        ctx = MLIR.IR.Context(Reactant.registry[], false)
+        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    end
+
+    MLIR.IR.context!(ctx) do
+        # XXX: needs to match with the mesh name in the attribute
+        mesh_op = Reactant.Ops.mesh(
+            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+        )
+
+        tensor_attr, dialect = get_tensor_sharding_attribute(
+            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, (); dialect=:sdy
+        )
+        @assert dialect == :sdy "Expected dialect to be `sdy`, got $(dialect)"
+
+        return SdySharding(
+            tensor_attr, sharding.mesh, sharding.is_closed, sharding.priority
+        )
+    end
+end
+
+@inline ndevices(sharding::SdySharding) = length(sharding.mesh.device_ids)
+
+@inline function shard_type(::Type{SdySharding{D1}}, N) where {D1}
+    return ShardInfo{SdySharding{D1},Vector{NTuple{N,UnitRange{Int64}}}}
+end
+
+function sharding_to_array_slices(
+    sharding::SdySharding, size_x; return_updated_sharding=Val(false), kwargs...
+)
+    hlo_sharding_original = convert(HloSharding, sharding)
+
+    device_to_array_slices, hlo_sharding = sharding_to_array_slices(
+        hlo_sharding_original, size_x; return_updated_sharding=Val(true), kwargs...
+    )
+
+    @assert hlo_sharding_original == hlo_sharding "TODO: Padding is not supported yet."
+
+    return_updated_sharding isa Val{true} && return (device_to_array_slices, sharding)
+    return device_to_array_slices
+end
+
+function SdySharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
+    return error("TODO: Use IFRT for now....")
+end
+
+function SdySharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
+    device_to_array_slices, sdy_sharding = sharding_to_array_slices(
+        convert(SdySharding, sharding), size(x); client, return_updated_sharding=Val(true)
+    )
+
+    ifrt_sharding = XLA.IFRT.Sharding(
+        vec(Reactant.XLA.get_device.((client,), sharding.mesh.device_ids)),
+        convert(HloSharding, sharding).hlo_sharding,
+    )
+    data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
+    return data, ShardInfo(sdy_sharding, device_to_array_slices)
+end
+
 # HloSharding
 # This stores the sharding information in the form of XLA.HloSharding, and provides a
 # central type for the final storage. It also potentially saves us the pain of not having
 # to regenerate the partition spec from the HloSharding.
 struct HloSharding{D1,D2} <: AbstractSharding
     hlo_sharding::XLA.HloSharding
-    parent_sharding # This is intentionally 
+    parent_sharding # This is intentionally left un-parameterized
     mesh::Mesh{D1}
     is_closed::NTuple{D2,Bool}
     priority::NTuple{D2,Int}
@@ -414,6 +478,43 @@ struct HloSharding{D1,D2} <: AbstractSharding
             hlo_sharding, parent_sharding, mesh, is_closed, priority
         )
     end
+end
+
+function Base.convert(::Type{HloSharding}, sharding::SdySharding)
+    if MLIR.IR._has_context()
+        ctx = MLIR.IR.context()
+    else
+        ctx = MLIR.IR.Context(Reactant.registry[], false)
+        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    end
+
+    MLIR.IR.context!(ctx) do
+        mesh_op = Reactant.Ops.mesh(
+            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+        )
+
+        @show sharding.tensor_sharding_attr
+        @show mesh_op.mesh_attr
+
+        error(1)
+
+        return HloSharding(
+            XLA.HloSharding(
+                @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
+                    sharding.tensor_sharding_attr::MLIR.API.MlirAttribute,
+                    mesh_op.mesh_attr.attribute::MLIR.API.MlirAttribute,
+                )::Ptr{Cvoid}
+            ),
+            sharding.mesh,
+            sharding.is_closed,
+            sharding.priority,
+            sharding,
+        )
+    end
+end
+
+function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
+    return convert(HloSharding, convert(SdySharding, sharding))
 end
 
 @inline ndevices(sharding::HloSharding) = length(sharding.mesh.device_ids)
@@ -464,10 +565,7 @@ end
 
 function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
     device_to_array_slices, hlo_sharding = sharding_to_array_slices(
-        generate_hlo_sharding_from_tensor_attribute(sharding),
-        size(x);
-        client,
-        return_updated_sharding=Val(true),
+        convert(HloSharding, sharding), size(x); client, return_updated_sharding=Val(true)
     )
 
     data = ntuple(length(hlo_sharding.mesh)) do i
@@ -483,10 +581,7 @@ end
 
 function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
     device_to_array_slices, hlo_sharding = sharding_to_array_slices(
-        generate_hlo_sharding_from_tensor_attribute(sharding),
-        size(x);
-        client,
-        return_updated_sharding=Val(true),
+        convert(HloSharding, sharding), size(x); client, return_updated_sharding=Val(true)
     )
 
     ifrt_sharding = XLA.IFRT.Sharding(
@@ -528,30 +623,48 @@ function (sharding::HloSharding)(
 end
 
 function get_tensor_sharding_attribute(
-    sharding::HloSharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+    sharding::HloSharding, ctx, mesh_name, mesh_attr, size_arr; dialect=:auto, kwargs...
 )
     if sharding.parent_sharding !== nothing
         # easier path with existing parent_sharding
         return get_tensor_sharding_attribute(
-            sharding.parent_sharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+            sharding.parent_sharding,
+            ctx,
+            mesh_name,
+            mesh_attr,
+            size_arr;
+            dialect,
+            kwargs...,
         )
     end
 
-    string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
-    GC.@preserve sharding begin
-        attr = MLIR.IR.Attribute(
-            @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
-                ctx::MLIR.API.MlirContext,
-                sharding.hlo_sharding.ptr::Ptr{Cvoid},
-                string_mesh_name.attribute::MLIR.API.MlirAttribute,
-                mesh_attr.attribute::MLIR.API.MlirAttribute,
-                Int64(length(sharding.is_closed))::Int64,
-                Bool[sharding.is_closed...]::Ptr{Bool},
-                Int64[sharding.priority...]::Ptr{Int64},
-            )::MLIR.API.MlirAttribute
+    dialect == :auto && (dialect = :sdy)
+
+    if dialect == :sdy
+        # XXX: Not recommended path
+        string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
+        GC.@preserve sharding begin
+            attr = MLIR.IR.Attribute(
+                @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
+                    ctx::MLIR.API.MlirContext,
+                    sharding.hlo_sharding.ptr::Ptr{Cvoid},
+                    string_mesh_name.attribute::MLIR.API.MlirAttribute,
+                    mesh_attr.attribute::MLIR.API.MlirAttribute,
+                    Int64(length(sharding.is_closed))::Int64,
+                    Bool[sharding.is_closed...]::Ptr{Bool},
+                    Int64[sharding.priority...]::Ptr{Int64},
+                )::MLIR.API.MlirAttribute
+            )
+        end
+        return attr, :sdy
+    elseif dialect == :mhlo
+        sharding_attr = parse(
+            MLIR.IR.Attribute, "\"" * string(sharding.hlo_sharding) * "\""
         )
+        return sharding_attr, :mhlo
+    else
+        error("Unknown dialect: $(dialect). Only :sdy and :mhlo are supported.")
     end
-    return attr, :sdy
 end
 
 # Given Sharding + Array --> ShardInfo
@@ -598,6 +711,7 @@ is_sharded(::NoSharding) = false
 is_sharded(::NamedSharding) = true
 is_sharded(::DimsSharding) = true
 is_sharded(::HloSharding) = true
+is_sharded(::SdySharding) = true
 is_sharded(s::ShardInfo) = is_sharded(s.sharding)
 
 function is_sharded(x::AbstractArray)

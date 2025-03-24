@@ -153,6 +153,10 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
         return data
     end
 
+    if !(reactant_sharding isa Reactant.Sharding.HloSharding)
+        reactant_sharding = convert(Reactant.Sharding.HloSharding, reactant_sharding)
+    end
+
     @assert reactant_sharding isa Reactant.Sharding.HloSharding
     client = XLA.client(buffer)
     all_devices = XLA.get_device.((client,), reactant_sharding.mesh.device_ids)
@@ -204,8 +208,8 @@ end
 function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     is_fully_replicated(XLA.sharding(array)) && return array
 
-    if sharding isa Reactant.Sharding.HloSharding
-        hlo_sharding = sharding
+    if sharding isa Reactant.Sharding.AbstractSharding
+        hlo_sharding = convert(Reactant.Sharding.HloSharding, sharding)
     else
         hlo_sharding = Reactant.Sharding.HloSharding(
             convert(XLA.HloSharding, sharding),
