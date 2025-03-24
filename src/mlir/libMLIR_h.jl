@@ -2716,6 +2716,28 @@ function mlirAffineExprCompose(affineExpr, affineMap)
 end
 
 """
+    mlirAffineExprShiftDims(affineExpr, numDims, shift, offset)
+
+Replace dims[offset ... numDims) by dims[offset + shift ... shift + numDims).
+"""
+function mlirAffineExprShiftDims(affineExpr, numDims, shift, offset)
+    @ccall mlir_c.mlirAffineExprShiftDims(
+        affineExpr::MlirAffineExpr, numDims::UInt32, shift::UInt32, offset::UInt32
+    )::MlirAffineExpr
+end
+
+"""
+    mlirAffineExprShiftSymbols(affineExpr, numSymbols, shift, offset)
+
+Replace symbols[offset ... numSymbols) by symbols[offset + shift ... shift + numSymbols).
+"""
+function mlirAffineExprShiftSymbols(affineExpr, numSymbols, shift, offset)
+    @ccall mlir_c.mlirAffineExprShiftSymbols(
+        affineExpr::MlirAffineExpr, numSymbols::UInt32, shift::UInt32, offset::UInt32
+    )::MlirAffineExpr
+end
+
+"""
     mlirAffineExprIsADim(affineExpr)
 
 Checks whether the given affine expression is a dimension expression.
