@@ -93,7 +93,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(runtime)
 )
     # functions are directly returned
-    if sizeof(T) == 0
+    if T === Function || sizeof(T) == 0
         return T
     end
 
