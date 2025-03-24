@@ -25,6 +25,8 @@ end
 
 Base.strides(x::AbstractConcreteArray) = Base.size_to_strides(1, size(x)...)
 
+Base.OneTo(x::AbstractConcreteNumber{<:Integer}) = Base.OneTo(to_number(x))
+
 @static if isdefined(Base, :unchecked_oneto)
     function Base.unchecked_oneto(x::AbstractConcreteNumber{<:Integer})
         return Base.unchecked_oneto(to_number(x))
