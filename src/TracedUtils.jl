@@ -503,7 +503,7 @@ function make_mlir_fn(
         sharding_mesh,
         mutated_args,
         true,
-        missing
+        missing,
     )
 end
 

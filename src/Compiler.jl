@@ -2014,7 +2014,7 @@ function compile(f, args; sync=false, kwargs...)
                 output_reactant_shardings[i] isa Reactant.Sharding.NoSharding
                 linear_result_shard_info[i] = Reactant.Sharding.ShardInfo(
                     Reactant.Sharding.HloSharding(
-                        hlo_sharding_info,
+                        hlo_sharding,
                         mlir_fn_res.sharding_mesh,
                         ntuple(Returns(true), length(res_size)),
                         ntuple(Returns(-1), length(res_size)),
