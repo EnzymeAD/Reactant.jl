@@ -266,15 +266,10 @@ end
 @inline ndevices(sharding::NamedSharding) = length(sharding.mesh.device_ids)
 
 @inline function shard_type(::Type{NamedSharding{D1,D2,P}}, N) where {D1,D2,P}
-    return shard_type(HloSharding{D1,D2}, N)
+    # XXX: what happens on reshards?
+    # XXX: should we make partition_spec an array?
+    return ShardInfo{NamedSharding{D1,D2,P},Vector{NTuple{N,UnitRange{Int64}}}}
 end
-
-# function (sharding::NamedSharding)(
-#     client::XLA.AbstractClient, device::Nothing, x::Union{AbstractArray,Number}
-# )
-#     @assert length(sharding.partition_spec) == ndims(x)
-#     return HloSharding(sharding, client, device, x)
-# end
 
 function (sharding::NamedSharding)(
     client::XLA.PJRT.Client, _, x::Union{AbstractArray,Number}
@@ -476,7 +471,7 @@ end
 @inline ndevices(sharding::DimsSharding) = length(sharding.mesh.device_ids)
 
 @inline function shard_type(::Type{DimsSharding{M,D,P}}, N) where {M,D,P}
-    return shard_type(HloSharding{M,N}, N)
+    return shard_type(NamedSharding{M,D,P}, N)
 end
 
 function standardize_sharding(sharding::DimsSharding, size_x)
