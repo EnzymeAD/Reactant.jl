@@ -128,11 +128,25 @@ function fn(x)
 end
 ```
 """
-macro trace(expr)
+macro trace(args...)
+    track_numbers = true
+    expr = first(args)
+    if length(args) > 1 && Meta.isexpr(args[1], :(=))
+        tn_expr = args[1]
+        tn_expr.args[1] == :track_numbers ||
+            error("@trace supports setting track_numbers, but got $(tn_expr)")
+
+        track_numbers = tn_expr.args[2]
+        expr = only(args[2:end])
+    else
+        expr = only(args)
+    end
+    track_numbers = track_numbers ? Number : Union{}
     expr = macroexpand(__module__, expr)
+
     if Meta.isexpr(expr, :(=))
         if Meta.isexpr(expr.args[2], :if)
-            return esc(trace_if_with_returns(__module__, expr))
+            return esc(trace_if_with_returns(__module__, expr; track_numbers))
         end
     end
     Meta.isexpr(expr, :call) && return esc(trace_call(__module__, expr))
@@ -142,12 +156,12 @@ macro trace(expr)
         call = Expr(:call, fname, args...)
         return esc(trace_call(__module__, call))
     end
-    Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
-    Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr)))
+    Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr; track_numbers))
+    Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr; track_numbers)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
 end
 
-function trace_for(mod, expr)
+function trace_for(mod, expr; track_numbers)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
@@ -216,7 +230,9 @@ function trace_for(mod, expr)
                     ($counter + 1, results_...)
                 end
 
-            $(ReactantCore).traced_while(cond_fn, body_fn, args)
+            $(ReactantCore).traced_while(
+                cond_fn, body_fn, args; track_numbers=$(track_numbers)
+            )
         end
     end
 
@@ -232,9 +248,9 @@ function trace_for(mod, expr)
 end
 
 # ... = if ... style expressions
-function trace_if_with_returns(mod, expr)
+function trace_if_with_returns(mod, expr; track_numbers)
     new_expr, _, all_check_vars = trace_if(
-        mod, expr.args[2]; store_last_line=expr.args[1], depth=1
+        mod, expr.args[2]; store_last_line=expr.args[1], depth=1, track_numbers
     )
     cond_name = first(all_check_vars)
     original_cond = expr.args[2].args[1]
@@ -249,7 +265,7 @@ function trace_if_with_returns(mod, expr)
     end
 end
 
-function trace_if(mod, expr; store_last_line=nothing, depth=0)
+function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
     discard_vars_from_expansion = []
     original_expr = expr
 
@@ -260,7 +276,9 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
         expr = MacroTools.prewalk(expr) do x
             counter += 1
             if x isa Expr && x.head == :if && counter > 1
-                ex_new, dv, _ = trace_if(mod, x; store_last_line, depth=depth + 1)
+                ex_new, dv, _ = trace_if(
+                    mod, x; store_last_line, depth=depth + 1, track_numbers
+                )
                 append!(discard_vars_from_expansion, dv)
                 return ex_new
             end
@@ -300,7 +318,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
         if !(expr.args[3] isa Expr) || expr.args[3].head != :elseif
             expr.args[3], [], nothing
         else
-            trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1)
+            trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1, track_numbers)
         end
     elseif length(expr.args) == 2
         tmp_expr = []
@@ -388,7 +406,8 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
             $(cond_name),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
-            ($(all_input_vars...),),
+            ($(all_input_vars...),);
+            track_numbers=$(track_numbers),
         )
     end
 
