@@ -1045,10 +1045,22 @@ function compile_mlir!(
             # inside the corresponding compile function for IFRT/PJRT. This keeps the
             # sharding readable.
             use_shardy_partitioner = true
+        elseif shardy_passes == :no_stablehlo_export
+            run_pass_pipeline!(
+                mod,
+                join(
+                    [
+                        "sdy-propagation-pipeline",
+                        "sdy-close-shardings",
+                        "canonicalize",
+                        "cse",
+                    ],
+                    ",",
+                ),
+            )
         elseif shardy_passes == :to_mhlo_shardings
             # Convert all shardy ops to corresponding mhlo attrs/ops that can be consumed by
             # XLA (note we need to set `use_shardy_partitioner` to `false` in the options)
-            # TODO: Use https://github.com/openxla/shardy/blob/01d3205086132d1bdf0867e911c05f489918431d/shardy/dialect/sdy/transforms/propagation/propagation_pipeline.cc#L28 to pass in the options
             run_pass_pipeline!(
                 mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
             )

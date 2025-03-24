@@ -366,34 +366,67 @@ function get_tensor_sharding_attribute(
 end
 
 function sharding_to_array_slices(
-    sharding::NamedSharding, size_x; return_updated_sharding=Val(false), kwargs...
+    sharding::NamedSharding, size_x; return_updated_sharding=Val(false), client=nothing
 )
     hlo_sharding = convert(HloSharding, sharding)
 
-    device_to_array_slices, hlo_sharding2 = sharding_to_array_slices(
-        hlo_sharding, size_x; return_updated_sharding=Val(true), kwargs...
+    # Check if the input needs to be padded. If so this sharding is not valid and we
+    # need to request the tensor sharding from XLA
+    condensed_op_sharding = convert(XLA.CondensedOpSharding, hlo_sharding.hlo_sharding)
+    device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+        condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
     )
 
-    if hlo_sharding != hlo_sharding2
-        if MLIR.IR._has_context()
-            ctx = MLIR.IR.context()
+    if needs_padding
+        kws = client === nothing ? (;) : (; client)
+        tmp = if length(size_x) == 0
+            Reactant.ConcreteRNumber(zero(Float32); kws...)
         else
-            ctx = MLIR.IR.Context(Reactant.registry[], false)
-            @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+            Reactant.ConcreteRArray(ones(Float32, size_x...); kws...)
+        end
+        _, exec, mlir_fn_res, _, _ = Reactant.Compiler.compile_xla(
+            Reactant.Ops.negate,
+            (tmp,);
+            input_shardings=IdDict(tmp => sharding),
+            shardy_passes=:no_stablehlo_export,
+        )
+
+        get_from_hlo_sharding = true
+        result_attrs = MLIR.IR.attr(mlir_fn_res.f, "res_attrs")
+        if result_attrs !== nothing && length(result_attrs) == 1
+            result_attr = result_attrs[0]
+            if MLIR.IR.isdict(result_attr)
+                mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
+                    result_attr, "sdy.sharding"
+                )
+                if mlir_attr.ptr != C_NULL
+                    sharding = Reactant.Sharding.named_sharding_from_tensor_sharding_attr(
+                        mlir_fn_res.sharding_mesh, MLIR.IR.Attribute(mlir_attr)
+                    )
+                    get_from_hlo_sharding = false
+                    condensed_op_sharding = convert(
+                        XLA.CondensedOpSharding,
+                        convert(Reactant.Sharding.HloSharding, sharding).hlo_sharding,
+                    )
+                end
+            end
         end
 
-        MLIR.IR.context!(ctx) do
-            mesh_op = Reactant.Ops.mesh(
-                sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
-            )
-
-            tensor_sharding_attr, _ = get_tensor_sharding_attribute(
-                hlo_sharding2, ctx, mesh_op.sym_name, mesh_op.mesh_attr, (); dialect=:sdy
-            )
-            sharding = named_sharding_from_tensor_sharding_attr(
-                sharding.mesh, tensor_sharding_attr
+        if get_from_hlo_sharding
+            condensed_op_sharding = convert(
+                XLA.CondensedOpSharding,
+                convert(
+                    Reactant.XLA.HloSharding,
+                    only(Reactant.XLA.get_parameter_shardings(exec)),
+                ),
             )
         end
+
+        device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+            condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
+        )
+
+        @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(convert(Reactant.XLA.HloSharding, only(Reactant.XLA.get_parameter_shardings(exec))))).\nArray Slices: $(device_to_array_slices)."
     end
 
     return_updated_sharding isa Val{true} && return (device_to_array_slices, sharding)
