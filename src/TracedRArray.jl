@@ -81,13 +81,18 @@ function generate_index_list(i1, is...)
     return list
 end
 
-function scalar_index_to_cartesian(idx::AbstractVector{T}, sz::NTuple{N,Int}) where {T,N}
-    idx = idx .- 1
-    idxs = materialize_traced_array(reshape(idx .% T(sz[1]), :, 1))
-    idx = idx .÷ T(sz[1])
+function scalar_index_to_cartesian(
+    idx::AbstractVector{TracedRNumber{T}}, sz::NTuple{N,Int}
+) where {T,N}
+    idx = materialize_traced_array(idx)
+    idx = Ops.subtract(idx, Ops.fill(T(1), size(idx)))
+    idxs = materialize_traced_array(
+        reshape(Ops.remainder(idx, Ops.fill(T(sz[1]), size(idx))), :, 1)
+    )
+    idx = Ops.divide(idx, Ops.fill(T(sz[1]), size(idx)))
     for i in 2:N
-        idxs = hcat(idxs, idx .% T(sz[i]))
-        idx = idx .÷ T(sz[i])
+        idxs = hcat(idxs, Ops.remainder(idx, Ops.fill(T(sz[i]), size(idx))))
+        idx = Ops.divide(idx, Ops.fill(T(sz[i]), size(idx)))
     end
     return idxs
 end

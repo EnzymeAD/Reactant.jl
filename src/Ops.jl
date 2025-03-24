@@ -488,6 +488,7 @@ end
     permutation;
     location=mlir_stacktrace("transpose", @__FILE__, @__LINE__),
 ) where {T,N}
+    @assert length(permutation) == ndims(x)
     rsize = permute!(collect(Int64, size(x)), permutation)
     permutation = permutation .- 1
     result = mlir_type(TracedRArray{T,N}, rsize)
