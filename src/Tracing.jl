@@ -1116,7 +1116,11 @@ function make_tracer_unknown(
                 changed = true
             end
             if mode != TracedToTypes && !(Core.Typeof(xi2) <: fieldtype(TT, i))
-                throw(AssertionError("Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) "))
+                throw(
+                    AssertionError(
+                        "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                    ),
+                )
             end
             flds[i] = xi2
         else
