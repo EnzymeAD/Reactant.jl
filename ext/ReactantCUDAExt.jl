@@ -80,6 +80,8 @@ for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isi
     end
 end
 
+Base.OneTo(x::CuTracedRNumber{<:Integer}) = Base.OneTo(x[])
+
 @static if isdefined(Base, :unchecked_oneto)
     function Base.unchecked_oneto(x::CuTracedRNumber{<:Integer})
         return Base.unchecked_oneto(x[])
