@@ -274,7 +274,7 @@ function Base.setindex!(
     return a
 end
 
-function Base.setindex!(a::Reactant.TracedRArray, v, indices::UnitRange{Int})
+function Base.setindex!(a::Reactant.TracedRArray{T, N}, v, indices::UnitRange{Int}) where {T, N}
     originalsz = size(a)
     flattened = Ops.reshape(a, [prod(originalsz)])
     result = Ops.dynamic_update_slice(flattened, v[begin:length(indices)], [first(indices)])
