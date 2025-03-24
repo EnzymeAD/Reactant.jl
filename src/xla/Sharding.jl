@@ -438,6 +438,7 @@ end
 __size_to_strides(sizes) = reverse(Base.size_to_strides(1, reverse(sizes)...))
 
 function __unflatten_superdims(assignment)
+    @show assignment
     flat_assignment = collect(Int64, assignment)
     @assert first(flat_assignment) == 0 "First dimension must be 0"
     dims = Dims{2}[]
@@ -457,18 +458,21 @@ end
 function __explode_superdims(sizes, dims)
     strides_to_sizes = Dict(zip(__size_to_strides(sizes), sizes))
     final_dims = Dims{2}[]
+    @show dims
+    @show sizes
     for (size, stride) in Iterators.reverse(dims)
         target_size = strides_to_sizes[stride]
+        @show size, target_size, stride
         new_dims = Dims{2}[]
         while size > target_size
-            @assert target_size > 1  # Ensure progress
+            @assert target_size > 1 "Ensure Progress"
+            @show size, target_size
             @assert size % target_size == 0
             push!(new_dims, (target_size, stride))
             size ÷= target_size
             stride *= target_size
             target_size = strides_to_sizes[stride]
         end
-        @show size, target_size
         @assert size == target_size "Expected size $size to be equal to target size \
                                      $target_size"
         push!(new_dims, (size, stride))
@@ -499,18 +503,21 @@ function generate_partition_spec(hlo_sharding::HloSharding, mesh, size_arr)
     end
 
     if is_tiled(hlo_sharding)
+        @show string(hlo_sharding)
+
         mesh_shape = Dict(zip(mesh.axis_names, size(mesh)))
 
         tile_dims = tile_assignment_dimensions(hlo_sharding)
 
         tile_devices = tile_assignment_devices(hlo_sharding)
-        tile_devices = vec(
-            permutedims(
-                reshape(tile_devices, reverse(tile_dims)...), reverse(1:length(tile_dims))
-            ),
-        )
+        # tile_devices = vec(
+        #     permutedims(
+        #         reshape(tile_devices, reverse(tile_dims)...), reverse(1:length(tile_dims))
+        #     ),
+        # )
 
         mesh_axis_order = __unflatten_array(mesh_shape, tile_devices)
+        @show mesh_axis_order
 
         axis_idx = 1
         partitions = Union{NTuple{<:Any,Symbol},Symbol,Nothing}[]
@@ -538,6 +545,8 @@ function generate_partition_spec(hlo_sharding::HloSharding, mesh, size_arr)
         if replicate_on_last_tile_dim(hlo_sharding)
             pop!(partitions)
         end
+
+        @show partitions
 
         return reverse(Tuple(partitions))
     end

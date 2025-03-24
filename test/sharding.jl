@@ -291,7 +291,9 @@ end
 
 @testset "Sharding with Mutation" begin
     if length(addressable_devices) ≥ 8
-        mesh = Sharding.Mesh(reshape(Reactant.addressable_devices(), 2, 2, 2), (:x, :y, :z))
+        mesh = Sharding.Mesh(
+            reshape(Reactant.addressable_devices()[1:8], 2, 2, 2), (:x, :y, :z)
+        )
 
         x_ra = Reactant.to_rarray(
             randn(Float32, 4, 5); sharding=Sharding.NamedSharding(mesh, ((:x, :y), :z))

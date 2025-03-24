@@ -260,6 +260,7 @@ function generate_hlo_sharding_from_tensor_attribute(sharding::NamedSharding)
             sharding.mesh,
             sharding.is_closed,
             sharding.priority,
+            sharding,
         )
     end
 end
@@ -396,15 +397,22 @@ end
 # to regenerate the partition spec from the HloSharding.
 struct HloSharding{D1,D2} <: AbstractSharding
     hlo_sharding::XLA.HloSharding
+    parent_sharding # This is intentionally 
     mesh::Mesh{D1}
     is_closed::NTuple{D2,Bool}
     priority::NTuple{D2,Int}
 
     function HloSharding(
-        hlo_sharding::XLA.HloSharding, mesh::Mesh{D1}, is_closed, priority
+        hlo_sharding::XLA.HloSharding,
+        mesh::Mesh{D1},
+        is_closed,
+        priority,
+        parent_sharding::Union{Nothing,AbstractSharding}=nothing,
     ) where {D1}
         @assert length(is_closed) == length(priority)
-        return new{D1,length(is_closed)}(hlo_sharding, mesh, is_closed, priority)
+        return new{D1,length(is_closed)}(
+            hlo_sharding, parent_sharding, mesh, is_closed, priority
+        )
     end
 end
 
@@ -522,24 +530,12 @@ end
 function get_tensor_sharding_attribute(
     sharding::HloSharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
 )
-    # partition_spec = Reactant.XLA.generate_partition_spec(
-    #     sharding.hlo_sharding, sharding.mesh, size_arr
-    # )
-    # named_sharding = NamedSharding(
-    #     sharding.mesh,
-    #     partition_spec;
-    #     is_closed=sharding.is_closed,
-    #     priority=sharding.priority,
-    # )
-
-    # return get_tensor_sharding_attribute(
-    #     named_sharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
-    # )
-
-    # mhlo_attr = parse(
-    #     MLIR.IR.Attribute, "\"" * string(sharding.hlo_sharding) * "\""; context=ctx
-    # )
-    # return mhlo_attr, :mhlo
+    if sharding.parent_sharding !== nothing
+        # easier path with existing parent_sharding
+        return get_tensor_sharding_attribute(
+            sharding.parent_sharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+        )
+    end
 
     string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
     GC.@preserve sharding begin
