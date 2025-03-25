@@ -637,24 +637,15 @@ const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedR
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    result = MLIR.IR.context!(ctx) do
+    return MLIR.IR.with_context() do ctx
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
         MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
         Text(repr(mod))
     end
-    Base.delete!(context_gc_vector, ctx)
-    return result
 end
 
 function compile_mlir(f, args; client=nothing, kwargs...)
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-
     backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
 
     if backend == "CUDA"
@@ -663,7 +654,7 @@ function compile_mlir(f, args; client=nothing, kwargs...)
         backend = "cpu"
     end
 
-    results = MLIR.IR.context!(ctx) do
+    results = MLIR.IR.with_context() do ctx
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         mlir_fn_res = compile_mlir!(
@@ -677,7 +668,6 @@ function compile_mlir(f, args; client=nothing, kwargs...)
 
         return mod, mlir_fn_res
     end
-    Base.delete!(context_gc_vector, ctx)
 
     return results
 end

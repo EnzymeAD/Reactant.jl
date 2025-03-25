@@ -235,7 +235,6 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         AsyncArray(array, nothing), size_arr, shard_info
     )
 
-    # TODO: Directly write the MLIR for this part??
     fn_compiled = Reactant.compile(
         identity,
         (data,);
