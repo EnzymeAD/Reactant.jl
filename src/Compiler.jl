@@ -1686,7 +1686,7 @@ function codegen_unflatten!(
                 path = path[2:end]
 
                 if Reactant.TracedUtils.has_idx(result, argprefix)
-                    argidx = Reactant.TracedUtils.get_idx(result)
+                    argidx = Reactant.TracedUtils.get_idx(result, argprefix)
                     if haskey(resharded_inputs, argidx)
                         to_unreshard_results[path] = resharded_inputs[argidx]
                     end
