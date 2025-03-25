@@ -516,4 +516,12 @@ function error_if_any_control_flow(expr)
     end
 end
 
+"""
+    materialize_traced_array(AbstractArray{<:TracedRNumber})::TracedRArray
+
+Given an AbstractArray{TracedRNumber}, return or create an equivalent TracedRArray.
+
+"""
+function materialize_traced_array end
+
 end

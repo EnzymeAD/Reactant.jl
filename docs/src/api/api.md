@@ -50,5 +50,5 @@ Reactant.addressable_devices
 ## Internal utils
 
 ```@docs
-Reactant.TracedUtils.materialize_traced_array
+ReactantCore.materialize_traced_array
 ```
