@@ -37,6 +37,6 @@ function XLA.is_addressable(device::Device)
     GC.@preserve device begin
         return @ccall MLIR.API.mlir_c.pjrt_device_is_addressable(
             device.device::Ptr{Cvoid}
-        )::Cint
+        )::Bool
     end
 end
