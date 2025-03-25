@@ -398,16 +398,23 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteI
     return fn(bc.args...)
 end
 
-# XXX: This is not necessarily correct. We need to check for sharding and also device
-#      compatibility.
-function Base.copyto!(dest::AbstractConcreteArray, src::AbstractConcreteArray)
-    dest.data = src.data
-    return dest
-end
-
 function mycopyto!(dest, src)
     dest .= src # use broadcasting instead of copyto!
     return nothing
+end
+
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    @eval function Base.copyto!(dest::$(aType), src::$(aType))
+        if dest.sharding == src.sharding &&
+            XLA.device(dest) == XLA.device(src) &&
+            XLA.client(dest) == XLA.client(src)
+            dest.data = src.data
+        else
+            fn = compile(mycopyto!, (dest, src))
+            fn(dest, src)
+        end
+        return dest
+    end
 end
 
 function Base.copyto!(
@@ -418,10 +425,22 @@ function Base.copyto!(
     return dest
 end
 
-function Base.copyto!(dest::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, src::Array)
-    copyto!(dest, to_rarray(src))
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    anyaType = Symbol(:Any, aType)
+    @eval function Base.copyto!(dest::$(anyaType), src::Array)
+        ancestor_dest = ancestor(dest)
+        return copyto!(
+            dest,
+            $(aType)(
+                src;
+                sharding=ancestor_dest.sharding,
+                client=XLA.client(ancestor_dest),
+                device=XLA.device(ancestor_dest),
+            ),
+        )
+    end
 end
-    return copyto!(dest, to_rarray(src))
+
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     @eval begin
         function Base.copyto!(
