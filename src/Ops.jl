@@ -1746,7 +1746,7 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
 end
 
 @noinline function while_loop(
-    cond_fn::CFn, body_fn::BFn, args...; track_numbers
+    cond_fn::CFn, body_fn::BFn, args...; track_numbers, verify_arg_names=nothing
 ) where {CFn,BFn}
     # TODO: detect and prevent mutation within the condition
 
@@ -1780,6 +1780,7 @@ end
             do_transpose=false,
         ).f
 
+    @warn verify_arg_names
     body_fn_compiled =
         Reactant.TracedUtils.make_mlir_fn(
             body_fn,
@@ -1790,6 +1791,7 @@ end
             return_dialect=:stablehlo,
             args_in_result=:none,
             do_transpose=false,
+            verify_arg_names
         ).f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
