@@ -223,28 +223,100 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         )
     end
 
-    shard_info = Reactant.Sharding.ShardInfo(
-        reactant_sharding,
-        Reactant.Sharding.sharding_to_array_slices(reactant_sharding, size_arr),
-    )
-    sharding_constraint = Reactant.Sharding.NamedSharding(
+    XLA.is_replicated(hlo_sharding) && return array
+
+    output_sharding = Reactant.Sharding.NamedSharding(
         mesh, ntuple(Returns(nothing), length(size_arr))
     )
 
-    data = Reactant.ConcreteIFRTArray{eltype(array),length(size_arr),typeof(shard_info)}(
-        AsyncArray(array, nothing), size_arr, shard_info
+    # Manually write the MLIR for resharding resharding
+    ctx = MLIR.IR.Context(Reactant.registry[], false)
+    Reactant.Compiler.context_gc_vector[ctx] = Vector{
+        Union{Reactant.TracedRArray,Reactant.TracedRNumber}
+    }(
+        undef, 0
     )
+    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    MLIR.IR.activate!(ctx)
 
-    # TODO: Directly write the MLIR for this part??
-    fn_compiled = Reactant.compile(
-        identity,
-        (data,);
-        shardy_passes=:to_mhlo_shardings,
-        optimize=false,
-        output_shardings=Dict(1 => sharding_constraint),
-    )
+    sdycache = IdDict{
+        Reactant.Sharding.Mesh,
+        @NamedTuple{
+            sym_name::MLIR.IR.Attribute,
+            mesh_attr::MLIR.IR.Attribute,
+            mesh_op::MLIR.IR.Operation,
+        }
+    }()
+    Reactant.Compiler.activate_sdycache!(sdycache)
 
-    return fn_compiled(data).data.buffer
+    output_buffer = try
+        data_mlir_type = [MLIR.IR.TensorType(reverse(size_arr), MLIR.IR.Type(eltype(array)))]
+        mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+
+        (; sym_name, mesh_attr) = Reactant.Ops.mesh(mesh; mod=mod)
+        common_args = (ctx, sym_name, mesh_attr, size_arr)
+        common_kwargs = (; dialect=:sdy, do_transpose=true)
+        input_tensor_sharding_attr, _ = Reactant.Sharding.get_tensor_sharding_attribute(
+            reactant_sharding, common_args...; common_kwargs...
+        )
+        output_tensor_sharding_attr, _ = Reactant.Sharding.get_tensor_sharding_attribute(
+            output_sharding, common_args...; common_kwargs...
+        )
+
+        func = MLIR.Dialects.func.func_(;
+            sym_name="main",
+            function_type=MLIR.IR.FunctionType(data_mlir_type, data_mlir_type),
+            no_inline=true,
+            body=MLIR.IR.Region(),
+        )
+        fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
+        push!(MLIR.IR.region(func, 1), fnbody)
+        MLIR.IR.activate!(fnbody)
+        try
+            MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
+        finally
+            MLIR.IR.deactivate!(fnbody)
+        end
+        push!(MLIR.IR.body(mod), func)
+
+        MLIR.API.mlirFuncSetArgAttr(func, 0, "sdy.sharding", input_tensor_sharding_attr)
+        MLIR.API.mlirFuncSetResultAttr(func, 0, "sdy.sharding", output_tensor_sharding_attr)
+
+        Reactant.Compiler.run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "sdy-propagation-pipeline",
+                    "sdy-close-shardings",
+                    "xla-sdy-stablehlo-export-pipeline",
+                    "canonicalize",
+                    "cse",
+                ],
+                ",",
+            ),
+        )
+
+        exec = XLA.compile(
+            XLA.client(array),
+            nothing,
+            mod;
+            is_sharded=true,
+            global_device_ids=vec(mesh.device_ids),
+            num_outputs=1,                # unused
+            num_parameters=1,             # unused
+            num_replicas=-1,              # unused
+            num_partitions=-1,            # unused
+            use_shardy_partitioner=false, # unused
+        )
+
+        only(XLA.execute(exec, (array.buffer,), (UInt8(0),), Val(1)))
+    finally
+        Reactant.Compiler.deactivate_sdycache!(sdycache)
+        MLIR.IR.deactivate!(ctx)
+    end
+    delete!(Reactant.Compiler.context_gc_vector, ctx)
+
+    return output_buffer
 end
 
 function XLA.unsafe_buffer_pointer(::Array)

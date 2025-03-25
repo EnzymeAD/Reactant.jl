@@ -816,10 +816,6 @@ function compile(job)
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
             :llvm,
             job;
-            optimize=false,
-            cleanup=false,
-            validate=false,
-            libraries=false,
             # :llvm, job; optimize=false, cleanup=false, validate=true, libraries=false
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
@@ -854,7 +850,7 @@ function compile(job)
         if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl post vendor IR\n", string(mod))
         end
-        LLVM.run!(CUDA.GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
+        LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
             if LLVM.haskey(LLVM.functions(mod), fname)
@@ -1247,14 +1243,18 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         always_inline = false
         name = nothing
         debuginfo = false
-        config = CUDA.CompilerConfig(
+        config = GPUCompiler.CompilerConfig(
             CUDA.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
             CUDA.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
             kernel,
             name,
             always_inline,
+            optimize=false,
+            cleanup=false,
+            validate=false,
+            libraries=false,
         )
-        CUDA.GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        GPUCompiler.cached_compilation(cache, source, config, compile, link)
     end
     return Core.Typeof(res)(f, res.entry)
 end

@@ -19,10 +19,7 @@ end
 end
 
 function test()
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-
-    MLIR.IR.context!(ctx) do
+    MLIR.IR.with_context() do ctx
         mod = MLIR.IR.Module(MLIR.IR.Location())
         modbody = MLIR.IR.body(mod)
 
