@@ -1778,7 +1778,9 @@ end
             return_dialect=:stablehlo,
             args_in_result=:none,
             do_transpose=false,
-            argprefix = gensym("loop_cond")
+            argprefix = gensym("loop_condarg"),
+            resprefix = gensym("loop_condres"),
+            resargprefix = gensym("loop_condresarg"),
         ).f
 
     @warn verify_arg_names
@@ -1793,7 +1795,9 @@ end
             args_in_result=:none,
             do_transpose=false,
             verify_arg_names,
-            argprefix = gensym("loop_body")
+            argprefix = gensym("loop_bodyarg"),
+            resprefix = gensym("loop_bodyres"),
+            resargprefix = gensym("loop_bodyresarg"),
         ).f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
