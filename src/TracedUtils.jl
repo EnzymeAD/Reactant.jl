@@ -189,6 +189,7 @@ function make_mlir_fn(
     input_shardings=nothing,  # This is not meant to be used by the user.
     output_shardings=nothing, # This is not meant to be used by the user.
     runtime=nothing,
+    verify_arg_names=nothing,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -346,6 +347,18 @@ function make_mlir_fn(
 
     if args_in_result == :mutated
         append!(linear_results, linear_args[mutated_args])
+    end
+    if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
+        @assert length(linear_args) <= length(linear_results)
+        argis = first.(get_argidx.(linear_args))
+        resis = Set(getindex.(get_residx.(linear_results), Ref(2)))
+        # this can be more efficient
+        conflicts = setdiff(resis, argis)
+        @assert !isempty(conflicts) "Expected to have some conflicts, but none were found."
+
+        error("""Types do not match between function arguments and results.
+        The following arguments should be traced: $(join(verify_arg_names.args[collect(conflicts)], ", "))
+        """)
     end
 
     out_tys = if do_transpose
