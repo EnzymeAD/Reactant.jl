@@ -1705,9 +1705,6 @@ function codegen_unflatten!(
                 end
 
                 if length(path) > 0
-                    @assert need_to_unreshard === nothing "TODO: do unreshard the buffer 
-                                                           here"
-
                     if !has_cache_dict
                         has_cache_dict = true
                         push!(
@@ -1719,14 +1716,37 @@ function codegen_unflatten!(
                         )
                     end
 
-                    unflatcode = quote
-                        # XXX: we might need to handle sharding here
-                        traced_setfield_buffer!(
-                            $runtime,
-                            $cache_dict,
-                            traced_getfield($unflatcode, $(Meta.quot(path[end]))),
-                            $concrete_res_name,
-                        )
+                    if need_to_unreshard === nothing
+                        unflatcode = quote
+                            # XXX: we might need to handle sharding here
+                            traced_setfield_buffer!(
+                                $runtime,
+                                $cache_dict,
+                                traced_getfield($unflatcode, $(Meta.quot(path[end]))),
+                                $concrete_res_name,
+                            )
+                        end
+                    else
+                        unreshard_sym = gensym(:unresharded_buffer)
+                        local_unflatcode_sym = gensym(:local_val)
+                        unflatcode = quote
+                            $(local_unflatcode_sym) = traced_getfield(
+                                $unflatcode, $(Meta.quot(path[end]))
+                            )
+                            $unreshard_sym = generate_unresharded_ifrt_array(
+                                $(concrete_res_name),
+                                $(need_to_unreshard),
+                                eltype($(local_unflatcode_sym)),
+                                ndims($(local_unflatcode_sym)),
+                                size($(local_unflatcode_sym)),
+                            )
+                            traced_setfield_buffer!(
+                                $runtime,
+                                $cache_dict,
+                                $local_unflatcode_sym,
+                                $concrete_res_name,
+                            )
+                        end
                     end
                 else
                     if need_to_unreshard === nothing
