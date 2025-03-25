@@ -1667,6 +1667,11 @@ function codegen_unflatten!(
     to_unreshard_results = Dict{Tuple,Any}()
 
     # mutate the result stores to point to the correct concrete results
+
+    argprefix::Symbol = :args
+    resprefix::Symbol = :result
+    resargprefix::Symbol = :resargs
+
     for (concrete_res_name, result, shard_info) in
         zip(concretized_res_names, linear_results, linear_result_shard_info)
         paths = (
@@ -1676,12 +1681,12 @@ function codegen_unflatten!(
             )...,
         )
         for path in paths
-            if path[1] == :result
+            if path[1] == argprefix
                 unflatcode = :result
                 path = path[2:end]
 
-                if Reactant.TracedUtils.has_argidx(result)
-                    _, argidx = Reactant.TracedUtils.get_argidx(result)
+                if Reactant.TracedUtils.has_argidx(result, argprefix)
+                    argidx = Reactant.TracedUtils.get_idx(result)
                     if haskey(resharded_inputs, argidx)
                         to_unreshard_results[path] = resharded_inputs[argidx]
                     end
