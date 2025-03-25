@@ -28,6 +28,10 @@ function ReactantCore.materialize_traced_array(x::AbstractRange{<:TracedRNumber}
     return Reactant.aos_to_soa(collect(x))
 end
 
+function ReactantCore.materialize_traced_array(x::Base.OneTo)
+    return Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
+end
+
 function ReactantCore.materialize_traced_array(x::UnitRange{<:TracedRNumber})
     return Ops.add(
         Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1),
