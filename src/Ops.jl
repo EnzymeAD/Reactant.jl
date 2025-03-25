@@ -1754,10 +1754,10 @@ end
     N = length(args)
     seen_args = Reactant.OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
-    for i in 1:N
-        @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, args[i], (), Reactant.NoStopTracedTrack; track_numbers
-        )
+
+    loopargsym = gensym("looparg")
+    for (i, prev) in enumerate(args)
+        Reactant.make_tracer(seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers)
     end
 
     linear_args = Reactant.TracedType[]
@@ -1778,6 +1778,7 @@ end
             return_dialect=:stablehlo,
             args_in_result=:none,
             do_transpose=false,
+            argprefix = gensym("loop_cond")
         ).f
 
     @warn verify_arg_names
@@ -1791,7 +1792,8 @@ end
             return_dialect=:stablehlo,
             args_in_result=:none,
             do_transpose=false,
-            verify_arg_names
+            verify_arg_names,
+            argprefix = gensym("loop_body")
         ).f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
