@@ -1756,7 +1756,7 @@ end
     traced_args = Vector{Any}(undef, N)
 
     for (i, prev) in enumerate(args)
-        Reactant.make_tracer(seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers)
+        @inbounds traced_args[i] = Reactant.make_tracer(seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers)
     end
 
     linear_args = Reactant.TracedType[]
