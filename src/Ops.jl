@@ -1745,7 +1745,9 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
     )
 end
 
-@noinline function while_loop(cond_fn::CFn, body_fn::BFn, args...) where {CFn,BFn}
+@noinline function while_loop(
+    cond_fn::CFn, body_fn::BFn, args...; track_numbers
+) where {CFn,BFn}
     # TODO: detect and prevent mutation within the condition
 
     # Make all the args traced or concrete
@@ -1754,7 +1756,7 @@ end
     traced_args = Vector{Any}(undef, N)
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, args[i], (), Reactant.NoStopTracedTrack; track_numbers=Number
+            seen_args, args[i], (), Reactant.NoStopTracedTrack; track_numbers
         )
     end
 
@@ -1809,7 +1811,7 @@ end
 end
 
 @noinline function if_condition(
-    cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args...
+    cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args...; track_numbers
 ) where {TFn,FFn}
     true_fn_names = (gensym(:true_fn_args), gensym(:true_result), gensym(:true_fn_resargs))
     false_fn_names = (
@@ -1828,14 +1830,14 @@ end
             args[i],
             (true_fn_names[1], i),
             Reactant.TracedSetPath;
-            track_numbers=Number,
+            track_numbers,
         )
         @inbounds fb_traced_args[i] = Reactant.make_tracer(
             fb_seen_args,
             args[i],
             (false_fn_names[1], i),
             Reactant.TracedSetPath;
-            track_numbers=Number,
+            track_numbers,
         )
     end
 
@@ -1899,7 +1901,7 @@ end
         tb_result,
         (true_fn_names[2],),
         Reactant.NoStopTracedTrack;
-        track_numbers=Number,
+        track_numbers,
     )
     for i in eachindex(tb_linear_args)
         Reactant.make_tracer(
@@ -1907,7 +1909,7 @@ end
             tb_linear_args[i],
             (true_fn_names[3], i),
             Reactant.NoStopTracedTrack;
-            track_numbers=Number,
+            track_numbers,
         )
     end
 
@@ -1964,7 +1966,7 @@ end
         fb_result,
         (false_fn_names[2],),
         Reactant.NoStopTracedTrack;
-        track_numbers=Number,
+        track_numbers,
     )
     for i in eachindex(fb_linear_args)
         Reactant.make_tracer(
@@ -1972,7 +1974,7 @@ end
             fb_linear_args[i],
             (false_fn_names[3], i),
             Reactant.NoStopTracedTrack;
-            track_numbers=Number,
+            track_numbers,
         )
     end
 
