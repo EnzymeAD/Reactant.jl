@@ -452,18 +452,18 @@ function make_mlir_fn(
         end
 
         # Ensure the sharding of the mutated arguments is propagated to the results
-        result_not_replicated = falses(length(linear_results))
         for i in mutated_args
             arg = linear_args[i]
-            if has_residx(arg) && haskey(traced_args_to_shardings, arg)
-                residx = findfirst(Base.Fix1(===, arg), linear_results)
-                @assert residx !== nothing
-                result_not_replicated[residx] = true
+
+            if haskey(traced_args_to_shardings, arg) &&
+                (has_residx(arg) || has_resargidx(arg))
+                idx = findfirst(Base.Fix1(===, arg), linear_results)
+                @assert idx !== nothing
                 attr, dialect = linear_arg_shardings[i]
                 if dialect == :sdy
-                    MLIR.API.mlirFuncSetResultAttr(func2, residx - 1, "sdy.sharding", attr)
+                    MLIR.API.mlirFuncSetResultAttr(func2, idx - 1, "sdy.sharding", attr)
                 elseif dialect == :mhlo
-                    MLIR.API.mlirFuncSetResultAttr(func2, residx - 1, "mhlo.sharding", attr)
+                    MLIR.API.mlirFuncSetResultAttr(func2, idx - 1, "mhlo.sharding", attr)
                 else
                     error("Unsupported dialect for tensor sharding: $(dialect)")
                 end
@@ -562,30 +562,6 @@ function push_val!(ad_inputs, x, path)
     return push!(ad_inputs, x)
 end
 
-function get_argidx(x)
-    for path in get_paths(x)
-        if length(path) == 0
-            continue
-        end
-        if path[1] == :args
-            return path[2]::Int, path
-        end
-    end
-    throw(AssertionError("No path found for $x"))
-end
-
-function has_argidx(x)
-    for path in get_paths(x)
-        if length(path) == 0
-            continue
-        end
-        if path[1] == :args
-            return true
-        end
-    end
-    return false
-end
-
 function set!(x, path, tostore; emptypath=false)
     for p in path
         x = Reactant.Compiler.traced_getfield(x, p)
@@ -596,28 +572,25 @@ function set!(x, path, tostore; emptypath=false)
     return emptypath && set_paths!(x, ())
 end
 
-function get_residx(x)
-    for path in get_paths(x)
-        if length(path) == 0
-            continue
+for (fn, key) in ((:arg, :args), (:res, :result), (:resarg, :resargs))
+    has_fn = Symbol(:has_, fn, :idx)
+    get_fn = Symbol(:get_, fn, :idx)
+    @eval begin
+        function $(has_fn)(x)
+            for path in get_paths(x)
+                length(path) == 0 && continue
+                path[1] == $(Meta.quot(key)) && return true
+            end
+            return false
         end
-        if path[1] == :result
-            return path
-        end
-    end
-    throw(AssertionError("No path found $x"))
-end
-
-function has_residx(x)
-    for path in get_paths(x)
-        if length(path) == 0
-            continue
-        end
-        if path[1] == :result
-            return true
+        function $(get_fn)(x)
+            for path in get_paths(x)
+                length(path) == 0 && continue
+                path[1] == $(Meta.quot(key)) && return path
+            end
+            throw(AssertionError("No path found for $x"))
         end
     end
-    return false
 end
 
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
