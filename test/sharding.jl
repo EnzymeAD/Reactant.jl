@@ -349,3 +349,31 @@ end
         @warn "Not enough addressable devices to run sharding tests"
     end
 end
+
+@testset "Bad Codegen for Resharded Inputs: #1027" begin
+    if length(addressable_devices) ≥ 12 && Reactant.XLA.runtime() isa Val{:IFRT}
+        x_ra = Reactant.to_rarray(
+            randn(Float32, 32, 32);
+            sharding=Sharding.NamedSharding(
+                Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
+            ),
+        )
+
+        z_ra = Reactant.to_rarray(ones(Float32, 32, 32))
+
+        function test1!(x, z)
+            y = x .+ x'
+            x .+= y
+            z .= x
+            return z
+        end
+
+        @jit test1!(x_ra, z_ra)
+
+        @test contains(
+            string(Reactant.XLA.sharding(z_ra.data.buffer)), "SingleDeviceSharding"
+        )
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end

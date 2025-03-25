@@ -24,6 +24,8 @@ import ..Reactant:
 
 import ..ReactantCore: correct_maybe_bcast_call
 
+const DEBUG_PRINT_CODEGEN = Ref(false)
+
 @inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
 end
@@ -92,6 +94,62 @@ end
     return Base.setfield!(obj, field, (val[idx],))
 end
 
+function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field)
+    return traced_setfield_buffer!(
+        runtime, cache_dict, traced_getfield(obj, field), concrete_res, obj, field
+    )
+end
+
+function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res, obj, field)
+    return traced_setfield!(val, :data, concrete_res)
+end
+
+function traced_setfield_buffer!(
+    ::Val{:PJRT},
+    cache_dict,
+    val::Union{TracedRArray,TracedRNumber},
+    concrete_res,
+    obj,
+    field,
+)
+    if haskey(cache_dict, val)
+        cval = cache_dict[val]
+    else
+        cval = if val isa TracedRArray
+            ConcretePJRTArray{Reactant.unwrapped_eltype(val),ndims(val)}(
+                concrete_res, size(val)
+            )
+        else
+            ConcretePJRTNumber{Reactant.unwrapped_eltype(val)}(concrete_res)
+        end
+        cache_dict[val] = cval
+    end
+    return traced_setfield!(obj, field, cval)
+end
+
+function traced_setfield_buffer!(
+    ::Val{:IFRT},
+    cache_dict,
+    val::Union{TracedRArray,TracedRNumber},
+    concrete_res,
+    obj,
+    field,
+)
+    if haskey(cache_dict, val)
+        cval = cache_dict[val]
+    else
+        cval = if val isa TracedRArray
+            ConcreteIFRTArray{Reactant.unwrapped_eltype(val),ndims(val)}(
+                concrete_res, size(val)
+            )
+        else
+            ConcreteIFRTNumber{Reactant.unwrapped_eltype(val)}(concrete_res)
+        end
+        cache_dict[val] = cval
+    end
+    return traced_setfield!(obj, field, cval)
+end
+
 function create_result(tocopy::T, path, args...) where {T}
     if !isstructtype(typeof(tocopy))
         error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
@@ -115,8 +173,8 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
     to_unreshard_results,
+    args...,
 ) where {T,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -136,9 +194,6 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        if haskey(to_unreshard_results, path)
-            error("TODO: Not yet Implemented. Use IFRT for this.")
-        end
         sharding = pop!(path_to_shard_info, path)
         return :(ConcretePJRTNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data...,)), $sharding
@@ -152,8 +207,8 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
     to_unreshard_results,
+    args...,
 ) where {T,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -171,9 +226,6 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        if haskey(to_unreshard_results, path)
-            error("TODO: Not yet Implemented.")
-        end
         sharding = pop!(path_to_shard_info, path)
         return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(tocopy.data), $sharding))
     end
@@ -185,8 +237,8 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
     to_unreshard_results,
+    args...,
 ) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -206,9 +258,6 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        if haskey(to_unreshard_results, path)
-            error("TODO: Not yet Implemented. Use IFRT for this.")
-        end
         sharding = pop!(path_to_shard_info, path)
         return :(ConcretePJRTArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
@@ -224,16 +273,29 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
     to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
 ) where {T,N,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                return :(generate_unresharded_ifrt_array(
-                    $(restore), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
+                if !haskey(unresharded_arrays_cache, restore)
+                    unresharded_array_sym = gensym(:unresharded_array)
+                    push!(
+                        unresharded_code,
+                        :(
+                            $unresharded_array_sym = generate_unresharded_ifrt_array(
+                                $(restore), $(to_unreshard_results[path])
+                            )
+                        ),
+                    )
+                    unresharded_arrays_cache[restore] = unresharded_array_sym
+                end
+                return :(ConcreteIFRTArray{$T,$N}(
+                    $(unresharded_arrays_cache[restore]), $(tocopy.shape)
                 ))
             end
             sharding = pop!(path_to_shard_info, path)
@@ -247,11 +309,6 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        if haskey(to_unreshard_results, path)
-            return :(generate_unresharded_ifrt_array(
-                $(tocopy.data), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
-            ))
-        end
         sharding = pop!(path_to_shard_info, path)
         return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
             $(tocopy.data), $(tocopy.shape), $sharding
@@ -263,12 +320,10 @@ function create_result(
 end
 
 function generate_unresharded_ifrt_array(
-    arr::Reactant.XLA.IFRT.AsyncArray,
-    (target_device, output_sharding, mesh),
-    ::Type{T},
-    N::Integer,
-    size_arr,
-) where {T}
+    arr::Reactant.XLA.IFRT.AsyncArray, (target_device, output_sharding, mesh)
+)
+    size_arr = reverse(size(arr))
+
     single_device_arrays = Reactant.XLA.IFRT.disassemble_into_single_device_arrays(
         Reactant.XLA.IFRT.replicate_array_to_all_devices(
             arr, output_sharding, mesh, size_arr
@@ -277,11 +332,18 @@ function generate_unresharded_ifrt_array(
     )
     devs = Reactant.XLA.device.(single_device_arrays)
     idx = findfirst(isequal(target_device), devs)
+    @assert idx !== nothing
     res_arr = Reactant.XLA.IFRT.AsyncArray(single_device_arrays[idx], nothing)
     res_arr_size = reverse(size(res_arr))
     @assert size_arr == res_arr_size "Expected size of array to be $(size_arr), but got \
                                       $(res_arr_size)"
-    return ConcreteIFRTArray{T,N}(res_arr, size_arr)
+
+    ifrt_sharding = Reactant.XLA.sharding(res_arr)
+    if !Reactant.XLA.IFRT.is_single_device_sharding(ifrt_sharding)
+        error("Unexpected sharding of result array: $(string(ifrt_sharding))")
+    end
+
+    return res_arr
 end
 
 function create_result(tocopy::Array{T,N}, path, args...) where {T,N}
@@ -588,24 +650,15 @@ const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedR
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    result = MLIR.IR.context!(ctx) do
+    return MLIR.IR.with_context() do ctx
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
         MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
         Text(repr(mod))
     end
-    Base.delete!(context_gc_vector, ctx)
-    return result
 end
 
 function compile_mlir(f, args; client=nothing, kwargs...)
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-
     backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
 
     if backend == "CUDA"
@@ -614,7 +667,7 @@ function compile_mlir(f, args; client=nothing, kwargs...)
         backend = "cpu"
     end
 
-    results = MLIR.IR.context!(ctx) do
+    results = MLIR.IR.with_context() do ctx
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         mlir_fn_res = compile_mlir!(
@@ -628,7 +681,6 @@ function compile_mlir(f, args; client=nothing, kwargs...)
 
         return mod, mlir_fn_res
     end
-    Base.delete!(context_gc_vector, ctx)
 
     return results
 end
@@ -1531,13 +1583,13 @@ function codegen_flatten!(
                     )
                     push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
                 else
-                    resharded_inputs[path[3:end]] = (
+                    resharded_inputs[path] = (
                         Reactant.XLA.device(carg), condensed_op_sharding, mesh
                     )
 
                     # XXX: Currently we copy to host and then make the transfer to the
-                    #      sharded devices. This is not ideal, we might be able to do a
-                    #      device-to-device transfer, maybe using reshard?
+                    #      sharded devices. This is not ideal, we should be able to do a
+                    #      direct transfer using remapplan
                     hlo_sharding = convert(XLA.HloSharding, condensed_op_sharding)
                     ifrt_sharding = XLA.IFRT.Sharding(
                         vec(Reactant.XLA.get_device.((client,), mesh.device_ids)),
@@ -1591,12 +1643,13 @@ function codegen_unflatten!(
     result_stores,
     path_to_shard_info,
     linear_result_shard_info,
-    sharding_mesh,
     client,
     resharded_inputs,
 )
     cache_dict = gensym("cache_dict")
-    has_cache_dict = false
+    needs_cache_dict = false
+    unresharded_arrays_cache = Dict{Symbol,Symbol}()
+    unresharded_code = Expr[]
     unflatten_code = Expr[]
 
     runtime = XLA.runtime(client)
@@ -1629,9 +1682,8 @@ function codegen_unflatten!(
 
                 if Reactant.TracedUtils.has_argidx(result)
                     _, argidx = Reactant.TracedUtils.get_argidx(result)
-                    arg_path = argidx[3:end]
-                    if haskey(resharded_inputs, arg_path)
-                        to_unreshard_results[path] = resharded_inputs[arg_path]
+                    if haskey(resharded_inputs, argidx)
+                        to_unreshard_results[path] = resharded_inputs[argidx]
                     end
                 end
 
@@ -1643,63 +1695,60 @@ function codegen_unflatten!(
             else
                 @assert path[1] == :resargs
                 unflatcode = :(args[$(path[2])])
-                path = path[3:end]
 
+                need_to_unreshard = get(resharded_inputs, (:args, path[2:end]...), nothing)
+                if need_to_unreshard !== nothing
+                    @assert runtime isa Val{:IFRT} "PJRT is not supported here. Use IFRT \
+                                                    instead."
+                end
+
+                path = path[3:end]
                 for p in path[1:(end - 1)]
                     unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
                 end
 
-                if length(path) > 0
-                    final_val = gensym("final_val")
-                    clocal = gensym("clocal")
-                    if !has_cache_dict
-                        has_cache_dict = true
+                concrete_res_name_final = concrete_res_name
+                if need_to_unreshard !== nothing
+                    if !haskey(unresharded_arrays_cache, concrete_res_name)
+                        unreshard_sym = gensym(:unresharded_buffer)
                         push!(
-                            unflatten_code,
+                            unresharded_code,
                             :(
-                                $cache_dict =
-                                    $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())
+                                $unreshard_sym = generate_unresharded_ifrt_array(
+                                    $(concrete_res_name), $(need_to_unreshard)
+                                )
                             ),
                         )
+                        unresharded_arrays_cache[concrete_res_name] = unreshard_sym
                     end
-                    unflatcode = quote
-                        # XXX: we might need to handle sharding here
-                        $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
-                        if $final_val isa TracedRArray
-                            $clocal = if haskey($cache_dict, $final_val)
-                                $cache_dict[$final_val]
-                            else
-                                $cache_dict[$final_val] = $(arrtype){
-                                    $(Reactant.unwrapped_eltype)($final_val),
-                                    ndims($final_val),
-                                }(
-                                    $concrete_res_name, size($final_val)
-                                )
-                                $cache_dict[$final_val]
-                            end
-                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
-                        elseif $final_val isa TracedRNumber
-                            $clocal = if haskey($cache_dict, $final_val)
-                                $cache_dict[$final_val]
-                            else
-                                $cache_dict[$final_val] = $(numtype){
-                                    $(Reactant.unwrapped_eltype)($final_val)
-                                }(
-                                    $concrete_res_name
-                                )
-                                $cache_dict[$final_val]
-                            end
-                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
-                        else
-                            traced_setfield!($final_val, :data, $concrete_res_name)
-                        end
-                    end
+                    concrete_res_name_final = unresharded_arrays_cache[concrete_res_name]
+                end
+
+                if length(path) > 0
+                    needs_cache_dict = true
+                    # XXX: we might need to handle sharding here
+                    unflatcode = :(traced_setfield_buffer!(
+                        $(runtime),
+                        $(cache_dict),
+                        $(concrete_res_name_final),
+                        $(unflatcode),
+                        $(Meta.quot(path[end])),
+                    ))
                 else
-                    unflatcode = :(traced_setfield!($unflatcode, :data, $concrete_res_name))
+                    unflatcode = :(traced_setfield!(
+                        $(unflatcode), :data, $(concrete_res_name_final)
+                    ))
                 end
                 push!(unflatten_code, unflatcode)
             end
         end
+    end
+
+    if needs_cache_dict
+        pushfirst!(
+            unflatten_code,
+            :($cache_dict = $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())),
+        )
     end
 
     prevkeys = collect(keys(result_stores))
@@ -1708,8 +1757,9 @@ function codegen_unflatten!(
         (),
         result_stores,
         path_to_shard_info,
-        sharding_mesh,
         to_unreshard_results,
+        unresharded_code,
+        unresharded_arrays_cache,
     )
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
@@ -1745,8 +1795,15 @@ function codegen_unflatten!(
                 res = :(args[$(path[2])])
                 path = path[3:end]
             end
+
             for p in path
                 res = :(traced_getfield($res, $(Meta.quot(p))))
+            end
+
+            need_to_unreshard = get(resharded_inputs, (:args, argpath[2:end]...), nothing)
+            if need_to_unreshard !== nothing
+                # TODO(@avik-pal): I need an MWE to debug this codepath
+                error("TODO: Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
             argres = :(args[$(argpath[2])])
@@ -1754,16 +1811,13 @@ function codegen_unflatten!(
                 argres = :(traced_getfield($argres, $(Meta.quot(p))))
             end
 
-            res = :($res.data = $argres.data)
+            res = :(traced_setfield!($res, :data, $argres.data))
             push!(unflatten_code, res)
         end
     end
 
     # generate return object which stores the concrete results in some arbitrary way
-    pushfirst!(unflatten_code, :(result = $result_code))
-    # push!(unflatten_code, :(return result))
-
-    return unflatten_code
+    return [unresharded_code..., :(result = $result_code), unflatten_code...]
 end
 
 """
@@ -1977,7 +2031,7 @@ function compile(f, args; sync=false, kwargs...)
         result_stores,
         mlir_fn_res.is_sharded,
         mlir_fn_res.sharding_mesh,
-        XLA.get_parameter_shardings(exec),
+        XLA.get_parameter_shardings(exec), # TODO: use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
         client,
     )
 
@@ -2044,7 +2098,6 @@ function compile(f, args; sync=false, kwargs...)
         result_stores,
         path_to_shard_info,
         linear_result_shard_info,
-        mlir_fn_res.sharding_mesh,
         client,
         resharded_inputs,
     )
@@ -2067,6 +2120,10 @@ function compile(f, args; sync=false, kwargs...)
         $(sync_call)
         $(unflatten_code...)
         return result
+    end
+
+    if DEBUG_PRINT_CODEGEN[] && Reactant.Distributed.local_rank() == 0
+        display(body)
     end
 
     return register_thunk(

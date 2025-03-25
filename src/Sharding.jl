@@ -582,14 +582,7 @@ struct HloSharding{D1,D2,PS} <: AbstractSharding
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
-    if MLIR.IR._has_context()
-        ctx = MLIR.IR.context()
-    else
-        ctx = MLIR.IR.Context(Reactant.registry[], false)
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    end
-
-    MLIR.IR.context!(ctx) do
+    MLIR.IR.with_context(; allow_use_existing=true) do ctx
         mesh_op = Reactant.Ops.mesh(
             sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
         )
