@@ -1698,7 +1698,6 @@ function codegen_unflatten!(
                 end
                 continue
             else
-                @show path
                 @assert path[1] == resargprefix
                 unflatcode = :(args[$(path[2])])
 

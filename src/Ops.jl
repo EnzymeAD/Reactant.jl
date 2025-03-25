@@ -1755,7 +1755,6 @@ end
     seen_args = Reactant.OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
 
-    loopargsym = gensym("looparg")
     for (i, prev) in enumerate(args)
         Reactant.make_tracer(seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers)
     end
