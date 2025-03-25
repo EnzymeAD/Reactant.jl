@@ -358,8 +358,8 @@ function make_mlir_fn(
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
         @assert length(linear_args) <= length(linear_results)
-        argis = (Base.tail).(Base.Fix2(getindex, 2).(Base.Fix2(get_idx, argprefix).(linear_args)))
-        resis = (Base.tail).(Base.Fix2(get_idx, resprefix).(linear_results))
+        argis = (Base.tail).(Base.Fix2(getindex, 2).((Base.Fix2(get_idx, argprefix)).(linear_args)))
+        resis = (Base.tail).((Base.Fix2(get_idx, resprefix)).(linear_results))
 
         # this can be more efficient
         conflicts = setdiff(resis, argis)
@@ -368,8 +368,8 @@ function make_mlir_fn(
         @show typeof.(linear_results)
         @show [a.paths for a in linear_args]
         @show [a.paths for a in linear_results]
-        @show Base.Fix2(get_idx, argprefix).(linear_args)
-        @show Base.Fix2(get_idx, resprefix).(linear_results)
+        @show (Base.Fix2(get_idx, argprefix)).(linear_args)
+        @show (Base.Fix2(get_idx, resprefix)).(linear_results)
         @assert !isempty(conflicts) "Expected to have some conflicts, but none were found."
 
         errs = []
