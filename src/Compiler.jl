@@ -1761,8 +1761,6 @@ function codegen_unflatten!(
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
 
-    @show preserved_args
-
     # if some argument is mutated, change them to point to the correct concrete results
     for (result, arg_idx) in preserved_args
         paths = (
@@ -1771,8 +1769,6 @@ function codegen_unflatten!(
                 length(p) > 0 && (p[1] == :result || p[1] == :resargs || p[1] == :args)
             )...,
         )
-
-        @show paths
 
         for path in paths
             arg = linear_args[arg_idx + 1]
@@ -1797,11 +1793,14 @@ function codegen_unflatten!(
                 path = path[3:end]
             end
 
-            error(1)
-
-            # TODO: We might not be able to directly set the field here.
             for p in path
                 res = :(traced_getfield($res, $(Meta.quot(p))))
+            end
+
+            need_to_unreshard = get(resharded_inputs, (:args, argpath[2:end]...), nothing)
+            if need_to_unreshard !== nothing
+                # TODO(@avik-pal): I need an MWE to debug this codepath
+                error("TODO: Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
             argres = :(args[$(argpath[2])])

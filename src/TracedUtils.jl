@@ -470,6 +470,21 @@ function make_mlir_fn(
             end
         end
 
+        for (i, res) in enumerate(linear_results)
+            if has_argidx(res) && haskey(traced_args_to_shardings, res)
+                argidx = findfirst(Base.Fix1(===, res), linear_args)
+                @assert argidx !== nothing
+                attr, dialect = linear_arg_shardings[argidx]
+                if dialect == :sdy
+                    MLIR.API.mlirFuncSetResultAttr(func2, i - 1, "sdy.sharding", attr)
+                elseif dialect == :mhlo
+                    MLIR.API.mlirFuncSetResultAttr(func2, i - 1, "mhlo.sharding", attr)
+                else
+                    error("Unsupported dialect for tensor sharding: $(dialect)")
+                end
+            end
+        end
+
         # XXX: Generalize the output shardings and expose it to the user
         # output_shardings is a Int -> Sharding mapping
         if output_shardings !== nothing
@@ -574,7 +589,6 @@ end
 
 for (fn, key) in ((:arg, :args), (:res, :result), (:resarg, :resargs))
     has_fn = Symbol(:has_, fn, :idx)
-    get_fn = Symbol(:get_, fn, :idx)
     @eval begin
         function $(has_fn)(x)
             for path in get_paths(x)
@@ -583,14 +597,23 @@ for (fn, key) in ((:arg, :args), (:res, :result), (:resarg, :resargs))
             end
             return false
         end
-        function $(get_fn)(x)
-            for path in get_paths(x)
-                length(path) == 0 && continue
-                path[1] == $(Meta.quot(key)) && return path
-            end
-            throw(AssertionError("No path found for $x"))
-        end
     end
+end
+
+function get_argidx(x)
+    for path in get_paths(x)
+        length(path) == 0 && continue
+        path[1] == :args && return (path[2]::Int, path)
+    end
+    throw(AssertionError("No path found for $x"))
+end
+
+function get_residx(x)
+    for path in get_paths(x)
+        length(path) == 0 && continue
+        path[1] == :result && return path
+    end
+    throw(AssertionError("No path found for $x"))
 end
 
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
