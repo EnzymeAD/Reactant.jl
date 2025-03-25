@@ -349,15 +349,32 @@ function make_mlir_fn(
         append!(linear_results, linear_args[mutated_args])
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
-        @assert length(linear_args) <= length(linear_results)
-        argis = first.(get_argidx.(linear_args))
-        resis = Set(getindex.(get_residx.(linear_results), Ref(2)))
+        @assert length(linear_args) <= length(linear_results) "Expected to have missing traced arguments, but it seems like results are missing."
+        argis = map(get_argidx.(linear_args)) do (_, path)
+            path[2:end]
+        end
+        resis = Set(map(get_residx.(linear_results)) do path
+            path[2:end]
+        end)
         # this can be more efficient
         conflicts = setdiff(resis, argis)
+        if isempty(conflicts)
+            Core.println("linear_args: $linear_args")
+            Core.println("linear_results: $linear_results")
+        end
         @assert !isempty(conflicts) "Expected to have some conflicts, but none were found."
 
+        conflicts = collect(conflicts)
+        diagnostics = map(conflicts) do conflict
+            i = first(conflict)
+            remaining_path = conflict[2:end]
+            name = verify_arg_names.args[i]
+            "$name -> [$(join(remaining_path, ", "))]"
+        end
+
         error("""Types do not match between function arguments and results.
-        The following arguments should be traced: $(join(verify_arg_names.args[collect(conflicts)], ", "))
+        The following arguments should be traced:
+        $(join(diagnostics, "\n"))
         """)
     end
 
