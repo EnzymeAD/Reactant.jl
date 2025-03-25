@@ -310,7 +310,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             use_shardy_partitioner=false, # unused
         )
 
-        only(XLA.execute(exec, (array.buffer,), (UInt8(0),), Val(1))).buffer
+        only(XLA.execute(exec, (array.buffer,), (UInt8(0),), Val(1)))
     finally
         Reactant.Compiler.deactivate_sdycache!(sdycache)
         MLIR.IR.deactivate!(ctx)

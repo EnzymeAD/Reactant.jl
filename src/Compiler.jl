@@ -325,7 +325,7 @@ function generate_unresharded_ifrt_array(
     @assert size_arr == res_arr_size "Expected size of array to be $(size_arr), but got \
                                       $(res_arr_size)"
 
-    ifrt_sharding = Reactant.XLA.sharding(res_arr.buffer)
+    ifrt_sharding = Reactant.XLA.sharding(res_arr)
     if !Reactant.XLA.IFRT.is_single_device_sharding(ifrt_sharding)
         error("Unexpected sharding of result array: $(string(ifrt_sharding))")
     end
