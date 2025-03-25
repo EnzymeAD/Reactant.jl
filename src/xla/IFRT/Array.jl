@@ -208,9 +208,6 @@ function disassemble_into_single_device_arrays(array::Array, only_addressable_de
 end
 
 function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
-    # TODO: we want to have better checks? For example, IFRT often returns
-    #       ConcreteEvenSharding(devices: BasicDeviceList([CpuDevice(id=0),CpuDevice(id=1),CpuDevice(id=2),CpuDevice(id=3),...]), shape: [32,32], shard_shape: [32,32], memory_kind: unpinned_host, is_fully_replicated: false)
-    #       which is essentially fully replicated....
     is_fully_replicated(XLA.sharding(array)) && return array
 
     if sharding isa Reactant.Sharding.AbstractSharding
@@ -225,6 +222,9 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             ntuple(Returns(-1), length(size_arr)),
         )
     end
+
+    # TODO: Expose C++ API for this check
+    string(hlo_sharding) == "{replicated}" && return array
 
     output_sharding = Reactant.Sharding.NamedSharding(
         mesh, ntuple(Returns(nothing), length(size_arr))
