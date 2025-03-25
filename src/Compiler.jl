@@ -1575,8 +1575,8 @@ function codegen_flatten!(
                     )
 
                     # XXX: Currently we copy to host and then make the transfer to the
-                    #      sharded devices. This is not ideal, we might be able to do a
-                    #      device-to-device transfer, maybe using reshard?
+                    #      sharded devices. This is not ideal, we should be able to do a
+                    #      direct transfer using remapplan
                     hlo_sharding = convert(XLA.HloSharding, condensed_op_sharding)
                     ifrt_sharding = XLA.IFRT.Sharding(
                         vec(Reactant.XLA.get_device.((client,), mesh.device_ids)),
@@ -2042,7 +2042,7 @@ function compile(f, args; sync=false, kwargs...)
         result_stores,
         mlir_fn_res.is_sharded,
         mlir_fn_res.sharding_mesh,
-        XLA.get_parameter_shardings(exec),
+        XLA.get_parameter_shardings(exec), # TODO: use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
         client,
     )
 
