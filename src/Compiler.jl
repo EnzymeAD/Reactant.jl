@@ -94,12 +94,23 @@ end
     return Base.setfield!(obj, field, (val[idx],))
 end
 
-function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res)
-    return traced_setfield!(val, :data, concrete_res)
+function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field)
+    return traced_setfield_buffer!(
+        runtime, cache_dict, traced_getfield(obj, field), concrete_res, obj, field
+    )
+end
+
+function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res, obj, field)
+    return traced_setfield!(obj, field, concrete_res)
 end
 
 function traced_setfield_buffer!(
-    ::Val{:PJRT}, cache_dict, val::Union{TracedRArray,TracedRNumber}, concrete_res
+    ::Val{:PJRT},
+    cache_dict,
+    val::Union{TracedRArray,TracedRNumber},
+    concrete_res,
+    obj,
+    field,
 )
     if haskey(cache_dict, val)
         cval = cache_dict[val]
@@ -113,11 +124,16 @@ function traced_setfield_buffer!(
         end
         cache_dict[val] = cval
     end
-    return traced_setfield!(val, :data, cval)
+    return traced_setfield!(obj, field, cval)
 end
 
 function traced_setfield_buffer!(
-    ::Val{:IFRT}, cache_dict, val::Union{TracedRArray,TracedRNumber}, concrete_res
+    ::Val{:IFRT},
+    cache_dict,
+    val::Union{TracedRArray,TracedRNumber},
+    concrete_res,
+    obj,
+    field,
 )
     if haskey(cache_dict, val)
         cval = cache_dict[val]
@@ -131,7 +147,7 @@ function traced_setfield_buffer!(
         end
         cache_dict[val] = cval
     end
-    return traced_setfield!(val, :data, cval)
+    return traced_setfield!(obj, field, cval)
 end
 
 function create_result(tocopy::T, path, args...) where {T}
@@ -1705,36 +1721,26 @@ function codegen_unflatten!(
                     unresharded_arrays_cache[concrete_res_name] = unreshard_sym
                 end
 
+                concrete_res_name_final = if need_to_unreshard === nothing
+                    concrete_res_name
+                else
+                    unresharded_arrays_cache[concrete_res_name]
+                end
+
                 if length(path) > 0
                     needs_cache_dict = true
-
-                    if need_to_unreshard === nothing
-                        # XXX: we might need to handle sharding here
-                        unflatcode = :(traced_setfield_buffer!(
-                            $(runtime),
-                            $(cache_dict),
-                            traced_getfield($(unflatcode), $(Meta.quot(path[end]))),
-                            $(concrete_res_name),
-                        ))
-                    else
-                        unflatcode = :(traced_setfield_buffer!(
-                            $(runtime),
-                            $(cache_dict),
-                            traced_getfield($(unflatcode), $(Meta.quot(path[end]))),
-                            $(unresharded_arrays_cache[concrete_res_name]),
-                        ))
-                    end
+                    # XXX: we might need to handle sharding here
+                    unflatcode = :(traced_setfield_buffer!(
+                        $(runtime),
+                        $(cache_dict),
+                        $(concrete_res_name_final),
+                        $(unflatcode),
+                        $(Meta.quot(path[end])),
+                    ))
                 else
-                    if need_to_unreshard === nothing
-                        unflatcode =
-                            :(traced_setfield!($unflatcode, :data, $concrete_res_name))
-                    else
-                        unflatcode = :(traced_setfield!(
-                            $(unflatcode),
-                            :data,
-                            $(unresharded_arrays_cache[concrete_res_name]),
-                        ))
-                    end
+                    unflatcode = :(traced_setfield!(
+                        $(unflatcode), :data, $(concrete_res_name_final)
+                    ))
                 end
                 push!(unflatten_code, unflatcode)
             end
