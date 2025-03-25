@@ -101,7 +101,7 @@ function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, fi
 end
 
 function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res, obj, field)
-    return traced_setfield!(obj, field, concrete_res)
+    return traced_setfield!(val, :data, concrete_res)
 end
 
 function traced_setfield_buffer!(
