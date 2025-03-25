@@ -101,7 +101,7 @@ function with_context(f; allow_use_existing=false)
         deactivate!(ctx)
     end
 
-    delete_context && delete!(Reactant.Compiler.context_gc_vector, ctx)
+    delete_context && Base.delete!(Reactant.Compiler.context_gc_vector, ctx)
 
     return result
 end

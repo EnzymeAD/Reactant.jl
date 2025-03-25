@@ -1808,6 +1808,8 @@ function codegen_unflatten!(
                 res = :(args[$(path[2])])
                 path = path[3:end]
             end
+
+            # TODO: We might not be able to directly set the field here.
             for p in path
                 res = :(traced_getfield($res, $(Meta.quot(p))))
             end
@@ -2132,7 +2134,7 @@ function compile(f, args; sync=false, kwargs...)
         return result
     end
 
-    if DEBUG_PRINT_CODEGEN[]
+    if DEBUG_PRINT_CODEGEN[] && Reactant.Distributed.local_rank() == 0
         display(body)
     end
 
