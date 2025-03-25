@@ -190,8 +190,8 @@ function make_mlir_fn(
     output_shardings=nothing, # This is not meant to be used by the user.
     runtime=nothing,
     verify_arg_names=nothing,
-    argprefix::Symbol = :args
-    resprefix::Symbol = :result
+    argprefix::Symbol = :args,
+    resprefix::Symbol = :result,
     resargprefix::Symbol = :resargs
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
@@ -203,7 +203,6 @@ function make_mlir_fn(
             concretein;
             toscalar,
             return_dialect,
-            do_transpose,
             args_in_result,
             construct_function_without_args,
             do_transpose,
@@ -211,7 +210,9 @@ function make_mlir_fn(
             output_shardings,
             runtime,
             verify_arg_names,
-            argprefix
+            argprefix,
+            resprefix,
+            resargprefix
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
@@ -610,10 +611,15 @@ function get_idx(x, prefix::Symbol)
             continue
         end
         if path[1] == prefix
-            return path[2]::Int, path
+            return path
         end
     end
     throw(AssertionError("No path found for $x"))
+end
+
+function get_argidx(x, prefix::Symbol)
+    path = get_idx(x, prefix)
+    return path[2]::Int, path
 end
 
 function has_idx(x, prefix::Symbol)
@@ -680,7 +686,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     batch_inputs = MLIR.IR.Value[]
 
     for a in linear_args
-        idx, path = get_idx(a, argprefix)
+        idx, path = get_argidx(a, argprefix)
         if idx == 1 && fnwrap
             push_val!(batch_inputs, f, path[3:end])
         else
@@ -701,12 +707,12 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     residx = 1
 
     for a in linear_results
-        if has_residx(a)
+        if has_idx(a, resprefix)
             path = get_idx(a, resprefix)
             set!(result, path[2:end], MLIR.IR.result(res, residx))
             residx += 1
         else
-            idx, path = get_idx(a, argprefix)
+            idx, path = get_argidx(a, argprefix)
             if idx == 1 && fnwrap
                 set!(f, path[3:end], MLIR.IR.result(res, residx))
                 residx += 1

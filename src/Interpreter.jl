@@ -271,7 +271,7 @@ function overload_autodiff(
     ad_inputs = MLIR.IR.Value[]
 
     for a in linear_args
-        idx, path = TracedUtils.get_idx(a, argprefix)
+        idx, path = TracedUtils.get_argidx(a, argprefix)
         if idx == 1 && fnwrap
             push!(activity, act_from_type(f, reverse))
             push_acts!(ad_inputs, f, path[3:end], reverse)
@@ -346,7 +346,7 @@ function overload_autodiff(
                 push!(ad_inputs, cst)
             end
         elseif TracedUtils.has_idx(a, argprefix)
-            idx, path = TracedUtils.get_idx(a, argprefix)
+            idx, path = TracedUtils.get_argidx(a, argprefix)
             if idx == 1 && fnwrap
                 act = act_from_type(f, reverse, true)
                 push!(ret_activity, act)
@@ -435,7 +435,7 @@ function overload_autodiff(
                 residx += 1
             end
         elseif TracedUtils.has_idx(a, argprefix)
-            idx, path = TracedUtils.get_idx(a, argprefix)
+            idx, path = TracedUtils.get_argidx(a, argprefix)
             if idx == 1 && fnwrap
                 TracedUtils.set!(
                     f.val,
@@ -462,7 +462,7 @@ function overload_autodiff(
 
     restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
     for a in linear_args
-        idx, path = TracedUtils.get_idx(a, argprefix)
+        idx, path = TracedUtils.get_argidx(a, argprefix)
         if idx == 1 && fnwrap
             if act_from_type(f, reverse) != enzyme_out
                 continue
