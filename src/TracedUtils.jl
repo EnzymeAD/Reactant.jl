@@ -358,7 +358,7 @@ function make_mlir_fn(
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
         @assert length(linear_args) <= length(linear_results)
-        argis = (Base.tail).(Base.Fix2(getindex, 2).((Base.Fix2(get_idx, argprefix)).(linear_args)))
+        argis = (Base.tail).(((Base.Fix2(get_idx, argprefix)).(linear_args)))
         resis = (Base.tail).((Base.Fix2(get_idx, resprefix)).(linear_results))
 
         # this can be more efficient
