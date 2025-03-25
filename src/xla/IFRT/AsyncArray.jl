@@ -18,10 +18,3 @@ function replicate_array_to_all_devices(array::AsyncArray, args...)
     wait(array)
     return replicate_array_to_all_devices(array.buffer, args...)
 end
-
-function XLA.to_host(array::AsyncArray, data, reactant_sharding)
-    wait(array)
-    return XLA.to_host(array.buffer, data, reactant_sharding)
-end
-
-XLA.sharding(x::AsyncArray) = XLA.sharding(x.buffer)
