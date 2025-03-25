@@ -12,7 +12,7 @@ using ..Reactant:
     Ops,
     MLIR
 
-import ReactantCore
+using ReactantCore: ReactantCore
 using ReactantCore: materialize_traced_array
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!

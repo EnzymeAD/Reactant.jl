@@ -14,7 +14,7 @@ using ..Reactant:
     OrderedIdDict,
     ReactantPrimitive,
     Ops
-import ReactantCore
+using ReactantCore: ReactantCore
 using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
 using Functors: Functors
 
@@ -49,7 +49,7 @@ function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
 end
 
 function ReactantCore.materialize_traced_array(
-    x::PermutedDimsArray{<:Any, <:Any, perm}
+    x::PermutedDimsArray{<:Any,<:Any,perm}
 ) where {perm}
     return permutedims(materialize_traced_array(parent(x)), perm)
 end
