@@ -157,8 +157,8 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
     to_unreshard_results,
+    args...,
 ) where {T,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -178,9 +178,6 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        if haskey(to_unreshard_results, path)
-            error("TODO: Not yet Implemented. Use IFRT for this.")
-        end
         sharding = pop!(path_to_shard_info, path)
         return :(ConcretePJRTNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data...,)), $sharding
@@ -194,8 +191,8 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
     to_unreshard_results,
+    args...,
 ) where {T,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -213,9 +210,6 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        if haskey(to_unreshard_results, path)
-            error("TODO: Not yet Implemented.")
-        end
         sharding = pop!(path_to_shard_info, path)
         return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(tocopy.data), $sharding))
     end
@@ -227,8 +221,8 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
     to_unreshard_results,
+    args...,
 ) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -248,9 +242,6 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        if haskey(to_unreshard_results, path)
-            error("TODO: Not yet Implemented. Use IFRT for this.")
-        end
         sharding = pop!(path_to_shard_info, path)
         return :(ConcretePJRTArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
             ($(tocopy.data)...,), $(tocopy.shape), $sharding
@@ -266,16 +257,29 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
     to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
 ) where {T,N,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                return :(generate_unresharded_ifrt_array(
-                    $(restore), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
+                if !haskey(unresharded_arrays_cache, restore)
+                    unresharded_array_sym = gensym(:unresharded_array)
+                    push!(
+                        unresharded_code,
+                        :(
+                            $unresharded_array_sym = generate_unresharded_ifrt_array(
+                                $(restore), $(to_unreshard_results[path])
+                            )
+                        ),
+                    )
+                    unresharded_arrays_cache[restore] = unresharded_array_sym
+                end
+                return :(ConcreteIFRTArray{$T,$N}(
+                    $(unresharded_arrays_cache[restore]), $(tocopy.shape)
                 ))
             end
             sharding = pop!(path_to_shard_info, path)
@@ -289,11 +293,6 @@ function create_result(
 
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        if haskey(to_unreshard_results, path)
-            return :(generate_unresharded_ifrt_array(
-                $(tocopy.data), $(to_unreshard_results[path]), $(T), $(N), $(tocopy.shape)
-            ))
-        end
         sharding = pop!(path_to_shard_info, path)
         return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
             $(tocopy.data), $(tocopy.shape), $sharding
@@ -305,12 +304,10 @@ function create_result(
 end
 
 function generate_unresharded_ifrt_array(
-    arr::Reactant.XLA.IFRT.AsyncArray,
-    (target_device, output_sharding, mesh),
-    ::Type{T},
-    N::Integer,
-    size_arr,
-) where {T}
+    arr::Reactant.XLA.IFRT.AsyncArray, (target_device, output_sharding, mesh)
+)
+    size_arr = reverse(size(arr))
+
     single_device_arrays = Reactant.XLA.IFRT.disassemble_into_single_device_arrays(
         Reactant.XLA.IFRT.replicate_array_to_all_devices(
             arr, output_sharding, mesh, size_arr
@@ -330,7 +327,7 @@ function generate_unresharded_ifrt_array(
         error("Unexpected sharding of result array: $(string(ifrt_sharding))")
     end
 
-    return ConcreteIFRTArray{T,N}(res_arr, size_arr)
+    return res_arr
 end
 
 function create_result(tocopy::Array{T,N}, path, args...) where {T,N}
@@ -1630,12 +1627,13 @@ function codegen_unflatten!(
     result_stores,
     path_to_shard_info,
     linear_result_shard_info,
-    sharding_mesh,
     client,
     resharded_inputs,
 )
     cache_dict = gensym("cache_dict")
-    has_cache_dict = false
+    needs_cache_dict = false
+    unresharded_arrays_cache = Dict{Symbol,Symbol}()
+    unresharded_code = Expr[]
     unflatten_code = Expr[]
 
     runtime = XLA.runtime(client)
@@ -1650,7 +1648,6 @@ function codegen_unflatten!(
     end
     ctypes = Union{arrtype,numtype}
 
-    # TODO: use a cache to ensure we don't unreshard the same buffer multiple times
     to_unreshard_results = Dict{Tuple,Any}()
 
     # mutate the result stores to point to the correct concrete results
@@ -1694,75 +1691,61 @@ function codegen_unflatten!(
                     unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
                 end
 
+                if need_to_unreshard !== nothing &&
+                    !haskey(unresharded_arrays_cache, concrete_res_name)
+                    unreshard_sym = gensym(:unresharded_buffer)
+                    push!(
+                        unresharded_code,
+                        :(
+                            $unreshard_sym = generate_unresharded_ifrt_array(
+                                $(concrete_res_name), $(need_to_unreshard)
+                            )
+                        ),
+                    )
+                    unresharded_arrays_cache[concrete_res_name] = unreshard_sym
+                end
+
                 if length(path) > 0
-                    if !has_cache_dict
-                        has_cache_dict = true
-                        push!(
-                            unflatten_code,
-                            :(
-                                $cache_dict =
-                                    $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())
-                            ),
-                        )
-                    end
+                    needs_cache_dict = true
 
                     if need_to_unreshard === nothing
-                        unflatcode = quote
-                            # XXX: we might need to handle sharding here
-                            traced_setfield_buffer!(
-                                $(runtime),
-                                $(cache_dict),
-                                traced_getfield($(unflatcode), $(Meta.quot(path[end]))),
-                                $(concrete_res_name),
-                            )
-                        end
+                        # XXX: we might need to handle sharding here
+                        unflatcode = :(traced_setfield_buffer!(
+                            $(runtime),
+                            $(cache_dict),
+                            traced_getfield($(unflatcode), $(Meta.quot(path[end]))),
+                            $(concrete_res_name),
+                        ))
                     else
-                        unreshard_sym = gensym(:unresharded_buffer)
-                        local_unflatcode_sym = gensym(:local_val)
-                        unflatcode = quote
-                            $(local_unflatcode_sym) = traced_getfield(
-                                $(unflatcode), $(Meta.quot(path[end]))
-                            )
-                            $unreshard_sym = generate_unresharded_ifrt_array(
-                                $(concrete_res_name),
-                                $(need_to_unreshard),
-                                eltype($(local_unflatcode_sym)),
-                                ndims($(local_unflatcode_sym)),
-                                size($(local_unflatcode_sym)),
-                            )
-                            traced_setfield_buffer!(
-                                $(runtime),
-                                $(cache_dict),
-                                $(local_unflatcode_sym),
-                                $(unreshard_sym).data,
-                            )
-                        end
+                        unflatcode = :(traced_setfield_buffer!(
+                            $(runtime),
+                            $(cache_dict),
+                            traced_getfield($(unflatcode), $(Meta.quot(path[end]))),
+                            $(unresharded_arrays_cache[concrete_res_name]),
+                        ))
                     end
                 else
                     if need_to_unreshard === nothing
                         unflatcode =
                             :(traced_setfield!($unflatcode, :data, $concrete_res_name))
                     else
-                        unreshard_sym = gensym(:unresharded_buffer)
-                        local_unflatcode_sym = gensym(:local_val)
-                        unflatcode = quote
-                            $(local_unflatcode_sym) = $(unflatcode)
-                            $unreshard_sym = generate_unresharded_ifrt_array(
-                                $(concrete_res_name),
-                                $(need_to_unreshard),
-                                eltype($(local_unflatcode_sym)),
-                                ndims($(local_unflatcode_sym)),
-                                size($(local_unflatcode_sym)),
-                            )
-                            traced_setfield!(
-                                $(local_unflatcode_sym), :data, $(unreshard_sym).data
-                            )
-                        end
+                        unflatcode = :(traced_setfield!(
+                            $(unflatcode),
+                            :data,
+                            $(unresharded_arrays_cache[concrete_res_name]),
+                        ))
                     end
                 end
                 push!(unflatten_code, unflatcode)
             end
         end
+    end
+
+    if needs_cache_dict
+        pushfirst!(
+            unflatten_code,
+            :($cache_dict = $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())),
+        )
     end
 
     prevkeys = collect(keys(result_stores))
@@ -1771,11 +1754,14 @@ function codegen_unflatten!(
         (),
         result_stores,
         path_to_shard_info,
-        sharding_mesh,
         to_unreshard_results,
+        unresharded_code,
+        unresharded_arrays_cache,
     )
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
+
+    @show preserved_args
 
     # if some argument is mutated, change them to point to the correct concrete results
     for (result, arg_idx) in preserved_args
@@ -1785,6 +1771,8 @@ function codegen_unflatten!(
                 length(p) > 0 && (p[1] == :result || p[1] == :resargs || p[1] == :args)
             )...,
         )
+
+        @show paths
 
         for path in paths
             arg = linear_args[arg_idx + 1]
@@ -1809,6 +1797,8 @@ function codegen_unflatten!(
                 path = path[3:end]
             end
 
+            error(1)
+
             # TODO: We might not be able to directly set the field here.
             for p in path
                 res = :(traced_getfield($res, $(Meta.quot(p))))
@@ -1819,16 +1809,13 @@ function codegen_unflatten!(
                 argres = :(traced_getfield($argres, $(Meta.quot(p))))
             end
 
-            res = :($res.data = $argres.data)
+            res = :(traced_setfield!($res, :data, $argres.data))
             push!(unflatten_code, res)
         end
     end
 
     # generate return object which stores the concrete results in some arbitrary way
-    pushfirst!(unflatten_code, :(result = $result_code))
-    # push!(unflatten_code, :(return result))
-
-    return unflatten_code
+    return [unresharded_code..., :(result = $result_code), unflatten_code...]
 end
 
 """
@@ -2109,7 +2096,6 @@ function compile(f, args; sync=false, kwargs...)
         result_stores,
         path_to_shard_info,
         linear_result_shard_info,
-        mlir_fn_res.sharding_mesh,
         client,
         resharded_inputs,
     )
