@@ -1720,10 +1720,10 @@ function codegen_unflatten!(
                         unflatcode = quote
                             # XXX: we might need to handle sharding here
                             traced_setfield_buffer!(
-                                $runtime,
-                                $cache_dict,
-                                traced_getfield($unflatcode, $(Meta.quot(path[end]))),
-                                $concrete_res_name,
+                                $(runtime),
+                                $(cache_dict),
+                                traced_getfield($(unflatcode), $(Meta.quot(path[end]))),
+                                $(concrete_res_name),
                             )
                         end
                     else
@@ -1731,7 +1731,7 @@ function codegen_unflatten!(
                         local_unflatcode_sym = gensym(:local_val)
                         unflatcode = quote
                             $(local_unflatcode_sym) = traced_getfield(
-                                $unflatcode, $(Meta.quot(path[end]))
+                                $(unflatcode), $(Meta.quot(path[end]))
                             )
                             $unreshard_sym = generate_unresharded_ifrt_array(
                                 $(concrete_res_name),
@@ -1741,10 +1741,10 @@ function codegen_unflatten!(
                                 size($(local_unflatcode_sym)),
                             )
                             traced_setfield_buffer!(
-                                $runtime,
-                                $cache_dict,
-                                $local_unflatcode_sym,
-                                $concrete_res_name,
+                                $(runtime),
+                                $(cache_dict),
+                                $(local_unflatcode_sym),
+                                $(unreshard_sym).data,
                             )
                         end
                     end
