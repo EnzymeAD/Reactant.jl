@@ -1677,15 +1677,15 @@ function codegen_unflatten!(
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                length(p) > 0 && (p[1] == :result || p[1] == :resargs)
+                length(p) > 0 && (p[1] == resprefix|| p[1] == resargprefix)
             )...,
         )
         for path in paths
-            if path[1] == argprefix
+            if path[1] == resprefix
                 unflatcode = :result
                 path = path[2:end]
 
-                if Reactant.TracedUtils.has_argidx(result, argprefix)
+                if Reactant.TracedUtils.has_idx(result, argprefix)
                     argidx = Reactant.TracedUtils.get_idx(result)
                     if haskey(resharded_inputs, argidx)
                         to_unreshard_results[path] = resharded_inputs[argidx]
@@ -1698,7 +1698,8 @@ function codegen_unflatten!(
                 end
                 continue
             else
-                @assert path[1] == :resargs
+                @show path
+                @assert path[1] == resargprefix
                 unflatcode = :(args[$(path[2])])
 
                 need_to_unreshard = get(resharded_inputs, (:args, path[2:end]...), nothing)
