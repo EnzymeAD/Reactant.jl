@@ -231,7 +231,11 @@ function trace_for(mod, expr; track_numbers)
                 end
 
             $(ReactantCore).traced_while(
-                cond_fn, body_fn, args; track_numbers=$(track_numbers), verify_arg_names=$(QuoteNode(args_init))
+                cond_fn,
+                body_fn,
+                args;
+                track_numbers=$(track_numbers),
+                verify_arg_names=$(QuoteNode(args_init)),
             )
         end
     end

@@ -356,9 +356,11 @@ function make_mlir_fn(
         conflicts = setdiff(resis, argis)
         @assert !isempty(conflicts) "Expected to have some conflicts, but none were found."
 
-        error("""Types do not match between function arguments and results.
-        The following arguments should be traced: $(join(verify_arg_names.args[collect(conflicts)], ", "))
-        """)
+        error(
+            """Types do not match between function arguments and results.
+      The following arguments should be traced: $(join(verify_arg_names.args[collect(conflicts)], ", "))
+      """,
+        )
     end
 
     out_tys = if do_transpose

@@ -1791,7 +1791,7 @@ end
             return_dialect=:stablehlo,
             args_in_result=:none,
             do_transpose=false,
-            verify_arg_names
+            verify_arg_names,
         ).f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
