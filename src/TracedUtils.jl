@@ -363,25 +363,13 @@ function make_mlir_fn(
 
         # this can be more efficient
         conflicts = setdiff(resis, argis)
-        @show verify_arg_names
-        @show typeof.(linear_args)
-        @show typeof.(linear_results)
-        @show [a.paths for a in linear_args]
-        @show [a.paths for a in linear_results]
-        @show (Base.Fix2(get_idx, argprefix)).(linear_args)
-        @show (Base.Fix2(get_idx, resprefix)).(linear_results)
         @assert !isempty(conflicts) "Expected to have some conflicts, but none were found."
 
         errs = []
         for conflict in conflicts
             stridx = string(verify_arg_names.args[conflict[1]])
-            @show Core.Typeof(args)
-            @show Core.Typeof.(args)
-            @show conflict
             aval = args[conflict[1]]
-            @show Core.Typeof(aval)
             for idx in Base.tail(conflict)
-                @show idx, Core.Typeof(aval)
                 if aval isa AbstractArray
                     aval = getindex(aval, idx)
                     @show "next1", idx, Core.Typeof(aval)
@@ -394,7 +382,6 @@ function make_mlir_fn(
                     end
                     stridx *= "." * fldname
                     aval = getfield(aval, idx)
-                    @show "next2", idx, Core.Typeof(aval)
                 end
             end
             push!(errs, stridx*" (path "*string(conflict)*")")
