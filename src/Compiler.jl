@@ -24,6 +24,8 @@ import ..Reactant:
 
 import ..ReactantCore: correct_maybe_bcast_call
 
+const DEBUG_PRINT_CODEGEN = Ref(false)
+
 @inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
 end
@@ -90,6 +92,46 @@ end
     device = Reactant.XLA.device(only(obj.data))
     idx = findfirst(isequal(device), devices)
     return Base.setfield!(obj, field, (val[idx],))
+end
+
+function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res)
+    return traced_setfield!(val, :data, concrete_res)
+end
+
+function traced_setfield_buffer!(
+    ::Val{:PJRT}, cache_dict, val::Union{TracedRArray,TracedRNumber}, concrete_res
+)
+    if haskey(cache_dict, val)
+        cval = cache_dict[val]
+    else
+        cval = if val isa TracedRArray
+            ConcretePJRTArray{Reactant.unwrapped_eltype(val),ndims(val)}(
+                concrete_res, size(val)
+            )
+        else
+            ConcretePJRTNumber{Reactant.unwrapped_eltype(val)}(concrete_res)
+        end
+        cache_dict[val] = cval
+    end
+    return traced_setfield!(val, :data, cval)
+end
+
+function traced_setfield_buffer!(
+    ::Val{:IFRT}, cache_dict, val::Union{TracedRArray,TracedRNumber}, concrete_res
+)
+    if haskey(cache_dict, val)
+        cval = cache_dict[val]
+    else
+        cval = if val isa TracedRArray
+            ConcreteIFRTArray{Reactant.unwrapped_eltype(val),ndims(val)}(
+                concrete_res, size(val)
+            )
+        else
+            ConcreteIFRTNumber{Reactant.unwrapped_eltype(val)}(concrete_res)
+        end
+        cache_dict[val] = cval
+    end
+    return traced_setfield!(val, :data, cval)
 end
 
 function create_result(tocopy::T, path, args...) where {T}
@@ -277,10 +319,17 @@ function generate_unresharded_ifrt_array(
     )
     devs = Reactant.XLA.device.(single_device_arrays)
     idx = findfirst(isequal(target_device), devs)
+    @assert idx !== nothing
     res_arr = Reactant.XLA.IFRT.AsyncArray(single_device_arrays[idx], nothing)
     res_arr_size = reverse(size(res_arr))
     @assert size_arr == res_arr_size "Expected size of array to be $(size_arr), but got \
                                       $(res_arr_size)"
+
+    ifrt_sharding = Reactant.XLA.sharding(res_arr.buffer)
+    if !Reactant.XLA.IFRT.is_single_device_sharding(ifrt_sharding)
+        error("Unexpected sharding of result array: $(string(ifrt_sharding))")
+    end
+
     return ConcreteIFRTArray{T,N}(res_arr, size_arr)
 end
 
@@ -1531,7 +1580,7 @@ function codegen_flatten!(
                     )
                     push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
                 else
-                    resharded_inputs[path[3:end]] = (
+                    resharded_inputs[path] = (
                         Reactant.XLA.device(carg), condensed_op_sharding, mesh
                     )
 
@@ -1611,6 +1660,7 @@ function codegen_unflatten!(
     end
     ctypes = Union{arrtype,numtype}
 
+    # TODO: use a cache to ensure we don't unreshard the same buffer multiple times
     to_unreshard_results = Dict{Tuple,Any}()
 
     # mutate the result stores to point to the correct concrete results
@@ -1629,9 +1679,8 @@ function codegen_unflatten!(
 
                 if Reactant.TracedUtils.has_argidx(result)
                     _, argidx = Reactant.TracedUtils.get_argidx(result)
-                    arg_path = argidx[3:end]
-                    if haskey(resharded_inputs, arg_path)
-                        to_unreshard_results[path] = resharded_inputs[arg_path]
+                    if haskey(resharded_inputs, argidx)
+                        to_unreshard_results[path] = resharded_inputs[argidx]
                     end
                 end
 
@@ -1643,15 +1692,22 @@ function codegen_unflatten!(
             else
                 @assert path[1] == :resargs
                 unflatcode = :(args[$(path[2])])
-                path = path[3:end]
 
+                need_to_unreshard = get(resharded_inputs, (:args, path[2:end]...), nothing)
+                if need_to_unreshard !== nothing
+                    @assert runtime isa Val{:IFRT} "PJRT is not supported here. Use IFRT \
+                                                    instead."
+                end
+
+                path = path[3:end]
                 for p in path[1:(end - 1)]
                     unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
                 end
 
                 if length(path) > 0
-                    final_val = gensym("final_val")
-                    clocal = gensym("clocal")
+                    @assert need_to_unreshard === nothing "TODO: do unreshard the buffer 
+                                                           here"
+
                     if !has_cache_dict
                         has_cache_dict = true
                         push!(
@@ -1662,40 +1718,37 @@ function codegen_unflatten!(
                             ),
                         )
                     end
+
                     unflatcode = quote
                         # XXX: we might need to handle sharding here
-                        $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
-                        if $final_val isa TracedRArray
-                            $clocal = if haskey($cache_dict, $final_val)
-                                $cache_dict[$final_val]
-                            else
-                                $cache_dict[$final_val] = $(arrtype){
-                                    $(Reactant.unwrapped_eltype)($final_val),
-                                    ndims($final_val),
-                                }(
-                                    $concrete_res_name, size($final_val)
-                                )
-                                $cache_dict[$final_val]
-                            end
-                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
-                        elseif $final_val isa TracedRNumber
-                            $clocal = if haskey($cache_dict, $final_val)
-                                $cache_dict[$final_val]
-                            else
-                                $cache_dict[$final_val] = $(numtype){
-                                    $(Reactant.unwrapped_eltype)($final_val)
-                                }(
-                                    $concrete_res_name
-                                )
-                                $cache_dict[$final_val]
-                            end
-                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
-                        else
-                            traced_setfield!($final_val, :data, $concrete_res_name)
-                        end
+                        traced_setfield_buffer!(
+                            $runtime,
+                            $cache_dict,
+                            traced_getfield($unflatcode, $(Meta.quot(path[end]))),
+                            $concrete_res_name,
+                        )
                     end
                 else
-                    unflatcode = :(traced_setfield!($unflatcode, :data, $concrete_res_name))
+                    if need_to_unreshard === nothing
+                        unflatcode =
+                            :(traced_setfield!($unflatcode, :data, $concrete_res_name))
+                    else
+                        unreshard_sym = gensym(:unresharded_buffer)
+                        local_unflatcode_sym = gensym(:local_val)
+                        unflatcode = quote
+                            $(local_unflatcode_sym) = $(unflatcode)
+                            $unreshard_sym = generate_unresharded_ifrt_array(
+                                $(concrete_res_name),
+                                $(need_to_unreshard),
+                                eltype($(local_unflatcode_sym)),
+                                ndims($(local_unflatcode_sym)),
+                                size($(local_unflatcode_sym)),
+                            )
+                            traced_setfield!(
+                                $(local_unflatcode_sym), :data, $(unreshard_sym).data
+                            )
+                        end
+                    end
                 end
                 push!(unflatten_code, unflatcode)
             end
@@ -2067,6 +2120,10 @@ function compile(f, args; sync=false, kwargs...)
         $(sync_call)
         $(unflatten_code...)
         return result
+    end
+
+    if DEBUG_PRINT_CODEGEN[]
+        display(body)
     end
 
     return register_thunk(
