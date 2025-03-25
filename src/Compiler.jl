@@ -1707,24 +1707,21 @@ function codegen_unflatten!(
                     unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
                 end
 
-                if need_to_unreshard !== nothing &&
-                    !haskey(unresharded_arrays_cache, concrete_res_name)
-                    unreshard_sym = gensym(:unresharded_buffer)
-                    push!(
-                        unresharded_code,
-                        :(
-                            $unreshard_sym = generate_unresharded_ifrt_array(
-                                $(concrete_res_name), $(need_to_unreshard)
-                            )
-                        ),
-                    )
-                    unresharded_arrays_cache[concrete_res_name] = unreshard_sym
-                end
-
-                concrete_res_name_final = if need_to_unreshard === nothing
-                    concrete_res_name
-                else
-                    unresharded_arrays_cache[concrete_res_name]
+                concrete_res_name_final = concrete_res_name
+                if need_to_unreshard !== nothing
+                    if !haskey(unresharded_arrays_cache, concrete_res_name)
+                        unreshard_sym = gensym(:unresharded_buffer)
+                        push!(
+                            unresharded_code,
+                            :(
+                                $unreshard_sym = generate_unresharded_ifrt_array(
+                                    $(concrete_res_name), $(need_to_unreshard)
+                                )
+                            ),
+                        )
+                        unresharded_arrays_cache[concrete_res_name] = unreshard_sym
+                    end
+                    concrete_res_name_final = unresharded_arrays_cache[concrete_res_name]
                 end
 
                 if length(path) > 0

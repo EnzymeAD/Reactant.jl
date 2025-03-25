@@ -223,8 +223,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         )
     end
 
-    # TODO: Expose C++ API for this check
-    string(hlo_sharding) == "{replicated}" && return array
+    XLA.is_replicated(hlo_sharding) && return array
 
     output_sharding = Reactant.Sharding.NamedSharding(
         mesh, ntuple(Returns(nothing), length(size_arr))
@@ -251,12 +250,12 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     Reactant.Compiler.activate_sdycache!(sdycache)
 
     output_buffer = try
-        data_mlir_type = [MLIR.IR.TensorType(size_arr, MLIR.IR.Type(eltype(array)))]
+        data_mlir_type = [MLIR.IR.TensorType(reverse(size_arr), MLIR.IR.Type(eltype(array)))]
         mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
 
         (; sym_name, mesh_attr) = Reactant.Ops.mesh(mesh; mod=mod)
         common_args = (ctx, sym_name, mesh_attr, size_arr)
-        common_kwargs = (; dialect=:sdy, do_transpose=false)
+        common_kwargs = (; dialect=:sdy, do_transpose=true)
         input_tensor_sharding_attr, _ = Reactant.Sharding.get_tensor_sharding_attribute(
             reactant_sharding, common_args...; common_kwargs...
         )
