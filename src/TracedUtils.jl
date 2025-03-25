@@ -24,7 +24,7 @@ ReactantCore.materialize_traced_array(x::TracedRArray) = x
 
 ReactantCore.materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
 
-function ReactantCore.materialize_traced_array(x::AbstractRange{<:TracedRNumber})
+function ReactantCore.materialize_traced_array(x::AbstractRange)
     return Reactant.aos_to_soa(collect(x))
 end
 
@@ -32,25 +32,25 @@ function ReactantCore.materialize_traced_array(x::Base.OneTo)
     return Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
 end
 
-function ReactantCore.materialize_traced_array(x::UnitRange{<:TracedRNumber})
+function ReactantCore.materialize_traced_array(x::UnitRange)
     return Ops.add(
         Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1),
         Ops.fill(first(x), [length(x)]),
     )
 end
 
-function ReactantCore.materialize_traced_array(x::SubArray{TracedRNumber{T}}) where {T}
+function ReactantCore.materialize_traced_array(x::SubArray)
     z = SubArray(materialize_traced_array(parent(x)), x.indices)
     return z[axes(z)...]
 end
 
-function ReactantCore.materialize_traced_array(x::Base.ReshapedArray{TracedRNumber{T}}) where {T}
+function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
 function ReactantCore.materialize_traced_array(
-    x::PermutedDimsArray{TracedRNumber{T},N,perm}
-) where {T,N,perm}
+    x::PermutedDimsArray{<:Any, <:Any, perm}
+) where {perm}
     return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
