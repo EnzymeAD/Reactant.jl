@@ -568,7 +568,7 @@ function make_mlir_fn(
         end
 
         for (i, res) in enumerate(linear_results)
-            if has_argidx(res) && haskey(traced_args_to_shardings, res)
+            if has_idx(res, argprefix) && haskey(traced_args_to_shardings, res)
                 argidx = findfirst(Base.Fix1(===, res), linear_args)
                 @assert argidx !== nothing
                 attr, dialect = linear_arg_shardings[argidx]
