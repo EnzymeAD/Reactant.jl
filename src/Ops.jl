@@ -2301,6 +2301,12 @@ end
         toscalar=false,
     )
 
+    for r in seen_results
+        if r isa TracedRNumber || r isa TracedRArray
+            r.paths = ()
+        end
+    end
+
     for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(call_op, i)
         for path in res.paths
@@ -2317,7 +2323,7 @@ end
                     if fnwrapped
                         idx -= 1
                     end
-                    Reactant.TracedUtils.set!(linear_args[idx], path[3:end], resv)
+                    Reactant.TracedUtils.set!(args[idx], path[3:end], resv)
                 end
             end
         end
