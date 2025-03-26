@@ -809,7 +809,15 @@ end
         size.(Ref(rhs), rhs_contracting_dimensions)
 
     # C11
-    @assert isnothing(precision_config) || length(precision_config) == 2
+    if !isnothing(precision_config)
+        if precision_config isa Reactant.DotGeneralPrecision.T
+            precision_config = (precision_config, precision_config)
+        end
+
+        @assert precision_config isa Union{Tuple,Vector}
+        @assert length(precision_config) == 2
+        @assert all(Base.Fix2(isa, Reactant.DotGeneralPrecision.T), precision_config)
+    end
 
     @assert isnothing(precision_type) ||
         length(precision_type) == 2 && eltype(precision_type) <: AbstractFloat
@@ -866,8 +874,7 @@ end
 
     if !isnothing(precision_config)
         precision_config = MLIR.IR.Attribute([
-            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[1]),
-            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[2]),
+            MLIR.IR.Attribute(precision_config[1]), MLIR.IR.Attribute(precision_config[2])
         ])
     end
 
