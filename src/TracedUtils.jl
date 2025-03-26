@@ -349,7 +349,7 @@ function make_mlir_fn(
             Reactant.make_tracer(
                 seen_results,
                 traced_args[i],
-                concretein ? (resargprefix, i) : (),
+                (resargprefix, i),
                 Reactant.NoStopTracedTrack;
                 runtime,
             )
@@ -411,6 +411,7 @@ function make_mlir_fn(
         @show argis
         @show (Core.Typeof.(args))
         @show (Core.Typeof.(traced_result))
+        @show (Core.Typeof.(traced_args))
 
         err2 = []
         for (errs, prev, post) in ((err1, resis, argis), (err2, argis, resis))
@@ -422,6 +423,7 @@ function make_mlir_fn(
                 aval = args[conflict[1]]
                 @show Core.Typeof(aval)
                 for idx in Base.tail(conflict)
+                    @show idx, Core.Typeof(aval)
                     if aval isa AbstractArray
                         aval = Reactant.@allowscalar getindex(aval, idx)
                         stridx = stridx * "[" * string(idx) * "]"
