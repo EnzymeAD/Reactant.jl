@@ -223,12 +223,20 @@ function make_mlir_fn(
     N = length(args)
     seen_args = OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
+    inmode = if concretein
+        @assert !toscalar
+        Reactant.ConcreteToTraced
+    elseif toscalar
+        Reactant.TracedSetPath
+    else
+        Reactant.TracedTrack
+    end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
             seen_args,
             args[i],
             (argprefix, i),
-            concretein ? Reactant.ConcreteToTraced : Reactant.TracedTrack;
+            inmode;
             toscalar,
             runtime,
         )
@@ -321,13 +329,22 @@ function make_mlir_fn(
 
     seen_results = OrderedIdDict()
 
+    outmode = if concretein
+        @assert !toscalar
+        Reactant.NoStopTracedTrack
+    elseif toscalar
+        Reactant.TracedSetPath
+    else
+        Reactant.TracedTrack
+    end
+
     MLIR.IR.activate!(fnbody)
     traced_result = try
         traced_result = Reactant.make_tracer(
             seen_results,
             result,
             (resprefix,),
-            concretein ? Reactant.NoStopTracedTrack : Reactant.TracedTrack;
+            outmode;
             runtime,
         )
 
@@ -744,21 +761,24 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     residx = 1
 
     for a in linear_results
-        if has_idx(a, resprefix)
-            path = get_idx(a, resprefix)
-            set!(result, path[2:end], MLIR.IR.result(res, residx))
-            residx += 1
-        else
-            idx, path = get_argidx(a, argprefix)
-            if idx == 1 && fnwrap
-                set!(f, path[3:end], MLIR.IR.result(res, residx))
-                residx += 1
-            else
-                if fnwrap
-                    idx -= 1
+        resv = MLIR.IR.result(res, residx)
+        residx += 1
+        for path in a.paths
+            if length(path) == 0
+                continue
+            end
+            if path[1] == resprefix
+                set!(result, path[2:end], resv)
+            elseif path[1] == argprefix
+                idx = path[2]::Int
+                if idx == 1 && fnwrap
+                    set!(f, path[3:end], resv)
+                else
+                    if fnwrap
+                        idx -= 1
+                    end
+                    set!(args[idx], path[3:end], resv)
                 end
-                set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
-                residx += 1
             end
         end
     end
