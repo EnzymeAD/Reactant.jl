@@ -364,7 +364,7 @@ function make_mlir_fn(
         v isa Reactant.TracedType || continue
         if args_in_result != :all
             if has_idx(v, argprefix)
-                if !(args_in_result == :result_and_mutated && has_idx(v, resprefix))
+                if !((args_in_result == :result_and_mutated || args_in_result == :result) && has_idx(v, resprefix))
                     continue
                 end
             end

@@ -1777,7 +1777,7 @@ end
             string(gensym("cond_fn")),
             false;
             return_dialect=:stablehlo,
-            args_in_result=:none,
+            args_in_result=:result,
             do_transpose=false,
             argprefix=gensym("loop_condarg"),
             resprefix=gensym("loop_condres"),
