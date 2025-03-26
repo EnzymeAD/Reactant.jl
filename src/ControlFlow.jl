@@ -11,6 +11,5 @@ end
 function ReactantCore.traced_while(
     cond_fn::CFn, body_fn::BFn, args; track_numbers=Number, verify_arg_names=nothing
 ) where {CFn,BFn}
-    @warn verify_arg_names
     return Ops.while_loop(cond_fn, body_fn, args...; track_numbers, verify_arg_names)
 end

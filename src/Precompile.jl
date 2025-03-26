@@ -53,10 +53,6 @@ function precompilation_supported()
     return VERSION >= v"1.11" || VERSION >= v"1.10.8"
 end
 
-function precompiling()
-    return (@ccall jl_generating_output()::Cint) == 1
-end
-
 if Reactant_jll.is_available()
     @setup_workload begin
         initialize_dialect()

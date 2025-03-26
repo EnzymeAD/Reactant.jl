@@ -1264,6 +1264,7 @@ function make_tracer(
         return prev
     end
     if mode == TracedSetPath
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if haskey(seen, prev)
             return seen[prev]
         end
@@ -1341,6 +1342,7 @@ function make_tracer(
         return prev
     end
     if mode == TracedSetPath
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if haskey(seen, prev)
             return seen[prev]
         end
@@ -1409,6 +1411,7 @@ function make_tracer(
         return prev
     end
     if mode == TracedSetPath
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         haskey(seen, prev) && return seen[prev]
         res = MissingTracedValue((path,))
         seen[res] = res
@@ -1446,9 +1449,10 @@ function make_tracer(
                 res = TracedRNumber{RT}(
                     (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
                 )
-                if !haskey(seen, prev)
+                if Base.ismutable(prev) && !haskey(seen, prev)
                     return seen[prev] = res
                 end
+                seen[gensym("number")] = res
                 return res
             elseif mode == TracedSetPath
                 haskey(seen, prev) && return seen[prev]
