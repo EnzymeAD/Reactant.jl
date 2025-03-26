@@ -408,10 +408,10 @@ function make_mlir_fn(
         err2 = []
         for (errs, prev, post) in ((err1, resis, argis), (err2, argis, resis))
             conflicts = setdiff(prev, post)
-            for (cidx, conflict) in enumerate(conflicts)
+            for conflict in conflicts
                 stridx = string(verify_arg_names.args[conflict[1]])
                 aval = args[conflict[1]]
-                for idx in Base.tail(conflict)
+                for (cidx, idx) in enumerate(Base.tail(conflict))
                     if aval isa Array
                         aval = Reactant.@allowscalar getindex(aval, idx)
                         stridx = stridx * "[" * string(idx) * "]"
@@ -423,7 +423,9 @@ function make_mlir_fn(
                         end
                         if cidx == 1
                             # Don't include the ref
-                            @assert idx == 1
+                            if idx != 1
+                                throw(AssertionError("expected first path to be a ref lookup, found idx=$idx conflict=$conflict, cidx=$cidx"))
+                            end
                         else
                             stridx *= "." * fldname
                         end
