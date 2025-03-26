@@ -35,13 +35,17 @@ end
 end
 
 @inline function traced_getfield(
-    @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber, TracedRNumber}}), field
+    @nospecialize(
+        obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}
+    ),
+    field,
 )
     return Base.getfield(obj, field)
 end
 
 @inline function traced_getfield(
-    @nospecialize(obj::Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber, TracedRNumber}}), field
+    @nospecialize(obj::Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}),
+    field,
 )
     return Base.getindex(obj, field)
 end
@@ -792,7 +796,7 @@ function compile_mlir!(
             fnwrapped::Bool,
             argprefix::Symbol,
             resprefix::Symbol,
-            resargprefix::Symbol
+            resargprefix::Symbol,
         }
     }(),
     sdycache=IdDict{

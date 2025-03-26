@@ -194,11 +194,7 @@ function trace_for(mod, expr; track_numbers)
 
     all_syms = Expr(:tuple, counter, external_syms...)
 
-    args_names = Expr(
-        :tuple,
-        counter,
-        external_syms...,
-    )
+    args_names = Expr(:tuple, counter, external_syms...)
     cond_val(s) = :(@isdefined($s) ? $s : nothing)
     args_init = Expr(
         :tuple,
@@ -210,11 +206,15 @@ function trace_for(mod, expr; track_numbers)
     arg_syms = Expr(:tuple, counter, ref_syms...)
 
     to_locals = [:(local $s = $ref[]) for (s, ref) in zip(external_syms, ref_syms)]
-    from_locals = [(quote
-        if !($ref[] isa Nothing)
-            $ref[] = $s
-        end
-    end) for (s, ref) in zip(external_syms, ref_syms)]
+    from_locals = [
+        (
+            quote
+                if !($ref[] isa Nothing)
+                    $ref[] = $s
+                end
+            end
+        ) for (s, ref) in zip(external_syms, ref_syms)
+    ]
 
     reactant_code_block = quote
         let args = $(args_init)

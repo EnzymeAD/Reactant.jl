@@ -621,8 +621,6 @@ function for_with_named_tuple(x)
     return res
 end
 
-
-
 @testset "for: named tuple" begin
     x = randn(Float64, 10)
     x_ra = Reactant.to_rarray(x)
@@ -630,8 +628,7 @@ end
     @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x)
 end
 
-
-mutable struct Container{A, B, C}
+mutable struct Container{A,B,C}
     a::A
     b::B
     c::C

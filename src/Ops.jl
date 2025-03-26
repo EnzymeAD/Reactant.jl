@@ -2215,15 +2215,16 @@ end
     residx = 0
     for (i, path) in enumerate(all_paths)
         if path[1] == :result
-            residx+=1
+            residx += 1
             Reactant.TracedUtils.set!(
                 corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
             )
         elseif path[1] == :resarg
-            residx+=1
-            Reactant.TracedUtils.set!(args, path[2:end], MLIR.IR.result(if_compiled, residx))
+            residx += 1
+            Reactant.TracedUtils.set!(
+                args, path[2:end], MLIR.IR.result(if_compiled, residx)
+            )
         end
-
     end
 
     return corrected_traced_results
@@ -2263,13 +2264,32 @@ end
         resargprefix::Symbol = gensym("callresarg")
 
         temp = Reactant.TracedUtils.make_mlir_fn(
-            f, args, (), f_name, false; args_in_result=:result_and_mutated, do_transpose=false, argprefix, resprefix, resargprefix
+            f,
+            args,
+            (),
+            f_name,
+            false;
+            args_in_result=:result_and_mutated,
+            do_transpose=false,
+            argprefix,
+            resprefix,
+            resargprefix,
         )
         (; traced_result, ret, mutated_args, linear_results, fnwrapped) = temp
         mlir_result_types = [
             MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
         ]
-        cache[cache_key] = (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped, argprefix, resprefix, resargprefix)
+        cache[cache_key] = (;
+            f_name,
+            mlir_result_types,
+            traced_result,
+            mutated_args,
+            linear_results,
+            fnwrapped,
+            argprefix,
+            resprefix,
+            resargprefix,
+        )
     end
 
     call_op = MLIR.Dialects.func.call(

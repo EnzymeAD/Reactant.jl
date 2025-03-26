@@ -231,12 +231,7 @@ function make_mlir_fn(
     end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args,
-            args[i],
-            (argprefix, i),
-            inmode;
-            toscalar,
-            runtime,
+            seen_args, args[i], (argprefix, i), inmode; toscalar, runtime
         )
     end
 
@@ -337,11 +332,7 @@ function make_mlir_fn(
     MLIR.IR.activate!(fnbody)
     traced_result = try
         traced_result = Reactant.make_tracer(
-            seen_results,
-            result,
-            (resprefix,),
-            outmode;
-            runtime,
+            seen_results, result, (resprefix,), outmode; runtime
         )
 
         # marks buffers to be donated
@@ -364,7 +355,10 @@ function make_mlir_fn(
         v isa Reactant.TracedType || continue
         if args_in_result != :all
             if has_idx(v, argprefix)
-                if !((args_in_result == :result_and_mutated || args_in_result == :result) && has_idx(v, resprefix))
+                if !(
+                    (args_in_result == :result_and_mutated || args_in_result == :result) &&
+                    has_idx(v, resprefix)
+                )
                     continue
                 end
             end
@@ -424,7 +418,11 @@ function make_mlir_fn(
                         if cidx == 1
                             # Don't include the ref
                             if idx != 1
-                                throw(AssertionError("expected first path to be a ref lookup, found idx=$idx conflict=$conflict, cidx=$cidx"))
+                                throw(
+                                    AssertionError(
+                                        "expected first path to be a ref lookup, found idx=$idx conflict=$conflict, cidx=$cidx",
+                                    ),
+                                )
                             end
                         else
                             stridx *= "." * fldname
@@ -437,8 +435,9 @@ function make_mlir_fn(
         end
 
         arg_info = sort([(Base.pointer_from_objref(arg), arg.paths) for arg in linear_args])
-        res_info = sort([(Base.pointer_from_objref(arg), arg.paths) for arg in linear_results])
-
+        res_info = sort([
+            (Base.pointer_from_objref(arg), arg.paths) for arg in linear_results
+        ])
 
         arg_info_ni = [ai for ai in arg_info if !(ai in res_info)]
         res_info_ni = [ai for ai in res_info if !(ai in arg_info)]
