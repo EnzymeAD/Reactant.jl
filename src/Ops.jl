@@ -37,6 +37,7 @@ end
 const DEBUG_MODE::Ref{Bool} = Ref(false)
 const LARGE_CONSTANT_THRESHOLD = Ref(100 << 20) # 100 MiB
 const LARGE_CONSTANT_RAISE_ERROR = Ref(true)
+const GATHER_GETINDEX_DISABLED = Ref(false)
 
 function with_debug(f)
     old = DEBUG_MODE[]
@@ -1708,6 +1709,12 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
     src::TracedRArray{T,N}, gather_indices::TracedRArray{Int64,2}
 ) where {T,N}
     @assert size(gather_indices, 2) == N
+
+    if GATHER_GETINDEX_DISABLED[]
+        GPUArraysCore.assertscalar(
+            "gather_getindex(::TracedRArray, ::TracedRArray{Int64,2}"
+        )
+    end
 
     #! format: off
     offset_dims = Int64[1]
