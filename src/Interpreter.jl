@@ -255,13 +255,19 @@ function overload_autodiff(
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
-
     argprefix::Symbol = gensym("autodiffarg")
     resprefix::Symbol = gensym("autodiffresult")
     resargprefix::Symbol = gensym("autodiffresarg")
 
     mlir_fn_res = TracedUtils.make_mlir_fn(
-        primf, primargs, (), string(f) * "_autodiff", false; argprefix, resprefix, resargprefix
+        primf,
+        primargs,
+        (),
+        string(f) * "_autodiff",
+        false;
+        argprefix,
+        resprefix,
+        resargprefix,
     )
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped

@@ -1677,7 +1677,7 @@ function codegen_unflatten!(
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                length(p) > 0 && (p[1] == resprefix|| p[1] == resargprefix)
+                length(p) > 0 && (p[1] == resprefix || p[1] == resargprefix)
             )...,
         )
         for path in paths

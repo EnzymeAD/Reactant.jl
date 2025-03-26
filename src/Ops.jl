@@ -1756,7 +1756,9 @@ end
     traced_args = Vector{Any}(undef, N)
 
     for (i, prev) in enumerate(args)
-        @inbounds traced_args[i] = Reactant.make_tracer(seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers)
+        @inbounds traced_args[i] = Reactant.make_tracer(
+            seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers
+        )
     end
 
     linear_args = Reactant.TracedType[]
@@ -1777,9 +1779,9 @@ end
             return_dialect=:stablehlo,
             args_in_result=:none,
             do_transpose=false,
-            argprefix = gensym("loop_condarg"),
-            resprefix = gensym("loop_condres"),
-            resargprefix = gensym("loop_condresarg"),
+            argprefix=gensym("loop_condarg"),
+            resprefix=gensym("loop_condres"),
+            resargprefix=gensym("loop_condresarg"),
         ).f
 
     body_fn_compiled =
@@ -1793,9 +1795,9 @@ end
             args_in_result=:none,
             do_transpose=false,
             verify_arg_names,
-            argprefix = gensym("loop_bodyarg"),
-            resprefix = gensym("loop_bodyres"),
-            resargprefix = gensym("loop_bodyresarg"),
+            argprefix=gensym("loop_bodyarg"),
+            resprefix=gensym("loop_bodyres"),
+            resargprefix=gensym("loop_bodyresarg"),
         ).f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)

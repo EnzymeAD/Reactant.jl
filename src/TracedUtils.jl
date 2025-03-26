@@ -190,9 +190,9 @@ function make_mlir_fn(
     output_shardings=nothing, # This is not meant to be used by the user.
     runtime=nothing,
     verify_arg_names=nothing,
-    argprefix::Symbol = :args,
-    resprefix::Symbol = :result,
-    resargprefix::Symbol = :resargs
+    argprefix::Symbol=:args,
+    resprefix::Symbol=:result,
+    resargprefix::Symbol=:resargs,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -212,7 +212,7 @@ function make_mlir_fn(
             verify_arg_names,
             argprefix,
             resprefix,
-            resargprefix
+            resargprefix,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
@@ -383,7 +383,7 @@ function make_mlir_fn(
                     aval = getfield(aval, idx)
                 end
             end
-            push!(errs, stridx*" (path "*string(conflict)*")")
+            push!(errs, stridx * " (path " * string(conflict) * ")")
         end
         error("""Types do not match between function arguments and results.
         The following arguments should be traced: $(join(errs, ", "))
@@ -658,7 +658,15 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     resargprefix::Symbol = gensym("broadcastresarg")
 
     mlir_fn_res = make_mlir_fn(
-        f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true, argprefix, resprefix, resargprefix
+        f,
+        args,
+        (),
+        string(f) * "_broadcast_scalar",
+        false;
+        toscalar=true,
+        argprefix,
+        resprefix,
+        resargprefix,
     )
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
