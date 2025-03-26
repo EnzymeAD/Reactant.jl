@@ -79,7 +79,7 @@ Represents the configuration of the `stablehlo.dot_general` operation.
 - `num_primitive_operations`: The number of primitive operations in the
   `stablehlo.dot_general` operation.
 """
-struct DotGeneralAlgorithm{lhsT,rhsT,accumT}
+struct DotGeneralAlgorithm{lhsT<:ReactantFloat,rhsT<:ReactantFloat,accumT<:ReactantFloat}
     rhs_component_count::Int
     lhs_component_count::Int
     num_primitive_operations::Int
@@ -94,7 +94,7 @@ function accumulation_eltype(
     return accumT
 end
 
-function MLIR.IR.Attribute(algo::DotGeneralAlgorithm)
+function MLIR.IR.Attribute(algo::DotGeneralAlgorithm, ::Type, ::Type)
     return MLIR.IR.Attribute(
         MLIR.API.stablehloDotGeneralAlgorithmGet(
             MLIR.IR.context(),
@@ -252,7 +252,7 @@ function supported_output_type(
     return accum_type === nothing ? nothing : accum_type
 end
 
-function MLIR.IR.Attribute(
+function DotGeneralAlgorithm(
     dot_algorithm_preset::DotGeneralAlgorithmPreset.T, ::Type{T1}, ::Type{T2}
 ) where {T1,T2}
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.ANY_F8_ANY_F8_ANY ||
@@ -262,83 +262,73 @@ function MLIR.IR.Attribute(
         if !(T1 <: ReactantFloat8 && T2 <: ReactantFloat8)
             error("Unsupported combination of types $T1 and $T2")
         end
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{T1,T2,Float32}(
-                1,
-                1,
-                1,
-                dot_algorithm_preset ==
-                DotGeneralAlgorithmPreset.ANY_F8_ANY_F8_F32_FAST_ACCUM,
-            ),
+        return nothing
+        DotGeneralAlgorithm{T1,T2,Float32}(
+            1,
+            1,
+            1,
+            dot_algorithm_preset == DotGeneralAlgorithmPreset.ANY_F8_ANY_F8_F32_FAST_ACCUM,
         )
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.F16_F16_F16
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{Float16,Float16,Float16}(1, 1, 1, false)
-        )
+        return DotGeneralAlgorithm{Float16,Float16,Float16}(1, 1, 1, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.F16_F16_F32
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{Float16,Float16,Float16}(1, 1, 1, false)
-        )
+        return DotGeneralAlgorithm{Float16,Float16,Float16}(1, 1, 1, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_BF16
         isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Core.BFloat16}(1, 1, 1, false)
+        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Core.BFloat16}(
+            1, 1, 1, false
         )
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32
         isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 1, false)
-        )
+        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 1, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32_X3
         isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 3, false)
-        )
+        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 3, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32_X6
         isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 6, false)
-        )
+        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 6, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32_X9
         isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 9, false)
-        )
+        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 9, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.F32_F32_F32
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{Float32,Float32,Float32}(1, 1, 1, false)
-        )
+        return DotGeneralAlgorithm{Float32,Float32,Float32}(1, 1, 1, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.F64_F64_F64
-        return MLIR.IR.Attribute(
-            DotGeneralAlgorithm{Float64,Float64,Float64}(1, 1, 1, false)
-        )
+        return DotGeneralAlgorithm{Float64,Float64,Float64}(1, 1, 1, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.TF32_TF32_F32
-        return MLIR.IR.Attribute(DotGeneralAlgorithm{TF32,TF32,Float32}(1, 1, 1, false))
+        return DotGeneralAlgorithm{TF32,TF32,Float32}(1, 1, 1, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.TF32_TF32_F32_X3
-        return MLIR.IR.Attribute(DotGeneralAlgorithm{TF32,TF32,Float32}(1, 1, 3, false))
+        return DotGeneralAlgorithm{TF32,TF32,Float32}(1, 1, 3, false)
     end
 
     return nothing
+end
+
+function MLIR.IR.Attribute(
+    dot_algorithm_preset::DotGeneralAlgorithmPreset.T, ::Type{T1}, ::Type{T2}
+) where {T1,T2}
+    algo = DotGeneralAlgorithm(dot_algorithm_preset, T1, T2)
+    algo === nothing && return nothing
+    return MLIR.IR.Attribute(algo, T1, T2)
 end

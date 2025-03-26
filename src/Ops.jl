@@ -771,18 +771,14 @@ end
 # end
 
 @noinline function dot_general(
-    lhs::TracedRArray{T},
-    rhs::TracedRArray{T};
+    lhs::TracedRArray{T1},
+    rhs::TracedRArray{T2};
     contracting_dimensions,
     batching_dimensions=(Int[], Int[]),
-    precision_config=nothing,
-    precision_type=nothing,
-    accumulation_type=nothing,
-    component_count=nothing,
-    num_primitive_operations=nothing,
-    allow_imprecise_accumulation=nothing,
+    precision_config=missing,
+    algorithm=missing,
     location=mlir_stacktrace("dot_general", @__FILE__, @__LINE__),
-) where {T}
+) where {T1,T2}
     # C1 + C2
     @assert length(batching_dimensions) == 2 && splat(==)(length.(batching_dimensions))
     @assert length(contracting_dimensions) == 2 &&
@@ -809,6 +805,10 @@ end
         size.(Ref(rhs), rhs_contracting_dimensions)
 
     # C11
+    if precision_config === missing
+        precision_config = Reactant.dot_general_precision[]
+    end
+
     if !isnothing(precision_config)
         if precision_config isa Reactant.DotGeneralPrecision.T
             precision_config = (precision_config, precision_config)
@@ -819,20 +819,24 @@ end
         @assert all(Base.Fix2(isa, Reactant.DotGeneralPrecision.T), precision_config)
     end
 
-    @assert isnothing(precision_type) ||
-        length(precision_type) == 2 && eltype(precision_type) <: AbstractFloat
-    @assert isnothing(accumulation_type) || accumulation_type <: AbstractFloat
+    if algorithm === missing
+        algorithm = Reactant.dot_general_algorithm[]
+    end
 
-    # C22 + C23
-    @assert isnothing(component_count) ||
-        length(component_count) == 2 &&
-            eltype(component_count) <: Int32 &&
-            all(0 .<= component_count)
+    if algorithm isa Reactant.DotGeneralAlgorithmPreset.T
+        algorithm = Reactant.DotGeneralAlgorithm(algorithm, T1, T2)
+    end
 
-    # C24
-    @assert isnothing(num_primitive_operations) ||
-        num_primitive_operations isa Int32 && num_primitive_operations > 0
-    @assert isnothing(allow_imprecise_accumulation) || allow_imprecise_accumulation isa Bool
+    @assert algorithm isa Reactant.DotGeneralAlgorithm || algorithm === nothing
+
+    if !isnothing(algorithm)
+        # C22 + C23
+        @assert algorithm.rhs_component_count ≥ 0
+        @assert algorithm.lhs_component_count ≥ 0
+
+        # C24
+        @assert algorithm.num_primitive_operations > 0
+    end
 
     ctx = MLIR.IR.context()
 
@@ -879,52 +883,13 @@ end
     end
 
     # all or nothing: if one is set, all must be set
-    # TODO maybe be more flexible, by setting some defaults?
-    if any(
-        !isnothing,
-        (
-            precision_type,
-            accumulation_type,
-            component_count,
-            num_primitive_operations,
-            allow_imprecise_accumulation,
-        ),
-    )
-        @assert all(
-            !isnothing,
-            (
-                precision_type...,
-                accumulation_type,
-                component_count...,
-                num_primitive_operations,
-                allow_imprecise_accumulation,
-            ),
-        )
-        lhs_precision_type, rhs_precision_type = precision_type
-        lhs_component_count, rhs_component_count = component_count
-        algorithm = GC.@preserve begin
-            MLIR.IR.Attribute(
-                MLIR.API.stablehloDotAlgorithmGet(
-                    ctx,
-                    lhs_precision_type,
-                    rhs_precision_type,
-                    accumulation_type,
-                    lhs_component_count,
-                    rhs_component_count,
-                    num_primitive_operations,
-                    allow_imprecise_accumulation,
-                ),
-            )
-        end
-    else
-        algorithm = nothing
-    end
+    algorithm = algorithm !== nothing ? MLIR.IR.Attribute(algorithm, T1, T2) : nothing
 
     res = MLIR.IR.result(
         stablehlo.dot_general(
             lhs.mlir_data,
             rhs.mlir_data;
-            result_0=mlir_type(TracedRArray{T,length(ressize)}, ressize),
+            result_0=mlir_type(TracedRArray{promote_type(T1, T2),length(ressize)}, ressize),
             dot_dimension_numbers,
             precision_config,
             algorithm,
