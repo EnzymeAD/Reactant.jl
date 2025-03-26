@@ -408,7 +408,7 @@ function make_mlir_fn(
         err2 = []
         for (errs, prev, post) in ((err1, resis, argis), (err2, argis, resis))
             conflicts = setdiff(prev, post)
-            for conflict in conflicts
+            for (cidx, conflict) in enumerate(conflicts)
                 stridx = string(verify_arg_names.args[conflict[1]])
                 aval = args[conflict[1]]
                 for idx in Base.tail(conflict)
@@ -421,7 +421,12 @@ function make_mlir_fn(
                         else
                             string(idx)
                         end
-                        stridx *= "." * fldname
+                        if cidx == 1
+                            # Don't include the ref
+                            @assert idx == 1
+                        else
+                            stridx *= "." * fldname
+                        end
                         aval = getfield(aval, idx)
                     end
                 end
