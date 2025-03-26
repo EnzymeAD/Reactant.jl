@@ -1911,10 +1911,10 @@ end
         Reactant.NoStopTracedTrack;
         track_numbers,
     )
-    for i in eachindex(tb_linear_args)
+    for (i, arg) in enumerate(tb_traced_args)
         Reactant.make_tracer(
             seen_true_results,
-            tb_linear_args[i],
+            arg,
             (true_fn_names[3], i),
             Reactant.NoStopTracedTrack;
             track_numbers,
@@ -1976,10 +1976,10 @@ end
         Reactant.NoStopTracedTrack;
         track_numbers,
     )
-    for i in eachindex(fb_linear_args)
+    for (i, arg) in enumerate(fb_traced_args)
         Reactant.make_tracer(
             seen_false_results,
-            fb_linear_args[i],
+            arg,
             (false_fn_names[3], i),
             Reactant.NoStopTracedTrack;
             track_numbers,
@@ -2221,21 +2221,7 @@ end
             )
         elseif path[1] == :resarg
             residx+=1
-
-            # The resarg path is with respect to the linear args, not the traced args.
-            # We find the path into traced args by searching for it in the linear args.
-            # Concretely, we look into tb_linear_args, but we could also look into fb_linear_args, they contain the same arg path.
-            @assert length(path) == 2
-            argpath = nothing
-            for p in Reactant.TracedUtils.get_paths(tb_linear_args[path[2]])
-                if length(p) > 0 && p[1] == true_fn_names[1]
-                    argpath = p[2:end]
-                end
-            end
-            if isnothing(argpath)
-                error("if_condition: could not find path for resarg $path")
-            end
-            Reactant.TracedUtils.set!(args, argpath, MLIR.IR.result(if_compiled, residx))
+            Reactant.TracedUtils.set!(args, path[2:end], MLIR.IR.result(if_compiled, residx))
         end
 
     end
