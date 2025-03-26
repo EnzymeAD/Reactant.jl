@@ -399,24 +399,26 @@ function make_mlir_fn(
 
         err1 = []
         err2 = []
-        for (errs, conflict) in ((err1, setdiff(resis, argis)), (err2, setdiff(argis, resis)))
-            stridx = string(verify_arg_names.args[conflict[1]])
-            aval = args[conflict[1]]
-            for idx in Base.tail(conflict)
-                if aval isa AbstractArray
-                    aval = getindex(aval, idx)
-                    stridx = stridx * "[" * string(idx) * "]"
-                else
-                    fldname = if idx isa Integer
-                        string(fieldname(Core.Typeof(aval), idx))
+        for (errs, conflicts) in ((err1, setdiff(resis, argis)), (err2, setdiff(argis, resis)))
+            for conflict in conflicts
+                stridx = string(verify_arg_names.args[conflict[1]])
+                aval = args[conflict[1]]
+                for idx in Base.tail(conflict)
+                    if aval isa AbstractArray
+                        aval = getindex(aval, idx)
+                        stridx = stridx * "[" * string(idx) * "]"
                     else
-                        string(idx)
+                        fldname = if idx isa Integer
+                            string(fieldname(Core.Typeof(aval), idx))
+                        else
+                            string(idx)
+                        end
+                        stridx *= "." * fldname
+                        aval = getfield(aval, idx)
                     end
-                    stridx *= "." * fldname
-                    aval = getfield(aval, idx)
                 end
+                push!(errs, stridx * " (path=$conflict, type=$(typeof(aval)))")
             end
-            push!(errs, stridx * " (path=$conflict, type=$(typeof(aval)))")
         end
         error("""Types do not match between function arguments and results.
         The following arguments should be traced but were not: $(join(err1, ", "))
