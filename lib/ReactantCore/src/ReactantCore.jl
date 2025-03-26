@@ -235,7 +235,7 @@ function trace_for(mod, expr; track_numbers)
                     $(to_locals...)
                     $body
                     $(from_locals...)
-                    $counter[] += 1
+                    $counter[].mlir_data = ($counter[] + 1).mlir_data
                     nothing
                 end
 

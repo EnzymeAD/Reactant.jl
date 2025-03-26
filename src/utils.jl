@@ -181,7 +181,8 @@ function should_rewrite_call(@nospecialize(ft))
         ft <: typeof(Base.setindex_widen_up_to) ||
         ft <: typeof(Base.typejoin) ||
         ft <: typeof(Base.argtype_decl) ||
-        ft <: typeof(Base.arg_decl_parts)
+        ft <: typeof(Base.arg_decl_parts) ||
+        ft <: typeof(Base.StackTraces.show_spec_sig)
         return false
     end
 
@@ -191,7 +192,7 @@ end
 
 # by default, same as `should_rewrite_call`
 function should_rewrite_invoke(@nospecialize(ft), @nospecialize(args))
-    if ft <: typeof(repeat) && args == Tuple{String,Int64}
+    if ft <: typeof(repeat) && (args == Tuple{String,Int64} || args == Tuple{Char,Int64})
         return false
     end
     return should_rewrite_call(ft)
