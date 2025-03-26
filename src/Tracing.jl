@@ -1264,6 +1264,7 @@ function make_tracer(
         return prev
     end
     if mode == TracedSetPath
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if haskey(seen, prev)
             return seen[prev]
         end
@@ -1341,6 +1342,7 @@ function make_tracer(
         return prev
     end
     if mode == TracedSetPath
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if haskey(seen, prev)
             return seen[prev]
         end
@@ -1409,6 +1411,7 @@ function make_tracer(
         return prev
     end
     if mode == TracedSetPath
+        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         haskey(seen, prev) && return seen[prev]
         res = MissingTracedValue((path,))
         seen[res] = res

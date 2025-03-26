@@ -226,10 +226,8 @@ function make_mlir_fn(
     inmode = if concretein
         @assert !toscalar
         Reactant.ConcreteToTraced
-    elseif toscalar
-        Reactant.TracedSetPath
     else
-        Reactant.TracedTrack
+        Reactant.TracedSetPath
     end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
@@ -332,8 +330,6 @@ function make_mlir_fn(
     outmode = if concretein
         @assert !toscalar
         Reactant.NoStopTracedTrack
-    elseif toscalar
-        Reactant.TracedSetPath
     else
         Reactant.TracedTrack
     end
@@ -374,7 +370,6 @@ function make_mlir_fn(
         append!(linear_results, linear_args[mutated_args])
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
-        @assert length(linear_args) <= length(linear_results)
         argis = []
         for arg in linear_args
             for path in arg.paths
@@ -401,11 +396,10 @@ function make_mlir_fn(
         end
 
         # this can be more efficient
-        conflicts = setdiff(resis, argis)
-        @assert !isempty(conflicts) "Expected to have some conflicts, but none were found."
 
-        errs = []
-        for conflict in conflicts
+        err1 = []
+        err2 = []
+        for (errs, conflict) in ((err1, setdiff(resis, argis)), (err2, setdiff(argis, resis)))
             stridx = string(verify_arg_names.args[conflict[1]])
             aval = args[conflict[1]]
             for idx in Base.tail(conflict)
@@ -425,13 +419,15 @@ function make_mlir_fn(
             push!(errs, stridx * " (path=$conflict, type=$(typeof(aval)))")
         end
         error("""Types do not match between function arguments and results.
-        The following arguments should be traced: $(join(errs, ", "))
+        The following arguments should be traced but were not: $(join(err1, ", "))
+        The following arguments should be returned but were not: $(join(err2, ", "))
         argprefix = $argprefix
         resprefix = $resprefix
         verify_arg_names = $verify_arg_names
         argtys = $(Core.Typeof.(args))
-        Traced Arg Paths: $([arg.paths for arg in traced_args])
-        Traced Res Paths: $([arg.paths for arg in traced_results])
+        Traced Arg Paths: $([arg.paths for arg in linear_args])
+        Traced Res Paths: $([arg.paths for arg in linear_results])
+        traced_result : $(Core.Typeof.(traced_result))
         """)
     end
 
