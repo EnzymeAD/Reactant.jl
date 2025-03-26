@@ -411,7 +411,7 @@ function make_mlir_fn(
                 aval = args[conflict[1]]
                 for idx in Base.tail(conflict)
                     if aval isa AbstractArray
-                        aval = getindex(aval, idx)
+                        aval = @allowscalar getindex(aval, idx)
                         stridx = stridx * "[" * string(idx) * "]"
                     else
                         fldname = if idx isa Integer
