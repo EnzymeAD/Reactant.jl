@@ -838,8 +838,6 @@ end
         @assert algorithm.num_primitive_operations > 0
     end
 
-    ctx = MLIR.IR.context()
-
     # from C12
     lhs_result_dimensions = setdiff(
         1:ndims(lhs), lhs_batching_dimensions, lhs_contracting_dimensions
@@ -863,7 +861,7 @@ end
     dot_dimension_numbers = GC.@preserve lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
         MLIR.IR.Attribute(
             MLIR.API.stablehloDotDimensionNumbersGet(
-                ctx,
+                MLIR.IR.context(),
                 length(lhs_batching_dimensions),
                 lhs_batching_dimensions,
                 length(rhs_batching_dimensions),
@@ -885,18 +883,19 @@ end
     # all or nothing: if one is set, all must be set
     algorithm = algorithm !== nothing ? MLIR.IR.Attribute(algorithm, T1, T2) : nothing
 
+    resT = promote_type(T1, T2)
     res = MLIR.IR.result(
         stablehlo.dot_general(
             lhs.mlir_data,
             rhs.mlir_data;
-            result_0=mlir_type(TracedRArray{promote_type(T1, T2),length(ressize)}, ressize),
+            result_0=mlir_type(TracedRArray{resT,length(ressize)}, ressize),
             dot_dimension_numbers,
             precision_config,
             algorithm,
             location,
         ),
     )
-    return TracedRArray{T,length(ressize)}((), res, ressize)
+    return TracedRArray{resT,length(ressize)}((), res, ressize)
 end
 
 @noinline function einsum(
