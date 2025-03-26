@@ -9,7 +9,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "9fe4c5e3f2ec044db7860ead3d42838589a08104"
+ENZYMEXLA_COMMIT = "b9cd10a03266e7e4cbaf13d6a1783ce87a157004"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
@@ -129,7 +129,9 @@ http_archive(
     patches = ["@enzyme_ad//:patches/jax.patch"],
 )
 
-load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
+# load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
+XLA_COMMIT = "53079112658aa1247cd1e12cb9435c9dc2fe480f"
+XLA_SHA256 = ""
 
 http_archive(
     name = "xla",
@@ -224,9 +226,6 @@ xla_workspace1()
 load("@xla//:workspace0.bzl", "xla_workspace0")
 xla_workspace0()
 
-load("@jax//third_party/flatbuffers:workspace.bzl", flatbuffers = "repo")
-flatbuffers()
-
 load("@jax//jaxlib:jax_python_wheel.bzl", "jax_python_wheel_repository")
 jax_python_wheel_repository(
     name = "jax_wheel",
@@ -235,15 +234,18 @@ jax_python_wheel_repository(
 )
 
 load(
-    "@tsl//third_party/py:python_wheel.bzl",
+    "@xla//third_party/py:python_wheel.bzl",
     "python_wheel_version_suffix_repository",
 )
 python_wheel_version_suffix_repository(
     name = "jax_wheel_version_suffix",
 )
 
+load("@jax//third_party/flatbuffers:workspace.bzl", flatbuffers = "repo")
+flatbuffers()
+
 load(
-    "@tsl//third_party/gpus/cuda/hermetic:cuda_json_init_repository.bzl",
+    "@xla//third_party/gpus/cuda/hermetic:cuda_json_init_repository.bzl",
     "cuda_json_init_repository",
 )
 
@@ -255,7 +257,7 @@ load(
     "CUDNN_REDISTRIBUTIONS",
 )
 load(
-    "@tsl//third_party/gpus/cuda/hermetic:cuda_redist_init_repositories.bzl",
+    "@xla//third_party/gpus/cuda/hermetic:cuda_redist_init_repositories.bzl",
     "cuda_redist_init_repositories",
     "cudnn_redist_init_repository",
 )
@@ -269,21 +271,21 @@ cudnn_redist_init_repository(
 )
 
 load(
-    "@tsl//third_party/gpus/cuda/hermetic:cuda_configure.bzl",
+    "@xla//third_party/gpus/cuda/hermetic:cuda_configure.bzl",
     "cuda_configure",
 )
 
 cuda_configure(name = "local_config_cuda")
 
 load(
-    "@tsl//third_party/nccl/hermetic:nccl_redist_init_repository.bzl",
+    "@xla//third_party/nccl/hermetic:nccl_redist_init_repository.bzl",
     "nccl_redist_init_repository",
 )
 
 nccl_redist_init_repository()
 
 load(
-    "@tsl//third_party/nccl/hermetic:nccl_configure.bzl",
+    "@xla//third_party/nccl/hermetic:nccl_configure.bzl",
     "nccl_configure",
 )
 

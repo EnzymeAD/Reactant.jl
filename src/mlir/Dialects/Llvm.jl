@@ -415,6 +415,8 @@ function call_intrinsic(
     fastmathFlags=nothing,
     op_bundle_sizes,
     op_bundle_tags=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -430,6 +432,8 @@ function call_intrinsic(
         push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
     !isnothing(op_bundle_tags) &&
         push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
 
     return create_operation(
         "llvm.call_intrinsic",
@@ -1496,12 +1500,14 @@ function insertvalue(
     )
 end
 
-function inttoptr(arg::Value; res::IR.Type, location=Location())
+function inttoptr(arg::Value; res::IR.Type, dereferenceable=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(dereferenceable) &&
+        push!(attributes, namedattribute("dereferenceable", dereferenceable))
 
     return create_operation(
         "llvm.inttoptr",
@@ -1875,6 +1881,7 @@ function load(
     invariantGroup=nothing,
     ordering=nothing,
     syncscope=nothing,
+    dereferenceable=nothing,
     access_groups=nothing,
     alias_scopes=nothing,
     noalias_scopes=nothing,
@@ -1894,6 +1901,8 @@ function load(
         push!(attributes, namedattribute("invariantGroup", invariantGroup))
     !isnothing(ordering) && push!(attributes, namedattribute("ordering", ordering))
     !isnothing(syncscope) && push!(attributes, namedattribute("syncscope", syncscope))
+    !isnothing(dereferenceable) &&
+        push!(attributes, namedattribute("dereferenceable", dereferenceable))
     !isnothing(access_groups) &&
         push!(attributes, namedattribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
@@ -1904,6 +1913,40 @@ function load(
 
     return create_operation(
         "llvm.load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`module_flags`
+
+Represents the equivalent in MLIR for LLVM\'s `llvm.module.flags` metadata,
+which requires a list of metadata triplets. Each triplet entry is described
+by a `ModuleFlagAttr`.
+
+# Example
+```mlir
+llvm.module.flags [
+  #llvm.mlir.module_flag<error, \"wchar_size\", 4>,
+  #llvm.mlir.module_flag<max, \"PIC Level\", 2>
+]
+```
+"""
+function module_flags(; flags, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("flags", flags),]
+
+    return create_operation(
+        "llvm.module_flags",
         location;
         operands,
         owned_regions,

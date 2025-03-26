@@ -170,7 +170,7 @@ end
 function fill(
     v, dims::NTuple{N,Integer}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
 ) where {N}
-    return fill(v, collect(dims); location)
+    return fill(v, collect(Int64, dims); location)
 end
 function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__))
     return fill(v, Int[]; location)
@@ -257,7 +257,6 @@ for (dialect, op) in [
     (:chlo, :atan),
     (:chlo, :atanh),
     (:chlo, :bessel_i1e),
-    (:chlo, :conj),
     (:chlo, :cosh),
     (:chlo, :digamma),
     (:chlo, :erf_inv),
@@ -291,6 +290,36 @@ for (dialect, op) in [
             return TracedRNumber{T}((), res)
         end
     end
+end
+
+@noinline function conj(
+    x::TracedRArray{T,N}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
+) where {T<:Complex,N}
+    res = MLIR.IR.result(
+        chlo.conj(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
+    )
+    return TracedRArray{T,N}((), res, size(x))
+end
+
+@noinline function conj(
+    x::TracedRNumber{T}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
+) where {T<:Complex}
+    res = MLIR.IR.result(
+        chlo.conj(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+    )
+    return TracedRNumber{T}((), res)
+end
+
+@noinline function conj(
+    x::TracedRArray{T,N}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
+) where {T<:Real,N}
+    return TracedRArray{T,N}((), x.mlir_data, size(x))
+end
+
+@noinline function conj(
+    x::TracedRNumber{T}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
+) where {T<:Real}
+    return TracedRNumber{T}((), x.mlir_data)
 end
 
 # binary elementwise ops
@@ -402,8 +431,8 @@ end
 end
 
 # shape ops
-function reshape(x::TracedRArray, dims...; kwargs...)
-    return reshape(x, collect(dims); kwargs...)
+@noinline function reshape(x::TracedRArray, dims::Integer...; kwargs...)
+    return reshape(x, collect(Int64, dims); kwargs...)
 end
 
 @noinline function reshape(
@@ -413,9 +442,9 @@ end
 ) where {T,N}
     # HLO reshape semantics collapse the opposite way
     res1 = transpose(x, Int64[N:-1:1...])
-    restype = mlir_type(TracedRArray{T,length(dims)}, collect(Base.reverse(dims)))
+    restype = mlir_type(TracedRArray{T,length(dims)}, collect(Int64, Base.reverse(dims)))
     res = MLIR.IR.result(stablehlo.reshape(res1.mlir_data; result_0=restype, location))
-    result = TracedRArray{T,length(dims)}((), res, collect(Base.reverse(dims)))
+    result = TracedRArray{T,length(dims)}((), res, collect(Int64, Base.reverse(dims)))
     # NOTE this last `transpose` is required for consistency with Julia's column-major order
     # do not remove, as it will be optimized away by the compiler
     return transpose(result, Int64[length(dims):-1:1...])
@@ -459,7 +488,8 @@ end
     permutation;
     location=mlir_stacktrace("transpose", @__FILE__, @__LINE__),
 ) where {T,N}
-    rsize = permute!(collect(size(x)), permutation)
+    @assert length(permutation) == ndims(x)
+    rsize = permute!(collect(Int64, size(x)), permutation)
     permutation = permutation .- 1
     result = mlir_type(TracedRArray{T,N}, rsize)
     permutation = MLIR.IR.DenseArrayAttribute(permutation)
@@ -626,14 +656,14 @@ end
     elseif type == "RFFT"
         @assert T <: Real
         Tout = Complex{T}
-        rsize = let rsize = collect(size(x))
+        rsize = let rsize = collect(Int64, size(x))
             rsize[end] = rsize[end] == 0 ? 0 : rsize[end] ÷ 2 + 1
             Tuple(rsize)
         end
     elseif type == "IRFFT"
         @assert T <: Complex
         Tout = Base.real(T)
-        rsize = let rsize = collect(size(x))
+        rsize = let rsize = collect(Int64, size(x))
             rsize[(end - Base.length(length) + 1):end] = length
             Tuple(rsize)
         end
@@ -1226,7 +1256,7 @@ end
         stablehlo.reverse(
             x.mlir_data;
             result=mlir_type(TracedRArray{T,N}, size(x)),
-            dimensions=MLIR.IR.DenseArrayAttribute(collect(dimensions .- 1)),
+            dimensions=MLIR.IR.DenseArrayAttribute(collect(Int64, dimensions .- 1)),
             location,
         ),
     )
@@ -1715,7 +1745,9 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
     )
 end
 
-@noinline function while_loop(cond_fn::CFn, body_fn::BFn, args...) where {CFn,BFn}
+@noinline function while_loop(
+    cond_fn::CFn, body_fn::BFn, args...; track_numbers, verify_arg_names=nothing
+) where {CFn,BFn}
     # TODO: detect and prevent mutation within the condition
 
     # Make all the args traced or concrete
@@ -1724,10 +1756,7 @@ end
     traced_args = Vector{Any}(undef, N)
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args,
-            args[i],
-            (),
-            Reactant.NoStopTracedTrack, #; track_numbers=Number
+            seen_args, args[i], (), Reactant.NoStopTracedTrack; track_numbers
         )
     end
 
@@ -1751,6 +1780,7 @@ end
             do_transpose=false,
         ).f
 
+    @warn verify_arg_names
     body_fn_compiled =
         Reactant.TracedUtils.make_mlir_fn(
             body_fn,
@@ -1761,6 +1791,7 @@ end
             return_dialect=:stablehlo,
             args_in_result=:none,
             do_transpose=false,
+            verify_arg_names,
         ).f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
@@ -1782,7 +1813,7 @@ end
 end
 
 @noinline function if_condition(
-    cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args...
+    cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args...; track_numbers
 ) where {TFn,FFn}
     true_fn_names = (gensym(:true_fn_args), gensym(:true_result), gensym(:true_fn_resargs))
     false_fn_names = (
@@ -1801,14 +1832,14 @@ end
             args[i],
             (true_fn_names[1], i),
             Reactant.TracedSetPath;
-            track_numbers=Number,
+            track_numbers,
         )
         @inbounds fb_traced_args[i] = Reactant.make_tracer(
             fb_seen_args,
             args[i],
             (false_fn_names[1], i),
             Reactant.TracedSetPath;
-            track_numbers=Number,
+            track_numbers,
         )
     end
 
@@ -1838,7 +1869,7 @@ end
     true_fn_args = true_fn_names[1]
 
     MLIR.IR.activate!(true_fn_body)
-    Ops.activate_constant_context!(true_fn_body)
+    activate_constant_context!(true_fn_body)
     tb_result = try
         for (i, arg) in enumerate(tb_linear_args)
             # find the right path to index the traced arg.
@@ -1862,7 +1893,7 @@ end
         end
         Reactant.call_with_reactant(true_fn, tb_traced_args...)
     finally
-        Ops.deactivate_constant_context!(true_fn_body)
+        deactivate_constant_context!(true_fn_body)
         MLIR.IR.deactivate!(true_fn_body)
     end
 
@@ -1872,7 +1903,7 @@ end
         tb_result,
         (true_fn_names[2],),
         Reactant.NoStopTracedTrack;
-        track_numbers=Number,
+        track_numbers,
     )
     for i in eachindex(tb_linear_args)
         Reactant.make_tracer(
@@ -1880,7 +1911,7 @@ end
             tb_linear_args[i],
             (true_fn_names[3], i),
             Reactant.NoStopTracedTrack;
-            track_numbers=Number,
+            track_numbers,
         )
     end
 
@@ -1937,7 +1968,7 @@ end
         fb_result,
         (false_fn_names[2],),
         Reactant.NoStopTracedTrack;
-        track_numbers=Number,
+        track_numbers,
     )
     for i in eachindex(fb_linear_args)
         Reactant.make_tracer(
@@ -1945,7 +1976,7 @@ end
             fb_linear_args[i],
             (false_fn_names[3], i),
             Reactant.NoStopTracedTrack;
-            track_numbers=Number,
+            track_numbers,
         )
     end
 
@@ -2385,11 +2416,14 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
         (input = constant(input; location))
 
     cache = Reactant.Compiler.sdycache()
-    haskey(cache, sharding.mesh) || Ops.mesh(sharding.mesh; location)
+    haskey(cache, sharding.mesh) || mesh(sharding.mesh; location)
     (; sym_name, mesh_attr) = cache[sharding.mesh]
-    tensor_sharding_attr = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-        sharding, MLIR.IR.context(), sym_name, mesh_attr; do_transpose=true
+
+    tensor_sharding_attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
+        sharding, MLIR.IR.context(), sym_name, mesh_attr, size(input); do_transpose=false
     )
+    @assert dialect == :sdy "Expected dialect to be `sdy`, got $(dialect)"
+
     resharded_value = MLIR.IR.result(
         MLIR.Dialects.sdy.sharding_constraint(
             input.mlir_data; sharding=tensor_sharding_attr, location
@@ -2452,7 +2486,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     fn::Function,
     location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
 ) where {T}
-    reduced_shape = Tuple(deleteat!(collect(size(x)), dimensions))
+    reduced_shape = Tuple(deleteat!(collect(Int64, size(x)), dimensions))
 
     result_type = mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)
 
@@ -2498,6 +2532,47 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     )
 
     return TracedRArray{T,length(reduced_shape)}((), res, reduced_shape)
+end
+
+@noinline function dynamic_update_slice(
+    operand::TracedRArray{T,N},
+    update::TracedRArray{T},
+    start_indices::Vector;
+    location=mlir_stacktrace("dynamic_update_slice", @__FILE__, @__LINE__),
+) where {T,N}
+    start_indices = [
+        Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, index - 1).mlir_data for
+        index in start_indices
+    ]
+    res = MLIR.IR.result(
+        stablehlo.dynamic_update_slice(
+            operand.mlir_data, update.mlir_data, start_indices; location
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, size(res))
+end
+
+@noinline function dynamic_slice(
+    operand::TracedRArray{T,N},
+    start_indices::Vector,
+    slice_sizes::Vector;
+    location=mlir_stacktrace("dynamic_slice", @__FILE__, @__LINE__),
+) where {T,N}
+    start_indices = [
+        Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, index - 1).mlir_data for
+        index in start_indices
+    ]
+    res = MLIR.IR.result(
+        stablehlo.dynamic_slice(
+            operand.mlir_data,
+            start_indices;
+            slice_sizes=collect(Int64, slice_sizes),
+            location,
+        ),
+        1,
+    )
+    return TracedRArray{T,ndims(res)}((), res, size(res))
 end
 
 end # module Ops

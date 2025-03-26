@@ -5,6 +5,27 @@ using Sockets
 
 const initialized = Ref(false)
 
+"""
+    local_rank()
+
+Returns the local rank of the current process.
+"""
+local_rank() = Reactant.XLA.global_state.process_id
+
+"""
+    num_processes()
+
+Returns the number of processes.
+"""
+num_processes() = Reactant.XLA.global_state.num_processes
+
+"""
+    is_initialized()
+
+Returns `true` if the distributed environment has been initialized.
+"""
+is_initialized() = initialized[]
+
 function initialize(;
     coordinator_address::Union{Nothing,String}=nothing,
     num_processes::Union{Nothing,Integer}=nothing,
@@ -14,6 +35,12 @@ function initialize(;
     initialization_timeout_in_seconds::Integer=300,
     kwargs...,
 )
+    if Reactant.XLA.runtime() isa Val{:PJRT}
+        @warn "Attempting to using Reactant Distributed functionality with PJRT runtime. \
+               This will never be properly supported. Switch to using IFRT runtime by \
+               adding a `xla_runtime` preference with value \"IFRT\""
+    end
+
     if isinteractive()
         @warn "Reactant.Distributed.initialize() should not be called in interactive mode. \
                Use Reactant.Distributed.initialize() in a script instead."

@@ -25,6 +25,14 @@ end
 
 Base.strides(x::AbstractConcreteArray) = Base.size_to_strides(1, size(x)...)
 
+Base.OneTo(x::AbstractConcreteNumber{<:Integer}) = Base.OneTo(to_number(x))
+
+@static if isdefined(Base, :unchecked_oneto)
+    function Base.unchecked_oneto(x::AbstractConcreteNumber{<:Integer})
+        return Base.unchecked_oneto(to_number(x))
+    end
+end
+
 # Ensure the device and client are the same as the input
 for numType in (:ConcretePJRTNumber, :ConcreteIFRTNumber)
     @eval function Base.float(x::$(numType){T}) where {T}
@@ -106,6 +114,10 @@ function synchronize(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
     return nothing
 end
 
+function to_number(tp::Base.TwicePrecision)
+    return Base.TwicePrecision(to_number(tp.hi), to_number(tp.lo))
+end
+
 to_number(x::Number) = x
 
 function to_number(X::ConcretePJRTScalar{T}) where {T}
@@ -147,6 +159,8 @@ for jlop in (
         $(jlop)(x::Number, y::$(T)) = $(jlop)(x, to_number(y))
     end
 end
+
+Base.:^(x::AbstractConcreteNumber, y::Integer) = ^(to_number(x), y)
 
 for jlop in (:(Base.isnan), :(Base.isfinite)),
     T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
@@ -224,7 +238,7 @@ function Base.show(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     return nothing
 end
 
-function Base.getindex(a::ConcretePJRTArray{T}, args::Vararg{Int,N}) where {T,N}
+function Base.getindex(a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}) where {T,N}
     isempty(a) && throw("Cannot getindex from empty buffer")
 
     wait(a)
@@ -246,9 +260,15 @@ function Base.getindex(a::ConcretePJRTArray{T}, args::Vararg{Int,N}) where {T,N}
     return convert(Array, a)[args...]
 end
 
-function Base.getindex(a::ConcreteIFRTArray, args::Vararg{Int,N}) where {N}
+function Base.getindex(a::ConcreteIFRTArray{T,N}, args::Vararg{Int,N}) where {T,N}
     GPUArraysCore.assertscalar("getindex(::ConcreteIFRTArray, ::Vararg{Int, N})")
     return convert(Array, a)[args...]
+end
+
+function Base.getindex(
+    a::Union{ConcreteIFRTArray{T,N},ConcretePJRTArray{T,N}}, args::Vararg{Any,N}
+) where {T,N}
+    return compile(getindex, (a, args...))(a, args...)
 end
 
 # This doesn't follow the semantics of getindex with ranges. It is mostly meant to be used
@@ -262,6 +282,8 @@ end
     fn = compile(getindex, (a, args...))
     return fn(a, args...)
 end
+
+@inline _fast_slice(a::AbstractConcreteNumber) = a
 
 function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
     setindex!(a, v, args...)
@@ -376,16 +398,23 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteI
     return fn(bc.args...)
 end
 
-# XXX: This is not necessarily correct. We need to check for sharding and also device
-#      compatibility.
-function Base.copyto!(dest::AbstractConcreteArray, src::AbstractConcreteArray)
-    dest.data = src.data
-    return dest
-end
-
 function mycopyto!(dest, src)
     dest .= src # use broadcasting instead of copyto!
     return nothing
+end
+
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    @eval function Base.copyto!(dest::$(aType), src::$(aType))
+        if dest.sharding == src.sharding &&
+            XLA.device(dest) == XLA.device(src) &&
+            XLA.client(dest) == XLA.client(src)
+            dest.data = src.data
+        else
+            fn = compile(mycopyto!, (dest, src))
+            fn(dest, src)
+        end
+        return dest
+    end
 end
 
 function Base.copyto!(
@@ -394,6 +423,22 @@ function Base.copyto!(
     fn = compile(mycopyto!, (dest, src))
     fn(dest, src)
     return dest
+end
+
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    anyaType = Symbol(:Any, aType)
+    @eval function Base.copyto!(dest::$(anyaType), src::Array{<:ReactantPrimitive})
+        ancestor_dest = ancestor(dest)
+        return copyto!(
+            dest,
+            $(aType)(
+                src;
+                sharding=ancestor_dest.sharding,
+                client=XLA.client(ancestor_dest),
+                device=XLA.device(ancestor_dest),
+            ),
+        )
+    end
 end
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)

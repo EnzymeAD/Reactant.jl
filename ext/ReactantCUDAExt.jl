@@ -1,8 +1,7 @@
 module ReactantCUDAExt
 
 using CUDA
-using Reactant:
-    Reactant, TracedRArray, AnyTracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
+using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
 using Reactant.Compiler: raising
 using ReactantCore: @trace
 using GPUCompiler: GPUCompiler
@@ -39,7 +38,12 @@ struct CuTracedRNumber{T,A} <: Number
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
+    function CuTracedRNumber{T,A}(ptr::Core.LLVMPtr{T,A}) where {T,A}
+        return new(ptr)
+    end
 end
+
+CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
 
 function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     align = alignment(RN)
@@ -50,9 +54,86 @@ function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
     return Base.convert(T, Base.getindex(RN))
 end
 
-Base.isless(a::CuTracedRNumber, b::CuTracedRNumber) = Base.isless(a[], b[])
-Base.isless(a, b::CuTracedRNumber) = Base.isless(a, b[])
-Base.isless(a::CuTracedRNumber, b) = Base.isless(a[], b)
+for jlop in (
+    :(Base.min),
+    :(Base.max),
+    :(Base.:+),
+    :(Base.:-),
+    :(Base.:*),
+    :(Base.:/),
+    :(Base.:^),
+    :(Base.rem),
+    :(Base.isless),
+    :(Base.:(==)),
+    :(Base.:(!=)),
+)
+    @eval begin
+        @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
+        @inline $jlop(a::CuTracedRNumber{T,A}, b::Number) where {T,A} = $jlop(a[], b)
+        @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
+    end
+end
+
+for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
+    @eval begin
+        @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
+    end
+end
+
+Base.OneTo(x::CuTracedRNumber{<:Integer}) = Base.OneTo(x[])
+
+@static if isdefined(Base, :unchecked_oneto)
+    function Base.unchecked_oneto(x::CuTracedRNumber{<:Integer})
+        return Base.unchecked_oneto(x[])
+    end
+end
+
+function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
+    return CT(
+        Base.llvmcall(
+            (
+                """define double addrspace(1)* @entry(double %d) alwaysinline {
+          %a = alloca double
+          store double %d, double* %a
+          %ac = addrspacecast double* %a to double addrspace(1)*
+          ret double addrspace(1)* %ac
+                    }
+      """,
+                "entry",
+            ),
+            Core.LLVMPtr{Float64,1},
+            Tuple{Float64},
+            Base.convert(Float64, x),
+        ),
+    )
+end
+
+function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
+    return CT(
+        Base.llvmcall(
+            (
+                """define float addrspace(1)* @entry(float %d) alwaysinline {
+          %a = alloca float
+          store float %d, float* %a
+          %ac = addrspacecast float* %a to float addrspace(1)*
+          ret float addrspace(1)* %ac
+                    }
+      """,
+                "entry",
+            ),
+            Core.LLVMPtr{Float32,1},
+            Tuple{Float32},
+            Base.convert(Float32, x),
+        ),
+    )
+end
+
+Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
+
+Base.one(a::CuTracedRNumber) = one(a[])
+Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
+Base.zero(a::CuTracedRNumber) = zero(a[])
+Base.zero(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = zero(T)
 
 function Base.promote_rule(
     ::Type{<:CuTracedRNumber{T}}, ::Type{<:CuTracedRNumber{T2}}
@@ -419,6 +500,24 @@ function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRNumber{T}) wher
     return res
 end
 
+import Reactant.TracedRNumberOverrides.TracedStepRangeLen
+
+function Adapt.adapt_storage(::ReactantKernelAdaptor, r::TracedStepRangeLen)
+    return TracedStepRangeLen(
+        Adapt.adapt(ReactantKernelAdaptor(), r.ref),
+        Adapt.adapt(ReactantKernelAdaptor(), r.step),
+        Adapt.adapt(ReactantKernelAdaptor(), r.len),
+        Adapt.adapt(ReactantKernelAdaptor(), r.offset),
+    )
+end
+
+function Adapt.adapt_storage(::ReactantKernelAdaptor, r::Base.TwicePrecision)
+    return Base.TwicePrecision(
+        Adapt.adapt(ReactantKernelAdaptor(), r.hi),
+        Adapt.adapt(ReactantKernelAdaptor(), r.lo),
+    )
+end
+
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
 # and not the operation itself).
 struct LLVMFunc{F,tt}
@@ -717,10 +816,6 @@ function compile(job)
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
             :llvm,
             job;
-            optimize=false,
-            cleanup=false,
-            validate=false,
-            libraries=false,
             # :llvm, job; optimize=false, cleanup=false, validate=true, libraries=false
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
@@ -755,7 +850,7 @@ function compile(job)
         if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl post vendor IR\n", string(mod))
         end
-        LLVM.run!(CUDA.GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
+        LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
             if LLVM.haskey(LLVM.functions(mod), fname)
@@ -1148,14 +1243,18 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         always_inline = false
         name = nothing
         debuginfo = false
-        config = CUDA.CompilerConfig(
+        config = GPUCompiler.CompilerConfig(
             CUDA.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
             CUDA.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
             kernel,
             name,
             always_inline,
+            optimize=false,
+            cleanup=false,
+            validate=false,
+            libraries=false,
         )
-        CUDA.GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        GPUCompiler.cached_compilation(cache, source, config, compile, link)
     end
     return Core.Typeof(res)(f, res.entry)
 end

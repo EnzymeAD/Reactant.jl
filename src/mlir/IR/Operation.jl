@@ -139,7 +139,7 @@ end
 
 Return an array of all operands of the operation.
 """
-operands(op) = IR.Value[operand(op, i) for i in 1:noperands(op)]
+operands(op) = Value[operand(op, i) for i in 1:noperands(op)]
 
 """
     operand!(op, i, value)
@@ -235,7 +235,7 @@ function Base.show(io::IO, operation::Operation)
 
     flags = API.mlirOpPrintingFlagsCreate()
 
-    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), true)
+    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), false)
     API.mlirOperationPrintWithFlags(operation, flags, c_print_callback, ref)
     API.mlirOpPrintingFlagsDestroy(flags)
 

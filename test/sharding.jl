@@ -29,9 +29,9 @@ end
         @test data ≈ Array(cdata_sharded2)
         @test data ≈ Array(cdata_sharded3)
 
-        @test cdata_sharded.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
-        @test cdata_sharded2.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
-        @test cdata_sharded3.sharding isa Sharding.ShardInfo{<:Sharding.HloSharding}
+        @test cdata_sharded.sharding isa Sharding.ShardInfo{<:Sharding.NamedSharding}
+        @test cdata_sharded2.sharding isa Sharding.ShardInfo{<:Sharding.NamedSharding}
+        @test cdata_sharded3.sharding isa Sharding.ShardInfo{<:Sharding.NamedSharding}
         @test cdata.sharding isa Sharding.NoShardInfo
 
         true_res_y, true_res_x, true_res_z = fn_test1(data)
@@ -99,6 +99,11 @@ fn_test3(x) = sum(x; dims=1)
             w2_ra = Reactant.to_rarray(w2; sharding=w2_sharding)
 
             @test Array(@jit(predict(samples_ra, w1_ra, w2_ra))) ≈ predict(samples, w1, w2)
+        end
+
+        @testset "No Crash" begin
+            y_ra = Reactant.to_rarray(2.0; track_numbers=Number)
+            @test Array(@jit(./(x, y_ra))) ≈ x ./ 2.0
         end
     end
 end
@@ -204,16 +209,22 @@ end
         @test contains(repr(hlo), "sharding_constraint")
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 3
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         z = Reactant.to_rarray(x; sharding=constraint)
         res = @jit fn_with_constraint(x_ra)
 
         @test x .+ x ≈ Array(res)
-        @test string(z.sharding.sharding.hlo_sharding) ==
-            string(res.sharding.sharding.hlo_sharding)
-        @test string(res.sharding.sharding.hlo_sharding) !=
-            string(x_ra.sharding.sharding.hlo_sharding)
+
+        z_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, z.sharding.sharding).hlo_sharding
+        res_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, res.sharding.sharding).hlo_sharding
+        x_ra_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, x_ra.sharding.sharding).hlo_sharding
+
+        @test string(z_hlo_sharding) == string(res_hlo_sharding)
+        @test string(res_hlo_sharding) != string(x_ra_hlo_sharding)
 
         # Test we can compile even when there is an intermediate sharding
         x_ra_no_sharding = Reactant.to_rarray(x)
@@ -224,14 +235,20 @@ end
             x_ra_no_sharding
         )
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 3
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
         @test x .+ x ≈ Array(res)
-        @test string(z.sharding.sharding.hlo_sharding) ==
-            string(res.sharding.sharding.hlo_sharding)
-        @test string(res.sharding.sharding.hlo_sharding) !=
-            string(x_ra_no_sharding.sharding.sharding.hlo_sharding)
+
+        z_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, z.sharding.sharding).hlo_sharding
+        res_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, res.sharding.sharding).hlo_sharding
+        x_ra_hlo_sharding =
+            convert(Reactant.Sharding.HloSharding, x_ra.sharding.sharding).hlo_sharding
+
+        @test string(z_hlo_sharding) == string(res_hlo_sharding)
+        @test string(res_hlo_sharding) != string(x_ra_hlo_sharding)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
@@ -256,6 +273,15 @@ end
 
         @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test2(x_ra)) ≈ fn_test2(x)
+
+        @testset "Handle Sub-Axis Info" begin
+            @test Reactant.to_rarray(
+                randn(Float32, 142, 142);
+                sharding=Sharding.NamedSharding(
+                    Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
+                ),
+            ) isa Reactant.ConcreteRArray
+        end
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
@@ -285,7 +311,9 @@ end
 
 @testset "Sharding with Mutation" begin
     if length(addressable_devices) ≥ 8
-        mesh = Sharding.Mesh(reshape(Reactant.addressable_devices(), 2, 2, 2), (:x, :y, :z))
+        mesh = Sharding.Mesh(
+            reshape(Reactant.addressable_devices()[1:8], 2, 2, 2), (:x, :y, :z)
+        )
 
         x_ra = Reactant.to_rarray(
             randn(Float32, 4, 5); sharding=Sharding.NamedSharding(mesh, ((:x, :y), :z))
@@ -317,6 +345,34 @@ end
         @test z_ra_arr ≈ Array(z_ra2)
         @test y_ra_final[1:2, 1:2] ≈ y_ra_arr[1:2, 1:2]
         @test all(y_ra_final[1:2, 1:2] .== 1)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+@testset "Bad Codegen for Resharded Inputs: #1027" begin
+    if length(addressable_devices) ≥ 12 && Reactant.XLA.runtime() isa Val{:IFRT}
+        x_ra = Reactant.to_rarray(
+            randn(Float32, 32, 32);
+            sharding=Sharding.NamedSharding(
+                Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
+            ),
+        )
+
+        z_ra = Reactant.to_rarray(ones(Float32, 32, 32))
+
+        function test1!(x, z)
+            y = x .+ x'
+            x .+= y
+            z .= x
+            return z
+        end
+
+        @jit test1!(x_ra, z_ra)
+
+        @test contains(
+            string(Reactant.XLA.sharding(z_ra.data.buffer)), "SingleDeviceSharding"
+        )
     else
         @warn "Not enough addressable devices to run sharding tests"
     end

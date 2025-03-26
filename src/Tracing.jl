@@ -93,7 +93,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(runtime)
 )
     # functions are directly returned
-    if sizeof(T) == 0
+    if T === Function || sizeof(T) == 0
         return T
     end
 
@@ -917,7 +917,21 @@ function Base.showerror(io::IO, err::NoFieldMatchError)
     )
     for (i, subty) in zip(1:fieldcount(err.origty), err.subTys)
         origty = fieldtype(err.origty, i)
-        println(io, "idx=", i, " Derived: ", subty, " Existing: ", origty)
+        name = fieldname(err.origty, i)
+        attemptty = fieldtype(err.besteffort, i)
+        println(
+            io,
+            "name=",
+            name,
+            " idx=",
+            i,
+            " Derived: ",
+            subty,
+            " Existing: ",
+            origty,
+            " Best Attempt: ",
+            attemptty,
+        )
     end
 end
 
@@ -1007,7 +1021,7 @@ function make_tracer_via_immutable_constructor(
     return y
 end
 
-function make_tracer(
+function make_tracer_unknown(
     seen,
     @nospecialize(prev),
     @nospecialize(path),
@@ -1094,12 +1108,19 @@ function make_tracer(
                 newpath,
                 mode;
                 track_numbers,
-                sharding=Base.getproperty(sharding, i),
+                sharding=getproperty(sharding, i),
                 runtime,
                 kwargs...,
             )
             if xi !== xi2
                 changed = true
+            end
+            if mode != TracedToTypes && !(Core.Typeof(xi2) <: fieldtype(TT, i))
+                throw(
+                    AssertionError(
+                        "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                    ),
+                )
             end
             flds[i] = xi2
         else
@@ -1117,6 +1138,21 @@ function make_tracer(
     y = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), TT, flds, nf)
     seen[prev] = y
     return y
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    kwargs...,
+)
+    return make_tracer_unknown(
+        seen, prev, path, mode; track_numbers, sharding, runtime, kwargs...
+    )
 end
 
 function make_tracer(
@@ -1730,7 +1766,7 @@ end
     @nospecialize(runtime)
 )
     return make_tracer(
-        OrderedIdDict(), x, (), Reactant.ArrayToConcrete; track_numbers, sharding, runtime
+        OrderedIdDict(), x, (), ArrayToConcrete; track_numbers, sharding, runtime
     )
 end
 
@@ -1836,4 +1872,109 @@ end
         error("Unsupported runtime $runtime")
     end
     return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding, runtime)
+end
+
+function Reactant.traced_type_inner(
+    @nospecialize(RT::Type{<:UnitRange{<:ReactantPrimitive}}),
+    seen,
+    mode::Reactant.TraceMode,
+    track_numbers::Type,
+    sharding,
+    runtime,
+)
+    (T,) = RT.parameters
+    newT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    if T == newT
+        return RT
+    else
+        return TracedRNumberOverrides.TracedUnitRange{newT}
+    end
+end
+
+function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::UnitRange),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    Reactant.Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
+    if mode == Reactant.TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.start, path, mode; kwargs...)
+        make_tracer(seen, prev.stop, path, mode; kwargs...)
+        return nothing
+    end
+    newstart = Reactant.make_tracer(
+        seen, prev.start, Reactant.append_path(path, :start), mode; kwargs...
+    )
+    newstop = Reactant.make_tracer(
+        seen, prev.stop, Reactant.append_path(path, :stop), mode; kwargs...
+    )
+    if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
+        return prev
+    else
+        return TracedRNumberOverrides.TracedUnitRange(newstart, newstop)
+    end
+end
+
+function Reactant.traced_type_inner(
+    @nospecialize(RT::Type{<:StepRangeLen}),
+    seen,
+    mode::Reactant.TraceMode,
+    track_numbers::Type,
+    sharding,
+    runtime,
+)
+    T, R, S, L = RT.parameters
+    newT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    newR = Reactant.traced_type_inner(R, seen, mode, track_numbers, sharding, runtime)
+    newS = Reactant.traced_type_inner(S, seen, mode, track_numbers, sharding, runtime)
+    newL = Reactant.traced_type_inner(L, seen, mode, track_numbers, sharding, runtime)
+    if T == newT && R == newR && S == newS && L == newL
+        return RT
+    else
+        return TracedRNumberOverrides.TracedStepRangeLen{newT,newR,newS,newL}
+    end
+end
+
+function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::StepRangeLen),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    Reactant.Sharding.is_sharded(sharding) &&
+        error("Cannot specify sharding for StepRangeLen")
+    if mode == Reactant.TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.len, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
+        return nothing
+    end
+    newref = Reactant.make_tracer(
+        seen, prev.ref, Reactant.append_path(path, :ref), mode; sharding, kwargs...
+    )
+    newstep = Reactant.make_tracer(
+        seen, prev.step, Reactant.append_path(path, :step), mode; sharding, kwargs...
+    )
+    newlen = Reactant.make_tracer(
+        seen, prev.len, Reactant.append_path(path, :len), mode; sharding, kwargs...
+    )
+    newoffset = Reactant.make_tracer(
+        seen, prev.offset, Reactant.append_path(path, :offset), mode; sharding, kwargs...
+    )
+    if typeof(newref) == typeof(prev.ref) &&
+        typeof(newstep) == typeof(prev.step) &&
+        typeof(newlen) == typeof(prev.len) &&
+        typeof(newoffset) == typeof(prev.offset)
+        return prev
+    else
+        return TracedRNumberOverrides.TracedStepRangeLen(newref, newstep, newlen, newoffset)
+    end
 end

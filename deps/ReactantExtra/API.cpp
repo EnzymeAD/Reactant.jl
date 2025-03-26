@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
 
@@ -143,6 +145,8 @@
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace mlir;
 using namespace llvm;
@@ -851,7 +855,7 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     }
   }
 
-  auto exec_err = client->Compile(cmod_op, options);
+  auto exec_err = client->CompileAndLoad(cmod_op, options);
 
   if (!exec_err.ok()) {
     std::string err_str;
@@ -1715,8 +1719,10 @@ extern "C" bool ifrt_DeviceIsAddressable(ifrt::Device *device) {
   return device->IsAddressable();
 }
 
-tsl::RCReference<ifrt::DeviceList> ifrt_CreateDeviceListFromDevices(
-    ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices) {
+static xla::ifrt::RCReferenceWrapper<ifrt::DeviceList>
+ifrt_CreateDeviceListFromDevices(ifrt::Client *client,
+                                 ifrt::Device **device_list,
+                                 int32_t num_devices) {
   absl::Span<ifrt::Device *const> devices(device_list, num_devices);
   return client->MakeDeviceList(devices);
 }
@@ -2021,6 +2027,68 @@ extern "C" void ifrt_sharding_to_index_domains(
       index_domain_shapes[idx] = shape[j];
     }
   }
+}
+
+extern "C" bool hlo_sharding_is_tuple(xla::HloSharding *hloSharding) {
+  return hloSharding->IsTuple();
+}
+
+extern "C" bool hlo_sharding_is_replicated(xla::HloSharding *hloSharding) {
+  return hloSharding->IsReplicated();
+}
+
+extern "C" bool hlo_sharding_is_manual(xla::HloSharding *hloSharding) {
+  return hloSharding->IsManual();
+}
+
+extern "C" bool hlo_sharding_is_unknown(xla::HloSharding *hloSharding) {
+  return hloSharding->IsUnknown();
+}
+
+extern "C" bool hlo_sharding_is_tiled(xla::HloSharding *hloSharding) {
+  return hloSharding->IsTiled();
+}
+
+extern "C" bool hlo_sharding_is_maximal(xla::HloSharding *hloSharding) {
+  return hloSharding->IsTileMaximal();
+}
+
+extern "C" bool
+hlo_sharding_replicate_on_last_tile_dim(xla::HloSharding *hloSharding) {
+  return hloSharding->ReplicateOnLastTileDim();
+}
+
+extern "C" int32_t
+hlo_sharding_tile_assignment_dimensions_size(xla::HloSharding *hloSharding) {
+  return static_cast<int32_t>(hloSharding->tile_assignment().num_dimensions());
+}
+
+extern "C" int32_t
+hlo_sharding_tile_assignment_devices_size(xla::HloSharding *hloSharding) {
+  return static_cast<int32_t>(hloSharding->tile_assignment().num_elements());
+}
+
+extern "C" void
+hlo_sharding_tile_assignment_dimensions(xla::HloSharding *hloSharding,
+                                        int64_t *dims, int32_t size) {
+  auto tileAssignmentDims = hloSharding->tile_assignment().dimensions();
+  for (int32_t i = 0; i < size; i++) {
+    dims[i] = tileAssignmentDims[i];
+  }
+}
+
+extern "C" void
+hlo_sharding_tile_assignment_devices(xla::HloSharding *hloSharding,
+                                     int64_t *devices, int32_t size) {
+  auto tileAssignmentDevices = hloSharding->tile_assignment().array().data();
+  for (int32_t i = 0; i < size; i++) {
+    devices[i] = tileAssignmentDevices[i];
+  }
+}
+
+extern "C" bool hlo_sharding_check_eq(xla::HloSharding *hloSharding,
+                                      xla::HloSharding *other) {
+  return *hloSharding == *other;
 }
 
 #pragma endregion
@@ -2382,3 +2450,23 @@ extern "C" void ifrt_hlo_module_cost_analysis_properties(
 }
 
 #pragma endregion
+
+extern "C" void dump_operation(Operation *op, const char *filename) {
+  std::error_code EC;
+  llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Text);
+
+  if (EC) {
+    std::cerr << "Error opening file: " << EC.message() << std::endl;
+    return;
+  }
+
+  op->print(file, mlir::OpPrintingFlags().enableDebugInfo(true, false));
+}
+
+extern "C" bool pjrt_device_is_addressable(PjRtDevice *device) {
+  return device->IsAddressable();
+}
+
+extern "C" mlir::Operation *mlirGetParentOfTypeFunctionOp(mlir::Operation *op) {
+  return op->getParentOfType<mlir::FunctionOpInterface>();
+}

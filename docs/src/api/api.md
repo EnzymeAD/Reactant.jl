@@ -46,3 +46,9 @@ Reactant.Profiler.@annotate
 Reactant.devices
 Reactant.addressable_devices
 ```
+
+## Internal utils
+
+```@docs
+ReactantCore.materialize_traced_array
+```

@@ -173,7 +173,15 @@ function should_rewrite_call(@nospecialize(ft))
         ft <: typeof(Base.identity) ||
         ft <: typeof(Base.print) ||
         ft <: typeof(Base.println) ||
-        ft <: typeof(Adapt.adapt_structure)
+        ft <: typeof(Base.show) ||
+        ft <: typeof(Base.show_delim_array) ||
+        ft <: typeof(Base.sprint) ||
+        ft <: typeof(Adapt.adapt_structure) ||
+        ft <: typeof(Core.is_top_bit_set) ||
+        ft <: typeof(Base.setindex_widen_up_to) ||
+        ft <: typeof(Base.typejoin) ||
+        ft <: typeof(Base.argtype_decl) ||
+        ft <: typeof(Base.arg_decl_parts)
         return false
     end
 
@@ -182,7 +190,12 @@ function should_rewrite_call(@nospecialize(ft))
 end
 
 # by default, same as `should_rewrite_call`
-should_rewrite_invoke(@nospecialize(ft), @nospecialize(args)) = should_rewrite_call(ft)
+function should_rewrite_invoke(@nospecialize(ft), @nospecialize(args))
+    if ft <: typeof(repeat) && args == Tuple{String,Int64}
+        return false
+    end
+    return should_rewrite_call(ft)
+end
 
 # Avoid recursively interpreting into methods we define explicitly
 # as overloads, which we assume should handle the entirety of the
@@ -576,7 +589,16 @@ function call_with_reactant_generator(
         safe_print("ir", ir)
     end
 
-    if !is_reactant_method(mi::Core.MethodInstance) || guaranteed_error
+    mi = mi::Core.MethodInstance
+
+    if !(
+        is_reactant_method(mi) || (
+            mi.def.sig isa DataType &&
+            !should_rewrite_invoke(
+                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
+            )
+        )
+    ) || guaranteed_error
         ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
     end
 

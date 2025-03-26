@@ -512,7 +512,7 @@ end
 end
 
 @testset for op in [round, ceil, floor]
-    for x in (rand(Float32, (3, 3)), rand(Float64))
+    @testset "$(typeof(x)) : $(size(x))" for x in (rand(Float32, (3, 3)), rand(Float64))
         intop = Base.Fix1(op, Int)
         x_ra = Reactant.to_rarray.(x; track_numbers=Number)
 
@@ -993,10 +993,33 @@ end
 
 @testset "Fractional index" begin
     times = 0:0.01:4.5
+    @test times isa Base.StepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
     @test res[1] == 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
+end
+
+@testset "Traced fractional index" begin
+    times = Reactant.to_rarray(0:0.01:4.5; track_numbers=Number)
+    @test times isa Reactant.TracedRNumberOverrides.TracedStepRangeLen
+    res = @jit fractional_idx(times, ConcreteRNumber(2.143))
+    @test res[1] == 0.29999999999997334
+    @test res[2] == 215
+    @test res[3] == 216
+end
+
+function unitrange_test(r, i)
+    return r[i]
+end
+@testset "Unitrange" begin
+    x = 2:10
+    @test (@jit unitrange_test(x, 3)) == 4
+    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+
+    x = Reactant.to_rarray(2:10; track_numbers=Number)
+    @test (@jit unitrange_test(x, 3)) == 4
+    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
 end
 
 mulpi(x) = π * x
@@ -1015,8 +1038,47 @@ end
         [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
 end
 
+@testset "copyto! TracedRArray" begin
+    x_ra = Reactant.to_rarray(ones(4, 4))
+    y_ra = Reactant.to_rarray(zeros(2, 2))
+    @jit copyto!(x_ra, 6, y_ra, 3, 2)
+
+    x = ones(4, 4)
+    y = zeros(2, 2)
+    copyto!(x, 6, y, 3, 2)
+    @test Array(x_ra) == x
+end
+
 @testset "copy(::Broadcast.Broadcasted{ArrayStyle{ConcreteRArray}})" begin
     x_ra = Reactant.to_rarray(ones(4, 4))
     res = copy(Broadcast.broadcasted(-, Broadcast.broadcasted(+, x_ra, 1)))
     @test res ≈ -(Array(x_ra) .+ 1)
+end
+
+@testset "typemin/typemax" begin
+    fn(x) = [typemin(eltype(x)), typemax(eltype(x))]
+
+    x_ra = Reactant.to_rarray(ones(4))
+    @test @jit(fn(x_ra)) == fn(ones(4))
+
+    x_ra = Reactant.to_rarray(ones(Int, 4))
+    @test @jit(fn(x_ra)) == fn(ones(Int, 4))
+end
+
+@testset "Module printing" begin
+    for opt in (true, false, :before_jit), debug in (true, false)
+        v = collect(Float32(1):Float32(64))
+        vr = Reactant.to_rarray(v)
+        mod = @code_hlo optimize = opt log.(vr)
+
+        # Store the module as a string with different debug options.
+        io = IOBuffer()
+        show(IOContext(io, :debug => debug), mod)
+        mod_string = String(take!(io))
+
+        # Test that we can parse back the string as an MLIR module, compile it
+        # and get correct results.
+        res = @jit(Reactant.Ops.hlo_call(mod_string, vr))[1]
+        @test res ≈ log.(v)
+    end
 end

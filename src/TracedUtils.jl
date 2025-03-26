@@ -3,36 +3,59 @@
 # within compilation. However, it means these functions are a _lot_ faster to compile.
 module TracedUtils
 
-using Adapt: Adapt, WrappedReshapedArray
 using ..Reactant:
     Reactant,
     MLIR,
     RNumber,
     TracedRArray,
     TracedRNumber,
-    WrappedTracedRArray,
     AnyTracedRArray,
     MissingTracedValue,
     OrderedIdDict,
     ReactantPrimitive,
     Ops
-using ReactantCore: MissingTracedValue, is_traced
+using ReactantCore: ReactantCore
+using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
 using Functors: Functors
 
-materialize_traced_array(x::TracedRArray) = x
+ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
-materialize_traced_array(x::WrappedTracedRArray) = x[axes(x)...]
+ReactantCore.materialize_traced_array(x::TracedRArray) = x
 
-function materialize_traced_array(
-    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}
-) where {T,N,M}
+ReactantCore.materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
+
+function ReactantCore.materialize_traced_array(x::AbstractRange)
+    return Reactant.aos_to_soa(collect(x))
+end
+
+function ReactantCore.materialize_traced_array(x::Base.OneTo)
+    return Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
+end
+
+function ReactantCore.materialize_traced_array(x::UnitRange)
+    return Ops.add(
+        Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1),
+        Ops.fill(first(x), [length(x)]),
+    )
+end
+
+function ReactantCore.materialize_traced_array(x::SubArray)
+    z = SubArray(materialize_traced_array(parent(x)), x.indices)
+    return z[axes(z)...]
+end
+
+function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
-function materialize_traced_array(
-    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}
-) where {T,N,perm,iperm}
-    return permutedims(parent(x), perm)
+function ReactantCore.materialize_traced_array(
+    x::PermutedDimsArray{<:Any,<:Any,perm}
+) where {perm}
+    return permutedims(materialize_traced_array(parent(x)), perm)
+end
+
+function ReactantCore.materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where {T}
+    return Reactant.aos_to_soa(x)
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
@@ -53,17 +76,16 @@ function set_mlir_data!(x::TracedRArray, data)
     return x
 end
 
-function set_mlir_data!(
-    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, data
-) where {T,N,M}
-    res_mlir_data = Ops.reshape(TracedRArray{T}(data), size(parent(x))...).mlir_data
-    set_mlir_data!(parent(x), res_mlir_data)
+function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
+    set_mlir_data!(
+        parent(x), get_mlir_data(Ops.reshape(TracedRArray{T}(data), size(parent(x))...))
+    )
     return x
 end
 
 function get_ancestor_indices(
-    x::WrappedReshapedArray{TracedRNumber{T},N,TracedRArray{T,M}}, indices...
-) where {T,N,M}
+    x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
+) where {T,N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = normalize_indices(x, indices...)
     if any(is_traced, indices)
@@ -98,9 +120,9 @@ function get_ancestor_indices(
 end
 
 function set_mlir_data!(
-    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm,TracedRArray{T,N}}, data
+    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm}, data
 ) where {T,N,perm,iperm}
-    parent(x).mlir_data = permutedims(TracedRArray{T}(data), iperm).mlir_data
+    set_mlir_data!(parent(x), get_mlir_data(permutedims(TracedRArray{T}(data), iperm)))
     return x
 end
 
@@ -111,7 +133,8 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
 end
 
 get_ancestor_indices(::TracedRArray, indices...) = indices
-function get_ancestor_indices(x::WrappedTracedRArray, indices...)
+get_ancestor_indices(::Array{<:TracedRNumber}, indices...) = indices
+function get_ancestor_indices(x::AnyTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
@@ -130,7 +153,7 @@ function transpose_val(val)
 end
 
 mutable struct CompiledMlirFnResult{
-    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA
+    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA,RS
 }
     fnwrapped::Bool
     f::F
@@ -149,6 +172,7 @@ mutable struct CompiledMlirFnResult{
     sharding_mesh::M
     mutated_args::MA
     use_shardy_partitioner::Bool
+    result_shardings::RS
 end
 
 function make_mlir_fn(
@@ -162,8 +186,10 @@ function make_mlir_fn(
     args_in_result::Symbol=:all,
     construct_function_without_args::Bool=false,
     do_transpose=true,
-    input_shardings=nothing, # This is not meant to be used by the user.
+    input_shardings=nothing,  # This is not meant to be used by the user.
+    output_shardings=nothing, # This is not meant to be used by the user.
     runtime=nothing,
+    verify_arg_names=nothing,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -177,6 +203,7 @@ function make_mlir_fn(
             do_transpose,
             args_in_result,
             input_shardings,
+            output_shardings,
             runtime,
         )
         mlir_fn_res.fnwrapped = true
@@ -286,23 +313,29 @@ function make_mlir_fn(
 
     seen_results = OrderedIdDict()
 
-    traced_result = Reactant.make_tracer(
-        seen_results,
-        result,
-        (:result,),
-        concretein ? Reactant.TracedTrack : Reactant.TracedSetPath;
-        runtime,
-    )
-
-    # marks buffers to be donated
-    for i in 1:N
-        Reactant.make_tracer(
+    MLIR.IR.activate!(fnbody)
+    traced_result = try
+        traced_result = Reactant.make_tracer(
             seen_results,
-            traced_args[i],
-            concretein ? (:resargs, i) : (),
-            Reactant.TracedTrack;
+            result,
+            (:result,),
+            concretein ? Reactant.NoStopTracedTrack : Reactant.TracedSetPath;
             runtime,
         )
+
+        # marks buffers to be donated
+        for i in 1:N
+            Reactant.make_tracer(
+                seen_results,
+                traced_args[i],
+                concretein ? (:resargs, i) : (),
+                Reactant.NoStopTracedTrack;
+                runtime,
+            )
+        end
+        traced_result
+    finally
+        MLIR.IR.deactivate!(fnbody)
     end
 
     linear_results = Reactant.TracedType[]
@@ -311,8 +344,23 @@ function make_mlir_fn(
         (args_in_result != :all && has_argidx(v)) && continue
         push!(linear_results, v)
     end
+
     if args_in_result == :mutated
         append!(linear_results, linear_args[mutated_args])
+    end
+    if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
+        @assert length(linear_args) <= length(linear_results)
+        argis = first.(get_argidx.(linear_args))
+        resis = Set(getindex.(get_residx.(linear_results), Ref(2)))
+        # this can be more efficient
+        conflicts = setdiff(resis, argis)
+        @assert !isempty(conflicts) "Expected to have some conflicts, but none were found."
+
+        error(
+            """Types do not match between function arguments and results.
+      The following arguments should be traced: $(join(verify_arg_names.args[collect(conflicts)], ", "))
+      """,
+        )
     end
 
     out_tys = if do_transpose
@@ -370,7 +418,9 @@ function make_mlir_fn(
         sharding_mesh = first(unique_meshes)
         num_partitions = length(sharding_mesh)
 
-        linear_arg_shardings = Vector{MLIR.IR.Attribute}(undef, length(linear_args))
+        linear_arg_shardings = Vector{Tuple{MLIR.IR.Attribute,Symbol}}(
+            undef, length(linear_args)
+        )
 
         # If an argument is mutated but is not sharded (aka sharding is NoSharding), we
         # need to force a replicated sharding.
@@ -389,26 +439,72 @@ function make_mlir_fn(
             if haskey(traced_args_to_shardings, arg)
                 sharding = traced_args_to_shardings[arg]
                 (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
-                linear_arg_shardings[i] = Reactant.Sharding.get_shardy_tensor_sharding_attribute(
-                    sharding, ctx, sym_name, mesh_attr
+                attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
+                    sharding, ctx, sym_name, mesh_attr, size(arg)
                 )
-                MLIR.API.mlirFuncSetArgAttr(
-                    func2, i - 1, "sdy.sharding", linear_arg_shardings[i]
-                )
+                linear_arg_shardings[i] = (attr, dialect)
+                if dialect == :sdy
+                    MLIR.API.mlirFuncSetArgAttr(func2, i - 1, "sdy.sharding", attr)
+                elseif dialect == :mhlo
+                    MLIR.API.mlirFuncSetArgAttr(func2, i - 1, "mhlo.sharding", attr)
+                else
+                    error("Unsupported dialect for tensor sharding: $(dialect)")
+                end
             end
         end
 
         # Ensure the sharding of the mutated arguments is propagated to the results
-        result_not_replicated = falses(length(linear_results))
         for i in mutated_args
             arg = linear_args[i]
-            if has_residx(arg) && haskey(traced_args_to_shardings, arg)
-                residx = findfirst(Base.Fix1(===, arg), linear_results)
-                @assert residx !== nothing
-                result_not_replicated[residx] = true
-                MLIR.API.mlirFuncSetResultAttr(
-                    func2, residx - 1, "sdy.sharding", linear_arg_shardings[i]
-                )
+
+            if haskey(traced_args_to_shardings, arg) &&
+                (has_residx(arg) || has_resargidx(arg))
+                idx = findfirst(Base.Fix1(===, arg), linear_results)
+                @assert idx !== nothing
+                attr, dialect = linear_arg_shardings[i]
+                if dialect == :sdy
+                    MLIR.API.mlirFuncSetResultAttr(func2, idx - 1, "sdy.sharding", attr)
+                elseif dialect == :mhlo
+                    MLIR.API.mlirFuncSetResultAttr(func2, idx - 1, "mhlo.sharding", attr)
+                else
+                    error("Unsupported dialect for tensor sharding: $(dialect)")
+                end
+            end
+        end
+
+        for (i, res) in enumerate(linear_results)
+            if has_argidx(res) && haskey(traced_args_to_shardings, res)
+                argidx = findfirst(Base.Fix1(===, res), linear_args)
+                @assert argidx !== nothing
+                attr, dialect = linear_arg_shardings[argidx]
+                if dialect == :sdy
+                    MLIR.API.mlirFuncSetResultAttr(func2, i - 1, "sdy.sharding", attr)
+                elseif dialect == :mhlo
+                    MLIR.API.mlirFuncSetResultAttr(func2, i - 1, "mhlo.sharding", attr)
+                else
+                    error("Unsupported dialect for tensor sharding: $(dialect)")
+                end
+            end
+        end
+
+        # XXX: Generalize the output shardings and expose it to the user
+        # output_shardings is a Int -> Sharding mapping
+        if output_shardings !== nothing
+            for (i, arg) in enumerate(linear_results)
+                if haskey(output_shardings, i)
+                    sharding = output_shardings[i]
+                    (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
+                    attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
+                        sharding, ctx, sym_name, mesh_attr, size(arg)
+                    )
+                    if dialect == :sdy
+                        MLIR.API.mlirFuncSetResultAttr(func2, i - 1, "sdy.sharding", attr)
+                    elseif dialect == :mhlo
+                        MLIR.API.mlirFuncSetResultAttr(func2, i - 1, "mhlo.sharding", attr)
+                    else
+                        error("Unsupported dialect for tensor sharding: $(dialect)")
+                    end
+                end
             end
         end
     else
@@ -436,6 +532,7 @@ function make_mlir_fn(
         sharding_mesh,
         mutated_args,
         true,
+        missing,
     )
 end
 
@@ -482,30 +579,6 @@ function push_val!(ad_inputs, x, path)
     return push!(ad_inputs, x)
 end
 
-function get_argidx(x)
-    for path in get_paths(x)
-        if length(path) == 0
-            continue
-        end
-        if path[1] == :args
-            return path[2]::Int, path
-        end
-    end
-    throw(AssertionError("No path found for $x"))
-end
-
-function has_argidx(x)
-    for path in get_paths(x)
-        if length(path) == 0
-            continue
-        end
-        if path[1] == :args
-            return true
-        end
-    end
-    return false
-end
-
 function set!(x, path, tostore; emptypath=false)
     for p in path
         x = Reactant.Compiler.traced_getfield(x, p)
@@ -516,28 +589,33 @@ function set!(x, path, tostore; emptypath=false)
     return emptypath && set_paths!(x, ())
 end
 
-function get_residx(x)
-    for path in get_paths(x)
-        if length(path) == 0
-            continue
-        end
-        if path[1] == :result
-            return path
+for (fn, key) in ((:arg, :args), (:res, :result), (:resarg, :resargs))
+    has_fn = Symbol(:has_, fn, :idx)
+    @eval begin
+        function $(has_fn)(x)
+            for path in get_paths(x)
+                length(path) == 0 && continue
+                path[1] == $(Meta.quot(key)) && return true
+            end
+            return false
         end
     end
-    throw(AssertionError("No path found $x"))
 end
 
-function has_residx(x)
+function get_argidx(x)
     for path in get_paths(x)
-        if length(path) == 0
-            continue
-        end
-        if path[1] == :result
-            return true
-        end
+        length(path) == 0 && continue
+        path[1] == :args && return (path[2]::Int, path)
     end
-    return false
+    throw(AssertionError("No path found for $x"))
+end
+
+function get_residx(x)
+    for path in get_paths(x)
+        length(path) == 0 && continue
+        path[1] == :result && return path
+    end
+    throw(AssertionError("No path found for $x"))
 end
 
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
@@ -628,15 +706,27 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
-    if Reactant.ancestor(arg) isa TracedRArray
+function broadcast_to_size(arg::AnyTracedRArray, rsize)
+    if Reactant.isa_traced_soa(Reactant.ancestor(arg))
         return broadcast_to_size(materialize_traced_array(arg), rsize)
     end
-    return broadcast_to_size(reshape(Ops.vcat(arg...), size(arg)...), rsize)
+    x = Reactant.aos_to_soa(arg)
+    x === arg && return broadcast_to_size(materialize_traced_array(arg), rsize)
+    return broadcast_to_size(x, rsize)
 end
+
+broadcast_to_size(arg::TracedRArray, rsize) = broadcast_to_size_internal(arg, rsize)
+
 broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
 
+function broadcast_to_size(arg::AbstractRange{<:TracedRNumber}, rsize)
+    return broadcast_to_size(collect(arg), rsize)
+end
 broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
+
+function broadcast_to_size(arg::UnitRange{<:TracedRNumber}, rsize)
+    return @invoke broadcast_to_size(arg::UnitRange, rsize)
+end
 function broadcast_to_size(arg::UnitRange, rsize)
     # For small inputs this will be automatically optimized away, and for large ranges
     # helps reduce the IR size
@@ -666,15 +756,9 @@ function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     return broadcast_to_size_internal(TracedRArray{T,0}((), get_mlir_data(arg), ()), rsize)
 end
 
-function broadcast_to_size(arg::AnyTracedRArray{T,0}, rsize) where {T}
+function broadcast_to_size(arg::AbstractArray{TracedRNumber{T},0}, rsize) where {T}
     arg = materialize_traced_array(arg)
     return broadcast_to_size(TracedRNumber{T}((), get_mlir_data(arg)), rsize)
-end
-
-function broadcast_to_size(arg::AnyTracedRArray, rsize)
-    arg = materialize_traced_array(arg)
-    size(arg) == Tuple(rsize) && return arg
-    return broadcast_to_size_internal(arg, rsize)
 end
 
 function broadcast_to_size(arg::Broadcast.Extruded, rsize)
