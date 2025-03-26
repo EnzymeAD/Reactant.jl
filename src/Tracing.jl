@@ -68,8 +68,9 @@ Base.@nospecializeinfer function traced_type_inner(
             return ConcreteIFRTNumber{T,Sharding.shard_type(typeof(sharding), 0)}
         else
             error("Unsupported runtime $runtime")
-     end
-    elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) && should_track
+        end
+    elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) &&
+        should_track
         return TracedRNumber{T}
     end
     return T
@@ -94,8 +95,24 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(include_paths),
 )
     C isa UnionAll && return C
-    re_T = traced_type_inner(C.parameters[1], seen, mode, track_numbers, sharding, runtime, path_subtract(include_paths, 1))
-    im_T = traced_type_inner(C.parameters[1], seen, mode, track_numbers, sharding, runtime, path_subtract(include_paths, 2))
+    re_T = traced_type_inner(
+        C.parameters[1],
+        seen,
+        mode,
+        track_numbers,
+        sharding,
+        runtime,
+        path_subtract(include_paths, 1),
+    )
+    im_T = traced_type_inner(
+        C.parameters[1],
+        seen,
+        mode,
+        track_numbers,
+        sharding,
+        runtime,
+        path_subtract(include_paths, 2),
+    )
     if re_T != im_T
         throw(NoFieldMatchError(C, C, (re_T, im_T)))
     end
@@ -122,7 +139,13 @@ Base.@nospecializeinfer function traced_type_inner(
     traced_fieldtypes = Type[]
     for i in 1:N
         next = traced_type_inner(
-            fieldtype(T, i), seen, mode, track_numbers, getproperty(sharding, i), runtime, path_subtract(include_paths, i)
+            fieldtype(T, i),
+            seen,
+            mode,
+            track_numbers,
+            getproperty(sharding, i),
+            runtime,
+            path_subtract(include_paths, i),
         )
         changed |= next != fieldtype(T, i)
         push!(traced_fieldtypes, next)
@@ -152,7 +175,15 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
         if T.var.lb === Union{} && T.var.ub === Any
             return UnionAll(
                 T.var,
-                traced_type_inner(T.body, seen, mode, track_numbers, sharding, runtime, path_subtract(include_paths, 1)),
+                traced_type_inner(
+                    T.body,
+                    seen,
+                    mode,
+                    track_numbers,
+                    sharding,
+                    runtime,
+                    path_subtract(include_paths, 1),
+                ),
             )
         end
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
@@ -160,7 +191,13 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
     TT = Union{Type,Core.TypeofVararg}[]
     for i in 1:length(T.parameters)
         st = traced_type_inner(
-            T.parameters[i], seen, mode, track_numbers, sharding, runtime, path_subtract(include_paths, i)
+            T.parameters[i],
+            seen,
+            mode,
+            track_numbers,
+            sharding,
+            runtime,
+            path_subtract(include_paths, i),
         )
         push!(TT, st)
     end
@@ -177,7 +214,10 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(include_paths),
 )
     @assert isempty(include_paths) "TODO: handle this."
-    return Vararg{traced_type_inner(T.T, seen, mode, track_numbers, sharding, runtime, include_paths),T.N}
+    return Vararg{
+        traced_type_inner(T.T, seen, mode, track_numbers, sharding, runtime, include_paths),
+        T.N,
+    }
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -207,7 +247,9 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     N = T.parameters[1]
     V = T.parameters[2]
-    return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers, sharding, runtime, include_paths)}
+    return NamedTuple{
+        N,traced_type_inner(V, seen, mode, track_numbers, sharding, runtime, include_paths)
+    }
 end
 
 Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
@@ -497,7 +539,13 @@ Base.@nospecializeinfer function traced_type_inner(
     elseif mode == TracedToConcrete
         return ConcreteRNG{
             traced_type_inner(
-                TracedRArray{UInt64,1}, seen, mode, track_numbers, sharding, runtime, path_subtract(include_paths, 1)
+                TracedRArray{UInt64,1},
+                seen,
+                mode,
+                track_numbers,
+                sharding,
+                runtime,
+                path_subtract(include_paths, 1),
             ),
         }
     elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
@@ -531,7 +579,15 @@ Base.@nospecializeinfer function traced_type_inner(
     @assert isempty(include_paths) "TODO: handle include_paths for AbstractArray{T}"
     if mode == ConcreteToTraced
         return AbstractArray{
-            traced_type_inner(T, seen, mode, track_numbers, sharding, runtime, path_subtract(include_paths, 1))
+            traced_type_inner(
+                T,
+                seen,
+                mode,
+                track_numbers,
+                sharding,
+                runtime,
+                path_subtract(include_paths, 1),
+            ),
         }
     else
         return A
@@ -550,7 +606,16 @@ Base.@nospecializeinfer function traced_type_inner(
     @assert isempty(include_paths) "TODO: handle include_paths for AbstractArray{T}"
     if mode == ConcreteToTraced
         return AbstractArray{
-            traced_type_inner(T, seen, mode, track_numbers, sharding, runtime, path_subtract(include_paths, 1)),N
+            traced_type_inner(
+                T,
+                seen,
+                mode,
+                track_numbers,
+                sharding,
+                runtime,
+                path_subtract(include_paths, 1),
+            ),
+            N,
         }
     else
         return A
@@ -942,7 +1007,9 @@ Base.@assume_effects :total @inline function traced_type(
         cache = Dict{Type,Type}()
         traced_type_cache[cache_key] = cache
     end
-    return traced_type_inner(T, cache, mode, track_numbers, sharding, runtime, include_paths)
+    return traced_type_inner(
+        T, cache, mode, track_numbers, sharding, runtime, include_paths
+    )
 end
 
 abstract type TracedTypeException <: Exception end
@@ -1005,7 +1072,7 @@ function make_tracer_via_immutable_constructor(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1082,7 +1149,7 @@ function make_tracer_unknown(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1204,7 +1271,7 @@ function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 )
     return make_tracer_unknown(
@@ -1489,7 +1556,7 @@ function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 )
     if mode == TracedToTypes
@@ -1553,19 +1620,47 @@ function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 )
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Complex")
     if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.re, path, mode; include_paths=path_subtract(include_paths, 1), kwargs...)
-        make_tracer(seen, prev.im, path, mode; include_paths=path_subtract(include_paths, 1), kwargs...)
+        make_tracer(
+            seen,
+            prev.re,
+            path,
+            mode;
+            include_paths=path_subtract(include_paths, 1),
+            kwargs...,
+        )
+        make_tracer(
+            seen,
+            prev.im,
+            path,
+            mode;
+            include_paths=path_subtract(include_paths, 1),
+            kwargs...,
+        )
         return nothing
     end
     return Complex(
-        make_tracer(seen, prev.re, append_path(path, :re), mode; include_paths=path_subtract(include_paths, 1), kwargs...),
-        make_tracer(seen, prev.im, append_path(path, :im), mode; include_paths=path_subtract(include_paths, 2), kwargs...),
+        make_tracer(
+            seen,
+            prev.re,
+            append_path(path, :re),
+            mode;
+            include_paths=path_subtract(include_paths, 1),
+            kwargs...,
+        ),
+        make_tracer(
+            seen,
+            prev.im,
+            append_path(path, :im),
+            mode;
+            include_paths=path_subtract(include_paths, 2),
+            kwargs...,
+        ),
     )
 end
 
@@ -1577,7 +1672,7 @@ function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1610,7 +1705,15 @@ function make_tracer(
             if isassigned(prev, I)
                 pv = prev[I]
                 make_tracer(
-                    seen, pv, path, mode; track_numbers, sharding, runtime, include_paths=path_subtract(paths, I), kwargs...
+                    seen,
+                    pv,
+                    path,
+                    mode;
+                    track_numbers,
+                    sharding,
+                    runtime,
+                    include_paths=path_subtract(paths, I),
+                    kwargs...,
                 )
             end
         end
@@ -1656,7 +1759,7 @@ function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 ) where {Key,Value}
     RT = Core.Typeof(prev)
@@ -1726,7 +1829,7 @@ function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1734,7 +1837,13 @@ function make_tracer(
         push!(path, RT)
         for (i, v) in enumerate(prev)
             make_tracer(
-                seen, v, path, mode; sharding=Base.getproperty(sharding, i), include_paths=path_subtract(include_paths, i), kwargs...
+                seen,
+                v,
+                path,
+                mode;
+                sharding=Base.getproperty(sharding, i),
+                include_paths=path_subtract(include_paths, i),
+                kwargs...,
             )
         end
         return nothing
@@ -1762,7 +1871,7 @@ function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 )
     NT = Core.Typeof(prev)
@@ -1773,12 +1882,21 @@ function make_tracer(
         push!(path, NT)
         for i in 1:length(A)
             make_tracer(
-                seen, Base.getfield(prev, i), path, mode; track_numbers, include_paths=path_subtract(include_paths, i), sharding, kwargs...
+                seen,
+                Base.getfield(prev, i),
+                path,
+                mode;
+                track_numbers,
+                include_paths=path_subtract(include_paths, i),
+                sharding,
+                kwargs...,
             )
         end
         return nothing
     end
-    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, sharding, runtime, include_paths)}((
+    return NamedTuple{
+        A,traced_type(RT, Val(mode), track_numbers, sharding, runtime, include_paths)
+    }((
         (
             make_tracer(
                 seen,
@@ -1801,12 +1919,20 @@ function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(include_paths=[]),
+    @nospecialize(include_paths = []),
     kwargs...,
 )
     if mode == TracedToTypes
         push!(path, Core.Box)
-        return make_tracer(seen, prev.contents, path, mode; sharding, include_paths=path_subtract(include_paths, :contents), kwargs...)
+        return make_tracer(
+            seen,
+            prev.contents,
+            path,
+            mode;
+            sharding,
+            include_paths=path_subtract(include_paths, :contents),
+            kwargs...,
+        )
     end
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
@@ -1966,8 +2092,24 @@ function Reactant.traced_type_inner(
     include_paths,
 )
     FTs = fieldtypes(RT)
-    Tstart = Reactant.traced_type_inner(ft[1], seen, mode, track_numbers, sharding, runtime, path_subtract(include_paths, :start))
-    Tstop = Reactant.traced_type_inner(ft[2], seen, mode, track_numbers, sharding, runtime, path_subtract(include_paths, :stop))
+    Tstart = Reactant.traced_type_inner(
+        ft[1],
+        seen,
+        mode,
+        track_numbers,
+        sharding,
+        runtime,
+        path_subtract(include_paths, :start),
+    )
+    Tstop = Reactant.traced_type_inner(
+        ft[2],
+        seen,
+        mode,
+        track_numbers,
+        sharding,
+        runtime,
+        path_subtract(include_paths, :stop),
+    )
     if Tstart != Tstop
         throw(NoFieldMatchError(RT, RT, (Tstart, Tstop)))
     end
@@ -1995,10 +2137,20 @@ function Reactant.make_tracer(
         return nothing
     end
     newstart = Reactant.make_tracer(
-        seen, prev.start, Reactant.append_path(path, :start), mode; include_paths=path_subtract(include_paths, :start), kwargs...
+        seen,
+        prev.start,
+        Reactant.append_path(path, :start),
+        mode;
+        include_paths=path_subtract(include_paths, :start),
+        kwargs...,
     )
     newstop = Reactant.make_tracer(
-        seen, prev.stop, Reactant.append_path(path, :stop), mode; include_paths=path_subtract(include_paths, :stop), kwargs...
+        seen,
+        prev.stop,
+        Reactant.append_path(path, :stop),
+        mode;
+        include_paths=path_subtract(include_paths, :stop),
+        kwargs...,
     )
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
