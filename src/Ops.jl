@@ -1782,7 +1782,6 @@ end
             resargprefix = gensym("loop_condresarg"),
         ).f
 
-    @warn verify_arg_names
     body_fn_compiled =
         Reactant.TracedUtils.make_mlir_fn(
             body_fn,
