@@ -1753,7 +1753,12 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
 end
 
 @noinline function while_loop(
-    cond_fn::CFn, body_fn::BFn, args...; track_numbers, verify_arg_names=nothing
+    cond_fn::CFn,
+    body_fn::BFn,
+    args...;
+    track_numbers,
+    verify_arg_names=nothing,
+    include_paths=[],
 ) where {CFn,BFn}
     # TODO: detect and prevent mutation within the condition
 
@@ -1764,7 +1769,7 @@ end
 
     for (i, prev) in enumerate(args)
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers
+            seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers, include_paths
         )
     end
 
