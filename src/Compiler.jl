@@ -789,7 +789,10 @@ function compile_mlir!(
             traced_result::Any,
             mutated_args::Vector{Int},
             linear_results::Vector{Reactant.TracedType},
-            fnwrapped::Bool
+            fnwrapped::Bool,
+            argprefix::Symbol,
+            resprefix::Symbol,
+            resargprefix::Symbol
         }
     }(),
     sdycache=IdDict{

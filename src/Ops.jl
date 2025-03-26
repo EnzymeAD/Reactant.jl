@@ -2268,17 +2268,22 @@ end
     cache = Reactant.Compiler.callcache()
     if haskey(cache, cache_key)
         # cache lookup:
-        (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped) = cache[cache_key]
+        (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped, argprefix, resprefix, resargprefix) = cache[cache_key]
     else
         f_name = String(gensym(Symbol(f)))
+
+        argprefix::Symbol = gensym("callarg")
+        resprefix::Symbol = gensym("calllresult")
+        resargprefix::Symbol = gensym("callresarg")
+
         temp = Reactant.TracedUtils.make_mlir_fn(
-            f, args, (), f_name, false; args_in_result=:result_and_mutated, do_transpose=false
+            f, args, (), f_name, false; args_in_result=:result_and_mutated, do_transpose=false, argprefix, resprefix, resargprefix
         )
         (; traced_result, ret, mutated_args, linear_results, fnwrapped) = temp
         mlir_result_types = [
             MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
         ]
-        cache[cache_key] = (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped)
+        cache[cache_key] = (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped, argprefix, resprefix, resargprefix)
     end
 
     call_op = MLIR.Dialects.func.call(
@@ -2302,9 +2307,9 @@ end
             if length(path) == 0
                 continue
             end
-            if path[1] == :result
+            if path[1] == resprefix
                 Reactant.TracedUtils.set!(traced_result, path[2:end], resv)
-            elseif path[1] == :args
+            elseif path[1] == argprefix
                 idx = path[2]::Int
                 if idx == 1 && fnwrapped
                     Reactant.TracedUtils.set!(f, path[3:end], resv)
