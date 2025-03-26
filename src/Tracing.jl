@@ -2220,6 +2220,7 @@ function Reactant.make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
+    include_paths,
     kwargs...,
 )
     @assert isempty(include_paths) "Currently cannot have include_paths pointing to a StepRangeLen because it has a type parameter that is statically derived from the fieldtypes."
@@ -2227,23 +2228,47 @@ function Reactant.make_tracer(
         error("Cannot specify sharding for StepRangeLen")
     if mode == Reactant.TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.len, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.ref, path, mode; sharding, include_paths=[], kwargs...)
+        make_tracer(seen, prev.step, path, mode; sharding, include_paths=[], kwargs...)
+        make_tracer(seen, prev.len, path, mode; sharding, include_paths=[], kwargs...)
+        make_tracer(seen, prev.offset, path, mode; sharding, include_paths=[], kwargs...)
         return nothing
     end
     newref = Reactant.make_tracer(
-        seen, prev.ref, Reactant.append_path(path, :ref), mode; sharding, kwargs...
+        seen,
+        prev.ref,
+        Reactant.append_path(path, :ref),
+        mode;
+        sharding,
+        include_paths=[],
+        kwargs...,
     )
     newstep = Reactant.make_tracer(
-        seen, prev.step, Reactant.append_path(path, :step), mode; sharding, kwargs...
+        seen,
+        prev.step,
+        Reactant.append_path(path, :step),
+        mode;
+        sharding,
+        include_paths=[],
+        kwargs...,
     )
     newlen = Reactant.make_tracer(
-        seen, prev.len, Reactant.append_path(path, :len), mode; sharding, kwargs...
+        seen,
+        prev.len,
+        Reactant.append_path(path, :len),
+        mode;
+        sharding,
+        include_paths=[],
+        kwargs...,
     )
     newoffset = Reactant.make_tracer(
-        seen, prev.offset, Reactant.append_path(path, :offset), mode; sharding, kwargs...
+        seen,
+        prev.offset,
+        Reactant.append_path(path, :offset),
+        mode;
+        sharding,
+        include_paths=[],
+        kwargs...,
     )
     if typeof(newref) == typeof(prev.ref) &&
         typeof(newstep) == typeof(prev.step) &&
