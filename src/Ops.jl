@@ -984,7 +984,7 @@ end
 #     end
 # end
 
-# paralell ops
+# parallel ops
 @noinline function partition_id(;
     location=mlir_stacktrace("partition_id", @__FILE__, @__LINE__)
 )
@@ -2635,6 +2635,31 @@ end
         1,
     )
     return TracedRArray{T,ndims(res)}((), res, size(res))
+end
+
+@noinline function collective_broadcast(
+    input::Union{TracedRArray{T,N},TracedRNumber{T}},
+    replica_groups::Matrix{Int64};
+    channel_id::Int64=0,
+    location=mlir_stacktrace("collective_broadcast", @__FILE__, @__LINE__),
+) where {T,N}
+    res = MLIR.IR.result(
+        stablehlo.collective_broadcast(
+            input.mlir_data;
+            replica_groups=MLIR.IR.DenseElementsAttribute(replica_groups),
+            channel_handle=MLIR.API.stablehloChannelHandleGet(
+                MLIR.IR.context(), channel_id, 0
+            ),
+            location,
+        ),
+        1,
+    )
+
+    if input isa TracedRArray
+        return TracedRArray{T,N}((), res, size(input))
+    else
+        return TracedRNumber{T}((), res)
+    end
 end
 
 end # module Ops

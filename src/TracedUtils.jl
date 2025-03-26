@@ -192,6 +192,7 @@ function make_mlir_fn(
     argprefix::Symbol=:args,
     resprefix::Symbol=:result,
     resargprefix::Symbol=:resargs,
+    num_replicas=1,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -212,12 +213,11 @@ function make_mlir_fn(
             argprefix,
             resprefix,
             resargprefix,
+            num_replicas,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
     end
-
-    num_partitions, num_replicas = 1, 1
 
     N = length(args)
     seen_args = OrderedIdDict()
@@ -504,7 +504,7 @@ function make_mlir_fn(
         sorted_devices = [m.device_ids for m in unique_meshes]
         @assert allequal(sorted_devices) "All meshes must have the same device ids"
         global_device_ids = first(sorted_devices)
-        num_partitions = length(first(unique_meshes))
+        num_partitions = length(first(unique_meshes)) ÷ num_replicas
 
         linear_arg_shardings = Vector{Tuple{MLIR.IR.Attribute,Symbol}}(
             undef, length(linear_args)
@@ -606,6 +606,7 @@ function make_mlir_fn(
     else
         global_device_ids = ()
         unique_meshes = nothing
+        num_partitions = 1
     end
 
     MLIR.API.mlirOperationDestroy(func.operation)
