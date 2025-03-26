@@ -782,7 +782,7 @@ function step!(sim)
     else
         sim.clock.iteration += 1 # time step
     end
-    return sim
+    return nothing
 end
 
 function simulate!(sim)
