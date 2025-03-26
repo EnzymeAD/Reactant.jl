@@ -404,14 +404,26 @@ function make_mlir_fn(
         # this can be more efficient
 
         err1 = []
+
+        @show [arg.paths for arg in linear_args]
+        @show [arg.paths for arg in linear_results]
+        @show resis
+        @show argis
+        @show (Core.Typeof.(args))
+        @show (Core.Typeof.(traced_result))
+
         err2 = []
         for (errs, prev, post) in ((err1, resis, argis), (err2, argis, resis))
-            for conflict in setdiff(prev, post)
+            conflicts = setdiff(prev, post)
+            @show conflicts
+            for conflict in conflicts
                 stridx = string(verify_arg_names.args[conflict[1]])
+                @show conflict
                 aval = args[conflict[1]]
+                @show Core.Typeof(aval)
                 for idx in Base.tail(conflict)
                     if aval isa AbstractArray
-                        aval = @allowscalar getindex(aval, idx)
+                        aval = Reactant.@allowscalar getindex(aval, idx)
                         stridx = stridx * "[" * string(idx) * "]"
                     else
                         fldname = if idx isa Integer
