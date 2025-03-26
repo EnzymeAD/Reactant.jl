@@ -1829,8 +1829,10 @@ function make_tracer(
         if v !== nv
             same = false
         end
-        if !(nv isa dict_value(DT))
-            error("Value at key $k has type $(typeof(nv)), but expected $(dict_value(DT))")
+        if !(nv isa dict_value(new_DT))
+            error(
+                "Value at key $k has type $(typeof(nv)), but expected $(dict_value(new_DT))"
+            )
         end
         newa[k] = nv
     end
@@ -1992,7 +1994,14 @@ end
     @nospecialize(runtime),
 )
     return make_tracer(
-        OrderedIdDict(), x, (), ArrayToConcrete; track_numbers, sharding, runtime, include_paths=[]
+        OrderedIdDict(),
+        x,
+        (),
+        ArrayToConcrete;
+        track_numbers,
+        sharding,
+        runtime,
+        include_paths=[],
     )
 end
 
