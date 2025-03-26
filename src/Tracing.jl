@@ -579,15 +579,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @assert isempty(include_paths) "TODO: handle include_paths for AbstractArray{T}"
     if mode == ConcreteToTraced
         return AbstractArray{
-            traced_type_inner(
-                T,
-                seen,
-                mode,
-                track_numbers,
-                sharding,
-                runtime,
-                path_subtract(include_paths, 1),
-            ),
+            traced_type_inner(T, seen, mode, track_numbers, sharding, runtime, [])
         }
     else
         return A
@@ -606,16 +598,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @assert isempty(include_paths) "TODO: handle include_paths for AbstractArray{T}"
     if mode == ConcreteToTraced
         return AbstractArray{
-            traced_type_inner(
-                T,
-                seen,
-                mode,
-                track_numbers,
-                sharding,
-                runtime,
-                path_subtract(include_paths, 1),
-            ),
-            N,
+            traced_type_inner(T, seen, mode, track_numbers, sharding, runtime, []),N
         }
     else
         return A
@@ -641,7 +624,7 @@ Base.@nospecializeinfer function traced_type_inner(
         else
             return Array{
                 traced_type_inner(
-                    T, seen, mode, track_numbers, getproperty(sharding, 1), runtime
+                    T, seen, mode, track_numbers, getproperty(sharding, 1), runtime, []
                 ),
             }
         end
@@ -657,7 +640,7 @@ Base.@nospecializeinfer function traced_type_inner(
         else
             return Array{
                 traced_type_inner(
-                    T, seen, mode, track_numbers, getproperty(sharding, 1), runtime
+                    T, seen, mode, track_numbers, getproperty(sharding, 1), runtime, []
                 ),
                 N,
             }
@@ -675,8 +658,8 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(include_paths),
 ) where {T,N,P,I,L}
     @assert isempty(include_paths) "TODO: handle include_paths for SubArray"
-    P2 = Reactant.traced_type_inner(P, seen, mode, track_numbers, sharding, runtime)
-    I2 = Reactant.traced_type_inner(I, seen, mode, track_numbers, sharding, runtime)
+    P2 = Reactant.traced_type_inner(P, seen, mode, track_numbers, sharding, runtime, [])
+    I2 = Reactant.traced_type_inner(I, seen, mode, track_numbers, sharding, runtime, [])
     T2 = eltype(P2)
     return SubArray{T2,N,P2,I2,L}
 end
@@ -688,7 +671,8 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue)
         @nospecialize(mode::TraceMode),
         @nospecialize(track_numbers::Type),
         @nospecialize(sharding),
-        @nospecialize(runtime)
+        @nospecialize(runtime),
+        @nospecialize(include_paths),
     )
         return $(P)
     end
@@ -700,11 +684,13 @@ for P in (Ptr, Base.RefValue)
         @nospecialize(mode::TraceMode),
         @nospecialize(track_numbers::Type),
         @nospecialize(sharding),
-        @nospecialize(runtime)
+        @nospecialize(runtime),
+        @nospecialize(include_paths),
     ) where {T}
+        @assert isempty(include_paths) "TODO: handle include_paths for $P{T}"
         return $P{
             traced_type_inner(
-                PT.parameters[1], seen, mode, track_numbers, sharding, runtime
+                PT.parameters[1], seen, mode, track_numbers, sharding, runtime, []
             ),
         }
     end
@@ -716,11 +702,13 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
+    @nospecialize(include_paths),
 ) where {T}
+    @assert isempty(include_paths) "TODO: handle include_paths for Core.LLVMPtr"
     return Core.LLVMPtr{
         traced_type_inner(
-            PT.body.parameters[1], seen, mode, track_numbers, sharding, runtime
+            PT.body.parameters[1], seen, mode, track_numbers, sharding, runtime, []
         ),
     }
 end
@@ -730,10 +718,15 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
+    @nospecialize(include_paths),
 ) where {T,A}
+    @assert isempty(include_paths) "TODO: handle include_paths for Core.LLVMPtr"
     return Core.LLVMPtr{
-        traced_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding, runtime),A
+        traced_type_inner(
+            PT.parameters[1], seen, mode, track_numbers, sharding, runtime, []
+        ),
+        A,
     }
 end
 
@@ -743,7 +736,8 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
+    @nospecialize(include_paths),
 )
     if T === Any
         return T
@@ -762,15 +756,18 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if T <: Tuple
-        return traced_tuple_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+        return traced_tuple_type_inner(
+            T, seen, mode, track_numbers, sharding, runtime, include_paths
+        )
     end
 
     # unknown number of fields
     if Base.inferencebarrier(T) isa UnionAll
         if T.var.lb === Union{} && T.var.ub === Any || T <: Type
+            @assert isempty(include_paths) "TODO: handle include_paths for UnionAll type"
             return UnionAll(
                 T.var,
-                traced_type_inner(T.body, seen, mode, track_numbers, sharding, runtime),
+                traced_type_inner(T.body, seen, mode, track_numbers, sharding, runtime, []),
             )
         end
         aT = Base.argument_datatype(T)
@@ -784,9 +781,10 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if T isa Union
+        @assert isempty(include_paths) "TODO: handle include_paths for Union type"
         return Union{
-            traced_type_inner(T.a, seen, mode, track_numbers, sharding, runtime),
-            traced_type_inner(T.b, seen, mode, track_numbers, sharding, runtime),
+            traced_type_inner(T.a, seen, mode, track_numbers, sharding, runtime, []),
+            traced_type_inner(T.b, seen, mode, track_numbers, sharding, runtime, []),
         }
     end
 
@@ -796,10 +794,6 @@ Base.@nospecializeinfer function traced_type_inner(
             return T
         end
         throw(TracedTypeError("Unhandled abstract type $T"))
-    end
-
-    if T <: Tuple
-        return traced_tuple_type_inner(T, seen, mode, track_numbers, sharding, runtime)
     end
 
     if haskey(seen, T)
@@ -813,7 +807,15 @@ Base.@nospecializeinfer function traced_type_inner(
     subTys = Union{Type,TypeVar}[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
-        subTT = traced_type_inner(subT, seen2, mode, track_numbers, sharding, runtime)
+        subTT = traced_type_inner(
+            subT,
+            seen2,
+            mode,
+            track_numbers,
+            sharding,
+            runtime,
+            path_subtract(include_paths, f),
+        )
         changed |= subT != subTT
         push!(subTys, subTT)
     end
@@ -833,6 +835,7 @@ Base.@nospecializeinfer function traced_type_inner(
     for (i, SST) in enumerate(T.parameters)
         if wrapped_cpjrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
             # XXX: Sharding???
+            # TODO: what should happen with include_paths here?
             TrT = traced_type_inner(
                 ConcretePJRTNumber{
                     SST,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), 0)
@@ -842,6 +845,7 @@ Base.@nospecializeinfer function traced_type_inner(
                 track_numbers,
                 sharding,
                 runtime,
+                [],
             )
             push!(subParms, TrT)
         elseif wrapped_cifrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
@@ -853,16 +857,19 @@ Base.@nospecializeinfer function traced_type_inner(
                 track_numbers,
                 sharding,
                 runtime,
+                [],
             )
             push!(subParms, TrT)
         elseif wrapped_tracedarray && i == 1 && SST isa Type && SST <: TracedRNumber
             TrT = traced_type_inner(
-                unwrapped_eltype(SST), seen, mode, track_numbers, sharding, runtime
+                unwrapped_eltype(SST), seen, mode, track_numbers, sharding, runtime, []
             )
             push!(subParms, TrT)
         else
             if SST isa Type
-                TrT = traced_type_inner(SST, seen, mode, track_numbers, sharding, runtime)
+                TrT = traced_type_inner(
+                    SST, seen, mode, track_numbers, sharding, runtime, []
+                )
                 push!(subParms, TrT)
             else
                 push!(subParms, SST)
@@ -882,7 +889,15 @@ Base.@nospecializeinfer function traced_type_inner(
         for f in 1:fieldcount(T)
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
-            subTT = traced_type_inner(subT, seen3, mode, track_numbers, sharding, runtime)
+            subTT = traced_type_inner(
+                subT,
+                seen3,
+                mode,
+                track_numbers,
+                sharding,
+                runtime,
+                path_subtract(include_paths, f),
+            )
             if subT2 != subTT
                 legal = false
                 break
