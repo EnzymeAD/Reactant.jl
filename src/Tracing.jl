@@ -1449,9 +1449,10 @@ function make_tracer(
                 res = TracedRNumber{RT}(
                     (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
                 )
-                if !haskey(seen, prev)
+                if Base.ismutable(prev) && !haskey(seen, prev)
                     return seen[prev] = res
                 end
+                seen[gensym("number")] = res
                 return res
             elseif mode == TracedSetPath
                 haskey(seen, prev) && return seen[prev]

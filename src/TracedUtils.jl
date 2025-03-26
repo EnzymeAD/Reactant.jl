@@ -362,11 +362,17 @@ function make_mlir_fn(
     linear_results = Reactant.TracedType[]
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
-        (args_in_result != :all && has_idx(v, argprefix)) && continue
+        if args_in_result != :all
+            if has_idx(v, argprefix)
+                if !(args_in_result == :result_and_mutated && ! has_idx(v, resprefix))
+                    continue
+                end
+            end
+        end
         push!(linear_results, v)
     end
 
-    if args_in_result == :mutated
+    if args_in_result == :mutated || args_in_result == :result_and_mutated
         append!(linear_results, linear_args[mutated_args])
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)

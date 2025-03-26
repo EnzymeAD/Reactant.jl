@@ -788,6 +788,8 @@ function compile_mlir!(
             mlir_result_types::Vector{MLIR.IR.Type},
             traced_result::Any,
             mutated_args::Vector{Int},
+            linear_results::Vector{Reactant.TracedType},
+            fnwrapped::Bool
         }
     }(),
     sdycache=IdDict{

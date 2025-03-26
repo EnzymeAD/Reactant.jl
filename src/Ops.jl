@@ -2041,6 +2041,9 @@ end
         end for path in all_paths
     ]
 
+    @assert length(tb_paths) == length(all_paths)
+    @assert length(fb_paths) == length(all_paths)
+
     # finalize the true branch by adding the missing values
     MLIR.IR.activate!(true_fn_body)
     Ops.activate_constant_context!(true_fn_body)
@@ -2078,13 +2081,19 @@ end
     # All MissingTracedValues must be replaced with zeroes
     @assert length(tb_corrected_linear_results) == length(fb_corrected_linear_results)
 
+    @assert length(all_paths) == length(tb_corrected_linear_results)
+    @assert length(all_paths) == length(fb_corrected_linear_results)
+
     result_types = MLIR.IR.Type[]
+    both_missing = Set{Int}()
     for (i, (tr, fr)) in
         enumerate(zip(tb_corrected_linear_results, fb_corrected_linear_results))
-        if tr isa MissingTracedValue && fr isa MissingTracedValue
-            continue # Don't insert into IR
-        end
-        res = if tr isa MissingTracedValue
+        res = if tr isa MissingTracedValue && fr isa MissingTracedValue
+            z = zero(TracedRNumber{Int})
+            tb_corrected_linear_results[i] = z
+            fb_corrected_linear_results[i] = z
+            z
+        elseif tr isa MissingTracedValue
             @assert !(fr isa MissingTracedValue)
             MLIR.IR.activate!(true_fn_body)
             Ops.activate_constant_context!(true_fn_body)
@@ -2114,6 +2123,8 @@ end
         end
         push!(result_types, mlir_type(res))
     end
+
+    @assert length(all_paths) == length(result_types) + length(both_missing)
 
     MLIR.IR.activate!(true_fn_body)
     Ops.activate_constant_context!(true_fn_body)
@@ -2184,13 +2195,14 @@ end
     MLIR.IR.rmfromparent!(true_fn_compiled)
     MLIR.IR.rmfromparent!(false_fn_compiled)
 
+    @assert length(all_paths) == length(result_types) + length(both_missing)
     if_compiled = MLIR.Dialects.stablehlo.if_(
         cond.mlir_data; true_branch=tb_region, false_branch=fb_region, result_0=result_types
     )
 
     corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr
         if fr isa MissingTracedValue && tr isa MissingTracedValue
-            error("Both false and true branches are missing")
+            return fr
         elseif fr isa MissingTracedValue
             return tr
         else
@@ -2198,12 +2210,18 @@ end
         end
     end
 
-    for (residx, path) in enumerate(all_paths)
+    @assert length(all_paths) == length(result_types)
+
+    residx = 0
+    for (i, path) in enumerate(all_paths)
         if path[1] == :result
+            residx+=1
             Reactant.TracedUtils.set!(
                 corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
             )
         elseif path[1] == :resarg
+            residx+=1
+
             # The resarg path is with respect to the linear args, not the traced args.
             # We find the path into traced args by searching for it in the linear args.
             # Concretely, we look into tb_linear_args, but we could also look into fb_linear_args, they contain the same arg path.
@@ -2219,6 +2237,7 @@ end
             end
             Reactant.TracedUtils.set!(args, argpath, MLIR.IR.result(if_compiled, residx))
         end
+
     end
 
     return corrected_traced_results
@@ -2253,7 +2272,7 @@ end
     else
         f_name = String(gensym(Symbol(f)))
         temp = Reactant.TracedUtils.make_mlir_fn(
-            f, args, (), f_name, false; args_in_result=:mutated, do_transpose=false
+            f, args, (), f_name, false; args_in_result=:result_and_mutated, do_transpose=false
         )
         (; traced_result, ret, mutated_args, linear_results, fnwrapped) = temp
         mlir_result_types = [
@@ -2277,7 +2296,7 @@ end
         toscalar=false,
     )
 
-    for (i, lin) in enumerate(linear_results)
+    for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(call_op, i)
         for path in res.paths
             if length(path) == 0
@@ -2290,30 +2309,15 @@ end
                 if idx == 1 && fnwrapped
                     Reactant.TracedUtils.set!(f, path[3:end], resv)
                 else
-                    if fnwrap
+                    if fnwrapped
                         idx -= 1
                     end
-                    Reactant.TracedUtils.set!(args[idx], path[3:end], resv)
+                    Reactant.TracedUtils.set!(linear_args[idx], path[3:end], resv)
                 end
             end
         end
     end
 
-    for (k, v) in seen_results
-        v isa Reactant.TracedType || continue
-        # this mutates `traced_result`, which is what we want:
-        v.mlir_data = MLIR.IR.result(call_op, i)
-        # make tracer inserted `()` into the path, here we remove it:
-        v.paths = v.paths[1:(end - 1)]
-        i += 1
-    end
-    nres = MLIR.IR.nresults(call_op)
-    # mutated args are included as the last ones in the call op results
-    for (result_i, arg_i) in zip((nres - length(mutated_args)):nres, mutated_args)
-        Reactant.TracedUtils.set_mlir_data!(
-            linear_args[arg_i], MLIR.IR.result(call_op, result_i + 1)
-        )
-    end
     return traced_result
 end
 

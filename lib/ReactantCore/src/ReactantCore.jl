@@ -193,29 +193,34 @@ function trace_for(mod, expr; track_numbers)
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
     all_syms = Expr(:tuple, counter, external_syms...)
+
+    args_names = Expr(
+        :tuple,
+        counter,
+        external_syms...,
+    )
+    cond_val(s) = :(@isdefined($s) ? $s : nothing)
     args_init = Expr(
         :tuple,
         :(Ref(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0))),
-        external_syms...,
+        (:(Ref($(cond_val(s)))) for s in external_syms)...,
     )
-
-    cond_val(s) = :(@isdefined($s) ? $s : nothing)
 
     ref_syms = Symbol[Symbol(string(sym) * "_ref") for sym in external_syms]
     arg_syms = Expr(:tuple, counter, ref_syms...)
 
-    while_defined = gensym(:while_defined)
-    locals = Expr[
-        [Expr(:(=), ref, Ref(cond_val(s))) for (s, ref) in zip(external_syms, ref_syms)]..., :(args = $(args_init))
-    ]
-
-    to_locals = [Expr(:(=), s, :($ref[])) for (s, ref) in zip(external_syms, ref_syms)]
-    from_locals = [Expr(:(=), :($ref[]), s) for (s, ref) in zip(external_syms, ref_syms)]
+    to_locals = [:(local $s = $ref[]) for (s, ref) in zip(external_syms, ref_syms)]
+    from_locals = [(quote
+        if !($ref[] isa Nothing)
+            $ref[] = $s
+        end
+    end) for (s, ref) in zip(external_syms, ref_syms)]
 
     reactant_code_block = quote
-        let $(locals...)
+        let args = $(args_init)
             cond_fn =
                 $(arg_syms) -> begin
+                    $(to_locals...)
                     local num_iters = div($limit - $start, $step, RoundDown)
                     local num_iters = Reactant.TracedUtils.promote_to(
                         Reactant.TracedRNumber{Int64}, num_iters
@@ -239,14 +244,14 @@ function trace_for(mod, expr; track_numbers)
                 body_fn,
                 args;
                 track_numbers=$(track_numbers),
-                verify_arg_names=$(QuoteNode(args_init)),
+                verify_arg_names=$(QuoteNode(args_names)),
             )
         end
     end
 
     return quote
         if $(within_compile)() && $(any)(
-            $(is_traced), $(Expr(:tuple, cond_val.(arg_syms.args[(begin + 1):end])...))
+            $(is_traced), $(Expr(:tuple, cond_val.(all_syms.args[(begin + 1):end])...))
         )
             $(reactant_code_block)
         else
