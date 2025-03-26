@@ -625,6 +625,8 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
             passes,
             "sroa-wrappers{instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
         )
+
+        push!(passes, "canonicalize")
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
         push!(passes, "remove-duplicate-func-def")
