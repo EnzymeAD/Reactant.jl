@@ -344,6 +344,7 @@ function make_mlir_fn(
                 (resargprefix, i),
                 Reactant.NoStopTracedTrack;
                 runtime,
+                include_paths=[]
             )
         end
         traced_result
