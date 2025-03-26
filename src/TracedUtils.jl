@@ -394,7 +394,7 @@ function make_mlir_fn(
                 if length(path) == 0
                     continue
                 end
-                if path[1] != resprefix
+                if path[1] != resargprefix
                     continue
                 end
                 push!(resis, path[2:end])
@@ -548,7 +548,7 @@ function make_mlir_fn(
             arg = linear_args[i]
 
             if haskey(traced_args_to_shardings, arg) &&
-                (has_residx(arg) || has_resargidx(arg))
+                (has_idx(arg, resprefix) || has_idx(arg, resargprefix))
                 idx = findfirst(Base.Fix1(===, arg), linear_results)
                 @assert idx !== nothing
                 attr, dialect = linear_arg_shardings[i]
