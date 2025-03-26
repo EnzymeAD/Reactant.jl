@@ -228,7 +228,7 @@ function make_mlir_fn(
             seen_args,
             args[i],
             (argprefix, i),
-            concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
+            concretein ? Reactant.ConcreteToTraced : Reactant.TracedTrack;
             toscalar,
             runtime,
         )
@@ -327,7 +327,7 @@ function make_mlir_fn(
             seen_results,
             result,
             (resprefix,),
-            concretein ? Reactant.NoStopTracedTrack : Reactant.TracedSetPath;
+            concretein ? Reactant.NoStopTracedTrack : Reactant.TracedTrack;
             runtime,
         )
 
@@ -358,8 +358,30 @@ function make_mlir_fn(
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
         @assert length(linear_args) <= length(linear_results)
-        argis = (Base.tail).(((Base.Fix2(get_idx, argprefix)).(linear_args)))
-        resis = (Base.tail).((Base.Fix2(get_idx, resprefix)).(linear_results))
+        argis = []
+        for arg in linear_args
+            for path in arg.paths
+                if length(path) == 0
+                    continue
+                end
+                if path[1] != argprefix
+                    continue
+                end
+                push!(argis, path)
+            end
+        end
+        resis = []
+        for arg in linear_results
+            for path in arg.paths
+                if length(path) == 0
+                    continue
+                end
+                if path[1] != resprefix
+                    continue
+                end
+                push!(argis, path)
+            end
+        end
 
         # this can be more efficient
         conflicts = setdiff(resis, argis)
@@ -383,10 +405,16 @@ function make_mlir_fn(
                     aval = getfield(aval, idx)
                 end
             end
-            push!(errs, stridx * " (path " * string(conflict) * ")")
+            push!(errs, stridx * " (path=$conflict, type=$(typeof(aval)))")
         end
         error("""Types do not match between function arguments and results.
         The following arguments should be traced: $(join(errs, ", "))
+        argprefix = $argprefix
+        resprefix = $resprefix
+        verify_arg_names = $verify_arg_names
+        argtys = $(Core.Typeof.(args))
+        Traced Arg Paths: $([arg.paths for arg in traced_args])
+        Traced Res Paths: $([arg.paths for arg in traced_results])
         """)
     end
 
