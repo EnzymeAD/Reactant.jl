@@ -195,39 +195,43 @@ function trace_for(mod, expr; track_numbers)
     all_syms = Expr(:tuple, counter, external_syms...)
     args_init = Expr(
         :tuple,
-        :(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0)),
+        :(Ref(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0))),
         external_syms...,
     )
 
     cond_val(s) = :(@isdefined($s) ? $s : nothing)
 
+    ref_syms = Symbol[Symbol(string(sym) * "_ref") for sym in external_syms]
+    arg_syms = Expr(:tuple, counter, ref_syms...)
+
     while_defined = gensym(:while_defined)
     locals = Expr[
-        [Expr(:(=), s, cond_val(s)) for s in external_syms]..., :(args = $(args_init))
+        [Expr(:(=), ref, Ref(cond_val(s))) for (s, ref) in zip(external_syms, ref_syms)]..., :(args = $(args_init))
     ]
 
-    var_syms = all_syms.args[(begin + 1):end]
+    to_locals = [Expr(:(=), s, :($ref[])) for (s, ref) in zip(external_syms, ref_syms)]
+    from_locals = [Expr(:(=), :($ref[]), s) for (s, ref) in zip(external_syms, ref_syms)]
+
     reactant_code_block = quote
         let $(locals...)
             cond_fn =
-                $(all_syms) -> begin
+                $(arg_syms) -> begin
                     local num_iters = div($limit - $start, $step, RoundDown)
                     local num_iters = Reactant.TracedUtils.promote_to(
                         Reactant.TracedRNumber{Int64}, num_iters
                     )
-                    $counter < num_iters + 1
+                    $counter[] < num_iters + 1
                 end
             body_fn =
-                $(all_syms) -> begin
-                    local isdefined_before = isnothing.(Any[$(var_syms...)])
+                $(arg_syms) -> begin
                     local step_ = $step
                     local start_ = $start
-                    local $induction = start_ + $counter * step_
+                    local $induction = start_ + $counter[] * step_
+                    $(to_locals...)
                     $body
-                    local results_ = Any[
-                        s for (d, s) in zip(isdefined_before, Any[$(var_syms...)]) if !d
-                    ]
-                    ($counter + 1, results_...)
+                    $(from_locals...)
+                    $counter[] += 1
+                    nothing
                 end
 
             $(ReactantCore).traced_while(
@@ -242,7 +246,7 @@ function trace_for(mod, expr; track_numbers)
 
     return quote
         if $(within_compile)() && $(any)(
-            $(is_traced), $(Expr(:tuple, cond_val.(all_syms.args[(begin + 1):end])...))
+            $(is_traced), $(Expr(:tuple, cond_val.(arg_syms.args[(begin + 1):end])...))
         )
             $(reactant_code_block)
         else

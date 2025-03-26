@@ -379,7 +379,7 @@ function make_mlir_fn(
                 if path[1] != argprefix
                     continue
                 end
-                push!(argis, path)
+                push!(argis, path[2:end])
             end
         end
         resis = []
@@ -391,7 +391,7 @@ function make_mlir_fn(
                 if path[1] != resprefix
                     continue
                 end
-                push!(argis, path)
+                push!(resis, path[2:end])
             end
         end
 
@@ -399,8 +399,8 @@ function make_mlir_fn(
 
         err1 = []
         err2 = []
-        for (errs, conflicts) in ((err1, setdiff(resis, argis)), (err2, setdiff(argis, resis)))
-            for conflict in conflicts
+        for (errs, prev, post) in ((err1, resis, argis), (err2, argis, resis))
+            for conflict in setdiff(prev, post)
                 stridx = string(verify_arg_names.args[conflict[1]])
                 aval = args[conflict[1]]
                 for idx in Base.tail(conflict)

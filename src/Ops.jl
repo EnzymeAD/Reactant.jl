@@ -1792,7 +1792,7 @@ end
             string(gensym("body_fn")),
             false;
             return_dialect=:stablehlo,
-            args_in_result=:none,
+            args_in_result=:all,
             do_transpose=false,
             verify_arg_names,
             argprefix=gensym("loop_bodyarg"),
@@ -2249,17 +2249,17 @@ end
     cache = Reactant.Compiler.callcache()
     if haskey(cache, cache_key)
         # cache lookup:
-        (; f_name, mlir_result_types, traced_result, mutated_args) = cache[cache_key]
+        (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped) = cache[cache_key]
     else
         f_name = String(gensym(Symbol(f)))
         temp = Reactant.TracedUtils.make_mlir_fn(
             f, args, (), f_name, false; args_in_result=:mutated, do_transpose=false
         )
-        (; traced_result, ret, mutated_args) = temp
+        (; traced_result, ret, mutated_args, linear_results, fnwrapped) = temp
         mlir_result_types = [
             MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
         ]
-        cache[cache_key] = (; f_name, mlir_result_types, traced_result, mutated_args)
+        cache[cache_key] = (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped)
     end
 
     call_op = MLIR.Dialects.func.call(
@@ -2276,7 +2276,29 @@ end
         Reactant.TracedSetPath;
         toscalar=false,
     )
-    i = 1
+
+    for (i, lin) in enumerate(linear_results)
+        resv = MLIR.IR.result(call_op, i)
+        for path in res.paths
+            if length(path) == 0
+                continue
+            end
+            if path[1] == :result
+                Reactant.TracedUtils.set!(traced_result, path[2:end], resv)
+            elseif path[1] == :args
+                idx = path[2]::Int
+                if idx == 1 && fnwrapped
+                    Reactant.TracedUtils.set!(f, path[3:end], resv)
+                else
+                    if fnwrap
+                        idx -= 1
+                    end
+                    Reactant.TracedUtils.set!(args[idx], path[3:end], resv)
+                end
+            end
+        end
+    end
+
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
         # this mutates `traced_result`, which is what we want:
