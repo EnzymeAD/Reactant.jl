@@ -14,6 +14,9 @@ end
 
 function traced_type_inner end
 
+# temporary fallback to old behavior
+traced_type_inner(args...; include_paths, kwargs...) = traced_type_inner(args...; kwargs...)
+
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{Union{}}), @nospecialize(args...)
 )
@@ -1008,7 +1011,7 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 # end
 
 Base.@assume_effects :total @inline function traced_type(
-    T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime, include_paths
+    T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime, include_paths=[]
 ) where {mode}
     if mode == TracedSetPath || mode == TracedTrack
         return T
@@ -1986,10 +1989,10 @@ end
     @nospecialize(x),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     return make_tracer(
-        OrderedIdDict(), x, (), ArrayToConcrete; track_numbers, sharding, runtime
+        OrderedIdDict(), x, (), ArrayToConcrete; track_numbers, sharding, runtime, []
     )
 end
 
@@ -2108,7 +2111,7 @@ function Reactant.traced_type_inner(
 )
     FTs = fieldtypes(RT)
     Tstart = Reactant.traced_type_inner(
-        ft[1],
+        FTs[1],
         seen,
         mode,
         track_numbers,
@@ -2117,7 +2120,7 @@ function Reactant.traced_type_inner(
         path_subtract(include_paths, :start),
     )
     Tstop = Reactant.traced_type_inner(
-        ft[2],
+        FTs[2],
         seen,
         mode,
         track_numbers,
