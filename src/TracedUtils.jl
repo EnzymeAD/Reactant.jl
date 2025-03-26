@@ -435,6 +435,14 @@ function make_mlir_fn(
                 push!(errs, stridx * " (path=$conflict, type=$(typeof(aval)))")
             end
         end
+
+        arg_info = sort([(Base.pointer_from_objref(arg), arg.paths) for arg in linear_args])
+        res_info = sort([(Base.pointer_from_objref(arg), arg.paths) for arg in linear_results])
+
+
+        arg_info_ni = [ai for ai in arg_info if !(ai in res_info)]
+        res_info_ni = [ai for ai in res_info if !(ai in arg_info)]
+
         error("""Types do not match between function arguments and results.
         The following arguments should be traced but were not: $(join(err1, ", "))
         The following arguments should be returned but were not: $(join(err2, ", "))
@@ -442,8 +450,10 @@ function make_mlir_fn(
         resprefix = $resprefix
         verify_arg_names = $verify_arg_names
         argtys = $(Core.Typeof.(args))
-        Traced Arg Paths: $([arg.paths for arg in linear_args])
-        Traced Res Paths: $([arg.paths for arg in linear_results])
+        Traced Arg Paths: \n$(join(arg_info, "\n"))\n
+        Traced Res Paths: \n$(join(res_info, "\n"))\n
+        Traced Arg NI Paths: \n$(join(arg_info_ni, "\n"))\n
+        Traced Res NI Paths: \n$(join(res_info_ni, "\n"))\n
         traced_result : $(Core.Typeof.(traced_result))
         """)
     end
