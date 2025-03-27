@@ -140,6 +140,7 @@ include("TracedUtils.jl")
 
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
+include("TracedROffsetArray.jl")
 
 include("ConcreteRArray.jl")
 

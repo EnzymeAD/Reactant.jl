@@ -1919,6 +1919,71 @@ function Reactant.make_tracer(
     end
 end
 
+# Point to the vendored version of OffsetArray (BTW: Ouch! This might not be a
+# good idea...)
+const OffsetArray = TracedROffsetArrayOverrides.OffsetArrays.OffsetArray
+
+function Reactant.traced_type_inner(
+    @nospecialize(RT::Type{<:OffsetArray}),
+    seen,
+    mode::Reactant.TraceMode,
+    track_numbers::Type,
+    sharding,
+    runtime,
+)
+    (T,N,AA) = RT.parameters
+    new_T = Reactant.traced_type_inner(
+        T, seen, mode, track_numbers, sharding, runtime
+    )
+    new_N = Reactant.traced_type_inner(
+        N, seen, mode, track_numbers, sharding, runtime
+    )
+    new_AA = Reactant.traced_type_inner(
+        A, seen, mode, track_numbers, sharding, runtime
+    )
+    if T == new_T && N == new_N && AA == new_AA
+        return RT
+    else
+        return TracedROffsetArrayOverrides.TracedROffsetArray{
+            new_T, new_N, new_AA
+        }
+    end
+end
+
+function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::OffsetArray),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    Reactant.Sharding.is_sharded(sharding) && error(
+        "Cannot specify sharding for OffsetArray"
+    )
+    if mode == Reactant.TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.parent, path, mode; kwargs...)
+        make_tracer(seen, prev.offsets, path, mode; kwargs...)
+        return nothing
+    end
+    new_parent = Reactant.make_tracer(
+        seen, prev.parent, Reactant.append_path(path, :parent), mode; kwargs...
+    )
+    new_offsets = Reactant.make_tracer(
+        seen, prev.offsets, Reactant.append_path(path, :offsets), mode; kwargs...
+    )
+    if typeof(new_parent) == typeof(prev.parent) &&
+        typeof(new_offsets) == typeof(prev.offsets)
+        return prev
+    else
+        return TracedROffsetArrayOverrides.TracedROffsetArray(
+            new_parent, new_offsets
+        )
+    end
+end
+
+
 function Reactant.traced_type_inner(
     @nospecialize(RT::Type{<:StepRangeLen}),
     seen,
