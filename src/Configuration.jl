@@ -6,9 +6,8 @@ export DotGeneralAlgorithmPreset, DotGeneralPrecision, DotGeneralAlgorithm
 """
     with_config(f; kwargs...)
 
-Run the function `f` within a dynamic scope such that. The configuration is controlled using
-ScopedValues. Refer to the
-[official documentation for more details](https://docs.julialang.org/en/v1/base/scopedvalues/).
+Run the function `f` within a dynamic scope such that all uses of the config within this
+scope will use the provided values.
 
 ## Configuration Options
 
@@ -39,10 +38,6 @@ Controls the `precision_config` for `stablehlo.dot_general`. Valid values are:
   - `DEFAULT`
   - `HIGH`
   - `HIGHEST`
-
-!!! note "ScopedValue"
-
-    This is controlled using the `DOT_GENERAL_PRECISION` ScopedValue.
 
 The following functions are available:
 
@@ -156,10 +151,6 @@ Controls the `precision_config` for `stablehlo.dot_general`. Valid values are:
   - `BF16_BF16_F32_X9`
   - `F32_F32_F32`
   - `F64_F64_F64`
-
-!!! note "ScopedValue"
-
-    This is controlled using the `DOT_GENERAL_ALGORITHM` ScopedValue.
 
 The following functions are available:
 

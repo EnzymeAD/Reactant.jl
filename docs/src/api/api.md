@@ -55,11 +55,6 @@ ReactantCore.materialize_traced_array
 
 ## Configuration
 
-!!! tip "ScopedValues"
-
-    Configurations are controlled using ScopedValues. Refer to the [official documentation
-    for more details](https://docs.julialang.org/en/v1/base/scopedvalues/).
-
 ```@docs
 Reactant.with_config
 ```
