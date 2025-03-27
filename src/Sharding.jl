@@ -1,6 +1,7 @@
 module Sharding
 
 using ..Reactant: Reactant, XLA, MLIR
+using ReactantCore: ReactantCore
 
 """
     Mesh(devices::AbstractArray{XLA.AbstractDevice}, axis_names)
@@ -22,9 +23,10 @@ julia> mesh = Mesh(reshape(devices, 4, 2), (:x, :y));
 ```
 """
 struct Mesh{D,ID<:AbstractVector{Int}}
-    device_ids::Array{Int64,D}
+    device_ids::Vector{Int64}
     logical_device_ids::ID
     axis_names::NTuple{D,Symbol}
+    axis_sizes::Dims{D}
 
     function Mesh(devices::AbstractArray{<:XLA.AbstractDevice}, axis_names)
         return Mesh(XLA.device_ordinal.(devices), axis_names)
@@ -33,9 +35,16 @@ struct Mesh{D,ID<:AbstractVector{Int}}
     function Mesh(
         device_ids::AbstractArray{<:Integer,D}, axis_names::NTuple{D,Union{String,Symbol}}
     ) where {D}
-        logical_device_ids = sortperm(vec(device_ids)) .- 1
+        return Mesh(device_ids, sortperm(vec(device_ids)) .- 1, axis_names)
+    end
+
+    function Mesh(
+        device_ids::AbstractArray{<:Integer,D},
+        logical_device_ids::AbstractVector{Int64},
+        axis_names::NTuple{D,Union{String,Symbol}},
+    ) where {D}
         return new{D,typeof(logical_device_ids)}(
-            device_ids, logical_device_ids, Symbol.(axis_names)
+            sort!(vec(device_ids)), logical_device_ids, axis_names, size(device_ids)
         )
     end
 
@@ -67,11 +76,51 @@ struct Mesh{D,ID<:AbstractVector{Int}}
     end
 end
 
-Base.length(m::Mesh) = length(m.device_ids)
+function mesh_from_sdy_mesh_attr(mesh_attr::MLIR.IR.Attribute, global_device_ids)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+
+    ndevice_ids = MLIR.API.sdyMeshAttrGetDeviceIdsSize(mesh_attr)
+    logical_device_ids = Vector{Int64}(undef, ndevice_ids)
+    for i in 1:ndevice_ids
+        logical_device_ids[i] = MLIR.API.sdyMeshAttrGetDeviceIdsElem(mesh_attr, i - 1)
+    end
+
+    naxes = MLIR.API.sdyMeshAttrGetAxesSize(mesh_attr)
+    mesh_axes = Vector{Pair{Symbol,Int64}}(undef, naxes)
+    for i in 1:naxes
+        mesh_axis_attr = MLIR.IR.Attribute(
+            MLIR.API.sdyMeshAttrGetAxesElem(mesh_attr, i - 1)
+        )
+        @assert MLIR.API.sdyAttributeIsAMeshAxisAttr(mesh_axis_attr)
+        mesh_axis_name = String(MLIR.API.sdyMeshAxisAttrGetName(mesh_axis_attr))
+        mesh_axis_size = MLIR.API.sdyMeshAxisAttrGetSize(mesh_axis_attr)
+        mesh_axes[i] = Symbol(mesh_axis_name) => mesh_axis_size
+    end
+
+    if ndevice_ids == 0
+        logical_device_ids = 0:(prod(last, mesh_axes) - 1)
+    end
+
+    @assert length(logical_device_ids) == length(global_device_ids)
+
+    mesh = Mesh(
+        reshape(global_device_ids, last.(mesh_axes)...),
+        logical_device_ids,
+        ntuple(i -> first(mesh_axes[i]), length(mesh_axes)),
+    )
+
+    cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
+    key = (mesh.logical_device_ids, mesh.axis_names, size(mesh))
+    cache === nothing && return mesh
+    haskey(cache, key) && return cache[key].mesh
+    return mesh
+end
+
+Base.length(m::Mesh) = length(m.logical_device_ids)
 Base.ndims(::Mesh{D}) where {D} = D
 
-Base.size(mesh::Mesh) = size(mesh.device_ids)
-Base.size(mesh::Mesh, axis::Int) = size(mesh.device_ids, axis)
+Base.size(mesh::Mesh) = mesh.axis_sizes
+Base.size(mesh::Mesh, axis::Int) = mesh.axis_sizes[axis]
 function Base.size(mesh::Mesh, axis::Union{String,Symbol})
     return size(mesh, findfirst(==(Symbol(axis)), mesh.axis_names))
 end
@@ -305,7 +354,7 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
     )
 end
 
-@inline ndevices(sharding::NamedSharding) = length(sharding.mesh.device_ids)
+@inline ndevices(sharding::NamedSharding) = length(sharding.mesh)
 
 @inline function shard_type(::Type{NamedSharding{D,M}}, N) where {D,M}
     @assert D == N
@@ -444,7 +493,7 @@ function sharding_to_array_slices(
                     result_attr, "sdy.sharding"
                 )
                 if mlir_attr.ptr != C_NULL
-                    sharding = Reactant.Sharding.named_sharding_from_tensor_sharding_attr(
+                    sharding = named_sharding_from_tensor_sharding_attr(
                         sharding_mesh, MLIR.IR.Attribute(mlir_attr)
                     )
                     get_from_hlo_sharding = false
@@ -517,7 +566,7 @@ struct DimsSharding{D,P,M<:Mesh} <: AbstractSharding
     end
 end
 
-@inline ndevices(sharding::DimsSharding) = length(sharding.mesh.device_ids)
+@inline ndevices(sharding::DimsSharding) = length(sharding.mesh)
 
 @inline function shard_type(::Type{DimsSharding{D,P,M}}, N) where {M,D,P}
     return shard_type(NamedSharding{D,M}, N)
@@ -610,7 +659,7 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
     end
 end
 
-@inline ndevices(sharding::HloSharding) = length(sharding.mesh.device_ids)
+@inline ndevices(sharding::HloSharding) = length(sharding.mesh)
 
 @inline function shard_type(::Type{HloSharding{D1,D2,PS}}, N) where {D1,D2,PS}
     return ShardInfo{HloSharding{D1,D2,PS},Vector{NTuple{N,UnitRange{Int64}}}}
@@ -733,7 +782,12 @@ function get_tensor_sharding_attribute(
 
     dialect == :auto && (dialect = :sdy)
 
-    if dialect == :sdy # XXX: Not recommended path
+    if dialect == :sdy
+        if Reactant.XLA.is_replicated(sharding.hlo_sharding)
+            error("TODO: fast path")
+        end
+
+        # XXX: Not recommended path
         string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
         GC.@preserve sharding begin
             attr = MLIR.IR.Attribute(

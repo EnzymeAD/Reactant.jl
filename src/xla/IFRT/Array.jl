@@ -239,12 +239,13 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.activate!(ctx)
 
-    sdycache = IdDict{
-        Reactant.Sharding.Mesh,
+    sdycache = Dict{
+        Tuple{AbstractVector{Int},NTuple{<:Any,Symbol},Dims{<:Any}},
         @NamedTuple{
             sym_name::MLIR.IR.Attribute,
             mesh_attr::MLIR.IR.Attribute,
             mesh_op::MLIR.IR.Operation,
+            mesh::Reactant.Sharding.Mesh,
         }
     }()
     Reactant.Compiler.activate_sdycache!(sdycache)

@@ -500,8 +500,8 @@ function make_mlir_fn(
     is_sharded = !isempty(mesh_cache)
 
     if is_sharded
-        unique_meshes = keys(mesh_cache)
-        sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
+        unique_meshes = [m.mesh for m in values(mesh_cache)]
+        sorted_devices = [m.device_ids for m in unique_meshes]
         @assert allequal(sorted_devices) "All meshes must have the same device ids"
         global_device_ids = first(sorted_devices)
         num_partitions = length(first(unique_meshes))
@@ -527,7 +527,11 @@ function make_mlir_fn(
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
                 sharding = traced_args_to_shardings[arg]
-                (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
+                (; sym_name, mesh_attr) = mesh_cache[(
+                    sharding.mesh.logical_device_ids,
+                    sharding.mesh.axis_names,
+                    size(sharding.mesh),
+                )]
                 attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
                     sharding, ctx, sym_name, mesh_attr, size(arg)
                 )
@@ -582,7 +586,11 @@ function make_mlir_fn(
             for (i, arg) in enumerate(linear_results)
                 if haskey(output_shardings, i)
                     sharding = output_shardings[i]
-                    (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
+                    (; sym_name, mesh_attr) = mesh_cache[(
+                        sharding.mesh.logical_device_ids,
+                        sharding.mesh.axis_names,
+                        size(sharding.mesh),
+                    )]
                     attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
                         sharding, ctx, sym_name, mesh_attr, size(arg)
                     )
@@ -623,7 +631,7 @@ function make_mlir_fn(
         mutated_args,
         true,
         missing,
-        global_device_ids
+        global_device_ids,
     )
 end
 

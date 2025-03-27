@@ -2388,7 +2388,8 @@ We return a NamedTuple with the following fields:
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
-    cache !== nothing && haskey(cache, m) && return cache[m]
+    key = (m.logical_device_ids, m.axis_names, size(m))
+    cache !== nothing && haskey(cache, key) && return cache[key]
     result = mesh(
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
         m.logical_device_ids;
@@ -2396,7 +2397,7 @@ We return a NamedTuple with the following fields:
         sym_name,
         location,
     )
-    cache !== nothing && (cache[m] = result)
+    cache !== nothing && (cache[key] = merge(result, (; mesh=m)))
     return result
 end
 
@@ -2534,7 +2535,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     - **CPU version & Julia's `reduce`**:
       - Reduce along dimension 1 → `[(15) (21); (18) (24)]`
       - Reduce along dimension 3 → `[(33 + 2)  (45 + 2)]` → `[35 47]`
-    
+
     - **GPU version**:
       - Reduce along dimension 1 → `[(15 + 2) (21 + 2); (18 + 2) (24 + 2)]`
       - Reduce along dimension 3 → `[37 49]`
