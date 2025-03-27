@@ -42,7 +42,7 @@ using Reactant, Test
         end
         @test contains(repr(hlo), "algorithm =")
 
-        @test_throws ErrorException with_config(;
+        @test_throws AssertionError with_config(;
             dot_general_algorithm=DotGeneralAlgorithmPreset.F64_F64_F64
         ) do
             @code_hlo *(x_ra, y_ra)
