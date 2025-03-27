@@ -51,9 +51,7 @@ function Array(
 
     seen_slice = Dict{NTuple{N,UnitRange{Int64}},Int}()
     host_buffers = Base.Array{T,N}[]
-    host_buffer_shapes = Vector{Int64}[]
     addressable_shard_indices = Vector{Int64}[]
-    addressable_shard_indices_sizes = Int64[]
 
     cur_shard = 0
     for (slice, device) in zip(slices, all_devices)
@@ -62,20 +60,35 @@ function Array(
         if haskey(seen_slice, slice)
             idx = seen_slice[slice]
             push!(addressable_shard_indices[idx], cur_shard)
-            addressable_shard_indices_sizes[idx] += 1
         else
             host_buffer = array[slice...]
             push!(host_buffers, host_buffer)
-            push!(host_buffer_shapes, collect(Int64, reverse(size(host_buffer))))
             push!(addressable_shard_indices, Int64[cur_shard])
-            push!(addressable_shard_indices_sizes, 1)
             seen_slice[slice] = length(host_buffers)
         end
 
         cur_shard += 1
     end
 
-    array_shape = collect(Int64, reverse(size(array)))
+    return Array(client, host_buffers, addressable_shard_indices, size(array), sharding)
+end
+
+function Array(
+    client::Client,
+    host_buffers::Vector{Base.Array{T,N}},
+    addressable_shard_indices::Vector{Vector{Int64}},
+    array_shape,
+    sharding,
+) where {T<:Reactant.ReactantPrimitive,N}
+    host_buffer_shapes = Vector{Vector{Int64}}(undef, length(host_buffers))
+    addressable_shard_indices_sizes = Vector{Int64}(undef, length(host_buffers))
+
+    for (i, host_buffer) in enumerate(host_buffers)
+        host_buffer_shapes[i] = collect(Int64, reverse(size(host_buffer)))
+        addressable_shard_indices_sizes[i] = length(addressable_shard_indices[i])
+    end
+
+    array_shape = collect(Int64, reverse(array_shape))
 
     buffer = GC.@preserve client host_buffers host_buffer_shapes addressable_shard_indices addressable_shard_indices_sizes array_shape sharding begin
         @ccall MLIR.API.mlir_c.ifrt_make_array_from_host_buffer_shards(
