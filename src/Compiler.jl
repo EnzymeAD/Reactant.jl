@@ -931,14 +931,14 @@ function compile_mlir!(
     end
 
     if optimize === :all
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -947,18 +947,18 @@ function compile_mlir!(
                     raise_passes,
                     jit,
                 ],
-                ',',
+                ",",
             ),
         )
     elseif optimize === :before_kernel
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -968,14 +968,14 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :before_jit
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -987,14 +987,14 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :before_raise
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -1005,12 +1005,14 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :no_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(mod, "arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -1020,26 +1022,26 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :only_enzyme
-        run_pass_pipeline!(mod, "enzyme-batch")
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
-        run_pass_pipeline!(
-            mod,
-            join(
-                ["canonicalize", "remove-unnecessary-enzyme-ops", "enzyme-simplify-math"],
-                ',',
-            ),
-        )
-    elseif optimize === :after_enzyme
-        run_pass_pipeline!(mod, "enzyme-batch")
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    "enzyme-batch",
+                    enzyme_pass,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :after_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "enzyme-batch",
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -1052,14 +1054,14 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :before_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                     kern,
                     raise_passes,
@@ -1189,11 +1191,20 @@ function compile_mlir!(
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
     preserved_args_idx = last.(preserved_args)
+    if backend != "tpu"
     for (i, arg) in enumerate(linear_args)
         if i ∉ preserved_args_idx
             MLIR.API.mlirFuncSetArgAttr(
                 func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
             )
+        end
+    end
+    else
+        for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
+            if MLIR.IR.dialect(op) == :llvm
+		    MLIR.API.mlirOperationDestroy(op.operation)
+		    op.operation = MLIR.API.MlirOperation(C_NULL)
+            end
         end
     end
 
