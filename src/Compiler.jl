@@ -25,6 +25,7 @@ import ..Reactant:
 import ..ReactantCore: correct_maybe_bcast_call
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
+const DEBUG_DISABLE_RESHARDING = Ref(false)
 
 @inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
@@ -1528,6 +1529,13 @@ function codegen_flatten!(
                         )
                     end
                 else
+                    if DEBUG_DISABLE_RESHARDING[]
+                        error("Resharding is disabled. Problematic input:\ntypeof: \
+                               $(typeof(carg))\nsize: $(size(carg))\nsharding: \
+                               $(carg.sharding)\nInput Index: $(i)\nInput Path: \
+                               $(path[3:end])")
+                    end
+
                     resharded_inputs[path[3:end]] = (
                         Reactant.XLA.device(carg), condensed_op_sharding, mesh
                     )
@@ -1604,6 +1612,13 @@ function codegen_flatten!(
                     )
                     push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
                 else
+                    if DEBUG_DISABLE_RESHARDING[]
+                        error("Resharding is disabled. Problematic input:\ntypeof: \
+                               $(typeof(carg))\nsize: $(size(carg))\nsharding: \
+                               $(carg.sharding)\nInput Index: $(i)\nInput Path: \
+                               $(path[3:end])")
+                    end
+
                     resharded_inputs[path] = (
                         Reactant.XLA.device(carg), condensed_op_sharding, mesh
                     )
