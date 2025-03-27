@@ -783,22 +783,24 @@ extern "C" uint8_t FutureIsReady(FutureType *Future) {
 
 extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 
-xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
-                                           const int64_t *mesh_ids,
-                                           int64_t num_mesh_ids,
-                                           const char *xla_gpu_cuda_data_dir,
-                                           bool use_shardy_partitioner) {
+xla::CompileOptions
+GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
+                       int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir,
+                       bool use_shardy_partitioner, int64_t num_replicas,
+                       int64_t num_partitions, bool use_spmd_partitioning) {
   xla::CompileOptions options;
   options.executable_build_options.mutable_debug_options()
       ->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
 
-  if (is_sharded) {
+  options.executable_build_options.set_num_replicas(num_replicas);
+  options.executable_build_options.set_num_partitions(num_partitions);
+
+  if (num_replicas > 1 || num_partitions > 1) {
     assert(device_id < 0);
+    assert(num_replicas * num_partitions == num_mesh_ids);
 
-    options.executable_build_options.set_num_replicas(1);
-    options.executable_build_options.set_num_partitions(num_mesh_ids);
-
-    options.executable_build_options.set_use_spmd_partitioning(true);
+    options.executable_build_options.set_use_spmd_partitioning(
+        use_spmd_partitioning);
     options.executable_build_options.set_use_shardy_partitioner(
         use_shardy_partitioner);
 
@@ -810,11 +812,13 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
     // std::vector<int64_t> mesh_ids_vec(mesh_ids, mesh_ids + num_mesh_ids);
     // options.executable_build_options.set_auto_spmd_partitioning_mesh_ids(mesh_ids_vec);
 
-    xla::DeviceAssignment device_assignment(1, num_mesh_ids);
-    for (int64_t i = 0; i < num_mesh_ids; ++i) {
-      int64_t mesh_id = mesh_ids[i];
-      assert(mesh_id >= 0);
-      device_assignment(0, i) = mesh_id;
+    xla::DeviceAssignment device_assignment(num_replicas, num_partitions);
+    for (int64_t i = 0; i < num_replicas; ++i) {
+      for (int64_t j = 0; j < num_partitions; ++j) {
+        int64_t mesh_id = mesh_ids[i * num_partitions + j];
+        assert(mesh_id >= 0);
+        device_assignment(i, j) = mesh_id;
+      }
     }
     options.executable_build_options.set_device_assignment(device_assignment);
 
@@ -824,9 +828,9 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
         .set_allow_spmd_sharding_propagation_to_output({false});
   } else {
     assert(device_id >= 0);
+    assert(num_replicas == 1);
+    assert(num_partitions == 1);
 
-    options.executable_build_options.set_num_replicas(1);
-    options.executable_build_options.set_num_partitions(1);
     options.executable_build_options.set_device_ordinal(device_id);
 
     xla::DeviceAssignment device_assignment(1, 1);
@@ -839,15 +843,18 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
 
 extern "C" xla::PjRtLoadedExecutable *
 ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
-              bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
-              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner) {
-  CompileOptions options =
-      GenerateCompileOptions(device_id, is_sharded, mesh_ids, num_mesh_ids,
-                             xla_gpu_cuda_data_dir, use_shardy_partitioner);
+              const int64_t *mesh_ids, int64_t num_mesh_ids,
+              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+              int64_t num_replicas, int64_t num_partitions,
+              bool use_spmd_partitioning) {
+  CompileOptions options = GenerateCompileOptions(
+      device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
+      use_shardy_partitioner, num_replicas, num_partitions,
+      use_spmd_partitioning);
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
 
-  if (is_sharded && use_shardy_partitioner) {
+  if (use_spmd_partitioning && use_shardy_partitioner) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -1329,8 +1336,8 @@ extern "C" HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
       std::nullopt, // byte_strides
       sharding->obj(),
       static_cast<ifrt::Client::HostBufferSemantics>(c_semantics),
-      [] {} // on_done_with_host_buffer
-      )));
+      [] {}, // on_done_with_host_buffer,
+      client->CreateUserContext())));
 }
 
 extern "C" HeldIfrtArray *ifrt_client_make_single_shard_array_from_host_buffer(
@@ -1376,16 +1383,19 @@ ifrt_pjrt_array_create(ifrt::PjRtClient *client,
 // `Topology`
 extern "C" xla::ifrt::LoadedExecutable *
 ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
-             bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
-             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner) {
-  xla::CompileOptions compile_options =
-      GenerateCompileOptions(device_id, is_sharded, mesh_ids, num_mesh_ids,
-                             xla_gpu_cuda_data_dir, use_shardy_partitioner);
+             const int64_t *mesh_ids, int64_t num_mesh_ids,
+             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+             int64_t num_replicas, int64_t num_partitions,
+             bool use_spmd_partitioning) {
+  xla::CompileOptions compile_options = GenerateCompileOptions(
+      device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
+      use_shardy_partitioner, num_replicas, num_partitions,
+      use_spmd_partitioning);
   auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
       xla::ifrt::XlaCompileOptions(compile_options));
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-  if (is_sharded && use_shardy_partitioner) {
+  if (use_spmd_partitioning && use_shardy_partitioner) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -2469,4 +2479,91 @@ extern "C" bool pjrt_device_is_addressable(PjRtDevice *device) {
 
 extern "C" mlir::Operation *mlirGetParentOfTypeFunctionOp(mlir::Operation *op) {
   return op->getParentOfType<mlir::FunctionOpInterface>();
+}
+
+// batched copy
+// https://github.com/jax-ml/jax/blob/2b86f38585a517ce50e8ddf964a4709040a1bd53/jaxlib/xla/py_array.cc#L1112
+
+// xla::ifrt::CopyArrays
+extern "C" HeldIfrtArray **ifrt_copy_arrays_to_device_with_sharding(
+    ifrt::Client *client, HeldIfrtArray **arrays, int32_t num_arrays,
+    HeldValue<std::shared_ptr<const ifrt::Sharding>> *dst_sharding,
+    int32_t c_semantics) {
+  std::vector<tsl::RCReference<ifrt::Array>> src_arrays_vec;
+  for (int i = 0; i < num_arrays; i++) {
+    src_arrays_vec.push_back(arrays[i]->obj());
+  }
+
+  auto dst_arrays = MyValueOrThrow(client->CopyArrays(
+      absl::MakeSpan(src_arrays_vec), dst_sharding->obj()->devices(),
+      dst_sharding->obj()->memory_kind(),
+      static_cast<ifrt::ArrayCopySemantics>(c_semantics)));
+
+  HeldIfrtArray **res_dst_arrays = new HeldIfrtArray *[num_arrays];
+  for (int i = 0; i < num_arrays; i++) {
+    arrays[i] = reactant::capture(std::move(dst_arrays[i]));
+  }
+  return res_dst_arrays;
+}
+
+ifrt::Client::MakeArraysFromHostBufferShardsSpec
+ifrt_make_arrays_from_host_buffer_shards_spec(
+    const void **host_buffers, int num_buffers,
+    const int64_t **host_buffer_shapes,
+    const int64_t **addressable_shard_indices,
+    const int64_t *addressable_shard_indices_sizes, int dtype_kind, int ndims,
+    const int64_t *final_buffer_shape,
+    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding) {
+  ifrt::DType ifrt_dtype =
+      ifrt::DType(static_cast<ifrt::DType::Kind>(dtype_kind));
+
+  auto array_spec = ifrt::ArraySpec{
+      /*dtype=*/ifrt_dtype,
+      /*shape=*/
+      ifrt::Shape(absl::Span<const int64_t>(final_buffer_shape, ndims)),
+      /*sharding=*/sharding->obj()};
+
+  absl::InlinedVector<
+      std::pair<absl::InlinedVector<int64_t, 1>, ifrt::Client::HostBuffer>, 1>
+      buffers;
+
+  for (int i = 0; i < num_buffers; i++) {
+    ifrt::Client::HostBuffer buffer = ifrt::Client::HostBuffer{
+        /*data=*/host_buffers[i],
+        /*dtype=*/ifrt_dtype,
+        /*shape=*/
+        ifrt::Shape(absl::Span<const int64_t>(host_buffer_shapes[i], ndims)),
+    };
+
+    absl::InlinedVector<int64_t, 1> indices;
+    for (int j = 0; j < addressable_shard_indices_sizes[i]; j++) {
+      indices.push_back(addressable_shard_indices[i][j]);
+    }
+
+    buffers.push_back(std::make_pair(indices, buffer));
+  }
+
+  return ifrt::Client::MakeArraysFromHostBufferShardsSpec{
+      /*buffers=*/buffers,
+      /*array_spec=*/array_spec,
+  };
+}
+
+// TODO: We can batch the construction of multiple arrays into a single call.
+extern "C" HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
+    ifrt::Client *client, const void **host_buffers, int num_buffers,
+    const int64_t **host_buffer_shapes,
+    const int64_t **addressable_shard_indices,
+    const int64_t *addressable_shard_indices_sizes, int dtype_kind, int ndims,
+    const int64_t *final_buffer_shape,
+    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding,
+    int32_t c_host_buffer_semantics) {
+  auto spec = ifrt_make_arrays_from_host_buffer_shards_spec(
+      host_buffers, num_buffers, host_buffer_shapes, addressable_shard_indices,
+      addressable_shard_indices_sizes, dtype_kind, ndims, final_buffer_shape,
+      sharding);
+  auto arrays = MyValueOrThrow(client->MakeArraysFromHostBufferShards(
+      absl::MakeSpan(&spec, 1),
+      static_cast<ifrt::Client::HostBufferSemantics>(c_host_buffer_semantics)));
+  return reactant::capture(arrays[0]);
 }
