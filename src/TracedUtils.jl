@@ -292,7 +292,7 @@ function make_mlir_fn(
 	end
 	aval = args[path[2]]
 	for (cidx, idx) in enumerate(path[3:end])
-	    if aval isa Array
+	    if aval isa Array || aval isa Dict
 		aval = getindex(aval, idx)
 		stridx = stridx * "[" * string(idx) * "]"
 	    else
@@ -431,7 +431,7 @@ function make_mlir_fn(
                 stridx = string(verify_arg_names.args[conflict[1]])
                 aval = args[conflict[1]]
                 for (cidx, idx) in enumerate(Base.tail(conflict))
-                    if aval isa Array
+                    if aval isa Array || aval isa Dict
                         aval = Reactant.@allowscalar getindex(aval, idx)
                         stridx = stridx * "[" * string(idx) * "]"
                     else
