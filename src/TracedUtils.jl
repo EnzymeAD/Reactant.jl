@@ -190,6 +190,9 @@ function make_mlir_fn(
     output_shardings=nothing, # This is not meant to be used by the user.
     runtime=nothing,
     verify_arg_names=nothing,
+    argprefix::Symbol=:args,
+    resprefix::Symbol=:result,
+    resargprefix::Symbol=:resargs,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -200,11 +203,16 @@ function make_mlir_fn(
             concretein;
             toscalar,
             return_dialect,
-            do_transpose,
             args_in_result,
+            construct_function_without_args,
+            do_transpose,
             input_shardings,
             output_shardings,
             runtime,
+            verify_arg_names,
+            argprefix,
+            resprefix,
+            resargprefix,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
@@ -215,14 +223,15 @@ function make_mlir_fn(
     N = length(args)
     seen_args = OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
+    inmode = if concretein
+        @assert !toscalar
+        Reactant.ConcreteToTraced
+    else
+        Reactant.TracedSetPath
+    end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args,
-            args[i],
-            (:args, i),
-            concretein ? Reactant.ConcreteToTraced : Reactant.TracedSetPath;
-            toscalar,
-            runtime,
+            seen_args, args[i], (argprefix, i), inmode; toscalar, runtime
         )
     end
 
@@ -313,14 +322,17 @@ function make_mlir_fn(
 
     seen_results = OrderedIdDict()
 
+    outmode = if concretein
+        @assert !toscalar
+        Reactant.NoStopTracedTrack
+    else
+        Reactant.TracedTrack
+    end
+
     MLIR.IR.activate!(fnbody)
     traced_result = try
         traced_result = Reactant.make_tracer(
-            seen_results,
-            result,
-            (:result,),
-            concretein ? Reactant.NoStopTracedTrack : Reactant.TracedSetPath;
-            runtime,
+            seen_results, result, (resprefix,), outmode; runtime
         )
 
         # marks buffers to be donated
@@ -328,7 +340,7 @@ function make_mlir_fn(
             Reactant.make_tracer(
                 seen_results,
                 traced_args[i],
-                concretein ? (:resargs, i) : (),
+                (resargprefix, i),
                 Reactant.NoStopTracedTrack;
                 runtime,
             )
@@ -341,26 +353,108 @@ function make_mlir_fn(
     linear_results = Reactant.TracedType[]
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
-        (args_in_result != :all && has_argidx(v)) && continue
+        if args_in_result != :all
+            if has_idx(v, argprefix)
+                if !(
+                    (args_in_result == :result_and_mutated || args_in_result == :result) &&
+                    has_idx(v, resprefix)
+                )
+                    continue
+                end
+            end
+        end
         push!(linear_results, v)
     end
 
-    if args_in_result == :mutated
+    if args_in_result == :mutated || args_in_result == :result_and_mutated
         append!(linear_results, linear_args[mutated_args])
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
-        @assert length(linear_args) <= length(linear_results)
-        argis = first.(get_argidx.(linear_args))
-        resis = Set(getindex.(get_residx.(linear_results), Ref(2)))
-        # this can be more efficient
-        conflicts = setdiff(resis, argis)
-        @assert !isempty(conflicts) "Expected to have some conflicts, but none were found."
+        argis = []
+        for arg in linear_args
+            for path in arg.paths
+                if length(path) == 0
+                    continue
+                end
+                if path[1] != argprefix
+                    continue
+                end
+                push!(argis, path[2:end])
+            end
+        end
+        resis = []
+        for arg in linear_results
+            for path in arg.paths
+                if length(path) == 0
+                    continue
+                end
+                if path[1] != resargprefix
+                    continue
+                end
+                push!(resis, path[2:end])
+            end
+        end
 
-        error(
-            """Types do not match between function arguments and results.
-      The following arguments should be traced: $(join(verify_arg_names.args[collect(conflicts)], ", "))
-      """,
-        )
+        # this can be more efficient
+
+        err1 = []
+
+        err2 = []
+        for (errs, prev, post) in ((err1, resis, argis), (err2, argis, resis))
+            conflicts = setdiff(prev, post)
+            for conflict in conflicts
+                stridx = string(verify_arg_names.args[conflict[1]])
+                aval = args[conflict[1]]
+                for (cidx, idx) in enumerate(Base.tail(conflict))
+                    if aval isa Array
+                        aval = Reactant.@allowscalar getindex(aval, idx)
+                        stridx = stridx * "[" * string(idx) * "]"
+                    else
+                        fldname = if idx isa Integer
+                            string(fieldname(Core.Typeof(aval), idx))
+                        else
+                            string(idx)
+                        end
+                        if cidx == 1
+                            # Don't include the ref
+                            if idx != 1
+                                throw(
+                                    AssertionError(
+                                        "expected first path to be a ref lookup, found idx=$idx conflict=$conflict, cidx=$cidx",
+                                    ),
+                                )
+                            end
+                        else
+                            stridx *= "." * fldname
+                        end
+                        aval = getfield(aval, idx)
+                    end
+                end
+                push!(errs, stridx * " (path=$conflict, type=$(typeof(aval)))")
+            end
+        end
+
+        arg_info = sort([(Base.pointer_from_objref(arg), arg.paths) for arg in linear_args])
+        res_info = sort([
+            (Base.pointer_from_objref(arg), arg.paths) for arg in linear_results
+        ])
+
+        arg_info_ni = [ai for ai in arg_info if !(ai in res_info)]
+        res_info_ni = [ai for ai in res_info if !(ai in arg_info)]
+
+        error("""Types do not match between function arguments and results.
+        The following arguments should be traced but were not: $(join(err1, ", "))
+        The following arguments should be returned but were not: $(join(err2, ", "))
+        argprefix = $argprefix
+        resprefix = $resprefix
+        verify_arg_names = $verify_arg_names
+        argtys = $(Core.Typeof.(args))
+        Traced Arg Paths: \n$(join(arg_info, "\n"))\n
+        Traced Res Paths: \n$(join(res_info, "\n"))\n
+        Traced Arg NI Paths: \n$(join(arg_info_ni, "\n"))\n
+        Traced Res NI Paths: \n$(join(res_info_ni, "\n"))\n
+        traced_result : $(Core.Typeof.(traced_result))
+        """)
     end
 
     out_tys = if do_transpose
@@ -458,7 +552,7 @@ function make_mlir_fn(
             arg = linear_args[i]
 
             if haskey(traced_args_to_shardings, arg) &&
-                (has_residx(arg) || has_resargidx(arg))
+                (has_idx(arg, resprefix) || has_idx(arg, resargprefix))
                 idx = findfirst(Base.Fix1(===, arg), linear_results)
                 @assert idx !== nothing
                 attr, dialect = linear_arg_shardings[i]
@@ -473,7 +567,7 @@ function make_mlir_fn(
         end
 
         for (i, res) in enumerate(linear_results)
-            if has_argidx(res) && haskey(traced_args_to_shardings, res)
+            if has_idx(res, argprefix) && haskey(traced_args_to_shardings, res)
                 argidx = findfirst(Base.Fix1(===, res), linear_args)
                 @assert argidx !== nothing
                 attr, dialect = linear_arg_shardings[argidx]
@@ -579,6 +673,35 @@ function push_val!(ad_inputs, x, path)
     return push!(ad_inputs, x)
 end
 
+function get_idx(x, prefix::Symbol)
+    for path in get_paths(x)
+        if length(path) == 0
+            continue
+        end
+        if path[1] == prefix
+            return path
+        end
+    end
+    throw(AssertionError("No path found for $x"))
+end
+
+function get_argidx(x, prefix::Symbol)
+    path = get_idx(x, prefix)
+    return path[2]::Int, path
+end
+
+function has_idx(x, prefix::Symbol)
+    for path in get_paths(x)
+        if length(path) == 0
+            continue
+        end
+        if path[1] == prefix
+            return true
+        end
+    end
+    return false
+end
+
 function set!(x, path, tostore; emptypath=false)
     for p in path
         x = Reactant.Compiler.traced_getfield(x, p)
@@ -589,35 +712,6 @@ function set!(x, path, tostore; emptypath=false)
     return emptypath && set_paths!(x, ())
 end
 
-for (fn, key) in ((:arg, :args), (:res, :result), (:resarg, :resargs))
-    has_fn = Symbol(:has_, fn, :idx)
-    @eval begin
-        function $(has_fn)(x)
-            for path in get_paths(x)
-                length(path) == 0 && continue
-                path[1] == $(Meta.quot(key)) && return true
-            end
-            return false
-        end
-    end
-end
-
-function get_argidx(x)
-    for path in get_paths(x)
-        length(path) == 0 && continue
-        path[1] == :args && return (path[2]::Int, path)
-    end
-    throw(AssertionError("No path found for $x"))
-end
-
-function get_residx(x)
-    for path in get_paths(x)
-        length(path) == 0 && continue
-        path[1] == :result && return path
-    end
-    throw(AssertionError("No path found for $x"))
-end
-
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
@@ -626,8 +720,20 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         return f(scalar_args...)
     end
 
+    argprefix::Symbol = gensym("broadcastarg")
+    resprefix::Symbol = gensym("broadcastresult")
+    resargprefix::Symbol = gensym("broadcastresarg")
+
     mlir_fn_res = make_mlir_fn(
-        f, args, (), string(f) * "_broadcast_scalar", false; toscalar=true
+        f,
+        args,
+        (),
+        string(f) * "_broadcast_scalar",
+        false;
+        toscalar=true,
+        argprefix,
+        resprefix,
+        resargprefix,
     )
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
@@ -656,7 +762,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     batch_inputs = MLIR.IR.Value[]
 
     for a in linear_args
-        idx, path = get_argidx(a)
+        idx, path = get_argidx(a, argprefix)
         if idx == 1 && fnwrap
             push_val!(batch_inputs, f, path[3:end])
         else
@@ -677,21 +783,24 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     residx = 1
 
     for a in linear_results
-        if has_residx(a)
-            path = get_residx(a)
-            set!(result, path[2:end], MLIR.IR.result(res, residx))
-            residx += 1
-        else
-            idx, path = get_argidx(a)
-            if idx == 1 && fnwrap
-                set!(f, path[3:end], MLIR.IR.result(res, residx))
-                residx += 1
-            else
-                if fnwrap
-                    idx -= 1
+        resv = MLIR.IR.result(res, residx)
+        residx += 1
+        for path in a.paths
+            if length(path) == 0
+                continue
+            end
+            if path[1] == resprefix
+                set!(result, path[2:end], resv)
+            elseif path[1] == argprefix
+                idx = path[2]::Int
+                if idx == 1 && fnwrap
+                    set!(f, path[3:end], resv)
+                else
+                    if fnwrap
+                        idx -= 1
+                    end
+                    set!(args[idx], path[3:end], resv)
                 end
-                set!(args[idx], path[3:end], MLIR.IR.result(res, residx))
-                residx += 1
             end
         end
     end

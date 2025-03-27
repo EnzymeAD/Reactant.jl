@@ -35,13 +35,17 @@ end
 end
 
 @inline function traced_getfield(
-    @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}), field
+    @nospecialize(
+        obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}
+    ),
+    field,
 )
     return Base.getfield(obj, field)
 end
 
 @inline function traced_getfield(
-    @nospecialize(obj::Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}), field
+    @nospecialize(obj::Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}),
+    field,
 )
     return Base.getindex(obj, field)
 end
@@ -788,6 +792,11 @@ function compile_mlir!(
             mlir_result_types::Vector{MLIR.IR.Type},
             traced_result::Any,
             mutated_args::Vector{Int},
+            linear_results::Vector{Reactant.TracedType},
+            fnwrapped::Bool,
+            argprefix::Symbol,
+            resprefix::Symbol,
+            resargprefix::Symbol,
         }
     }(),
     sdycache=IdDict{
@@ -914,21 +923,22 @@ function compile_mlir!(
         raise
     elseif raise
         # Raise enabled but use default passes
-        "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,raise-affine-to-stablehlo,arith-raise{stablehlo=true}," *
+        # TODO remove redundant libdevice raise after fixing phase ordering
+        "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,raise-affine-to-stablehlo,arith-raise{stablehlo=true}," *
         opt_passes2
     else
         "canonicalize"
     end
 
     if optimize === :all
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -937,18 +947,18 @@ function compile_mlir!(
                     raise_passes,
                     jit,
                 ],
-                ',',
+                ",",
             ),
         )
     elseif optimize === :before_kernel
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -958,14 +968,14 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :before_jit
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -977,14 +987,14 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :before_raise
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -995,12 +1005,14 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :no_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(mod, "arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -1010,26 +1022,26 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :only_enzyme
-        run_pass_pipeline!(mod, "enzyme-batch")
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
-        run_pass_pipeline!(
-            mod,
-            join(
-                ["canonicalize", "remove-unnecessary-enzyme-ops", "enzyme-simplify-math"],
-                ',',
-            ),
-        )
-    elseif optimize === :after_enzyme
-        run_pass_pipeline!(mod, "enzyme-batch")
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    "enzyme-batch",
+                    enzyme_pass,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                ],
+                ',',
+            ),
+        )
+    elseif optimize === :after_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "enzyme-batch",
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -1042,14 +1054,14 @@ function compile_mlir!(
             ),
         )
     elseif optimize === :before_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
                     "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                     kern,
                     raise_passes,
@@ -1179,11 +1191,20 @@ function compile_mlir!(
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
     preserved_args_idx = last.(preserved_args)
+    if backend != "tpu"
     for (i, arg) in enumerate(linear_args)
         if i ∉ preserved_args_idx
             MLIR.API.mlirFuncSetArgAttr(
                 func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
             )
+        end
+    end
+    else
+        for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
+            if MLIR.IR.dialect(op) == :llvm
+		    MLIR.API.mlirOperationDestroy(op.operation)
+		    op.operation = MLIR.API.MlirOperation(C_NULL)
+            end
         end
     end
 
@@ -1667,21 +1688,26 @@ function codegen_unflatten!(
     to_unreshard_results = Dict{Tuple,Any}()
 
     # mutate the result stores to point to the correct concrete results
+
+    argprefix::Symbol = :args
+    resprefix::Symbol = :result
+    resargprefix::Symbol = :resargs
+
     for (concrete_res_name, result, shard_info) in
         zip(concretized_res_names, linear_results, linear_result_shard_info)
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                length(p) > 0 && (p[1] == :result || p[1] == :resargs)
+                length(p) > 0 && (p[1] == resprefix || p[1] == resargprefix)
             )...,
         )
         for path in paths
-            if path[1] == :result
+            if path[1] == resprefix
                 unflatcode = :result
                 path = path[2:end]
 
-                if Reactant.TracedUtils.has_argidx(result)
-                    _, argidx = Reactant.TracedUtils.get_argidx(result)
+                if Reactant.TracedUtils.has_idx(result, argprefix)
+                    argidx = Reactant.TracedUtils.get_idx(result, argprefix)
                     if haskey(resharded_inputs, argidx)
                         to_unreshard_results[path] = resharded_inputs[argidx]
                     end
@@ -1693,7 +1719,7 @@ function codegen_unflatten!(
                 end
                 continue
             else
-                @assert path[1] == :resargs
+                @assert path[1] == resargprefix
                 unflatcode = :(args[$(path[2])])
 
                 need_to_unreshard = get(resharded_inputs, (:args, path[2:end]...), nothing)

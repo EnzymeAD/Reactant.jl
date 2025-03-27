@@ -628,6 +628,31 @@ end
     @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x)
 end
 
+mutable struct Container{A,B,C}
+    a::A
+    b::B
+    c::C
+end
+
+function for_in_container(ctr)
+    dt = copy(ctr.a)
+    @trace for i in 1:10
+        ctr.b .+= ctr.c * dt
+    end
+end
+
+@testset "for: container" begin
+    x = Container(3.1, [1.4], [2.7])
+    x_ra = Reactant.to_rarray(x)
+
+    @jit(for_in_container(x_ra))
+    for_in_container(x)
+
+    @test x.a ≈ x_ra.a
+    @test x.b ≈ x_ra.b
+    @test x.c ≈ x_ra.c
+end
+
 _call1(a, b) = a
 function call1(a, b)
     x = @trace _call1(a, b)
@@ -754,7 +779,7 @@ function step!(sim)
     else
         sim.clock.iteration += 1 # time step
     end
-    return sim
+    return nothing
 end
 
 function simulate!(sim)
