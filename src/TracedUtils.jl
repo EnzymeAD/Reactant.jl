@@ -288,6 +288,8 @@ function make_mlir_fn(
 	stridx = if verify_arg_names isa Nothing
 	   "arg"*string(path[2])
 	else
+	    verify_arg_names[path[2]]
+	end
 	aval = args[path[2]]
 	for (cidx, idx) in enumerate(path[3:end])
 	    if aval isa Array
