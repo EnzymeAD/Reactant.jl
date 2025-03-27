@@ -291,7 +291,7 @@ function make_mlir_fn(
 	    verify_arg_names[path[2]]
 	end
 	aval = args[path[2]]
-	for idx in enumerate(path[3:end])
+	for (cidx, idx) in enumerate(path[3:end])
 	    if aval isa Array
 		aval = getindex(aval, idx)
 		stridx = stridx * "[" * string(idx) * "]"
