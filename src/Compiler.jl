@@ -1105,7 +1105,7 @@ function compile_mlir!(
             # Convert all shardy ops to corresponding mhlo attrs/ops that can be consumed by
             # XLA (note we need to set `use_shardy_partitioner` to `false` in the options)
             run_pass_pipeline!(
-                mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+                mod, join(["print{debug=true}", "sdy-propagation-pipeline", "sdy-close-shardings"], ",")
             )
 
             # Extract the result shardings from the compiled function
@@ -1132,12 +1132,12 @@ function compile_mlir!(
                 end
             end
 
-            run_pass_pipeline!(mod, join(["xla-sdy-stablehlo-export-pipeline"], ','))
+            run_pass_pipeline!(mod, join(["print{debug=true}", "xla-sdy-stablehlo-export-pipeline", "print{debug=true}"], ','))
 
             # Run our optimization passes here -- we need to be careful to not apply folding
             # here since that violates the semantics of `sdy.constant` which was converted to
             # `stablehlo.constant` by the previous pass.
-            run_pass_pipeline!(mod, join(["canonicalize", "cse"], ','))
+            run_pass_pipeline!(mod, join(["canonicalize", "case", "print{debug=true}"], ','))
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
