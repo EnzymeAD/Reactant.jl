@@ -282,7 +282,41 @@ function make_mlir_fn(
         )
     end
 
-    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
+    arglocs = MLIR.IR.Location[]
+    for arg in linear_args
+	path = get_idx(arg, argprefix)
+	stridx = if verify_arg_names isa Nothing
+	   "arg"*string(path[2])
+	else
+	aval = args[path[2]]
+	for (cidx, idx) in enumerate(path[3:end])
+	    if aval isa Array
+		aval = getindex(aval, idx)
+		stridx = stridx * "[" * string(idx) * "]"
+	    else
+		fldname = if idx isa Integer
+		    string(fieldname(Core.Typeof(aval), idx))
+		else
+		    string(idx)
+		end
+		if cidx == 1
+		    # Don't include the ref
+		    if idx != 1
+			throw(
+			    AssertionError(
+				"expected first path to be a ref lookup, found idx=$idx conflict=$conflict, cidx=$cidx",
+			    ),
+			)
+		    end
+		else
+		    stridx *= "." * fldname
+		end
+		aval = getfield(aval, idx)
+	    end
+	end
+	push!(arglocs, MLIR.IR.Location(stridx*" (path=$path)", MLIR.IR.Location()))
+    end
+    fnbody = MLIR.IR.Block(in_tys, arglocs)
     push!(MLIR.IR.region(func, 1), fnbody)
     Ops.activate_constant_context!(fnbody)
 
