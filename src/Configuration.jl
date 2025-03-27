@@ -1,26 +1,34 @@
 using ScopedValues: ScopedValues, ScopedValue
 
+export with_config
 export DotGeneralAlgorithmPreset, DotGeneralPrecision, DotGeneralAlgorithm
 
-# """
-#     @with_config(f; kwargs...)
+"""
+    with_config(f; kwargs...)
 
-# Run the function `f` with the given configuration. The configuration is controlled using
-# ScopedValues. Refer to the
-# [official documentation for more details](https://docs.julialang.org/en/v1/base/scopedvalues/).
-# """
-# function with_config(f; dot_general_algorithm=missing, dot_general_precision=missing)
-#     config_vars = (;)
-#     dot_general_algorithm !== missing &&
-#         (config_vars = (; config_vars..., dot_general_algorithm = dot_general_algorithm))
-#     dot_general_precision !== missing &&
-#         (config_vars = (; config_vars..., dot_general_precision = dot_general_precision))
+Run the function `f` within a dynamic scope such that. The configuration is controlled using
+ScopedValues. Refer to the
+[official documentation for more details](https://docs.julialang.org/en/v1/base/scopedvalues/).
 
-#     @show config_vars
+## Configuration Options
 
-#     length(config_vars) == 0 && return f()
-#     return ScopedValues.with(f, pairs(config_vars)...)
-# end
+### DotGeneral
+
+  - `dot_general_algorithm`: Algorithm preset for `stablehlo.dot_general`. Can be `nothing`,
+    [`DotGeneralAlgorithm`](@ref) or [`DotGeneralAlgorithmPreset`](@ref). Defaults to
+    `DotGeneralAlgorithmPreset.DEFAULT`.
+  - `dot_general_precision`: Precision for `stablehlo.dot_general`. Can be `nothing`,
+    or [`DotGeneralPrecision`](@ref). Defaults to `DotGeneralPrecision.DEFAULT`.
+"""
+function with_config(f; dot_general_algorithm=missing, dot_general_precision=missing)
+    config_vars = ()
+    dot_general_algorithm !== missing &&
+        (config_vars = (config_vars..., DOT_GENERAL_ALGORITHM => dot_general_algorithm))
+    dot_general_precision !== missing &&
+        (config_vars = (config_vars..., DOT_GENERAL_PRECISION => dot_general_precision))
+
+    return ScopedValues.with(f, config_vars...)
+end
 
 # DotGeneral Attributes Configuration
 """
@@ -34,7 +42,7 @@ Controls the `precision_config` for `stablehlo.dot_general`. Valid values are:
 
 !!! note "ScopedValue"
 
-    This is controlled using the `dot_general_precision` ScopedValue.
+    This is controlled using the `DOT_GENERAL_PRECISION` ScopedValue.
 
 The following functions are available:
 
@@ -46,7 +54,9 @@ The following functions are available:
     HIGHEST
 end
 
-const dot_general_precision = ScopedValue(DotGeneralPrecision.DEFAULT)
+const DOT_GENERAL_PRECISION = ScopedValue{DotGeneralPrecision.T}(
+    DotGeneralPrecision.DEFAULT
+)
 
 function MLIR.IR.Attribute(precision::DotGeneralPrecision.T)
     precision_str = if precision == DotGeneralPrecision.DEFAULT
@@ -86,21 +96,15 @@ struct DotGeneralAlgorithm{lhsT<:ReactantFloat,rhsT<:ReactantFloat,accumT<:React
     allow_imprecise_accumulation::Bool
 end
 
-supported_lhs_eltype(::DotGeneralAlgorithm{lhsT}) where {lhsT} = lhsT
-supported_rhs_eltype(::DotGeneralAlgorithm{lhsT,rhsT}) where {lhsT,rhsT} = rhsT
-function accumulation_eltype(
-    ::DotGeneralAlgorithm{lhsT,rhsT,accumT}
+function MLIR.IR.Attribute(
+    algo::DotGeneralAlgorithm{lhsT,rhsT,accumT}
 ) where {lhsT,rhsT,accumT}
-    return accumT
-end
-
-function MLIR.IR.Attribute(algo::DotGeneralAlgorithm, ::Type, ::Type)
     return MLIR.IR.Attribute(
-        MLIR.API.stablehloDotGeneralAlgorithmGet(
+        MLIR.API.stablehloDotAlgorithmGet(
             MLIR.IR.context(),
-            MLIR.IR.Type(supported_lhs_eltype(algo)),
-            MLIR.IR.Type(supported_rhs_eltype(algo)),
-            MLIR.IR.Type(accumulation_eltype(algo)),
+            MLIR.IR.Type(lhsT),
+            MLIR.IR.Type(rhsT),
+            MLIR.IR.Type(accumT),
             algo.lhs_component_count,
             algo.rhs_component_count,
             algo.num_primitive_operations,
@@ -131,7 +135,7 @@ Controls the `precision_config` for `stablehlo.dot_general`. Valid values are:
 
 !!! note "ScopedValue"
 
-    This is controlled using the `dot_general_algorithm` ScopedValue.
+    This is controlled using the `DOT_GENERAL_ALGORITHM` ScopedValue.
 
 The following functions are available:
 
@@ -142,29 +146,17 @@ The following functions are available:
   `MLIR.IR.Attribute(dot_algorithm_preset::DotGeneralAlgorithmPreset.T, T1, T2)`
 """
 @enumx DotGeneralAlgorithmPreset begin
-    "An algorithm will be selected based on input and output types."
     DEFAULT
-    "Accepts any float8 input types and accumulates into float32."
     ANY_F8_ANY_F8_F32
-    "Like `ANY_F8_ANY_F8_F32`, but using faster accumulation with the cost of lower \
-     accuracy."
     ANY_F8_ANY_F8_F32_FAST_ACCUM
-    "Like `ANY_F8_ANY_F8_F32`, but the accumulation type is controlled by \
-     `preferred_element_type`."
     ANY_F8_ANY_F8_ANY
-    "Like `ANY_F8_ANY_F8_F32_FAST_ACCUM`, but the accumulation type is controlled by \
-     `preferred_element_type`."
     ANY_F8_ANY_F8_ANY_FAST_ACCUM
     F16_F16_F16
     F16_F16_F32
     BF16_BF16_BF16
     BF16_BF16_F32
-    "The `_X3` suffix indicates that the algorithm uses 3 operations to emulate higher \
-     precision."
     BF16_BF16_F32_X3
-    "Like `BF16_BF16_F32_X3`, but using 6 operations instead of 3."
     BF16_BF16_F32_X6
-    "Like `BF16_BF16_F32_X3`, but using 9 operations instead of 3."
     BF16_BF16_F32_X9
     F32_F32_F32
     F64_F64_F64
@@ -172,7 +164,9 @@ The following functions are available:
     TF32_TF32_F32_X3
 end
 
-const dot_general_algorithm = ScopedValue(DotGeneralAlgorithmPreset.DEFAULT)
+const DOT_GENERAL_ALGORITHM = ScopedValue{DotGeneralAlgorithmPreset.T}(
+    DotGeneralAlgorithmPreset.DEFAULT
+)
 
 function supported_lhs_eltype(dot_algorithm_preset::DotGeneralAlgorithmPreset.T)
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.DEFAULT ||
@@ -180,7 +174,7 @@ function supported_lhs_eltype(dot_algorithm_preset::DotGeneralAlgorithmPreset.T)
         dot_algorithm_preset == DotGeneralAlgorithmPreset.ANY_F8_ANY_F8_ANY_FAST_ACCUM ||
         dot_algorithm_preset == DotGeneralAlgorithmPreset.ANY_F8_ANY_F8_F32 ||
         dot_algorithm_preset == DotGeneralAlgorithmPreset.ANY_F8_ANY_F8_F32_FAST_ACCUM
-        return Union{} # Any Eltype
+        return Number # Any Eltype
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.F16_F16_F16 ||
@@ -323,12 +317,4 @@ function DotGeneralAlgorithm(
     end
 
     return nothing
-end
-
-function MLIR.IR.Attribute(
-    dot_algorithm_preset::DotGeneralAlgorithmPreset.T, ::Type{T1}, ::Type{T2}
-) where {T1,T2}
-    algo = DotGeneralAlgorithm(dot_algorithm_preset, T1, T2)
-    algo === nothing && return nothing
-    return MLIR.IR.Attribute(algo, T1, T2)
 end

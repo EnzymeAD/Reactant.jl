@@ -775,8 +775,8 @@ end
     rhs::TracedRArray{T2};
     contracting_dimensions,
     batching_dimensions=(Int[], Int[]),
-    precision_config=missing,
-    algorithm=missing,
+    precision_config=Reactant.DOT_GENERAL_PRECISION[],
+    algorithm=Reactant.DOT_GENERAL_ALGORITHM[],
     location=mlir_stacktrace("dot_general", @__FILE__, @__LINE__),
 ) where {T1,T2}
     # C1 + C2
@@ -805,10 +805,6 @@ end
         size.(Ref(rhs), rhs_contracting_dimensions)
 
     # C11
-    if precision_config === missing
-        precision_config = Reactant.dot_general_precision[]
-    end
-
     if !isnothing(precision_config)
         if precision_config isa Reactant.DotGeneralPrecision.T
             precision_config = (precision_config, precision_config)
@@ -819,11 +815,15 @@ end
         @assert all(Base.Fix2(isa, Reactant.DotGeneralPrecision.T), precision_config)
     end
 
-    if algorithm === missing
-        algorithm = Reactant.dot_general_algorithm[]
-    end
+    resT = promote_type(T1, T2)
 
     if algorithm isa Reactant.DotGeneralAlgorithmPreset.T
+        lhs_eltype = Reactant.supported_lhs_eltype(algorithm)
+        @assert T1 <: lhs_eltype "$(T1) is not a subtype of $(lhs_eltype)"
+        @assert T2 <: lhs_eltype "$(T2) is not a subtype of $(lhs_eltype)"
+        rhs_eltype = Reactant.supported_rhs_eltype(algorithm)
+        @assert resT <: rhs_eltype "$(resT) is not a subtype of $(rhs_eltype)"
+
         algorithm = Reactant.DotGeneralAlgorithm(algorithm, T1, T2)
     end
 
@@ -880,10 +880,8 @@ end
         ])
     end
 
-    # all or nothing: if one is set, all must be set
-    algorithm = algorithm !== nothing ? MLIR.IR.Attribute(algorithm, T1, T2) : nothing
+    algorithm = algorithm !== nothing ? MLIR.IR.Attribute(algorithm) : nothing
 
-    resT = promote_type(T1, T2)
     res = MLIR.IR.result(
         stablehlo.dot_general(
             lhs.mlir_data,
