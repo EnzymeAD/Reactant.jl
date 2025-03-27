@@ -1137,7 +1137,7 @@ function compile_mlir!(
             # Run our optimization passes here -- we need to be careful to not apply folding
             # here since that violates the semantics of `sdy.constant` which was converted to
             # `stablehlo.constant` by the previous pass.
-            run_pass_pipeline!(mod, join(["canonicalize", "case", "print{debug=true}"], ','))
+            run_pass_pipeline!(mod, join(["canonicalize", "cse", "print{debug=true}"], ','))
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
