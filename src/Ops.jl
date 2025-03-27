@@ -127,6 +127,11 @@ end
             result_inference=false,
         )
 
+        parent_func_op = MLIR.IR.get_parent_of_type_function_op(cstop)
+        if parent_func_op == C_NULL
+            error("Constant must be created inside a Function Op.")
+        end
+
         res = MLIR.IR.result(cstop)
         tres = TracedRArray{T,N}((), res, size(x))
         constants[value] = tres
@@ -202,6 +207,12 @@ for (T, mlir_func) in (
 
             splatattr = MLIR.API.$mlir_func(tt, number)
             cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
+
+            parent_func_op = MLIR.IR.get_parent_of_type_function_op(cst_op)
+            if parent_func_op == C_NULL
+                error("Constant must be created inside a Function Op.")
+            end
+
             cst = MLIR.IR.result(cst_op)
             ta = TracedRArray{$T,length(shape)}((), cst, shape)
             return ta
@@ -222,6 +233,12 @@ end
     tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
     splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
     cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
+
+    parent_func_op = MLIR.IR.get_parent_of_type_function_op(cst_op)
+    if parent_func_op == C_NULL
+        error("Constant must be created inside a Function Op.")
+    end
+
     cst = MLIR.IR.result(cst_op)
     ta = TracedRArray{T,length(shape)}((), cst, shape)
     return ta
