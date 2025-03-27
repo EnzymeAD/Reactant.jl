@@ -59,6 +59,9 @@ using Reactant, Test
             @code_hlo *(x_ra, y_ra)
         end
 
-        @test contains(repr(hlo), "algorithm = <lhs_precision_type = f16, rhs_precision_type = f16, accumulation_type = f32, lhs_component_count = 1, rhs_component_count = 1, num_primitive_operations = 1, allow_imprecise_accumulation = false>")
+        @test contains(
+            repr(hlo),
+            "algorithm = <lhs_precision_type = f16, rhs_precision_type = f16, accumulation_type = f32, lhs_component_count = 1, rhs_component_count = 1, num_primitive_operations = 1, allow_imprecise_accumulation = false>",
+        )
     end
 end
