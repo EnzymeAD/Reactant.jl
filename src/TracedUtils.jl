@@ -291,7 +291,7 @@ function make_mlir_fn(
 	    verify_arg_names[path[2]]
 	end
 	aval = args[path[2]]
-	for (cidx, idx) in enumerate(path[3:end])
+	for idx in enumerate(path[3:end])
 	    if aval isa Array
 		aval = getindex(aval, idx)
 		stridx = stridx * "[" * string(idx) * "]"
@@ -301,18 +301,7 @@ function make_mlir_fn(
 		else
 		    string(idx)
 		end
-		if cidx == 1
-		    # Don't include the ref
-		    if idx != 1
-			throw(
-			    AssertionError(
-				"expected first path to be a ref lookup, found idx=$idx conflict=$conflict, cidx=$cidx",
-			    ),
-			)
-		    end
-		else
-		    stridx *= "." * fldname
-		end
+		stridx *= "." * fldname
 		aval = getfield(aval, idx)
 	    end
 	end
