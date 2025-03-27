@@ -193,6 +193,7 @@ function make_mlir_fn(
     argprefix::Symbol=:args,
     resprefix::Symbol=:result,
     resargprefix::Symbol=:resargs,
+    include_paths=[],
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -231,7 +232,7 @@ function make_mlir_fn(
     end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, args[i], (argprefix, i), inmode; toscalar, runtime
+            seen_args, args[i], (argprefix, i), inmode; toscalar, runtime, include_paths
         )
     end
 
@@ -343,6 +344,7 @@ function make_mlir_fn(
                 (resargprefix, i),
                 Reactant.NoStopTracedTrack;
                 runtime,
+                include_paths=[],
             )
         end
         traced_result
