@@ -1092,7 +1092,9 @@ end
     mktempdir() do dir
         Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
         @compile sin.(Reactant.to_rarray(Float32[1.0]))
-        @test contains(read(readdir(dir; join=true)[1], String), "stablehlo.sine")
+        for mod in readdir(dir; join=true)
+            @test contains(read(mod, String), "hlo.sine")
+        end
     end
 
     Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = always_old
