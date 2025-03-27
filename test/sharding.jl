@@ -109,7 +109,7 @@ fn_test3(x) = sum(x; dims=1)
 end
 
 @testset "Sharding with non-iota mesh" begin
-    if length(addressable_devices) ≥ 8
+    if length(addressable_devices) ≥ 8 && Reactant.XLA.runtime() isa Val{:IFRT}
         mesh = Sharding.Mesh(reshape([4, 6, 0, 2, 7, 3, 1, 5], 4, 2), ("data", "model"))
         x = reshape(collect(Float32, 1:16), 4, 4)
         x_ra = Reactant.to_rarray(
@@ -166,7 +166,7 @@ end
 fn_test4(x, y) = x .+ sin.(y')
 
 @testset "Multiple Mesh Sharding" begin
-    if length(addressable_devices) ≥ 8
+    if length(addressable_devices) ≥ 8 && Reactant.XLA.runtime() isa Val{:IFRT}
         mesh1 = Sharding.Mesh(reshape(collect(Int64, 0:7), (4, 2)), ("m1_x", "m1_y"))
         mesh2 = Sharding.Mesh(
             reshape([4, 6, 0, 2, 7, 3, 1, 5], 2, 2, 2), ("m2_x", "m2_y", "m2_z")
@@ -182,8 +182,8 @@ fn_test4(x, y) = x .+ sin.(y')
             y; sharding=Sharding.NamedSharding(mesh2, ("m2_y", nothing))
         )
 
-        # This is supported in shardy & XLA, but we don't support it yet.
-        @test_throws ErrorException @jit fn_test4(x_ra, y_ra)
+        res = @jit fn_test4(x_ra, y_ra)
+        @test Array(res) ≈ fn_test4(x, y)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
@@ -373,6 +373,41 @@ end
         @test contains(
             string(Reactant.XLA.sharding(z_ra.data.buffer)), "SingleDeviceSharding"
         )
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+function inplace_sub!(x, y)
+    x .-= y
+    return nothing
+end
+
+@testset "Multiple Mesh Sharding" begin
+    if length(addressable_devices) ≥ 12 && Reactant.XLA.runtime() isa Val{:IFRT}
+        mesh1 = Sharding.Mesh(reshape(0:11, 2, 3, 2), (:x, :y, :z))
+        mesh2 = Sharding.Mesh(permutedims(reshape(0:11, 2, 2, 3), (3, 2, 1)), (:p, :q, :r))
+
+        jl_arr = reshape(collect(1:24), 2, 3, 4)
+
+        x_ra_mesh1 = Reactant.to_rarray(
+            jl_arr; sharding=Sharding.NamedSharding(mesh1, (:x, :y, :z))
+        )
+        y_ra_mesh2 = Reactant.to_rarray(
+            jl_arr; sharding=Sharding.NamedSharding(mesh2, (:p, :q, :r))
+        )
+
+        res1 = @jit .+(x_ra_mesh1, y_ra_mesh2)
+        @test res1 isa Reactant.ConcreteRArray
+        @test Array(res1) ≈ jl_arr .+ jl_arr
+
+        @jit inplace_sub!(res1, x_ra_mesh1)
+        @test res1 isa Reactant.ConcreteRArray
+        @test Array(res1) ≈ jl_arr
+
+        @jit inplace_sub!(res1, y_ra_mesh2)
+        @test res1 isa Reactant.ConcreteRArray
+        @test Array(res1) ≈ zero.(jl_arr)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
