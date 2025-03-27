@@ -1197,6 +1197,13 @@ function compile_mlir!(
             )
         end
     end
+    else
+        for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
+            if MLIR.IR.name(op) == :llvm
+		    MLIR.API.mlirOperationDestroy(op.operation)
+		    op.operation = MLIR.API.MlirOperation(C_NULL)
+            end
+        end
     end
 
     return Reactant.TracedUtils.CompiledMlirFnResult(
