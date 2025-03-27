@@ -2323,14 +2323,14 @@ end
     )
     mesh(
         mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-        device_ids::Vector{Int64};
+        logical_device_ids::Vector{Int64};
         sym_name::String="mesh",
         mod::MLIR.IR.Module=MLIR.IR.mmodule(),
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
 
 Produces a [`Reactant.MLIR.Dialects.sdy.mesh`](@ref) operation with the given `mesh` and
-`device_ids`.
+`logical_device_ids`.
 
 Based on the provided `sym_name``, we generate a unique name for the mesh in the module's
 `SymbolTable`. Note that users shouldn't use this sym_name directly, instead they should
@@ -2338,8 +2338,8 @@ use the returned `sym_name` to refer to the mesh in the module.
 
 !!! warning
 
-    The `device_ids` argument are the logical device ids, not the physical device ids.
-    For example, if the physical device ids are `[2, 4, 123, 293]`, the corresponding
+    The `logical_device_ids` argument are the logical device ids, not the physical device
+    ids. For example, if the physical device ids are `[2, 4, 123, 293]`, the corresponding
     logical device ids are `[0, 1, 2, 3]`.
 
 ## Returned Value
@@ -2357,7 +2357,8 @@ We return a NamedTuple with the following fields:
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
-    cache !== nothing && haskey(cache, m) && return cache[m]
+    key = (m.logical_device_ids, m.axis_names, size(m))
+    cache !== nothing && haskey(cache, key) && return cache[key]
     result = mesh(
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
         m.logical_device_ids;
@@ -2365,13 +2366,13 @@ We return a NamedTuple with the following fields:
         sym_name,
         location,
     )
-    cache !== nothing && (cache[m] = result)
+    cache !== nothing && (cache[key] = merge(result, (; mesh=m)))
     return result
 end
 
 @noinline function mesh(
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-    device_ids::AbstractVector{Int64};
+    logical_device_ids::AbstractVector{Int64};
     mod::MLIR.IR.Module=MLIR.IR.mmodule(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
@@ -2380,16 +2381,20 @@ end
     ndevices = prod(last, mesh_axes)
 
     @assert allunique(first, mesh_axes) "mesh_axes must be unique"
-    @assert ndevices == length(device_ids) "length(device_ids) should be same as \
-                                            prod(last, mesh_axes)"
-    @assert all(Base.Fix2(≥, 0), device_ids) "device_ids must be non-negative"
-    @assert Base.sort(device_ids) == 0:(ndevices - 1) "sorted device_ids must be the same \
-                                                       as iota(product(axes)), got \
-                                                       $(Base.sort(device_ids))"
+    @assert ndevices == length(logical_device_ids) "length(logical_device_ids) should be \
+                                                    same as prod(last, mesh_axes)"
+    @assert all(Base.Fix2(≥, 0), logical_device_ids) "logical_device_ids must be \
+                                                      non-negative"
+
+    sorted_logical_device_ids = Base.sort(logical_device_ids)
+    @assert sorted_logical_device_ids == 0:(ndevices - 1) "sorted logical_device_ids \
+                                                           must be the same \
+                                                           as iota(product(axes)), got \
+                                                           $(sorted_logical_device_ids)"
 
     # error: if the ordered device ids are the same as iota(product(axes)), no need to
     # specify them for simplicity
-    issorted(device_ids) && (device_ids = Int64[])
+    logical_device_ids == sorted_logical_device_ids && (logical_device_ids = Int64[])
 
     ctx = MLIR.IR.context()
     mesh_axis_attrs = [
@@ -2399,8 +2404,8 @@ end
         ctx,
         Int64(length(mesh_axis_attrs)),
         mesh_axis_attrs,
-        Int64(length(device_ids)),
-        collect(Int64, device_ids),
+        Int64(length(logical_device_ids)),
+        collect(Int64, logical_device_ids),
     )
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
@@ -2441,8 +2446,9 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
         (input = constant(input; location))
 
     cache = Reactant.Compiler.sdycache()
-    haskey(cache, sharding.mesh) || mesh(sharding.mesh; location)
-    (; sym_name, mesh_attr) = cache[sharding.mesh]
+    key = (sharding.mesh.logical_device_ids, sharding.mesh.axis_names, size(sharding.mesh))
+    haskey(cache, key) || mesh(sharding.mesh; location)
+    (; sym_name, mesh_attr) = cache[key]
 
     tensor_sharding_attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
         sharding, MLIR.IR.context(), sym_name, mesh_attr, size(input); do_transpose=false
@@ -2499,7 +2505,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     - **CPU version & Julia's `reduce`**:
       - Reduce along dimension 1 → `[(15) (21); (18) (24)]`
       - Reduce along dimension 3 → `[(33 + 2)  (45 + 2)]` → `[35 47]`
-    
+
     - **GPU version**:
       - Reduce along dimension 1 → `[(15 + 2) (21 + 2); (18 + 2) (24 + 2)]`
       - Reduce along dimension 3 → `[37 49]`

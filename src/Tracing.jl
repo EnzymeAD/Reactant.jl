@@ -32,6 +32,7 @@ for T in (
     RNumber,
     Val,
     VersionNumber,
+    Sharding.Mesh,
 )
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(T::Type{<:$T}),
@@ -1750,6 +1751,19 @@ function make_tracer(
     res = Core.Box(tr)
     seen[prev] = res
     return res
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev::Sharding.Mesh),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    kwargs...,
+)
+    return prev
 end
 
 @inline function to_rarray(
