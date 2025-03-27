@@ -786,29 +786,8 @@ function compile_mlir!(
     mod,
     f,
     args,
-    callcache=Dict{
-        Vector,
-        @NamedTuple{
-            f_name::String,
-            mlir_result_types::Vector{MLIR.IR.Type},
-            traced_result::Any,
-            mutated_args::Vector{Int},
-            linear_results::Vector{Reactant.TracedType},
-            fnwrapped::Bool,
-            argprefix::Symbol,
-            resprefix::Symbol,
-            resargprefix::Symbol,
-        }
-    }(),
-    sdycache=Dict{
-        Tuple{AbstractVector{Int},NTuple{<:Any,Symbol},Dims{<:Any}},
-        @NamedTuple{
-            sym_name::MLIR.IR.Attribute,
-            mesh_attr::MLIR.IR.Attribute,
-            mesh_op::MLIR.IR.Operation,
-            mesh::Reactant.Sharding.Mesh,
-        }
-    }();
+    callcache=default_callcache(),
+    sdycache=default_sdycache();
     optimize::Union{Bool,Symbol}=true,
     # default refers to letting XLA handle the shardy inport/propagation/export
     shardy_passes::Symbol=:to_mhlo_shardings, # [:default, :to_mhlo_shardings]
@@ -2317,6 +2296,35 @@ for cache_type in (:callcache, :sdycache)
             return last(task_local_storage($(Meta.quot(cache_type))))
         end
     end
+end
+
+function default_sdycache()
+    return Dict{
+        Tuple{AbstractVector{Int},NTuple{<:Any,Symbol},Dims{<:Any}},
+        @NamedTuple{
+            sym_name::MLIR.IR.Attribute,
+            mesh_attr::MLIR.IR.Attribute,
+            mesh_op::MLIR.IR.Operation,
+            mesh::Reactant.Sharding.Mesh,
+        }
+    }()
+end
+
+function default_callcache()
+    return Dict{
+        Vector,
+        @NamedTuple{
+            f_name::String,
+            mlir_result_types::Vector{MLIR.IR.Type},
+            traced_result::Any,
+            mutated_args::Vector{Int},
+            linear_results::Vector{Reactant.TracedType},
+            fnwrapped::Bool,
+            argprefix::Symbol,
+            resprefix::Symbol,
+            resargprefix::Symbol,
+        }
+    }()
 end
 
 end

@@ -481,57 +481,71 @@ function sharding_to_array_slices(
     )
 
     if needs_padding
-        # TODO: directly use MLIR instead of tracing
-        kws = client === nothing ? (;) : (; client)
-        tmp = if length(size_x) == 0
-            Reactant.ConcreteRNumber(zero(Float32); kws...)
-        else
-            Reactant.ConcreteRArray(ones(Float32, size_x...); kws...)
-        end
-        _, exec, mlir_fn_res, _, _ = Reactant.Compiler.compile_xla(
-            Reactant.Ops.negate,
-            (tmp,);
-            input_shardings=IdDict(tmp => sharding),
-            shardy_passes=:no_stablehlo_export,
+        # MLIR for identity operation, avoid tracing here
+        ctx = MLIR.IR.Context(Reactant.registry[], false)
+        Reactant.Compiler.context_gc_vector[ctx] = Vector{
+            Union{Reactant.TracedRArray,Reactant.TracedRNumber}
+        }(
+            undef, 0
         )
-        sharding_mesh = only(mlir_fn_res.unique_meshes)
+        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+        MLIR.IR.activate!(ctx)
 
-        get_from_hlo_sharding = true
-        result_attrs = MLIR.IR.attr(mlir_fn_res.f, "res_attrs")
-        if result_attrs !== nothing && length(result_attrs) == 1
-            result_attr = result_attrs[0]
-            if MLIR.IR.isdict(result_attr)
-                mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
-                    result_attr, "sdy.sharding"
-                )
-                if mlir_attr.ptr != C_NULL
-                    sharding = named_sharding_from_tensor_sharding_attr(
-                        sharding_mesh, MLIR.IR.Attribute(mlir_attr)
-                    )
-                    get_from_hlo_sharding = false
-                    condensed_op_sharding = convert(
-                        XLA.CondensedOpSharding,
-                        convert(Reactant.Sharding.HloSharding, sharding).hlo_sharding,
-                    )
-                end
-            end
-        end
+        sdycache = Reactant.Compiler.default_sdycache()
+        Reactant.Compiler.activate_sdycache!(sdycache)
 
-        if get_from_hlo_sharding
-            condensed_op_sharding = convert(
-                XLA.CondensedOpSharding,
-                convert(
-                    Reactant.XLA.HloSharding,
-                    only(Reactant.XLA.get_parameter_shardings(exec)),
-                ),
+        try
+            data_mlir_type = [MLIR.IR.TensorType(reverse(size_x), MLIR.IR.Type(Float32))]
+            mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+
+            (; sym_name, mesh_attr) = Reactant.Ops.mesh(sharding.mesh; mod)
+
+            func = MLIR.Dialects.func.func_(;
+                sym_name="main",
+                function_type=MLIR.IR.FunctionType(data_mlir_type, data_mlir_type),
+                no_inline=true,
+                body=MLIR.IR.Region(),
             )
+            fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
+            push!(MLIR.IR.region(func, 1), fnbody)
+            MLIR.IR.activate!(fnbody)
+            try
+                MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
+            finally
+                MLIR.IR.deactivate!(fnbody)
+            end
+            push!(MLIR.IR.body(mod), func)
+
+            input_tensor_sharding_attr, _ = get_tensor_sharding_attribute(
+                sharding, ctx, sym_name, mesh_attr, size_x; dialect=:sdy
+            )
+
+            MLIR.API.mlirFuncSetArgAttr(func, 0, "sdy.sharding", input_tensor_sharding_attr)
+
+            Reactant.Compiler.run_pass_pipeline!(
+                mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+            )
+
+            mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
+                MLIR.IR.attr(func, "res_attrs")[0], "sdy.sharding"
+            )
+            @assert mlir_attr.ptr != C_NULL
+            sharding = named_sharding_from_tensor_sharding_attr(
+                sharding.mesh, MLIR.IR.Attribute(mlir_attr)
+            )
+
+            new_hlo_sharding = convert(HloSharding, sharding).hlo_sharding
+            condensed_op_sharding = convert(XLA.CondensedOpSharding, new_hlo_sharding)
+
+            device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+                condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
+            )
+
+            @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
+        finally
+            Reactant.Compiler.deactivate_sdycache!(sdycache)
+            MLIR.IR.deactivate!(ctx)
         end
-
-        device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
-            condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
-        )
-
-        @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(convert(Reactant.XLA.HloSharding, only(Reactant.XLA.get_parameter_shardings(exec))))).\nArray Slices: $(device_to_array_slices)."
     end
 
     return_updated_sharding isa Val{true} && return (device_to_array_slices, sharding)

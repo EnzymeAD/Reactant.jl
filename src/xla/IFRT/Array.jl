@@ -239,22 +239,14 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.activate!(ctx)
 
-    sdycache = Dict{
-        Tuple{AbstractVector{Int},NTuple{<:Any,Symbol},Dims{<:Any}},
-        @NamedTuple{
-            sym_name::MLIR.IR.Attribute,
-            mesh_attr::MLIR.IR.Attribute,
-            mesh_op::MLIR.IR.Operation,
-            mesh::Reactant.Sharding.Mesh,
-        }
-    }()
+    sdycache = Reactant.Compiler.default_sdycache()
     Reactant.Compiler.activate_sdycache!(sdycache)
 
     output_buffer = try
         data_mlir_type = [MLIR.IR.TensorType(reverse(size_arr), MLIR.IR.Type(eltype(array)))]
         mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
 
-        (; sym_name, mesh_attr) = Reactant.Ops.mesh(mesh; mod=mod)
+        (; sym_name, mesh_attr) = Reactant.Ops.mesh(mesh; mod)
         common_args = (ctx, sym_name, mesh_attr, size_arr)
         common_kwargs = (; dialect=:sdy, do_transpose=true)
         input_tensor_sharding_attr, _ = Reactant.Sharding.get_tensor_sharding_attribute(
