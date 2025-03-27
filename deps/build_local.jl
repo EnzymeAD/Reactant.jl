@@ -151,13 +151,13 @@ if cc_is_gcc
     arch = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform())
     if arch == "x86_64"
         if gcc_version < v"13"
-            push!(build_cmd_list, "--define=xnn_enable_avxvnniint8=false")
         end
         if gcc_version < v"12"
-            push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
         end
     end
 end
+push!(build_cmd_list, "--define=xnn_enable_avxvnniint8=false")
+push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
 
