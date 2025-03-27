@@ -43,8 +43,19 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         logical_device_ids::AbstractVector{Int64},
         axis_names::NTuple{D,Union{String,Symbol}},
     ) where {D}
-        return new{D,typeof(logical_device_ids)}(
+        return Mesh(
             sort!(vec(device_ids)), logical_device_ids, axis_names, size(device_ids)
+        )
+    end
+
+    function Mesh(
+        sorted_device_ids::AbstractVector{<:Integer},
+        logical_device_ids::AbstractVector{Int64},
+        axis_names::NTuple{D,Union{String,Symbol}},
+        axis_sizes::Dims{D},
+    ) where {D}
+        return new{D,typeof(logical_device_ids)}(
+            sorted_device_ids, logical_device_ids, axis_names, axis_sizes
         )
     end
 
@@ -104,9 +115,10 @@ function mesh_from_sdy_mesh_attr(mesh_attr::MLIR.IR.Attribute, global_device_ids
     @assert length(logical_device_ids) == length(global_device_ids)
 
     mesh = Mesh(
-        reshape(global_device_ids, last.(mesh_axes)...),
+        global_device_ids,
         logical_device_ids,
         ntuple(i -> first(mesh_axes[i]), length(mesh_axes)),
+        Tuple(last.(mesh_axes)),
     )
 
     cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
