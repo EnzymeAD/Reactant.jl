@@ -784,7 +784,15 @@ function get_tensor_sharding_attribute(
 
     if dialect == :sdy
         if Reactant.XLA.is_replicated(sharding.hlo_sharding)
-            error("TODO: fast path")
+            named_sharding = NamedSharding(
+                sharding.mesh,
+                ntuple(Returns(nothing), length(size_arr));
+                sharding.is_closed,
+                sharding.priority,
+            )
+            return get_tensor_sharding_attribute(
+                named_sharding, ctx, mesh_name, mesh_attr, size_arr; dialect, kwargs...
+            )
         end
 
         # XXX: Not recommended path

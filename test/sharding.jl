@@ -377,3 +377,38 @@ end
         @warn "Not enough addressable devices to run sharding tests"
     end
 end
+
+function inplace_sub!(x, y)
+    x .-= y
+    return nothing
+end
+
+@testset "Multiple Mesh Sharding" begin
+    if length(addressable_devices) ≥ 12
+        mesh1 = Sharding.Mesh(reshape(0:11, 2, 3, 2), (:x, :y, :z))
+        mesh2 = Sharding.Mesh(permutedims(reshape(0:11, 2, 2, 3), (3, 2, 1)), (:p, :q, :r))
+
+        jl_arr = reshape(collect(1:24), 2, 3, 4)
+
+        x_ra_mesh1 = Reactant.to_rarray(
+            jl_arr; sharding=Sharding.NamedSharding(mesh1, (:x, :y, :z))
+        )
+        y_ra_mesh2 = Reactant.to_rarray(
+            jl_arr; sharding=Sharding.NamedSharding(mesh2, (:p, :q, :r))
+        )
+
+        res1 = @jit .+(x_ra_mesh1, y_ra_mesh2)
+        @test res1 isa Reactant.ConcreteRArray
+        @test Array(res1) ≈ jl_arr .+ jl_arr
+
+        @jit inplace_sub!(res1, x_ra_mesh1)
+        @test res1 isa Reactant.ConcreteRArray
+        @test Array(res1) ≈ jl_arr
+
+        @jit inplace_sub!(res1, y_ra_mesh2)
+        @test res1 isa Reactant.ConcreteRArray
+        @test Array(res1) ≈ zero.(jl_arr)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
