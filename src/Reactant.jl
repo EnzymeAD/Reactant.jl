@@ -15,6 +15,10 @@ export @allowscalar # re-exported from GPUArraysCore
 # auxiliary types and functions
 include("OrderedIdDict.jl")
 
+function precompiling()
+    return (@ccall jl_generating_output()::Cint) == 1
+end
+
 using Enzyme
 
 struct ReactantABI <: Enzyme.EnzymeCore.ABI end

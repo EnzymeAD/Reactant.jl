@@ -193,41 +193,50 @@ function trace_for(mod, expr; track_numbers)
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
     all_syms = Expr(:tuple, counter, external_syms...)
+
+    args_names = Expr(:tuple, counter, external_syms...)
+    cond_val(s) = :(@isdefined($s) ? $s : nothing)
     args_init = Expr(
         :tuple,
-        :(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0)),
-        external_syms...,
+        :(Ref(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0))),
+        (:(Ref($(cond_val(s)))) for s in external_syms)...,
     )
 
-    cond_val(s) = :(@isdefined($s) ? $s : nothing)
+    ref_syms = Symbol[Symbol(string(sym) * "_ref") for sym in external_syms]
+    arg_syms = Expr(:tuple, counter, ref_syms...)
 
-    while_defined = gensym(:while_defined)
-    locals = Expr[
-        [Expr(:(=), s, cond_val(s)) for s in external_syms]..., :(args = $(args_init))
+    to_locals = [:(local $s = $ref[]) for (s, ref) in zip(external_syms, ref_syms)]
+    from_locals = [
+        (
+            quote
+                if !($ref[] isa Nothing)
+                    $ref[] = $s
+                end
+            end
+        ) for (s, ref) in zip(external_syms, ref_syms)
     ]
 
-    var_syms = all_syms.args[(begin + 1):end]
     reactant_code_block = quote
-        let $(locals...)
+        let args = $(args_init)
             cond_fn =
-                $(all_syms) -> begin
+                $(arg_syms) -> begin
+                    $(to_locals...)
                     local num_iters = div($limit - $start, $step, RoundDown)
                     local num_iters = Reactant.TracedUtils.promote_to(
                         Reactant.TracedRNumber{Int64}, num_iters
                     )
-                    $counter < num_iters + 1
+                    $counter[] < num_iters + 1
                 end
             body_fn =
-                $(all_syms) -> begin
-                    local isdefined_before = isnothing.(Any[$(var_syms...)])
+                $(arg_syms) -> begin
                     local step_ = $step
                     local start_ = $start
-                    local $induction = start_ + $counter * step_
+                    local $induction = start_ + $counter[] * step_
+                    $(to_locals...)
                     $body
-                    local results_ = Any[
-                        s for (d, s) in zip(isdefined_before, Any[$(var_syms...)]) if !d
-                    ]
-                    ($counter + 1, results_...)
+                    $(from_locals...)
+                    $counter[].mlir_data = ($counter[] + 1).mlir_data
+                    nothing
                 end
 
             $(ReactantCore).traced_while(
@@ -235,7 +244,7 @@ function trace_for(mod, expr; track_numbers)
                 body_fn,
                 args;
                 track_numbers=$(track_numbers),
-                verify_arg_names=$(QuoteNode(args_init)),
+                verify_arg_names=$(QuoteNode(args_names)),
             )
         end
     end
