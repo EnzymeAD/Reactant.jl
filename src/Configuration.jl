@@ -54,7 +54,9 @@ The following functions are available:
     HIGHEST
 end
 
-const DOT_GENERAL_PRECISION = ScopedValue{DotGeneralPrecision.T}(
+const DOT_GENERAL_PRECISION = ScopedValue{
+    Union{DotGeneralPrecision.T,Nothing,Tuple{DotGeneralPrecision.T,DotGeneralPrecision.T}}
+}(
     DotGeneralPrecision.DEFAULT
 )
 
@@ -72,9 +74,14 @@ function MLIR.IR.Attribute(precision::DotGeneralPrecision.T)
 end
 
 """
+    DotGeneralAlgorithm(
+        ::Type{lhsT}, ::Type{rhsT}, ::Type{accumT},
+        rhs_component_count::Int, lhs_component_count::Int, num_primitive_operations::Int,
+        allow_imprecise_accumulation::Bool
+    )
     DotGeneralAlgorithm{lhsT,rhsT,accumT}(
-        lhs_component_count, rhs_component_count, num_primitive_operations,
-        allow_imprecise_accumulation
+        lhs_component_count::Int, rhs_component_count::Int, num_primitive_operations::Int,
+        allow_imprecise_accumulation::Bool
     )
 
 Represents the configuration of the `stablehlo.dot_general` operation.
@@ -94,6 +101,23 @@ struct DotGeneralAlgorithm{lhsT<:ReactantFloat,rhsT<:ReactantFloat,accumT<:React
     lhs_component_count::Int
     num_primitive_operations::Int
     allow_imprecise_accumulation::Bool
+end
+
+function DotGeneralAlgorithm(
+    ::Type{lhsT},
+    ::Type{rhsT},
+    ::Type{accumT},
+    rhs_component_count::Int,
+    lhs_component_count::Int,
+    num_primitive_operations::Int,
+    allow_imprecise_accumulation::Bool,
+) where {lhsT,rhsT,accumT}
+    return DotGeneralAlgorithm{lhsT,rhsT,accumT}(
+        rhs_component_count,
+        lhs_component_count,
+        num_primitive_operations,
+        allow_imprecise_accumulation,
+    )
 end
 
 function MLIR.IR.Attribute(
@@ -164,7 +188,9 @@ The following functions are available:
     TF32_TF32_F32_X3
 end
 
-const DOT_GENERAL_ALGORITHM = ScopedValue{DotGeneralAlgorithmPreset.T}(
+const DOT_GENERAL_ALGORITHM = ScopedValue{
+    Union{DotGeneralAlgorithmPreset.T,Nothing,DotGeneralAlgorithm}
+}(
     DotGeneralAlgorithmPreset.DEFAULT
 )
 
@@ -256,8 +282,7 @@ function DotGeneralAlgorithm(
         if !(T1 <: ReactantFloat8 && T2 <: ReactantFloat8)
             error("Unsupported combination of types $T1 and $T2")
         end
-        return nothing
-        DotGeneralAlgorithm{T1,T2,Float32}(
+        return DotGeneralAlgorithm{T1,T2,Float32}(
             1,
             1,
             1,
