@@ -64,11 +64,14 @@ function enable_verifier!(pm, enable=true)
     return pm
 end
 
+# Where to dump the MLIR modules
 const DUMP_MLIR_DIR = Ref{Union{Nothing,String}}(nothing)
+# Whether to always dump MLIR, regardless of failure
+const DUMP_MLIR_ALWAYS = Ref{Bool}(false)
 
 # Utilities for dumping to a file the module of a failed compilation, useful for
 # debugging purposes.
-function compilation_failed_dump_mlir(mod::Module, pm::Union{Nothing,PassManager}=nothing)
+function dump_mlir(mod::Module, pm::Union{Nothing,PassManager}=nothing; failed::Bool=false)
     try
         # If `DUMP_MLIR_DIR` is `nothing`, create a persistent new temp
         # directory, otherwise use the provided path.
@@ -90,18 +93,21 @@ function compilation_failed_dump_mlir(mod::Module, pm::Union{Nothing,PassManager
             end
             show(IOContext(io, :debug => true), mod)
         end
-        @error "Compilation failed, MLIR module written to $(path)"
+        failed && @error "Compilation failed, MLIR module written to $(path)"
     catch err
         @error "Couldn't save MLIR module" exception = err
     end
 end
 
 function try_compile_dump_mlir(f, mod::Module, pm=nothing)
+    failed = false
     try
         f()
     catch
-        compilation_failed_dump_mlir(mod, pm)
+        failed = true
         rethrow()
+    finally
+        dump_mlir(mod, pm; failed)
     end
 end
 
@@ -116,8 +122,11 @@ function run!(pm::PassManager, mod::Module)
     else
         API.mlirPassManagerRun(pm, mod)
     end)
-    if isfailure(status)
-        compilation_failed_dump_mlir(mod, pm)
+    failed = isfailure(status)
+    if failed || DUMP_MLIR_ALWAYS[]
+        dump_mlir(mod, pm; failed)
+    end
+    if failed
         throw("failed to run pass manager on module")
     end
     return mod
