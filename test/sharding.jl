@@ -109,7 +109,7 @@ fn_test3(x) = sum(x; dims=1)
 end
 
 @testset "Sharding with non-iota mesh" begin
-    if length(addressable_devices) ≥ 8
+    if length(addressable_devices) ≥ 8 && Reactant.XLA.runtime() isa Val{:IFRT}
         mesh = Sharding.Mesh(reshape([4, 6, 0, 2, 7, 3, 1, 5], 4, 2), ("data", "model"))
         x = reshape(collect(Float32, 1:16), 4, 4)
         x_ra = Reactant.to_rarray(
@@ -166,7 +166,7 @@ end
 fn_test4(x, y) = x .+ sin.(y')
 
 @testset "Multiple Mesh Sharding" begin
-    if length(addressable_devices) ≥ 8
+    if length(addressable_devices) ≥ 8 && Reactant.XLA.runtime() isa Val{:IFRT}
         mesh1 = Sharding.Mesh(reshape(collect(Int64, 0:7), (4, 2)), ("m1_x", "m1_y"))
         mesh2 = Sharding.Mesh(
             reshape([4, 6, 0, 2, 7, 3, 1, 5], 2, 2, 2), ("m2_x", "m2_y", "m2_z")
@@ -384,7 +384,7 @@ function inplace_sub!(x, y)
 end
 
 @testset "Multiple Mesh Sharding" begin
-    if length(addressable_devices) ≥ 12
+    if length(addressable_devices) ≥ 12 && Reactant.XLA.runtime() isa Val{:IFRT}
         mesh1 = Sharding.Mesh(reshape(0:11, 2, 3, 2), (:x, :y, :z))
         mesh2 = Sharding.Mesh(permutedims(reshape(0:11, 2, 2, 3), (3, 2, 1)), (:p, :q, :r))
 

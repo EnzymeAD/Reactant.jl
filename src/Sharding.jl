@@ -376,6 +376,10 @@ end
 function (sharding::NamedSharding)(
     client::XLA.PJRT.Client, _, x::Union{AbstractArray,Number}
 )
+    if !issorted(sharding.mesh.logical_device_ids)
+        error("PJRT doesn't support non-iota meshes. Use IFRT instead.")
+    end
+
     device_to_array_slices, sharding = sharding_to_array_slices(
         sharding, size(x); client, return_updated_sharding=Val(true)
     )
@@ -732,6 +736,10 @@ function sharding_to_array_slices(
 end
 
 function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
+    if !issorted(sharding.mesh.logical_device_ids)
+        error("PJRT doesn't support non-iota meshes. Use IFRT instead.")
+    end
+
     device_to_array_slices, hlo_sharding = sharding_to_array_slices(
         convert(HloSharding, sharding), size(x); client, return_updated_sharding=Val(true)
     )

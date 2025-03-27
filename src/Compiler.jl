@@ -1520,12 +1520,12 @@ function codegen_flatten!(
 
                     push!(flatten_code, :($usbuf = $flatcode.data))
                     for j in 1:length(carg.sharding.mesh)
-                        sbuf = Symbol(
-                            :sbuf_, i, "_", carg.sharding.mesh.logical_device_ids[j]
-                        )
+                        logical_id = carg.sharding.mesh.logical_device_ids[j]
+                        sbuf = Symbol(:sbuf_, i, "_", logical_id)
                         push!(flatten_names, sbuf)
                         push!(
-                            flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j)))
+                            flatten_code,
+                            :($sbuf = XLA.synced_buffer(getindex($usbuf, $(j)))),
                         )
                     end
                 else
