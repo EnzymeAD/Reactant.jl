@@ -515,10 +515,9 @@ function make_mlir_fn(
         for i in mutated_args
             arg = linear_args[i]
             if !haskey(traced_args_to_shardings, arg)
-                # Force a replicated sharding
-                error("TODO: support multiple meshes")
+                # Force a replicated sharding (it doesn't matter with mesh we use)
                 traced_args_to_shardings[arg] = Reactant.Sharding.NamedSharding(
-                    sharding_mesh, ntuple(Returns(nothing), ndims(arg))
+                    first(unique_meshes), ntuple(Returns(nothing), ndims(arg))
                 )
             end
         end

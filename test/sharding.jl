@@ -182,8 +182,8 @@ fn_test4(x, y) = x .+ sin.(y')
             y; sharding=Sharding.NamedSharding(mesh2, ("m2_y", nothing))
         )
 
-        # This is supported in shardy & XLA, but we don't support it yet.
-        @test_throws ErrorException @jit fn_test4(x_ra, y_ra)
+        res = @jit fn_test4(x_ra, y_ra)
+        @test Array(res) ≈ fn_test4(x, y)
     else
         @warn "Not enough addressable devices to run sharding tests"
     end

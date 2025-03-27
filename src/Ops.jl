@@ -2477,8 +2477,9 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
         (input = constant(input; location))
 
     cache = Reactant.Compiler.sdycache()
-    haskey(cache, sharding.mesh) || mesh(sharding.mesh; location)
-    (; sym_name, mesh_attr) = cache[sharding.mesh]
+    key = (sharding.mesh.logical_device_ids, sharding.mesh.axis_names, size(sharding.mesh))
+    haskey(cache, key) || mesh(sharding.mesh; location)
+    (; sym_name, mesh_attr) = cache[key]
 
     tensor_sharding_attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
         sharding, MLIR.IR.context(), sym_name, mesh_attr, size(input); do_transpose=false
