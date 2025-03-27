@@ -498,6 +498,7 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "reshape_empty_broadcast<1>",
         "add_pad_pad_to_concat<1>",
         "broadcast_reshape<1>",
+        "broadcast_iota_simplify<1>",
         "slice_reshape_concat<1>",
         "slice_reshape_elementwise<1>",
         "slice_reshape_transpose<1>",
