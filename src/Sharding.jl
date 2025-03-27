@@ -514,7 +514,7 @@ end
 @inline ndevices(sharding::DimsSharding) = length(sharding.mesh.device_ids)
 
 @inline function shard_type(::Type{DimsSharding{M,D,P}}, N) where {M,D,P}
-    return shard_type(NamedSharding{M,D}, N)
+    return shard_type(NamedSharding{M,N}, N)
 end
 
 function standardize_sharding(sharding::DimsSharding, size_x)
