@@ -55,7 +55,7 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         axis_sizes::Dims{D},
     ) where {D}
         return new{D,typeof(logical_device_ids)}(
-            sorted_device_ids, logical_device_ids, axis_names, axis_sizes
+            sorted_device_ids, logical_device_ids, Symbol.(axis_names), axis_sizes
         )
     end
 
