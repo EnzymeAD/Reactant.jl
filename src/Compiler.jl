@@ -1189,11 +1189,20 @@ function compile_mlir!(
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
     preserved_args_idx = last.(preserved_args)
+    if backend != "tpu"
     for (i, arg) in enumerate(linear_args)
         if i ∉ preserved_args_idx
             MLIR.API.mlirFuncSetArgAttr(
                 func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
             )
+        end
+    end
+    else
+        for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
+            if MLIR.IR.dialect(op) == :llvm
+		    MLIR.API.mlirOperationDestroy(op.operation)
+		    op.operation = MLIR.API.MlirOperation(C_NULL)
+            end
         end
     end
 
