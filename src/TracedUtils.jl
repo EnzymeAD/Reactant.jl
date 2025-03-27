@@ -152,9 +152,7 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-mutable struct CompiledMlirFnResult{
-    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA,RS
-}
+mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD}
     fnwrapped::Bool
     f::F
     traced_result::TR
@@ -169,10 +167,11 @@ mutable struct CompiledMlirFnResult{
     is_sharded::Bool
     preserved_args::PA
     concrete_result::CR
-    sharding_mesh::M
+    unique_meshes::M
     mutated_args::MA
     use_shardy_partitioner::Bool
     result_shardings::RS
+    global_device_ids::GD # only populated if is_sharded
 end
 
 function make_mlir_fn(
@@ -502,15 +501,10 @@ function make_mlir_fn(
 
     if is_sharded
         unique_meshes = keys(mesh_cache)
-
-        # TODO: support multiple meshes
-        if length(unique_meshes) > 1
-            error("Currently we support using a single mesh")
-            sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
-            @assert allequal(sorted_devices) "All meshes must have the same device ids"
-        end
-        sharding_mesh = first(unique_meshes)
-        num_partitions = length(sharding_mesh)
+        sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
+        @assert allequal(sorted_devices) "All meshes must have the same device ids"
+        global_device_ids = first(sorted_devices)
+        num_partitions = length(first(unique_meshes))
 
         linear_arg_shardings = Vector{Tuple{MLIR.IR.Attribute,Symbol}}(
             undef, length(linear_args)
@@ -522,6 +516,7 @@ function make_mlir_fn(
             arg = linear_args[i]
             if !haskey(traced_args_to_shardings, arg)
                 # Force a replicated sharding
+                error("TODO: support multiple meshes")
                 traced_args_to_shardings[arg] = Reactant.Sharding.NamedSharding(
                     sharding_mesh, ntuple(Returns(nothing), ndims(arg))
                 )
@@ -602,7 +597,8 @@ function make_mlir_fn(
             end
         end
     else
-        sharding_mesh = nothing
+        global_device_ids = ()
+        unique_meshes = nothing
     end
 
     MLIR.API.mlirOperationDestroy(func.operation)
@@ -623,10 +619,11 @@ function make_mlir_fn(
         is_sharded,
         nothing,
         nothing,
-        sharding_mesh,
+        unique_meshes,
         mutated_args,
         true,
         missing,
+        global_device_ids
     )
 end
 

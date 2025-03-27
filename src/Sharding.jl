@@ -21,9 +21,9 @@ julia> mesh = Mesh(reshape(devices, 2, 2, 2), (:x, :y, :z));
 julia> mesh = Mesh(reshape(devices, 4, 2), (:x, :y));
 ```
 """
-struct Mesh{D}
+struct Mesh{D,ID<:AbstractVector{Int}}
     device_ids::Array{Int64,D}
-    logical_device_ids::UnitRange{Int}
+    logical_device_ids::ID
     axis_names::NTuple{D,Symbol}
 
     function Mesh(devices::AbstractArray{<:XLA.AbstractDevice}, axis_names)
@@ -33,7 +33,10 @@ struct Mesh{D}
     function Mesh(
         device_ids::AbstractArray{<:Integer,D}, axis_names::NTuple{D,Union{String,Symbol}}
     ) where {D}
-        return new{D}(device_ids, 0:(length(device_ids) - 1), Symbol.(axis_names))
+        logical_device_ids = sortperm(vec(device_ids)) .- 1
+        return new{D,typeof(logical_device_ids)}(
+            device_ids, logical_device_ids, Symbol.(axis_names)
+        )
     end
 
     # XXX (Deprecated): remove in v0.3
@@ -182,20 +185,20 @@ julia> sharding = NamedSharding(mesh, (nothing, nothing)); # fully replicated Ma
 
 See also: [`Sharding.NoSharding`](@ref)
 """
-struct NamedSharding{D1,D2} <: AbstractSharding
-    mesh::Mesh{D1}
+struct NamedSharding{D,M<:Mesh} <: AbstractSharding
+    mesh::M
     partition_spec::Vector{Vector{Union{Nothing,Symbol}}}
-    is_closed::NTuple{D2,Bool}
-    priority::NTuple{D2,Int}
+    is_closed::NTuple{D,Bool}
+    priority::NTuple{D,Int}
     subaxes::Vector{Vector{Union{Nothing,Dims{2}}}}
 
     function NamedSharding(
-        mesh::Mesh{D1},
+        mesh::Mesh,
         partition_spec;
         subaxes=nothing,
-        is_closed::NTuple{D2,Bool}=ntuple(Returns(true), length(partition_spec)),
-        priority::NTuple{D2,Int}=ntuple(i -> -1, length(partition_spec)),
-    ) where {D1,D2}
+        is_closed::NTuple{D,Bool}=ntuple(Returns(true), length(partition_spec)),
+        priority::NTuple{D,Int}=ntuple(i -> -1, length(partition_spec)),
+    ) where {D}
         axis_names = Symbol[]
 
         new_partition_spec = Vector{Vector{Union{Nothing,Symbol}}}(
@@ -237,7 +240,7 @@ struct NamedSharding{D1,D2} <: AbstractSharding
             end
         end
 
-        return new{D1,D2}(mesh, new_partition_spec, is_closed, priority, subaxes)
+        return new{D,typeof(mesh)}(mesh, new_partition_spec, is_closed, priority, subaxes)
     end
 end
 
@@ -304,8 +307,9 @@ end
 
 @inline ndevices(sharding::NamedSharding) = length(sharding.mesh.device_ids)
 
-@inline function shard_type(::Type{NamedSharding{D1,D2}}, N) where {D1,D2}
-    return ShardInfo{NamedSharding{D1,D2},Vector{NTuple{N,UnitRange{Int64}}}}
+@inline function shard_type(::Type{NamedSharding{D,M}}, N) where {D,M}
+    @assert D == N
+    return ShardInfo{NamedSharding{D,M},Vector{NTuple{N,UnitRange{Int64}}}}
 end
 
 function (sharding::NamedSharding)(
@@ -416,6 +420,7 @@ function sharding_to_array_slices(
     )
 
     if needs_padding
+        # TODO: directly use MLIR instead of tracing
         kws = client === nothing ? (;) : (; client)
         tmp = if length(size_x) == 0
             Reactant.ConcreteRNumber(zero(Float32); kws...)
@@ -428,6 +433,7 @@ function sharding_to_array_slices(
             input_shardings=IdDict(tmp => sharding),
             shardy_passes=:no_stablehlo_export,
         )
+        sharding_mesh = only(mlir_fn_res.unique_meshes)
 
         get_from_hlo_sharding = true
         result_attrs = MLIR.IR.attr(mlir_fn_res.f, "res_attrs")
@@ -439,7 +445,7 @@ function sharding_to_array_slices(
                 )
                 if mlir_attr.ptr != C_NULL
                     sharding = Reactant.Sharding.named_sharding_from_tensor_sharding_attr(
-                        mlir_fn_res.sharding_mesh, MLIR.IR.Attribute(mlir_attr)
+                        sharding_mesh, MLIR.IR.Attribute(mlir_attr)
                     )
                     get_from_hlo_sharding = false
                     condensed_op_sharding = convert(
@@ -476,7 +482,7 @@ end
 
 """
     DimsSharding(
-        mesh::Mesh{M},
+        mesh::Mesh,
         dims::NTuple{D,Int},
         partition_spec;
         is_closed::NTuple{D,Bool}=ntuple(Returns(true), D),
@@ -489,23 +495,23 @@ number of dimensions in the array, the corresponding `partition_spec`, `is_close
 `priority` are ignored. Additionally for any negative dimensions in `dims`, the true
 dims are calculated as `ndims(x) - dim + 1`. A dims value of `0` will throw an error.
 """
-struct DimsSharding{M,D,P} <: AbstractSharding
-    mesh::Mesh{M}
+struct DimsSharding{D,P,M<:Mesh} <: AbstractSharding
+    mesh::M
     dims::NTuple{D,Int}
     partition_spec::P
     is_closed::NTuple{D,Bool}
     priority::NTuple{D,Int}
 
     function DimsSharding(
-        mesh::Mesh{M},
+        mesh::M,
         dims::NTuple{D,Int},
         partition_spec;
         is_closed::NTuple{D,Bool}=ntuple(Returns(true), length(partition_spec)),
         priority::NTuple{D,Int}=ntuple(i -> -1, length(partition_spec)),
-    ) where {M,D}
+    ) where {M<:Mesh,D}
         @assert length(partition_spec) == length(dims)
         # Validity checks on the inputs are deferred to NamedSharding
-        return new{M,D,typeof(partition_spec)}(
+        return new{D,typeof(partition_spec),M}(
             mesh, dims, partition_spec, is_closed, priority
         )
     end
@@ -513,8 +519,8 @@ end
 
 @inline ndevices(sharding::DimsSharding) = length(sharding.mesh.device_ids)
 
-@inline function shard_type(::Type{DimsSharding{M,D,P}}, N) where {M,D,P}
-    return shard_type(NamedSharding{M,N}, N)
+@inline function shard_type(::Type{DimsSharding{D,P,M}}, N) where {M,D,P}
+    return shard_type(NamedSharding{D,M}, N)
 end
 
 function standardize_sharding(sharding::DimsSharding, size_x)
@@ -560,22 +566,22 @@ end
 # This stores the sharding information in the form of XLA.HloSharding, and provides a
 # central type for the final storage. It also potentially saves us the pain of not having
 # to regenerate the partition spec from the HloSharding.
-struct HloSharding{D1,D2,PS} <: AbstractSharding
+struct HloSharding{D,PS,M<:Mesh} <: AbstractSharding
     hlo_sharding::XLA.HloSharding
     parent_sharding::PS
-    mesh::Mesh{D1}
-    is_closed::NTuple{D2,Bool}
-    priority::NTuple{D2,Int}
+    mesh::M
+    is_closed::NTuple{D,Bool}
+    priority::NTuple{D,Int}
 
     function HloSharding(
         hlo_sharding::XLA.HloSharding,
-        mesh::Mesh{D1},
+        mesh::M,
         is_closed,
         priority,
         parent_sharding::Union{Nothing,AbstractSharding}=nothing,
-    ) where {D1}
+    ) where {M<:Mesh}
         @assert length(is_closed) == length(priority)
-        return new{D1,length(is_closed),typeof(parent_sharding)}(
+        return new{length(is_closed),typeof(parent_sharding),M}(
             hlo_sharding, parent_sharding, mesh, is_closed, priority
         )
     end

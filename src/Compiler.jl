@@ -1224,10 +1224,11 @@ function compile_mlir!(
         mlir_fn_res.is_sharded,
         preserved_args,
         concrete_result,
-        mlir_fn_res.sharding_mesh,
+        mlir_fn_res.unique_meshes,
         mlir_fn_res.mutated_args,
         use_shardy_partitioner,
         result_shardings,
+        mlir_fn_res.global_device_ids,
     )
 end
 
@@ -2022,11 +2023,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # compile MLIR module to XLA executable
-        global_device_ids = if mlir_fn_res.is_sharded
-            vec(mlir_fn_res.sharding_mesh.device_ids)
-        else
-            Int64[]
-        end
+        global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
         mlir_fn_res.is_sharded && (device = nothing)
 
         exec = XLA.compile(
