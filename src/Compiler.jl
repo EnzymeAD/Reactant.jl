@@ -25,6 +25,7 @@ import ..Reactant:
 import ..ReactantCore: correct_maybe_bcast_call
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
+const DEBUG_DISABLE_RESHARDING = Ref(false)
 
 @inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
@@ -1192,18 +1193,18 @@ function compile_mlir!(
     # check which arguments were donated.
     preserved_args_idx = last.(preserved_args)
     if backend != "tpu"
-    for (i, arg) in enumerate(linear_args)
-        if i ∉ preserved_args_idx
-            MLIR.API.mlirFuncSetArgAttr(
-                func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
-            )
+        for (i, arg) in enumerate(linear_args)
+            if i ∉ preserved_args_idx
+                MLIR.API.mlirFuncSetArgAttr(
+                    func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
+                )
+            end
         end
-    end
     else
         for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
             if MLIR.IR.dialect(op) == :llvm
-		    MLIR.API.mlirOperationDestroy(op.operation)
-		    op.operation = MLIR.API.MlirOperation(C_NULL)
+                MLIR.API.mlirOperationDestroy(op.operation)
+                op.operation = MLIR.API.MlirOperation(C_NULL)
             end
         end
     end
@@ -1528,6 +1529,13 @@ function codegen_flatten!(
                         )
                     end
                 else
+                    if DEBUG_DISABLE_RESHARDING[]
+                        error("Resharding is disabled. Problematic input:\ntypeof: \
+                               $(typeof(carg))\nsize: $(size(carg))\nsharding: \
+                               $(carg.sharding)\nInput Index: $(i)\nInput Path: \
+                               $(path[3:end])")
+                    end
+
                     resharded_inputs[path[3:end]] = (
                         Reactant.XLA.device(carg), condensed_op_sharding, mesh
                     )
@@ -1604,6 +1612,13 @@ function codegen_flatten!(
                     )
                     push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
                 else
+                    if DEBUG_DISABLE_RESHARDING[]
+                        error("Resharding is disabled. Problematic input:\ntypeof: \
+                               $(typeof(carg))\nsize: $(size(carg))\nsharding: \
+                               $(carg.sharding)\nInput Index: $(i)\nInput Path: \
+                               $(path[3:end])")
+                    end
+
                     resharded_inputs[path] = (
                         Reactant.XLA.device(carg), condensed_op_sharding, mesh
                     )
