@@ -1199,7 +1199,7 @@ function compile_mlir!(
     end
     else
         for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
-            if MLIR.IR.name(op) == :llvm
+            if MLIR.IR.dialect(op) == :llvm
 		    MLIR.API.mlirOperationDestroy(op.operation)
 		    op.operation = MLIR.API.MlirOperation(C_NULL)
             end
