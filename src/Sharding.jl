@@ -87,7 +87,7 @@ struct Mesh{D,ID<:AbstractVector{Int}}
     end
 end
 
-function mesh_from_sdy_mesh_attr(mesh_attr::MLIR.IR.Attribute, global_device_ids)
+function sdy_mesh_to_reactant_mesh(mesh_attr::MLIR.IR.Attribute, global_device_ids)
     @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
 
     ndevice_ids = MLIR.API.sdyMeshAttrGetDeviceIdsSize(mesh_attr)
@@ -305,7 +305,7 @@ struct NamedSharding{D,M<:Mesh} <: AbstractSharding
     end
 end
 
-function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_attr)
+function sdy_tensor_sharding_to_named_sharding(mesh::Mesh, tensor_sharding_attr)
     @assert MLIR.API.sdyAttributeIsATensorShardingAttr(tensor_sharding_attr)
 
     ndims = MLIR.API.sdyTensorShardingAttrGetDimShardingsSize(tensor_sharding_attr)
@@ -534,7 +534,7 @@ function sharding_to_array_slices(
                 MLIR.IR.attr(func, "res_attrs")[0], "sdy.sharding"
             )
             @assert mlir_attr.ptr != C_NULL
-            sharding = named_sharding_from_tensor_sharding_attr(
+            sharding = sdy_tensor_sharding_to_named_sharding(
                 sharding.mesh, MLIR.IR.Attribute(mlir_attr)
             )
 
@@ -918,5 +918,27 @@ Unwraps a sharding info object, returning the sharding object itself.
 """
 unwrap_shardinfo(x::AbstractSharding) = x
 unwrap_shardinfo(x::ShardInfo) = unwrap_shardinfo(x.sharding)
+
+# sdy attributes to high-level sharding information
+function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
+    !MLIR.IR.isdict(attr) && return NoSharding()
+
+    mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(attr, "sdy.sharding")
+    mlir_attr.ptr == C_NULL && return NoSharding()
+
+    mesh_op = MLIR.IR.Operation(
+        MLIR.API.mlirSymbolTableLookup(
+            MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)),
+            MLIR.IR.leafref(
+                MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
+            ),
+        ),
+        false,
+    )
+    return sdy_tensor_sharding_to_named_sharding(
+        sdy_mesh_to_reactant_mesh(MLIR.IR.attr(mesh_op, "mesh"), global_device_ids),
+        MLIR.IR.Attribute(mlir_attr),
+    )
+end
 
 end

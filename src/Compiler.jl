@@ -7,6 +7,7 @@ import ..Reactant:
     Reactant,
     MLIR,
     XLA,
+    Sharding,
     ConcretePJRTArray,
     ConcretePJRTNumber,
     ConcreteIFRTArray,
@@ -91,8 +92,8 @@ end
 
     # This case is triggered if the user had provided an unsharded input (NoSharding), but
     # we had to replicate it before feeding it to XLA
-    @assert !Reactant.Sharding.is_sharded(obj) "Expected unsharded input. Open an issue on \
-                                                Reactant.jl with a MWE."
+    @assert !Sharding.is_sharded(obj) "Expected unsharded input. Open an issue on \
+                                       Reactant.jl with a MWE."
     devices = Reactant.XLA.device.(val)
     device = Reactant.XLA.device(only(obj.data))
     idx = findfirst(isequal(device), devices)
@@ -790,7 +791,7 @@ function compile_mlir!(
     sdycache=default_sdycache();
     optimize::Union{Bool,Symbol}=true,
     # default refers to letting XLA handle the shardy inport/propagation/export
-    shardy_passes::Symbol=:to_mhlo_shardings, # [:default, :to_mhlo_shardings]
+    shardy_passes::Symbol=:to_mhlo_shardings, # [:none, :to_mhlo_shardings]
     no_nan::Bool=false,
     assert_nonallocating::Bool=false,
     backend="gpu",
@@ -1064,28 +1065,9 @@ function compile_mlir!(
     use_shardy_partitioner = false
     result_shardings = missing
     if is_sharded
-        if shardy_passes == :default
-            # If `:default` is passed in, we will run a pass to export the sharding
-            # inside the corresponding compile function for IFRT/PJRT. This keeps the
-            # sharding readable.
+        if shardy_passes == :none
             use_shardy_partitioner = true
-        elseif shardy_passes == :no_stablehlo_export
-            run_pass_pipeline!(
-                mod,
-                join(
-                    [
-                        "sdy-propagation-pipeline",
-                        "sdy-close-shardings",
-                        "sdy-lift-inlined-meshes",
-                        "canonicalize",
-                        "cse",
-                    ],
-                    ",",
-                ),
-            )
         elseif shardy_passes == :to_mhlo_shardings
-            # Convert all shardy ops to corresponding mhlo attrs/ops that can be consumed by
-            # XLA (note we need to set `use_shardy_partitioner` to `false` in the options)
             run_pass_pipeline!(
                 mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
             )
@@ -1093,49 +1075,17 @@ function compile_mlir!(
             # Extract the result shardings from the compiled function
             result_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
             if result_attrs !== nothing
-                result_shardings = Vector{
-                    Union{Reactant.Sharding.NamedSharding,Reactant.Sharding.NoSharding}
-                }(
+                result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.NoSharding}}(
                     undef, length(result_attrs)
                 )
                 for i in 1:length(result_attrs)
-                    result_attr = result_attrs[i - 1]
-                    @assert MLIR.IR.isdict(result_attr)
-                    mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
-                        result_attr, "sdy.sharding"
+                    result_shardings[i] = Sharding.sdy_sharding_to_reactant_sharding(
+                        result_attrs[i - 1], mlir_fn_res.global_device_ids, mod
                     )
-                    if mlir_attr.ptr == C_NULL
-                        result_shardings[i] = Reactant.Sharding.NoSharding()
-                    else
-                        mesh_op = MLIR.IR.Operation(
-                            MLIR.API.mlirSymbolTableLookup(
-                                MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)),
-                                MLIR.IR.leafref(
-                                    MLIR.IR.Attribute(
-                                        MLIR.API.sdyTensorShardingAttrGetMeshOrRef(
-                                            mlir_attr
-                                        ),
-                                    ),
-                                ),
-                            ),
-                            false,
-                        )
-                        result_shardings[i] = Reactant.Sharding.named_sharding_from_tensor_sharding_attr(
-                            Reactant.Sharding.mesh_from_sdy_mesh_attr(
-                                MLIR.IR.attr(mesh_op, "mesh"), mlir_fn_res.global_device_ids
-                            ),
-                            MLIR.IR.Attribute(mlir_attr),
-                        )
-                    end
                 end
             end
 
-            run_pass_pipeline!(mod, join(["xla-sdy-stablehlo-export-pipeline"], ','))
-
-            # Run our optimization passes here -- we need to be careful to not apply folding
-            # here since that violates the semantics of `sdy.constant` which was converted to
-            # `stablehlo.constant` by the previous pass.
-            run_pass_pipeline!(mod, join(["canonicalize", "cse"], ','))
+            run_pass_pipeline!(mod, "xla-sdy-stablehlo-export-pipeline")
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
@@ -1222,7 +1172,7 @@ function compile_mlir!(
                     $((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys))...)
                     preserved_args = $(preserved_args_idx)
                     $str
-                    """
+                    """,
                 ),
             )
         end
@@ -1262,7 +1212,7 @@ macro code_hlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:default),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
@@ -1291,7 +1241,7 @@ macro code_mhlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:default),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
@@ -1455,7 +1405,7 @@ function assert_mismatched_sharding(
     sharding_from_input, hlo_sharding_from_executable::Reactant.XLA.HloSharding
 )
     return assert_mismatched_sharding(
-        convert(Reactant.Sharding.HloSharding, sharding_from_input).hlo_sharding,
+        convert(Sharding.HloSharding, sharding_from_input).hlo_sharding,
         hlo_sharding_from_executable,
     )
 end
@@ -1539,7 +1489,7 @@ function codegen_flatten!(
                 hlo_sharding_from_executable = convert(
                     XLA.HloSharding, condensed_op_sharding
                 )
-                if Reactant.Sharding.is_sharded(carg)
+                if Sharding.is_sharded(carg)
                     # Check if the sharding provided is same as the one we have
                     assert_mismatched_sharding(
                         carg.sharding.sharding.hlo_sharding, hlo_sharding_from_executable
@@ -1632,7 +1582,7 @@ function codegen_flatten!(
                     XLA.HloSharding, condensed_op_sharding
                 )
 
-                if Reactant.Sharding.is_sharded(carg)
+                if Sharding.is_sharded(carg)
                     # Check if the sharding provided is same as the one we have
                     assert_mismatched_sharding(
                         carg.sharding.sharding.hlo_sharding, hlo_sharding_from_executable
@@ -2085,15 +2035,14 @@ function compile(f, args; sync=false, assert_nonallocating=false, kwargs...)
     end
 
     result_stores = Dict{Tuple,Symbol}()
-    path_to_shard_info =
-        mlir_fn_res.is_sharded ? Dict{Tuple,Reactant.Sharding.ShardInfo}() : nothing
+    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Sharding.ShardInfo}() : nothing
 
     global_mesh = if mlir_fn_res.unique_meshes === nothing
         nothing
     elseif length(mlir_fn_res.unique_meshes) == 1
         only(mlir_fn_res.unique_meshes)
     else
-        Reactant.Sharding.Mesh(
+        Sharding.Mesh(
             mlir_fn_res.global_device_ids,
             0:(length(mlir_fn_res.global_device_ids) - 1),
             (:flat_mesh,),
@@ -2122,7 +2071,7 @@ function compile(f, args; sync=false, assert_nonallocating=false, kwargs...)
     linear_result_shard_info = if mlir_fn_res.is_sharded
         output_hlo_shardings = XLA.get_output_shardings(exec)
         output_reactant_shardings = mlir_fn_res.result_shardings
-        local linear_result_shard_info = Vector{Reactant.Sharding.ShardInfo}(
+        local linear_result_shard_info = Vector{Sharding.ShardInfo}(
             undef, length(linear_results)
         )
         for i in 1:length(linear_results)
@@ -2136,17 +2085,16 @@ function compile(f, args; sync=false, assert_nonallocating=false, kwargs...)
             if output_reactant_shardings !== missing
                 reactant_sharding = output_reactant_shardings[i]
                 use_hlo_sharding =
-                    reactant_sharding isa Reactant.Sharding.NoSharding ||
-                    convert(
-                        Reactant.Sharding.HloSharding, reactant_sharding
-                    ).hlo_sharding != hlo_sharding
+                    reactant_sharding isa Sharding.NoSharding ||
+                    convert(Sharding.HloSharding, reactant_sharding).hlo_sharding !=
+                    hlo_sharding
             else
                 use_hlo_sharding = true
             end
 
             if use_hlo_sharding
-                linear_result_shard_info[i] = Reactant.Sharding.ShardInfo(
-                    Reactant.Sharding.HloSharding(
+                linear_result_shard_info[i] = Sharding.ShardInfo(
+                    Sharding.HloSharding(
                         hlo_sharding,
                         global_mesh,
                         ntuple(Returns(true), length(res_size)),
@@ -2155,7 +2103,7 @@ function compile(f, args; sync=false, assert_nonallocating=false, kwargs...)
                     array_slices,
                 )
             else
-                linear_result_shard_info[i] = Reactant.Sharding.ShardInfo(
+                linear_result_shard_info[i] = Sharding.ShardInfo(
                     output_reactant_shardings[i], array_slices
                 )
             end
@@ -2332,7 +2280,7 @@ function default_sdycache()
             sym_name::MLIR.IR.Attribute,
             mesh_attr::MLIR.IR.Attribute,
             mesh_op::MLIR.IR.Operation,
-            mesh::Reactant.Sharding.Mesh,
+            mesh::Sharding.Mesh,
         }
     }()
 end

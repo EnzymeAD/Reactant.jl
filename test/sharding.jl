@@ -132,8 +132,8 @@ end
         x_ra = Reactant.to_rarray(
             x; sharding=Sharding.NamedSharding(mesh, (("data", "model"), nothing))
         )
-        @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
-        @test Reactant.to_number(@jit shardy_passes = :default sum(x_ra)) ≈ sum(x)
+        @test Array(@jit shardy_passes = :none fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit shardy_passes = :none sum(x_ra)) ≈ sum(x)
 
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test3(x_ra)) ≈ fn_test3(x)
         @test Reactant.to_number(@jit shardy_passes = :to_mhlo_shardings sum(x_ra)) ≈ sum(x)
@@ -153,8 +153,8 @@ end
             ),
         )
 
-        @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
-        @test Reactant.to_number(@jit shardy_passes = :default sum(x_ra)) ≈ sum(x)
+        @test Array(@jit shardy_passes = :none fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Reactant.to_number(@jit shardy_passes = :none sum(x_ra)) ≈ sum(x)
 
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test3(x_ra)) ≈ fn_test3(x)
         @test Reactant.to_number(@jit shardy_passes = :to_mhlo_shardings sum(x_ra)) ≈ sum(x)
@@ -209,7 +209,7 @@ end
         @test contains(repr(hlo), "sharding_constraint")
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 6
 
         z = Reactant.to_rarray(x; sharding=constraint)
         res = @jit fn_with_constraint(x_ra)
@@ -235,7 +235,7 @@ end
             x_ra_no_sharding
         )
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 6
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
         @test x .+ x ≈ Array(res)
@@ -262,7 +262,7 @@ end
             x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
         )
 
-        @test Array(@jit shardy_passes = :default sum(x_ra; dims=2)) ≈ sum(x; dims=2)
+        @test Array(@jit shardy_passes = :none sum(x_ra; dims=2)) ≈ sum(x; dims=2)
         @test Array(@jit shardy_passes = :to_mhlo_shardings sum(x_ra; dims=2)) ≈
             sum(x; dims=2)
 
@@ -271,7 +271,7 @@ end
             x; sharding=Sharding.NamedSharding(mesh, ("data", "model"))
         )
 
-        @test Array(@jit shardy_passes = :default fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Array(@jit shardy_passes = :none fn_test2(x_ra)) ≈ fn_test2(x)
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test2(x_ra)) ≈ fn_test2(x)
 
         @testset "Handle Sub-Axis Info" begin
@@ -332,7 +332,7 @@ end
         x_ra_arr = Array(x_ra)
         z_ra_arr = fn(x_ra_arr, y_ra_arr)
 
-        z_ra = @jit shardy_passes = :default fn(x_ra, y_ra)
+        z_ra = @jit shardy_passes = :none fn(x_ra, y_ra)
         y_ra_final = Array(y_ra)
 
         @test z_ra_arr ≈ Array(z_ra)
