@@ -791,7 +791,7 @@ function compile_mlir!(
     sdycache=default_sdycache();
     optimize::Union{Bool,Symbol}=true,
     # default refers to letting XLA handle the shardy inport/propagation/export
-    shardy_passes::Symbol=:to_mhlo_shardings, # [:none, :xla_default, :to_mhlo_shardings]
+    shardy_passes::Symbol=:to_mhlo_shardings, # [:none, :to_mhlo_shardings]
     no_nan::Bool=false,
     assert_nonallocating::Bool=false,
     backend="gpu",
@@ -1067,7 +1067,7 @@ function compile_mlir!(
     if is_sharded
         if shardy_passes == :none
             use_shardy_partitioner = true
-        elseif shardy_passes ∈ (:xla_default, :to_mhlo_shardings)
+        elseif shardy_passes == :to_mhlo_shardings
             run_pass_pipeline!(
                 mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
             )
@@ -1085,11 +1085,7 @@ function compile_mlir!(
                 end
             end
 
-            if shardy_passes == :xla_default
-                use_shardy_partitioner = true
-            else
-                run_pass_pipeline!(mod, "xla-sdy-stablehlo-export-pipeline")
-            end
+            run_pass_pipeline!(mod, "xla-sdy-stablehlo-export-pipeline")
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
