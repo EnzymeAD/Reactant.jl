@@ -1215,7 +1215,7 @@ function compile_mlir!(
             throw(
                 AssertionError(
                     """length(preserved_args_idx) = $(length(preserved_args_idx))
-       		    length(linear_args) - length(preserved_args_idx) = $(length(linear_args) - length(preserved_args_idx))
+       		    donated = length(linear_args) - length(preserved_args_idx) = $(length(linear_args) - length(preserved_args_idx))
                     length(nresults) = $(length(nresults))
                     linear_args = $linear_args
                     linear_results = $linear_results
