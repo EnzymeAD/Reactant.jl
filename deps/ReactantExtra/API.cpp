@@ -201,6 +201,7 @@ using HeldPjRtClient = HeldValue<std::shared_ptr<xla::PjRtClient>>;
 using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
 using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
 using HeldHloModule = HeldValue<std::shared_ptr<xla::HloModule>>;
+using HeldIfrtSharding = HeldValue<std::shared_ptr<xla::ifrt::Sharding>>;
 
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -1918,10 +1919,6 @@ extern "C" void free_hlo_sharding(xla::HloSharding *hlo_sharding) {
   delete hlo_sharding;
 }
 
-extern "C" void free_ifrt_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
-  delete hlo_sharding;
-}
-
 extern "C" xla::HloSharding *
 hlo_sharding_from_op_sharding(xla::OpSharding *op_sharding) {
   xla::HloSharding *hlo_sharding = new xla::HloSharding(
@@ -1944,88 +1941,65 @@ extern "C" ifrt::MemoryKind *ifrt_memory_kind_from_string(const char *c_str) {
   return new ifrt::MemoryKind(std::string(c_str));
 }
 
-extern "C" ifrt::HloSharding *ifrt_hlo_sharding_from_xla_hlo_sharding(
-    ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices,
-    ifrt::MemoryKind *memory_kind, xla::HloSharding *xla_hlo_sharding) {
-  return ifrt::HloSharding::Create(
-             ifrt_CreateDeviceListFromDevices(client, device_list, num_devices),
-             *memory_kind, *xla_hlo_sharding)
-      .release();
-}
-
-extern "C" xla::HloSharding *
-ifrt_hlo_sharding_to_xla_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
-  xla::HloSharding *xla_hlo_sharding =
-      new xla::HloSharding(hlo_sharding->xla_hlo_sharding());
-  return xla_hlo_sharding;
-}
-
-extern "C" const char *
-ifrt_hlo_sharding_to_string(ifrt::HloSharding *hlo_sharding) {
-  return cstr_from_string(hlo_sharding->DebugString());
-}
-
-extern "C" ifrt::HloSharding *ifrt_sharding_to_ifrt_hlo_sharding(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
-  const ifrt::Sharding *val = sharding->obj().get();
-  if (!llvm::isa<ifrt::HloSharding>(val))
-    ReactantThrowError("Expected a HloSharding");
-  return new ifrt::HloSharding(*llvm::dyn_cast<const ifrt::HloSharding>(val));
-}
-
-extern "C" void
-free_ifrt_sharding(HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" void free_ifrt_sharding(HeldIfrtSharding *sharding) {
   delete sharding;
 }
 
-extern "C" HeldValue<std::shared_ptr<ifrt::Sharding>> *
-ifrt_sharding_from_ifrt_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
-  return reactant::capture(std::shared_ptr<ifrt::Sharding>(hlo_sharding));
+extern "C" HeldIfrtSharding *ifrt_sharding_from_xla_hlo_sharding(
+    ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices,
+    ifrt::MemoryKind *memory_kind, xla::HloSharding *xla_hlo_sharding) {
+  // convert to ifrt::HloSharding
+  auto hlo_sharding =
+      ifrt::HloSharding::Create(
+          ifrt_CreateDeviceListFromDevices(client, device_list, num_devices),
+          *memory_kind, *xla_hlo_sharding)
+          .release();
+  // convert to ifrt::Sharding
+  return reactant::capture(
+      std::shared_ptr<ifrt::Sharding>(std::move(hlo_sharding)));
 }
 
-extern "C" HeldValue<std::shared_ptr<ifrt::Sharding>> *
-ifrt_sharding_from_hlo_sharding(ifrt::Client *client,
-                                ifrt::Device **device_list, int32_t num_devices,
-                                ifrt::MemoryKind *memory_kind,
-                                xla::HloSharding *xla_hlo_sharding) {
-  return ifrt_sharding_from_ifrt_hlo_sharding(
-      ifrt_hlo_sharding_from_xla_hlo_sharding(client, device_list, num_devices,
-                                              memory_kind, xla_hlo_sharding));
+extern "C" xla::HloSharding *
+ifrt_sharding_to_xla_hlo_sharding(HeldIfrtSharding *sharding) {
+  const ifrt::Sharding *val = sharding->obj().get();
+  if (!llvm::isa<ifrt::HloSharding>(val))
+    ReactantThrowError("Expected a HloSharding");
+  auto ifrt_hlo_sharding = llvm::dyn_cast<const ifrt::HloSharding>(val);
+  xla::HloSharding *xla_hlo_sharding =
+      new xla::HloSharding(ifrt_hlo_sharding->xla_hlo_sharding());
+  return xla_hlo_sharding;
 }
 
-extern "C" bool ifrt_sharding_is_single_device_sharding(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" bool
+ifrt_sharding_is_single_device_sharding(HeldIfrtSharding *sharding) {
   return llvm::isa<const ifrt::SingleDeviceSharding>(sharding->obj().get());
 }
 
-extern "C" bool ifrt_sharding_is_fully_replicated(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" bool ifrt_sharding_is_fully_replicated(HeldIfrtSharding *sharding) {
   return sharding->obj()->IsFullyReplicated();
 }
 
-extern "C" const char *
-ifrt_sharding_to_string(HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" const char *ifrt_sharding_to_string(HeldIfrtSharding *sharding) {
   return cstr_from_string(sharding->obj()->DebugString());
 }
 
-extern "C" int32_t ifrt_sharding_devices_size(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" int32_t ifrt_sharding_devices_size(HeldIfrtSharding *sharding) {
   return sharding->obj()->devices()->size();
 }
 
-extern "C" void ifrt_sharding_to_device_list(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding,
-    ifrt::Device **devices) {
+extern "C" void ifrt_sharding_to_device_list(HeldIfrtSharding *sharding,
+                                             ifrt::Device **devices) {
   auto device_list = sharding->obj()->devices()->devices();
   for (int i = 0; i < device_list.size(); i++) {
     devices[i] = device_list[i];
   }
 }
 
-extern "C" void ifrt_sharding_to_index_domains(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding,
-    int64_t *array_size_list, int32_t array_size_len,
-    int64_t *index_domain_origins, int64_t *index_domain_shapes) {
+extern "C" void ifrt_sharding_to_index_domains(HeldIfrtSharding *sharding,
+                                               int64_t *array_size_list,
+                                               int32_t array_size_len,
+                                               int64_t *index_domain_origins,
+                                               int64_t *index_domain_shapes) {
   std::vector<int64_t> array_size(array_size_len);
   for (int i = 0; i < array_size_len; i++) {
     array_size[i] = array_size_list[i];
