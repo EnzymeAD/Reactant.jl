@@ -61,7 +61,8 @@ function Array(
             idx = seen_slice[slice]
             push!(addressable_shard_indices[idx], cur_shard)
         else
-            host_buffer = view(array, slice...)
+            # maybe use `view(array, slice...)` to avoid allocations?
+            host_buffer = collect(array[slice...])
             push!(host_buffers, host_buffer)
             push!(addressable_shard_indices, Int64[cur_shard])
             seen_slice[slice] = length(host_buffers)
