@@ -467,7 +467,7 @@ Creates an unranked tensor type with the given element type in the same context 
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
 function TensorType(
-    elem_type::MLIR.IR.Type; location::Location=Location(), check::Bool=false
+    elem_type::Type; location::Location=Location(), check::Bool=false
 )
     return Type(
         if check
