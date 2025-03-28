@@ -771,18 +771,14 @@ end
 # end
 
 @noinline function dot_general(
-    lhs::TracedRArray{T},
-    rhs::TracedRArray{T};
+    lhs::TracedRArray{T1},
+    rhs::TracedRArray{T2};
     contracting_dimensions,
     batching_dimensions=(Int[], Int[]),
-    precision_config=nothing,
-    precision_type=nothing,
-    accumulation_type=nothing,
-    component_count=nothing,
-    num_primitive_operations=nothing,
-    allow_imprecise_accumulation=nothing,
+    precision_config=Reactant.DOT_GENERAL_PRECISION[],
+    algorithm=Reactant.DOT_GENERAL_ALGORITHM[],
     location=mlir_stacktrace("dot_general", @__FILE__, @__LINE__),
-) where {T}
+) where {T1,T2}
     # C1 + C2
     @assert length(batching_dimensions) == 2 && splat(==)(length.(batching_dimensions))
     @assert length(contracting_dimensions) == 2 &&
@@ -809,24 +805,38 @@ end
         size.(Ref(rhs), rhs_contracting_dimensions)
 
     # C11
-    @assert isnothing(precision_config) || length(precision_config) == 2
+    if !isnothing(precision_config)
+        if precision_config isa Reactant.DotGeneralPrecision.T
+            precision_config = (precision_config, precision_config)
+        end
 
-    @assert isnothing(precision_type) ||
-        length(precision_type) == 2 && eltype(precision_type) <: AbstractFloat
-    @assert isnothing(accumulation_type) || accumulation_type <: AbstractFloat
+        @assert precision_config isa Union{Tuple,Vector}
+        @assert length(precision_config) == 2
+        @assert all(Base.Fix2(isa, Reactant.DotGeneralPrecision.T), precision_config)
+    end
 
-    # C22 + C23
-    @assert isnothing(component_count) ||
-        length(component_count) == 2 &&
-            eltype(component_count) <: Int32 &&
-            all(0 .<= component_count)
+    resT = promote_type(T1, T2)
 
-    # C24
-    @assert isnothing(num_primitive_operations) ||
-        num_primitive_operations isa Int32 && num_primitive_operations > 0
-    @assert isnothing(allow_imprecise_accumulation) || allow_imprecise_accumulation isa Bool
+    if algorithm isa Reactant.DotGeneralAlgorithmPreset.T
+        lhs_eltype = Reactant.supported_lhs_eltype(algorithm)
+        @assert T1 <: lhs_eltype "$(T1) is not a subtype of $(lhs_eltype)"
+        @assert T2 <: lhs_eltype "$(T2) is not a subtype of $(lhs_eltype)"
+        rhs_eltype = Reactant.supported_rhs_eltype(algorithm)
+        @assert resT <: rhs_eltype "$(resT) is not a subtype of $(rhs_eltype)"
 
-    ctx = MLIR.IR.context()
+        algorithm = Reactant.DotGeneralAlgorithm(algorithm, T1, T2)
+    end
+
+    @assert algorithm isa Reactant.DotGeneralAlgorithm || algorithm === nothing
+
+    if !isnothing(algorithm)
+        # C22 + C23
+        @assert algorithm.rhs_component_count ≥ 0
+        @assert algorithm.lhs_component_count ≥ 0
+
+        # C24
+        @assert algorithm.num_primitive_operations > 0
+    end
 
     # from C12
     lhs_result_dimensions = setdiff(
@@ -851,7 +861,7 @@ end
     dot_dimension_numbers = GC.@preserve lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
         MLIR.IR.Attribute(
             MLIR.API.stablehloDotDimensionNumbersGet(
-                ctx,
+                MLIR.IR.context(),
                 length(lhs_batching_dimensions),
                 lhs_batching_dimensions,
                 length(rhs_batching_dimensions),
@@ -866,65 +876,24 @@ end
 
     if !isnothing(precision_config)
         precision_config = MLIR.IR.Attribute([
-            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[1]),
-            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[2]),
+            MLIR.IR.Attribute(precision_config[1]), MLIR.IR.Attribute(precision_config[2])
         ])
     end
 
-    # all or nothing: if one is set, all must be set
-    # TODO maybe be more flexible, by setting some defaults?
-    if any(
-        !isnothing,
-        (
-            precision_type,
-            accumulation_type,
-            component_count,
-            num_primitive_operations,
-            allow_imprecise_accumulation,
-        ),
-    )
-        @assert all(
-            !isnothing,
-            (
-                precision_type...,
-                accumulation_type,
-                component_count...,
-                num_primitive_operations,
-                allow_imprecise_accumulation,
-            ),
-        )
-        lhs_precision_type, rhs_precision_type = precision_type
-        lhs_component_count, rhs_component_count = component_count
-        algorithm = GC.@preserve begin
-            MLIR.IR.Attribute(
-                MLIR.API.stablehloDotAlgorithmGet(
-                    ctx,
-                    lhs_precision_type,
-                    rhs_precision_type,
-                    accumulation_type,
-                    lhs_component_count,
-                    rhs_component_count,
-                    num_primitive_operations,
-                    allow_imprecise_accumulation,
-                ),
-            )
-        end
-    else
-        algorithm = nothing
-    end
+    algorithm = algorithm !== nothing ? MLIR.IR.Attribute(algorithm) : nothing
 
     res = MLIR.IR.result(
         stablehlo.dot_general(
             lhs.mlir_data,
             rhs.mlir_data;
-            result_0=mlir_type(TracedRArray{T,length(ressize)}, ressize),
+            result_0=mlir_type(TracedRArray{resT,length(ressize)}, ressize),
             dot_dimension_numbers,
             precision_config,
             algorithm,
             location,
         ),
     )
-    return TracedRArray{T,length(ressize)}((), res, ressize)
+    return TracedRArray{resT,length(ressize)}((), res, ressize)
 end
 
 @noinline function einsum(

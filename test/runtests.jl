@@ -63,6 +63,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         end
         @safetestset "Sharding" include("sharding.jl")
         @safetestset "Cluster Detection" include("cluster_detector.jl")
+        @safetestset "Config" include("config.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
