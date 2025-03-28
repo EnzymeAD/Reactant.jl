@@ -1208,13 +1208,14 @@ function compile_mlir!(
     end
 
     if assert_nonallocating
-        if length(preserved_args_idx) != length(nresults)
+       if length(linear_args) - length(preserved_args_idx) != length(nresults)
             str = sprint() do io
                 Base.show(IOContext(io, :debug => true), func3)
             end
             throw(
                 AssertionError(
                     """length(preserved_args_idx) = $(length(preserved_args_idx))
+       		    length(linear_args) - length(preserved_args_idx) = $(length(linear_args) - length(preserved_args_idx))
                     length(nresults) = $(length(nresults))
                     linear_args = $linear_args
                     linear_results = $linear_results
