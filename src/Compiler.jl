@@ -790,7 +790,7 @@ function compile_mlir!(
     sdycache=default_sdycache();
     optimize::Union{Bool,Symbol}=true,
     # default refers to letting XLA handle the shardy inport/propagation/export
-    shardy_passes::Symbol=:to_mhlo_shardings, # [:default, :to_mhlo_shardings]
+    shardy_passes::Symbol=:to_mhlo_shardings, # [:none, :xla_default, :to_mhlo_shardings]
     no_nan::Bool=false,
     assert_nonallocating::Bool=false,
     backend="gpu",
@@ -1064,28 +1064,9 @@ function compile_mlir!(
     use_shardy_partitioner = false
     result_shardings = missing
     if is_sharded
-        if shardy_passes == :default
-            # If `:default` is passed in, we will run a pass to export the sharding
-            # inside the corresponding compile function for IFRT/PJRT. This keeps the
-            # sharding readable.
+        if shardy_passes == :none
             use_shardy_partitioner = true
-        elseif shardy_passes == :no_stablehlo_export
-            run_pass_pipeline!(
-                mod,
-                join(
-                    [
-                        "sdy-propagation-pipeline",
-                        "sdy-close-shardings",
-                        "sdy-lift-inlined-meshes",
-                        "canonicalize",
-                        "cse",
-                    ],
-                    ",",
-                ),
-            )
-        elseif shardy_passes == :to_mhlo_shardings
-            # Convert all shardy ops to corresponding mhlo attrs/ops that can be consumed by
-            # XLA (note we need to set `use_shardy_partitioner` to `false` in the options)
+        elseif shardy_passes ∈ (:xla_default, :to_mhlo_shardings)
             run_pass_pipeline!(
                 mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
             )
@@ -1130,12 +1111,13 @@ function compile_mlir!(
                 end
             end
 
-            run_pass_pipeline!(mod, join(["xla-sdy-stablehlo-export-pipeline"], ','))
-
-            # Run our optimization passes here -- we need to be careful to not apply folding
-            # here since that violates the semantics of `sdy.constant` which was converted to
-            # `stablehlo.constant` by the previous pass.
-            run_pass_pipeline!(mod, join(["canonicalize", "cse"], ','))
+            if shardy_passes == :xla_default
+                use_shardy_partitioner = true
+            else
+                run_pass_pipeline!(
+                    mod, join(["xla-sdy-stablehlo-export-pipeline", "cse"], ',')
+                )
+            end
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
@@ -1222,7 +1204,7 @@ function compile_mlir!(
                     $((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys))...)
                     preserved_args = $(preserved_args_idx)
                     $str
-                    """
+                    """,
                 ),
             )
         end
@@ -1262,7 +1244,7 @@ macro code_hlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:default),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
@@ -1291,7 +1273,7 @@ macro code_mhlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:default),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
