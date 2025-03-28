@@ -1082,3 +1082,29 @@ end
         @test res ≈ log.(v)
     end
 end
+
+@testset "Dump MLIR modules" begin
+    always_old = Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[]
+    dir_old = Reactant.MLIR.IR.DUMP_MLIR_DIR[]
+
+    mktempdir() do dir
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+        @compile sin.(Reactant.to_rarray(Float32[1.0]))
+        for mod in readdir(dir; join=true)
+            @test contains(read(mod, String), "hlo.sine")
+        end
+    end
+
+    mktempdir() do dir
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = false
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+        @compile exp.(Reactant.to_rarray(Float32[1.0]))
+        # Make sure we don't save anything to file when compilation is
+        # successful and `DUMP_MLIR_ALWAYS=false`.
+        @test isempty(readdir(dir; join=true))
+    end
+
+    Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = always_old
+    Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir_old
+end

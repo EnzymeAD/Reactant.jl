@@ -792,6 +792,7 @@ function compile_mlir!(
     # default refers to letting XLA handle the shardy inport/propagation/export
     shardy_passes::Symbol=:to_mhlo_shardings, # [:default, :to_mhlo_shardings]
     no_nan::Bool=false,
+    assert_nonallocating::Bool=false,
     backend="gpu",
     fn_kwargs=(),
     raise::Union{Bool,String}=false,
@@ -1191,7 +1192,7 @@ function compile_mlir!(
     preserved_args_idx = last.(preserved_args)
     if backend != "tpu"
         for (i, arg) in enumerate(linear_args)
-            if i ∉ preserved_args_idx
+            if (i - 1) ∉ preserved_args_idx
                 MLIR.API.mlirFuncSetArgAttr(
                     func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
                 )
@@ -1203,6 +1204,27 @@ function compile_mlir!(
                 MLIR.API.mlirOperationDestroy(op.operation)
                 op.operation = MLIR.API.MlirOperation(C_NULL)
             end
+        end
+    end
+
+    if assert_nonallocating
+        if length(linear_args) - length(preserved_args_idx) != length(nresults)
+            str = sprint() do io
+                Base.show(IOContext(io, :debug => true), func3)
+            end
+            throw(
+                AssertionError(
+                    """length(preserved_args_idx) = $(length(preserved_args_idx))
+             donated = length(linear_args) - length(preserved_args_idx) = $(length(linear_args) - length(preserved_args_idx))
+                    length(nresults) = $(length(nresults))
+                    linear_args = $linear_args
+                    linear_results = $linear_results
+                    $((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys))...)
+                    preserved_args = $(preserved_args_idx)
+                    $str
+                    """
+                ),
+            )
         end
     end
 
@@ -1241,6 +1263,7 @@ macro code_hlo(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:default),
+        :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1269,6 +1292,7 @@ macro code_mhlo(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:default),
+        :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1297,6 +1321,7 @@ macro code_xla(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1324,6 +1349,7 @@ macro compile(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1341,6 +1367,7 @@ macro jit(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
@@ -2047,14 +2074,14 @@ function compile_xla(f, args; client=nothing, kwargs...)
     return results
 end
 
-function compile(f, args; sync=false, kwargs...)
+function compile(f, args; sync=false, assert_nonallocating=false, kwargs...)
     _, exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
 
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = map(1:length(linear_args)) do i
-        UInt8(i ∉ preserved_args_idx)
+        UInt8((i - 1) ∉ preserved_args_idx)
     end
 
     result_stores = Dict{Tuple,Symbol}()

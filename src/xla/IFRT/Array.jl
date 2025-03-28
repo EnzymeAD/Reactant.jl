@@ -61,7 +61,10 @@ function Array(
             idx = seen_slice[slice]
             push!(addressable_shard_indices[idx], cur_shard)
         else
-            host_buffer = array[slice...]
+            # maybe use `view(array, slice...)` to avoid allocations?
+            host_buffer = let slice = array[slice...]
+                slice isa Number ? collect(slice) : slice
+            end
             push!(host_buffers, host_buffer)
             push!(addressable_shard_indices, Int64[cur_shard])
             seen_slice[slice] = length(host_buffers)

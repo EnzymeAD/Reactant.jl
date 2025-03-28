@@ -281,7 +281,32 @@ function make_mlir_fn(
         )
     end
 
-    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
+    arglocs = MLIR.IR.Location[]
+    for arg in linear_args
+        path = get_idx(arg, argprefix)
+        stridx = if verify_arg_names isa Nothing
+            "arg" * string(path[2])
+        else
+            string(verify_arg_names.args[path[2]])
+        end
+        aval = args[path[2]]
+        for (cidx, idx) in enumerate(path[3:end])
+            if aval isa Array || aval isa Dict
+                aval = getindex(aval, idx)
+                stridx = stridx * "[" * string(idx) * "]"
+            else
+                fldname = if idx isa Integer
+                    string(fieldname(Core.Typeof(aval), idx))
+                else
+                    string(idx)
+                end
+                stridx *= "." * fldname
+                aval = getfield(aval, idx)
+            end
+        end
+        push!(arglocs, MLIR.IR.Location(stridx * " (path=$path)", MLIR.IR.Location()))
+    end
+    fnbody = MLIR.IR.Block(in_tys, arglocs)
     push!(MLIR.IR.region(func, 1), fnbody)
     Ops.activate_constant_context!(fnbody)
 
@@ -405,7 +430,7 @@ function make_mlir_fn(
                 stridx = string(verify_arg_names.args[conflict[1]])
                 aval = args[conflict[1]]
                 for (cidx, idx) in enumerate(Base.tail(conflict))
-                    if aval isa Array
+                    if aval isa Array || aval isa Dict
                         aval = Reactant.@allowscalar getindex(aval, idx)
                         stridx = stridx * "[" * string(idx) * "]"
                     else
