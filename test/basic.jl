@@ -1114,6 +1114,6 @@ end
     if platform_name != "cpu" # not supported on CPU
         @test Reactant.XLA.allocatorstats() isa Reactant.XLA.AllocatorStats
     else
-        @test_throws  Reactant.XLA.ReactantInternalError Reactant.XLA.allocatorstats()
+        @test_throws Reactant.XLA.ReactantInternalError Reactant.XLA.allocatorstats()
     end
 end
