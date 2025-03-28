@@ -443,9 +443,9 @@ Creates a tensor type of a fixed rank with the given shape, element type, and op
 The type is owned by the context. Tensor types without any specific encoding field should assign [`mlirAttributeGetNull`](@ref) to this parameter.
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function TensorType(
+Base.@nospecializeinfer function TensorType(
     shape::Vector{Int},
-    elem_type::MLIR.IR.Type,
+    @nospecialize(elem_type::Type),
     encoding=Attribute();
     location::Location=Location(),
     check::Bool=false,
