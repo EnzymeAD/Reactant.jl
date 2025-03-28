@@ -1068,6 +1068,10 @@ function compile_mlir!(
             # If `:default` is passed in, we will run a pass to export the sharding
             # inside the corresponding compile function for IFRT/PJRT. This keeps the
             # sharding readable.
+            run_pass_pipeline!(
+                mod,
+                "print{debug=true}"
+            )
             use_shardy_partitioner = true
         elseif shardy_passes == :no_stablehlo_export
             run_pass_pipeline!(
@@ -1135,7 +1139,7 @@ function compile_mlir!(
             # Run our optimization passes here -- we need to be careful to not apply folding
             # here since that violates the semantics of `sdy.constant` which was converted to
             # `stablehlo.constant` by the previous pass.
-            run_pass_pipeline!(mod, join(["canonicalize", "cse"], ','))
+            run_pass_pipeline!(mod, join(["canonicalize", "cse", "print{debug=true}"], ','))
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
