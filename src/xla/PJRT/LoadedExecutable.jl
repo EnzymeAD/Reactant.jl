@@ -84,11 +84,13 @@ function XLA.compile(
                 client.client::Ptr{Cvoid},
                 mod.module_::MLIR.API.MlirModule,
                 device_id::Clong,
-                is_sharded::Bool,
                 global_device_ids::Ptr{Clong},
                 length(global_device_ids)::Clong,
                 XLA.CUDA_DATA_DIR[]::Cstring,
                 use_shardy_partitioner::Bool,
+                num_replicas::Int64,
+                num_partitions::Int64,
+                is_sharded::Bool,
             )::Ptr{Cvoid}
         end
     end

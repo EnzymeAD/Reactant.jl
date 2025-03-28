@@ -953,7 +953,7 @@ end
 #     end
 # end
 
-# paralell ops
+# parallel ops
 @noinline function partition_id(;
     location=mlir_stacktrace("partition_id", @__FILE__, @__LINE__)
 )
