@@ -1192,7 +1192,7 @@ function compile_mlir!(
     preserved_args_idx = last.(preserved_args)
     if backend != "tpu"
         for (i, arg) in enumerate(linear_args)
-            if i ∉ preserved_args_idx
+	    if (i-1) ∉ preserved_args_idx
                 MLIR.API.mlirFuncSetArgAttr(
                     func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
                 )
@@ -2081,7 +2081,7 @@ function compile(f, args; sync=false, assert_nonallocating=false, kwargs...)
 
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = map(1:length(linear_args)) do i
-        UInt8(i ∉ preserved_args_idx)
+       UInt8((i-1) ∉ preserved_args_idx)
     end
 
     result_stores = Dict{Tuple,Symbol}()

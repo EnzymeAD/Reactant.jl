@@ -36,24 +36,29 @@ end
     @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 end
 
-function update_inplace!(x, y)
-    x .+= y
+function update_inplace!(x, y, z)
+    x .+= y .* z
     return nothing
 end
 
-function update_inplace_bad!(x, y)
+function update_inplace_bad!(x, y, z)
     old = x[]
-    x[] = old .+ y
+    x[] = old .+ y .* z
     return old
 end
 
 @testset "buffer_donation" begin
     x = Reactant.to_rarray(ones(3))
     y = Reactant.to_rarray(ones(3))
+    z = Reactant.to_rarray(ones(3))
 
-    @code_hlo assert_nonallocating = true update_inplace!(x, y)
+    @code_hlo assert_nonallocating = true update_inplace!(x, y, z)
+    
+    (; preserved_args) = Reactant.Compiler.compile_xla(update_inplace!, (x, y, z))[3]
+    preserved_args_idx = last.(preserved_args)
+    @test preserved_args_idx == [1, 2] # y and z are both preserved (preserved_args is 0-indexed)
 
     @test_throws AssertionError @code_hlo assert_nonallocating = true update_inplace_bad!(
-        Ref(x), y
+        Ref(x), y, z
     )
 end
