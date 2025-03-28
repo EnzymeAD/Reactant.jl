@@ -2,8 +2,7 @@ mutable struct Array <: XLA.AbstractBuffer
     buffer::Ptr{Cvoid}
 
     function Array(buffer::Ptr{Cvoid})
-        # return finalizer(free_ifrt_array, new(buffer))
-        return new(buffer)
+        return finalizer(free_ifrt_array, new(buffer))
     end
 end
 
@@ -128,9 +127,8 @@ function Array(
 end
 
 @inline function free_ifrt_array(buffer::Array)
-    sbuffer = buffer.buffer
-    if sbuffer != C_NULL
-        @ccall MLIR.API.mlir_c.ifrt_free_array(sbuffer::Ptr{Cvoid})::Cvoid
+    if buffer.buffer != C_NULL
+        @ccall MLIR.API.mlir_c.ifrt_free_array(buffer.buffer::Ptr{Cvoid})::Cvoid
     end
 end
 
