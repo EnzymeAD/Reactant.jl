@@ -311,7 +311,8 @@ mutable struct HloSharding
 
     function HloSharding(ptr::Ptr{Cvoid})
         @assert ptr != C_NULL
-        return finalizer(free_hlo_sharding, new(ptr))
+        # return finalizer(free_hlo_sharding, new(ptr))
+        return new(ptr)
     end
 end
 

@@ -241,7 +241,7 @@ function disassemble_into_single_device_arrays(array::Array, only_addressable_de
     arrays = GC.@preserve array begin
         @ccall MLIR.API.mlir_c.ifrt_array_disassemble_into_single_device_arrays(
             array.buffer::Ptr{Cvoid},
-            Int32(0)::Int32,
+            0::Int32,
             c_single_device_shard_semantics::Int32,
             narrays::Ptr{Int32},
         )::Ptr{Ptr{Cvoid}}

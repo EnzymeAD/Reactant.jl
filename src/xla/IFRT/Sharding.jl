@@ -4,7 +4,9 @@ mutable struct HloSharding
 
     function HloSharding(ptr::Ptr{Cvoid})
         @assert ptr != C_NULL
-        return finalizer(free_hlo_sharding, new(ptr))
+        # Reference also held by Sharding, finalizing leads to a double free
+        # return finalizer(free_hlo_sharding, new(ptr))
+        return new(ptr)
     end
 end
 
@@ -79,8 +81,7 @@ mutable struct Sharding
 
     function Sharding(ptr::Ptr{Cvoid})
         @assert ptr != C_NULL
-        # return finalizer(free_sharding, new(ptr))
-        return new(ptr)
+        return finalizer(free_sharding, new(ptr))
     end
 end
 
@@ -100,19 +101,23 @@ function free_sharding(sharding::Sharding)
     @ccall MLIR.API.mlir_c.free_ifrt_sharding(sharding.ptr::Ptr{Cvoid})::Cvoid
 end
 
-function XLA.devices(sharding::Sharding)
+function XLA.num_devices(sharding::Sharding)
     GC.@preserve sharding begin
-        ndevices = @ccall MLIR.API.mlir_c.ifrt_sharding_devices_size(
+        return @ccall MLIR.API.mlir_c.ifrt_sharding_devices_size(
             sharding.ptr::Ptr{Cvoid}
         )::Int32
     end
+end
+
+function XLA.devices(sharding::Sharding)
+    ndevices = XLA.num_devices(sharding)
     devices = Ref{NTuple{Int64(ndevices),Ptr{Cvoid}}}()
     GC.@preserve sharding devices begin
         @ccall MLIR.API.mlir_c.ifrt_sharding_to_device_list(
             sharding.ptr::Ptr{Cvoid}, devices::Ptr{Ptr{Cvoid}}
         )::Cvoid
     end
-    return [Device(device) for device in devices[]]
+    return map(Device, devices[])
 end
 
 function Base.convert(::Type{Sharding}, hlo_sharding::HloSharding)
