@@ -38,20 +38,22 @@ end
 
 function update_inplace!(x, y)
     x .+= y
-    nothing
+    return nothing
 end
 
 function update_inplace_bad!(x, y)
     old = x[]
     x[] = old .+ y
-    old
+    return old
 end
 
 @testset "buffer_donation" begin
     x = Reactant.to_rarray(ones(3))
     y = Reactant.to_rarray(ones(3))
 
-    @code_hlo assert_nonallocating=true update_inplace!(x, y)
+    @code_hlo assert_nonallocating = true update_inplace!(x, y)
 
-    @test_throws AssertionError @code_hlo assert_nonallocating=true update_inplace_bad!(Ref(x), y)
+    @test_throws AssertionError @code_hlo assert_nonallocating = true update_inplace_bad!(
+        Ref(x), y
+    )
 end

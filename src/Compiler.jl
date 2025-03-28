@@ -1262,7 +1262,7 @@ macro code_hlo(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:default),
-        :assert_nonallocating => false
+        :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1291,7 +1291,7 @@ macro code_mhlo(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:default),
-        :assert_nonallocating => false
+        :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1320,7 +1320,7 @@ macro code_xla(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false
+        :assert_nonallocating => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1348,7 +1348,7 @@ macro compile(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false
+        :assert_nonallocating => false,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1366,7 +1366,7 @@ macro jit(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false
+        :assert_nonallocating => false,
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
