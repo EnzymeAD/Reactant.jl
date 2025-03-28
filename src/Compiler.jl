@@ -1088,9 +1088,7 @@ function compile_mlir!(
             if shardy_passes == :xla_default
                 use_shardy_partitioner = true
             else
-                run_pass_pipeline!(
-                    mod, join(["xla-sdy-stablehlo-export-pipeline", "cse"], ',')
-                )
+                run_pass_pipeline!(mod, "xla-sdy-stablehlo-export-pipeline")
             end
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")

@@ -920,7 +920,7 @@ unwrap_shardinfo(x::AbstractSharding) = x
 unwrap_shardinfo(x::ShardInfo) = unwrap_shardinfo(x.sharding)
 
 # sdy attributes to high-level sharding information
-function sdy_sharding_to_reactant_sharding(attr, global_device_ids)
+function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
     !MLIR.IR.isdict(attr) && return NoSharding()
 
     mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(attr, "sdy.sharding")
