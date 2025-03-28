@@ -286,6 +286,51 @@ function ConcreteIFRTArray(
     return ConcreteIFRTArray{T,N}(sharded_data, size(data), sharding)
 end
 
+# Assemble data from multiple arrays. Needed in distributed setting where each process wont
+# have enough host memory to hold all the arrays. We assume that the data is only provided
+# for all of the addressable devices.
+function ConcreteIFRTArray(
+    data::Vector{Array{T,N}},
+    array_size::Dims{N},
+    data_to_addressable_shard::Vector{Vector{Int64}}=[[i] for i in 1:length(data)];
+    client::XLA.IFRT.Client=XLA.default_backend(),
+    sharding::Sharding.AbstractSharding,
+) where {T,N}
+    @assert Sharding.is_sharded(sharding)
+    @assert length(data) == length(data_to_addressable_shard)
+
+    hlo_sharding = convert(Sharding.HloSharding, sharding).hlo_sharding
+    all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
+    ifrt_sharding = XLA.IFRT.Sharding(all_devices, hlo_sharding)
+
+    # Validate that all the slices are as we expected them to be
+    slices, _ = XLA.sharding_to_concrete_array_indices(
+        hlo_sharding, array_size, 0:(length(all_devices) - 1)
+    )
+    addressable_slices = [
+        slice for (slice, device) in zip(slices, all_devices) if XLA.is_addressable(device)
+    ]
+    for (i, slice) in enumerate(addressable_slices)
+        idx = findfirst(Base.Fix1(in, i), data_to_addressable_shard)
+        @assert idx !== nothing
+        @assert size(data[idx]) == length.(slice) "Expected data[$idx] to be at \
+                                                   $(slice), but got size \
+                                                   $(size(data[idx]))"
+    end
+
+    # Make the mapping 0-indexed
+    @inbounds for shard_idxs in data_to_addressable_shard
+        shard_idxs .-= 1
+    end
+    ifrt_array = XLA.IFRT.AsyncArray(
+        XLA.IFRT.Array(client, data, data_to_addressable_shard, array_size, ifrt_sharding),
+        nothing,
+    )
+    return ConcreteIFRTArray{T,N}(
+        ifrt_array, array_size, Sharding.ShardInfo(sharding, slices)
+    )
+end
+
 Base.wait(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = wait(x.data)
 XLA.client(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = XLA.client(x.data)
 function XLA.device(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})

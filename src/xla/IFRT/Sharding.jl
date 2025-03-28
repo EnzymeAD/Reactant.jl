@@ -91,9 +91,9 @@ end
 function Sharding(
     device_list::AbstractVector{<:Device},
     xla_hlo_sharding::XLA.HloSharding,
-    memoy_kind::Union{AbstractString,MemoryKind},
+    memory_kind::Union{AbstractString,MemoryKind},
 )
-    return convert(Sharding, HloSharding(device_list, xla_hlo_sharding, memoy_kind))
+    return convert(Sharding, HloSharding(device_list, xla_hlo_sharding, memory_kind))
 end
 
 function free_sharding(sharding::Sharding)
