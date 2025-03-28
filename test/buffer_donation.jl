@@ -53,7 +53,6 @@ end
     z = Reactant.to_rarray(ones(3))
 
     @code_hlo assert_nonallocating = true update_inplace!(x, y, z)
-    
     (; preserved_args) = Reactant.Compiler.compile_xla(update_inplace!, (x, y, z))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1, 2] # y and z are both preserved (preserved_args is 0-indexed)

@@ -1192,7 +1192,7 @@ function compile_mlir!(
     preserved_args_idx = last.(preserved_args)
     if backend != "tpu"
         for (i, arg) in enumerate(linear_args)
-	    if (i-1) ∉ preserved_args_idx
+            if (i - 1) ∉ preserved_args_idx
                 MLIR.API.mlirFuncSetArgAttr(
                     func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
                 )
@@ -1208,14 +1208,14 @@ function compile_mlir!(
     end
 
     if assert_nonallocating
-       if length(linear_args) - length(preserved_args_idx) != length(nresults)
+        if length(linear_args) - length(preserved_args_idx) != length(nresults)
             str = sprint() do io
                 Base.show(IOContext(io, :debug => true), func3)
             end
             throw(
                 AssertionError(
                     """length(preserved_args_idx) = $(length(preserved_args_idx))
-       		    donated = length(linear_args) - length(preserved_args_idx) = $(length(linear_args) - length(preserved_args_idx))
+             donated = length(linear_args) - length(preserved_args_idx) = $(length(linear_args) - length(preserved_args_idx))
                     length(nresults) = $(length(nresults))
                     linear_args = $linear_args
                     linear_results = $linear_results
@@ -2081,7 +2081,7 @@ function compile(f, args; sync=false, assert_nonallocating=false, kwargs...)
 
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = map(1:length(linear_args)) do i
-       UInt8((i-1) ∉ preserved_args_idx)
+        UInt8((i - 1) ∉ preserved_args_idx)
     end
 
     result_stores = Dict{Tuple,Symbol}()
