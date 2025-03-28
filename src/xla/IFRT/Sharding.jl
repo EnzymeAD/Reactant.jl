@@ -4,12 +4,12 @@ mutable struct HloSharding
 
     function HloSharding(ptr::Ptr{Cvoid})
         @assert ptr != C_NULL
-        # return finalizer(free_hlo_sharding, new(ptr))
-        return new(ptr)
+        return finalizer(free_hlo_sharding, new(ptr))
     end
 end
 
 function free_hlo_sharding(hlo_sharding::HloSharding)
+    hlo_sharding.ptr == C_NULL && return nothing
     @ccall MLIR.API.mlir_c.free_ifrt_hlo_sharding(hlo_sharding.ptr::Ptr{Cvoid})::Cvoid
 end
 
