@@ -784,8 +784,8 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     OutShape = isempty(seen_args) ? nothing : first(input_shapes)
     @assert !isnothing(OutShape)
 
-    out_tys2 = [
-        MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
+    out_tys2 = MLIR.IR.Type[
+        MLIR.IR.TensorType(collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
         arg in linear_results
     ]
 
