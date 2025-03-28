@@ -769,7 +769,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
     X = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{RT,length(shape)}), X)
 
     return TracedRArray{RT,length(shape)}(
-        (),
+        Int[],
         MLIR.IR.result(
             # TODO maybe we should do some conversion?
             MLIR.Dialects.stablehlo.concatenate(
