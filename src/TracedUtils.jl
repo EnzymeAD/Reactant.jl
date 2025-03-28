@@ -138,15 +138,16 @@ function get_ancestor_indices(x::AnyTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
-function batch_ty(width, mlirty)
+Base.@nospecializeinfer function batch_ty(width::Int, @nospecialize(mlirty::MLIR.IR.TensorType))
     return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
 end
 
-function transpose_ty(mlirty)
+Base.@nospecializeinfer function transpose_ty(@nospecialize(mlirty::MLIR.IR.TensorType))
     return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
 end
-function transpose_val(val)
-    val_size = size(MLIR.IR.type(val))
+
+Base.@nospecializeinfer function transpose_val(val::MLIR.IR.Value)
+    val_size = size(MLIR.IR.type(val::MLIR.IR.TensorType))
     val_size == () && return val
     attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
@@ -241,14 +242,14 @@ function make_mlir_fn(
     end
 
     in_tys = if toscalar
-        [
-            MLIR.IR.TensorType((), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
+        MLIR.IR.Type[
+            MLIR.IR.TensorType(Vector{Int}(undef, 0), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
             arg in linear_args
         ]
     elseif do_transpose
-        [transpose_ty(Ops.mlir_type(arg)) for arg in linear_args]
+        MLIR.IR.Type[transpose_ty(Ops.mlir_type(arg)) for arg in linear_args]
     else
-        [Ops.mlir_type(arg) for arg in linear_args]
+        MLIR.IR.Type[Ops.mlir_type(arg) for arg in linear_args]
     end
 
     sym_visibility = nothing
@@ -276,7 +277,7 @@ function make_mlir_fn(
     func = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
-            function_type=MLIR.IR.FunctionType(in_tys, []),
+            function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
             body=MLIR.IR.Region(),
         )
     end
