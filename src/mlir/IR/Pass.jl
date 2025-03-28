@@ -107,7 +107,9 @@ function try_compile_dump_mlir(f, mod::Module, pm=nothing)
         failed = true
         rethrow()
     finally
-        dump_mlir(mod, pm; failed)
+        if failed || DUMP_MLIR_ALWAYS[]
+            dump_mlir(mod, pm; failed)
+        end
     end
 end
 
