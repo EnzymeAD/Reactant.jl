@@ -1145,7 +1145,7 @@ end
     @assert fn_name == "comparator" "$comparator: no function generated"
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool)) error(
         "$comparator return type is not tensor<i1>"
     )
 
