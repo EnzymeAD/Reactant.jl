@@ -1212,15 +1212,18 @@ function compile_mlir!(
             str = sprint() do io
                 Base.show(IOContext(io, :debug => true), func3)
             end
-            throw(AssertionError(
-"""length(preserved_args_idx) = $(length(preserved_args_idx))
-length(nresults) = $(length(nresults))
-linear_args = $linear_args
-linear_results = $linear_results
-$((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys))...)
-preserved_args = $(preserved_args_idx)
-$str
-"""))
+            throw(
+                AssertionError(
+                    """length(preserved_args_idx) = $(length(preserved_args_idx))
+                    length(nresults) = $(length(nresults))
+                    linear_args = $linear_args
+                    linear_results = $linear_results
+                    $((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys))...)
+                    preserved_args = $(preserved_args_idx)
+                    $str
+                    """
+                ),
+            )
         end
     end
 
