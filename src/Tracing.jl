@@ -1470,7 +1470,9 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
-Base.@nospecializeinfer function make_tracer(seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...)
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...
+)
     if mode == TracedToTypes
         push!(path, prev)
         return nothing
@@ -1478,7 +1480,9 @@ Base.@nospecializeinfer function make_tracer(seen, @nospecialize(prev::Type), @n
     return prev
 end
 
-Base.@nospecializeinfer function make_tracer(seen, @nospecialize(prev::Symbol), @nospecialize(path), mode; kwargs...)
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::Symbol), @nospecialize(path), mode; kwargs...
+)
     if mode == TracedToTypes
         push!(path, prev)
         return nothing

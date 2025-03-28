@@ -138,7 +138,9 @@ function get_ancestor_indices(x::AnyTracedRArray, indices...)
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 
-Base.@nospecializeinfer function batch_ty(width::Int, @nospecialize(mlirty::MLIR.IR.TensorType))
+Base.@nospecializeinfer function batch_ty(
+    width::Int, @nospecialize(mlirty::MLIR.IR.TensorType)
+)
     return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
 end
 
@@ -243,8 +245,9 @@ function make_mlir_fn(
 
     in_tys = if toscalar
         MLIR.IR.Type[
-            MLIR.IR.TensorType(Vector{Int}(undef, 0), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
-            arg in linear_args
+            MLIR.IR.TensorType(
+                Vector{Int}(undef, 0), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
+            ) for arg in linear_args
         ]
     elseif do_transpose
         MLIR.IR.Type[transpose_ty(Ops.mlir_type(arg)) for arg in linear_args]
