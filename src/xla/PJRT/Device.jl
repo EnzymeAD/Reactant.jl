@@ -40,3 +40,11 @@ function XLA.is_addressable(device::Device)
         )::Bool
     end
 end
+
+function XLA.allocatorstats_internal(device::Device)
+    ref = Ref{XLA.JLAllocatorStats}()
+    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
+        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
+    )::Cvoid
+    return ref[]
+end
