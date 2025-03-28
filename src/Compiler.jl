@@ -812,6 +812,7 @@ function compile_mlir!(
     # default refers to letting XLA handle the shardy inport/propagation/export
     shardy_passes::Symbol=:to_mhlo_shardings, # [:default, :to_mhlo_shardings]
     no_nan::Bool=false,
+    assert_nonallocating::Bool=false,
     backend="gpu",
     fn_kwargs=(),
     raise::Union{Bool,String}=false,
@@ -1209,6 +1210,23 @@ function compile_mlir!(
         end
     end
 
+    if assert_nonallocating
+        if length(preserved_args_idx) != length(nresults)
+            str = sprint() do io
+                Base.show(IOContext(io, :debug => true), func3)
+            end
+            throw(AssertionError(
+"""length(preserved_args_idx) = $(length(preserved_args_idx))
+length(nresults) = $(length(nresults))
+linear_args = $linear_args
+linear_results = $linear_results
+$((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys))...)
+preserved_args = $(preserved_args_idx)
+$str
+"""))
+        end
+    end
+
     return Reactant.TracedUtils.CompiledMlirFnResult(
         fnwrapped,
         func3,
@@ -1243,6 +1261,7 @@ macro code_hlo(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:default),
+        :assert_nonallocating => false
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1271,6 +1290,7 @@ macro code_mhlo(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:default),
+        :assert_nonallocating => false
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1299,6 +1319,7 @@ macro code_xla(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1326,6 +1347,7 @@ macro compile(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1343,6 +1365,7 @@ macro jit(args...)
         :client => nothing,
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
@@ -2051,7 +2074,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
     return results
 end
 
-function compile(f, args; sync=false, kwargs...)
+function compile(f, args; sync=false, assert_nonallocating=false, kwargs...)
     _, exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
