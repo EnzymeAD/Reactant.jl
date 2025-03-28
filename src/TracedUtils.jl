@@ -139,17 +139,16 @@ function get_ancestor_indices(x::AnyTracedRArray, indices...)
 end
 
 Base.@nospecializeinfer function batch_ty(
-    width::Int, @nospecialize(mlirty::MLIR.IR.TensorType)
-)
-    return MLIR.IR.TensorType([width, size(mlirty)...], eltype(mlirty))
+    width::Int, @nospecialize(mlirty::MLIR.IR.Type))::MLIR.IR.Type
+    return MLIR.IR.TensorType(Int[width, size(mlirty)...], eltype(mlirty))
 end
 
-Base.@nospecializeinfer function transpose_ty(@nospecialize(mlirty::MLIR.IR.TensorType))
-    return MLIR.IR.TensorType([reverse(size(mlirty))...], eltype(mlirty))
+Base.@nospecializeinfer function transpose_ty(@nospecialize(mlirty::MLIR.IR.Type))::MLIR.IR.Type
+    return MLIR.IR.TensorType(Int[reverse(size(mlirty))...], eltype(mlirty))
 end
 
-Base.@nospecializeinfer function transpose_val(val::MLIR.IR.Value)
-    val_size = size(MLIR.IR.type(val::MLIR.IR.TensorType))
+Base.@nospecializeinfer function transpose_val(@nospecialize(val::MLIR.IR.Value))::MLIR.IR.Value
+    val_size = size(MLIR.IR.type(val))
     val_size == () && return val
     attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)

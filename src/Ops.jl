@@ -15,23 +15,23 @@ using ..Reactant:
 using ReactantCore: ReactantCore
 using Functors: fmap
 
-function mlir_type(x::Union{RNumber,RArray})
-    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(unwrapped_eltype(x)))
+function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
+    return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
 end
 
 mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 
 function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
-    return MLIR.IR.TensorType(shape, MLIR.IR.Type(unwrapped_eltype(RT)))
+    return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(RT::Type{<:RNumber})
-    return MLIR.IR.TensorType((), MLIR.IR.Type(unwrapped_eltype(RT)))
+function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
+    return MLIR.IR.TensorType(Int[], MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(::Type{<:MissingTracedValue})
-    return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+function mlir_type(::Type{<:MissingTracedValue})::MLIR.IR.Type
+    return MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 end
 
 const DEBUG_MODE::Ref{Bool} = Ref(false)
