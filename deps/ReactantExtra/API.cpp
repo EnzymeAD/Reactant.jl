@@ -590,6 +590,16 @@ extern "C" void PjRtDeviceGetAllocatorStats(PjRtDevice *device,
   jlstats->peak_pool_bytes = stats.peak_pool_bytes.value_or(optnull);
 }
 
+extern "C" void ifrt_device_get_allocator_stats(ifrt::Device *device,
+                                                JLAllocatorStats *jlstats) {
+  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+    ReactantThrowError(
+        "ifrt_device_get_allocator_stats: only supported for ifrt-pjrt.");
+  }
+  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  PjRtDeviceGetAllocatorStats(ifrt_pjrt_device->pjrt_device(), jlstats);
+}
+
 extern "C" void ExecutableFree(xla::PjRtLoadedExecutable *exec) { delete exec; }
 
 extern "C" PjRtDevice *BufferToDevice(PjRtBuffer *Buffer) {
