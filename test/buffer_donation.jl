@@ -49,7 +49,10 @@ end
     @test convert(Array, b) == 3 * ones(3, 4)
     @test convert(Array, c) == 4 * ones(2, 2)
     hlo = @code_hlo(multiple_donated_args(a, b, c))
-    @test contains(repr(hlo), "@main(%arg0: tensor<2x2xf64> {tf.aliasing_output = 0 : i32}, %arg1: tensor<4x3xf64> {tf.aliasing_output = 2 : i32}, %arg2: tensor<2x2xf64> {tf.aliasing_output = 1 : i32})")
+    @test contains(
+        repr(hlo),
+        "@main(%arg0: tensor<2x2xf64> {tf.aliasing_output = 0 : i32}, %arg1: tensor<4x3xf64> {tf.aliasing_output = 2 : i32}, %arg2: tensor<2x2xf64> {tf.aliasing_output = 1 : i32})",
+    )
 end
 
 function update_inplace!(x, y, z)
