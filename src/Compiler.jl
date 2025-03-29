@@ -1932,6 +1932,7 @@ function codegen_shard_info(
     output_hlo_shardings = XLA.get_output_shardings(exec)
 
     linear_result_shard_info = Vector{Symbol}(undef, length(linear_results))
+    mesh_codegen_cache = Dict{Tuple,Symbol}()
 
     for i in 1:nresults
         res_size = size(linear_results[i])
@@ -1982,17 +1983,30 @@ function codegen_shard_info(
         else
             @assert output_reactant_shardings[i] isa Sharding.NamedSharding
             mesh = output_reactant_shardings[i].mesh
+            mesh_key = (mesh.logical_device_ids, mesh.axis_names, mesh.axis_sizes)
+            if haskey(mesh_codegen_cache, mesh_key)
+                mesh_name = mesh_codegen_cache[mesh_key]
+            else
+                mesh_name = gensym(:mesh)
+                push!(
+                    shard_info_code,
+                    :(
+                        $(mesh_name) = Sharding.Mesh(
+                            thunk.global_device_ids,
+                            $(mesh.logical_device_ids),
+                            $(mesh.axis_names),
+                            $(mesh.axis_sizes),
+                        )
+                    ),
+                )
+                mesh_codegen_cache[mesh_key] = mesh_name
+            end
             push!(
                 shard_info_code,
                 :(
                     $(var_name) = Sharding.ShardInfo(
                         Sharding.NamedSharding(
-                            Sharding.Mesh(
-                                thunk.global_device_ids,
-                                $(mesh.logical_device_ids),
-                                $(mesh.axis_names),
-                                $(mesh.axis_sizes),
-                            ),
+                            $(mesh_name),
                             $(output_reactant_shardings[i].partition_spec),
                             $(output_reactant_shardings[i].is_closed),
                             $(output_reactant_shardings[i].priority),
