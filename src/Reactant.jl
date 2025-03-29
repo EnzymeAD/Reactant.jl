@@ -181,7 +181,7 @@ include("Compiler.jl")
 
 include("Overlay.jl")
 
-include("Serialize.jl")
+include("Serialization.jl")
 
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)

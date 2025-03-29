@@ -1,4 +1,4 @@
-module Serialize
+module Serialization
 
 # TODO: move these deps into an extension
 # TODO: Deal with sharding/global devices
@@ -42,7 +42,7 @@ function serialize(
         throw("To serialize a compiled thunk, ensure it is called with `serializable=true`")
     end
 
-    serializable_thunk = SerializedThunk{FTy,tag,ArgTypes,IsClosure}(
+    return serializable_thunk = SerializedThunk{FTy,tag,ArgTypes,IsClosure}(
         thunk.f, Reactant.Compiler.__thunk_body_cache[tag]
     )
 end
