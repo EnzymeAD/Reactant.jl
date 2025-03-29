@@ -27,7 +27,7 @@ function reduce_window(
     result_type = Reactant.MLIR.IR.TensorType(output_shape, Reactant.MLIR.IR.Type(T))
 
     unranked = Reactant.MLIR.IR.TensorType(
-        (), eltype(Reactant.MLIR.IR.type(get_mlir_data(x)))
+        Int[], eltype(Reactant.MLIR.IR.type(get_mlir_data(x)))
     )
     body =
         let body = Reactant.MLIR.IR.Region(),
