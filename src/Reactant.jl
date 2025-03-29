@@ -5,6 +5,7 @@ using ReactantCore:
 
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
+using EnumX: @enumx
 using Functors: @leaf
 
 using Adapt: Adapt, WrappedArray
@@ -48,6 +49,8 @@ using .TPUUtils: has_tpu
 
 include("mlir/MLIR.jl")
 include("xla/XLA.jl")
+
+include("Configuration.jl")
 include("Sharding.jl")
 include("Devices.jl")
 include("Interpreter.jl")

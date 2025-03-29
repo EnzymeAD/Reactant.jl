@@ -152,9 +152,7 @@ function transpose_val(val)
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-mutable struct CompiledMlirFnResult{
-    F,TR,Re,Rt,LA,LR,PA,CR,M<:Union{Nothing,Reactant.Sharding.Mesh},MA,RS
-}
+mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD}
     fnwrapped::Bool
     f::F
     traced_result::TR
@@ -169,10 +167,11 @@ mutable struct CompiledMlirFnResult{
     is_sharded::Bool
     preserved_args::PA
     concrete_result::CR
-    sharding_mesh::M
+    unique_meshes::M
     mutated_args::MA
     use_shardy_partitioner::Bool
     result_shardings::RS
+    global_device_ids::GD # only populated if is_sharded
 end
 
 function make_mlir_fn(
@@ -193,6 +192,7 @@ function make_mlir_fn(
     argprefix::Symbol=:args,
     resprefix::Symbol=:result,
     resargprefix::Symbol=:resargs,
+    num_replicas=1,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -213,12 +213,11 @@ function make_mlir_fn(
             argprefix,
             resprefix,
             resargprefix,
+            num_replicas,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
     end
-
-    num_partitions, num_replicas = 1, 1
 
     N = length(args)
     seen_args = OrderedIdDict()
@@ -282,7 +281,32 @@ function make_mlir_fn(
         )
     end
 
-    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for arg in linear_args])
+    arglocs = MLIR.IR.Location[]
+    for arg in linear_args
+        path = get_idx(arg, argprefix)
+        stridx = if verify_arg_names isa Nothing
+            "arg" * string(path[2])
+        else
+            string(verify_arg_names.args[path[2]])
+        end
+        aval = args[path[2]]
+        for (cidx, idx) in enumerate(path[3:end])
+            if aval isa Array || aval isa Dict
+                aval = getindex(aval, idx)
+                stridx = stridx * "[" * string(idx) * "]"
+            else
+                fldname = if idx isa Integer
+                    string(fieldname(Core.Typeof(aval), idx))
+                else
+                    string(idx)
+                end
+                stridx *= "." * fldname
+                aval = getfield(aval, idx)
+            end
+        end
+        push!(arglocs, MLIR.IR.Location(stridx * " (path=$path)", MLIR.IR.Location()))
+    end
+    fnbody = MLIR.IR.Block(in_tys, arglocs)
     push!(MLIR.IR.region(func, 1), fnbody)
     Ops.activate_constant_context!(fnbody)
 
@@ -406,7 +430,7 @@ function make_mlir_fn(
                 stridx = string(verify_arg_names.args[conflict[1]])
                 aval = args[conflict[1]]
                 for (cidx, idx) in enumerate(Base.tail(conflict))
-                    if aval isa Array
+                    if aval isa Array || aval isa Dict
                         aval = Reactant.@allowscalar getindex(aval, idx)
                         stridx = stridx * "[" * string(idx) * "]"
                     else
@@ -501,16 +525,11 @@ function make_mlir_fn(
     is_sharded = !isempty(mesh_cache)
 
     if is_sharded
-        unique_meshes = keys(mesh_cache)
-
-        # TODO: support multiple meshes
-        if length(unique_meshes) > 1
-            error("Currently we support using a single mesh")
-            sorted_devices = [sort(vec(m.device_ids)) for m in unique_meshes]
-            @assert allequal(sorted_devices) "All meshes must have the same device ids"
-        end
-        sharding_mesh = first(unique_meshes)
-        num_partitions = length(sharding_mesh)
+        unique_meshes = [m.mesh for m in values(mesh_cache)]
+        sorted_devices = [m.device_ids for m in unique_meshes]
+        @assert allequal(sorted_devices) "All meshes must have the same device ids"
+        global_device_ids = first(sorted_devices)
+        num_partitions = length(first(unique_meshes)) ÷ num_replicas
 
         linear_arg_shardings = Vector{Tuple{MLIR.IR.Attribute,Symbol}}(
             undef, length(linear_args)
@@ -521,9 +540,9 @@ function make_mlir_fn(
         for i in mutated_args
             arg = linear_args[i]
             if !haskey(traced_args_to_shardings, arg)
-                # Force a replicated sharding
+                # Force a replicated sharding (it doesn't matter with mesh we use)
                 traced_args_to_shardings[arg] = Reactant.Sharding.NamedSharding(
-                    sharding_mesh, ntuple(Returns(nothing), ndims(arg))
+                    first(unique_meshes), ntuple(Returns(nothing), ndims(arg))
                 )
             end
         end
@@ -532,7 +551,11 @@ function make_mlir_fn(
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
                 sharding = traced_args_to_shardings[arg]
-                (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
+                (; sym_name, mesh_attr) = mesh_cache[(
+                    sharding.mesh.logical_device_ids,
+                    sharding.mesh.axis_names,
+                    size(sharding.mesh),
+                )]
                 attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
                     sharding, ctx, sym_name, mesh_attr, size(arg)
                 )
@@ -587,7 +610,11 @@ function make_mlir_fn(
             for (i, arg) in enumerate(linear_results)
                 if haskey(output_shardings, i)
                     sharding = output_shardings[i]
-                    (; sym_name, mesh_attr) = mesh_cache[sharding.mesh]
+                    (; sym_name, mesh_attr) = mesh_cache[(
+                        sharding.mesh.logical_device_ids,
+                        sharding.mesh.axis_names,
+                        size(sharding.mesh),
+                    )]
                     attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
                         sharding, ctx, sym_name, mesh_attr, size(arg)
                     )
@@ -602,7 +629,9 @@ function make_mlir_fn(
             end
         end
     else
-        sharding_mesh = nothing
+        global_device_ids = ()
+        unique_meshes = nothing
+        num_partitions = 1
     end
 
     MLIR.API.mlirOperationDestroy(func.operation)
@@ -623,10 +652,11 @@ function make_mlir_fn(
         is_sharded,
         nothing,
         nothing,
-        sharding_mesh,
+        unique_meshes,
         mutated_args,
         true,
         missing,
+        global_device_ids,
     )
 end
 

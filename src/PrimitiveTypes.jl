@@ -42,6 +42,8 @@ for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
     end
 end
 
+primitive type TF32 <: AbstractFloat 32 end # currently only used to set precision
+
 const ReactantFloat8 = Union{F8E5M2,F8E4M3FN,F8E4M3B11FNUZ,F8E5M2FNUZ,F8E4M3FNUZ}
 
 # TODO: Quantized types

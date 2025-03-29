@@ -42,26 +42,70 @@ function Array(
     client::Client, array::Base.Array{T,N}, sharding::Sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
     all_devices = XLA.devices(sharding)
-    array_slices, _ = XLA.sharding_to_concrete_array_indices(
-        convert(XLA.HloSharding, sharding),
-        size(array),
-        collect(Int64, 0:(length(all_devices) - 1)),
-    )
-    array_shape = collect(Int64, reverse(size(array)))
-    arrays_list = [
-        Array(client, array[slice...], device).buffer for
-        (device, slice) in zip(all_devices, array_slices) if XLA.is_addressable(device)
-    ]
+    all_logical_device_ids = collect(Int64, 0:(length(all_devices) - 1))
+    hlo_sharding = convert(XLA.HloSharding, sharding)
 
-    buffer = GC.@preserve client arrays_list array_shape sharding begin
-        @ccall MLIR.API.mlir_c.ifrt_client_assemble_array_from_single_shards(
+    slices, _ = XLA.sharding_to_concrete_array_indices(
+        hlo_sharding, size(array), all_logical_device_ids
+    )
+
+    seen_slice = Dict{NTuple{N,UnitRange{Int64}},Int}()
+    host_buffers = Base.Array{T,N}[]
+    addressable_shard_indices = Vector{Int64}[]
+
+    cur_shard = 0
+    for (slice, device) in zip(slices, all_devices)
+        XLA.is_addressable(device) || continue
+
+        if haskey(seen_slice, slice)
+            idx = seen_slice[slice]
+            push!(addressable_shard_indices[idx], cur_shard)
+        else
+            # maybe use `view(array, slice...)` to avoid allocations?
+            host_buffer = let slice = array[slice...]
+                slice isa Number ? collect(slice) : slice
+            end
+            push!(host_buffers, host_buffer)
+            push!(addressable_shard_indices, Int64[cur_shard])
+            seen_slice[slice] = length(host_buffers)
+        end
+
+        cur_shard += 1
+    end
+
+    return Array(client, host_buffers, addressable_shard_indices, size(array), sharding)
+end
+
+function Array(
+    client::Client,
+    host_buffers::Vector{Base.Array{T,N}},
+    addressable_shard_indices::Vector{Vector{Int64}},
+    array_shape,
+    sharding,
+) where {T<:Reactant.ReactantPrimitive,N}
+    host_buffer_shapes = Vector{Vector{Int64}}(undef, length(host_buffers))
+    addressable_shard_indices_sizes = Vector{Int64}(undef, length(host_buffers))
+
+    for (i, host_buffer) in enumerate(host_buffers)
+        host_buffer_shapes[i] = collect(Int64, reverse(size(host_buffer)))
+        addressable_shard_indices_sizes[i] = length(addressable_shard_indices[i])
+    end
+
+    array_shape = collect(Int64, reverse(array_shape))
+
+    buffer = GC.@preserve client host_buffers host_buffer_shapes addressable_shard_indices addressable_shard_indices_sizes array_shape sharding begin
+        @ccall MLIR.API.mlir_c.ifrt_make_array_from_host_buffer_shards(
             client.client::Ptr{Cvoid},
-            Int32(length(array_shape))::Int32,
+            host_buffers::Ptr{Ptr{Cvoid}},
+            length(host_buffers)::Cint,
+            host_buffer_shapes::Ptr{Ptr{Int64}},
+            addressable_shard_indices::Ptr{Ptr{Int64}},
+            addressable_shard_indices_sizes::Ptr{Int64},
+            XLA.primitive_type(T)::Cint,
+            N::Cint,
             array_shape::Ptr{Int64},
             sharding.ptr::Ptr{Cvoid},
-            Int32(length(arrays_list))::Int32,
-            arrays_list::Ptr{Ptr{Cvoid}},
-            2::Cint, # kDonateInput
+            0::Cint,
         )::Ptr{Cvoid}
     end
 
@@ -239,21 +283,14 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.activate!(ctx)
 
-    sdycache = IdDict{
-        Reactant.Sharding.Mesh,
-        @NamedTuple{
-            sym_name::MLIR.IR.Attribute,
-            mesh_attr::MLIR.IR.Attribute,
-            mesh_op::MLIR.IR.Operation,
-        }
-    }()
+    sdycache = Reactant.Compiler.default_sdycache()
     Reactant.Compiler.activate_sdycache!(sdycache)
 
     output_buffer = try
         data_mlir_type = [MLIR.IR.TensorType(reverse(size_arr), MLIR.IR.Type(eltype(array)))]
         mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
 
-        (; sym_name, mesh_attr) = Reactant.Ops.mesh(mesh; mod=mod)
+        (; sym_name, mesh_attr) = Reactant.Ops.mesh(mesh; mod)
         common_args = (ctx, sym_name, mesh_attr, size_arr)
         common_kwargs = (; dialect=:sdy, do_transpose=true)
         input_tensor_sharding_attr, _ = Reactant.Sharding.get_tensor_sharding_attribute(
@@ -302,10 +339,10 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             mod;
             is_sharded=true,
             global_device_ids=vec(mesh.device_ids),
+            num_replicas=1,
+            num_partitions=length(mesh.device_ids),
             num_outputs=1,                # unused
             num_parameters=1,             # unused
-            num_replicas=-1,              # unused
-            num_partitions=-1,            # unused
             use_shardy_partitioner=false, # unused
         )
 
@@ -335,4 +372,23 @@ function XLA.sharding(buffer::Array)
             )::Ptr{Cvoid}
         )
     end
+end
+
+function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::Sharding)
+    ifrt_client = XLA.client(first(buffers)) # TODO: check all clients are the same?
+    src_buffers = [buffer.buffer for buffer in buffers]
+    GC.@preserve buffers ifrt_client begin
+        dst_buffers = @ccall MLIR.API.mlir_c.ifrt_copy_arrays_to_device_with_sharding(
+            ifrt_client.client::Ptr{Cvoid},
+            src_buffers::Ptr{Ptr{Cvoid}},
+            length(buffers)::Int32,
+            sharding.ptr::Ptr{Cvoid},
+            0::Cint, # kAlwaysCopy
+        )::Ptr{Ptr{Cvoid}}
+    end
+    dst_arrays = Vector{Array}(undef, length(buffers))
+    for i in 1:length(buffers)
+        dst_arrays[i] = Array(unsafe_load(dst_buffers, i))
+    end
+    return dst_arrays
 end

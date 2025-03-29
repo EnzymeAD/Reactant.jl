@@ -28,13 +28,20 @@ symbol reference attribute named \"callee\".
 ```
 """
 function call(
-    operands::Vector{Value}; result_0::Vector{IR.Type}, callee, location=Location()
+    operands::Vector{Value};
+    result_0::Vector{IR.Type},
+    callee,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("callee", callee),]
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
 
     return create_operation(
         "tt.call",
@@ -459,39 +466,39 @@ end
 """
 `dot_scaled`
 
-\$d = matrix_multiply(scale(\$lhs, \$lhs_scale), scale(rlhs, \$rhs_scale)) + \$c.
+\$d = matrix_multiply(scale(\$a, \$a_scale), scale(\$b, \$b_scale)) + \$c.
 Where scale(x, s) is a function that applies the scale per block following microscaling spec.
 """
 function dot_scaled(
-    lhs::Value,
-    rhs::Value,
+    a::Value,
+    b::Value,
     c::Value,
-    lhs_scale=nothing::Union{Nothing,Value};
-    rhs_scale=nothing::Union{Nothing,Value},
+    a_scale=nothing::Union{Nothing,Value};
+    b_scale=nothing::Union{Nothing,Value},
     d::IR.Type,
-    lhs_type,
-    rhs_type,
+    a_elem_type,
+    b_elem_type,
     fastMath,
     location=Location(),
 )
     op_ty_results = IR.Type[d,]
-    operands = Value[lhs, rhs, c]
+    operands = Value[a, b, c]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("lhs_type", lhs_type),
-        namedattribute("rhs_type", rhs_type),
+        namedattribute("a_elem_type", a_elem_type),
+        namedattribute("b_elem_type", b_elem_type),
         namedattribute("fastMath", fastMath),
     ]
-    !isnothing(lhs_scale) && push!(operands, lhs_scale)
-    !isnothing(rhs_scale) && push!(operands, rhs_scale)
+    !isnothing(a_scale) && push!(operands, a_scale)
+    !isnothing(b_scale) && push!(operands, b_scale)
     push!(attributes, operandsegmentsizes([
         1,
         1,
         1,
-        if (lhs_scale == nothing)
+        if (a_scale == nothing)
             0
-        elseif 1(rhs_scale == nothing)
+        elseif 1(b_scale == nothing)
             0
         else
             1
@@ -973,15 +980,12 @@ shape 4x8x2xf32.
 Because Triton tensors always have a power-of-two number of elements,
 the two input tensors must have the same shape.
 """
-function join(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
-)
-    op_ty_results = IR.Type[]
+function join(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "tt.join",
@@ -990,8 +994,8 @@ function join(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 

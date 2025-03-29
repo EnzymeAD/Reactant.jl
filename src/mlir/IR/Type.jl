@@ -237,6 +237,15 @@ function Type(::Core.Type{<:Reactant.F8E4M3FNUZ}; context::Context=context())
 end
 
 """
+    Type(::Core.Type{Reactant.TF32}; context=context())
+
+Creates a tf32 type in the given context. The type is owned by the context.
+"""
+function Type(::Core.Type{<:Reactant.TF32}; context::Context=context())
+    return Type(API.mlirTF32TypeGet(context))
+end
+
+"""
     isf8e5m2(type)
 
 Checks whether the given type is an f8E5M2 type.
@@ -298,6 +307,13 @@ isf32(type::Type) = API.mlirTypeIsAF32(type)
 Checks whether the given type is an f64 type.
 """
 isf64(type::Type) = API.mlirTypeIsAF64(type)
+
+"""
+    istf32(type)
+
+Checks whether the given type is an tf32 type.
+"""
+istf32(type::Type) = API.mlirTypeIsATF32(type)
 
 # Complex types
 """
@@ -796,6 +812,8 @@ function julia_type(type::Type)
                 throw("could not convert unsigned $width-bit integer type to julia")
             end
         end
+    elseif istf32(type)
+        Reactant.TF32
     elseif isbf16(type)
         Core.BFloat16
     elseif isf16(type)
