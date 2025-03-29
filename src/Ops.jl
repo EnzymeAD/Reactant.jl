@@ -1271,7 +1271,7 @@ distribution between 0 and 1. Returns a NamedTuple with the following fields:
         @assert length(seed) == 2
     end
 
-    output = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    output = MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(T))
     output_state = MLIR.IR.TensorType(collect(Int, size(seed)), MLIR.IR.Type(UInt64))
     rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
     op = stablehlo.rng_bit_generator(
