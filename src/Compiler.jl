@@ -2024,7 +2024,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
     return results
 end
 
-function compile(f, args; sync=false, assert_nonallocating=false, kwargs...)
+function compile(f, args; sync=false, kwargs...)
     _, exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
