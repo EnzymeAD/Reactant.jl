@@ -7,18 +7,12 @@ mutable struct Sharding
     end
 end
 
-function Sharding(device_list::AbstractVector{<:Device}, xla_hlo_sharding::XLA.HloSharding)
-    addressable_devices = filter(XLA.is_addressable, device_list)
-    default_memory_kind = convert(MemoryKind, XLA.default_memory(addressable_devices))
-    return Sharding(device_list, xla_hlo_sharding, default_memory_kind)
-end
-
 function Sharding(
     device_list::AbstractVector{<:Device},
     xla_hlo_sharding::XLA.HloSharding,
-    memory_kind::Union{AbstractString,MemoryKind},
+    memory_kind::Union{AbstractString,MemoryKind,Nothing}=nothing,
 )
-    memory_kind isa AbstractString && (memory_kind = MemoryKind(memory_kind))
+    !(memory_kind isa MemoryKind) && (memory_kind = MemoryKind(memory_kind))
     client = XLA.client(device_list)
     GC.@preserve device_list memory_kind xla_hlo_sharding client begin
         return Sharding(

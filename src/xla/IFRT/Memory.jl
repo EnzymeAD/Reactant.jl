@@ -14,6 +14,12 @@ mutable struct MemoryKind <: XLA.AbstractMemoryKind
     ptr::Ptr{Cvoid}
 end
 
+function MemoryKind(::Nothing)
+    return MemoryKind(
+        @ccall MLIR.API.mlir_c.ifrt_memory_kind_with_optional_memory_space()::Ptr{Cvoid}
+    )
+end
+
 function MemoryKind(str::AbstractString)
     str = string(str)
     GC.@preserve str begin
