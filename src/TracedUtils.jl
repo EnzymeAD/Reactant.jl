@@ -139,15 +139,20 @@ function get_ancestor_indices(x::AnyTracedRArray, indices...)
 end
 
 Base.@nospecializeinfer function batch_ty(
-    width::Int, @nospecialize(mlirty::MLIR.IR.Type))::MLIR.IR.Type
+    width::Int, @nospecialize(mlirty::MLIR.IR.Type)
+)::MLIR.IR.Type
     return MLIR.IR.TensorType(Int[width, size(mlirty)...], eltype(mlirty))
 end
 
-Base.@nospecializeinfer function transpose_ty(@nospecialize(mlirty::MLIR.IR.Type))::MLIR.IR.Type
+Base.@nospecializeinfer function transpose_ty(
+    @nospecialize(mlirty::MLIR.IR.Type)
+)::MLIR.IR.Type
     return MLIR.IR.TensorType(Int[reverse(size(mlirty))...], eltype(mlirty))
 end
 
-Base.@nospecializeinfer function transpose_val(@nospecialize(val::MLIR.IR.Value))::MLIR.IR.Value
+Base.@nospecializeinfer function transpose_val(
+    @nospecialize(val::MLIR.IR.Value)
+)::MLIR.IR.Value
     val_size = size(MLIR.IR.type(val))
     val_size == () && return val
     attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
@@ -785,8 +790,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     @assert !isnothing(OutShape)
 
     out_tys2 = MLIR.IR.Type[
-        MLIR.IR.TensorType(collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
-        arg in linear_results
+        MLIR.IR.TensorType(
+            collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
+        ) for arg in linear_results
     ]
 
     fname = get_attribute_by_name(func2, "sym_name")
