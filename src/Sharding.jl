@@ -499,7 +499,7 @@ function sharding_to_array_slices(
         Reactant.Compiler.activate_sdycache!(sdycache)
 
         try
-            data_mlir_type = [MLIR.IR.TensorType(reverse(size_x), MLIR.IR.Type(Float32))]
+            data_mlir_type = [MLIR.IR.TensorType(collect(Int, reverse(size_x)), MLIR.IR.Type(Float32))]
             mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
 
             (; sym_name, mesh_attr) = Reactant.Ops.mesh(sharding.mesh; mod)
