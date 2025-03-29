@@ -72,6 +72,10 @@ function ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
     return ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
 end
 
+function ConcretePJRTNumber{T}(data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding) where {T,D}
+    return ConcretePJRTNumber{T,D,typeof(sharding)}(data, sharding)
+end
+
 @leaf ConcretePJRTNumber
 
 function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
@@ -210,6 +214,10 @@ ConcreteIFRTNumber{T,Sharding.NoShardInfo}(x::Number) where {T} = ConcreteIFRTNu
 
 function ConcreteIFRTNumber{T}(data::XLA.IFRT.AsyncArray) where {T}
     return ConcreteIFRTNumber{T,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
+end
+
+function ConcreteIFRTNumber{T}(data::XLA.IFRT.AsyncArray, sharding) where {T}
+    return ConcreteIFRTNumber{T,typeof(sharding)}(data, sharding)
 end
 
 @leaf ConcreteIFRTNumber
