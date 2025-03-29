@@ -792,9 +792,9 @@ function compile_mlir!(
     do_transpose=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     # TODO: allow more fine-grained options to control the donation of specific arguments
-    donated_args::Symbol=:auto, # :auto | :none | :all
+    donated_args::Symbol=:auto, # :auto | :none
 )
-    @assert donated_args ∈ (:auto, :none, :all)
+    @assert donated_args ∈ (:auto, :none)
 
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -1135,74 +1135,24 @@ function compile_mlir!(
     # check which arguments were donated.
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = Vector{Bool}(undef, length(linear_args))
-    for i in 1:length(linear_args)
+    for (i, arg) in enumerate(linear_args)
         if donated_args == :auto
-            donated_args_mask[i] = (i - 1) ∉ preserved_args_idx
-        elseif donated_args == :none
+            if (i - 1) ∉ preserved_args_idx
+                donated_args_mask[i] = true
+
+                residx = findfirst(Base.Fix1(===, arg), linear_results2)
+                if residx !== nothing
+                    MLIR.API.mlirFuncSetArgAttr(
+                        func3, i - 1, "tf.aliasing_output", MLIR.IR.Attribute(residx - 1)
+                    )
+                end
+            else
+                donated_args_mask[i] = false
+            end
+        else # :none
             donated_args_mask[i] = false
-        else # :all
-            donated_args_mask[i] = true
         end
     end
-
-    # Mark arguments as donated using `mhlo.input_output_alias` attribute
-    # (`tf.aliasing_output`).
-
-    # TODO: We can also mark several arguments as https://github.com/openxla/xla/blob/f50746ab3144d0bf59c8e5c2dcfb2e09e56338d0/xla/service/hlo.proto#L441 "must_alias"
-
-    # TODO: use a better assignment, currently we scan though the output list and find
-    #       the first matcing type and shape and assign that as the alias.
-
-    # TODO: use mhlo.input_output_alias
-    # input_output_aliases = MLIR.IR.Attribute[]
-
-    available_results_for_aliasing = [
-        (Int32(i - 1), Reactant.unwrapped_eltype(res), size(res)) for
-        (i, res) in enumerate(linear_results2)
-    ]
-
-    for (i, donated) in enumerate(donated_args_mask)
-        !donated && continue
-
-        linear_arg = linear_args[i]
-        elTarg, sz_arg = Reactant.unwrapped_eltype(linear_arg), size(linear_arg)
-        idx = findfirst(available_results_for_aliasing) do (_, elT, sz)
-            return sz == sz_arg && elT == elTarg
-        end
-
-        if idx === nothing
-            @debug "Requested aliasing for argument $i, but could not find a matching \
-                    result."
-            continue
-        end
-
-        residx, _, _ = popat!(available_results_for_aliasing, idx)
-        MLIR.API.mlirFuncSetArgAttr(
-            func3, i - 1, "tf.aliasing_output", MLIR.IR.Attribute(residx)
-        )
-
-        # XXX: we should be using mhlo.input_output_alias, but I couldn't get it to work
-        # push!(
-        #     input_output_aliases,
-        #     MLIR.IR.Attribute(
-        #         Dict(
-        #             "alias" => Dict(
-        #                 "kind" => "may_alias",
-        #                 "parameter_number" => Int64(i - 1),
-        #                 "parameter_index" => Int64[],
-        #             ),
-        #             "output_index" => Int64[residx - 1],
-        #         ),
-        #     ),
-        # )
-    end
-
-    # TODO: use mhlo.input_output_alias
-    # if !isempty(input_output_aliases)
-    #     input_output_aliases = MLIR.IR.Attribute(input_output_aliases)
-    #     modop = MLIR.IR.Operation(mod)
-    #     MLIR.IR.attr!(modop, "mhlo.input_output_alias", input_output_aliases)
-    # end
 
     # drop certain operations from the module if using TPU backend
     if backend == "tpu"
