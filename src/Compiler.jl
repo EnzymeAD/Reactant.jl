@@ -1300,6 +1300,7 @@ macro compile(args...)
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
+        :serializable => true,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1963,7 +1964,7 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     return (client, device)
 end
 
-function compile_xla(f, args; client=nothing, kwargs...)
+function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs...)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
@@ -2002,6 +2003,15 @@ function compile_xla(f, args; client=nothing, kwargs...)
         global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
         mlir_fn_res.is_sharded && (device = nothing)
 
+        # XLA.compile mutates the module, for serialization we need to keep a copy
+        if serializable
+            mod_pre_xla = MLIR.IR.Module(
+                MLIR.API.mlirModuleFromOperation(copy(MLIR.IR.Operation(mod)))
+            )
+        else
+            mod_pre_xla = mod
+        end
+
         exec = XLA.compile(
             client,
             device,
@@ -2015,7 +2025,7 @@ function compile_xla(f, args; client=nothing, kwargs...)
             mlir_fn_res.use_shardy_partitioner,
         )
 
-        return mod, exec, mlir_fn_res, device, client
+        return mod_pre_xla, exec, mlir_fn_res, device, client
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -2158,16 +2168,24 @@ function compile(f, args; sync=false, kwargs...)
         mlir_fn_res.fnwrapped,
         exec,
         mlir_fn_res.is_sharded ? nothing : device,
+        serializable ? mod : nothing,
     )
 end
 
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_body_cache = Dict{Symbol,Expr}()
 
-struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
+struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,M<:Union{Nothing,MLIR.IR.Module}}
     f::FTy
     exec::ExecTy
     device::DeviceTy
+    mod::M
+end
+
+function Base.show(
+    io::IO, thunk::Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
+) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
+    return print(io, "Reactant compiled function $(thunk.f) (with tag $(tag))")
 end
 
 XLA.cost_analysis(thunk::Thunk) = XLA.cost_analysis(thunk.exec)
@@ -2179,11 +2197,16 @@ XLA.get_parameter_shardings(thunk::Thunk) = XLA.get_parameter_shardings(thunk.ex
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
 function Base.showerror(
-    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}
-) where {FTy,tag,ArgTypes,FoundTypes,IsClosure}
+    io::IO,
+    ::MisMatchedThunkTypeError{
+        Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy},FoundTypes
+    },
+) where {FTy,tag,ArgTypes,FoundTypes,IsClosure,ExecTy,DeviceTy}
     print(
         io,
-        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.",
+        "\nThe Reactant-compiled function \
+         `$(Thunk{FTy, tag, ArgTypes, IsClosure, ExecTy, DeviceTy})` exists, but no method \
+         is defined for this combination of argument types.",
     )
     print(
         io,
@@ -2231,10 +2254,19 @@ function register_thunk(
     isclosure::Bool,
     exec,
     device,
+    mod,
 )
     __thunk_body_cache[tag] = body
-    return Thunk{Core.Typeof(f),tag,argtys,isclosure,Core.Typeof(exec),Core.Typeof(device)}(
-        f, exec, device
+    return Thunk{
+        Core.Typeof(f),
+        tag,
+        argtys,
+        isclosure,
+        Core.Typeof(exec),
+        Core.Typeof(device),
+        Core.Typeof(mod),
+    }(
+        f, exec, device, mod
     )
 end
 
