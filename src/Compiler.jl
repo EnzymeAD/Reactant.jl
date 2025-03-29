@@ -190,7 +190,7 @@ function create_result(
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
-            return :(ConcretePJRTNumber{$T,length($(restore))}(($(restore)...,), $sharding))
+            return :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
         else
             return :(ConcretePJRTNumber{$T}($restore))
         end
@@ -199,9 +199,7 @@ function create_result(
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
-        return :(ConcretePJRTNumber{$T,length($(tocopy.data))}(
-            ($(tocopy.data...,)), $sharding
-        ))
+        return :(ConcretePJRTNumber{$T}(($(tocopy.data...,)), $sharding))
     end
     return :(ConcretePJRTNumber{$T}($(tocopy.data)))
 end
@@ -2141,13 +2139,11 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
 
         # XLA.compile mutates the module, for serialization we need to keep a copy
         if serializable
-            # XXX: Double free??
-            # mod_pre_xla = MLIR.IR.Module(
-            #     MLIR.API.mlirModuleFromOperation(copy(MLIR.IR.Operation(mod)))
-            # )
-            error("TODO")
+            iobuffer = IOBuffer()
+            show(iobuffer, mod)
+            module_string = String(take!(iobuffer))
         else
-            mod_pre_xla = mod
+            module_string = ""
         end
 
         exec = XLA.compile(
@@ -2163,7 +2159,7 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
             mlir_fn_res.use_shardy_partitioner,
         )
 
-        return mod_pre_xla, exec, mlir_fn_res, device, client
+        return mod, exec, mlir_fn_res, device, client, module_string
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -2172,8 +2168,8 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
     return results
 end
 
-function compile(f, args; sync=false, serializable=false, kwargs...)
-    _, exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
+function compile(f, args; sync=false, kwargs...)
+    _, exec, mlir_fn_res, device, client, str = compile_xla(f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
 
@@ -2294,7 +2290,7 @@ function compile(f, args; sync=false, serializable=false, kwargs...)
         mlir_fn_res.fnwrapped,
         exec,
         mlir_fn_res.is_sharded ? nothing : device,
-        serializable ? mod : nothing,
+        str,
         client,
         mlir_fn_res.global_device_ids,
     )
@@ -2303,13 +2299,11 @@ end
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_body_cache = Dict{Symbol,Expr}()
 
-struct Thunk{
-    FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,M<:Union{Nothing,MLIR.IR.Module},ClientTy,GD
-}
+struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD}
     f::FTy
     exec::ExecTy
     device::DeviceTy
-    mod::M
+    module_string::String
     client::ClientTy
     global_device_ids::GD
 end
@@ -2331,7 +2325,7 @@ struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 function Base.showerror(
     io::IO,
     ::MisMatchedThunkTypeError{
-        Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy,ClientTy,GD},FoundTypes
+        <:Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD},FoundTypes
     },
 ) where {FTy,tag,ArgTypes,FoundTypes,IsClosure,ExecTy,DeviceTy,ClientTy,GD}
     print(
@@ -2354,15 +2348,15 @@ function Base.showerror(
     )
 end
 
-@generated function (thunk::Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy})(
+@generated function (thunk::Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy})(
     args...
-) where {FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy}
+) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
     FoundTypes = Tuple{args...}
     if ArgTypes != FoundTypes
         return quote
             throw(
                 $(MisMatchedThunkTypeError{
-                    Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy},FoundTypes
+                    Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy},FoundTypes
                 }()),
             )
         end
@@ -2386,7 +2380,7 @@ function register_thunk(
     isclosure::Bool,
     exec,
     device,
-    mod,
+    module_string,
     client,
     global_device_ids,
 )
@@ -2394,15 +2388,14 @@ function register_thunk(
     return Thunk{
         Core.Typeof(f),
         tag,
-        argtys,
         isclosure,
+        argtys,
         Core.Typeof(exec),
         Core.Typeof(device),
-        Core.Typeof(mod),
         Core.Typeof(client),
         Core.Typeof(global_device_ids),
     }(
-        f, exec, device, mod, client, global_device_ids
+        f, exec, device, module_string, client, global_device_ids
     )
 end
 
