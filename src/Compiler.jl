@@ -1980,10 +1980,11 @@ function codegen_shard_info(
                 :(
                     $(var_name) = Sharding.ShardInfo(
                         Sharding.HloSharding(
-                            $(output_hlo_shardings_var)[$(i)],
+                            convert(XLA.HloSharding, $(output_hlo_shardings_var)[$(i)]),
                             global_mesh,
                             $(ntuple(Returns(true), length(res_size))),
                             $(ntuple(Returns(-1), length(res_size))),
+                            nothing,
                         ),
                         $(array_slices),
                     )
