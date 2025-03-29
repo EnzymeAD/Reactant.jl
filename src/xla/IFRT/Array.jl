@@ -1,7 +1,8 @@
 mutable struct Array <: XLA.AbstractBuffer
     buffer::Ptr{Cvoid}
 
-    function Array(buffer::Ptr{Cvoid})
+    function Array(buffer::Ptr{Cvoid}, owned::Bool=true)
+        !owned && return new(buffer)
         return finalizer(free_ifrt_array, new(buffer))
     end
 end
@@ -60,7 +61,6 @@ function Array(
             idx = seen_slice[slice]
             push!(addressable_shard_indices[idx], cur_shard)
         else
-            # maybe use `view(array, slice...)` to avoid allocations?
             host_buffer = let slice = array[slice...]
                 slice isa Number ? collect(slice) : slice
             end
@@ -80,33 +80,62 @@ function Array(
     host_buffers::Vector{Base.Array{T,N}},
     addressable_shard_indices::Vector{Vector{Int64}},
     array_shape,
-    sharding,
+    sharding::Sharding,
 ) where {T<:Reactant.ReactantPrimitive,N}
-    host_buffer_shapes = Vector{Vector{Int64}}(undef, length(host_buffers))
-    addressable_shard_indices_sizes = Vector{Int64}(undef, length(host_buffers))
+    # Construct using the slower path, the faster path is only implemented for IFRT-Proxy
+    # and seems to cause issues with IFRT-PJRT
+    all_addressable_devices = filter(XLA.is_addressable, XLA.devices(sharding))
 
-    for (i, host_buffer) in enumerate(host_buffers)
-        host_buffer_shapes[i] = collect(Int64, reverse(size(host_buffer)))
-        addressable_shard_indices_sizes[i] = length(addressable_shard_indices[i])
+    single_device_arrays = Vector{Ptr{Nothing}}(
+        undef, sum(length, addressable_shard_indices)
+    )
+    for (i, addr_shard_idxs) in enumerate(addressable_shard_indices)
+        for addr_shard_idx in addr_shard_idxs
+            idx = addr_shard_idx + 1
+            device = all_addressable_devices[idx]
+            single_device_arrays[idx] = Array(client, host_buffers[i], device).buffer
+        end
     end
 
     array_shape = collect(Int64, reverse(array_shape))
 
-    buffer = GC.@preserve client host_buffers host_buffer_shapes addressable_shard_indices addressable_shard_indices_sizes array_shape sharding begin
-        @ccall MLIR.API.mlir_c.ifrt_make_array_from_host_buffer_shards(
+    buffer = GC.@preserve client single_device_arrays array_shape sharding begin
+        @ccall MLIR.API.mlir_c.ifrt_client_assemble_array_from_single_shards(
             client.client::Ptr{Cvoid},
-            host_buffers::Ptr{Ptr{Cvoid}},
-            length(host_buffers)::Cint,
-            host_buffer_shapes::Ptr{Ptr{Int64}},
-            addressable_shard_indices::Ptr{Ptr{Int64}},
-            addressable_shard_indices_sizes::Ptr{Int64},
-            XLA.primitive_type(T)::Cint,
-            N::Cint,
+            length(array_shape)::Int32,
             array_shape::Ptr{Int64},
             sharding.ptr::Ptr{Cvoid},
-            0::Cint,
+            length(single_device_arrays)::Int32,
+            single_device_arrays::Ptr{Ptr{Cvoid}},
+            2::Int32, # kDonateInput
         )::Ptr{Cvoid}
     end
+
+    # host_buffer_shapes = Vector{Vector{Int64}}(undef, length(host_buffers))
+    # addressable_shard_indices_sizes = Vector{Int64}(undef, length(host_buffers))
+
+    # for (i, host_buffer) in enumerate(host_buffers)
+    #     host_buffer_shapes[i] = collect(Int64, reverse(size(host_buffer)))
+    #     addressable_shard_indices_sizes[i] = length(addressable_shard_indices[i])
+    # end
+
+    # array_shape = collect(Int64, reverse(array_shape))
+
+    # buffer = GC.@preserve client host_buffers host_buffer_shapes addressable_shard_indices addressable_shard_indices_sizes array_shape sharding begin
+    #     @ccall MLIR.API.mlir_c.ifrt_make_array_from_host_buffer_shards(
+    #         client.client::Ptr{Cvoid},
+    #         host_buffers::Ptr{Ptr{Cvoid}},
+    #         length(host_buffers)::Cint,
+    #         host_buffer_shapes::Ptr{Ptr{Int64}},
+    #         addressable_shard_indices::Ptr{Ptr{Int64}},
+    #         addressable_shard_indices_sizes::Ptr{Int64},
+    #         XLA.primitive_type(T)::Cint,
+    #         N::Cint,
+    #         array_shape::Ptr{Int64},
+    #         sharding.ptr::Ptr{Cvoid},
+    #         0::Cint,
+    #     )::Ptr{Cvoid}
+    # end
 
     return Array(buffer)
 end
