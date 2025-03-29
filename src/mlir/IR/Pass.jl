@@ -101,6 +101,9 @@ end
 
 function try_compile_dump_mlir(f, mod::Module, pm=nothing)
     failed = false
+    # Dump MLIR before calling `f`.  We set `pm` to nothing because the pass
+    # manager isn't called yet here.
+    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, nothing)
     try
         f()
     catch
@@ -119,6 +122,9 @@ end
 Run the provided `passManager` on the given `module`.
 """
 function run!(pm::PassManager, mod::Module)
+    # Dump MLIR before running the pass manager.  We set `pm` to nothing because
+    # the pass manager isn't called yet here.
+    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, nothing)
     status = LogicalResult(@static if isdefined(API, :mlirPassManagerRunOnOp)
         API.mlirPassManagerRunOnOp(pm, Operation(mod))
     else
