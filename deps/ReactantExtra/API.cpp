@@ -1941,6 +1941,14 @@ extern "C" ifrt::MemoryKind *ifrt_memory_kind_from_string(const char *c_str) {
   return new ifrt::MemoryKind(std::string(c_str));
 }
 
+extern "C" ifrt::MemoryKind *ifrt_memory_kind_with_optional_memory_space() {
+  return new ifrt::MemoryKind(std::nullopt);
+}
+
+extern "C" bool ifrt_memory_kind_has_value(ifrt::MemoryKind *memory_kind) {
+  return *memory_kind != ifrt::MemoryKind(std::nullopt);
+}
+
 extern "C" void free_ifrt_sharding(HeldIfrtSharding *sharding) {
   delete sharding;
 }
