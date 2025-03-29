@@ -252,57 +252,59 @@ struct NamedSharding{D,M<:Mesh} <: AbstractSharding
     is_closed::NTuple{D,Bool}
     priority::NTuple{D,Int}
     subaxes::Vector{Vector{Union{Nothing,Dims{2}}}}
+end
 
-    function NamedSharding(
-        mesh::Mesh,
-        partition_spec;
-        subaxes=nothing,
-        is_closed::NTuple{D,Bool}=ntuple(Returns(true), length(partition_spec)),
-        priority::NTuple{D,Int}=ntuple(i -> -1, length(partition_spec)),
-    ) where {D}
-        axis_names = Symbol[]
+function NamedSharding(
+    mesh::Mesh,
+    partition_spec;
+    subaxes=nothing,
+    is_closed::NTuple{D,Bool}=ntuple(Returns(true), length(partition_spec)),
+    priority::NTuple{D,Int}=ntuple(i -> -1, length(partition_spec)),
+) where {D}
+    axis_names = Symbol[]
 
-        new_partition_spec = Vector{Vector{Union{Nothing,Symbol}}}(
-            undef, length(partition_spec)
-        )
-        @inbounds for (i, p) in enumerate(partition_spec)
-            if p === nothing
-                new_partition_spec[i] = [nothing]
-            elseif p isa Tuple
-                new_partition_spec[i] = Vector{Union{Nothing,Symbol}}(undef, length(p))
-                for (j, pⱼ) in enumerate(p)
-                    @assert pⱼ isa Symbol || pⱼ isa String
-                    new_partition_spec[i][j] = Symbol(pⱼ)
-                    push!(axis_names, Symbol(pⱼ))
-                end
-            elseif p isa Symbol || p isa String
-                push!(axis_names, Symbol(p))
-                new_partition_spec[i] = [Symbol(p)]
-            elseif p isa Vector
-                new_partition_spec[i] = copy(p)
-            else
-                error("Unexpected partition spec $(partition_spec) [$(p)]")
+    new_partition_spec = Vector{Vector{Union{Nothing,Symbol}}}(
+        undef, length(partition_spec)
+    )
+    @inbounds for (i, p) in enumerate(partition_spec)
+        if p === nothing
+            new_partition_spec[i] = [nothing]
+        elseif p isa Tuple
+            new_partition_spec[i] = Vector{Union{Nothing,Symbol}}(undef, length(p))
+            for (j, pⱼ) in enumerate(p)
+                @assert pⱼ isa Symbol || pⱼ isa String
+                new_partition_spec[i][j] = Symbol(pⱼ)
+                push!(axis_names, Symbol(pⱼ))
             end
-        end
-        @assert allunique(axis_names) "Duplicate axis names!"
-
-        if subaxes === nothing
-            subaxes = Vector{Vector{Union{Nothing,Dims{2}}}}(undef, length(partition_spec))
-            @inbounds for (i, pspec) in enumerate(new_partition_spec)
-                subaxes[i] = Vector{Union{Nothing,Dims{2}}}(undef, length(pspec))
-                for j in 1:length(pspec)
-                    subaxes[i][j] = nothing
-                end
-            end
+        elseif p isa Symbol || p isa String
+            push!(axis_names, Symbol(p))
+            new_partition_spec[i] = [Symbol(p)]
+        elseif p isa Vector
+            new_partition_spec[i] = copy(p)
         else
-            @assert length(subaxes) == length(new_partition_spec)
-            for (i, pspec) in enumerate(new_partition_spec)
-                @assert length(pspec) == length(subaxes[i])
+            error("Unexpected partition spec $(partition_spec) [$(p)]")
+        end
+    end
+    @assert allunique(axis_names) "Duplicate axis names!"
+
+    if subaxes === nothing
+        subaxes = Vector{Vector{Union{Nothing,Dims{2}}}}(undef, length(partition_spec))
+        @inbounds for (i, pspec) in enumerate(new_partition_spec)
+            subaxes[i] = Vector{Union{Nothing,Dims{2}}}(undef, length(pspec))
+            for j in 1:length(pspec)
+                subaxes[i][j] = nothing
             end
         end
-
-        return new{D,typeof(mesh)}(mesh, new_partition_spec, is_closed, priority, subaxes)
+    else
+        @assert length(subaxes) == length(new_partition_spec)
+        for (i, pspec) in enumerate(new_partition_spec)
+            @assert length(pspec) == length(subaxes[i])
+        end
     end
+
+    return NamedSharding{D,typeof(mesh)}(
+        mesh, new_partition_spec, is_closed, priority, subaxes
+    )
 end
 
 function sdy_tensor_sharding_to_named_sharding(mesh::Mesh, tensor_sharding_attr)
@@ -500,7 +502,7 @@ function sharding_to_array_slices(
 
         try
             data_mlir_type = [
-                MLIR.IR.TensorType(collect(Int, reverse(size_x)), MLIR.IR.Type(Float32))
+                MLIR.IR.TensorType(collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32))
             ]
             mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
 
@@ -714,7 +716,7 @@ function sharding_to_array_slices(
         else
             Reactant.ConcreteRArray(ones(Float32, size_x...); kws...)
         end
-        _, exec, _, _, _ = Reactant.Compiler.compile_xla(
+        _, exec, _, _, _, _ = Reactant.Compiler.compile_xla(
             Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
         )
 
