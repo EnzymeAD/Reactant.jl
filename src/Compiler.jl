@@ -1143,7 +1143,10 @@ function compile_mlir!(
                 residx = findfirst(Base.Fix1(===, arg), linear_results2)
                 if residx !== nothing
                     MLIR.API.mlirFuncSetArgAttr(
-                        func3, i - 1, "tf.aliasing_output", MLIR.IR.Attribute(residx - 1)
+                        func3,
+                        i - 1,
+                        "tf.aliasing_output",
+                        MLIR.IR.Attribute(Int32(residx - 1)),
                     )
                 end
             else
