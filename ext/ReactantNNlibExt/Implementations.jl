@@ -191,7 +191,7 @@ function overloaded_∇conv_filter!(
         Int64[i - 1 for i in output_spatial_dims],
     )
 
-    result_type = Reactant.MLIR.IR.TensorType(size(dw), Reactant.MLIR.IR.Type(T))
+    result_type = Reactant.MLIR.IR.TensorType(collect(Int, size(dw)), Reactant.MLIR.IR.Type(T))
     conv = MLIR.Dialects.stablehlo.convolution(
         get_mlir_data(x),
         get_mlir_data(dy);
@@ -303,7 +303,7 @@ function overloaded_∇conv_data!(
         Int64[i - 1 for i in output_spatial_dims],
     )
 
-    result_type = Reactant.MLIR.IR.TensorType(size(dx), Reactant.MLIR.IR.Type(T))
+    result_type = Reactant.MLIR.IR.TensorType(collect(Int, size(dx)), Reactant.MLIR.IR.Type(T))
 
     if NNlib.flipkernel(cdims)
         w = Reactant.Ops.reverse(w; dimensions=kernel_spatial_dims)
