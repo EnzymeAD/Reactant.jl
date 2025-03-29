@@ -2,6 +2,7 @@ module Compiler
 
 using Reactant_jll
 using Libdl: dlsym
+using DeepDiffs: deepdiff
 
 import ..Reactant:
     Reactant,
@@ -2179,24 +2180,23 @@ XLA.get_parameter_shardings(thunk::Thunk) = XLA.get_parameter_shardings(thunk.ex
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
 function Base.showerror(
-    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}
-) where {FTy,tag,ArgTypes,FoundTypes,IsClosure}
+    io::IO,
+    ::MisMatchedThunkTypeError{
+        Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy},FoundTypes
+    },
+) where {FTy,tag,ArgTypes,FoundTypes,IsClosure,ExecTy,DeviceTy}
     print(
         io,
-        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.",
+        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure, ExecTy, DeviceTy})` exists, but no method is defined for this combination of argument types.\n\nDiff between input argument types and compiled argument types:\n\n",
     )
-    print(
-        io,
-        "\nYou passed in arguments with types\n\t(" *
-        join(FoundTypes.parameters, ", ") *
-        ")",
+
+    str = sprint(
+        show,
+        deepdiff(join(FoundTypes.parameters, ", "), join(ArgTypes.parameters, ", "));
+        context=IOContext(io),
     )
-    return print(
-        io,
-        "\nHowever the method you are calling was compiled for arguments with types\n\t(" *
-        join(ArgTypes.parameters, ", ") *
-        ")",
-    )
+    println(io, strip(str, '"'))
+    return nothing
 end
 
 @generated function (thunk::Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy})(
