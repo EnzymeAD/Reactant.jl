@@ -1,5 +1,4 @@
-using Test
-using Reactant
+using Reactant, Test
 
 # TODO try again with `2` to check automatic conversion from int to float
 function donate_fill_x_with_2(x, y)
@@ -18,7 +17,7 @@ end
     @jit(donate_fill_x_with_2(a, b))
     @test convert(Array, a) == 2 * ones(2, 2)
     hlo = @code_hlo(donate_fill_x_with_2(a, b))
-    @test length(findall("reactant.donated", repr(hlo))) == 1
+    @test length(findall("tf.aliasing_output = 0", repr(hlo))) == 1
 
     (; preserved_args) = Reactant.Compiler.compile_xla(donate_fill_x_with_2, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
@@ -29,7 +28,7 @@ end
     @jit(donate_inplace_mul(a, b))
     @test convert(Array, a) == 6 * ones(2, 2)
     hlo = @code_hlo(donate_inplace_mul(a, b))
-    @test length(findall("reactant.donated", repr(hlo))) == 1
+    @test length(findall("tf.aliasing_output = 0", repr(hlo))) == 1
 
     (; preserved_args) = Reactant.Compiler.compile_xla(donate_inplace_mul, (a, b))[3]
     preserved_args_idx = last.(preserved_args)

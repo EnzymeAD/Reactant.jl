@@ -791,6 +791,7 @@ function compile_mlir!(
     output_shardings=nothing,
     do_transpose=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
+    # TODO: allow more fine-grained options to control the donation of specific arguments
     donated_args::Symbol=:auto, # :auto | :none | :all
 )
     @assert donated_args ∈ (:auto, :none, :all)
@@ -1144,14 +1145,61 @@ function compile_mlir!(
         end
     end
 
-    if backend != "tpu"
-        for (i, donated) in enumerate(donated_args_mask)
-            !donated && continue
-            MLIR.API.mlirFuncSetArgAttr(
-                func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
-            )
+    # Mark arguments as donated using `mhlo.input_output_alias` attribute
+    # (`tf.aliasing_output`).
+
+    # TODO: We can also mark several arguments as https://github.com/openxla/xla/blob/f50746ab3144d0bf59c8e5c2dcfb2e09e56338d0/xla/service/hlo.proto#L441 "must_alias"
+
+    # TODO: use a better assignment, currently we scan though the output list and find
+    #       the first matcing type and shape and assign that as the alias.
+
+    # TODO: use mhlo.input_output_alias
+    # input_output_aliases = MLIR.IR.Attribute[]
+
+    for (i, donated) in enumerate(donated_args_mask)
+        !donated && continue
+
+        linear_arg = linear_args[i]
+        residx = findfirst(linear_results2) do res
+            return size(res) == size(linear_arg) &&
+                   Reactant.unwrapped_eltype(res) == Reactant.unwrapped_eltype(linear_arg)
         end
-    else
+
+        if residx === nothing
+            @debug "Requested aliasing for argument $i, but could not find a matching \
+                    result."
+            continue
+        end
+
+        MLIR.API.mlirFuncSetArgAttr(
+            func3, i - 1, "tf.aliasing_output", MLIR.IR.Attribute(Int32(residx - 1))
+        )
+
+        # XXX: we should be using mhlo.input_output_alias, but I couldn't get it to work
+        # push!(
+        #     input_output_aliases,
+        #     MLIR.IR.Attribute(
+        #         Dict(
+        #             "alias" => Dict(
+        #                 "kind" => "may_alias",
+        #                 "parameter_number" => Int64(i - 1),
+        #                 "parameter_index" => Int64[],
+        #             ),
+        #             "output_index" => Int64[residx - 1],
+        #         ),
+        #     ),
+        # )
+    end
+
+    # TODO: use mhlo.input_output_alias
+    # if !isempty(input_output_aliases)
+    #     input_output_aliases = MLIR.IR.Attribute(input_output_aliases)
+    #     modop = MLIR.IR.Operation(mod)
+    #     MLIR.IR.attr!(modop, "mhlo.input_output_alias", input_output_aliases)
+    # end
+
+    # drop certain operations from the module if using TPU backend
+    if backend == "tpu"
         for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
             if MLIR.IR.dialect(op) == :llvm
                 MLIR.API.mlirOperationDestroy(op.operation)
