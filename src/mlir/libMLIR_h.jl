@@ -7776,6 +7776,101 @@ function mlirUniformQuantizedPerAxisTypeIsFixedPoint(type)
 end
 
 """
+    mlirTypeIsAUniformQuantizedSubChannelType(type)
+
+Returns `true` if the given type is a UniformQuantizedSubChannel.
+"""
+function mlirTypeIsAUniformQuantizedSubChannelType(type)
+    @ccall mlir_c.mlirTypeIsAUniformQuantizedSubChannelType(type::MlirType)::Bool
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGet(flags, storageType, expressedType, scalesAttr, zeroPointsAttr, blockSizeInfoLength, quantizedDimensions, blockSizes, storageTypeMin, storageTypeMax)
+
+Creates a UniformQuantizedSubChannelType with the given parameters.
+
+The type is owned by the context. `scalesAttr` and `zeroPointsAttr` must be DenseElementsAttrs. `quantizedDimensions` and `blockSizes` point to `blockSizeInfoLength` number of elements, describing respectively the quantization axis and corresponding block size.
+"""
+function mlirUniformQuantizedSubChannelTypeGet(
+    flags,
+    storageType,
+    expressedType,
+    scalesAttr,
+    zeroPointsAttr,
+    blockSizeInfoLength,
+    quantizedDimensions,
+    blockSizes,
+    storageTypeMin,
+    storageTypeMax,
+)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGet(
+        flags::Cuint,
+        storageType::MlirType,
+        expressedType::MlirType,
+        scalesAttr::MlirAttribute,
+        zeroPointsAttr::MlirAttribute,
+        blockSizeInfoLength::intptr_t,
+        quantizedDimensions::Ptr{Int32},
+        blockSizes::Ptr{Int64},
+        storageTypeMin::Int64,
+        storageTypeMax::Int64,
+    )::MlirType
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetNumBlockSizes(type)
+
+Returns the number of block sizes provided in type.
+"""
+function mlirUniformQuantizedSubChannelTypeGetNumBlockSizes(type)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetNumBlockSizes(
+        type::MlirType
+    )::intptr_t
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetQuantizedDimension(type, pos)
+
+Returns the quantized dimension at the given position.
+"""
+function mlirUniformQuantizedSubChannelTypeGetQuantizedDimension(type, pos)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetQuantizedDimension(
+        type::MlirType, pos::intptr_t
+    )::Int32
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetBlockSize(type, pos)
+
+Returns the block size at the given position.
+"""
+function mlirUniformQuantizedSubChannelTypeGetBlockSize(type, pos)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetBlockSize(
+        type::MlirType, pos::intptr_t
+    )::Int64
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetScales(type)
+
+Returns the scales of the quantized type.
+"""
+function mlirUniformQuantizedSubChannelTypeGetScales(type)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetScales(type::MlirType)::MlirAttribute
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetZeroPoints(type)
+
+Returns the zero-points of the quantized type.
+"""
+function mlirUniformQuantizedSubChannelTypeGetZeroPoints(type)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetZeroPoints(
+        type::MlirType
+    )::MlirAttribute
+end
+
+"""
     mlirTypeIsACalibratedQuantizedType(type)
 
 Returns `true` if the given type is a CalibratedQuantizedType.
@@ -10369,6 +10464,8 @@ function sdyOpShardingRuleAttrGet(
     needReplicationFactors,
     nPermutationFactors,
     permutationFactors,
+    nBlockedPropagationFactors,
+    blockedPropagationFactors,
     isCustomRule,
 )
     @ccall mlir_c.sdyOpShardingRuleAttrGet(
@@ -10385,6 +10482,8 @@ function sdyOpShardingRuleAttrGet(
         needReplicationFactors::Ptr{Int64},
         nPermutationFactors::intptr_t,
         permutationFactors::Ptr{Int64},
+        nBlockedPropagationFactors::Int64,
+        blockedPropagationFactors::Ptr{Int64},
         isCustomRule::Bool,
     )::MlirAttribute
 end
@@ -10455,6 +10554,18 @@ end
 
 function sdyOpShardingRuleAttrGetPermutationFactorsElem(attr, pos)
     @ccall mlir_c.sdyOpShardingRuleAttrGetPermutationFactorsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::Int64
+end
+
+function sdyOpShardingRuleAttrGetBlockedPropagationFactorsSize(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetBlockedPropagationFactorsSize(
+        attr::MlirAttribute
+    )::intptr_t
+end
+
+function sdyOpShardingRuleAttrGetBlockedPropagationFactorsElem(attr, pos)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetBlockedPropagationFactorsElem(
         attr::MlirAttribute, pos::intptr_t
     )::Int64
 end
