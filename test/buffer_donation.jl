@@ -11,6 +11,13 @@ function donate_inplace_mul(x, y)
     return nothing
 end
 
+function multiple_donated_args(x, y, z)
+    x .= 2.0
+    y .= 3.0
+    z .= 4.0
+    return x, z, y
+end
+
 @testset "buffer_donation" begin
     a = Reactant.to_rarray(ones(2, 2))
     b = Reactant.to_rarray(3 * ones(2, 2))
@@ -33,6 +40,16 @@ end
     (; preserved_args) = Reactant.Compiler.compile_xla(donate_inplace_mul, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
+
+    a = Reactant.to_rarray(ones(2, 2))
+    b = Reactant.to_rarray(ones(3, 4))
+    c = Reactant.to_rarray(ones(2, 2))
+    @jit(multiple_donated_args(a, b, c))
+    @test convert(Array, a) == 2 * ones(2, 2)
+    @test convert(Array, b) == 3 * ones(3, 4)
+    @test convert(Array, c) == 4 * ones(2, 2)
+    hlo = @code_hlo(multiple_donated_args(a, b, c))
+    @test contains(repr(hlo), "@main(%arg0: tensor<2x2xf64> {tf.aliasing_output = 0 : i32}, %arg1: tensor<4x3xf64> {tf.aliasing_output = 2 : i32}, %arg2: tensor<2x2xf64> {tf.aliasing_output = 1 : i32})")
 end
 
 function update_inplace!(x, y, z)
