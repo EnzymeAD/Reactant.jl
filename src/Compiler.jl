@@ -1156,23 +1156,29 @@ function compile_mlir!(
     # TODO: use mhlo.input_output_alias
     # input_output_aliases = MLIR.IR.Attribute[]
 
+    available_results_for_aliasing = [
+        (Int32(i - 1), Reactant.unwrapped_eltype(res), size(res)) for
+        (i, res) in enumerate(linear_results2)
+    ]
+
     for (i, donated) in enumerate(donated_args_mask)
         !donated && continue
 
         linear_arg = linear_args[i]
-        residx = findfirst(linear_results2) do res
-            return size(res) == size(linear_arg) &&
-                   Reactant.unwrapped_eltype(res) == Reactant.unwrapped_eltype(linear_arg)
+        elTarg, sz_arg = Reactant.unwrapped_eltype(linear_arg), size(linear_arg)
+        idx = findfirst(available_results_for_aliasing) do (_, elT, sz)
+            return sz == sz_arg && elT == elTarg
         end
 
-        if residx === nothing
+        if idx === nothing
             @debug "Requested aliasing for argument $i, but could not find a matching \
                     result."
             continue
         end
 
+        residx, _, _ = popat!(available_results_for_aliasing, idx)
         MLIR.API.mlirFuncSetArgAttr(
-            func3, i - 1, "tf.aliasing_output", MLIR.IR.Attribute(Int32(residx - 1))
+            func3, i - 1, "tf.aliasing_output", MLIR.IR.Attribute(residx)
         )
 
         # XXX: we should be using mhlo.input_output_alias, but I couldn't get it to work
