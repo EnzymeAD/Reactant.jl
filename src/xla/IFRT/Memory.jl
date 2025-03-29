@@ -29,6 +29,15 @@ function MemoryKind(str::AbstractString)
     end
 end
 
+function Base.isempty(memory_kind::MemoryKind)
+    GC.@preserve memory_kind begin
+        has_value = @ccall MLIR.API.mlir_c.ifrt_memory_kind_has_value(
+            memory_kind.ptr::Ptr{Cvoid}
+        )::Bool
+    end
+    return !has_value
+end
+
 function Base.convert(::Type{MemoryKind}, memory::Memory)
     GC.@preserve memory begin
         return MemoryKind(
@@ -48,6 +57,7 @@ function Base.:(==)(a::MemoryKind, b::MemoryKind)
 end
 
 function Base.string(memory_kind::MemoryKind)
+    isempty(memory_kind) && return "<null>"
     GC.@preserve memory_kind begin
         str = @ccall MLIR.API.mlir_c.ifrt_MemoryKindToString(
             memory_kind.ptr::Ptr{Cvoid}
