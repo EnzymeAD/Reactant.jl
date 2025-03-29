@@ -947,7 +947,7 @@ function make_tracer(
 end
 append_path(@nospecialize(path), i) = (path..., i)
 
-function make_tracer_via_immutable_constructor(
+Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     seen,
     @nospecialize(prev),
     @nospecialize(path),
@@ -1022,7 +1022,7 @@ function make_tracer_via_immutable_constructor(
     return y
 end
 
-function make_tracer_unknown(
+Base.@nospecializeinfer function make_tracer_unknown(
     seen,
     @nospecialize(prev),
     @nospecialize(path),
@@ -1156,7 +1156,7 @@ function make_tracer(
     )
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::ConcretePJRTArray{T,N}),
     @nospecialize(path),
@@ -1175,7 +1175,7 @@ function make_tracer(
     return res
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::ConcreteIFRTArray{T,N}),
     @nospecialize(path),
@@ -1194,7 +1194,7 @@ function make_tracer(
     return res
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     prev::ConcretePJRTNumber{T},
     @nospecialize(path),
@@ -1213,7 +1213,7 @@ function make_tracer(
     return res
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::ConcreteIFRTNumber{T}),
     @nospecialize(path),
@@ -1232,7 +1232,7 @@ function make_tracer(
     return res
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::TracedRArray{T,N}),
     @nospecialize(path),
@@ -1310,7 +1310,7 @@ function make_tracer(
     throw("Cannot Unknown trace mode $mode")
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::TracedRNumber{T}),
     @nospecialize(path),
@@ -1388,7 +1388,7 @@ function make_tracer(
     throw("Cannot Unknown trace mode $mode")
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::MissingTracedValue), @nospecialize(path), mode; kwargs...
 )
     if mode == ConcreteToTraced
@@ -1425,7 +1425,7 @@ function make_tracer(
     throw("Cannot Unknown trace mode $mode")
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Number),
     @nospecialize(path),
@@ -1470,14 +1470,9 @@ function make_tracer(
     return prev
 end
 
-function make_tracer(seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...)
-    if mode == TracedToTypes
-        push!(path, prev)
-        return nothing
-    end
-    return prev
-end
-function make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...)
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...
+)
     if mode == TracedToTypes
         push!(path, prev)
         return nothing
@@ -1485,7 +1480,17 @@ function make_tracer(seen, prev::Symbol, @nospecialize(path), mode; kwargs...)
     return prev
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::Symbol), @nospecialize(path), mode; kwargs...
+)
+    if mode == TracedToTypes
+        push!(path, prev)
+        return nothing
+    end
+    return prev
+end
+
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Complex),
     @nospecialize(path),
@@ -1506,7 +1511,7 @@ function make_tracer(
     )
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Array),
     @nospecialize(path),
@@ -1582,7 +1587,7 @@ function make_tracer(
     return newa
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Dict{Key,Value}),
     @nospecialize(path),
@@ -1649,7 +1654,7 @@ function make_tracer(
     return newa
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Tuple),
     @nospecialize(path),
@@ -1681,7 +1686,7 @@ function make_tracer(
     )
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::NamedTuple),
     @nospecialize(path),
@@ -1720,9 +1725,9 @@ function make_tracer(
     ))
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
-    prev::Core.Box,
+    @nospecialize(prev::Core.Box),
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
@@ -1753,7 +1758,7 @@ function make_tracer(
     return res
 end
 
-function make_tracer(
+Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Sharding.Mesh),
     @nospecialize(path),

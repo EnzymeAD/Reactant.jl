@@ -15,23 +15,23 @@ using ..Reactant:
 using ReactantCore: ReactantCore
 using Functors: fmap
 
-function mlir_type(x::Union{RNumber,RArray})
-    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(unwrapped_eltype(x)))
+function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
+    return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
 end
 
 mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 
 function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
-    return MLIR.IR.TensorType(shape, MLIR.IR.Type(unwrapped_eltype(RT)))
+    return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(RT::Type{<:RNumber})
-    return MLIR.IR.TensorType((), MLIR.IR.Type(unwrapped_eltype(RT)))
+function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
+    return MLIR.IR.TensorType(Int[], MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(::Type{<:MissingTracedValue})
-    return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+function mlir_type(::Type{<:MissingTracedValue})::MLIR.IR.Type
+    return MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 end
 
 const DEBUG_MODE::Ref{Bool} = Ref(false)
@@ -1145,7 +1145,7 @@ end
     @assert fn_name == "comparator" "$comparator: no function generated"
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool)) error(
         "$comparator return type is not tensor<i1>"
     )
 
@@ -1271,8 +1271,8 @@ distribution between 0 and 1. Returns a NamedTuple with the following fields:
         @assert length(seed) == 2
     end
 
-    output = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
-    output_state = MLIR.IR.TensorType(size(seed), MLIR.IR.Type(UInt64))
+    output = MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(T))
+    output_state = MLIR.IR.TensorType(collect(Int, size(seed)), MLIR.IR.Type(UInt64))
     rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
     op = stablehlo.rng_bit_generator(
         seed.mlir_data; output, output_state, rng_algorithm, location
@@ -2542,7 +2542,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     )
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(T)) error (
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(T)) error (
         "$fn return type is not tensor<i1>"
     )
     fn = MLIR.IR.Region()

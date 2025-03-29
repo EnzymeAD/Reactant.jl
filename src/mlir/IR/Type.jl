@@ -443,11 +443,14 @@ Creates a tensor type of a fixed rank with the given shape, element type, and op
 The type is owned by the context. Tensor types without any specific encoding field should assign [`mlirAttributeGetNull`](@ref) to this parameter.
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function TensorType(
-    shape, elem_type, encoding=Attribute(); location::Location=Location(), check::Bool=false
+Base.@nospecializeinfer function TensorType(
+    shape::Vector{Int},
+    @nospecialize(elem_type::Type),
+    encoding=Attribute();
+    location::Location=Location(),
+    check::Bool=false,
 )
     rank = length(shape)
-    shape = shape isa AbstractVector ? shape : collect(shape)
     return Type(
         if check
             API.mlirRankedTensorTypeGetChecked(location, rank, shape, elem_type, encoding)
@@ -463,7 +466,7 @@ end
 Creates an unranked tensor type with the given element type in the same context as the element type. The type is owned by the context.
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function TensorType(elem_type; location::Location=Location(), check::Bool=false)
+function TensorType(elem_type::Type; location::Location=Location(), check::Bool=false)
     return Type(
         if check
             API.mlirUnrankedTensorTypeGetChecked(location, elem_type)
