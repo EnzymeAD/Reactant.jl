@@ -23,7 +23,7 @@ function reduce_window(
         reshape([padding..., 0, 0, 0, 0], (2, N))'
     )
 
-    output_shape = (output_spatial_shapes..., size(x, N - 1), size(x, N))
+    output_shape = Int[output_spatial_shapes..., size(x, N - 1), size(x, N)]
     result_type = Reactant.MLIR.IR.TensorType(output_shape, Reactant.MLIR.IR.Type(T))
 
     unranked = Reactant.MLIR.IR.TensorType(
