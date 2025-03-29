@@ -252,9 +252,7 @@ function create_result(
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
-            return :(ConcretePJRTArray{$T,$N,length($(restore))}(
-                ($(restore)...,), $(tocopy.shape), $sharding
-            ))
+            return :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
         else
             return :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
         end
@@ -263,9 +261,7 @@ function create_result(
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
-        return :(ConcretePJRTArray{$T,$N,length($(tocopy.data))}(
-            ($(tocopy.data)...,), $(tocopy.shape), $sharding
-        ))
+        return :(ConcretePJRTArray{$T,$N}(($(tocopy.data)...,), $(tocopy.shape), $sharding))
     end
     return :(ConcretePJRTArray{$T,$N,$D,$S}(
         $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
@@ -1480,7 +1476,6 @@ function codegen_flatten!(
         end
 
         if runtime isa Val{:PJRT}
-            error("TODO: trim out the pointers from the generated code")
             if is_sharded
                 carg = inv_seen_args[arg]
 
@@ -1514,11 +1509,24 @@ function codegen_flatten!(
                                $(path[3:end])")
                     end
 
-                    resharded_inputs[path[3:end]] = (
-                        Reactant.XLA.device(carg), condensed_op_sharding
-                    )
-
                     push!(flatten_code, :($usbuf = $flatcode))
+                    device_sym = gensym(:device)
+                    push!(flatten_code, :($device_sym = Reactant.XLA.device($usbuf)))
+
+                    if xla_parameter_sharding_sym === missing
+                        xla_parameter_sharding_sym = :xla_parameter_sharding
+                        pushfirst!(
+                            flatten_code,
+                            :(
+                                $(xla_parameter_sharding_sym) = Reactant.XLA.get_parameter_shardings(
+                                    thunk.exec
+                                )
+                            ),
+                        )
+                    end
+
+                    resharded_inputs[path[3:end]] = (device_sym, xla_parameter_sharding_sym)
+
                     device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
                         condensed_op_sharding, size(carg), 0:(ndevices - 1)
                     )
@@ -1543,8 +1551,7 @@ function codegen_flatten!(
                     end
 
                     for j in 1:ndevices
-                        device_id = global_mesh.device_ids[j]
-                        buf = Symbol(:buf_, i, :_, device_id)
+                        buf = Symbol(:buf_, i, :_, j)
                         slice = device_to_array_slices[j]
                         sbuf = Symbol(:s, buf)
                         push!(flatten_names, sbuf)
@@ -1553,7 +1560,9 @@ function codegen_flatten!(
                             :(
                                 $sbuf = XLA.copy_buffer_to_device(
                                     XLA.synced_buffer($(buf_slice[slice])),
-                                    $(XLA.get_device(client, device_id)),
+                                    XLA.get_device(
+                                        thunk.client, global_mesh.device_ids[$(j)]
+                                    ),
                                 )
                             ),
                         )
