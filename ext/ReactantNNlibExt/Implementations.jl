@@ -91,7 +91,7 @@ function overloaded_conv!(
     padding = Reactant.MLIR.IR.DenseElementsAttribute(
         reshape(collect(padding), (2, num_spatial_dims))'
     )
-    result_type = Reactant.MLIR.IR.TensorType(size(y), Reactant.MLIR.IR.Type(T))
+    result_type = Reactant.MLIR.IR.TensorType(collect(Int, size(y)), Reactant.MLIR.IR.Type(T))
 
     weight = W
     if !flipkernel
