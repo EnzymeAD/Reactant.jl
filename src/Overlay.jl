@@ -4,9 +4,7 @@
 #       we should move all the reactant_overrides to relevant files.
 
 # Compiling within a compile should return simply the original function
-@reactant_overlay function Compiler.compile(
-    f, args; client=nothing, optimize=true, sync=false
-)
+@reactant_overlay function Compiler.compile(f, args; kwargs...)
     return f
 end
 
