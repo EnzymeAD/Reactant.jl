@@ -1272,7 +1272,7 @@ distribution between 0 and 1. Returns a NamedTuple with the following fields:
     end
 
     output = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
-    output_state = MLIR.IR.TensorType(size(seed), MLIR.IR.Type(UInt64))
+    output_state = MLIR.IR.TensorType(collect(Int, size(seed)), MLIR.IR.Type(UInt64))
     rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
     op = stablehlo.rng_bit_generator(
         seed.mlir_data; output, output_state, rng_algorithm, location
@@ -2542,7 +2542,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     )
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(T)) error (
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(T)) error (
         "$fn return type is not tensor<i1>"
     )
     fn = MLIR.IR.Region()
