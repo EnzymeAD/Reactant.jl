@@ -465,9 +465,7 @@ function ka_with_reactant(ndrange, workgroupsize, obj, args...)
     return nothing
 end
 
-Reactant.@reactant_overlay @noinline Base.@nospecializeinfer function (@nospecialize(
-    obj::KA.Kernel{ReactantBackend}
-))(
+Reactant.@reactant_overlay @noinline Base.@nospecializeinfer function (obj::KA.Kernel{ReactantBackend})(
     args...; ndrange=nothing, workgroupsize=nothing
 )
     @nospecialize
