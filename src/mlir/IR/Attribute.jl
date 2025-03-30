@@ -96,7 +96,7 @@ isdict(attr::Attribute) = API.mlirAttributeIsADictionary(attr)
 Creates a dictionary attribute containing the given list of elements in the provided context.
 """
 function Attribute(attrs::Dict; context::Context=context())
-    attrs = map(splat(NamedAttribute), attrs)
+    attrs = [NamedAttribute(k, Attribute(v); context) for (k, v) in attrs]
     return Attribute(API.mlirDictionaryAttrGet(context, length(attrs), attrs))
 end
 

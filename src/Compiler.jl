@@ -781,8 +781,7 @@ function compile_mlir!(
     callcache=default_callcache(),
     sdycache=default_sdycache();
     optimize::Union{Bool,Symbol}=true,
-    # default refers to letting XLA handle the shardy inport/propagation/export
-    shardy_passes::Symbol=:to_mhlo_shardings, # [:none, :to_mhlo_shardings]
+    shardy_passes::Symbol=:to_mhlo_shardings, # :none | :to_mhlo_shardings
     no_nan::Bool=false,
     assert_nonallocating::Bool=false,
     backend="gpu",
@@ -792,7 +791,11 @@ function compile_mlir!(
     output_shardings=nothing,
     do_transpose=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
+    # TODO: allow more fine-grained options to control the donation of specific arguments
+    donated_args::Symbol=:auto, # :auto | :none
 )
+    @assert donated_args ∈ (:auto, :none)
+
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
@@ -1131,15 +1134,31 @@ function compile_mlir!(
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
     preserved_args_idx = last.(preserved_args)
-    if backend != "tpu"
-        for (i, arg) in enumerate(linear_args)
+    donated_args_mask = Vector{Bool}(undef, length(linear_args))
+    for (i, arg) in enumerate(linear_args)
+        if donated_args == :auto
             if (i - 1) ∉ preserved_args_idx
-                MLIR.API.mlirFuncSetArgAttr(
-                    func3, i - 1, "reactant.donated", MLIR.IR.UnitAttribute()
-                )
+                donated_args_mask[i] = true
+
+                residx = findfirst(Base.Fix1(===, arg), linear_results2)
+                if residx !== nothing
+                    MLIR.API.mlirFuncSetArgAttr(
+                        func3,
+                        i - 1,
+                        "tf.aliasing_output",
+                        MLIR.IR.Attribute(Int32(residx - 1)),
+                    )
+                end
+            else
+                donated_args_mask[i] = false
             end
+        else # :none
+            donated_args_mask[i] = false
         end
-    else
+    end
+
+    # drop certain operations from the module if using TPU backend
+    if backend == "tpu"
         for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
             if MLIR.IR.dialect(op) == :llvm
                 MLIR.API.mlirOperationDestroy(op.operation)
@@ -1189,6 +1208,7 @@ function compile_mlir!(
         use_shardy_partitioner,
         result_shardings,
         mlir_fn_res.global_device_ids,
+        donated_args_mask,
     )
 end
 
@@ -1205,6 +1225,7 @@ macro code_hlo(args...)
         :raise => false,
         :shardy_passes => :(:none),
         :assert_nonallocating => false,
+        :donated_args => :(:auto),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1234,6 +1255,7 @@ macro code_mhlo(args...)
         :raise => false,
         :shardy_passes => :(:none),
         :assert_nonallocating => false,
+        :donated_args => :(:auto),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1263,6 +1285,7 @@ macro code_xla(args...)
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
+        :donated_args => :(:auto),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1292,6 +1315,7 @@ macro compile(args...)
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :serializable => false,
+        :donated_args => :(:auto),
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1310,6 +1334,7 @@ macro jit(args...)
         :raise => false,
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
+        :donated_args => :(:auto),
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
@@ -2170,13 +2195,14 @@ end
 
 function compile(f, args; sync=false, kwargs...)
     _, exec, mlir_fn_res, device, client, str = compile_xla(f, args; kwargs...)
-    (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
-        mlir_fn_res
-
-    preserved_args_idx = last.(preserved_args)
-    donated_args_mask = map(1:length(linear_args)) do i
-        UInt8((i - 1) ∉ preserved_args_idx)
-    end
+    (;
+        linear_args,
+        seen_args,
+        linear_results,
+        preserved_args,
+        concrete_result,
+        donated_args_mask,
+    ) = mlir_fn_res
 
     result_stores = Dict{Tuple,Symbol}()
     path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Symbol}() : nothing
@@ -2228,7 +2254,7 @@ function compile(f, args; sync=false, kwargs...)
 
     concretized_res_names, xla_call_code = codegen_xla_call(
         flatten_arg_names,
-        donated_args_mask,
+        UInt8.(donated_args_mask),
         length(linear_results),
         mlir_fn_res.is_sharded,
         ndevices,

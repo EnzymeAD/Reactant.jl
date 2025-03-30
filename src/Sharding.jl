@@ -680,15 +680,26 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
             sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
         )
 
-        hlo_sharding = XLA.HloSharding(
-            @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                tensor_sharding_attr::MLIR.API.MlirAttribute,
-                mesh_op.mesh_attr.attribute::MLIR.API.MlirAttribute,
-            )::Ptr{Cvoid}
-        )
-
         return HloSharding(
-            hlo_sharding, sharding.mesh, sharding.is_closed, sharding.priority
+            hlo_sharding_from_sdy_tensor_sharding_attr(
+                tensor_sharding_attr, mesh_op.mesh_attr
+            ),
+            sharding.mesh,
+            sharding.is_closed,
+            sharding.priority,
+        )
+    end
+end
+
+function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
+    @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr.attribute)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+    GC.@preserve attr begin
+        return XLA.HloSharding(
+            @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
+                attr.attribute::MLIR.API.MlirAttribute,
+                mesh_attr.attribute::MLIR.API.MlirAttribute,
+            )::Ptr{Cvoid}
         )
     end
 end

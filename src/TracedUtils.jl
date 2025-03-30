@@ -159,7 +159,7 @@ Base.@nospecializeinfer function transpose_val(
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD}
+mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
     fnwrapped::Bool
     f::F
     traced_result::TR
@@ -179,6 +179,7 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD}
     use_shardy_partitioner::Bool
     result_shardings::RS
     global_device_ids::GD # only populated if is_sharded
+    donated_args_mask::DA
 end
 
 function make_mlir_fn(
@@ -665,6 +666,7 @@ function make_mlir_fn(
         true,
         missing,
         global_device_ids,
+        nothing, # populated later in `compile_mlir!`
     )
 end
 

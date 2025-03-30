@@ -434,3 +434,10 @@ function replicate_on_last_tile_dim(hlo_sharding::HloSharding)
         )::Bool
     end
 end
+
+function shard_shape(args...; kwargs...)
+    indices = sharding_to_concrete_array_indices(args...; kwargs...)
+    shard_shapes = map(Base.BroadcastFunction(length), indices)
+    allequal(shard_shapes) && return first(shard_shapes)
+    return nothing
+end
