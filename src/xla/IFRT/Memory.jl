@@ -14,6 +14,12 @@ mutable struct MemoryKind <: XLA.AbstractMemoryKind
     ptr::Ptr{Cvoid}
 end
 
+function MemoryKind(::Nothing)
+    return MemoryKind(
+        @ccall MLIR.API.mlir_c.ifrt_memory_kind_with_optional_memory_space()::Ptr{Cvoid}
+    )
+end
+
 function MemoryKind(str::AbstractString)
     str = string(str)
     GC.@preserve str begin
@@ -21,6 +27,15 @@ function MemoryKind(str::AbstractString)
             @ccall MLIR.API.mlir_c.ifrt_memory_kind_from_string(str::Cstring)::Ptr{Cvoid}
         )
     end
+end
+
+function Base.isempty(memory_kind::MemoryKind)
+    GC.@preserve memory_kind begin
+        has_value = @ccall MLIR.API.mlir_c.ifrt_memory_kind_has_value(
+            memory_kind.ptr::Ptr{Cvoid}
+        )::Bool
+    end
+    return !has_value
 end
 
 function Base.convert(::Type{MemoryKind}, memory::Memory)
@@ -42,6 +57,7 @@ function Base.:(==)(a::MemoryKind, b::MemoryKind)
 end
 
 function Base.string(memory_kind::MemoryKind)
+    isempty(memory_kind) && return "<null>"
     GC.@preserve memory_kind begin
         str = @ccall MLIR.API.mlir_c.ifrt_MemoryKindToString(
             memory_kind.ptr::Ptr{Cvoid}
