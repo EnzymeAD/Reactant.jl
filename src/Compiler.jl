@@ -489,16 +489,11 @@ function optimization_passes(;
         "bin_broadcast_splat_subtract<1>",
         "bin_broadcast_splat_div<1>",
         "bin_broadcast_splat_mul<1>",
-        "slice_reshape_slice<1>",
         "dot_general_simplify<16>",
         "transpose_simplify<16>",
         "reshape_empty_broadcast<1>",
         "add_pad_pad_to_concat<1>",
         "broadcast_reshape<1>",
-        "slice_reshape_concat<1>",
-        "slice_reshape_elementwise<1>",
-        "slice_reshape_transpose<1>",
-        "slice_reshape_dot_general<1>",
         "concat_pad<1>",
         "reduce_pad<1>",
         "broadcast_pad<1>",
@@ -510,7 +505,6 @@ function optimization_passes(;
         "binop_const_pad_subtract<1>",
         "binop_const_pad_mul<1>",
         "binop_const_pad_div<1>",
-        "slice_reshape_pad<1>",
         "binop_binop_pad_pad_add<1>",
         "binop_binop_pad_pad_mul<1>",
         "binop_pad_pad_add<1>",
@@ -522,11 +516,8 @@ function optimization_passes(;
         "unary_pad_push_convert<1>",
         "unary_pad_push_tanh<1>",
         "unary_pad_push_exp<1>",
-        "transpose_pad<1>",
         "transpose_dot_reorder<1>",
         "dot_transpose<1>",
-        "transpose_einsum<1>",
-        "einsum_transpose<1>",
         "transpose_convolution<1>",
         "convolution_transpose<1>",
         "convert_convert_float<1>",
@@ -534,10 +525,6 @@ function optimization_passes(;
         "reshape_iota<1>",
         "broadcast_reduce<1>",
         "slice_dot_general<1>",
-        "dot_reshape_pad<1>",
-        "pad_dot_general<1>(0)",
-        "dot_reshape_pad<1>",
-        "pad_dot_general<1>(1)",
         "if_inline<1>",
         "if_to_select<1>",
         "dynamic_update_slice_const_prop",
@@ -552,7 +539,6 @@ function optimization_passes(;
         "binop_const_simplify",
         "is_finite_const_prop",
         "not_const_prop",
-        "transpose_broadcast_in_dim_to_broadcast_in_dim",
         "not_select_simplify",
         "scatter_update_computation_const_prop",
         "common_compare_expression_rewrite",
@@ -569,13 +555,30 @@ function optimization_passes(;
     ]
 
     if reshape_propagate === :up
-        # Will be added by the next JLL
-        # append!(
-        #     transform_passes_list,
-        #     ["reshape_elementwise", "reshape_concat", "reshape_slice"],
-        # )
+        append!(
+            transform_passes_list,
+            [
+                # "reshape_elementwise",
+                # "reshape_concat",
+                # "reshape_slice",
+                "dot_reshape_pad<1>",
+                "pad_dot_general<1>(0)",
+                "pad_dot_general<1>(1)",
+            ],
+        )
     elseif reshape_propagate === :down
-        append!(transform_passes_list, ["concat_appending_reshape", "slice_reshape"])
+        append!(
+            transform_passes_list,
+            [
+                "concat_appending_reshape",
+                "slice_reshape",
+                "slice_reshape_slice<1>",
+                "slice_reshape_concat<1>",
+                "slice_reshape_elementwise<1>",
+                "slice_reshape_dot_general<1>",
+                "slice_reshape_pad<1>",
+            ],
+        )
     else
         error("Invalid value for reshape_propagate. Must be :up or :down.")
     end
@@ -592,6 +595,8 @@ function optimization_passes(;
                 "transpose_reduce",
                 "transpose_reduce_window",
                 "transpose_dus",
+                "transpose_pad<1>",
+                "transpose_einsum<1>",
             ],
         )
     elseif transpose_propagate === :down
@@ -625,6 +630,8 @@ function optimization_passes(;
                 "transpose_unary_transpose_sign",
                 "transpose_unary_transpose_sine",
                 "transpose_unary_transpose_tanh",
+                "einsum_transpose<1>",
+                "slice_reshape_transpose<1>",
             ],
         )
     else
