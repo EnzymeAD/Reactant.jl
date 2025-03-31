@@ -581,9 +581,10 @@ function optimization_passes(;
     ]
 
     if reshape_propagate === :up
-        append!(transform_passes_list, ["concat_appending_reshape"])
+        # Will be added by the next JLL
+        # append!(transform_passes_list, [])
     elseif reshape_propagate === :down
-        append!(transform_passes_list, ["slice_reshape"])
+        append!(transform_passes_list, ["concat_appending_reshape", "slice_reshape"])
     else
         error("Invalid value for reshape_propagate. Must be :up or :down.")
     end
