@@ -549,7 +549,6 @@ function optimization_passes(;
         "dus_dus",
         "dus_dus_concat",
         "abs_positive_simplify",
-        "transpose_reduce_simplify",
         "transpose_unary_transpose_abs",
         "transpose_unary_transpose_neg",
         "transpose_unary_transpose_sqrt",
@@ -575,6 +574,7 @@ function optimization_passes(;
                 # "reshape_elementwise",
                 # "reshape_concat",
                 # "reshape_slice",
+                # "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
                 "pad_dot_general<1>(1)",
@@ -632,6 +632,8 @@ function optimization_passes(;
                 "slice_transpose",
                 "einsum_transpose<1>",
                 "slice_reshape_transpose<1>",
+                "transpose_reduce_simplify",
+                # "reduce_transpose_simplify",
             ],
         )
     else
