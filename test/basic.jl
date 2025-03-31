@@ -38,6 +38,14 @@ end
 sinexp(x) = sin(exp(x))
 sinexpbc(x) = sinexp.(x)
 
+x = rand(2, 10)
+
+r_res = sinexpbc(x)
+
+a = Reactant.to_rarray(x)
+
+@code_hlo optimize = true transpose_propagate = :down sinexpbc(a)
+
 @testset "Broadcast combined" begin
     x = rand(2, 10)
 
