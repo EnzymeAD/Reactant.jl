@@ -130,14 +130,14 @@ http_archive(
 )
 
 # load("@jax//third_party/xla:workspace.bzl", "XLA_COMMIT", "XLA_SHA256")
-XLA_COMMIT = "31b74e5854876fb2a311ae694c645bc6cc1c80be"
+XLA_COMMIT = "eecffc998ab313838f8923197c11668be2dfd82d"
 XLA_SHA256 = ""
 
 http_archive(
     name = "xla",
     sha256 = XLA_SHA256,
     strip_prefix = "xla-" + XLA_COMMIT,
-    urls = ["https://github.com/wsmoses/xla/archive/{commit}.tar.gz".format(commit = XLA_COMMIT)],
+    urls = ["https://github.com/giordano/xla/archive/{commit}.tar.gz".format(commit = XLA_COMMIT)],
     patch_cmds = XLA_PATCHES
 )
 
@@ -178,20 +178,6 @@ http_archive(
     strip_prefix = "Enzyme-" + ENZYME_COMMIT + "/enzyme",
     urls = ["https://github.com/EnzymeAD/Enzyme/archive/{commit}.tar.gz".format(commit = ENZYME_COMMIT)],
 )
-
-http_archive(
-    name = "build_bazel_rules_apple",
-    sha256 = "34c41bfb59cdaea29ac2df5a2fa79e5add609c71bb303b2ebb10985f93fa20e7",
-    url = "https://github.com/bazelbuild/rules_apple/releases/download/3.1.1/rules_apple.3.1.1.tar.gz",
-)
-
-load(
-    "@build_bazel_rules_apple//apple:repositories.bzl",
-    "apple_rules_dependencies",
-)
-
-apple_rules_dependencies()
-
 
 http_archive(
     name = "upb",
