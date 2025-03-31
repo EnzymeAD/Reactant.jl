@@ -578,11 +578,16 @@ function optimization_passes(;
         "dus_dus",
         "dus_dus_concat",
         "abs_positive_simplify",
+        # "broadcastindim_is_reshape",
+        # "slice_reduce_window<1>"
     ]
 
     if reshape_propagate === :up
         # Will be added by the next JLL
-        # append!(transform_passes_list, [])
+        # append!(
+        #     transform_passes_list,
+        #     ["reshape_elementwise", "reshape_concat", "reshape_slice"],
+        # )
     elseif reshape_propagate === :down
         append!(transform_passes_list, ["concat_appending_reshape", "slice_reshape"])
     else
@@ -642,7 +647,7 @@ function optimization_passes(;
         ],
         ",",
     )
-    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
+    func_passes = join(["print{debug=true}", "canonicalize", "cse", "canonicalize", transform_passes], ",")
     passes = String[]
     if inline
         push!(passes, "inline{default-pipeline=canonicalize max-iterations=4}")
