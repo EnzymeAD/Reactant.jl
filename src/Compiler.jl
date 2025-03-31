@@ -415,7 +415,6 @@ function optimization_passes(;
         "merge_consecutive_reshapes<16>",
         "transpose_is_reshape<16>",
         "zero_extent_tensor_canon<16>",
-        "reorder_elementwise_and_shape_op<16>",
         "chlo_inf_const_prop<16>",
         "gamma_const_prop<16>",
         "cse_broadcast_in_dim<16>",
@@ -550,6 +549,21 @@ function optimization_passes(;
         "dus_dus",
         "dus_dus_concat",
         "abs_positive_simplify",
+        "transpose_reduce_simplify",
+        "transpose_unary_transpose_abs",
+        "transpose_unary_transpose_neg",
+        "transpose_unary_transpose_sqrt",
+        "transpose_unary_transpose_rsqrt",
+        "transpose_unary_transpose_ceil",
+        "transpose_unary_transpose_convert",
+        "transpose_unary_transpose_cosine",
+        "transpose_unary_transpose_exp",
+        "transpose_unary_transpose_expm1",
+        "transpose_unary_transpose_log",
+        "transpose_unary_transpose_log1p",
+        "transpose_unary_transpose_sign",
+        "transpose_unary_transpose_sine",
+        "transpose_unary_transpose_tanh",
         # "broadcastindim_is_reshape",
         # "slice_reduce_window<1>"
     ]
@@ -603,6 +617,7 @@ function optimization_passes(;
         append!(
             transform_passes_list,
             [
+                "reorder_elementwise_and_shape_op<16>",
                 "binary_op_transpose_simplify_add",
                 "binary_op_transpose_simplify_sub",
                 "binary_op_transpose_simplify_mul",
@@ -615,21 +630,6 @@ function optimization_passes(;
                 "binary_op_transpose_simplify_and",
                 "binary_op_transpose_simplify_xor",
                 "slice_transpose",
-                "transpose_reduce_simplify",
-                "transpose_unary_transpose_abs",
-                "transpose_unary_transpose_neg",
-                "transpose_unary_transpose_sqrt",
-                "transpose_unary_transpose_rsqrt",
-                "transpose_unary_transpose_ceil",
-                "transpose_unary_transpose_convert",
-                "transpose_unary_transpose_cosine",
-                "transpose_unary_transpose_exp",
-                "transpose_unary_transpose_expm1",
-                "transpose_unary_transpose_log",
-                "transpose_unary_transpose_log1p",
-                "transpose_unary_transpose_sign",
-                "transpose_unary_transpose_sine",
-                "transpose_unary_transpose_tanh",
                 "einsum_transpose<1>",
                 "slice_reshape_transpose<1>",
             ],
@@ -654,9 +654,7 @@ function optimization_passes(;
         ],
         ",",
     )
-    func_passes = join(
-        ["print{debug=true}", "canonicalize", "cse", "canonicalize", transform_passes], ","
-    )
+    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
     passes = String[]
     if inline
         push!(passes, "inline{default-pipeline=canonicalize max-iterations=4}")
