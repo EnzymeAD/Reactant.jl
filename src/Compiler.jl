@@ -1108,10 +1108,7 @@ function compile_mlir!(
         # We tried propagating reshapes and transposes up. If at this point we are left with
         # them, we propagate them down to minimize the number of Ops in the IR.
         run_pass_pipeline!(
-            mod,
-            optimization_passes(;
-                transpose_propagate::Symbol=:down, reshape_propagate::Symbol=:down
-            ),
+            mod, optimization_passes(; transpose_propagate=:down, reshape_propagate=:down)
         )
     end
 
