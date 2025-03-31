@@ -388,7 +388,11 @@ end
 
 # Optimization passes via transform dialect
 function optimization_passes(;
-    no_nan::Bool=false, sroa::Bool=false, inline::Bool=true, transpose_propagate::Symbol=:up
+    no_nan::Bool=false,
+    sroa::Bool=false,
+    inline::Bool=true,
+    transpose_propagate::Symbol=:up,
+    reshape_propagate::Symbol=:up,
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -485,7 +489,6 @@ function optimization_passes(;
         "bin_broadcast_splat_subtract<1>",
         "bin_broadcast_splat_div<1>",
         "bin_broadcast_splat_mul<1>",
-        "reshape_iota<16>",
         "slice_reshape_slice<1>",
         "dot_general_simplify<16>",
         "transpose_simplify<16>",
@@ -528,7 +531,6 @@ function optimization_passes(;
         "convolution_transpose<1>",
         "convert_convert_float<1>",
         "concat_to_pad<1>",
-        "concat_appending_reshape<1>",
         "reshape_iota<1>",
         "broadcast_reduce<1>",
         "slice_dot_general<1>",
@@ -577,6 +579,14 @@ function optimization_passes(;
         "dus_dus_concat",
         "abs_positive_simplify",
     ]
+
+    if reshape_propagate === :up
+        append!(transform_passes_list, ["concat_appending_reshape"])
+    elseif reshape_propagate === :down
+        append!(transform_passes_list, ["slice_reshape"])
+    else
+        error("Invalid value for reshape_propagate. Must be :up or :down.")
+    end
 
     if transpose_propagate === :up
         append!(
@@ -816,6 +826,7 @@ function compile_mlir!(
     shardy_passes::Symbol=:to_mhlo_shardings, # :none | :to_mhlo_shardings
     no_nan::Bool=false,
     transpose_propagate::Symbol=:up,
+    reshape_propagate::Symbol=:up,
     assert_nonallocating::Bool=false,
     backend="gpu",
     fn_kwargs=(),
@@ -925,8 +936,12 @@ function compile_mlir!(
         jit = "lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
-    opt_passes = optimization_passes(; no_nan, sroa=true, transpose_propagate)
-    opt_passes2 = optimization_passes(; no_nan, sroa=false, transpose_propagate)
+    opt_passes = optimization_passes(;
+        no_nan, sroa=true, transpose_propagate, reshape_propagate
+    )
+    opt_passes2 = optimization_passes(;
+        no_nan, sroa=false, transpose_propagate, reshape_propagate
+    )
 
     raise_passes = if raise isa String
         # Raising passes were specified
@@ -1086,6 +1101,18 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "enzyme-batch")
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
+    end
+
+    if optimize ∉ (:none, :just_batch, :canonicalize) &&
+        (transpose_propagate == :up || reshape_propagate == :up)
+        # We tried propagating reshapes and transposes up. If at this point we are left with
+        # them, we propagate them down to minimize the number of Ops in the IR.
+        run_pass_pipeline!(
+            mod,
+            optimization_passes(;
+                transpose_propagate::Symbol=:down, reshape_propagate::Symbol=:down
+            ),
+        )
     end
 
     # shardy passes
@@ -1260,6 +1287,7 @@ macro code_hlo(args...)
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1291,6 +1319,7 @@ macro code_mhlo(args...)
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1322,6 +1351,7 @@ macro code_xla(args...)
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1353,6 +1383,7 @@ macro compile(args...)
         :serializable => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1373,6 +1404,7 @@ macro jit(args...)
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
