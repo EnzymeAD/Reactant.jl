@@ -544,20 +544,6 @@ function optimization_passes(;
         "dynamic_gather_op_is_not_dynamic<16>",
         "divide_sqrt_to_multiply_rsqrt<16>",
         "associative_binary_op_reordering<1>",
-        "transpose_unary_transpose_abs",
-        "transpose_unary_transpose_neg",
-        "transpose_unary_transpose_sqrt",
-        "transpose_unary_transpose_rsqrt",
-        "transpose_unary_transpose_ceil",
-        "transpose_unary_transpose_convert",
-        "transpose_unary_transpose_cosine",
-        "transpose_unary_transpose_exp",
-        "transpose_unary_transpose_expm1",
-        "transpose_unary_transpose_log",
-        "transpose_unary_transpose_log1p",
-        "transpose_unary_transpose_sign",
-        "transpose_unary_transpose_sine",
-        "transpose_unary_transpose_tanh",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
         "scatter_indices_are_unique",
         "replace_neg_add_with_subtract",
@@ -625,6 +611,20 @@ function optimization_passes(;
                 "binary_op_transpose_simplify_xor",
                 "slice_transpose",
                 "transpose_reduce_simplify",
+                "transpose_unary_transpose_abs",
+                "transpose_unary_transpose_neg",
+                "transpose_unary_transpose_sqrt",
+                "transpose_unary_transpose_rsqrt",
+                "transpose_unary_transpose_ceil",
+                "transpose_unary_transpose_convert",
+                "transpose_unary_transpose_cosine",
+                "transpose_unary_transpose_exp",
+                "transpose_unary_transpose_expm1",
+                "transpose_unary_transpose_log",
+                "transpose_unary_transpose_log1p",
+                "transpose_unary_transpose_sign",
+                "transpose_unary_transpose_sine",
+                "transpose_unary_transpose_tanh",
             ],
         )
     else
@@ -647,7 +647,9 @@ function optimization_passes(;
         ],
         ",",
     )
-    func_passes = join(["print{debug=true}", "canonicalize", "cse", "canonicalize", transform_passes], ",")
+    func_passes = join(
+        ["print{debug=true}", "canonicalize", "cse", "canonicalize", transform_passes], ","
+    )
     passes = String[]
     if inline
         push!(passes, "inline{default-pipeline=canonicalize max-iterations=4}")
