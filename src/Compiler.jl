@@ -387,7 +387,9 @@ function create_result(
 end
 
 # Optimization passes via transform dialect
-function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Bool=true)
+function optimization_passes(;
+    no_nan::Bool=false, sroa::Bool=false, inline::Bool=true, transpose_propagate::Symbol=:up
+)
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
         "transpose_transpose<16>",
@@ -539,17 +541,6 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "dynamic_update_slice_const_prop",
         "dynamic_gather_op_is_not_dynamic<16>",
         "divide_sqrt_to_multiply_rsqrt<16>",
-        "binary_op_transpose_simplify_add",
-        "binary_op_transpose_simplify_sub",
-        "binary_op_transpose_simplify_mul",
-        "binary_op_transpose_simplify_div",
-        "binary_op_transpose_simplify_min",
-        "binary_op_transpose_simplify_max",
-        "binary_op_transpose_simplify_pow",
-        "binary_op_transpose_simplify_rem",
-        "binary_op_transpose_simplify_or",
-        "binary_op_transpose_simplify_and",
-        "binary_op_transpose_simplify_xor",
         "associative_binary_op_reordering<1>",
         "transpose_unary_transpose_abs",
         "transpose_unary_transpose_neg",
@@ -567,7 +558,6 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "transpose_unary_transpose_tanh",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
         "scatter_indices_are_unique",
-        "transpose_reduce_simplify",
         "replace_neg_add_with_subtract",
         "log_const_prop<1>",
         "log_plus_one_const_prop<1>",
@@ -582,7 +572,49 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "while_simplify<1>",
         "scatter_update_computation_const_prop",
         "if_remove_unused",
+        "transpose_reshape_to_broadcast",
+        "dus_dus",
+        "dus_dus_concat",
+        "abs_positive_simplify",
     ]
+
+    if transpose_propagate === :up
+        append!(
+            transform_passes_list,
+            [
+                "transpose_while",
+                "transpose_slice",
+                "transpose_elementwise",
+                "transpose_concat",
+                "transpose_iota",
+                "transpose_reduce",
+                "transpose_reduce_window",
+                "transpose_dus",
+            ],
+        )
+    elseif transpose_propagate === :down
+        append!(
+            transform_passes_list,
+            [
+                "binary_op_transpose_simplify_add",
+                "binary_op_transpose_simplify_sub",
+                "binary_op_transpose_simplify_mul",
+                "binary_op_transpose_simplify_div",
+                "binary_op_transpose_simplify_min",
+                "binary_op_transpose_simplify_max",
+                "binary_op_transpose_simplify_pow",
+                "binary_op_transpose_simplify_rem",
+                "binary_op_transpose_simplify_or",
+                "binary_op_transpose_simplify_and",
+                "binary_op_transpose_simplify_xor",
+                "slice_transpose",
+                "transpose_reduce_simplify",
+            ],
+        )
+    else
+        error("Invalid value for transpose_propagate. Must be :up or :down.")
+    end
+
     if no_nan
         append!(
             transform_passes_list,
@@ -783,6 +815,7 @@ function compile_mlir!(
     optimize::Union{Bool,Symbol}=true,
     shardy_passes::Symbol=:to_mhlo_shardings, # :none | :to_mhlo_shardings
     no_nan::Bool=false,
+    transpose_propagate::Symbol=:up,
     assert_nonallocating::Bool=false,
     backend="gpu",
     fn_kwargs=(),
@@ -892,8 +925,8 @@ function compile_mlir!(
         jit = "lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
-    opt_passes = optimization_passes(; no_nan, sroa=true)
-    opt_passes2 = optimization_passes(; no_nan, sroa=false)
+    opt_passes = optimization_passes(; no_nan, sroa=true, transpose_propagate)
+    opt_passes2 = optimization_passes(; no_nan, sroa=false, transpose_propagate)
 
     raise_passes = if raise isa String
         # Raising passes were specified
@@ -1226,6 +1259,7 @@ macro code_hlo(args...)
         :shardy_passes => :(:none),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1256,6 +1290,7 @@ macro code_mhlo(args...)
         :shardy_passes => :(:none),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1286,6 +1321,7 @@ macro code_xla(args...)
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1316,6 +1352,7 @@ macro compile(args...)
         :assert_nonallocating => false,
         :serializable => false,
         :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1335,6 +1372,7 @@ macro jit(args...)
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
