@@ -563,8 +563,8 @@ function optimization_passes(;
         "transpose_unary_transpose_sign",
         "transpose_unary_transpose_sine",
         "transpose_unary_transpose_tanh",
-        "broadcastindim_is_reshape",
-        "slice_reduce_window<1>",
+        # "broadcastindim_is_reshape",
+        # "slice_reduce_window<1>",
     ]
 
     if reshape_propagate === :up
@@ -578,6 +578,7 @@ function optimization_passes(;
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
                 "pad_dot_general<1>(1)",
+                "reshape_pad",
             ],
         )
     elseif reshape_propagate === :down
