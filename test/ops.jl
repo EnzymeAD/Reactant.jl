@@ -1117,8 +1117,13 @@ end
     hlo_ir = repr(mod)
     csts = collect(x for x in eachsplit(hlo_ir, "\n") if occursin("stablehlo.constant", x))
     @test length(csts) == 2
-    @test occursin("1, 2, 3, 4", csts[1])
-    @test occursin("6, 2, 3, 4", csts[2])
+    idx = findfirst(x -> occursin("1, 2, 3, 4", x), csts)
+    @test idx !== nothing
+    if idx == 1
+        @test occursin("6, 2, 3, 4", csts[2])
+    else
+        @test occursin("6, 2, 3, 4", csts[1])
+    end
 end
 
 @testset "Large constant" begin

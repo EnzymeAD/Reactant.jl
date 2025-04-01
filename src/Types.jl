@@ -6,6 +6,24 @@ abstract type RArray{T,N} <: AbstractArray{T,N} end
 
 abstract type AbstractConcreteArray{T,N} <: RArray{T,N} end
 
+function Base.getproperty(x::Union{AbstractConcreteArray,AbstractConcreteNumber}, f::Symbol)
+    f === :data && x.donated && error("$(typeof(x)) has already been donated!")
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Union{AbstractConcreteArray,AbstractConcreteNumber}, f::Symbol, v
+)
+    f === :data && (x.donated = false)
+    return setfield!(x, f, v)
+end
+
+function mark_donated!(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    x.donated && error("Can't donate an already-donated object")
+    setfield!(x, :donated, true)
+    return nothing
+end
+
 # Traced Types
 
 ## MissingTracedValue -- defined in ReactantCore
@@ -64,6 +82,13 @@ end
 mutable struct ConcretePJRTNumber{T,D,S<:Sharding.ShardInfo} <: AbstractConcreteNumber{T}
     data::NTuple{D,XLA.PJRT.AsyncBuffer}
     sharding::S
+    donated::Bool
+
+    function ConcretePJRTNumber{T,D,S}(
+        data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::S
+    ) where {T,D,S}
+        return new{T,D,S}(data, sharding, false)
+    end
 end
 
 ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(x::Number) where {T} = ConcretePJRTNumber{T}(x)
@@ -110,6 +135,13 @@ mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: AbstractConcret
     data::NTuple{D,XLA.PJRT.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::S
+    donated::Bool
+
+    function ConcretePJRTArray{T,N,D,S}(
+        data::NTuple{D,XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}, sharding::S
+    ) where {T,N,D,S}
+        return new{T,N,D,S}(data, shape, sharding, false)
+    end
 end
 
 @leaf ConcretePJRTArray
@@ -208,6 +240,11 @@ end
 mutable struct ConcreteIFRTNumber{T,S<:Sharding.ShardInfo} <: AbstractConcreteNumber{T}
     data::XLA.IFRT.AsyncArray
     sharding::S
+    donated::Bool
+
+    function ConcreteIFRTNumber{T,S}(data::XLA.IFRT.AsyncArray, sharding::S) where {T,S}
+        return new{T,S}(data, sharding, false)
+    end
 end
 
 ConcreteIFRTNumber{T,Sharding.NoShardInfo}(x::Number) where {T} = ConcreteIFRTNumber{T}(x)
@@ -245,6 +282,13 @@ mutable struct ConcreteIFRTArray{T,N,S<:Sharding.ShardInfo} <: AbstractConcreteA
     data::XLA.IFRT.AsyncArray
     shape::NTuple{N,Int}
     sharding::S
+    donated::Bool
+
+    function ConcreteIFRTArray{T,N,S}(
+        data::XLA.IFRT.AsyncArray, shape::NTuple{N,Int}, sharding::S
+    ) where {T,N,S}
+        return new{T,N,S}(data, shape, sharding, false)
+    end
 end
 
 @leaf ConcreteIFRTArray
