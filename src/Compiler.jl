@@ -620,7 +620,7 @@ function optimization_passes(;
         "transpose_unary_transpose_tanh",
         "select_comp_iota_const_simplify<1>",
         "sign_abs_simplify<1>",
-        # "broadcastindim_is_reshape", # broken EnzymeAD/Enzyme-JAX/issues/591
+        "broadcastindim_is_reshape",
         "slice_reduce_window<1>",
     ]
 
@@ -629,7 +629,7 @@ function optimization_passes(;
             transform_passes_list,
             [
                 "reshape_elementwise",
-                # "reshape_concat", # broken EnzymeAD/Enzyme-JAX/issues/592
+                "reshape_concat",
                 "reshape_slice",
                 "reshape_dus",
                 "dot_reshape_pad<1>",
