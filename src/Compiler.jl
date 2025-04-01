@@ -572,8 +572,8 @@ function optimization_passes(;
             transform_passes_list,
             [
                 "reshape_elementwise",
-                "reshape_concat",
-                "reshape_slice",
+                # "reshape_concat",
+                # "reshape_slice",
                 "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
