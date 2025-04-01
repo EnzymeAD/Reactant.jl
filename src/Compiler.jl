@@ -634,8 +634,7 @@ function optimization_passes(;
                 "slice_transpose",
                 "einsum_transpose<1>",
                 "slice_reshape_transpose<1>",
-                "transpose_reduce_simplify",
-                # "reduce_transpose_simplify",
+                "reduce_transpose_simplify",
             ],
         )
     else
