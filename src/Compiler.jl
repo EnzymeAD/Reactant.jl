@@ -1206,25 +1206,21 @@ function compile_mlir!(
 
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
-    already_aliased = Set{Int}()
-    already_donated = Set{TracedType}()
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = Vector{Bool}(undef, length(linear_args))
     for (i, arg) in enumerate(linear_args)
         if donated_args == :auto
-            if (i - 1) ∉ preserved_args_idx && arg ∉ already_donated
+            if (i - 1) ∉ preserved_args_idx
                 donated_args_mask[i] = true
-                push!(already_donated, arg)
 
                 residx = findfirst(Base.Fix1(===, arg), linear_results2)
-                if residx !== nothing && residx ∉ already_aliased
+                if residx !== nothing
                     MLIR.API.mlirFuncSetArgAttr(
                         func3,
                         i - 1,
                         "tf.aliasing_output",
                         MLIR.IR.Attribute(Int32(residx - 1)),
                     )
-                    push!(already_aliased, residx)
                 end
             else
                 donated_args_mask[i] = false
