@@ -195,6 +195,7 @@ function traced_setfield_buffer!(
     concrete_res,
     obj,
     field,
+    path,
 )
     if haskey(cache_dict, val)
         cval = cache_dict[val]
@@ -208,7 +209,7 @@ function traced_setfield_buffer!(
         end
         cache_dict[val] = cval
     end
-    return traced_setfield!(obj, field, cval)
+    return traced_setfield!(obj, field, cval, path)
 end
 
 function create_result(tocopy::T, path, args...) where {T}
