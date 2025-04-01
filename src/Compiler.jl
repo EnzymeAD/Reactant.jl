@@ -1129,6 +1129,8 @@ function compile_mlir!(
         )
     end
 
+    MLIR.IR.dump_mlir(mod)
+
     # shardy passes
     use_shardy_partitioner = false
     result_shardings = missing
@@ -1139,6 +1141,8 @@ function compile_mlir!(
             run_pass_pipeline!(
                 mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
             )
+
+            MLIR.IR.dump_mlir(mod)
 
             # Extract the result shardings from the compiled function
             result_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
@@ -1158,6 +1162,8 @@ function compile_mlir!(
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
     end
+
+    MLIR.IR.dump_mlir(mod)
 
     preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
