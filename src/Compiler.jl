@@ -608,7 +608,8 @@ function optimization_passes(;
                 "transpose_concat",
                 "transpose_iota",
                 "transpose_reduce",
-                "transpose_reduce_window",
+                # Broken see https://github.com/EnzymeAD/Enzyme-JAX/issues/586
+                # "transpose_reduce_window",
                 "transpose_dus",
                 "transpose_pad<1>",
                 "transpose_einsum<1>",
