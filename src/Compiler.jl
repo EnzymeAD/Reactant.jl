@@ -1197,17 +1197,20 @@ function compile_mlir!(
     use_shardy_partitioner = false
     result_shardings = missing
     if is_sharded
-        mod_copied = MLIR.IR.Module(copy(MLIR.IR.Operation(mod)))
+        module_op = copy(MLIR.IR.Operation(mod))
+        mod_copied = MLIR.IR.Module(module_op)
 
         run_pass_pipeline!(
             mod_copied, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
         )
 
-        result_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
+        func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), "main")
+        @assert func_op.ptr !== C_NULL
+        func_op_new_module = MLIR.IR.Operation(func_op)
+
+        result_attrs = MLIR.IR.attr(func_op_new_module, "res_attrs")
         if result_attrs !== nothing
-            result_shardings = Vector{
-                Union{Sharding.NamedSharding,Sharding.NoSharding,Sharding.Replicated}
-            }(
+            result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.Replicated}}(
                 undef, length(result_attrs)
             )
             for i in 1:length(result_attrs)
@@ -1215,6 +1218,8 @@ function compile_mlir!(
                     result_attrs[i - 1], mlir_fn_res.global_device_ids, mod_copied
                 )
             end
+        else
+            result_shardings = [Sharding.Replicated() for _ in 1:length(linear_results)]
         end
 
         if shardy_passes == :none
