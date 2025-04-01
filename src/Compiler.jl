@@ -563,18 +563,18 @@ function optimization_passes(;
         "transpose_unary_transpose_sign",
         "transpose_unary_transpose_sine",
         "transpose_unary_transpose_tanh",
-        # "broadcastindim_is_reshape",
-        # "slice_reduce_window<1>",
+        "broadcastindim_is_reshape",
+        "slice_reduce_window<1>",
     ]
 
     if reshape_propagate === :up
         append!(
             transform_passes_list,
             [
-                # "reshape_elementwise",
-                # "reshape_concat",
-                # "reshape_slice",
-                # "reshape_dus",
+                "reshape_elementwise",
+                "reshape_concat",
+                "reshape_slice",
+                "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
                 "pad_dot_general<1>(1)",
@@ -608,8 +608,7 @@ function optimization_passes(;
                 "transpose_concat",
                 "transpose_iota",
                 "transpose_reduce",
-                # Broken see https://github.com/EnzymeAD/Enzyme-JAX/issues/586
-                # "transpose_reduce_window",
+                "transpose_reduce_window",
                 "transpose_dus",
                 "transpose_pad<1>",
                 "transpose_einsum<1>",
