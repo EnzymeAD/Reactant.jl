@@ -469,6 +469,8 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "slice_pad<1>",
         "dot_reshape_dot<1>",
         "concat_const_prop<1>",
+        "log_const_prop<1>",
+        "log_plus_one_const_prop<1>",
         "concat_fuse<1>",
         "pad_reshape_pad<1>",
         "pad_pad<1>",
