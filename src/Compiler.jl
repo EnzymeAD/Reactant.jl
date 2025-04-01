@@ -1585,7 +1585,7 @@ function assert_mismatched_sharding(
     return assert_mismatched_sharding(
         Sharding.HloSharding(sharding_from_input, size_x).hlo_sharding,
         hlo_sharding_from_executable,
-        size_x
+        size_x,
     )
 end
 

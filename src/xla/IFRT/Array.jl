@@ -225,7 +225,7 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
     end
 
     if reactant_sharding isa Reactant.Sharding.HloSharding
-        (; hlo_sharding)  = reactant_sharding
+        (; hlo_sharding) = reactant_sharding
     else
         (; hlo_sharding) = Reactant.Sharding.HloSharding(reactant_sharding, size(data))
     end
