@@ -1197,27 +1197,38 @@ function compile_mlir!(
     use_shardy_partitioner = false
     result_shardings = missing
     if is_sharded
+        mod_copied = MLIR.IR.Module(copy(MLIR.IR.Operation(mod)))
+
+        run_pass_pipeline!(
+            mod_copied, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+        )
+
+        result_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
+        if result_attrs !== nothing
+            result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.NoSharding}}(
+                undef, length(result_attrs)
+            )
+            for i in 1:length(result_attrs)
+                result_shardings[i] = Sharding.sdy_sharding_to_reactant_sharding(
+                    result_attrs[i - 1], mlir_fn_res.global_device_ids, mod_copied
+                )
+            end
+        end
+
         if shardy_passes == :none
             use_shardy_partitioner = true
         elseif shardy_passes == :to_mhlo_shardings
             run_pass_pipeline!(
-                mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+                mod,
+                join(
+                    [
+                        "sdy-propagation-pipeline",
+                        "sdy-close-shardings",
+                        "xla-sdy-stablehlo-export-pipeline",
+                    ],
+                    ",",
+                ),
             )
-
-            # Extract the result shardings from the compiled function
-            result_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
-            if result_attrs !== nothing
-                result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.NoSharding}}(
-                    undef, length(result_attrs)
-                )
-                for i in 1:length(result_attrs)
-                    result_shardings[i] = Sharding.sdy_sharding_to_reactant_sharding(
-                        result_attrs[i - 1], mlir_fn_res.global_device_ids, mod
-                    )
-                end
-            end
-
-            run_pass_pipeline!(mod, "xla-sdy-stablehlo-export-pipeline")
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
@@ -1425,7 +1436,7 @@ macro code_xla(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:to_mhlo_shardings),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -1456,7 +1467,7 @@ macro compile(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:to_mhlo_shardings),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
         :serializable => false,
         :donated_args => :(:auto),
@@ -1478,7 +1489,7 @@ macro jit(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:to_mhlo_shardings),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
