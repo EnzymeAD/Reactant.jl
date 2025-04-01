@@ -102,7 +102,7 @@ jobs:
         timeout-minutes: 10
         if: ${{ always() }}
         with:
-          name: "simulation-mlir- downgrade - PJRT - ${{ github.event_name }}"
+          name: "mlir-downgrade-PJRT-${{ github.event_name }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false
@@ -131,7 +131,7 @@ jobs:
         timeout-minutes: 10
         if: ${{ always() }}
         with:
-          name: "simulation-mlir- downgrade - IFRT - ${{ github.event_name }}"
+          name: "mlir-downgrade-IFRT-${{ github.event_name }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false

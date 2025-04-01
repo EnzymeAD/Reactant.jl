@@ -81,7 +81,7 @@ jobs:
         timeout-minutes: 10
         if: ${{ always() }}
         with:
-          name: "simulation-mlir- downgrade - ${{ matrix.test_group }} - ${{ matrix.runtime }} - ${{ github.event_name }}"
+          name: "mlir-downgrade-${{ matrix.test_group }}-${{ matrix.runtime }}-${{ github.event_name }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false

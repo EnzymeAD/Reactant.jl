@@ -146,7 +146,7 @@ jobs:
         timeout-minutes: 10
         if: ${{ always() }}
         with:
-          name: "simulation-mlir-${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}"
+          name: "mlir-${{ matrix.version }}-${{ matrix.test_group }}-${{ matrix.os }}-${{ matrix.runtime }}-assertions=${{ matrix.assertions }}-${{ github.event_name }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false
