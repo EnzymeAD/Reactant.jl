@@ -27,6 +27,9 @@ import ..ReactantCore: correct_maybe_bcast_call
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
 const DEBUG_DISABLE_RESHARDING = Ref(false)
+const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
+
+const DEBUG_BUFFER_POINTERS_STORE = Base.IdSet()
 
 @inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
@@ -68,18 +71,27 @@ end
 end
 
 @inline function traced_setfield!(
-    @nospecialize(obj::Reactant.AbstractConcreteNumber), field, val
+    @nospecialize(obj::Reactant.AbstractConcreteNumber), field, val, path
 )
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
+        if val ∈ DEBUG_BUFFER_POINTERS_STORE
+            error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                   Path: $path.")
+        end
+        push!(DEBUG_BUFFER_POINTERS_STORE, val)
+    end
     return Base.setproperty!(obj, field, val)
 end
 
-@inline traced_setfield!(@nospecialize(obj), field, val) = Base.setfield!(obj, field, val)
+@inline traced_setfield!(@nospecialize(obj), field, val, path) =
+    Base.setfield!(obj, field, val)
 
 @inline function traced_setfield!(
-    @nospecialize(obj::AbstractArray{T}), field, val
+    @nospecialize(obj::AbstractArray{T}), field, val, path
 ) where {T}
     ancestor_obj = ancestor(obj)
-    (isbitstype(T) || ancestor_obj isa RArray) && return setfield_carray!(obj, field, val)
+    (isbitstype(T) || ancestor_obj isa RArray) &&
+        return setfield_carray!(obj, field, val, path)
     return Base.setindex!(obj, val, field)
 end
 
@@ -87,20 +99,36 @@ end
     @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}),
     field,
     val,
+    path,
 )
-    return setfield_carray!(obj, field, val)
+    return setfield_carray!(obj, field, val, path)
 end
 
-@inline function traced_setfield!(@nospecialize(obj::Dict), field, val)
+@inline function traced_setfield!(@nospecialize(obj::Dict), field, val, path)
     return Base.setindex!(obj, field, val)
 end
 
 # fallback
-@inline function setfield_carray!(obj, field, val)
+@inline function setfield_carray!(obj, field, val, path)
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
+        if val ∈ DEBUG_BUFFER_POINTERS_STORE
+            error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                   Path: $path.")
+        end
+        push!(DEBUG_BUFFER_POINTERS_STORE, val)
+    end
     return Base.setproperty!(obj, field, val)
 end
 
-@inline function setfield_carray!(obj::ConcretePJRTArray, field, val)
+@inline function setfield_carray!(obj::ConcretePJRTArray, field, val, path)
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
+        if val ∈ DEBUG_BUFFER_POINTERS_STORE
+            error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                   Path: $path.")
+        end
+        push!(DEBUG_BUFFER_POINTERS_STORE, val)
+    end
+
     if field !== :data || typeof(val) == typeof(getfield(obj, field))
         return Base.setproperty!(obj, field, val)
     end
@@ -115,14 +143,14 @@ end
     return Base.setproperty!(obj, field, (val[idx],))
 end
 
-function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field)
+function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field, path)
     return traced_setfield_buffer!(
-        runtime, cache_dict, traced_getfield(obj, field), concrete_res, obj, field
+        runtime, cache_dict, traced_getfield(obj, field), concrete_res, obj, field, path
     )
 end
 
-function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res, obj, field)
-    return traced_setfield!(val, :data, concrete_res)
+function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res, obj, field, path)
+    return traced_setfield!(val, :data, concrete_res, path)
 end
 
 function traced_setfield_buffer!(
@@ -132,6 +160,7 @@ function traced_setfield_buffer!(
     concrete_res,
     obj,
     field,
+    path,
 )
     if haskey(cache_dict, val)
         cval = cache_dict[val]
@@ -145,7 +174,7 @@ function traced_setfield_buffer!(
         end
         cache_dict[val] = cval
     end
-    return traced_setfield!(obj, field, cval)
+    return traced_setfield!(obj, field, cval, path)
 end
 
 function traced_setfield_buffer!(
@@ -1135,8 +1164,16 @@ function compile_mlir!(
         error("Invalid optimize option: $(Meta.quot(optimize))")
     end
 
+    # HACK: remove with next JLL
+    if transpose_propagate === :up
+        run_pass_pipeline!(
+            mod,
+            "enzyme-hlo-generate-td{patterns=transpose_while},transform-interpreter,enzyme-hlo-remove-transform",
+        )
+    end
+
     if optimize ∉ (:none, :just_batch, :canonicalize) &&
-        (transpose_propagate == :up || reshape_propagate == :up)
+        (transpose_propagate === :up || reshape_propagate === :up)
         # We tried propagating reshapes and transposes up. If at this point we are left with
         # them, we propagate them down to minimize the number of Ops in the IR.
         run_pass_pipeline!(
@@ -1858,6 +1895,11 @@ function codegen_unflatten!(
 
     to_unreshard_results = Dict{Tuple,Any}()
 
+    # Ofcourse not thread-safe but this isn't meant for end-users anyways
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
+        push!(unflatten_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE)))
+    end
+
     # mutate the result stores to point to the correct concrete results
 
     argprefix::Symbol = :args
@@ -1933,10 +1975,11 @@ function codegen_unflatten!(
                         $(concrete_res_name_final),
                         $(unflatcode),
                         $(Meta.quot(path[end])),
+                        $(path),
                     ))
                 else
                     unflatcode = :(traced_setfield!(
-                        $(unflatcode), :data, $(concrete_res_name_final)
+                        $(unflatcode), :data, $(concrete_res_name_final), $(path)
                     ))
                 end
                 push!(unflatten_code, unflatcode)
@@ -2011,9 +2054,13 @@ function codegen_unflatten!(
                 argres = :(traced_getfield($argres, $(Meta.quot(p))))
             end
 
-            res = :(traced_setfield!($res, :data, $argres.data))
+            res = :(traced_setfield!($res, :data, $argres.data, $(path)))
             push!(unflatten_code, res)
         end
+    end
+
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
+        push!(unflatten_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE)))
     end
 
     # generate return object which stores the concrete results in some arbitrary way
