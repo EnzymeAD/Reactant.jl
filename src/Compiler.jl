@@ -587,7 +587,8 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "select_comp_iota_const_simplify<1>",
         "sign_abs_simplify<1>",
         "abs_positive_simplify<1>",
-        "broadcastindim_is_reshape<1>",
+        # busted rn
+        # "broadcastindim_is_reshape<1>",
         "slice_reduce_window<1>",
     ]
     if no_nan
