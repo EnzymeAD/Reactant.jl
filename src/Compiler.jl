@@ -1705,7 +1705,9 @@ function codegen_flatten!(
             # Important to mark donated after we have extracted the data
             push!(
                 flatten_code,
-                :(donate_argument!(donated_args_mask, $carg_sym, $i, donated_buffers)),
+                :(donate_argument!(
+                    donated_args_mask, $carg_sym, $i, donated_buffers, $(path)
+                )),
             )
         elseif runtime isa Val{:IFRT}
             push!(flatten_code, :($carg_sym = $flatcode))
@@ -1775,7 +1777,9 @@ function codegen_flatten!(
             # Important to mark donated after we have extracted the data
             push!(
                 flatten_code,
-                :(donate_argument!(donated_args_mask, $carg_sym, $i, donated_buffers)),
+                :(donate_argument!(
+                    donated_args_mask, $carg_sym, $i, donated_buffers, $(path)
+                )),
             )
         else
             error("Unsupported runtime $runtime")
@@ -1790,11 +1794,11 @@ function codegen_flatten!(
     return flatten_names, flatten_code, resharded_inputs
 end
 
-function donate_argument!(donated_args_mask, carg, i::Int, donated_buffers)
+function donate_argument!(donated_args_mask, carg, i::Int, donated_buffers, path)
     if donated_args_mask[i]
         if carg.data in donated_buffers
             error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
-                   the same buffer multiple times.")
+                   the same buffer multiple times. The argument is present at $(path)")
         end
         push!(donated_buffers, carg.data)
         Reactant.mark_donated!(carg)
@@ -2395,9 +2399,15 @@ function compile(f, args; sync=false, kwargs...)
 
     fname = gensym(Symbol(Symbol(f), :_reactant))
 
+    donated_buffers_set = if XLA.runtime(client) isa Val{:PJRT}
+        :(Base.IdSet{NTuple{<:Any,XLA.PJRT.AsyncBuffer}}())
+    else
+        :(Base.IdSet{XLA.IFRT.AsyncArray}())
+    end
+
     body = quote
         global_mesh = $(global_mesh_expr)
-        donated_buffers = IdSet()
+        donated_buffers = $(donated_buffers_set)
         donated_args_mask = thunk.donated_args_mask
         $(flatten_code...)
         $(xla_call_code)
