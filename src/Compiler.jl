@@ -571,14 +571,14 @@ function optimization_passes(;
         append!(
             transform_passes_list,
             [
-                "reshape_elementwise",
+                # "reshape_elementwise",
                 # "reshape_concat",
                 # "reshape_slice",
-                "reshape_dus",
+                # "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
                 "pad_dot_general<1>(1)",
-                "reshape_pad",
+                # "reshape_pad",
             ],
         )
     elseif reshape_propagate === :down
