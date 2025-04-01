@@ -351,7 +351,7 @@ function ConcreteIFRTArray(
     @assert Sharding.is_sharded(sharding)
     @assert length(data) == length(data_to_addressable_shard)
 
-    hlo_sharding = convert(Sharding.HloSharding, sharding).hlo_sharding
+    (; hlo_sharding) = Sharding.HloSharding(sharding, array_size)
     all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
     ifrt_sharding = XLA.IFRT.Sharding(all_devices, hlo_sharding)
 

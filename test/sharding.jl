@@ -216,12 +216,11 @@ end
 
         @test x .+ x ≈ Array(res)
 
-        z_hlo_sharding =
-            convert(Reactant.Sharding.HloSharding, z.sharding.sharding).hlo_sharding
+        z_hlo_sharding = Reactant.Sharding.HloSharding(z.sharding, size(z)).hlo_sharding
         res_hlo_sharding =
-            convert(Reactant.Sharding.HloSharding, res.sharding.sharding).hlo_sharding
+            Reactant.Sharding.HloSharding(res.sharding, size(res)).hlo_sharding
         x_ra_hlo_sharding =
-            convert(Reactant.Sharding.HloSharding, x_ra.sharding.sharding).hlo_sharding
+            Reactant.Sharding.HloSharding(x_ra.sharding, size(x_ra)).hlo_sharding
 
         @test string(z_hlo_sharding) == string(res_hlo_sharding)
         @test string(res_hlo_sharding) != string(x_ra_hlo_sharding)
@@ -240,12 +239,11 @@ end
         res = @jit fn_with_constraint(x_ra_no_sharding)
         @test x .+ x ≈ Array(res)
 
-        z_hlo_sharding =
-            convert(Reactant.Sharding.HloSharding, z.sharding.sharding).hlo_sharding
+        z_hlo_sharding = Reactant.Sharding.HloSharding(z.sharding, size(z)).hlo_sharding
         res_hlo_sharding =
-            convert(Reactant.Sharding.HloSharding, res.sharding.sharding).hlo_sharding
+            Reactant.Sharding.HloSharding(res.sharding, size(res)).hlo_sharding
         x_ra_hlo_sharding =
-            convert(Reactant.Sharding.HloSharding, x_ra.sharding.sharding).hlo_sharding
+            Reactant.Sharding.HloSharding(x_ra.sharding, size(x_ra)).hlo_sharding
 
         @test string(z_hlo_sharding) == string(res_hlo_sharding)
         @test string(res_hlo_sharding) != string(x_ra_hlo_sharding)

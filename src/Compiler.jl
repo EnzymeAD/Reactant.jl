@@ -1205,7 +1205,9 @@ function compile_mlir!(
 
         result_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
         if result_attrs !== nothing
-            result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.NoSharding}}(
+            result_shardings = Vector{
+                Union{Sharding.NamedSharding,Sharding.NoSharding,Sharding.Replicated}
+            }(
                 undef, length(result_attrs)
             )
             for i in 1:length(result_attrs)
@@ -1578,17 +1580,19 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
 end
 
 function assert_mismatched_sharding(
-    sharding_from_input, hlo_sharding_from_executable::Reactant.XLA.HloSharding
+    sharding_from_input, hlo_sharding_from_executable::Reactant.XLA.HloSharding, size_x
 )
     return assert_mismatched_sharding(
-        convert(Sharding.HloSharding, sharding_from_input).hlo_sharding,
+        Sharding.HloSharding(sharding_from_input, size_x).hlo_sharding,
         hlo_sharding_from_executable,
+        size_x
     )
 end
 
 function assert_mismatched_sharding(
     hlo_sharding_from_input::Reactant.XLA.HloSharding,
     hlo_sharding_from_executable::Reactant.XLA.HloSharding,
+    size_x,
 )
     @assert hlo_sharding_from_executable == hlo_sharding_from_input "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 end
@@ -1672,7 +1676,9 @@ function codegen_flatten!(
                 if Sharding.is_sharded(carg)
                     # Check if the sharding provided is same as the one we have
                     assert_mismatched_sharding(
-                        carg.sharding.sharding.hlo_sharding, hlo_sharding_from_executable
+                        carg.sharding.sharding.hlo_sharding,
+                        hlo_sharding_from_executable,
+                        size(carg),
                     )
 
                     push!(flatten_code, :($usbuf = $carg_sym.data))
@@ -1786,6 +1792,7 @@ function codegen_flatten!(
                     assert_mismatched_sharding(
                         carg.sharding.sharding.hlo_sharding,
                         convert(XLA.HloSharding, condensed_op_sharding),
+                        size(carg),
                     )
 
                     push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
@@ -2170,7 +2177,7 @@ function codegen_shard_info(
             reactant_sharding = output_reactant_shardings[i]
             use_hlo_sharding =
                 reactant_sharding isa Sharding.NoSharding ||
-                convert(Sharding.HloSharding, reactant_sharding).hlo_sharding !=
+                Sharding.HloSharding(reactant_sharding, res_size).hlo_sharding !=
                 hlo_sharding
         else
             use_hlo_sharding = true
@@ -2206,7 +2213,6 @@ function codegen_shard_info(
                 ),
             )
         else
-            @assert output_reactant_shardings[i] isa Sharding.NamedSharding
             mesh = output_reactant_shardings[i].mesh
             mesh_key = (mesh.logical_device_ids, mesh.axis_names, mesh.axis_sizes)
             if haskey(mesh_codegen_cache, mesh_key)
@@ -2226,20 +2232,13 @@ function codegen_shard_info(
                 )
                 mesh_codegen_cache[mesh_key] = mesh_name
             end
+
+            new_sharding = Sharding.codegen_with_new_mesh(
+                output_reactant_shardings[i], mesh_name
+            )
             push!(
                 shard_info_code,
-                :(
-                    $(var_name) = Sharding.ShardInfo(
-                        Sharding.NamedSharding(
-                            $(mesh_name),
-                            $(output_reactant_shardings[i].partition_spec),
-                            $(output_reactant_shardings[i].is_closed),
-                            $(output_reactant_shardings[i].priority),
-                            $(output_reactant_shardings[i].subaxes),
-                        ),
-                        $(array_slices),
-                    )
-                ),
+                :($(var_name) = Sharding.ShardInfo($(new_sharding), $(array_slices))),
             )
         end
         linear_result_shard_info[i] = var_name
