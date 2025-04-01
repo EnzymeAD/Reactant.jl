@@ -1207,16 +1207,14 @@ function compile_mlir!(
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
     already_aliased = Set{Int}()
-    already_donated = IdDict{
-        Union{ConcreteIFRTArray,ConcreteIFRTNumber,ConcretePJRTArray,ConcretePJRTNumber},Int
-    }()
+    already_donated = Set{TracedType}()
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = Vector{Bool}(undef, length(linear_args))
     for (i, arg) in enumerate(linear_args)
         if donated_args == :auto
-            if (i - 1) ∉ preserved_args_idx && !haskey(already_donated, arg)
+            if (i - 1) ∉ preserved_args_idx && arg ∉ already_donated
                 donated_args_mask[i] = true
-                already_donated[arg] = i
+                push!(already_donated, arg)
 
                 residx = findfirst(Base.Fix1(===, arg), linear_results2)
                 if residx !== nothing && residx ∉ already_aliased
