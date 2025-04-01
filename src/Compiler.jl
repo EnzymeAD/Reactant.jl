@@ -29,7 +29,7 @@ const DEBUG_PRINT_CODEGEN = Ref(false)
 const DEBUG_DISABLE_RESHARDING = Ref(false)
 const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
 
-const DEBUG_BUFFER_POINTERS_STORE = Base.IdSet()
+const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
 @inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
@@ -74,12 +74,16 @@ end
     @nospecialize(obj::Reactant.AbstractConcreteNumber), field, val, path
 )
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
-        if val ∈ DEBUG_BUFFER_POINTERS_STORE
-            error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
-                   Path: $path.")
+        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
+            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
+                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                       Path: $path.")
+            end
+        else
+            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
         end
-        push!(DEBUG_BUFFER_POINTERS_STORE, val)
     end
+
     return Base.setproperty!(obj, field, val)
 end
 
@@ -111,22 +115,29 @@ end
 # fallback
 @inline function setfield_carray!(obj, field, val, path)
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
-        if val ∈ DEBUG_BUFFER_POINTERS_STORE
-            error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
-                   Path: $path.")
+        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
+            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
+                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                       Path: $path.")
+            end
+        else
+            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
         end
-        push!(DEBUG_BUFFER_POINTERS_STORE, val)
     end
+
     return Base.setproperty!(obj, field, val)
 end
 
 @inline function setfield_carray!(obj::ConcretePJRTArray, field, val, path)
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
-        if val ∈ DEBUG_BUFFER_POINTERS_STORE
-            error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
-                   Path: $path.")
+        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
+            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
+                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                       Path: $path.")
+            end
+        else
+            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
         end
-        push!(DEBUG_BUFFER_POINTERS_STORE, val)
     end
 
     if field !== :data || typeof(val) == typeof(getfield(obj, field))
@@ -1897,7 +1908,7 @@ function codegen_unflatten!(
 
     # Ofcourse not thread-safe but this isn't meant for end-users anyways
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
-        push!(unflatten_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE)))
+        push!(unflatten_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE_DICT)))
     end
 
     # mutate the result stores to point to the correct concrete results
@@ -2060,7 +2071,7 @@ function codegen_unflatten!(
     end
 
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
-        push!(unflatten_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE)))
+        push!(unflatten_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE_DICT)))
     end
 
     # generate return object which stores the concrete results in some arbitrary way
