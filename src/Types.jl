@@ -19,6 +19,7 @@ function Base.setproperty!(
 end
 
 function mark_donated!(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    x.donated && error("Can't donate an already-donated object")
     setfield!(x, :donated, true)
     return nothing
 end

@@ -1693,7 +1693,7 @@ function codegen_flatten!(
                     end
                 end
             else
-                push!(flatten_code, :($usbuf = $flatcode.data))
+                push!(flatten_code, :($usbuf = $carg_sym.data))
                 sbuf = Symbol(:sbuf_, i)
                 push!(flatten_names, sbuf)
                 if arg isa TracedRArray || arg isa TracedRNumber
@@ -1705,7 +1705,7 @@ function codegen_flatten!(
             # Important to mark donated after we have extracted the data
             push!(
                 flatten_code,
-                :(thunk.donated_args_mask[$i] && Reactant.mark_donated!($carg_sym)),
+                :(donate_argument!(donated_args_mask, $carg_sym, $i, donated_buffers)),
             )
         elseif runtime isa Val{:IFRT}
             push!(flatten_code, :($carg_sym = $flatcode))
@@ -1769,14 +1769,14 @@ function codegen_flatten!(
                         ),
                     )
                 end
-                # Important to mark donated after we have extracted the data
-                push!(
-                    flatten_code,
-                    :(thunk.donated_args_mask[$i] && Reactant.mark_donated!($carg_sym)),
-                )
             else
                 push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
             end
+            # Important to mark donated after we have extracted the data
+            push!(
+                flatten_code,
+                :(donate_argument!(donated_args_mask, $carg_sym, $i, donated_buffers)),
+            )
         else
             error("Unsupported runtime $runtime")
         end
@@ -1788,6 +1788,17 @@ function codegen_flatten!(
     end
 
     return flatten_names, flatten_code, resharded_inputs
+end
+
+function donate_argument!(donated_args_mask, carg, i::Int, donated_buffers)
+    if donated_args_mask[i]
+        if carg.data in donated_buffers
+            error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
+                   the same buffer multiple times.")
+        end
+        push!(donated_buffers, carg.data)
+        Reactant.mark_donated!(carg)
+    end
 end
 
 # XXX: Currently we copy to host and then make the transfer to the sharded devices. This is
@@ -2033,7 +2044,7 @@ function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::I
                     linearized_results = XLA.execute(
                         thunk.exec,
                         ($(flatten_buffer_refs...),),
-                        UInt8.(thunk.donated_args_mask),
+                        UInt8.(Tuple(donated_args_mask)),
                         Val($nresults),
                         Val($ndevices),
                     )
@@ -2047,7 +2058,7 @@ function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::I
                         thunk.exec,
                         thunk.device,
                         ($(flatten_buffer_refs...),),
-                        UInt8.(thunk.donated_args_mask),
+                        UInt8.(Tuple(donated_args_mask)),
                         Val($nresults),
                     )
                 end
@@ -2386,6 +2397,8 @@ function compile(f, args; sync=false, kwargs...)
 
     body = quote
         global_mesh = $(global_mesh_expr)
+        donated_buffers = IdSet()
+        donated_args_mask = thunk.donated_args_mask
         $(flatten_code...)
         $(xla_call_code)
         $(sync_call)
@@ -2409,7 +2422,7 @@ function compile(f, args; sync=false, kwargs...)
         str,
         client,
         mlir_fn_res.global_device_ids,
-        Tuple(mlir_fn_res.donated_args_mask),
+        mlir_fn_res.donated_args_mask,
     )
 end
 
