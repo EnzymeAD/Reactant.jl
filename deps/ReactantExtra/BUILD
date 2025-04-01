@@ -495,6 +495,7 @@ cc_library(
 "-Wl,-exported_symbol,_hloShardingToTensorShardingAttr",
 "-Wl,-exported_symbol,_dump_operation",
 "-Wl,-exported_symbol,_hlo_sharding_*",
+"-Wl,-exported_symbol,free_ifrt_sharding",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
