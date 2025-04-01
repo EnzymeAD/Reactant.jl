@@ -1583,6 +1583,7 @@ function codegen_flatten!(
             )
         end
 
+        carg_sym = Symbol(:carg_, i)
         usbuf = Symbol(:usbuf_, i)
 
         flatcode = :(getindex(args, $(path[2])))
@@ -1591,6 +1592,7 @@ function codegen_flatten!(
         end
 
         if runtime isa Val{:PJRT}
+            push!(flatten_code, :($carg_sym = $flatcode))
             if is_sharded
                 carg = inv_seen_args[arg]
 
@@ -1606,7 +1608,7 @@ function codegen_flatten!(
                         carg.sharding.sharding.hlo_sharding, hlo_sharding_from_executable
                     )
 
-                    push!(flatten_code, :($usbuf = $flatcode.data))
+                    push!(flatten_code, :($usbuf = $carg_sym.data))
                     for j in 1:length(carg.sharding.mesh)
                         logical_id = carg.sharding.mesh.logical_device_ids[j]
                         sbuf = Symbol(:sbuf_, i, "_", logical_id)
@@ -1624,7 +1626,7 @@ function codegen_flatten!(
                                $(path[3:end])")
                     end
 
-                    push!(flatten_code, :($usbuf = $flatcode))
+                    push!(flatten_code, :($usbuf = $carg_sym))
                     device_sym = gensym(:device)
                     push!(flatten_code, :($device_sym = Reactant.XLA.device($usbuf)))
 
@@ -1693,8 +1695,12 @@ function codegen_flatten!(
                     error("Unsupported type $(typeof(arg))")
                 end
             end
+            # Important to mark donated after we have extracted the data
+            push!(
+                flatten_code,
+                :(thunk.donated_args_mask[$i] && Reactant.mark_donated!($carg_sym)),
+            )
         elseif runtime isa Val{:IFRT}
-            carg_sym = Symbol(:carg_, i)
             push!(flatten_code, :($carg_sym = $flatcode))
             push!(flatten_code, :($usbuf = $carg_sym.data))
             sbuf = Symbol(:sbuf_, i)
@@ -1756,6 +1762,11 @@ function codegen_flatten!(
                         ),
                     )
                 end
+                # Important to mark donated after we have extracted the data
+                push!(
+                    flatten_code,
+                    :(thunk.donated_args_mask[$i] && Reactant.mark_donated!($carg_sym)),
+                )
             else
                 push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
             end
@@ -1995,12 +2006,9 @@ Generate Julia code to call the XLA executable.
 # Arguments
 
 - `flatten_names`: A list of `Symbol`s representing the names of the flattened linear arguments.
-- `donated_args_mask`: A list of `UInt8`s representing whether the argument is donated.
 - `nresults`: The number of results to expect.
 """
-function codegen_xla_call(
-    flatten_names, donated_args_mask, nresults, is_sharded::Bool, ndevices::Int
-)
+function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::Int)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
     base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
@@ -2018,7 +2026,7 @@ function codegen_xla_call(
                     linearized_results = XLA.execute(
                         thunk.exec,
                         ($(flatten_buffer_refs...),),
-                        $(Tuple(donated_args_mask)),
+                        UInt8.(thunk.donated_args_mask),
                         Val($nresults),
                         Val($ndevices),
                     )
@@ -2032,7 +2040,7 @@ function codegen_xla_call(
                         thunk.exec,
                         thunk.device,
                         ($(flatten_buffer_refs...),),
-                        $(Tuple(donated_args_mask)),
+                        UInt8.(thunk.donated_args_mask),
                         Val($nresults),
                     )
                 end
@@ -2318,19 +2326,6 @@ function compile(f, args; sync=false, kwargs...)
         ))
     end
 
-    # XXX: Lift into the generated function
-    global_mesh = if mlir_fn_res.unique_meshes === nothing
-        nothing
-    elseif length(mlir_fn_res.unique_meshes) == 1
-        only(mlir_fn_res.unique_meshes)
-    else
-        Sharding.Mesh(
-            mlir_fn_res.global_device_ids,
-            0:(length(mlir_fn_res.global_device_ids) - 1),
-            (:flat_mesh,),
-        )
-    end
-
     ndevices = mlir_fn_res.is_sharded ? length(mlir_fn_res.global_device_ids) : 1
 
     # generate Julia `Thunk` code
@@ -2345,11 +2340,7 @@ function compile(f, args; sync=false, kwargs...)
     )
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        flatten_arg_names,
-        UInt8.(donated_args_mask),
-        length(linear_results),
-        mlir_fn_res.is_sharded,
-        ndevices,
+        flatten_arg_names, length(linear_results), mlir_fn_res.is_sharded, ndevices
     )
 
     shard_info_code, linear_result_shard_info = codegen_shard_info(
@@ -2411,24 +2402,24 @@ function compile(f, args; sync=false, kwargs...)
         str,
         client,
         mlir_fn_res.global_device_ids,
+        Tuple(mlir_fn_res.donated_args_mask),
     )
 end
 
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_body_cache = Dict{Symbol,Expr}()
 
-struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD}
+struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     f::FTy
     exec::ExecTy
     device::DeviceTy
     module_string::String
     client::ClientTy
     global_device_ids::GD
+    donated_args_mask::DAM
 end
 
-function Base.show(
-    io::IO, thunk::Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
-) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
+function Base.show(io::IO, thunk::Thunk{FTy,tag}) where {FTy,tag}
     return print(io, "Reactant compiled function $(thunk.f) (with tag $(tag))")
 end
 
@@ -2466,15 +2457,18 @@ function Base.showerror(
     )
 end
 
-@generated function (thunk::Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy})(
+@generated function (
+    thunk::Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
+)(
     args...
-) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
+) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     FoundTypes = Tuple{args...}
     if ArgTypes != FoundTypes
         return quote
             throw(
                 $(MisMatchedThunkTypeError{
-                    Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy},FoundTypes
+                    Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM},
+                    FoundTypes,
                 }()),
             )
         end
@@ -2501,6 +2495,7 @@ function register_thunk(
     module_string,
     client,
     global_device_ids,
+    donated_args_mask,
 )
     __thunk_body_cache[tag] = body
     return Thunk{
@@ -2512,8 +2507,9 @@ function register_thunk(
         Core.Typeof(device),
         Core.Typeof(client),
         Core.Typeof(global_device_ids),
+        Core.Typeof(donated_args_mask),
     }(
-        f, exec, device, module_string, client, global_device_ids
+        f, exec, device, module_string, client, global_device_ids, donated_args_mask
     )
 end
 
