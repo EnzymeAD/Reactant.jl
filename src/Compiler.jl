@@ -582,6 +582,13 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "while_simplify<1>",
         "scatter_update_computation_const_prop",
         "if_remove_unused",
+        "dus_dus<1>",
+        "dus_dus_concat<1>",
+        "select_comp_iota_const_simplify<1>",
+        "sign_abs_simplify<1>",
+        "abs_positive_simplify<1>",
+        "broadcastindim_is_reshape<1>",
+        "slice_reduce_window<1>"
     ]
     if no_nan
         append!(
