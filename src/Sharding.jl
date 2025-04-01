@@ -654,6 +654,19 @@ function sharding_to_array_slices(sharding::DimsSharding, size_x; kwargs...)
     )
 end
 
+function get_tensor_sharding_attribute(
+    sharding::DimsSharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+)
+    return get_tensor_sharding_attribute(
+        NamedSharding(sharding, length(size_arr)),
+        ctx,
+        mesh_name,
+        mesh_attr,
+        size_arr;
+        kwargs...,
+    )
+end
+
 """
     Replicated(mesh::Mesh)
 
@@ -683,6 +696,19 @@ function sharding_to_array_slices(sharding::Replicated, size_x; kwargs...)
     )
 end
 
+function get_tensor_sharding_attribute(
+    sharding::Replicated, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+)
+    return get_tensor_sharding_attribute(
+        NamedSharding(sharding, length(size_arr)),
+        ctx,
+        mesh_name,
+        mesh_attr,
+        size_arr;
+        kwargs...,
+    )
+end
+
 # HloSharding
 # This stores the sharding information in the form of XLA.HloSharding, and provides a
 # central type for the final storage. It also potentially saves us the pain of not having
@@ -707,6 +733,8 @@ struct HloSharding{D,PS,M<:Mesh} <: AbstractSharding
         )
     end
 end
+
+HloSharding(sharding::HloSharding, size_x) = sharding
 
 HloSharding(sharding::NamedSharding, size_x) = convert(HloSharding, sharding)
 
@@ -925,11 +953,7 @@ struct ShardInfo{S,D} <: AbstractSharding
     device_to_array_slices::D
 end
 
-function HloSharding(sharding::ShardInfo, size_x)
-    sharding = unwrap_shardinfo(sharding)
-    sharding isa HloSharding && return sharding
-    return HloSharding(sharding, size_x)
-end
+HloSharding(sharding::ShardInfo, size_x) = HloSharding(unwrap_shardinfo(sharding), size_x)
 
 @inline ndevices(sharding::ShardInfo) = length(sharding.mesh)
 
