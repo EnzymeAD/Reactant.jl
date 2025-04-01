@@ -1,5 +1,11 @@
 using Reactant, SafeTestsets, Test
 
+# If we are in GitHub Actions, make `TMPDIR` be a local directory from which we
+# can upload artifacts at the end.
+if get(ENV, "GITHUB_ACTIONS", "false") == "true"
+    ENV["TMPDIR"] = mkpath(joinpath(@__DIR__, "..", "tmp"))
+end
+
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing; typ=typeof(default))
     for f in args
