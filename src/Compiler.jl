@@ -567,7 +567,7 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "transpose_unary_transpose_tanh",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
         "scatter_indices_are_unique",
-        "transpose_reduce_simplify",
+        "reduce_transpose_simplify",
         "replace_neg_add_with_subtract",
         "log_const_prop<1>",
         "log_plus_one_const_prop<1>",
