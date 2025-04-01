@@ -52,6 +52,15 @@ end
     return Base.getindex(obj, field)
 end
 
+@inline function traced_getfield(
+    @nospecialize(
+        obj::Union{Reactant.AbstractConcreteArray,Reactant.AbstractConcreteNumber}
+    ),
+    field,
+)
+    return Base.getproperty(obj, field)
+end
+
 @inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
     (isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange) &&
         return Base.getfield(obj, field)
@@ -82,12 +91,12 @@ end
 
 # fallback
 @inline function setfield_carray!(obj, field, val)
-    return Base.setfield!(obj, field, val)
+    return Base.setproperty!(obj, field, val)
 end
 
 @inline function setfield_carray!(obj::ConcretePJRTArray, field, val)
     if field !== :data || typeof(val) == typeof(getfield(obj, field))
-        return Base.setfield!(obj, field, val)
+        return Base.setproperty!(obj, field, val)
     end
 
     # This case is triggered if the user had provided an unsharded input (NoSharding), but
@@ -95,9 +104,9 @@ end
     @assert !Sharding.is_sharded(obj) "Expected unsharded input. Open an issue on \
                                        Reactant.jl with a MWE."
     devices = Reactant.XLA.device.(val)
-    device = Reactant.XLA.device(only(obj.data))
+    device = Reactant.XLA.device(only(getfield(obj, :data)))
     idx = findfirst(isequal(device), devices)
-    return Base.setfield!(obj, field, (val[idx],))
+    return Base.setproperty!(obj, field, (val[idx],))
 end
 
 function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field)
