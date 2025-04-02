@@ -17,6 +17,18 @@ for runtime in (:PJRT, :IFRT)
     end
 end
 
+# copy
+function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    fn = Reactant.compile(copy, (x,))
+    return fn(x)
+end
+
+# deepcopy
+function Base.deepcopy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    fn = Reactant.compile(copy, (x,))
+    return fn(x)
+end
+
 Base.size(::AbstractConcreteNumber) = ()
 Base.real(x::AbstractConcreteNumber{<:Real}) = x
 function Base.rtoldefault(T::Type{<:AbstractConcreteNumber})
@@ -410,14 +422,10 @@ end
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     @eval function Base.copyto!(dest::$(aType), src::$(aType))
-        if dest.sharding == src.sharding &&
-            XLA.device(dest) == XLA.device(src) &&
-            XLA.client(dest) == XLA.client(src)
-            dest.data = src.data
-        else
-            fn = compile(mycopyto!, (dest, src))
-            fn(dest, src)
-        end
+        # We can't directly set the data field. it will alias the inner buffers without
+        # actually copying them.
+        fn = compile(mycopyto!, (dest, src))
+        fn(dest, src)
         return dest
     end
 end

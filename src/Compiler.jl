@@ -1262,14 +1262,16 @@ function compile_mlir!(
     nresults = MLIR.IR.Value[]
     linear_results2 = TracedType[]
     results_mask = falses(length(results))
+
     for (i, op) in enumerate(results)
-        if !MLIR.IR.is_block_arg(op)
-            push!(nresults, op)
-            push!(linear_results2, linear_results[i])
-            results_mask[i] = true
-            continue
+        if MLIR.IR.is_block_arg(op)
+            push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
         end
-        push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
+        # We need all the results returned to ensure proper buffer allocation. Else we end
+        # up with aliased buffers without aliasing the outer arrays
+        push!(nresults, op)
+        push!(linear_results2, linear_results[i])
+        results_mask[i] = true
     end
 
     fnbody = MLIR.IR.block(ret)
