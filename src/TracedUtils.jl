@@ -169,9 +169,7 @@ Base.@nospecializeinfer function unpad_val(
             val;
             start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
             limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
-            strides=MLIR.IR.DenseArrayAttribute(
-                ones(Int64, length(padding))
-            ),
+            strides=MLIR.IR.DenseArrayAttribute(ones(Int64, length(padding))),
         ),
         1,
     )
