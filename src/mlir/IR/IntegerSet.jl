@@ -69,7 +69,7 @@ context(set::IntegerSet) = Context(API.mlirIntegerSetGetContext(set.set))
 
 Checks whether the given set is a canonical empty set, e.g., the set returned by [`mlirIntegerSetEmptyGet`](@ref).
 """
-isempty(set::IntegerSet) = API.mlirIntegerSetIsCanonicalEmpty(set)
+Base.isempty(set::IntegerSet) = API.mlirIntegerSetIsCanonicalEmpty(set)
 
 """
     ndims(set)
