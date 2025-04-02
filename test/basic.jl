@@ -1117,3 +1117,37 @@ end
         @test_throws Reactant.XLA.ReactantInternalError Reactant.XLA.allocatorstats()
     end
 end
+
+@testset "copy/deepcopy" begin
+    for op in (copy, deepcopy)
+        x = Reactant.to_rarray(ones(4, 4))
+        if x isa Reactant.ConcretePJRTArray
+            orig_ptr = only(x.data).buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcretePJRTArray
+            @test only(y.data).buffer.buffer != orig_ptr
+            @test only(x.data).buffer.buffer == orig_ptr
+        else
+            orig_ptr = x.data.buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcreteIFRTArray
+            @test y.data.buffer.buffer != orig_ptr
+            @test x.data.buffer.buffer == orig_ptr
+        end
+
+        x = Reactant.to_rarray(4.0; track_numbers=Number)
+        if x isa Reactant.ConcretePJRTNumber
+            orig_ptr = only(x.data).buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcretePJRTNumber
+            @test only(y.data).buffer.buffer != orig_ptr
+            @test only(x.data).buffer.buffer == orig_ptr
+        else
+            orig_ptr = x.data.buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcreteIFRTNumber
+            @test y.data.buffer.buffer != orig_ptr
+            @test x.data.buffer.buffer == orig_ptr
+        end
+    end
+end
