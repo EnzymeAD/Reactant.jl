@@ -638,6 +638,7 @@ function optimization_passes(;
         "broadcastindim_is_reshape",
         "slice_reduce_window<1>",
         "while_deadresult",
+        "while_dus",
     ]
 
     if reshape_propagate === :up
