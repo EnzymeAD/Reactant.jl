@@ -159,6 +159,24 @@ Base.@nospecializeinfer function transpose_val(
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
+Base.@nospecializeinfer function unpad_val(
+    @nospecialize(val::MLIR.IR.Value), padding, sz
+)::MLIR.IR.Value
+    start_indices = zeros(Int64, length(padding))
+    limit_indices = collect(Int64, sz) .- padding
+    return MLIR.IR.result(
+        MLIR.Dialects.stablehlo.slice(
+            val;
+            start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
+            limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
+            strides=MLIR.IR.DenseArrayAttribute(
+                ones(Int64, length(padding))
+            ),
+        ),
+        1,
+    )
+end
+
 mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
     fnwrapped::Bool
     f::F
@@ -243,9 +261,11 @@ function make_mlir_fn(
     end
 
     linear_args = Reactant.TracedType[]
+    inv_map = IdDict()
     for (k, v) in seen_args
         v isa Reactant.TracedType || continue
         push!(linear_args, v)
+        inv_map[v] = k
     end
 
     in_tys = if toscalar
@@ -255,9 +275,9 @@ function make_mlir_fn(
             ) for arg in linear_args
         ]
     elseif do_transpose
-        MLIR.IR.Type[transpose_ty(Ops.mlir_type(arg)) for arg in linear_args]
+        MLIR.IR.Type[transpose_ty(Ops.mlir_type(inv_map[arg])) for arg in linear_args]
     else
-        MLIR.IR.Type[Ops.mlir_type(arg) for arg in linear_args]
+        MLIR.IR.Type[Ops.mlir_type(inv_map[arg]) for arg in linear_args]
     end
 
     sym_visibility = nothing
@@ -329,7 +349,18 @@ function make_mlir_fn(
         for (i, arg) in enumerate(linear_args)
             raw_arg = MLIR.IR.argument(fnbody, i)
             row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
-            set_mlir_data!(arg, row_maj_arg)
+            carg = inv_map[arg]
+            if !Reactant.zero_padding(carg)
+                padding = Reactant.get_padding(carg)
+                sz = size(carg) .+ padding
+                if !do_transpose
+                    padding = reverse(padding)
+                    sz = reverse(sz)
+                end
+                set_mlir_data!(arg, unpad_val(row_maj_arg, padding, sz))
+            else
+                set_mlir_data!(arg, row_maj_arg)
+            end
         end
 
         if isempty(kwargs)
