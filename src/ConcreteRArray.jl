@@ -29,6 +29,16 @@ function Base.deepcopy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     return fn(x)
 end
 
+# One more reason why users shouldn't call `deepcopy`
+function Base.deepcopy_internal(
+    x::Union{AbstractConcreteArray,AbstractConcreteNumber}, stackdict::IdDict
+)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    return deepcopy(x)
+end
+
 Base.size(::AbstractConcreteNumber) = ()
 Base.real(x::AbstractConcreteNumber{<:Real}) = x
 function Base.rtoldefault(T::Type{<:AbstractConcreteNumber})
