@@ -457,6 +457,8 @@ function create_result(
     return Meta.quot(tocopy)
 end
 
+const WHILE_CONCAT = Ref(false)
+
 # Optimization passes via transform dialect
 function optimization_passes(;
     no_nan::Bool=false,
@@ -640,6 +642,10 @@ function optimization_passes(;
         "while_deadresult",
         "while_dus",
     ]
+
+    if WHILE_CONCAT[]
+        push!(transform_passes_list, "while_concat")
+    end
 
     if reshape_propagate === :up
         append!(
