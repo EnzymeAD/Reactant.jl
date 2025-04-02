@@ -107,7 +107,7 @@ jobs:
         timeout-minutes: 10
         if: ${{ always() }}
         with:
-          name: "mlir-downgrade-PJRT-${{ github.event_name }}"
+          name: "mlir-localjll-PJRT-${{ matrix.version }}-${{ matrix.os }}-${{ github.event_name }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false
@@ -136,7 +136,7 @@ jobs:
         timeout-minutes: 10
         if: ${{ always() }}
         with:
-          name: "mlir-downgrade-IFRT-${{ github.event_name }}"
+          name: "mlir-localjll-IFRT-${{ matrix.version }}-${{ matrix.os }}-${{ github.event_name }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false
