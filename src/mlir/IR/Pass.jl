@@ -69,7 +69,7 @@ const DUMP_MLIR_DIR = Ref{Union{Nothing,String}}(nothing)
 # Whether to always dump MLIR, regardless of failure
 const DUMP_MLIR_ALWAYS = Ref{Bool}(false)
 # Counter for dumping MLIR modules
-const MLIR_DUMP_COUNTER = Ref{Int}(0)
+const MLIR_DUMP_COUNTER = Threads.Atomic{Int}(0)
 
 # Utilities for dumping to a file the module of a failed compilation, useful for
 # debugging purposes.
