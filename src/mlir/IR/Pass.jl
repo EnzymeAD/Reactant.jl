@@ -68,22 +68,41 @@ end
 const DUMP_MLIR_DIR = Ref{Union{Nothing,String}}(nothing)
 # Whether to always dump MLIR, regardless of failure
 const DUMP_MLIR_ALWAYS = Ref{Bool}(false)
+# Counter for dumping MLIR modules
+const MLIR_DUMP_COUNTER = Threads.Atomic{Int}(0)
 
 # Utilities for dumping to a file the module of a failed compilation, useful for
 # debugging purposes.
-function dump_mlir(mod::Module, pm::Union{Nothing,PassManager}=nothing; failed::Bool=false)
+function dump_mlir(
+    mod::Module, pm::Union{Nothing,PassManager}=nothing, mode::String=""; failed::Bool=false
+)
     try
         # If `DUMP_MLIR_DIR` is `nothing`, create a persistent new temp
         # directory, otherwise use the provided path.
         dir = if isnothing(DUMP_MLIR_DIR[])
             mkpath(tempdir())
-            mktempdir(; prefix="reactant_", cleanup=false)
+            # Use the same directory for this session
+            DUMP_MLIR_DIR[] = mktempdir(; prefix="reactant_", cleanup=false)
         else
             DUMP_MLIR_DIR[]
         end
+
         # Make sure the directory exists
         mkpath(dir)
-        path = tempname(dir; cleanup=false) * ".mlir"
+
+        # Attempt to get the name of the module if that exists
+        module_op = Operation(mod)
+        mod_name = attr(module_op, String(API.mlirSymbolTableGetSymbolAttributeName()))
+        fname = mod_name === nothing ? randstring(4) : String(mod_name)
+        fname = "module_" * lpad(MLIR_DUMP_COUNTER[], 3, "0") * "_$(fname)"
+        if isempty(mode)
+            fname *= ".mlir"
+        else
+            fname *= "_$(mode).mlir"
+        end
+        MLIR_DUMP_COUNTER[] += 1
+        path = joinpath(dir, fname)
+
         open(path, "w") do io
             if !isnothing(pm)
                 println(io, "// Pass pipeline:")
@@ -93,7 +112,11 @@ function dump_mlir(mod::Module, pm::Union{Nothing,PassManager}=nothing; failed::
             end
             show(IOContext(io, :debug => true), mod)
         end
-        failed && @error "Compilation failed, MLIR module written to $(path)"
+        if failed
+            @error "Compilation failed, MLIR module written to $(path)"
+        else
+            @debug "MLIR module written to $(path)"
+        end
     catch err
         @error "Couldn't save MLIR module" exception = err
     end
@@ -103,7 +126,7 @@ function try_compile_dump_mlir(f, mod::Module, pm=nothing)
     failed = false
     # Dump MLIR before calling `f`.  We set `pm` to nothing because the pass
     # manager isn't called yet here.
-    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, nothing)
+    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, nothing, "pre_xla_compile")
     try
         f()
     catch
@@ -111,7 +134,7 @@ function try_compile_dump_mlir(f, mod::Module, pm=nothing)
         rethrow()
     finally
         if failed || DUMP_MLIR_ALWAYS[]
-            dump_mlir(mod, pm; failed)
+            dump_mlir(mod, pm, "post_xla_compile"; failed)
         end
     end
 end
@@ -124,7 +147,7 @@ Run the provided `passManager` on the given `module`.
 function run!(pm::PassManager, mod::Module)
     # Dump MLIR before running the pass manager.  We set `pm` to nothing because
     # the pass manager isn't called yet here.
-    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, nothing)
+    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, nothing, "pre_pm")
     status = LogicalResult(@static if isdefined(API, :mlirPassManagerRunOnOp)
         API.mlirPassManagerRunOnOp(pm, Operation(mod))
     else
@@ -132,7 +155,7 @@ function run!(pm::PassManager, mod::Module)
     end)
     failed = isfailure(status)
     if failed || DUMP_MLIR_ALWAYS[]
-        dump_mlir(mod, pm; failed)
+        dump_mlir(mod, pm, "post_pm"; failed)
     end
     if failed
         throw("failed to run pass manager on module")
