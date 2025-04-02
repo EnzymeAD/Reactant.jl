@@ -236,7 +236,9 @@ function create_result(
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
-    args...,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
 ) where {T,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -246,6 +248,7 @@ function create_result(
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
             return :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
         else
             return :(ConcretePJRTNumber{$T}($restore))
@@ -255,6 +258,7 @@ function create_result(
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
+        push!(used_shardinfo, sharding)
         return :(ConcretePJRTNumber{$T}(($(tocopy.data...,)), $sharding))
     end
     return :(ConcretePJRTNumber{$T}($(tocopy.data)))
@@ -266,7 +270,9 @@ function create_result(
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
-    args...,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
 ) where {T,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -276,6 +282,7 @@ function create_result(
                 error("TODO: Not yet Implemented.")
             end
             sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
             return :(ConcreteIFRTNumber{$T}($(restore), $sharding))
         else
             return :(ConcreteIFRTNumber{$T}($restore))
@@ -285,6 +292,7 @@ function create_result(
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
+        push!(used_shardinfo, sharding)
         return :(ConcreteIFRTNumber{$T}($(tocopy.data), $sharding))
     end
     return :(ConcreteIFRTNumber{$T}($(tocopy.data)))
@@ -296,7 +304,9 @@ function create_result(
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
-    args...,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
 ) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -306,6 +316,7 @@ function create_result(
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
             return :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
         else
             return :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
@@ -315,6 +326,7 @@ function create_result(
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
+        push!(used_shardinfo, sharding)
         return :(ConcretePJRTArray{$T,$N}(($(tocopy.data)...,), $(tocopy.shape), $sharding))
     end
     return :(ConcretePJRTArray{$T,$N,$D,$S}(
@@ -330,6 +342,7 @@ function create_result(
     to_unreshard_results,
     unresharded_code::Vector{Expr},
     unresharded_arrays_cache,
+    used_shardinfo,
 ) where {T,N,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -356,6 +369,7 @@ function create_result(
                 ))
             end
             sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
             return :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape), $sharding))
         else
             return :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
@@ -365,6 +379,7 @@ function create_result(
     # We will set the data for this later
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
+        push!(used_shardinfo, sharding)
         return :(ConcreteIFRTArray{$T,$N}($(tocopy.data), $(tocopy.shape), $sharding))
     end
     return :(ConcreteIFRTArray{$T,$N,$S}(
@@ -1197,27 +1212,45 @@ function compile_mlir!(
     use_shardy_partitioner = false
     result_shardings = missing
     if is_sharded
+        module_op = copy(MLIR.IR.Operation(mod))
+        mod_copied = MLIR.IR.Module(module_op)
+
+        run_pass_pipeline!(
+            mod_copied, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+        )
+
+        func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), "main")
+        @assert func_op.ptr !== C_NULL
+        func_op_new_module = MLIR.IR.Operation(func_op)
+
+        result_attrs = MLIR.IR.attr(func_op_new_module, "res_attrs")
+        if result_attrs !== nothing
+            result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.Replicated}}(
+                undef, length(result_attrs)
+            )
+            for i in 1:length(result_attrs)
+                result_shardings[i] = Sharding.sdy_sharding_to_reactant_sharding(
+                    result_attrs[i - 1], mlir_fn_res.global_device_ids, mod_copied
+                )
+            end
+        else
+            result_shardings = [Sharding.Replicated() for _ in 1:length(linear_results)]
+        end
+
         if shardy_passes == :none
             use_shardy_partitioner = true
         elseif shardy_passes == :to_mhlo_shardings
             run_pass_pipeline!(
-                mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+                mod,
+                join(
+                    [
+                        "sdy-propagation-pipeline",
+                        "sdy-close-shardings",
+                        "xla-sdy-stablehlo-export-pipeline",
+                    ],
+                    ",",
+                ),
             )
-
-            # Extract the result shardings from the compiled function
-            result_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
-            if result_attrs !== nothing
-                result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.NoSharding}}(
-                    undef, length(result_attrs)
-                )
-                for i in 1:length(result_attrs)
-                    result_shardings[i] = Sharding.sdy_sharding_to_reactant_sharding(
-                        result_attrs[i - 1], mlir_fn_res.global_device_ids, mod
-                    )
-                end
-            end
-
-            run_pass_pipeline!(mod, "xla-sdy-stablehlo-export-pipeline")
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
@@ -1425,7 +1458,7 @@ macro code_xla(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:to_mhlo_shardings),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -1456,7 +1489,7 @@ macro compile(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:to_mhlo_shardings),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
         :serializable => false,
         :donated_args => :(:auto),
@@ -1478,7 +1511,7 @@ macro jit(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:to_mhlo_shardings),
+        :shardy_passes => :(:none),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -1567,17 +1600,19 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
 end
 
 function assert_mismatched_sharding(
-    sharding_from_input, hlo_sharding_from_executable::Reactant.XLA.HloSharding
+    sharding_from_input, hlo_sharding_from_executable::Reactant.XLA.HloSharding, size_x
 )
     return assert_mismatched_sharding(
-        convert(Sharding.HloSharding, sharding_from_input).hlo_sharding,
+        Sharding.HloSharding(sharding_from_input, size_x).hlo_sharding,
         hlo_sharding_from_executable,
+        size_x,
     )
 end
 
 function assert_mismatched_sharding(
     hlo_sharding_from_input::Reactant.XLA.HloSharding,
     hlo_sharding_from_executable::Reactant.XLA.HloSharding,
+    size_x,
 )
     @assert hlo_sharding_from_executable == hlo_sharding_from_input "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 end
@@ -1661,7 +1696,9 @@ function codegen_flatten!(
                 if Sharding.is_sharded(carg)
                     # Check if the sharding provided is same as the one we have
                     assert_mismatched_sharding(
-                        carg.sharding.sharding.hlo_sharding, hlo_sharding_from_executable
+                        carg.sharding.sharding.hlo_sharding,
+                        hlo_sharding_from_executable,
+                        size(carg),
                     )
 
                     push!(flatten_code, :($usbuf = $carg_sym.data))
@@ -1775,6 +1812,7 @@ function codegen_flatten!(
                     assert_mismatched_sharding(
                         carg.sharding.sharding.hlo_sharding,
                         convert(XLA.HloSharding, condensed_op_sharding),
+                        size(carg),
                     )
 
                     push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
@@ -1892,6 +1930,7 @@ function codegen_unflatten!(
     unresharded_arrays_cache = Dict{Symbol,Symbol}()
     unresharded_code = Expr[]
     unflatten_code = Expr[]
+    used_shardinfo = Set{Symbol}()
 
     runtime = XLA.runtime(client)
     if runtime isa Val{:PJRT}
@@ -2015,6 +2054,7 @@ function codegen_unflatten!(
         to_unreshard_results,
         unresharded_code,
         unresharded_arrays_cache,
+        used_shardinfo,
     )
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
@@ -2076,7 +2116,8 @@ function codegen_unflatten!(
     end
 
     # generate return object which stores the concrete results in some arbitrary way
-    return [unresharded_code..., :(result = $result_code), unflatten_code...]
+    return [unresharded_code..., :(result = $result_code), unflatten_code...],
+    used_shardinfo
 end
 
 """
@@ -2138,9 +2179,10 @@ end
 function codegen_shard_info(
     is_sharded, nresults::Int, linear_results, output_reactant_shardings, exec, ndevices
 )
-    !is_sharded && return Expr[], [nothing for _ in 1:nresults]
+    !is_sharded && return Expr[], Expr[], [nothing for _ in 1:nresults]
 
     shard_info_code = Expr[]
+    optional_shard_info_code = Expr[]
     output_hlo_shardings_var = missing
     output_hlo_shardings = XLA.get_output_shardings(exec)
 
@@ -2159,7 +2201,7 @@ function codegen_shard_info(
             reactant_sharding = output_reactant_shardings[i]
             use_hlo_sharding =
                 reactant_sharding isa Sharding.NoSharding ||
-                convert(Sharding.HloSharding, reactant_sharding).hlo_sharding !=
+                Sharding.HloSharding(reactant_sharding, res_size).hlo_sharding !=
                 hlo_sharding
         else
             use_hlo_sharding = true
@@ -2180,7 +2222,7 @@ function codegen_shard_info(
             end
 
             push!(
-                shard_info_code,
+                optional_shard_info_code,
                 :(
                     $(var_name) = Sharding.ShardInfo(
                         Sharding.HloSharding(
@@ -2195,7 +2237,6 @@ function codegen_shard_info(
                 ),
             )
         else
-            @assert output_reactant_shardings[i] isa Sharding.NamedSharding
             mesh = output_reactant_shardings[i].mesh
             mesh_key = (mesh.logical_device_ids, mesh.axis_names, mesh.axis_sizes)
             if haskey(mesh_codegen_cache, mesh_key)
@@ -2215,25 +2256,18 @@ function codegen_shard_info(
                 )
                 mesh_codegen_cache[mesh_key] = mesh_name
             end
+
+            new_sharding = Sharding.codegen_with_new_mesh(
+                output_reactant_shardings[i], mesh_name
+            )
             push!(
-                shard_info_code,
-                :(
-                    $(var_name) = Sharding.ShardInfo(
-                        Sharding.NamedSharding(
-                            $(mesh_name),
-                            $(output_reactant_shardings[i].partition_spec),
-                            $(output_reactant_shardings[i].is_closed),
-                            $(output_reactant_shardings[i].priority),
-                            $(output_reactant_shardings[i].subaxes),
-                        ),
-                        $(array_slices),
-                    )
-                ),
+                optional_shard_info_code,
+                :($(var_name) = Sharding.ShardInfo($(new_sharding), $(array_slices))),
             )
         end
         linear_result_shard_info[i] = var_name
     end
-    return shard_info_code, linear_result_shard_info
+    return shard_info_code, optional_shard_info_code, linear_result_shard_info
 end
 
 function __add_mhlo_attributes_and_name!(mod::MLIR.IR.Module, f; kwargs...)
@@ -2424,7 +2458,7 @@ function compile(f, args; sync=false, kwargs...)
         flatten_arg_names, length(linear_results), mlir_fn_res.is_sharded, ndevices
     )
 
-    shard_info_code, linear_result_shard_info = codegen_shard_info(
+    shard_info_code, optional_shard_info_code, linear_result_shard_info = codegen_shard_info(
         mlir_fn_res.is_sharded,
         length(linear_results),
         linear_results,
@@ -2433,7 +2467,7 @@ function compile(f, args; sync=false, kwargs...)
         ndevices,
     )
 
-    unflatten_code = codegen_unflatten!(
+    unflatten_code, used_shardinfo = codegen_unflatten!(
         linear_args,
         preserved_args,
         concretized_res_names,
@@ -2445,6 +2479,12 @@ function compile(f, args; sync=false, kwargs...)
         client,
         resharded_inputs,
     )
+
+    for (i, name) in enumerate(linear_result_shard_info)
+        if name in used_shardinfo
+            push!(shard_info_code, optional_shard_info_code[i])
+        end
+    end
 
     sync_call = if sync
         calls = []

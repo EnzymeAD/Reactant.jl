@@ -254,6 +254,16 @@ struct NamedSharding{D,M<:Mesh} <: AbstractSharding
     subaxes::Vector{Vector{Union{Nothing,Dims{2}}}}
 end
 
+function codegen_with_new_mesh(named_sharding::NamedSharding, mesh_sym)
+    return :($(NamedSharding)(
+        $(mesh_sym),
+        $(named_sharding.partition_spec),
+        $(named_sharding.is_closed),
+        $(named_sharding.priority),
+        $(named_sharding.subaxes),
+    ))
+end
+
 function NamedSharding(
     mesh::Mesh,
     partition_spec;
@@ -606,8 +616,7 @@ end
     return shard_type(NamedSharding{D,M}, N)
 end
 
-function standardize_sharding(sharding::DimsSharding, size_x)
-    N = length(size_x)
+function NamedSharding(sharding::DimsSharding, N)
     final_dims = map(sharding.dims) do d
         @assert !iszero(d) "dims cannot contain 0"
         return ifelse(d < 0, N + d + 1, d)
@@ -636,12 +645,67 @@ end
 function (sharding::DimsSharding)(
     client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
 )
-    return (standardize_sharding(sharding, size(x)))(client, device, x)
+    return (NamedSharding(sharding, ndims(x)))(client, device, x)
 end
 
 function sharding_to_array_slices(sharding::DimsSharding, size_x; kwargs...)
     return sharding_to_array_slices(
-        standardize_sharding(sharding, size_x), size_x; kwargs...
+        NamedSharding(sharding, length(size_x)), size_x; kwargs...
+    )
+end
+
+function get_tensor_sharding_attribute(
+    sharding::DimsSharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+)
+    return get_tensor_sharding_attribute(
+        NamedSharding(sharding, length(size_arr)),
+        ctx,
+        mesh_name,
+        mesh_attr,
+        size_arr;
+        kwargs...,
+    )
+end
+
+"""
+    Replicated(mesh::Mesh)
+
+Sharding annotation that indicates that the array is fully replicated along all dimensions.
+"""
+struct Replicated{M<:Mesh} <: AbstractSharding
+    mesh::M
+end
+
+codegen_with_new_mesh(replicated::Replicated, mesh_sym) = :($(Replicated)($mesh_sym))
+
+@inline ndevices(sharding::Replicated) = length(sharding.mesh)
+
+@inline shard_type(::Type{Replicated{M}}, N) where {M} = shard_type(NamedSharding{N,M}, N)
+
+function NamedSharding(sharding::Replicated, ndims::Int)
+    return NamedSharding(sharding.mesh, ntuple(Returns(nothing), ndims))
+end
+
+function (sharding::Replicated)(client::XLA.AbstractClient, device, x)
+    return (NamedSharding(sharding, ndims(x)))(client, device, x)
+end
+
+function sharding_to_array_slices(sharding::Replicated, size_x; kwargs...)
+    return sharding_to_array_slices(
+        NamedSharding(sharding, length(size_x)), size_x; kwargs...
+    )
+end
+
+function get_tensor_sharding_attribute(
+    sharding::Replicated, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+)
+    return get_tensor_sharding_attribute(
+        NamedSharding(sharding, length(size_arr)),
+        ctx,
+        mesh_name,
+        mesh_attr,
+        size_arr;
+        kwargs...,
     )
 end
 
@@ -668,6 +732,18 @@ struct HloSharding{D,PS,M<:Mesh} <: AbstractSharding
             hlo_sharding, parent_sharding, mesh, is_closed, priority
         )
     end
+end
+
+HloSharding(sharding::HloSharding, size_x) = sharding
+
+HloSharding(sharding::NamedSharding, size_x) = convert(HloSharding, sharding)
+
+function HloSharding(sharding::Replicated, size_x)
+    return convert(HloSharding, NamedSharding(sharding, length(size_x)))
+end
+
+function HloSharding(sharding::DimsSharding, size_x)
+    return convert(HloSharding, NamedSharding(sharding, length(size_x)))
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
@@ -877,6 +953,8 @@ struct ShardInfo{S,D} <: AbstractSharding
     device_to_array_slices::D
 end
 
+HloSharding(sharding::ShardInfo, size_x) = HloSharding(unwrap_shardinfo(sharding), size_x)
+
 @inline ndevices(sharding::ShardInfo) = length(sharding.mesh)
 
 @inline shard_type(::Type{ShardInfo{S,D}}, N) where {S,D} = shard_type(S, N)
@@ -911,9 +989,7 @@ ShardInfo{NoSharding,Nothing}() = ShardInfo(NoSharding(), nothing)
 Checks whether the given sharding refers to no sharding.
 """
 is_sharded(::NoSharding) = false
-is_sharded(::NamedSharding) = true
-is_sharded(::DimsSharding) = true
-is_sharded(::HloSharding) = true
+is_sharded(::AbstractSharding) = true
 is_sharded(s::ShardInfo) = is_sharded(s.sharding)
 
 function is_sharded(x::AbstractArray)
@@ -936,10 +1012,28 @@ unwrap_shardinfo(x::ShardInfo) = unwrap_shardinfo(x.sharding)
 
 # sdy attributes to high-level sharding information
 function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
-    !MLIR.IR.isdict(attr) && return NoSharding()
+    if !MLIR.IR.isdict(attr)
+        return Replicated(
+            Mesh(
+                global_device_ids,
+                0:(length(global_device_ids) - 1),
+                (:all_axes,),
+                (length(global_device_ids),),
+            ),
+        )
+    end
 
     mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(attr, "sdy.sharding")
-    mlir_attr.ptr == C_NULL && return NoSharding()
+    if mlir_attr.ptr == C_NULL
+        return Replicated(
+            Mesh(
+                global_device_ids,
+                0:(length(global_device_ids) - 1),
+                (:all_axes,),
+                (length(global_device_ids),),
+            ),
+        )
+    end
 
     mesh_op = MLIR.IR.Operation(
         MLIR.API.mlirSymbolTableLookup(

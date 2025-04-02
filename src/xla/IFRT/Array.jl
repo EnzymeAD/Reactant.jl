@@ -145,7 +145,7 @@ function Array(
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert sharding isa Reactant.Sharding.AbstractSharding
     if !(sharding isa Reactant.Sharding.HloSharding)
-        sharding = convert(Reactant.Sharding.HloSharding, sharding)
+        sharding = Reactant.Sharding.HloSharding(sharding, size(array))
     end
 
     (; hlo_sharding, mesh) = sharding
@@ -225,10 +225,9 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
     end
 
     if reactant_sharding isa Reactant.Sharding.HloSharding
-        hlo_sharding = reactant_sharding.hlo_sharding
+        (; hlo_sharding) = reactant_sharding
     else
-        hlo_sharding =
-            convert(Reactant.Sharding.HloSharding, reactant_sharding).hlo_sharding
+        (; hlo_sharding) = Reactant.Sharding.HloSharding(reactant_sharding, size(data))
     end
 
     client = XLA.client(buffer)
@@ -282,7 +281,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     is_fully_replicated(XLA.sharding(array)) && return array
 
     if sharding isa Reactant.Sharding.AbstractSharding
-        hlo_sharding = convert(Reactant.Sharding.HloSharding, sharding).hlo_sharding
+        (; hlo_sharding) = Reactant.Sharding.HloSharding(sharding, size(array))
         reactant_sharding = sharding
     else
         hlo_sharding = convert(XLA.HloSharding, sharding)

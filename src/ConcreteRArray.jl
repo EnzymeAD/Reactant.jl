@@ -224,10 +224,9 @@ function Base.showarg(
     toplevel || print(io, "::")
     print(io, "$(typeof(a).name.wrapper){$T,$N}")
     if Sharding.is_sharded(a)
-        hlo_sharding =
-            convert(
-                Sharding.HloSharding, Sharding.unwrap_shardinfo(a.sharding)
-            ).hlo_sharding
+        (; hlo_sharding) = Sharding.HloSharding(
+            Sharding.unwrap_shardinfo(a.sharding), size(a)
+        )
         print(io, " with \"mhlo.sharding = $(string(hlo_sharding))\"")
     end
     return nothing
