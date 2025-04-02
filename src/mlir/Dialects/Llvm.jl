@@ -726,6 +726,45 @@ function mlir_constant(; res::IR.Type, value, location=Location())
     )
 end
 
+"""
+`dso_local_equivalent`
+
+Creates an SSA value containing a pointer to a global value (function or
+alias to function). It represents a function which is functionally
+equivalent to a given function, but is always defined in the current
+linkage unit. The target function may not have `extern_weak` linkage.
+
+Examples:
+
+```mlir
+llvm.mlir.global external constant @const() : i64 {
+  %0 = llvm.mlir.addressof @const : !llvm.ptr
+  %1 = llvm.ptrtoint %0 : !llvm.ptr to i64
+  %2 = llvm.dso_local_equivalent @func : !llvm.ptr
+  %4 = llvm.ptrtoint %2 : !llvm.ptr to i64
+  llvm.return %4 : i64
+}
+```
+"""
+function dso_local_equivalent(; res::IR.Type, function_name, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("function_name", function_name),]
+
+    return create_operation(
+        "llvm.dso_local_equivalent",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function extractelement(
     vector::Value, position::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )

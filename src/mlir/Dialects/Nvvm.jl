@@ -304,6 +304,37 @@ function breakpoint(; location=Location())
     )
 end
 
+"""
+`st_bulk`
+
+Initializes a region of shared memory at the address given by `addr`.
+The `size` operand specifies the number of bytes to initialize and must be 
+a multiple of 8.
+The `initVal` operand specifies the value to initialize the memory to. The 
+only supported value is 0.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st-bulk)
+"""
+function st_bulk(addr::Value, size::Value; initVal=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[addr, size]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(initVal) && push!(attributes, namedattribute("initVal", initVal))
+
+    return create_operation(
+        "nvvm.st.bulk",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function read_ptx_sreg_clock64(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]

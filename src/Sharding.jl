@@ -1,6 +1,7 @@
 module Sharding
 
 using ..Reactant: Reactant, XLA, MLIR
+using ReactantCore: ReactantCore
 
 """
     Mesh(devices::AbstractArray{XLA.AbstractDevice}, axis_names)
@@ -21,10 +22,11 @@ julia> mesh = Mesh(reshape(devices, 2, 2, 2), (:x, :y, :z));
 julia> mesh = Mesh(reshape(devices, 4, 2), (:x, :y));
 ```
 """
-struct Mesh{D}
-    device_ids::Array{Int64,D}
-    logical_device_ids::UnitRange{Int}
+struct Mesh{D,ID<:AbstractVector{Int}}
+    device_ids::Vector{Int64}
+    logical_device_ids::ID
     axis_names::NTuple{D,Symbol}
+    axis_sizes::Dims{D}
 
     function Mesh(devices::AbstractArray{<:XLA.AbstractDevice}, axis_names)
         return Mesh(XLA.device_ordinal.(devices), axis_names)
@@ -33,7 +35,28 @@ struct Mesh{D}
     function Mesh(
         device_ids::AbstractArray{<:Integer,D}, axis_names::NTuple{D,Union{String,Symbol}}
     ) where {D}
-        return new{D}(device_ids, 0:(length(device_ids) - 1), Symbol.(axis_names))
+        return Mesh(device_ids, sortperm(vec(device_ids)) .- 1, axis_names)
+    end
+
+    function Mesh(
+        device_ids::AbstractArray{<:Integer,D},
+        logical_device_ids::AbstractVector{Int64},
+        axis_names::NTuple{D,Union{String,Symbol}},
+    ) where {D}
+        return Mesh(
+            sort!(vec(device_ids)), logical_device_ids, axis_names, size(device_ids)
+        )
+    end
+
+    function Mesh(
+        sorted_device_ids::AbstractVector{<:Integer},
+        logical_device_ids::AbstractVector{Int64},
+        axis_names::NTuple{D,Union{String,Symbol}},
+        axis_sizes::Dims{D},
+    ) where {D}
+        return new{D,typeof(logical_device_ids)}(
+            sorted_device_ids, logical_device_ids, Symbol.(axis_names), axis_sizes
+        )
     end
 
     # XXX (Deprecated): remove in v0.3
@@ -64,11 +87,52 @@ struct Mesh{D}
     end
 end
 
-Base.length(m::Mesh) = length(m.device_ids)
+function sdy_mesh_to_reactant_mesh(mesh_attr::MLIR.IR.Attribute, global_device_ids)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+
+    ndevice_ids = MLIR.API.sdyMeshAttrGetDeviceIdsSize(mesh_attr)
+    logical_device_ids = Vector{Int64}(undef, ndevice_ids)
+    for i in 1:ndevice_ids
+        logical_device_ids[i] = MLIR.API.sdyMeshAttrGetDeviceIdsElem(mesh_attr, i - 1)
+    end
+
+    naxes = MLIR.API.sdyMeshAttrGetAxesSize(mesh_attr)
+    mesh_axes = Vector{Pair{Symbol,Int64}}(undef, naxes)
+    for i in 1:naxes
+        mesh_axis_attr = MLIR.IR.Attribute(
+            MLIR.API.sdyMeshAttrGetAxesElem(mesh_attr, i - 1)
+        )
+        @assert MLIR.API.sdyAttributeIsAMeshAxisAttr(mesh_axis_attr)
+        mesh_axis_name = String(MLIR.API.sdyMeshAxisAttrGetName(mesh_axis_attr))
+        mesh_axis_size = MLIR.API.sdyMeshAxisAttrGetSize(mesh_axis_attr)
+        mesh_axes[i] = Symbol(mesh_axis_name) => mesh_axis_size
+    end
+
+    if ndevice_ids == 0
+        logical_device_ids = 0:(prod(last, mesh_axes) - 1)
+    end
+
+    @assert length(logical_device_ids) == length(global_device_ids)
+
+    mesh = Mesh(
+        global_device_ids,
+        logical_device_ids,
+        ntuple(i -> first(mesh_axes[i]), length(mesh_axes)),
+        Tuple(last.(mesh_axes)),
+    )
+
+    cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
+    key = (mesh.logical_device_ids, mesh.axis_names, size(mesh))
+    cache === nothing && return mesh
+    haskey(cache, key) && return cache[key].mesh
+    return mesh
+end
+
+Base.length(m::Mesh) = length(m.logical_device_ids)
 Base.ndims(::Mesh{D}) where {D} = D
 
-Base.size(mesh::Mesh) = size(mesh.device_ids)
-Base.size(mesh::Mesh, axis::Int) = size(mesh.device_ids, axis)
+Base.size(mesh::Mesh) = mesh.axis_sizes
+Base.size(mesh::Mesh, axis::Int) = mesh.axis_sizes[axis]
 function Base.size(mesh::Mesh, axis::Union{String,Symbol})
     return size(mesh, findfirst(==(Symbol(axis)), mesh.axis_names))
 end
@@ -182,66 +246,78 @@ julia> sharding = NamedSharding(mesh, (nothing, nothing)); # fully replicated Ma
 
 See also: [`Sharding.NoSharding`](@ref)
 """
-struct NamedSharding{D1,D2} <: AbstractSharding
-    mesh::Mesh{D1}
+struct NamedSharding{D,M<:Mesh} <: AbstractSharding
+    mesh::M
     partition_spec::Vector{Vector{Union{Nothing,Symbol}}}
-    is_closed::NTuple{D2,Bool}
-    priority::NTuple{D2,Int}
+    is_closed::NTuple{D,Bool}
+    priority::NTuple{D,Int}
     subaxes::Vector{Vector{Union{Nothing,Dims{2}}}}
-
-    function NamedSharding(
-        mesh::Mesh{D1},
-        partition_spec;
-        subaxes=nothing,
-        is_closed::NTuple{D2,Bool}=ntuple(Returns(true), length(partition_spec)),
-        priority::NTuple{D2,Int}=ntuple(i -> -1, length(partition_spec)),
-    ) where {D1,D2}
-        axis_names = Symbol[]
-
-        new_partition_spec = Vector{Vector{Union{Nothing,Symbol}}}(
-            undef, length(partition_spec)
-        )
-        @inbounds for (i, p) in enumerate(partition_spec)
-            if p === nothing
-                new_partition_spec[i] = [nothing]
-            elseif p isa Tuple
-                new_partition_spec[i] = Vector{Union{Nothing,Symbol}}(undef, length(p))
-                for (j, pⱼ) in enumerate(p)
-                    @assert pⱼ isa Symbol || pⱼ isa String
-                    new_partition_spec[i][j] = Symbol(pⱼ)
-                    push!(axis_names, Symbol(pⱼ))
-                end
-            elseif p isa Symbol || p isa String
-                push!(axis_names, Symbol(p))
-                new_partition_spec[i] = [Symbol(p)]
-            elseif p isa Vector
-                new_partition_spec[i] = copy(p)
-            else
-                error("Unexpected partition spec $(partition_spec) [$(p)]")
-            end
-        end
-        @assert allunique(axis_names) "Duplicate axis names!"
-
-        if subaxes === nothing
-            subaxes = Vector{Vector{Union{Nothing,Dims{2}}}}(undef, length(partition_spec))
-            @inbounds for (i, pspec) in enumerate(new_partition_spec)
-                subaxes[i] = Vector{Union{Nothing,Dims{2}}}(undef, length(pspec))
-                for j in 1:length(pspec)
-                    subaxes[i][j] = nothing
-                end
-            end
-        else
-            @assert length(subaxes) == length(new_partition_spec)
-            for (i, pspec) in enumerate(new_partition_spec)
-                @assert length(pspec) == length(subaxes[i])
-            end
-        end
-
-        return new{D1,D2}(mesh, new_partition_spec, is_closed, priority, subaxes)
-    end
 end
 
-function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_attr)
+function codegen_with_new_mesh(named_sharding::NamedSharding, mesh_sym)
+    return :($(NamedSharding)(
+        $(mesh_sym),
+        $(named_sharding.partition_spec),
+        $(named_sharding.is_closed),
+        $(named_sharding.priority),
+        $(named_sharding.subaxes),
+    ))
+end
+
+function NamedSharding(
+    mesh::Mesh,
+    partition_spec;
+    subaxes=nothing,
+    is_closed::NTuple{D,Bool}=ntuple(Returns(true), length(partition_spec)),
+    priority::NTuple{D,Int}=ntuple(i -> -1, length(partition_spec)),
+) where {D}
+    axis_names = Symbol[]
+
+    new_partition_spec = Vector{Vector{Union{Nothing,Symbol}}}(
+        undef, length(partition_spec)
+    )
+    @inbounds for (i, p) in enumerate(partition_spec)
+        if p === nothing
+            new_partition_spec[i] = [nothing]
+        elseif p isa Tuple
+            new_partition_spec[i] = Vector{Union{Nothing,Symbol}}(undef, length(p))
+            for (j, pⱼ) in enumerate(p)
+                @assert pⱼ isa Symbol || pⱼ isa String
+                new_partition_spec[i][j] = Symbol(pⱼ)
+                push!(axis_names, Symbol(pⱼ))
+            end
+        elseif p isa Symbol || p isa String
+            push!(axis_names, Symbol(p))
+            new_partition_spec[i] = [Symbol(p)]
+        elseif p isa Vector
+            new_partition_spec[i] = copy(p)
+        else
+            error("Unexpected partition spec $(partition_spec) [$(p)]")
+        end
+    end
+    @assert allunique(axis_names) "Duplicate axis names!"
+
+    if subaxes === nothing
+        subaxes = Vector{Vector{Union{Nothing,Dims{2}}}}(undef, length(partition_spec))
+        @inbounds for (i, pspec) in enumerate(new_partition_spec)
+            subaxes[i] = Vector{Union{Nothing,Dims{2}}}(undef, length(pspec))
+            for j in 1:length(pspec)
+                subaxes[i][j] = nothing
+            end
+        end
+    else
+        @assert length(subaxes) == length(new_partition_spec)
+        for (i, pspec) in enumerate(new_partition_spec)
+            @assert length(pspec) == length(subaxes[i])
+        end
+    end
+
+    return NamedSharding{D,typeof(mesh)}(
+        mesh, new_partition_spec, is_closed, priority, subaxes
+    )
+end
+
+function sdy_tensor_sharding_to_named_sharding(mesh::Mesh, tensor_sharding_attr)
     @assert MLIR.API.sdyAttributeIsATensorShardingAttr(tensor_sharding_attr)
 
     ndims = MLIR.API.sdyTensorShardingAttrGetDimShardingsSize(tensor_sharding_attr)
@@ -302,15 +378,20 @@ function named_sharding_from_tensor_sharding_attr(mesh::Mesh, tensor_sharding_at
     )
 end
 
-@inline ndevices(sharding::NamedSharding) = length(sharding.mesh.device_ids)
+@inline ndevices(sharding::NamedSharding) = length(sharding.mesh)
 
-@inline function shard_type(::Type{NamedSharding{D1,D2}}, N) where {D1,D2}
-    return ShardInfo{NamedSharding{D1,D2},Vector{NTuple{N,UnitRange{Int64}}}}
+@inline function shard_type(::Type{NamedSharding{D,M}}, N) where {D,M}
+    @assert D == N
+    return ShardInfo{NamedSharding{D,M},Vector{NTuple{N,UnitRange{Int64}}}}
 end
 
 function (sharding::NamedSharding)(
     client::XLA.PJRT.Client, _, x::Union{AbstractArray,Number}
 )
+    if !issorted(sharding.mesh.logical_device_ids)
+        error("PJRT doesn't support non-iota meshes. Use IFRT instead.")
+    end
+
     device_to_array_slices, sharding = sharding_to_array_slices(
         sharding, size(x); client, return_updated_sharding=Val(true)
     )
@@ -416,55 +497,73 @@ function sharding_to_array_slices(
     )
 
     if needs_padding
-        kws = client === nothing ? (;) : (; client)
-        tmp = if length(size_x) == 0
-            Reactant.ConcreteRNumber(zero(Float32); kws...)
-        else
-            Reactant.ConcreteRArray(ones(Float32, size_x...); kws...)
-        end
-        _, exec, mlir_fn_res, _, _ = Reactant.Compiler.compile_xla(
-            Reactant.Ops.negate,
-            (tmp,);
-            input_shardings=IdDict(tmp => sharding),
-            shardy_passes=:no_stablehlo_export,
+        # MLIR for identity operation, avoid tracing here
+        ctx = MLIR.IR.Context(Reactant.registry[], false)
+        Reactant.Compiler.context_gc_vector[ctx] = Vector{
+            Union{Reactant.TracedRArray,Reactant.TracedRNumber}
+        }(
+            undef, 0
         )
+        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+        MLIR.IR.activate!(ctx)
 
-        get_from_hlo_sharding = true
-        result_attrs = MLIR.IR.attr(mlir_fn_res.f, "res_attrs")
-        if result_attrs !== nothing && length(result_attrs) == 1
-            result_attr = result_attrs[0]
-            if MLIR.IR.isdict(result_attr)
-                mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
-                    result_attr, "sdy.sharding"
-                )
-                if mlir_attr.ptr != C_NULL
-                    sharding = Reactant.Sharding.named_sharding_from_tensor_sharding_attr(
-                        mlir_fn_res.sharding_mesh, MLIR.IR.Attribute(mlir_attr)
-                    )
-                    get_from_hlo_sharding = false
-                    condensed_op_sharding = convert(
-                        XLA.CondensedOpSharding,
-                        convert(Reactant.Sharding.HloSharding, sharding).hlo_sharding,
-                    )
-                end
-            end
-        end
+        sdycache = Reactant.Compiler.default_sdycache()
+        Reactant.Compiler.activate_sdycache!(sdycache)
 
-        if get_from_hlo_sharding
-            condensed_op_sharding = convert(
-                XLA.CondensedOpSharding,
-                convert(
-                    Reactant.XLA.HloSharding,
-                    only(Reactant.XLA.get_parameter_shardings(exec)),
-                ),
+        try
+            data_mlir_type = [
+                MLIR.IR.TensorType(collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32))
+            ]
+            mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+
+            (; sym_name, mesh_attr) = Reactant.Ops.mesh(sharding.mesh; mod)
+
+            func = MLIR.Dialects.func.func_(;
+                sym_name="main",
+                function_type=MLIR.IR.FunctionType(data_mlir_type, data_mlir_type),
+                no_inline=true,
+                body=MLIR.IR.Region(),
             )
+            fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
+            push!(MLIR.IR.region(func, 1), fnbody)
+            MLIR.IR.activate!(fnbody)
+            try
+                MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
+            finally
+                MLIR.IR.deactivate!(fnbody)
+            end
+            push!(MLIR.IR.body(mod), func)
+
+            input_tensor_sharding_attr, _ = get_tensor_sharding_attribute(
+                sharding, ctx, sym_name, mesh_attr, size_x; dialect=:sdy
+            )
+
+            MLIR.API.mlirFuncSetArgAttr(func, 0, "sdy.sharding", input_tensor_sharding_attr)
+
+            Reactant.Compiler.run_pass_pipeline!(
+                mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+            )
+
+            mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
+                MLIR.IR.attr(func, "res_attrs")[0], "sdy.sharding"
+            )
+            @assert mlir_attr.ptr != C_NULL
+            sharding = sdy_tensor_sharding_to_named_sharding(
+                sharding.mesh, MLIR.IR.Attribute(mlir_attr)
+            )
+
+            new_hlo_sharding = convert(HloSharding, sharding).hlo_sharding
+            condensed_op_sharding = convert(XLA.CondensedOpSharding, new_hlo_sharding)
+
+            device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+                condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
+            )
+
+            @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
+        finally
+            Reactant.Compiler.deactivate_sdycache!(sdycache)
+            MLIR.IR.deactivate!(ctx)
         end
-
-        device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
-            condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
-        )
-
-        @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(convert(Reactant.XLA.HloSharding, only(Reactant.XLA.get_parameter_shardings(exec))))).\nArray Slices: $(device_to_array_slices)."
     end
 
     return_updated_sharding isa Val{true} && return (device_to_array_slices, sharding)
@@ -476,7 +575,7 @@ end
 
 """
     DimsSharding(
-        mesh::Mesh{M},
+        mesh::Mesh,
         dims::NTuple{D,Int},
         partition_spec;
         is_closed::NTuple{D,Bool}=ntuple(Returns(true), D),
@@ -489,36 +588,35 @@ number of dimensions in the array, the corresponding `partition_spec`, `is_close
 `priority` are ignored. Additionally for any negative dimensions in `dims`, the true
 dims are calculated as `ndims(x) - dim + 1`. A dims value of `0` will throw an error.
 """
-struct DimsSharding{M,D,P} <: AbstractSharding
-    mesh::Mesh{M}
+struct DimsSharding{D,P,M<:Mesh} <: AbstractSharding
+    mesh::M
     dims::NTuple{D,Int}
     partition_spec::P
     is_closed::NTuple{D,Bool}
     priority::NTuple{D,Int}
 
     function DimsSharding(
-        mesh::Mesh{M},
+        mesh::M,
         dims::NTuple{D,Int},
         partition_spec;
         is_closed::NTuple{D,Bool}=ntuple(Returns(true), length(partition_spec)),
         priority::NTuple{D,Int}=ntuple(i -> -1, length(partition_spec)),
-    ) where {M,D}
+    ) where {M<:Mesh,D}
         @assert length(partition_spec) == length(dims)
         # Validity checks on the inputs are deferred to NamedSharding
-        return new{M,D,typeof(partition_spec)}(
+        return new{D,typeof(partition_spec),M}(
             mesh, dims, partition_spec, is_closed, priority
         )
     end
 end
 
-@inline ndevices(sharding::DimsSharding) = length(sharding.mesh.device_ids)
+@inline ndevices(sharding::DimsSharding) = length(sharding.mesh)
 
-@inline function shard_type(::Type{DimsSharding{M,D,P}}, N) where {M,D,P}
-    return shard_type(NamedSharding{M,D}, N)
+@inline function shard_type(::Type{DimsSharding{D,P,M}}, N) where {M,D,P}
+    return shard_type(NamedSharding{D,M}, N)
 end
 
-function standardize_sharding(sharding::DimsSharding, size_x)
-    N = length(size_x)
+function NamedSharding(sharding::DimsSharding, N)
     final_dims = map(sharding.dims) do d
         @assert !iszero(d) "dims cannot contain 0"
         return ifelse(d < 0, N + d + 1, d)
@@ -547,12 +645,67 @@ end
 function (sharding::DimsSharding)(
     client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
 )
-    return (standardize_sharding(sharding, size(x)))(client, device, x)
+    return (NamedSharding(sharding, ndims(x)))(client, device, x)
 end
 
 function sharding_to_array_slices(sharding::DimsSharding, size_x; kwargs...)
     return sharding_to_array_slices(
-        standardize_sharding(sharding, size_x), size_x; kwargs...
+        NamedSharding(sharding, length(size_x)), size_x; kwargs...
+    )
+end
+
+function get_tensor_sharding_attribute(
+    sharding::DimsSharding, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+)
+    return get_tensor_sharding_attribute(
+        NamedSharding(sharding, length(size_arr)),
+        ctx,
+        mesh_name,
+        mesh_attr,
+        size_arr;
+        kwargs...,
+    )
+end
+
+"""
+    Replicated(mesh::Mesh)
+
+Sharding annotation that indicates that the array is fully replicated along all dimensions.
+"""
+struct Replicated{M<:Mesh} <: AbstractSharding
+    mesh::M
+end
+
+codegen_with_new_mesh(replicated::Replicated, mesh_sym) = :($(Replicated)($mesh_sym))
+
+@inline ndevices(sharding::Replicated) = length(sharding.mesh)
+
+@inline shard_type(::Type{Replicated{M}}, N) where {M} = shard_type(NamedSharding{N,M}, N)
+
+function NamedSharding(sharding::Replicated, ndims::Int)
+    return NamedSharding(sharding.mesh, ntuple(Returns(nothing), ndims))
+end
+
+function (sharding::Replicated)(client::XLA.AbstractClient, device, x)
+    return (NamedSharding(sharding, ndims(x)))(client, device, x)
+end
+
+function sharding_to_array_slices(sharding::Replicated, size_x; kwargs...)
+    return sharding_to_array_slices(
+        NamedSharding(sharding, length(size_x)), size_x; kwargs...
+    )
+end
+
+function get_tensor_sharding_attribute(
+    sharding::Replicated, ctx, mesh_name, mesh_attr, size_arr; kwargs...
+)
+    return get_tensor_sharding_attribute(
+        NamedSharding(sharding, length(size_arr)),
+        ctx,
+        mesh_name,
+        mesh_attr,
+        size_arr;
+        kwargs...,
     )
 end
 
@@ -560,25 +713,37 @@ end
 # This stores the sharding information in the form of XLA.HloSharding, and provides a
 # central type for the final storage. It also potentially saves us the pain of not having
 # to regenerate the partition spec from the HloSharding.
-struct HloSharding{D1,D2,PS} <: AbstractSharding
+struct HloSharding{D,PS,M<:Mesh} <: AbstractSharding
     hlo_sharding::XLA.HloSharding
     parent_sharding::PS
-    mesh::Mesh{D1}
-    is_closed::NTuple{D2,Bool}
-    priority::NTuple{D2,Int}
+    mesh::M
+    is_closed::NTuple{D,Bool}
+    priority::NTuple{D,Int}
 
     function HloSharding(
         hlo_sharding::XLA.HloSharding,
-        mesh::Mesh{D1},
+        mesh::M,
         is_closed,
         priority,
         parent_sharding::Union{Nothing,AbstractSharding}=nothing,
-    ) where {D1}
+    ) where {M<:Mesh}
         @assert length(is_closed) == length(priority)
-        return new{D1,length(is_closed),typeof(parent_sharding)}(
+        return new{length(is_closed),typeof(parent_sharding),M}(
             hlo_sharding, parent_sharding, mesh, is_closed, priority
         )
     end
+end
+
+HloSharding(sharding::HloSharding, size_x) = sharding
+
+HloSharding(sharding::NamedSharding, size_x) = convert(HloSharding, sharding)
+
+function HloSharding(sharding::Replicated, size_x)
+    return convert(HloSharding, NamedSharding(sharding, length(size_x)))
+end
+
+function HloSharding(sharding::DimsSharding, size_x)
+    return convert(HloSharding, NamedSharding(sharding, length(size_x)))
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
@@ -591,20 +756,31 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
             sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
         )
 
-        hlo_sharding = XLA.HloSharding(
-            @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                tensor_sharding_attr::MLIR.API.MlirAttribute,
-                mesh_op.mesh_attr.attribute::MLIR.API.MlirAttribute,
-            )::Ptr{Cvoid}
-        )
-
         return HloSharding(
-            hlo_sharding, sharding.mesh, sharding.is_closed, sharding.priority
+            hlo_sharding_from_sdy_tensor_sharding_attr(
+                tensor_sharding_attr, mesh_op.mesh_attr
+            ),
+            sharding.mesh,
+            sharding.is_closed,
+            sharding.priority,
         )
     end
 end
 
-@inline ndevices(sharding::HloSharding) = length(sharding.mesh.device_ids)
+function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
+    @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr.attribute)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+    GC.@preserve attr begin
+        return XLA.HloSharding(
+            @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
+                attr.attribute::MLIR.API.MlirAttribute,
+                mesh_attr.attribute::MLIR.API.MlirAttribute,
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
+@inline ndevices(sharding::HloSharding) = length(sharding.mesh)
 
 @inline function shard_type(::Type{HloSharding{D1,D2,PS}}, N) where {D1,D2,PS}
     return ShardInfo{HloSharding{D1,D2,PS},Vector{NTuple{N,UnitRange{Int64}}}}
@@ -627,7 +803,7 @@ function sharding_to_array_slices(
         else
             Reactant.ConcreteRArray(ones(Float32, size_x...); kws...)
         end
-        _, exec, _, _, _ = Reactant.Compiler.compile_xla(
+        _, exec, _, _, _, _ = Reactant.Compiler.compile_xla(
             Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
         )
 
@@ -651,6 +827,10 @@ function sharding_to_array_slices(
 end
 
 function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
+    if !issorted(sharding.mesh.logical_device_ids)
+        error("PJRT doesn't support non-iota meshes. Use IFRT instead.")
+    end
+
     device_to_array_slices, hlo_sharding = sharding_to_array_slices(
         convert(HloSharding, sharding), size(x); client, return_updated_sharding=Val(true)
     )
@@ -727,7 +907,20 @@ function get_tensor_sharding_attribute(
 
     dialect == :auto && (dialect = :sdy)
 
-    if dialect == :sdy # XXX: Not recommended path
+    if dialect == :sdy
+        if Reactant.XLA.is_replicated(sharding.hlo_sharding)
+            named_sharding = NamedSharding(
+                sharding.mesh,
+                ntuple(Returns(nothing), length(size_arr));
+                sharding.is_closed,
+                sharding.priority,
+            )
+            return get_tensor_sharding_attribute(
+                named_sharding, ctx, mesh_name, mesh_attr, size_arr; dialect, kwargs...
+            )
+        end
+
+        # XXX: Not recommended path
         string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
         GC.@preserve sharding begin
             attr = MLIR.IR.Attribute(
@@ -759,6 +952,8 @@ struct ShardInfo{S,D} <: AbstractSharding
     sharding::S
     device_to_array_slices::D
 end
+
+HloSharding(sharding::ShardInfo, size_x) = HloSharding(unwrap_shardinfo(sharding), size_x)
 
 @inline ndevices(sharding::ShardInfo) = length(sharding.mesh)
 
@@ -794,9 +989,7 @@ ShardInfo{NoSharding,Nothing}() = ShardInfo(NoSharding(), nothing)
 Checks whether the given sharding refers to no sharding.
 """
 is_sharded(::NoSharding) = false
-is_sharded(::NamedSharding) = true
-is_sharded(::DimsSharding) = true
-is_sharded(::HloSharding) = true
+is_sharded(::AbstractSharding) = true
 is_sharded(s::ShardInfo) = is_sharded(s.sharding)
 
 function is_sharded(x::AbstractArray)
@@ -816,5 +1009,45 @@ Unwraps a sharding info object, returning the sharding object itself.
 """
 unwrap_shardinfo(x::AbstractSharding) = x
 unwrap_shardinfo(x::ShardInfo) = unwrap_shardinfo(x.sharding)
+
+# sdy attributes to high-level sharding information
+function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
+    if !MLIR.IR.isdict(attr)
+        return Replicated(
+            Mesh(
+                global_device_ids,
+                0:(length(global_device_ids) - 1),
+                (:all_axes,),
+                (length(global_device_ids),),
+            ),
+        )
+    end
+
+    mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(attr, "sdy.sharding")
+    if mlir_attr.ptr == C_NULL
+        return Replicated(
+            Mesh(
+                global_device_ids,
+                0:(length(global_device_ids) - 1),
+                (:all_axes,),
+                (length(global_device_ids),),
+            ),
+        )
+    end
+
+    mesh_op = MLIR.IR.Operation(
+        MLIR.API.mlirSymbolTableLookup(
+            MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)),
+            MLIR.IR.leafref(
+                MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
+            ),
+        ),
+        false,
+    )
+    return sdy_tensor_sharding_to_named_sharding(
+        sdy_mesh_to_reactant_mesh(MLIR.IR.attr(mesh_op, "mesh"), global_device_ids),
+        MLIR.IR.Attribute(mlir_attr),
+    )
+end
 
 end

@@ -15,23 +15,23 @@ using ..Reactant:
 using ReactantCore: ReactantCore
 using Functors: fmap
 
-function mlir_type(x::Union{RNumber,RArray})
-    return MLIR.IR.TensorType(size(x), MLIR.IR.Type(unwrapped_eltype(x)))
+function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
+    return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
 end
 
 mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 
 function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
-    return MLIR.IR.TensorType(shape, MLIR.IR.Type(unwrapped_eltype(RT)))
+    return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(RT::Type{<:RNumber})
-    return MLIR.IR.TensorType((), MLIR.IR.Type(unwrapped_eltype(RT)))
+function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
+    return MLIR.IR.TensorType(Int[], MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(::Type{<:MissingTracedValue})
-    return MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+function mlir_type(::Type{<:MissingTracedValue})::MLIR.IR.Type
+    return MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 end
 
 const DEBUG_MODE::Ref{Bool} = Ref(false)
@@ -771,18 +771,14 @@ end
 # end
 
 @noinline function dot_general(
-    lhs::TracedRArray{T},
-    rhs::TracedRArray{T};
+    lhs::TracedRArray{T1},
+    rhs::TracedRArray{T2};
     contracting_dimensions,
     batching_dimensions=(Int[], Int[]),
-    precision_config=nothing,
-    precision_type=nothing,
-    accumulation_type=nothing,
-    component_count=nothing,
-    num_primitive_operations=nothing,
-    allow_imprecise_accumulation=nothing,
+    precision_config=Reactant.DOT_GENERAL_PRECISION[],
+    algorithm=Reactant.DOT_GENERAL_ALGORITHM[],
     location=mlir_stacktrace("dot_general", @__FILE__, @__LINE__),
-) where {T}
+) where {T1,T2}
     # C1 + C2
     @assert length(batching_dimensions) == 2 && splat(==)(length.(batching_dimensions))
     @assert length(contracting_dimensions) == 2 &&
@@ -809,24 +805,38 @@ end
         size.(Ref(rhs), rhs_contracting_dimensions)
 
     # C11
-    @assert isnothing(precision_config) || length(precision_config) == 2
+    if !isnothing(precision_config)
+        if precision_config isa Reactant.DotGeneralPrecision.T
+            precision_config = (precision_config, precision_config)
+        end
 
-    @assert isnothing(precision_type) ||
-        length(precision_type) == 2 && eltype(precision_type) <: AbstractFloat
-    @assert isnothing(accumulation_type) || accumulation_type <: AbstractFloat
+        @assert precision_config isa Union{Tuple,Vector}
+        @assert length(precision_config) == 2
+        @assert all(Base.Fix2(isa, Reactant.DotGeneralPrecision.T), precision_config)
+    end
 
-    # C22 + C23
-    @assert isnothing(component_count) ||
-        length(component_count) == 2 &&
-            eltype(component_count) <: Int32 &&
-            all(0 .<= component_count)
+    resT = promote_type(T1, T2)
 
-    # C24
-    @assert isnothing(num_primitive_operations) ||
-        num_primitive_operations isa Int32 && num_primitive_operations > 0
-    @assert isnothing(allow_imprecise_accumulation) || allow_imprecise_accumulation isa Bool
+    if algorithm isa Reactant.DotGeneralAlgorithmPreset.T
+        lhs_eltype = Reactant.supported_lhs_eltype(algorithm)
+        @assert T1 <: lhs_eltype "$(T1) is not a subtype of $(lhs_eltype)"
+        @assert T2 <: lhs_eltype "$(T2) is not a subtype of $(lhs_eltype)"
+        rhs_eltype = Reactant.supported_rhs_eltype(algorithm)
+        @assert resT <: rhs_eltype "$(resT) is not a subtype of $(rhs_eltype)"
 
-    ctx = MLIR.IR.context()
+        algorithm = Reactant.DotGeneralAlgorithm(algorithm, T1, T2)
+    end
+
+    @assert algorithm isa Reactant.DotGeneralAlgorithm || algorithm === nothing
+
+    if !isnothing(algorithm)
+        # C22 + C23
+        @assert algorithm.rhs_component_count ≥ 0
+        @assert algorithm.lhs_component_count ≥ 0
+
+        # C24
+        @assert algorithm.num_primitive_operations > 0
+    end
 
     # from C12
     lhs_result_dimensions = setdiff(
@@ -851,7 +861,7 @@ end
     dot_dimension_numbers = GC.@preserve lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
         MLIR.IR.Attribute(
             MLIR.API.stablehloDotDimensionNumbersGet(
-                ctx,
+                MLIR.IR.context(),
                 length(lhs_batching_dimensions),
                 lhs_batching_dimensions,
                 length(rhs_batching_dimensions),
@@ -866,65 +876,24 @@ end
 
     if !isnothing(precision_config)
         precision_config = MLIR.IR.Attribute([
-            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[1]),
-            MLIR.API.stablehloPrecisionAttrGet(ctx, precision_config[2]),
+            MLIR.IR.Attribute(precision_config[1]), MLIR.IR.Attribute(precision_config[2])
         ])
     end
 
-    # all or nothing: if one is set, all must be set
-    # TODO maybe be more flexible, by setting some defaults?
-    if any(
-        !isnothing,
-        (
-            precision_type,
-            accumulation_type,
-            component_count,
-            num_primitive_operations,
-            allow_imprecise_accumulation,
-        ),
-    )
-        @assert all(
-            !isnothing,
-            (
-                precision_type...,
-                accumulation_type,
-                component_count...,
-                num_primitive_operations,
-                allow_imprecise_accumulation,
-            ),
-        )
-        lhs_precision_type, rhs_precision_type = precision_type
-        lhs_component_count, rhs_component_count = component_count
-        algorithm = GC.@preserve begin
-            MLIR.IR.Attribute(
-                MLIR.API.stablehloDotAlgorithmGet(
-                    ctx,
-                    lhs_precision_type,
-                    rhs_precision_type,
-                    accumulation_type,
-                    lhs_component_count,
-                    rhs_component_count,
-                    num_primitive_operations,
-                    allow_imprecise_accumulation,
-                ),
-            )
-        end
-    else
-        algorithm = nothing
-    end
+    algorithm = algorithm !== nothing ? MLIR.IR.Attribute(algorithm) : nothing
 
     res = MLIR.IR.result(
         stablehlo.dot_general(
             lhs.mlir_data,
             rhs.mlir_data;
-            result_0=mlir_type(TracedRArray{T,length(ressize)}, ressize),
+            result_0=mlir_type(TracedRArray{resT,length(ressize)}, ressize),
             dot_dimension_numbers,
             precision_config,
             algorithm,
             location,
         ),
     )
-    return TracedRArray{T,length(ressize)}((), res, ressize)
+    return TracedRArray{resT,length(ressize)}((), res, ressize)
 end
 
 @noinline function einsum(
@@ -984,7 +953,7 @@ end
 #     end
 # end
 
-# paralell ops
+# parallel ops
 @noinline function partition_id(;
     location=mlir_stacktrace("partition_id", @__FILE__, @__LINE__)
 )
@@ -1176,7 +1145,7 @@ end
     @assert fn_name == "comparator" "$comparator: no function generated"
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) error(
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool)) error(
         "$comparator return type is not tensor<i1>"
     )
 
@@ -1302,8 +1271,8 @@ distribution between 0 and 1. Returns a NamedTuple with the following fields:
         @assert length(seed) == 2
     end
 
-    output = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
-    output_state = MLIR.IR.TensorType(size(seed), MLIR.IR.Type(UInt64))
+    output = MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(T))
+    output_state = MLIR.IR.TensorType(collect(Int, size(seed)), MLIR.IR.Type(UInt64))
     rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
     op = stablehlo.rng_bit_generator(
         seed.mlir_data; output, output_state, rng_algorithm, location
@@ -2359,14 +2328,14 @@ end
     )
     mesh(
         mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-        device_ids::Vector{Int64};
+        logical_device_ids::Vector{Int64};
         sym_name::String="mesh",
         mod::MLIR.IR.Module=MLIR.IR.mmodule(),
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
 
 Produces a [`Reactant.MLIR.Dialects.sdy.mesh`](@ref) operation with the given `mesh` and
-`device_ids`.
+`logical_device_ids`.
 
 Based on the provided `sym_name``, we generate a unique name for the mesh in the module's
 `SymbolTable`. Note that users shouldn't use this sym_name directly, instead they should
@@ -2374,8 +2343,8 @@ use the returned `sym_name` to refer to the mesh in the module.
 
 !!! warning
 
-    The `device_ids` argument are the logical device ids, not the physical device ids.
-    For example, if the physical device ids are `[2, 4, 123, 293]`, the corresponding
+    The `logical_device_ids` argument are the logical device ids, not the physical device
+    ids. For example, if the physical device ids are `[2, 4, 123, 293]`, the corresponding
     logical device ids are `[0, 1, 2, 3]`.
 
 ## Returned Value
@@ -2393,7 +2362,8 @@ We return a NamedTuple with the following fields:
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
     cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
-    cache !== nothing && haskey(cache, m) && return cache[m]
+    key = (m.logical_device_ids, m.axis_names, size(m))
+    cache !== nothing && haskey(cache, key) && return cache[key]
     result = mesh(
         [k => Int64(v) for (k, v) in zip(m.axis_names, size(m))],
         m.logical_device_ids;
@@ -2401,13 +2371,13 @@ We return a NamedTuple with the following fields:
         sym_name,
         location,
     )
-    cache !== nothing && (cache[m] = result)
+    cache !== nothing && (cache[key] = merge(result, (; mesh=m)))
     return result
 end
 
 @noinline function mesh(
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
-    device_ids::AbstractVector{Int64};
+    logical_device_ids::AbstractVector{Int64};
     mod::MLIR.IR.Module=MLIR.IR.mmodule(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
@@ -2416,16 +2386,20 @@ end
     ndevices = prod(last, mesh_axes)
 
     @assert allunique(first, mesh_axes) "mesh_axes must be unique"
-    @assert ndevices == length(device_ids) "length(device_ids) should be same as \
-                                            prod(last, mesh_axes)"
-    @assert all(Base.Fix2(≥, 0), device_ids) "device_ids must be non-negative"
-    @assert Base.sort(device_ids) == 0:(ndevices - 1) "sorted device_ids must be the same \
-                                                       as iota(product(axes)), got \
-                                                       $(Base.sort(device_ids))"
+    @assert ndevices == length(logical_device_ids) "length(logical_device_ids) should be \
+                                                    same as prod(last, mesh_axes)"
+    @assert all(Base.Fix2(≥, 0), logical_device_ids) "logical_device_ids must be \
+                                                      non-negative"
+
+    sorted_logical_device_ids = Base.sort(logical_device_ids)
+    @assert sorted_logical_device_ids == 0:(ndevices - 1) "sorted logical_device_ids \
+                                                           must be the same \
+                                                           as iota(product(axes)), got \
+                                                           $(sorted_logical_device_ids)"
 
     # error: if the ordered device ids are the same as iota(product(axes)), no need to
     # specify them for simplicity
-    issorted(device_ids) && (device_ids = Int64[])
+    logical_device_ids == sorted_logical_device_ids && (logical_device_ids = Int64[])
 
     ctx = MLIR.IR.context()
     mesh_axis_attrs = [
@@ -2435,8 +2409,8 @@ end
         ctx,
         Int64(length(mesh_axis_attrs)),
         mesh_axis_attrs,
-        Int64(length(device_ids)),
-        collect(Int64, device_ids),
+        Int64(length(logical_device_ids)),
+        collect(Int64, logical_device_ids),
     )
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
@@ -2477,8 +2451,9 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
         (input = constant(input; location))
 
     cache = Reactant.Compiler.sdycache()
-    haskey(cache, sharding.mesh) || mesh(sharding.mesh; location)
-    (; sym_name, mesh_attr) = cache[sharding.mesh]
+    key = (sharding.mesh.logical_device_ids, sharding.mesh.axis_names, size(sharding.mesh))
+    haskey(cache, key) || mesh(sharding.mesh; location)
+    (; sym_name, mesh_attr) = cache[key]
 
     tensor_sharding_attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
         sharding, MLIR.IR.context(), sym_name, mesh_attr, size(input); do_transpose=false
@@ -2535,7 +2510,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     - **CPU version & Julia's `reduce`**:
       - Reduce along dimension 1 → `[(15) (21); (18) (24)]`
       - Reduce along dimension 3 → `[(33 + 2)  (45 + 2)]` → `[35 47]`
-    
+
     - **GPU version**:
       - Reduce along dimension 1 → `[(15 + 2) (21 + 2); (18 + 2) (24 + 2)]`
       - Reduce along dimension 3 → `[37 49]`
@@ -2572,7 +2547,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     )
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(T)) error (
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(T)) error (
         "$fn return type is not tensor<i1>"
     )
     fn = MLIR.IR.Region()

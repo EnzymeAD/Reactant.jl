@@ -24,6 +24,8 @@ export nattrs,
 export BlockIterator, RegionIterator, OperationIterator
 export @affinemap
 
+using Random: randstring
+
 function mlirIsNull(val)
     return val.ptr == C_NULL
 end

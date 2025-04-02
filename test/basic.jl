@@ -1082,3 +1082,72 @@ end
         @test res ≈ log.(v)
     end
 end
+
+@testset "Dump MLIR modules" begin
+    always_old = Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[]
+    dir_old = Reactant.MLIR.IR.DUMP_MLIR_DIR[]
+
+    mktempdir() do dir
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+        @compile sin.(Reactant.to_rarray(Float32[1.0]))
+        for mod in readdir(dir; join=true)
+            @test contains(read(mod, String), "hlo.sine")
+        end
+    end
+
+    mktempdir() do dir
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = false
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+        @compile exp.(Reactant.to_rarray(Float32[1.0]))
+        # Make sure we don't save anything to file when compilation is
+        # successful and `DUMP_MLIR_ALWAYS=false`.
+        @test isempty(readdir(dir; join=true))
+    end
+
+    Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = always_old
+    Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir_old
+end
+
+@testset "Allocator Stats" begin
+    platform_name = lowercase(Reactant.XLA.platform_name(Reactant.XLA.default_backend()))
+    if platform_name != "cpu" # not supported on CPU
+        @test Reactant.XLA.allocatorstats() isa Reactant.XLA.AllocatorStats
+    else
+        @test_throws Reactant.XLA.ReactantInternalError Reactant.XLA.allocatorstats()
+    end
+end
+
+@testset "copy/deepcopy" begin
+    for op in (copy, deepcopy)
+        x = Reactant.to_rarray(ones(4, 4))
+        if x isa Reactant.ConcretePJRTArray
+            orig_ptr = only(x.data).buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcretePJRTArray
+            @test only(y.data).buffer.buffer != orig_ptr
+            @test only(x.data).buffer.buffer == orig_ptr
+        else
+            orig_ptr = x.data.buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcreteIFRTArray
+            @test y.data.buffer.buffer != orig_ptr
+            @test x.data.buffer.buffer == orig_ptr
+        end
+
+        x = Reactant.to_rarray(4.0; track_numbers=Number)
+        if x isa Reactant.ConcretePJRTNumber
+            orig_ptr = only(x.data).buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcretePJRTNumber
+            @test only(y.data).buffer.buffer != orig_ptr
+            @test only(x.data).buffer.buffer == orig_ptr
+        else
+            orig_ptr = x.data.buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcreteIFRTNumber
+            @test y.data.buffer.buffer != orig_ptr
+            @test x.data.buffer.buffer == orig_ptr
+        end
+    end
+end

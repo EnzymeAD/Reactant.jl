@@ -183,17 +183,17 @@ function get_number_of_ways_dim_sharded(op_sharding::OpSharding)
     return td, 1
 end
 
-function sharding_to_concrete_array_indices(sharding::OpSharding, shape, device_ids)
+function sharding_to_concrete_array_indices(sharding::OpSharding, shape, logical_device_ids)
     return sharding_to_concrete_array_indices(
-        convert(CondensedOpSharding, sharding), shape, device_ids
+        convert(CondensedOpSharding, sharding), shape, logical_device_ids
     )
 end
 
 function compute_array_indices_and_hlo_sharding(
-    sharding::OpSharding, array_size, device_ids
+    sharding::OpSharding, array_size, logical_device_ids
 )
     return compute_array_indices_and_hlo_sharding(
-        convert(CondensedOpSharding, sharding), array_size, device_ids
+        convert(CondensedOpSharding, sharding), array_size, logical_device_ids
     )
 end
 
@@ -248,10 +248,10 @@ function get_number_of_ways_dim_sharded(op_sharding::CondensedOpSharding{N}) whe
 end
 
 function sharding_to_concrete_array_indices(
-    sharding::CondensedOpSharding, shape::Dims{N}, device_ids
+    sharding::CondensedOpSharding, shape::Dims{N}, logical_device_ids
 ) where {N}
     if sharding.type == OpShardingType.Replicated || sharding.type == OpShardingType.Maximal
-        return map(Returns(UnitRange.(1, shape)), device_ids), false
+        return map(Returns(UnitRange.(1, shape)), logical_device_ids), false
     elseif sharding.type == OpShardingType.Other
         partitions, num_replicas = get_number_of_ways_dim_sharded(sharding)
         @assert length(partitions) == length(shape)
@@ -290,17 +290,17 @@ function sharding_to_concrete_array_indices(
             end
         end
 
-        return map(Base.Fix1(getindex, indices), device_ids), needs_padding
+        return map(Base.Fix1(getindex, indices), logical_device_ids), needs_padding
     else
         error("Unsupported sharding type: $(sharding.type)")
     end
 end
 
 function compute_array_indices_and_hlo_sharding(
-    sharding::CondensedOpSharding, array_size, device_ids
+    sharding::CondensedOpSharding, array_size, logical_device_ids
 )
     return (
-        first(sharding_to_concrete_array_indices(sharding, array_size, device_ids)),
+        first(sharding_to_concrete_array_indices(sharding, array_size, logical_device_ids)),
         convert(HloSharding, sharding),
     )
 end
@@ -369,18 +369,20 @@ function Base.show(io::IO, hlo_sharding::HloSharding)
     return nothing
 end
 
-function sharding_to_concrete_array_indices(sharding::HloSharding, shape, device_ids)
+function sharding_to_concrete_array_indices(
+    sharding::HloSharding, shape, logical_device_ids
+)
     return sharding_to_concrete_array_indices(
-        convert(CondensedOpSharding, sharding), shape, device_ids
+        convert(CondensedOpSharding, sharding), shape, logical_device_ids
     )
 end
 
 function compute_array_indices_and_hlo_sharding(
-    sharding::HloSharding, array_size, device_ids
+    sharding::HloSharding, array_size, logical_device_ids
 )
     return (
         compute_array_indices_and_hlo_sharding(
-            convert(CondensedOpSharding, sharding), array_size, device_ids
+            convert(CondensedOpSharding, sharding), array_size, logical_device_ids
         ),
         sharding,
     )
@@ -431,4 +433,11 @@ function replicate_on_last_tile_dim(hlo_sharding::HloSharding)
             hlo_sharding.ptr::Ptr{Cvoid}
         )::Bool
     end
+end
+
+function shard_shape(args...; kwargs...)
+    indices = sharding_to_concrete_array_indices(args...; kwargs...)
+    shard_shapes = map(Base.BroadcastFunction(length), indices)
+    allequal(shard_shapes) && return first(shard_shapes)
+    return nothing
 end

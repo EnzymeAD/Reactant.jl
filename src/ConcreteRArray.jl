@@ -17,6 +17,28 @@ for runtime in (:PJRT, :IFRT)
     end
 end
 
+# copy
+function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    fn = Reactant.compile(copy, (x,))
+    return fn(x)
+end
+
+# deepcopy
+function Base.deepcopy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    fn = Reactant.compile(copy, (x,))
+    return fn(x)
+end
+
+# One more reason why users shouldn't call `deepcopy`
+function Base.deepcopy_internal(
+    x::Union{AbstractConcreteArray,AbstractConcreteNumber}, stackdict::IdDict
+)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    return deepcopy(x)
+end
+
 Base.size(::AbstractConcreteNumber) = ()
 Base.real(x::AbstractConcreteNumber{<:Real}) = x
 function Base.rtoldefault(T::Type{<:AbstractConcreteNumber})
@@ -223,7 +245,12 @@ function Base.showarg(
 ) where {T,N}
     toplevel || print(io, "::")
     print(io, "$(typeof(a).name.wrapper){$T,$N}")
-    Sharding.is_sharded(a) && print(io, " with sharding $(typeof(a.sharding.sharding))")
+    if Sharding.is_sharded(a)
+        (; hlo_sharding) = Sharding.HloSharding(
+            Sharding.unwrap_shardinfo(a.sharding), size(a)
+        )
+        print(io, " with \"mhlo.sharding = $(string(hlo_sharding))\"")
+    end
     return nothing
 end
 
@@ -405,14 +432,10 @@ end
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     @eval function Base.copyto!(dest::$(aType), src::$(aType))
-        if dest.sharding == src.sharding &&
-            XLA.device(dest) == XLA.device(src) &&
-            XLA.client(dest) == XLA.client(src)
-            dest.data = src.data
-        else
-            fn = compile(mycopyto!, (dest, src))
-            fn(dest, src)
-        end
+        # We can't directly set the data field. it will alias the inner buffers without
+        # actually copying them.
+        fn = compile(mycopyto!, (dest, src))
+        fn(dest, src)
         return dest
     end
 end

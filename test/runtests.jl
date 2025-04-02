@@ -1,4 +1,4 @@
-using Reactant, SafeTestsets, Test, TestSetExtensions
+using Reactant, SafeTestsets, Test
 
 # parse some command-line arguments
 function extract_flag!(args, flag, default=nothing; typ=typeof(default))
@@ -41,7 +41,7 @@ end
 
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
-@testset ExtendedTestSet "Reactant.jl Tests" begin
+@testset "Reactant.jl Tests" begin
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
         @safetestset "Layout" include("layout.jl")
         @safetestset "Tracing" include("tracing.jl")
@@ -63,6 +63,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         end
         @safetestset "Sharding" include("sharding.jl")
         @safetestset "Cluster Detection" include("cluster_detector.jl")
+        @safetestset "Config" include("config.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"

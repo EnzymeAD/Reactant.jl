@@ -6,6 +6,24 @@ abstract type RArray{T,N} <: AbstractArray{T,N} end
 
 abstract type AbstractConcreteArray{T,N} <: RArray{T,N} end
 
+function Base.getproperty(x::Union{AbstractConcreteArray,AbstractConcreteNumber}, f::Symbol)
+    f === :data && x.donated && error("$(typeof(x)) has already been donated!")
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Union{AbstractConcreteArray,AbstractConcreteNumber}, f::Symbol, v
+)
+    f === :data && (x.donated = false)
+    return setfield!(x, f, v)
+end
+
+function mark_donated!(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    x.donated && error("Can't donate an already-donated object")
+    setfield!(x, :donated, true)
+    return nothing
+end
+
 # Traced Types
 
 ## MissingTracedValue -- defined in ReactantCore
@@ -64,12 +82,23 @@ end
 mutable struct ConcretePJRTNumber{T,D,S<:Sharding.ShardInfo} <: AbstractConcreteNumber{T}
     data::NTuple{D,XLA.PJRT.AsyncBuffer}
     sharding::S
+    donated::Bool
+
+    function ConcretePJRTNumber{T,D,S}(
+        data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::S
+    ) where {T,D,S}
+        return new{T,D,S}(data, sharding, false)
+    end
 end
 
 ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(x::Number) where {T} = ConcretePJRTNumber{T}(x)
 
 function ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
     return ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
+end
+
+function ConcretePJRTNumber{T}(data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding) where {T,D}
+    return ConcretePJRTNumber{T,D,typeof(sharding)}(data, sharding)
 end
 
 @leaf ConcretePJRTNumber
@@ -106,6 +135,13 @@ mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: AbstractConcret
     data::NTuple{D,XLA.PJRT.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::S
+    donated::Bool
+
+    function ConcretePJRTArray{T,N,D,S}(
+        data::NTuple{D,XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}, sharding::S
+    ) where {T,N,D,S}
+        return new{T,N,D,S}(data, shape, sharding, false)
+    end
 end
 
 @leaf ConcretePJRTArray
@@ -204,12 +240,21 @@ end
 mutable struct ConcreteIFRTNumber{T,S<:Sharding.ShardInfo} <: AbstractConcreteNumber{T}
     data::XLA.IFRT.AsyncArray
     sharding::S
+    donated::Bool
+
+    function ConcreteIFRTNumber{T,S}(data::XLA.IFRT.AsyncArray, sharding::S) where {T,S}
+        return new{T,S}(data, sharding, false)
+    end
 end
 
 ConcreteIFRTNumber{T,Sharding.NoShardInfo}(x::Number) where {T} = ConcreteIFRTNumber{T}(x)
 
 function ConcreteIFRTNumber{T}(data::XLA.IFRT.AsyncArray) where {T}
     return ConcreteIFRTNumber{T,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())
+end
+
+function ConcreteIFRTNumber{T}(data::XLA.IFRT.AsyncArray, sharding) where {T}
+    return ConcreteIFRTNumber{T,typeof(sharding)}(data, sharding)
 end
 
 @leaf ConcreteIFRTNumber
@@ -237,6 +282,13 @@ mutable struct ConcreteIFRTArray{T,N,S<:Sharding.ShardInfo} <: AbstractConcreteA
     data::XLA.IFRT.AsyncArray
     shape::NTuple{N,Int}
     sharding::S
+    donated::Bool
+
+    function ConcreteIFRTArray{T,N,S}(
+        data::XLA.IFRT.AsyncArray, shape::NTuple{N,Int}, sharding::S
+    ) where {T,N,S}
+        return new{T,N,S}(data, shape, sharding, false)
+    end
 end
 
 @leaf ConcreteIFRTArray
@@ -284,6 +336,51 @@ function ConcreteIFRTArray(
     end
     sharded_data, sharding = sharding(client, nothing, data)
     return ConcreteIFRTArray{T,N}(sharded_data, size(data), sharding)
+end
+
+# Assemble data from multiple arrays. Needed in distributed setting where each process wont
+# have enough host memory to hold all the arrays. We assume that the data is only provided
+# for all of the addressable devices.
+function ConcreteIFRTArray(
+    data::Vector{Array{T,N}},
+    array_size::Dims{N},
+    data_to_addressable_shard::Vector{Vector{Int64}}=[[i] for i in 1:length(data)];
+    client::XLA.IFRT.Client=XLA.default_backend(),
+    sharding::Sharding.AbstractSharding,
+) where {T,N}
+    @assert Sharding.is_sharded(sharding)
+    @assert length(data) == length(data_to_addressable_shard)
+
+    (; hlo_sharding) = Sharding.HloSharding(sharding, array_size)
+    all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
+    ifrt_sharding = XLA.IFRT.Sharding(all_devices, hlo_sharding)
+
+    # Validate that all the slices are as we expected them to be
+    slices, _ = XLA.sharding_to_concrete_array_indices(
+        hlo_sharding, array_size, 0:(length(all_devices) - 1)
+    )
+    addressable_slices = [
+        slice for (slice, device) in zip(slices, all_devices) if XLA.is_addressable(device)
+    ]
+    for (i, slice) in enumerate(addressable_slices)
+        idx = findfirst(Base.Fix1(in, i), data_to_addressable_shard)
+        @assert idx !== nothing
+        @assert size(data[idx]) == length.(slice) "Expected data[$idx] to be at \
+                                                   $(slice), but got size \
+                                                   $(size(data[idx]))"
+    end
+
+    # Make the mapping 0-indexed
+    @inbounds for shard_idxs in data_to_addressable_shard
+        shard_idxs .-= 1
+    end
+    ifrt_array = XLA.IFRT.AsyncArray(
+        XLA.IFRT.Array(client, data, data_to_addressable_shard, array_size, ifrt_sharding),
+        nothing,
+    )
+    return ConcreteIFRTArray{T,N}(
+        ifrt_array, array_size, Sharding.ShardInfo(sharding, slices)
+    )
 end
 
 Base.wait(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = wait(x.data)
