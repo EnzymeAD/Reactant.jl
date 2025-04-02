@@ -1884,13 +1884,37 @@ function codegen_flatten!(
     return flatten_names, flatten_code, resharded_inputs
 end
 
-function donate_argument!(donated_args_mask, carg, i::Int, donated_buffers, path)
+function donate_argument!(
+    donated_args_mask,
+    carg::Union{ConcretePJRTNumber,ConcretePJRTArray},
+    i::Int,
+    donated_buffers,
+    path,
+)
     if donated_args_mask[i]
-        if carg.data in donated_buffers
+        buffers = Tuple(d.buffer for d in carg.data)
+        if buffers in donated_buffers
             error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
                    the same buffer multiple times. The argument is present at $(path)")
         end
-        push!(donated_buffers, carg.data)
+        push!(donated_buffers, buffers)
+        Reactant.mark_donated!(carg)
+    end
+end
+
+function donate_argument!(
+    donated_args_mask,
+    carg::Union{ConcreteIFRTNumber,ConcreteIFRTArray},
+    i::Int,
+    donated_buffers,
+    path,
+)
+    if donated_args_mask[i]
+        if carg.data.buffer in donated_buffers
+            error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
+                   the same buffer multiple times. The argument is present at $(path)")
+        end
+        push!(donated_buffers, carg.data.buffer)
         Reactant.mark_donated!(carg)
     end
 end
@@ -2502,9 +2526,9 @@ function compile(f, args; sync=false, kwargs...)
     fname = gensym(Symbol(Symbol(f), :_reactant))
 
     donated_buffers_set = if XLA.runtime(client) isa Val{:PJRT}
-        :(Base.IdSet{NTuple{<:Any,XLA.PJRT.AsyncBuffer}}())
+        :(Base.IdSet{NTuple{<:Any,XLA.PJRT.Buffer}}())
     else
-        :(Base.IdSet{XLA.IFRT.AsyncArray}())
+        :(Base.IdSet{XLA.IFRT.Array}())
     end
 
     body = quote
