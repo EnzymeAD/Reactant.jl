@@ -519,25 +519,51 @@ function make_mlir_fn(
         """)
     end
 
-    out_tys = if do_transpose
-        [transpose_ty(Ops.mlir_type(arg)) for arg in linear_results]
-    else
-        [Ops.mlir_type(arg) for arg in linear_results]
-    end
-
+    out_tys = Vector{MLIR.IR.Type}(undef, length(linear_results))
     MLIR.IR.activate!(fnbody)
     ret = try
-        vals = MLIR.IR.Value[]
-        for res in linear_results
-            col_maj = if res isa MissingTracedValue
-                get_mlir_data(broadcast_to_size(false, ()))
-            elseif !do_transpose
-                get_mlir_data(res)
-            elseif do_transpose
-                transpose_val(get_mlir_data(res))
+        vals = Vector{MLIR.IR.Value}(undef, length(linear_results))
+
+        for (i, res) in enumerate(linear_results)
+            if res in keys(inv_map) && !Reactant.zero_padding(inv_map[res])
+                carg = inv_map[res]
+                padding = Reactant.get_padding(carg)
+                sz = size(carg) .+ padding
+                if !do_transpose
+                    padding = reverse(padding)
+                    sz = reverse(sz)
+                end
+
+                res = Ops.pad(
+                    res,
+                    promote_to(TracedRNumber{Reactant.unwrapped_eltype(res)}, 0);
+                    high=collect(Int, padding),
+                )
+
+                if do_transpose
+                    col_maj = transpose_val(get_mlir_data(res))
+                    out_ty = transpose_ty(Ops.mlir_type(res))
+                else
+                    col_maj = get_mlir_data(res)
+                    out_ty = Ops.mlir_type(res)
+                end
+            else
+                if res isa MissingTracedValue
+                    col_maj = get_mlir_data(broadcast_to_size(false, ()))
+                    out_ty = mlir_type(TracedRArray{Bool,0}, ())
+                elseif !do_transpose
+                    col_maj = get_mlir_data(res)
+                    out_ty = Ops.mlir_type(res)
+                elseif do_transpose
+                    col_maj = transpose_val(get_mlir_data(res))
+                    out_ty = transpose_ty(Ops.mlir_type(res))
+                end
             end
-            push!(vals, col_maj)
+
+            vals[i] = col_maj
+            out_tys[i] = out_ty
         end
+
         args_in_result == :all && @assert length(vals) == length(linear_results)
 
         dialect = getfield(MLIR.Dialects, return_dialect)
