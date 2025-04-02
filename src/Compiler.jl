@@ -684,7 +684,7 @@ function optimization_passes(;
             [
                 "transpose_while",
                 "transpose_slice",
-                "transpose_elementwise",
+                # "transpose_elementwise", # Busted  EnzymeAD/Reactant.jl#1117
                 "transpose_concat",
                 "transpose_iota",
                 "transpose_reduce",
