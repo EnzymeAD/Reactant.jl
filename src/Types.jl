@@ -309,8 +309,8 @@ mutable struct ConcreteIFRTArray{
     end
 end
 
-has_padding(x::ConcreteIFRTArray{T,N,S,Nothing}) where {T,N,S} = false
-has_padding(::ConcreteIFRTArray) = true
+has_padding(::ConcreteIFRTArray{T,N,S,Nothing}) where {T,N,S} = false
+has_padding(::ConcreteIFRTArray{T,N,S,P}) where {T,N,S,P} = true
 zero_padding(x::ConcreteIFRTArray) = all(iszero, x.padding)
 
 @leaf ConcreteIFRTArray
