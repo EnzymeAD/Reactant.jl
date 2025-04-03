@@ -601,7 +601,7 @@ function make_mlir_fn(
             if !haskey(traced_args_to_shardings, arg) && !isempty(mesh_cache)
                 # Force a replicated sharding (it doesn't matter with mesh we use)
                 traced_args_to_shardings[arg] = Reactant.Sharding.Replicated(
-                    first(values(mesh_cache)).mesh,
+                    first(values(mesh_cache)).mesh
                 )
             end
         end
