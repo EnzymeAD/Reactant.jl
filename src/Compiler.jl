@@ -1062,7 +1062,7 @@ function compile_mlir!(
 
         if DUS_TO_CONCAT[]
             opt_passes3 = optimization_passes(;
-                no_nan, sroa=false, transpose_propagate, reshape_propagate, dus_to_concat=True
+                no_nan, sroa=false, transpose_propagate, reshape_propagate, dus_to_concat=true
             )
             result = result * "," * opt_passes3
         end
