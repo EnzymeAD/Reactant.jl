@@ -427,10 +427,10 @@ function (sharding::NamedSharding)(
         return data, ShardInfo(sharding, device_to_array_slices), ()
     end
 
-    partition_sizes = zeros(Int64, length(sharding.partition_spec))
+    partition_sizes = ones(Int64, length(sharding.partition_spec))
     for (i, pspec) in enumerate(sharding.partition_spec)
         for p in pspec
-            partition_sizes[i] += p === nothing ? 1 : size(sharding.mesh, p)
+            partition_sizes[i] *= p === nothing ? 1 : size(sharding.mesh, p)
         end
     end
     remainders = size(x) .% partition_sizes
