@@ -305,7 +305,7 @@ mutable struct ConcreteIFRTArray{
         sharding::S,
         padding::Union{Nothing,NTuple{N,Int}}=nothing,
     ) where {T,N,S}
-        return new{T,N,S}(data, shape, sharding, false, padding)
+        return new{T,N,S,typeof(padding)}(data, shape, sharding, false, padding)
     end
 end
 
