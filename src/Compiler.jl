@@ -646,6 +646,7 @@ function optimization_passes(;
         "while_licm",
         "while_op_induction_replacement",
         "dus_pad",
+        "dus_concat",
         "slice_dus_to_concat",
     ]
 
