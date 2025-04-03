@@ -543,9 +543,8 @@ Base.@nospecializeinfer function traced_type_inner(
             runtime isa Val{:PJRT} && return ConcretePJRTArray{
                 T,N,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), N)
             }
-            runtime isa Val{:IFRT} && return ConcreteIFRTArray{
-                T,N,Sharding.shard_type(typeof(sharding), N)
-            }
+            runtime isa Val{:IFRT} &&
+                return ConcreteIFRTArray{T,N,Sharding.shard_type(typeof(sharding), N)}
             error("Unsupported runtime $runtime")
         else
             return Array{
