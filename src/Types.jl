@@ -26,7 +26,9 @@ end
 
 has_padding(_) = false
 function get_padding(x)
-    hasfield(typeof(x), :padding) && return x.padding
+    if hasfield(typeof(x), :padding)
+        x.padding !== nothing && return x.padding
+    end
     return ntuple(Returns(0), ndims(x))
 end
 function zero_padding(x)
@@ -288,23 +290,26 @@ function ConcreteIFRTNumber(data::ConcreteIFRTNumber; kwargs...)
 end
 
 ## ConcreteIFRTArray
-mutable struct ConcreteIFRTArray{T,N,S<:Sharding.ShardInfo} <: AbstractConcreteArray{T,N}
+mutable struct ConcreteIFRTArray{
+    T,N,S<:Sharding.ShardInfo,P<:Union{Nothing,NTuple{N,Int}}
+} <: AbstractConcreteArray{T,N}
     data::XLA.IFRT.AsyncArray
     shape::NTuple{N,Int}
     sharding::S
     donated::Bool
-    padding::NTuple{N,Int}
+    padding::P
 
     function ConcreteIFRTArray{T,N,S}(
         data::XLA.IFRT.AsyncArray,
         shape::NTuple{N,Int},
         sharding::S,
-        padding::NTuple{N,Int}=ntuple(Returns(0), N),
+        padding::Union{Nothing,NTuple{N,Int}}=nothing,
     ) where {T,N,S}
         return new{T,N,S}(data, shape, sharding, false, padding)
     end
 end
 
+has_padding(x::ConcreteIFRTArray{T,N,S,Nothing}) where {T,N,S} = false
 has_padding(::ConcreteIFRTArray) = true
 zero_padding(x::ConcreteIFRTArray) = all(iszero, x.padding)
 

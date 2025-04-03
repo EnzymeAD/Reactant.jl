@@ -424,7 +424,7 @@ function (sharding::NamedSharding)(
             convert(HloSharding, sharding).hlo_sharding,
         )
         data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
-        return data, ShardInfo(sharding, device_to_array_slices), ()
+        return data, ShardInfo(sharding, device_to_array_slices), nothing
     end
 
     partition_sizes = ones(Int64, length(sharding.partition_spec))
@@ -444,7 +444,7 @@ function (sharding::NamedSharding)(
         return (
             XLA.IFRT.AsyncArray(client, x, ifrt_sharding),
             ShardInfo(sharding, device_to_array_slices),
-            ntuple(Returns(0), ndims(x)),
+            nothing,
         )
     end
 
@@ -905,9 +905,7 @@ function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
 
     # XXX: Can we auto-pad this case too? Will think about it later, for now use
     #      NamedSharidng
-    return (
-        data, ShardInfo(hlo_sharding, device_to_array_slices), ntuple(Returns(0), ndims(x))
-    )
+    return data, ShardInfo(hlo_sharding, device_to_array_slices), nothing
 end
 
 function (sharding::HloSharding)(
@@ -939,7 +937,7 @@ function (sharding::HloSharding)(
 
     # XXX: Can we auto-pad this case too? Will think about it later, for now use
     #      NamedSharidng
-    return data, ShardInfo(sharding, device_to_array_slices), ntuple(Returns(0), ndims(x))
+    return data, ShardInfo(sharding, device_to_array_slices), nothing
 end
 
 function get_tensor_sharding_attribute(
