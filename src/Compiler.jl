@@ -458,6 +458,7 @@ function create_result(
 end
 
 const WHILE_CONCAT = Ref(false)
+const DUS_TO_CONCAT = Ref(false)
 
 # Optimization passes via transform dialect
 function optimization_passes(;
@@ -466,6 +467,7 @@ function optimization_passes(;
     inline::Bool=true,
     transpose_propagate::Symbol=:up,
     reshape_propagate::Symbol=:up,
+    dus_to_concat::Bool = false,
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -651,7 +653,7 @@ function optimization_passes(;
         push!(transform_passes_list, "while_concat")
     end
 
-    if DUS_TO_CONCAT[]
+    if dus_to_concat
         push!(transform_passes_list, "dus_to_concat")
     end
 
@@ -1051,10 +1053,19 @@ function compile_mlir!(
         # Raising passes were specified
         raise
     elseif raise
+
         # Raise enabled but use default passes
         # TODO remove redundant libdevice raise after fixing phase ordering
-        "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,raise-affine-to-stablehlo{prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}," *
+        result = "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,raise-affine-to-stablehlo{prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}," *
         opt_passes2
+
+        if DUS_TO_CONCAT[]
+            opt_passes3 = optimization_passes(;
+                no_nan, sroa=false, transpose_propagate, reshape_propagate, dus_to_concat=True
+            )
+            result = result * "," * opt_passes3
+        end
+        result
     else
         "canonicalize"
     end
