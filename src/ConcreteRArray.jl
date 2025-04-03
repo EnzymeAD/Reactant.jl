@@ -597,3 +597,17 @@ function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::Ab
     fn(f, R, A)
     return R
 end
+
+# Directly initialize a Device Array
+function Base.fill(
+    ::Type{<:Union{ConcreteIFRTArray,ConcretePJRTArray}},
+    val,
+    dims::Vararg{Int};
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+)
+    output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
+    fn = Reactant.compile((); output_shardings) do
+        return Ops.fill(val, collect(Int64, dims))
+    end
+    return fn()
+end
