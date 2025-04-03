@@ -410,3 +410,32 @@ end
         @warn "Not enough addressable devices to run sharding tests"
     end
 end
+
+@testset "Initialize Sharded Data" begin
+    if length(addressable_devices) ≥ 12
+        mesh = Sharding.Mesh(reshape(0:11, 2, 3, 2), (:x, :y, :z))
+
+        x_ra_device = fill(ConcreteRArray, 1.0f0, 8, 9)
+        @test x_ra_device isa ConcreteRArray
+        @test eltype(x_ra_device) == Float32
+        @test size(x_ra_device) == (8, 9)
+        @test x_ra_device.sharding.sharding isa Sharding.NoSharding
+        @test all(Array(x_ra_device) .== 1.0f0)
+
+        x_ra_sharded = fill(
+            ConcreteRArray,
+            5.0f0,
+            8,
+            9;
+            sharding=Sharding.NamedSharding(mesh, ((:x, :z), :y)),
+        )
+        @test x_ra_sharded isa ConcreteRArray
+        @test eltype(x_ra_sharded) == Float32
+        @test size(x_ra_sharded) == (8, 9)
+        @test x_ra_sharded.sharding.sharding isa Sharding.NamedSharding
+        @test all(Array(x_ra_sharded) .== 5.0f0)
+        @test x_ra_sharded.sharding.sharding.partition_spec == [[:x, :z], [:y]]
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end

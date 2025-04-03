@@ -600,12 +600,13 @@ end
 
 # Directly initialize a Device Array
 function Base.fill(
-    ::Type{<:ConcreteIFRTArray},
+    ::Type{<:Union{ConcreteIFRTArray,ConcretePJRTArray}},
     val,
     dims::Vararg{Int};
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 )
-    fn = Reactant.compile((); output_shardings=Dict(1 => sharding)) do
+    output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
+    fn = Reactant.compile((); output_shardings) do
         return Ops.fill(val, collect(Int64, dims))
     end
     return fn()

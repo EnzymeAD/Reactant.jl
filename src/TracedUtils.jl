@@ -598,10 +598,10 @@ function make_mlir_fn(
         # need to force a replicated sharding.
         for i in mutated_args
             arg = linear_args[i]
-            if !haskey(traced_args_to_shardings, arg)
+            if !haskey(traced_args_to_shardings, arg) && !isempty(mesh_cache)
                 # Force a replicated sharding (it doesn't matter with mesh we use)
-                traced_args_to_shardings[arg] = Reactant.Sharding.NamedSharding(
-                    first(unique_meshes), ntuple(Returns(nothing), ndims(arg))
+                traced_args_to_shardings[arg] = Reactant.Sharding.Replicated(
+                    first(values(mesh_cache)).mesh,
                 )
             end
         end
