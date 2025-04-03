@@ -339,7 +339,7 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:IFRT}
-        return ConcreteIFRTArray{elT,N,Sharding.shard_type(typeof(sharding), N),Nothing}
+        return ConcreteIFRTArray{elT,N,Sharding.shard_type(typeof(sharding), N)}
     else
         throw("Unsupported mode: $mode")
     end
@@ -391,7 +391,7 @@ Base.@nospecializeinfer function traced_type_inner(
                 T.parameters[1],
                 T.parameters[2],
                 Sharding.shard_type(typeof(sharding), T.parameters[2]),
-                Nothing,
+                Nothing, # TODO: check if we can ensure no padding??
             }
         end
         error("Unsupported runtime $runtime")
@@ -544,7 +544,7 @@ Base.@nospecializeinfer function traced_type_inner(
                 T,N,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), N)
             }
             runtime isa Val{:IFRT} && return ConcreteIFRTArray{
-                T,N,Sharding.shard_type(typeof(sharding), N),Nothing
+                T,N,Sharding.shard_type(typeof(sharding), N)
             }
             error("Unsupported runtime $runtime")
         else
