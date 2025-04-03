@@ -643,7 +643,7 @@ function optimization_passes(;
         "slice_reduce_window<1>",
         "while_deadresult",
         "while_dus",
-        "while_licm",
+        "dus_licm",
         "while_op_induction_replacement",
         "dus_pad",
         "dus_concat",
