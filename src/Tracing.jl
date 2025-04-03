@@ -324,7 +324,11 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(runtime)
 )
     if T isa UnionAll
-        elT, N = T.body.parameters[1], T.body.parameters[2]
+        if T.body isa UnionAll
+            elT, N = T.body.body.parameters[1], T.body.body.parameters[2]
+        else
+            elT, N = T.body.parameters[1], T.body.parameters[2]
+        end
     else
         elT, N = T.parameters[1], T.parameters[2]
     end
@@ -387,6 +391,7 @@ Base.@nospecializeinfer function traced_type_inner(
                 T.parameters[1],
                 T.parameters[2],
                 Sharding.shard_type(typeof(sharding), T.parameters[2]),
+                Nothing, # TODO: check if we can ensure no padding??
             }
         end
         error("Unsupported runtime $runtime")

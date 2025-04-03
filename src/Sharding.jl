@@ -190,7 +190,11 @@ end
 
 function (::NoSharding)(client::XLA.IFRT.Client, device, x::Union{AbstractArray,Number})
     device === nothing && (device = XLA.default_device(client))
-    return XLA.IFRT.AsyncArray(client, x, device), ShardInfo(NoSharding(), nothing)
+    return (
+        XLA.IFRT.AsyncArray(client, x, device),
+        ShardInfo(NoSharding(), nothing),
+        ntuple(Returns(0), ndims(x)),
+    )
 end
 
 function sharding_to_array_slices(
@@ -410,16 +414,58 @@ end
 function (sharding::NamedSharding)(
     client::XLA.IFRT.Client, _, x::Union{AbstractArray,Number}
 )
-    device_to_array_slices, sharding = sharding_to_array_slices(
-        sharding, size(x); client, return_updated_sharding=Val(true)
-    )
+    if x isa Number
+        # Probably doesn't need so much complication
+        device_to_array_slices = sharding_to_array_slices(
+            sharding, size(x); client, return_updated_sharding=Val(false)
+        )
+        ifrt_sharding = XLA.IFRT.Sharding(
+            vec(Reactant.XLA.get_device.((client,), sharding.mesh.device_ids)),
+            convert(HloSharding, sharding).hlo_sharding,
+        )
+        data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
+        return data, ShardInfo(sharding, device_to_array_slices), nothing
+    end
+
+    partition_sizes = ones(Int64, length(sharding.partition_spec))
+    for (i, pspec) in enumerate(sharding.partition_spec)
+        for p in pspec
+            partition_sizes[i] *= p === nothing ? 1 : size(sharding.mesh, p)
+        end
+    end
+    remainders = size(x) .% partition_sizes
+
+    if all(iszero, remainders) # fast path
+        device_to_array_slices = sharding_to_array_slices(sharding, size(x); client)
+        ifrt_sharding = XLA.IFRT.Sharding(
+            vec(Reactant.XLA.get_device.((client,), sharding.mesh.device_ids)),
+            convert(HloSharding, sharding).hlo_sharding,
+        )
+        return (
+            XLA.IFRT.AsyncArray(client, x, ifrt_sharding),
+            ShardInfo(sharding, device_to_array_slices),
+            nothing,
+        )
+    end
+
+    padding = Tuple((partition_sizes .- remainders) .% partition_sizes)
+    device_to_array_slices = sharding_to_array_slices(sharding, size(x) .+ padding; client)
 
     ifrt_sharding = XLA.IFRT.Sharding(
         vec(Reactant.XLA.get_device.((client,), sharding.mesh.device_ids)),
         convert(HloSharding, sharding).hlo_sharding,
     )
-    data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
-    return data, ShardInfo(sharding, device_to_array_slices)
+    return (
+        XLA.IFRT.AsyncArray(client, construct_padded_array(x, padding), ifrt_sharding),
+        ShardInfo(sharding, device_to_array_slices),
+        padding,
+    )
+end
+
+function construct_padded_array(x::AbstractArray, padding)
+    y = similar(x, size(x) .+ padding)
+    view(y, [1:size(x, i) for i in 1:ndims(x)]...) .= x
+    return y
 end
 
 function get_tensor_sharding_attribute(
@@ -856,7 +902,10 @@ function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
         hlo_sharding.hlo_sharding,
     )
     data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
-    return data, ShardInfo(hlo_sharding, device_to_array_slices)
+
+    # XXX: Can we auto-pad this case too? Will think about it later, for now use
+    #      NamedSharidng
+    return data, ShardInfo(hlo_sharding, device_to_array_slices), nothing
 end
 
 function (sharding::HloSharding)(
@@ -886,7 +935,9 @@ function (sharding::HloSharding)(
     )
     data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
 
-    return data, ShardInfo(sharding, device_to_array_slices)
+    # XXX: Can we auto-pad this case too? Will think about it later, for now use
+    #      NamedSharidng
+    return data, ShardInfo(sharding, device_to_array_slices), nothing
 end
 
 function get_tensor_sharding_attribute(

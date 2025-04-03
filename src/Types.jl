@@ -24,6 +24,14 @@ function mark_donated!(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     return nothing
 end
 
+has_padding(_) = false
+function get_padding(x)
+    if hasfield(typeof(x), :padding)
+        x.padding !== nothing && return x.padding
+    end
+    return ntuple(Returns(0), ndims(x))
+end
+
 # Traced Types
 
 ## MissingTracedValue -- defined in ReactantCore
@@ -278,18 +286,27 @@ function ConcreteIFRTNumber(data::ConcreteIFRTNumber; kwargs...)
 end
 
 ## ConcreteIFRTArray
-mutable struct ConcreteIFRTArray{T,N,S<:Sharding.ShardInfo} <: AbstractConcreteArray{T,N}
+mutable struct ConcreteIFRTArray{
+    T,N,S<:Sharding.ShardInfo,P<:Union{Nothing,NTuple{N,Int}}
+} <: AbstractConcreteArray{T,N}
     data::XLA.IFRT.AsyncArray
     shape::NTuple{N,Int}
     sharding::S
     donated::Bool
+    padding::P
 
     function ConcreteIFRTArray{T,N,S}(
-        data::XLA.IFRT.AsyncArray, shape::NTuple{N,Int}, sharding::S
+        data::XLA.IFRT.AsyncArray,
+        shape::NTuple{N,Int},
+        sharding::S,
+        padding::Union{Nothing,NTuple{N,Int}}=nothing,
     ) where {T,N,S}
-        return new{T,N,S}(data, shape, sharding, false)
+        return new{T,N,S,typeof(padding)}(data, shape, sharding, false, padding)
     end
 end
+
+has_padding(::ConcreteIFRTArray{T,N,S,Nothing}) where {T,N,S} = false
+has_padding(x::ConcreteIFRTArray{T,N,S,P}) where {T,N,S,P} = !all(iszero, x.padding)
 
 @leaf ConcreteIFRTArray
 
@@ -334,13 +351,16 @@ function ConcreteIFRTArray(
                    arguments will be ignored."
         end
     end
-    sharded_data, sharding = sharding(client, nothing, data)
-    return ConcreteIFRTArray{T,N}(sharded_data, size(data), sharding)
+    sharded_data, sharding, padding = sharding(client, nothing, data)
+    return ConcreteIFRTArray{T,N,typeof(sharding)}(
+        sharded_data, size(data), sharding, padding
+    )
 end
 
 # Assemble data from multiple arrays. Needed in distributed setting where each process wont
 # have enough host memory to hold all the arrays. We assume that the data is only provided
 # for all of the addressable devices.
+# TODO: Implement Padding for this version. A bit more finicky that the above case
 function ConcreteIFRTArray(
     data::Vector{Array{T,N}},
     array_size::Dims{N},

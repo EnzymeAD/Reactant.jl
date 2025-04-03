@@ -88,9 +88,16 @@ function Base.isempty(x::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray
 end
 
 function Base.convert(::Type{<:Array}, X::AbstractConcreteArray{T,N}) where {T,N}
-    data = Array{T,N}(undef, size(X)...)
-    write_to_host_buffer!(data, X)
-    return data
+    if has_padding(X)
+        padding = get_padding(X)
+        data = Array{T,N}(undef, (size(X) .+ padding)...)
+        write_to_host_buffer!(data, X)
+        return view(data, [1:size(X, i) for i in 1:ndims(X)]...)
+    else
+        data = Array{T,N}(undef, size(X)...)
+        write_to_host_buffer!(data, X)
+        return data
+    end
 end
 
 function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,N}
