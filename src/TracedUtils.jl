@@ -586,15 +586,10 @@ function make_mlir_fn(
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
     mesh_cache = Reactant.Compiler.sdycache()
-    is_sharded = !isempty(mesh_cache)
+    is_sharded =
+        !isempty(mesh_cache) || (output_shardings !== nothing && !isempty(output_shardings))
 
     if is_sharded
-        unique_meshes = [m.mesh for m in values(mesh_cache)]
-        sorted_devices = [m.device_ids for m in unique_meshes]
-        @assert allequal(sorted_devices) "All meshes must have the same device ids"
-        global_device_ids = first(sorted_devices)
-        num_partitions = length(first(unique_meshes)) ÷ num_replicas
-
         linear_arg_shardings = Vector{Tuple{MLIR.IR.Attribute,Symbol}}(
             undef, length(linear_args)
         )
@@ -674,11 +669,13 @@ function make_mlir_fn(
             for (i, arg) in enumerate(linear_results)
                 if haskey(output_shardings, i)
                     sharding = output_shardings[i]
-                    (; sym_name, mesh_attr) = mesh_cache[(
+                    key = (
                         sharding.mesh.logical_device_ids,
                         sharding.mesh.axis_names,
                         size(sharding.mesh),
-                    )]
+                    )
+                    haskey(mesh_cache, key) || Reactant.Ops.mesh(sharding.mesh)
+                    (; sym_name, mesh_attr) = mesh_cache[key]
                     attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
                         sharding, ctx, sym_name, mesh_attr, size(arg)
                     )
@@ -692,6 +689,12 @@ function make_mlir_fn(
                 end
             end
         end
+
+        unique_meshes = [m.mesh for m in values(mesh_cache)]
+        sorted_devices = [m.device_ids for m in unique_meshes]
+        @assert allequal(sorted_devices) "All meshes must have the same device ids"
+        global_device_ids = first(sorted_devices)
+        num_partitions = length(first(unique_meshes)) ÷ num_replicas
     else
         global_device_ids = ()
         unique_meshes = nothing
