@@ -641,10 +641,18 @@ function optimization_passes(;
         "slice_reduce_window<1>",
         "while_deadresult",
         "while_dus",
+        "while_licm",
+        "while_op_induction_replacement",
+        "dus_pad",
+        "dus_concat",
     ]
 
     if WHILE_CONCAT[]
         push!(transform_passes_list, "while_concat")
+    end
+
+    if DUS_TO_CONCAT[]
+        push!(transform_passes_list, "dus_to_concat")
     end
 
     if reshape_propagate === :up
