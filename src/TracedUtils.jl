@@ -348,7 +348,7 @@ function make_mlir_fn(
             raw_arg = MLIR.IR.argument(fnbody, i)
             row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
             carg = inv_map[arg]
-            if !Reactant.zero_padding(carg)
+            if Reactant.has_padding(carg)
                 padding = Reactant.get_padding(carg)
                 sz = size(carg) .+ padding
                 if !do_transpose
@@ -525,7 +525,7 @@ function make_mlir_fn(
         vals = Vector{MLIR.IR.Value}(undef, length(linear_results))
 
         for (i, res) in enumerate(linear_results)
-            if res in keys(inv_map) && !Reactant.zero_padding(inv_map[res])
+            if res in keys(inv_map) && Reactant.has_padding(inv_map[res])
                 carg = inv_map[res]
                 padding = Reactant.get_padding(carg)
                 sz = size(carg) .+ padding

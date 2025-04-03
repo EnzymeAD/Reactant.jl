@@ -31,10 +31,6 @@ function get_padding(x)
     end
     return ntuple(Returns(0), ndims(x))
 end
-function zero_padding(x)
-    has_padding(x) && return all(iszero, x.padding)
-    return true
-end
 
 # Traced Types
 
@@ -310,8 +306,7 @@ mutable struct ConcreteIFRTArray{
 end
 
 has_padding(::ConcreteIFRTArray{T,N,S,Nothing}) where {T,N,S} = false
-has_padding(::ConcreteIFRTArray{T,N,S,P}) where {T,N,S,P} = true
-zero_padding(x::ConcreteIFRTArray) = all(iszero, x.padding)
+has_padding(x::ConcreteIFRTArray{T,N,S,P}) where {T,N,S,P} = !all(iszero, x.padding)
 
 @leaf ConcreteIFRTArray
 
