@@ -1249,17 +1249,13 @@ function compile_mlir!(
     end
 
     # Now we resolve paddings
-    inv_map = IdDict()
     padded_inputs = IdDict()
     has_padded_inputs = false
     for (k, v) in seen_args
         v isa Reactant.TracedType || continue
-        inv_map[v] = k
         if Reactant.has_padding(k)
             has_padded_inputs = true
             padded_inputs[v] = Reactant.get_padding(k)
-        else
-            padded_inputs[v] = nothing
         end
     end
 
@@ -1317,9 +1313,9 @@ function compile_mlir!(
 
             for i in input_arg_padded_idxs
                 arg = linear_args[i]
+                padding = padded_inputs[arg]
 
                 block_arg = MLIR.IR.argument(fnbody, i)
-                padding = padded_inputs[arg]
                 unpad_op = Reactant.TracedUtils.unpad_val_op(
                     block_arg, reverse(padding), reverse(size(arg) .+ padding)
                 )
