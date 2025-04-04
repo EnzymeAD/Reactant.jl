@@ -91,7 +91,11 @@
 
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
+#include "shardy/dialect/sdy/transforms/export/passes.h"
+#include "shardy/dialect/sdy/transforms/import/passes.h"
 #include "shardy/dialect/sdy/transforms/passes.h"
+#include "shardy/dialect/sdy/transforms/propagation/passes.h"
+#include "shardy/dialect/sdy/transforms/propagation/user_priority_propagation.h"
 #include "shardy/integrations/c/attributes.h"
 #include "xla/pjrt/mlir_to_hlo.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
@@ -2558,4 +2562,21 @@ extern "C" HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
       absl::MakeSpan(&spec, 1),
       static_cast<ifrt::Client::HostBufferSemantics>(c_host_buffer_semantics)));
   return reactant::capture(arrays[0]);
+}
+
+extern "C" void addSdyPropagationPipeline(
+    mlir::OpPassManager &pm, bool keepShardingRules /*false*/,
+    bool conservativePropagation /*false*/, bool debugShardingOrigins /*false*/,
+    bool debugPropagationEdgeSharding /*false*/,
+    bool skipConvertToReshard /*false*/, bool skipInline /*false*/,
+    bool enableInsertExplicitCollectives /*false*/) {
+  const mlir::sdy::PropagationOptions options{keepShardingRules,
+                                              "",
+                                              conservativePropagation,
+                                              debugShardingOrigins,
+                                              debugPropagationEdgeSharding,
+                                              skipConvertToReshard,
+                                              skipInline,
+                                              enableInsertExplicitCollectives};
+  mlir::sdy::addPropagationPipeline(pm, options);
 }
