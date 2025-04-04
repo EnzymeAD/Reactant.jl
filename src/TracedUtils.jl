@@ -159,19 +159,16 @@ Base.@nospecializeinfer function transpose_val(
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-Base.@nospecializeinfer function unpad_val(
+Base.@nospecializeinfer function unpad_val_op(
     @nospecialize(val::MLIR.IR.Value), padding, sz
-)::MLIR.IR.Value
+)::MLIR.IR.Operation
     start_indices = zeros(Int64, length(padding))
     limit_indices = collect(Int64, sz) .- padding
-    return MLIR.IR.result(
-        MLIR.Dialects.stablehlo.slice(
-            val;
-            start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
-            limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
-            strides=MLIR.IR.DenseArrayAttribute(ones(Int64, length(padding))),
-        ),
-        1,
+    return MLIR.Dialects.stablehlo.slice(
+        val;
+        start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
+        limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
+        strides=MLIR.IR.DenseArrayAttribute(ones(Int64, length(padding))),
     )
 end
 
@@ -259,11 +256,9 @@ function make_mlir_fn(
     end
 
     linear_args = Reactant.TracedType[]
-    inv_map = IdDict()
     for (k, v) in seen_args
         v isa Reactant.TracedType || continue
         push!(linear_args, v)
-        inv_map[v] = k
     end
 
     in_tys = if toscalar
@@ -273,9 +268,9 @@ function make_mlir_fn(
             ) for arg in linear_args
         ]
     elseif do_transpose
-        MLIR.IR.Type[transpose_ty(Ops.mlir_type(inv_map[arg])) for arg in linear_args]
+        MLIR.IR.Type[transpose_ty(Ops.mlir_type(arg)) for arg in linear_args]
     else
-        MLIR.IR.Type[Ops.mlir_type(inv_map[arg]) for arg in linear_args]
+        MLIR.IR.Type[Ops.mlir_type(arg) for arg in linear_args]
     end
 
     sym_visibility = nothing
@@ -347,18 +342,7 @@ function make_mlir_fn(
         for (i, arg) in enumerate(linear_args)
             raw_arg = MLIR.IR.argument(fnbody, i)
             row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
-            carg = inv_map[arg]
-            if Reactant.has_padding(carg)
-                padding = Reactant.get_padding(carg)
-                sz = size(carg) .+ padding
-                if !do_transpose
-                    padding = reverse(padding)
-                    sz = reverse(sz)
-                end
-                set_mlir_data!(arg, unpad_val(row_maj_arg, padding, sz))
-            else
-                set_mlir_data!(arg, row_maj_arg)
-            end
+            set_mlir_data!(arg, row_maj_arg)
         end
 
         if isempty(kwargs)
@@ -525,39 +509,15 @@ function make_mlir_fn(
         vals = Vector{MLIR.IR.Value}(undef, length(linear_results))
 
         for (i, res) in enumerate(linear_results)
-            if res in keys(inv_map) && Reactant.has_padding(inv_map[res])
-                carg = inv_map[res]
-                padding = Reactant.get_padding(carg)
-                sz = size(carg) .+ padding
-                if !do_transpose
-                    padding = reverse(padding)
-                    sz = reverse(sz)
-                end
-
-                res = Ops.pad(
-                    res,
-                    promote_to(TracedRNumber{Reactant.unwrapped_eltype(res)}, 0);
-                    high=collect(Int, padding),
-                )
-
-                if do_transpose
-                    col_maj = transpose_val(get_mlir_data(res))
-                    out_ty = transpose_ty(Ops.mlir_type(res))
-                else
-                    col_maj = get_mlir_data(res)
-                    out_ty = Ops.mlir_type(res)
-                end
-            else
-                if res isa MissingTracedValue
-                    col_maj = get_mlir_data(broadcast_to_size(false, ()))
-                    out_ty = mlir_type(TracedRArray{Bool,0}, ())
-                elseif !do_transpose
-                    col_maj = get_mlir_data(res)
-                    out_ty = Ops.mlir_type(res)
-                elseif do_transpose
-                    col_maj = transpose_val(get_mlir_data(res))
-                    out_ty = transpose_ty(Ops.mlir_type(res))
-                end
+            if res isa MissingTracedValue
+                col_maj = get_mlir_data(broadcast_to_size(false, ()))
+                out_ty = mlir_type(TracedRArray{Bool,0}, ())
+            elseif !do_transpose
+                col_maj = get_mlir_data(res)
+                out_ty = Ops.mlir_type(res)
+            elseif do_transpose
+                col_maj = transpose_val(get_mlir_data(res))
+                out_ty = transpose_ty(Ops.mlir_type(res))
             end
 
             vals[i] = col_maj
