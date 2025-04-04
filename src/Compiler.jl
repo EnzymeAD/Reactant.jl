@@ -788,12 +788,12 @@ end
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
 
-function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
+function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    MLIR.IR.run!(pm, mod)
+    MLIR.IR.run!(pm, mod, key)
     return mod
 end
 
@@ -1122,6 +1122,7 @@ function compile_mlir!(
                 ],
                 ",",
             ),
+            "all",
         )
     elseif optimize === :before_kernel
         run_pass_pipeline!(
@@ -1139,6 +1140,7 @@ function compile_mlir!(
                 ],
                 ',',
             ),
+            "before_kernel",
         )
     elseif optimize === :before_jit
         run_pass_pipeline!(
@@ -1158,6 +1160,7 @@ function compile_mlir!(
                 ],
                 ',',
             ),
+            "before_jit",
         )
     elseif optimize === :before_raise
         run_pass_pipeline!(
@@ -1176,6 +1179,7 @@ function compile_mlir!(
                 ],
                 ',',
             ),
+            "before_raise",
         )
     elseif optimize === :no_enzyme
         run_pass_pipeline!(
@@ -1193,6 +1197,7 @@ function compile_mlir!(
                 ],
                 ',',
             ),
+            "only_enzyme",
         )
     elseif optimize === :only_enzyme
         run_pass_pipeline!(
@@ -1207,6 +1212,7 @@ function compile_mlir!(
                 ],
                 ',',
             ),
+            "after_enzyme",
         )
     elseif optimize === :after_enzyme
         run_pass_pipeline!(
@@ -1225,6 +1231,7 @@ function compile_mlir!(
                 ],
                 ',',
             ),
+            "before_enzyme",
         )
     elseif optimize === :before_enzyme
         run_pass_pipeline!(
@@ -1242,11 +1249,12 @@ function compile_mlir!(
                 ],
                 ',',
             ),
+            "after_enzyme",
         )
     elseif optimize === :canonicalize
-        run_pass_pipeline!(mod, "canonicalize")
+        run_pass_pipeline!(mod, "canonicalize", "canonicalize")
     elseif optimize === :just_batch
-        run_pass_pipeline!(mod, "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme-batch", "enzyme-batch")
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
     end
@@ -1256,6 +1264,7 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             "enzyme-hlo-generate-td{patterns=transpose_while},transform-interpreter,enzyme-hlo-remove-transform",
+            "transpose_while",
         )
     end
 
@@ -1264,7 +1273,9 @@ function compile_mlir!(
         # We tried propagating reshapes and transposes up. If at this point we are left with
         # them, we propagate them down to minimize the number of Ops in the IR.
         run_pass_pipeline!(
-            mod, optimization_passes(; transpose_propagate=:down, reshape_propagate=:down)
+            mod,
+            optimization_passes(; transpose_propagate=:down, reshape_propagate=:down),
+            "post_op_transpose_reshape",
         )
     end
 
@@ -1277,10 +1288,12 @@ function compile_mlir!(
 
         if shardy_passes isa Sharding.ShardyPropagationOptions
             run_pass_pipeline!(mod_copied, shardy_passes)
-            run_pass_pipeline!(mod_copied, "sdy-close-shardings")
+            run_pass_pipeline!(mod_copied, "sdy-close-shardings", "sdy_close_shardings")
         else
             run_pass_pipeline!(
-                mod_copied, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+                mod_copied,
+                join(["sdy-propagation-pipeline", "sdy-close-shardings"], ","),
+                "sdy_prop_capture_res_shardings",
             )
         end
 
@@ -1309,7 +1322,9 @@ function compile_mlir!(
             # sdy passes are run deep inside the XLA compiler. So the only way to respect
             # the options is to export them to MHLO shardings
             run_pass_pipeline!(
-                mod, join(["sdy-close-shardings", "xla-sdy-stablehlo-export-pipeline"], ",")
+                mod,
+                join(["sdy-close-shardings", "xla-sdy-stablehlo-export-pipeline"], ","),
+                "sdy_export",
             )
         elseif shardy_passes == :to_mhlo_shardings
             run_pass_pipeline!(
@@ -1322,6 +1337,7 @@ function compile_mlir!(
                     ],
                     ",",
                 ),
+                "to_mhlo_shardings",
             )
         else
             error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")

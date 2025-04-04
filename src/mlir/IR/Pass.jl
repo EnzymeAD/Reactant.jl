@@ -144,7 +144,7 @@ end
 
 Run the provided `passManager` on the given `module`.
 """
-function run!(pm::PassManager, mod::Module, key::String = "")
+function run!(pm::PassManager, mod::Module, key::String="")
     # Dump MLIR before running the pass manager.  We set `pm` to nothing because
     # the pass manager isn't called yet here.
     DUMP_MLIR_ALWAYS[] && dump_mlir(mod, nothing, isempty(key) ? "pre_pm" : "pre_$(key)_pm")
