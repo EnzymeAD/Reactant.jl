@@ -1260,6 +1260,8 @@ function compile_mlir!(
     end
 
     if has_padded_inputs
+        MLIR.IR.DUMP_MLIR_ALWAYS[] && MLIR.IR.dump_mlir(mod, nothing, "pre_padding")
+
         in_tys_padded = Vector{MLIR.IR.Type}(undef, length(linear_args))
         input_arg_padded_idxs = Int[]
         for (i, arg) in enumerate(linear_args)
@@ -1359,7 +1361,10 @@ function compile_mlir!(
         end
 
         if optimize === :all # we just need the ops to potentially remove slices / paddings
-            run_pass_pipeline!(mod, opt_passes)
+            run_pass_pipeline!(
+                mod,
+                join([opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2], ","),
+            )
         end
 
         MLIR.API.mlirOperationDestroy(compiled_f.operation)
