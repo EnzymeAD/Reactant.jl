@@ -2556,6 +2556,7 @@ extern "C" HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
       sharding);
   auto arrays = MyValueOrThrow(client->MakeArraysFromHostBufferShards(
       absl::MakeSpan(&spec, 1),
-      static_cast<ifrt::Client::HostBufferSemantics>(c_host_buffer_semantics)));
+      static_cast<ifrt::Client::HostBufferSemantics>(c_host_buffer_semantics),
+      client->CreateUserContext()));
   return reactant::capture(arrays[0]);
 }
