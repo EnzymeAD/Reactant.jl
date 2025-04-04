@@ -797,6 +797,26 @@ function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
     return mod
 end
 
+function run_pass_pipeline!(
+    mod, propagation_options::Sharding.ShardyPropagationOptions; enable_verifier=true
+)
+    pm = MLIR.IR.PassManager()
+    MLIR.IR.enable_verifier!(pm, enable_verifier)
+    opm = MLIR.IR.OpPassManager(pm)
+    @ccall MLIR.API.mlir_c.addSdyPropagationPipeline(
+        opm::MLIR.API.MlirOpPassManager,
+        propagation_options.keep_sharding_rules::UInt8,
+        propagation_options.conservative_propagation::UInt8,
+        propagation_options.debug_sharding_origins::UInt8,
+        propagation_options.debug_propagation_edge_sharding::UInt8,
+        propagation_options.skip_convert_to_reshard::UInt8,
+        propagation_options.skip_inline::UInt8,
+        propagation_options.enable_insert_explicit_collectives::UInt8,
+    )::Cvoid
+    MLIR.IR.run!(pm, mod, "sdy_prop")
+    return mod
+end
+
 const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedRNumber}}}()
 
 # helper for debug purposes: String -> Text
@@ -936,7 +956,8 @@ function compile_mlir!(
     callcache=default_callcache(),
     sdycache=default_sdycache();
     optimize::Union{Bool,Symbol}=true,
-    shardy_passes::Symbol=:to_mhlo_shardings, # :none | :to_mhlo_shardings
+    # :none | :to_mhlo_shardings or Sharding.ShardyPropagationOptions
+    shardy_passes::Union{Symbol,Sharding.ShardyPropagationOptions}=:to_mhlo_shardings,
     no_nan::Bool=false,
     transpose_propagate::Symbol=:up,
     reshape_propagate::Symbol=:up,
@@ -1254,9 +1275,14 @@ function compile_mlir!(
         module_op = copy(MLIR.IR.Operation(mod))
         mod_copied = MLIR.IR.Module(module_op)
 
-        run_pass_pipeline!(
-            mod_copied, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
-        )
+        if shardy_passes isa Sharding.ShardyPropagationOptions
+            run_pass_pipeline!(mod_copied, shardy_passes)
+            run_pass_pipeline!(mod_copied, "sdy-close-shardings")
+        else
+            run_pass_pipeline!(
+                mod_copied, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+            )
+        end
 
         func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), "main")
         @assert func_op.ptr !== C_NULL
@@ -1278,6 +1304,13 @@ function compile_mlir!(
 
         if shardy_passes == :none
             use_shardy_partitioner = true
+        elseif shardy_passes isa Sharding.ShardyPropagationOptions
+            run_pass_pipeline!(mod, shardy_passes)
+            # sdy passes are run deep inside the XLA compiler. So the only way to respect
+            # the options is to export them to MHLO shardings
+            run_pass_pipeline!(
+                mod, join(["sdy-close-shardings", "xla-sdy-stablehlo-export-pipeline"], ",")
+            )
         elseif shardy_passes == :to_mhlo_shardings
             run_pass_pipeline!(
                 mod,
