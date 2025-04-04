@@ -496,6 +496,7 @@ cc_library(
 "-Wl,-exported_symbol,_dump_operation",
 "-Wl,-exported_symbol,_hlo_sharding_*",
 "-Wl,-exported_symbol,_free_ifrt_sharding",
+"-Wl,-exported_symbol,_addSdyPropagationPipeline",
     ]}),
     deps = [
                 "@enzyme//:EnzymeMLIR",
@@ -613,6 +614,8 @@ cc_library(
         "@stablehlo//:stablehlo_capi_objects",
         "@stablehlo//:chlo_capi_objects",
         "@shardy//shardy/integrations/c:sdy_capi_objects",
+        "@shardy//shardy/dialect/sdy/transforms:passes",
+        "@shardy//shardy/dialect/sdy/transforms/propagation:passes",
         "@com_google_absl//absl/hash:hash",
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
