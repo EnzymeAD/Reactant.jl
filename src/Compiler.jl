@@ -648,6 +648,7 @@ function optimization_passes(;
         "dus_pad",
         "dus_concat",
         "slice_dus_to_concat",
+        "slice_broadcast",
     ]
 
     if WHILE_CONCAT[]
