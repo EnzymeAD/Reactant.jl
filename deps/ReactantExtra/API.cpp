@@ -2565,18 +2565,20 @@ extern "C" HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
 }
 
 extern "C" void addSdyPropagationPipeline(
-    mlir::OpPassManager &pm, bool keepShardingRules /*false*/,
-    bool conservativePropagation /*false*/, bool debugShardingOrigins /*false*/,
-    bool debugPropagationEdgeSharding /*false*/,
-    bool skipConvertToReshard /*false*/, bool skipInline /*false*/,
-    bool enableInsertExplicitCollectives /*false*/) {
-  const mlir::sdy::PropagationOptions options{keepShardingRules,
+    mlir::OpPassManager &pm, uint8_t keepShardingRules /*false*/,
+    uint8_t conservativePropagation /*false*/,
+    uint8_t debugShardingOrigins /*false*/,
+    uint8_t debugPropagationEdgeSharding /*false*/,
+    uint8_t skipConvertToReshard /*false*/, uint8_t skipInline /*false*/,
+    uint8_t enableInsertExplicitCollectives /*false*/) {
+  const mlir::sdy::PropagationOptions options{keepShardingRules != 0,
                                               "",
-                                              conservativePropagation,
-                                              debugShardingOrigins,
-                                              debugPropagationEdgeSharding,
-                                              skipConvertToReshard,
-                                              skipInline,
-                                              enableInsertExplicitCollectives};
+                                              conservativePropagation != 0,
+                                              debugShardingOrigins != 0,
+                                              debugPropagationEdgeSharding != 0,
+                                              skipConvertToReshard != 0,
+                                              skipInline != 0,
+                                              enableInsertExplicitCollectives !=
+                                                  0};
   mlir::sdy::addPropagationPipeline(pm, options);
 }
