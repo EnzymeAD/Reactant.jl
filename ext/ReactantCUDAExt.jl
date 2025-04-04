@@ -1378,7 +1378,7 @@ function Reactant.make_tracer(
 end
 
 function __init__()
-    if CUDA.functional()
+    if CUDA.functional() && !Reactant.precompiling()
         target = CUDA._compiler_config(CUDA.device()).target
         Reactant.Compiler.cubinChip[] = "sm_$(target.cap.major)$(target.cap.minor)"
     end
