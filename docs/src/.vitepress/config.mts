@@ -16,7 +16,7 @@ export default defineConfig({
   description: "Documentation for Reactant.jl",
   cleanUrls: true,
   outDir: 'REPLACE_ME_DOCUMENTER_VITEPRESS', // This is required for MarkdownVitepress to work correctly...
-  ignoreDeadLinks: false, // tested in Documenter.jl directly
+  ignoreDeadLinks: true, // tested in Documenter.jl directly
   lastUpdated: true,
   
   head: [
