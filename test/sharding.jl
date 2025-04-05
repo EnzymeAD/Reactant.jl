@@ -441,3 +441,21 @@ end
         @warn "Not enough addressable devices to run sharding tests"
     end
 end
+
+@testset "ShardyPropagationOptions" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(0:7, 2, 4), (:x, :y))
+
+        x_ra = Reactant.to_rarray(
+            randn(Float32, 4, 4); sharding=Sharding.NamedSharding(mesh, (:x, :y))
+        )
+
+        shardy_options = Sharding.ShardyPropagationOptions(;
+            enable_insert_explicit_collectives=true, conservative_propagation=true
+        )
+
+        @test (@jit shardy_passes = shardy_options fn_test2(x_ra)) ≈ fn_test2(x_ra)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end

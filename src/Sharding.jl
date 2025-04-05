@@ -1101,4 +1101,19 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
     )
 end
 
+"""
+    ShardyPropagationOptions
+
+Fine-grained control over the sharding propagation pipeline.
+"""
+@kwdef struct ShardyPropagationOptions
+    keep_sharding_rules::Bool = false
+    conservative_propagation::Bool = false
+    debug_sharding_origins::Bool = false
+    debug_propagation_edge_sharding::Bool = false
+    skip_convert_to_reshard::Bool = false
+    skip_inline::Bool = false
+    enable_insert_explicit_collectives::Bool = false
+end
+
 end
