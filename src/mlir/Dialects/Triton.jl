@@ -422,6 +422,130 @@ function clampf(
 end
 
 """
+`descriptor_gather`
+
+The `tt.desciptor_gather` op will be lowered to NVIDIA TMA
+load operations on targets that support it.
+
+`desc_ptr` is a pointer to the TMA descriptor allocated in global memory.
+The descriptor block must have 1 row and the indices must be a 1D tensor.
+Accordingly, the result is a 2D tensor multiple rows.
+
+This is an escape hatch and is only there for testing/experimenting. This
+op will be removed in the future.
+"""
+function descriptor_gather(
+    desc::Value, x_offsets::Value, y_offset::Value; result::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[desc, x_offsets, y_offset]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.descriptor_gather",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`descriptor_load`
+
+This operation will be lowered to Nvidia TMA load operation on targets supporting it.
+`desc` is a tensor descriptor object.
+The destination tensor type and shape must match the descriptor otherwise the result is undefined.
+
+This is an escape hatch and is only there for testing/experimenting.
+This op will be removed in the future.
+"""
+function descriptor_load(
+    desc::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    cache=nothing,
+    evict=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[desc, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(cache) && push!(attributes, namedattribute("cache", cache))
+    !isnothing(evict) && push!(attributes, namedattribute("evict", evict))
+
+    return create_operation(
+        "tt.descriptor_load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function descriptor_scatter(
+    desc::Value, x_offsets::Value, y_offset::Value, src::Value; location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[desc, x_offsets, y_offset, src]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.descriptor_scatter",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`descriptor_store`
+
+This operation will be lowered to Nvidia TMA store operation on targets supporting it.
+`desc` is a tensor descriptor object.
+The shape and types of `src` must match the descriptor otherwise the result is undefined.
+
+This is an escape hatch and is only there for testing/experimenting.
+This op will be removed in the future.
+"""
+function descriptor_store(
+    desc::Value, src::Value, indices::Vector{Value}; location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[desc, src, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.descriptor_store",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `dot`
 
 \$d = matrix_multiply(\$a, \$b) + \$c. \$inputPrecision describes how to exercise the TC
@@ -576,130 +700,6 @@ function expand_dims(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
-    )
-end
-
-"""
-`experimental_descriptor_gather`
-
-The `tt.experimental_desciptor_gather` op will be lowered to NVIDIA TMA
-load operations on targets that support it.
-
-`desc_ptr` is a pointer to the TMA descriptor allocated in global memory.
-The descriptor block must have 1 row and the indices must be a 1D tensor.
-Accordingly, the result is a 2D tensor multiple rows.
-
-This is an escape hatch and is only there for testing/experimenting. This
-op will be removed in the future.
-"""
-function experimental_descriptor_gather(
-    desc::Value, x_offsets::Value, y_offset::Value; result::IR.Type, location=Location()
-)
-    op_ty_results = IR.Type[result,]
-    operands = Value[desc, x_offsets, y_offset]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.experimental_descriptor_gather",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`experimental_descriptor_load`
-
-This operation will be lowered to Nvidia TMA load operation on targets supporting it.
-`desc` is a tensor descriptor object.
-The destination tensor type and shape must match the descriptor otherwise the result is undefined.
-
-This is an escape hatch and is only there for testing/experimenting.
-This op will be removed in the future.
-"""
-function experimental_descriptor_load(
-    desc::Value,
-    indices::Vector{Value};
-    result::IR.Type,
-    cache=nothing,
-    evict=nothing,
-    location=Location(),
-)
-    op_ty_results = IR.Type[result,]
-    operands = Value[desc, indices...]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(cache) && push!(attributes, namedattribute("cache", cache))
-    !isnothing(evict) && push!(attributes, namedattribute("evict", evict))
-
-    return create_operation(
-        "tt.experimental_descriptor_load",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-function experimental_descriptor_scatter(
-    desc::Value, x_offsets::Value, y_offset::Value, src::Value; location=Location()
-)
-    op_ty_results = IR.Type[]
-    operands = Value[desc, x_offsets, y_offset, src]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.experimental_descriptor_scatter",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`experimental_descriptor_store`
-
-This operation will be lowered to Nvidia TMA store operation on targets supporting it.
-`desc` is a tensor descriptor object.
-The shape and types of `src` must match the descriptor otherwise the result is undefined.
-
-This is an escape hatch and is only there for testing/experimenting.
-This op will be removed in the future.
-"""
-function experimental_descriptor_store(
-    desc::Value, src::Value, indices::Vector{Value}; location=Location()
-)
-    op_ty_results = IR.Type[]
-    operands = Value[desc, src, indices...]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.experimental_descriptor_store",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
     )
 end
 

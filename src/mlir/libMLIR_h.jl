@@ -2738,6 +2738,17 @@ function mlirAffineExprShiftSymbols(affineExpr, numSymbols, shift, offset)
 end
 
 """
+    mlirSimplifyAffineExpr(expr, numDims, numSymbols)
+
+Simplify an affine expression by flattening and some amount of simple analysis. This has complexity linear in the number of nodes in 'expr'. Returns the simplified expression, which is the same as the input expression if it can't be simplified. When `expr` is semi-affine, a simplified semi-affine expression is constructed in the sorted order of dimension and symbol positions.
+"""
+function mlirSimplifyAffineExpr(expr, numDims, numSymbols)
+    @ccall mlir_c.mlirSimplifyAffineExpr(
+        expr::MlirAffineExpr, numDims::UInt32, numSymbols::UInt32
+    )::MlirAffineExpr
+end
+
+"""
     mlirAffineExprIsADim(affineExpr)
 
 Checks whether the given affine expression is a dimension expression.
@@ -10482,7 +10493,7 @@ function sdyOpShardingRuleAttrGet(
         needReplicationFactors::Ptr{Int64},
         nPermutationFactors::intptr_t,
         permutationFactors::Ptr{Int64},
-        nBlockedPropagationFactors::Int64,
+        nBlockedPropagationFactors::intptr_t,
         blockedPropagationFactors::Ptr{Int64},
         isCustomRule::Bool,
     )::MlirAttribute
