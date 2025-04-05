@@ -504,6 +504,8 @@ function call(
     op_bundle_tags=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
+    no_inline=nothing,
+    always_inline=nothing,
     access_groups=nothing,
     alias_scopes=nothing,
     noalias_scopes=nothing,
@@ -539,6 +541,9 @@ function call(
         push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
     !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+    !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
+    !isnothing(always_inline) &&
+        push!(attributes, namedattribute("always_inline", always_inline))
     !isnothing(access_groups) &&
         push!(attributes, namedattribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
@@ -1179,32 +1184,34 @@ end
 """
 `mlir_global_ctors`
 
-Specifies a list of constructor functions and priorities. The functions
-referenced by this array will be called in ascending order of priority (i.e.
-lowest first) when the module is loaded. The order of functions with the
-same priority is not defined. This operation is translated to LLVM\'s
-global_ctors global variable. The initializer functions are run at load
-time. The `data` field present in LLVM\'s global_ctors variable is not
-modeled here.
+Specifies a list of constructor functions, priorities, and associated data.
+The functions referenced by this array will be called in ascending order
+of priority (i.e. lowest first) when the module is loaded. The order of
+functions with the same priority is not defined. This operation is
+translated to LLVM\'s global_ctors global variable. The initializer
+functions are run at load time. However, if the associated data is not
+`#llvm.zero`, functions only run if the data is not discarded.
 
 Examples:
 
 ```mlir
-llvm.mlir.global_ctors {@ctor}
-
 llvm.func @ctor() {
   ...
   llvm.return
 }
+llvm.mlir.global_ctors ctors = [@ctor], priorities = [0],
+                               data = [#llvm.zero]
 ```
 """
-function mlir_global_ctors(; ctors, priorities, location=Location())
+function mlir_global_ctors(; ctors, priorities, data, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("ctors", ctors), namedattribute("priorities", priorities)
+        namedattribute("ctors", ctors),
+        namedattribute("priorities", priorities),
+        namedattribute("data", data),
     ]
 
     return create_operation(
@@ -1223,11 +1230,12 @@ end
 `mlir_global_dtors`
 
 Specifies a list of destructor functions and priorities. The functions
-referenced by this array will be called in descending order of priority (i.e.
-highest first) when the module is unloaded. The order of functions with the
-same priority is not defined. This operation is translated to LLVM\'s
-global_dtors global variable. The `data` field present in LLVM\'s
-global_dtors variable is not modeled here.
+referenced by this array will be called in descending order of priority
+(i.e. highest first) when the module is unloaded. The order of functions
+with the same priority is not defined. This operation is translated to
+LLVM\'s global_dtors global variable. The destruction functions are run at
+load time. However, if the associated data is not `#llvm.zero`, functions
+only run if the data is not discarded.
 
 Examples:
 
@@ -1235,16 +1243,19 @@ Examples:
 llvm.func @dtor() {
   llvm.return
 }
-llvm.mlir.global_dtors {@dtor}
+llvm.mlir.global_dtors dtors = [@dtor], priorities = [0],
+                               data = [#llvm.zero]
 ```
 """
-function mlir_global_dtors(; dtors, priorities, location=Location())
+function mlir_global_dtors(; dtors, priorities, data, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dtors", dtors), namedattribute("priorities", priorities)
+        namedattribute("dtors", dtors),
+        namedattribute("priorities", priorities),
+        namedattribute("data", data),
     ]
 
     return create_operation(
