@@ -23,7 +23,7 @@ end
 ```
 
 !!! note
-    When profiling compiled functions make sure to [`@compile`](@ref) with the `sync=true` option so that the compiled execution is captured by the profiler.
+    When profiling compiled functions make sure to [`Reactant.Compiler.@compile`](@ref) with the `sync=true` option so that the compiled execution is captured by the profiler.
 
 """
 function with_profiler(

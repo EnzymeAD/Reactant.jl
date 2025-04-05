@@ -219,7 +219,7 @@ value of equal bit width. When operating on vectors, casts elementwise.
 
 Note that this implements a logical bitcast independent of target
 endianness. This allows constant folding without target information and is
-consitent with the bitcast constant folders in LLVM (see
+consistent with the bitcast constant folders in LLVM (see
 https://github.com/llvm/llvm-project/blob/18c19414eb/llvm/lib/IR/ConstantFold.cpp#L168)
 For targets where the source and target type have the same endianness (which
 is the standard), this cast will also change no bits at runtime, but it may
@@ -253,7 +253,7 @@ end
 
 Signed integer division. Rounds towards positive infinity, i.e. `7 / -2 = -3`.
 
-Divison by zero, or signed division overflow (minimum value divided by -1) 
+Division by zero, or signed division overflow (minimum value divided by -1) 
 is undefined behavior. When applied to `vector` and `tensor` values, the 
 behavior is undefined if _any_ of its elements are divided by zero or has a 
 signed division overflow.
@@ -419,16 +419,16 @@ main reason being that comparison operations have diverging sets of
 attributes: integers require sign specification while floats require various
 floating point-related particularities, e.g., `-ffast-math` behavior,
 IEEE754 compliance, etc
-([rationale](../Rationale/Rationale.md#splitting-floating-point-vs-integer-operations)).
+([rationale](https://mlir.llvm.org/docs/Rationale/Rationale/#splitting-floating-point-vs-integer-operations)).
 The type of comparison is specified as attribute to avoid introducing ten
 similar operations, taking into account that they are often implemented
 using the same operation downstream
-([rationale](../Rationale/Rationale.md#specifying-comparison-kind-as-attribute)). The
+([rationale](https://mlir.llvm.org/docs/Rationale/Rationale/#specifying-comparison-kind-as-attribute)). The
 separation between signed and unsigned order comparisons is necessary
 because of integers being signless. The comparison operation must know how
 to interpret values with the foremost bit being set: negatives in two\'s
 complement or large positives
-([rationale](../Rationale/Rationale.md#specifying-sign-in-integer-comparison-operations)).
+([rationale](https://mlir.llvm.org/docs/Rationale/Rationale/#specifying-sign-in-integer-comparison-operations)).
 
 # Example
 
