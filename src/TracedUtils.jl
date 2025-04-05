@@ -213,6 +213,7 @@ function make_mlir_fn(
     argprefix::Symbol=:args,
     resprefix::Symbol=:result,
     resargprefix::Symbol=:resargs,
+    include_paths=[],
     num_replicas=1,
     optimize_then_pad::Bool=true,
 )
@@ -252,7 +253,7 @@ function make_mlir_fn(
     end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, args[i], (argprefix, i), inmode; toscalar, runtime
+            seen_args, args[i], (argprefix, i), inmode; toscalar, runtime, include_paths
         )
     end
 
@@ -410,6 +411,7 @@ function make_mlir_fn(
                 (resargprefix, i),
                 Reactant.NoStopTracedTrack;
                 runtime,
+                include_paths=[],
             )
         end
         traced_result
