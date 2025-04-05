@@ -206,7 +206,7 @@ element type of the memref.
 
 A set `nontemporal` attribute indicates that this load is not expected to
 be reused in the cache. For details, refer to the
-[https://llvm.org/docs/LangRef.html#load-instruction](LLVM load instruction).
+[LLVM load instruction](https://llvm.org/docs/LangRef.html#load-instruction).
 
 # Example
 
@@ -315,7 +315,7 @@ end
 The `alloca` operation allocates memory on the stack, to be automatically
 released when control transfers back from the region of its closest
 surrounding operation with an
-[`AutomaticAllocationScope`](../Traits.md/#automaticallocationscope) trait.
+[`AutomaticAllocationScope`](https://mlir.llvm.org/docs/Traits/#automaticallocationscope) trait.
 The amount of memory allocated is specified by its memref and additional
 operands. For example:
 
@@ -1238,7 +1238,7 @@ memref.
 ```
 
 If the result memref has a dynamic shape, a result dimension operand is
-needed to spefify its dynamic dimension. In the example below, the ssa value
+needed to specify its dynamic dimension. In the example below, the ssa value
 \'%d\' specifies the unknown dimension of the result memref.
 
 ```mlir
@@ -1431,7 +1431,7 @@ be in-bounds: `0 <= idx < dim_size`
 
 A set `nontemporal` attribute indicates that this store is not expected to
 be reused in the cache. For details, refer to the
-[https://llvm.org/docs/LangRef.html#store-instruction](LLVM store instruction).
+[LLVM store instruction](https://llvm.org/docs/LangRef.html#store-instruction).
 
 # Example
 

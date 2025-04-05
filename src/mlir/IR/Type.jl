@@ -440,7 +440,7 @@ isvector(type::Type) = API.mlirTypeIsAVector(type)
     TensorType(shape, elementType, encoding=Attribute(); location=Location(), check=false)
 
 Creates a tensor type of a fixed rank with the given shape, element type, and optional encoding in the same context as the element type.
-The type is owned by the context. Tensor types without any specific encoding field should assign [`mlirAttributeGetNull`](@ref) to this parameter.
+The type is owned by the context. Tensor types without any specific encoding field should assign [`Reactant.MLIR.API.mlirAttributeGetNull`](@ref) to this parameter.
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
 Base.@nospecializeinfer function TensorType(

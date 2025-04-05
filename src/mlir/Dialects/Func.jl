@@ -121,7 +121,7 @@ to a `func.func` operation
 MLIR does not allow direct references to functions in SSA operands because
 the compiler is multithreaded, and disallowing SSA values to directly
 reference a function simplifies this
-([rationale](../Rationale/Rationale.md#multithreading-the-compiler)).
+([rationale](https://mlir.llvm.org/docs/Rationale/Rationale/#multithreading-the-compiler)).
 """
 function constant(; result_0::IR.Type, value, location=Location())
     op_ty_results = IR.Type[result_0,]
