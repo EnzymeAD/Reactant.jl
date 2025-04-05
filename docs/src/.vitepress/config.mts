@@ -3,6 +3,7 @@ import { tabsMarkdownPlugin } from "vitepress-plugin-tabs";
 import mathjax3 from "markdown-it-mathjax3";
 import footnote from "markdown-it-footnote";
 import { transformerMetaWordHighlight } from "@shikijs/transformers";
+import path from 'path'
 
 const baseTemp = {
   base: 'REPLACE_ME_DOCUMENTER_VITEPRESS', // TODO: replace this in makedocs!
@@ -24,6 +25,11 @@ export default defineConfig({
     ['script', { src: `${baseTemp.base}siteinfo.js` }],
   ],
   vite: {
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '../components')
+      }
+    },
     optimizeDeps: {
       exclude: [ 
         '@nolebase/vitepress-plugin-enhanced-readabilities/client',
