@@ -935,6 +935,7 @@ function compile_mlir!(
     args,
     callcache=default_callcache(),
     sdycache=default_sdycache();
+    fn_kwargs=(),
     optimize::Union{Bool,Symbol}=true,
     shardy_passes::Symbol=:to_mhlo_shardings, # :none | :to_mhlo_shardings
     no_nan::Bool=false,
@@ -942,14 +943,12 @@ function compile_mlir!(
     reshape_propagate::Symbol=:up,
     assert_nonallocating::Bool=false,
     backend="gpu",
-    fn_kwargs=(),
     raise::Union{Bool,String}=false,
-    input_shardings=nothing,
-    output_shardings=nothing,
-    do_transpose=true,
-    runtime::Union{Val{:PJRT},Val{:IFRT}},
     # TODO: allow more fine-grained options to control the donation of specific arguments
     donated_args::Symbol=:auto, # :auto | :none
+    optimize_then_pad::Bool=true,
+    runtime::Union{Val{:PJRT},Val{:IFRT}},
+    kwargs...,
 )
     @assert donated_args ∈ (:auto, :none)
 
@@ -970,17 +969,10 @@ function compile_mlir!(
     is_raising = raise isa String || raise
     activate_raising!(is_raising)
 
+    fnname = string(f)
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(
-            f,
-            args,
-            fn_kwargs,
-            "main",
-            true;
-            input_shardings,
-            output_shardings,
-            runtime,
-            do_transpose,
+            f, args, fn_kwargs, fnname, true; runtime, optimize_then_pad, kwargs...
         )
     finally
         deactivate_raising!(is_raising)
@@ -1247,6 +1239,144 @@ function compile_mlir!(
         )
     end
 
+    # Now we resolve paddings if `optimize_then_pad`
+    if optimize_then_pad
+        padded_inputs = IdDict()
+        has_padded_inputs = false
+        for (k, v) in seen_args
+            v isa Reactant.TracedType || continue
+            if Reactant.has_padding(k)
+                has_padded_inputs = true
+                padded_inputs[v] = Reactant.get_padding(k)
+            end
+        end
+
+        if has_padded_inputs
+            MLIR.IR.DUMP_MLIR_ALWAYS[] && MLIR.IR.dump_mlir(mod, nothing, "pre_padding")
+
+            in_tys_padded = Vector{MLIR.IR.Type}(undef, length(linear_args))
+            input_arg_padded_idxs = Int[]
+            for (i, arg) in enumerate(linear_args)
+                if haskey(padded_inputs, arg)
+                    push!(input_arg_padded_idxs, i)
+                    in_tys_padded[i] = MLIR.IR.TensorType(
+                        collect(Int, reverse(size(arg) .+ padded_inputs[arg])),
+                        MLIR.IR.Type(Reactant.unwrapped_eltype(arg)),
+                    )
+                else
+                    in_tys_padded[i] = in_tys[i]
+                end
+            end
+
+            out_tys_padded = Vector{MLIR.IR.Type}(undef, length(linear_results))
+            output_res_padded_idxs = Int[]
+            for (i, res) in enumerate(linear_results)
+                if haskey(padded_inputs, res)
+                    push!(output_res_padded_idxs, i)
+                    out_tys_padded[i] = MLIR.IR.TensorType(
+                        collect(Int, reverse(size(res) .+ padded_inputs[res])),
+                        MLIR.IR.Type(Reactant.unwrapped_eltype(res)),
+                    )
+                else
+                    out_tys_padded[i] = Reactant.TracedUtils.transpose_ty(
+                        Reactant.Ops.mlir_type(res)
+                    )
+                end
+            end
+
+            fnname_old = fnname
+            fnname = string(f, "_padded")
+            func_with_padding = MLIR.Dialects.func.func_(;
+                sym_name=fnname,
+                function_type=MLIR.IR.FunctionType(in_tys_padded, out_tys_padded),
+                arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
+                res_attrs=MLIR.IR.attr(compiled_f, "res_attrs"),
+                no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
+                body=MLIR.IR.Region(),
+                sym_visibility=MLIR.IR.attr(compiled_f, "private"),
+            )
+            fnbody = MLIR.IR.Block(
+                in_tys_padded, [MLIR.IR.Location() for _ in in_tys_padded]
+            )
+            push!(MLIR.IR.region(func_with_padding, 1), fnbody)
+            MLIR.IR.activate!(fnbody)
+            push!(MLIR.IR.body(mod), func_with_padding)
+
+            try
+                call_args = MLIR.IR.Value[
+                    MLIR.IR.argument(fnbody, i) for i in 1:length(linear_args)
+                ]
+
+                for i in input_arg_padded_idxs
+                    arg = linear_args[i]
+                    padding = padded_inputs[arg]
+
+                    block_arg = MLIR.IR.argument(fnbody, i)
+                    unpad_op = Reactant.TracedUtils.unpad_val_op(
+                        block_arg, reverse(padding), reverse(size(arg) .+ padding)
+                    )
+
+                    call_args[i] = MLIR.IR.result(unpad_op, 1)
+                end
+
+                ftype = MLIR.IR.Type(MLIR.IR.attr(compiled_f, "function_type"))
+                call_op = MLIR.Dialects.func.call(
+                    call_args;
+                    result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
+                    callee=MLIR.IR.FlatSymbolRefAttribute(fnname_old),
+                )
+
+                results = MLIR.IR.Value[
+                    MLIR.IR.result(call_op, i) for i in 1:MLIR.IR.nresults(call_op)
+                ]
+
+                for i in output_res_padded_idxs
+                    res = linear_results[i]
+                    padding = padded_inputs[res]
+
+                    pad_op = MLIR.Dialects.stablehlo.pad(
+                        results[i],
+                        Reactant.TracedUtils.promote_to(
+                            TracedRNumber{Reactant.unwrapped_eltype(res)}, 0
+                        ).mlir_data;
+                        edge_padding_low=MLIR.IR.DenseArrayAttribute(
+                            fill(0, length(padding))
+                        ),
+                        edge_padding_high=MLIR.IR.DenseArrayAttribute(
+                            collect(reverse(padding))
+                        ),
+                        interior_padding=MLIR.IR.DenseArrayAttribute(
+                            fill(0, length(padding))
+                        ),
+                    )
+
+                    results[i] = MLIR.IR.result(pad_op, 1)
+                end
+
+                ret = MLIR.Dialects.func.return_(results)
+            finally
+                MLIR.IR.deactivate!(fnbody)
+            end
+
+            # we just need the ops to potentially remove slices / paddings
+            if optimize === :all
+                run_pass_pipeline!(
+                    mod,
+                    join(
+                        [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2],
+                        ",",
+                    ),
+                )
+            end
+
+            MLIR.API.mlirOperationDestroy(compiled_f.operation)
+            compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
+
+            compiled_f = func_with_padding
+            in_tys = in_tys_padded
+        end
+    end
+
     # shardy passes
     use_shardy_partitioner = false
     result_shardings = missing
@@ -1258,7 +1388,7 @@ function compile_mlir!(
             mod_copied, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
         )
 
-        func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), "main")
+        func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), fnname)
         @assert func_op.ptr !== C_NULL
         func_op_new_module = MLIR.IR.Operation(func_op)
 
@@ -1440,6 +1570,7 @@ macro code_hlo(args...)
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1472,6 +1603,7 @@ macro code_mhlo(args...)
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1504,6 +1636,7 @@ macro code_xla(args...)
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1536,6 +1669,7 @@ macro compile(args...)
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1557,6 +1691,7 @@ macro jit(args...)
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...

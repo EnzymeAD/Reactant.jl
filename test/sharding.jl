@@ -263,6 +263,7 @@ end
         @test Array(@jit shardy_passes = :none sum(x_ra; dims=2)) ≈ sum(x; dims=2)
         @test Array(@jit shardy_passes = :to_mhlo_shardings sum(x_ra; dims=2)) ≈
             sum(x; dims=2)
+        @test Array(@jit optimize_then_pad = false sum(x_ra; dims=2)) ≈ sum(x; dims=2)
 
         x = reshape(collect(Float32, 1:25), 5, 5)
         x_ra = Reactant.to_rarray(
@@ -271,6 +272,7 @@ end
 
         @test Array(@jit shardy_passes = :none fn_test2(x_ra)) ≈ fn_test2(x)
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test2(x_ra)) ≈ fn_test2(x)
+        @test Array(@jit optimize_then_pad = false fn_test2(x_ra)) ≈ fn_test2(x)
 
         @testset "Handle Sub-Axis Info" begin
             @test Reactant.to_rarray(

@@ -16,16 +16,11 @@ using ReactantCore: ReactantCore
 using Functors: fmap
 
 function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
-    sz = collect(Int, size(x))
-    if Reactant.has_padding(x)
-        sz .+= Reactant.get_padding(x)
-    end
-    return MLIR.IR.TensorType(sz, MLIR.IR.Type(unwrapped_eltype(x)))
+    return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
 end
 
 mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 
-# TODO: Handle padding????
 function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
     return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))

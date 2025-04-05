@@ -159,19 +159,16 @@ Base.@nospecializeinfer function transpose_val(
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 
-Base.@nospecializeinfer function unpad_val(
+Base.@nospecializeinfer function unpad_val_op(
     @nospecialize(val::MLIR.IR.Value), padding, sz
-)::MLIR.IR.Value
+)::MLIR.IR.Operation
     start_indices = zeros(Int64, length(padding))
     limit_indices = collect(Int64, sz) .- padding
-    return MLIR.IR.result(
-        MLIR.Dialects.stablehlo.slice(
-            val;
-            start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
-            limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
-            strides=MLIR.IR.DenseArrayAttribute(ones(Int64, length(padding))),
-        ),
-        1,
+    return MLIR.Dialects.stablehlo.slice(
+        val;
+        start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
+        limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
+        strides=MLIR.IR.DenseArrayAttribute(ones(Int64, length(padding))),
     )
 end
 
@@ -217,6 +214,7 @@ function make_mlir_fn(
     resprefix::Symbol=:result,
     resargprefix::Symbol=:resargs,
     num_replicas=1,
+    optimize_then_pad::Bool=true,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -266,16 +264,22 @@ function make_mlir_fn(
         inv_map[v] = k
     end
 
-    in_tys = if toscalar
-        MLIR.IR.Type[
-            MLIR.IR.TensorType(
-                Vector{Int}(undef, 0), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-            ) for arg in linear_args
-        ]
-    elseif do_transpose
-        MLIR.IR.Type[transpose_ty(Ops.mlir_type(inv_map[arg])) for arg in linear_args]
-    else
-        MLIR.IR.Type[Ops.mlir_type(inv_map[arg]) for arg in linear_args]
+    in_tys = Vector{MLIR.IR.Type}(undef, length(linear_args))
+    for (i, arg) in enumerate(linear_args)
+        elT = MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
+        if toscalar
+            in_tys[i] = MLIR.IR.TensorType(Int[], elT)
+        else
+            sz = collect(Int, size(arg))
+            if !optimize_then_pad
+                carg = inv_map[arg]
+                Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
+            end
+
+            typ = MLIR.IR.TensorType(sz, elT)
+            do_transpose && (typ = transpose_ty(typ))
+            in_tys[i] = typ
+        end
     end
 
     sym_visibility = nothing
@@ -347,18 +351,19 @@ function make_mlir_fn(
         for (i, arg) in enumerate(linear_args)
             raw_arg = MLIR.IR.argument(fnbody, i)
             row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
-            carg = inv_map[arg]
-            if Reactant.has_padding(carg)
-                padding = Reactant.get_padding(carg)
-                sz = size(carg) .+ padding
-                if !do_transpose
-                    padding = reverse(padding)
-                    sz = reverse(sz)
+            if !optimize_then_pad
+                carg = inv_map[arg]
+                if Reactant.has_padding(carg)
+                    padding = Reactant.get_padding(carg)
+                    sz = size(carg) .+ padding
+                    if !do_transpose
+                        padding = reverse(padding)
+                        sz = reverse(sz)
+                    end
+                    row_maj_arg = MLIR.IR.result(unpad_val_op(row_maj_arg, padding, sz), 1)
                 end
-                set_mlir_data!(arg, unpad_val(row_maj_arg, padding, sz))
-            else
-                set_mlir_data!(arg, row_maj_arg)
             end
+            set_mlir_data!(arg, row_maj_arg)
         end
 
         if isempty(kwargs)
@@ -525,7 +530,7 @@ function make_mlir_fn(
         vals = Vector{MLIR.IR.Value}(undef, length(linear_results))
 
         for (i, res) in enumerate(linear_results)
-            if res in keys(inv_map) && Reactant.has_padding(inv_map[res])
+            if !optimize_then_pad && haskey(inv_map, res) && Reactant.has_padding(inv_map[res])
                 carg = inv_map[res]
                 padding = Reactant.get_padding(carg)
                 sz = size(carg) .+ padding
@@ -539,24 +544,18 @@ function make_mlir_fn(
                     promote_to(TracedRNumber{Reactant.unwrapped_eltype(res)}, 0);
                     high=collect(Int, padding),
                 )
+            end
+
+            if res isa MissingTracedValue
+                col_maj = get_mlir_data(broadcast_to_size(false, ()))
+                out_ty = Ops.mlir_type(TracedRArray{Bool,0}, ())
+            else
+                col_maj = get_mlir_data(res)
+                out_ty = Ops.mlir_type(res)
 
                 if do_transpose
-                    col_maj = transpose_val(get_mlir_data(res))
-                    out_ty = transpose_ty(Ops.mlir_type(res))
-                else
-                    col_maj = get_mlir_data(res)
-                    out_ty = Ops.mlir_type(res)
-                end
-            else
-                if res isa MissingTracedValue
-                    col_maj = get_mlir_data(broadcast_to_size(false, ()))
-                    out_ty = mlir_type(TracedRArray{Bool,0}, ())
-                elseif !do_transpose
-                    col_maj = get_mlir_data(res)
-                    out_ty = Ops.mlir_type(res)
-                elseif do_transpose
-                    col_maj = transpose_val(get_mlir_data(res))
-                    out_ty = transpose_ty(Ops.mlir_type(res))
+                    col_maj = transpose_val(col_maj)
+                    out_ty = transpose_ty(out_ty)
                 end
             end
 
