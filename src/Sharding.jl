@@ -1118,4 +1118,22 @@ Fine-grained control over the sharding propagation pipeline.
     enable_insert_explicit_collectives::Bool = false
 end
 
+"""
+    disassemble_into_single_device_arrays(x)
+
+Disassembles a sharded array into a vector of single device shards. Each element in the
+returned vector is a pair mapping the array slices to the single device shard. To transfer
+the data to host, call `Array` on the single device shards.
+
+!!! note
+
+    For distributed arrays, each process only returns the shards that are addressable to
+    that process.
+
+!!! warning
+
+    Only supported for IFRT runtime.
+"""
+function disassemble_into_single_device_arrays end
+
 end
