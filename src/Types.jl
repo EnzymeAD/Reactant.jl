@@ -434,6 +434,43 @@ function ConcreteIFRTArray{T,N}(x::AnyConcreteIFRTArray; kwargs...) where {T,N}
     )
 end
 
+function Sharding.disassemble_into_single_device_arrays(
+    x::ConcreteIFRTArray{T,N,<:Sharding.ShardInfo{<:Sharding.NoSharding}}
+) where {T,N}
+    return [ntuple(Returns(Colon()), N) => x]
+end
+
+function Sharding.disassemble_into_single_device_arrays(
+    x::ConcreteIFRTArray{T,N}
+) where {T,N}
+    single_device_shards = XLA.IFRT.disassemble_into_single_device_arrays(x.data, true)
+
+    padded_size = size(x) .+ get_padding(x)
+    @show padded_size
+    @show size(x)
+    @show get_padding(x)
+
+    if x.sharding.sharding isa Sharding.HloSharding
+        (; hlo_sharding) = x.sharding.sharding
+    else
+        (; hlo_sharding) = Sharding.HloSharding(x.sharding.sharding, padded_size)
+    end
+
+    all_devices = XLA.get_device.((XLA.client(x),), x.sharding.mesh.device_ids)
+    array_slices, _ = XLA.sharding_to_concrete_array_indices(
+        convert(XLA.CondensedOpSharding, hlo_sharding),
+        padded_size,
+        x.sharding.mesh.logical_device_ids,
+    )
+    return [
+        slice => ConcreteIFRTArray{T,N}(
+            XLA.IFRT.AsyncArray(shard, nothing), length.(slice), Sharding.NoShardInfo()
+        ) for
+        (slice, shard, device) in zip(array_slices, single_device_shards, all_devices) if
+        XLA.is_addressable(device)
+    ]
+end
+
 ## ConcreteRNG
 mutable struct ConcreteRNG{S<:AbstractConcreteArray} <: Random.AbstractRNG
     seed::S
