@@ -459,6 +459,7 @@ end
 
 const WHILE_CONCAT = Ref(false)
 const DUS_TO_CONCAT = Ref(false)
+const SUM_TO_CONV = Ref(false)
 
 # Optimization passes via transform dialect
 function optimization_passes(;
@@ -656,13 +657,16 @@ function optimization_passes(;
         "slice_broadcast",
         "while_pad_induction_reduction",
         "while_licm<1>(1)",
-        "sum_to_conv",
         "associative_common_mul_op_reordering",
         "slice_select_to_select_slice",
         "pad_concat_to_concat_pad",
         "slice_if",
         "dus_to_i32",
     ]
+
+    if SUM_TO_CONV[]
+        push!(transform_passes_list, "sum_to_conv")
+    end
 
     if WHILE_CONCAT[]
         push!(transform_passes_list, "while_concat")
