@@ -33,9 +33,7 @@ end
 function Base.deepcopy_internal(
     x::Union{AbstractConcreteArray,AbstractConcreteNumber}, stackdict::IdDict
 )
-    if haskey(stackdict, x)
-        return stackdict[x]::typeof(x)
-    end
+    haskey(stackdict, x) && return stackdict[x]
     return deepcopy(x)
 end
 
