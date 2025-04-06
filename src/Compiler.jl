@@ -956,7 +956,7 @@ function compile_mlir!(
     callcache=default_callcache(),
     sdycache=default_sdycache();
     fn_kwargs=(),
-    optimize::Union{Bool,Symbol}=true,
+    optimize::Union{Bool,Symbol,String}=true,
     # :none | :to_mhlo_shardings or Sharding.ShardyPropagationOptions
     shardy_passes::Union{Symbol,Sharding.ShardyPropagationOptions}=:to_mhlo_shardings,
     no_nan::Bool=false,
@@ -1247,6 +1247,8 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "canonicalize", "canonicalize")
     elseif optimize === :just_batch
         run_pass_pipeline!(mod, "enzyme-batch", "enzyme-batch")
+    elseif optimize isa String
+        run_pass_pipeline!(mod, optimize, optimize)
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
     end
