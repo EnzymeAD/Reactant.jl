@@ -145,8 +145,7 @@ end
 Run the provided `passManager` on the given `module`.
 """
 function run!(pm::PassManager, mod::Module, key::String="")
-    # Dump MLIR before running the pass manager.  We set `pm` to nothing because
-    # the pass manager isn't called yet here.
+    # Dump MLIR before running the pass manager, but also print the list of passes that will be called later.
     DUMP_MLIR_ALWAYS[] && dump_mlir(mod, pm, isempty(key) ? "pre_pm" : "pre_$(key)_pm")
     status = LogicalResult(@static if isdefined(API, :mlirPassManagerRunOnOp)
         API.mlirPassManagerRunOnOp(pm, Operation(mod))
