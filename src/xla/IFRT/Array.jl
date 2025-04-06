@@ -86,6 +86,9 @@ function Array(
     # and seems to cause issues with IFRT-PJRT
     all_addressable_devices = filter(XLA.is_addressable, XLA.devices(sharding))
 
+    @assert isempty(all_addressable_devices) "`IFRT.Array` requires atleast one \
+                                              addressable device per process."
+
     single_device_arrays = Vector{Ptr{Nothing}}(
         undef, sum(length, addressable_shard_indices)
     )
