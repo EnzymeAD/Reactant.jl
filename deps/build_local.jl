@@ -85,7 +85,7 @@ if isempty(arg)
         Cmd(
             `bazel build -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
             --repo_env HERMETIC_PYTHON_VERSION="3.10"
-            --check_visibility=false --verbose_failures :libReactantExtra.so`;
+            --check_visibility=false --verbose_failures :libReactantExtra.so @enzyme_ad//:enzymexlamlir-opt`;
             dir=source_dir,
         ),
     )
@@ -94,7 +94,7 @@ else
         Cmd(
             `bazel build $(arg) -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
             --repo_env HERMETIC_PYTHON_VERSION="3.10"
-            --check_visibility=false --verbose_failures :libReactantExtra.so`;
+            --check_visibility=false --verbose_failures :libReactantExtra.so :enzymexlamlir-opt`;
             dir=source_dir,
         ),
     )
