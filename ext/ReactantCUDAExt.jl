@@ -415,7 +415,9 @@ function threads_to_workgroupsize(threads, ndrange)
     end
 end
 
-function ReactantKernelAbstractionsExt.ka_with_reactant(ndrange, workgroupsize, obj, args...)
+function ReactantKernelAbstractionsExt.ka_with_reactant(
+    ndrange, workgroupsize, obj, args...
+)
     backend = KA.backend(obj)
 
     ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
