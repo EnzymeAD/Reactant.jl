@@ -95,15 +95,15 @@ function overloaded_conv!(
         collect(Int, size(y)), Reactant.MLIR.IR.Type(T)
     )
 
-    weight = W
-    if !flipkernel
-        weight = Reactant.Ops.reverse(weight; dimensions=kernel_spatial_dims)
-    end
-
     conv = Reactant.MLIR.Dialects.stablehlo.convolution(
         get_mlir_data(x),
-        get_mlir_data(weight);
+        get_mlir_data(W);
         result_0=result_type,
+        window_reversal=if flipkernel
+            nothing
+        else
+            [true for _ in 1:length(kernel_spatial_dims)]
+        end,
         window_strides=collect(stride),
         padding,
         dimension_numbers,
