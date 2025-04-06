@@ -274,7 +274,7 @@ function __init__()
             print(
                 io,
                 "\nAttempted to raise a KernelAbstractions kernel with Reactant \
-                   but CUDA.jl is not loaded. Load CUDA.jl using `using CUDA`. You might \
+                   but CUDA.jl is not loaded.\nLoad CUDA.jl using `using CUDA`. You might \
                    need to restart the Julia process (even if Revise.jl is loaded).",
             )
         end
