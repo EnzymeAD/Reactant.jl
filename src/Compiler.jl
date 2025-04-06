@@ -654,6 +654,14 @@ function optimization_passes(;
         "elementwise_licm(0)",
         "concatenate_licm(0)",
         "slice_broadcast",
+        "while_pad_induction_reduction",
+        "while_licm<1>(1)",
+        "sum_to_conv",
+        "associative_common_mul_op_reordering",
+        "slice_select_to_select_slice",
+        "pad_concat_to_concat_pad",
+        "slice_if",
+        "dus_to_i32",
     ]
 
     if WHILE_CONCAT[]
