@@ -9,12 +9,15 @@ using KernelAbstractions: KernelAbstractions
 import KernelAbstractions as KA
 using LLVM: LLVM
 using Libdl
+
 const ReactantKernelAbstractionsExt = Base.get_extension(
     Reactant, :ReactantKernelAbstractionsExt
 )
 const ReactantBackend = ReactantKernelAbstractionsExt.ReactantBackend
 
 using Adapt
+
+Reactant.is_extension_loaded(::Val{:CUDA}) = true
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
@@ -412,7 +415,9 @@ function threads_to_workgroupsize(threads, ndrange)
     end
 end
 
-function ka_with_reactant(ndrange, workgroupsize, obj, args...)
+function ReactantKernelAbstractionsExt.ka_with_reactant(
+    ndrange, workgroupsize, obj, args...
+)
     backend = KA.backend(obj)
 
     ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
@@ -463,17 +468,6 @@ function ka_with_reactant(ndrange, workgroupsize, obj, args...)
     kernel(ctx, args...; threads, blocks)
 
     return nothing
-end
-
-Reactant.@reactant_overlay @noinline Base.@nospecializeinfer function (
-    obj::KA.Kernel{ReactantBackend}
-)(
-    args...; ndrange=nothing, workgroupsize=nothing
-)
-    @nospecialize
-    return Reactant.call_with_reactant(
-        ka_with_reactant, ndrange, workgroupsize, obj, args...
-    )
 end
 
 Adapt.adapt_storage(to::KA.ConstAdaptor, a::CuTracedArray) = Base.Experimental.Const(a)

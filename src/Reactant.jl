@@ -13,6 +13,8 @@ using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import
 
 export @allowscalar # re-exported from GPUArraysCore
 
+is_extension_loaded(::Val) = false
+
 # auxiliary types and functions
 include("OrderedIdDict.jl")
 
@@ -266,6 +268,18 @@ function __init__()
     else
         @warn "Reactant_jll isn't availble for your platform $(Reactant_jll.host_platform)"
     end
+
+    Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
+        if string(exc.f) == "ka_with_reactant" && !is_extension_loaded(Val(:CUDA))
+            print(
+                io,
+                "\nAttempted to raise a KernelAbstractions kernel with Reactant \
+                   but CUDA.jl is not loaded.\nLoad CUDA.jl using `using CUDA`. You might \
+                   need to restart the Julia process (even if Revise.jl is loaded).",
+            )
+        end
+    end
+
     return nothing
 end
 
