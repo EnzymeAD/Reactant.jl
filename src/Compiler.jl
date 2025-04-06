@@ -713,7 +713,7 @@ function optimization_passes(;
             [
                 "transpose_while",
                 "transpose_slice",
-                "transpose_elementwise",
+                "transpose_elementwise(0)",
                 "transpose_concat",
                 "transpose_iota",
                 "transpose_reduce",
