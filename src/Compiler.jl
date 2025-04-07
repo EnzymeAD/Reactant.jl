@@ -668,6 +668,7 @@ function optimization_passes(;
         "pad_concat_to_concat_pad",
         "slice_if",
         "dus_to_i32",
+        "dus_slice_simplify",
     ]
 
     if SUM_TO_REDUCEWINDOW[]
