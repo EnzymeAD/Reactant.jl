@@ -1090,7 +1090,7 @@ function compile_mlir!(
         # TODO remove redundant libdevice raise after fixing phase ordering
         result =
             "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,raise-affine-to-stablehlo{prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}," *
-            opt_passes2
+            ifelse(optimize isa String, optimize, opt_passes2)
 
         if DUS_TO_CONCAT[]
             opt_passes3 = optimization_passes(;
@@ -1274,7 +1274,8 @@ function compile_mlir!(
         )
     end
 
-    if optimize ∉ (:none, :just_batch, :canonicalize) &&
+    if !(optimize isa String) &&
+        optimize ∉ (:none, :just_batch, :canonicalize) &&
         (transpose_propagate === :up || reshape_propagate === :up)
         # We tried propagating reshapes and transposes up. If at this point we are left with
         # them, we propagate them down to minimize the number of Ops in the IR.
