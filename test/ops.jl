@@ -981,6 +981,25 @@ end
             y_reactant,
         )
     )[1] ≈ x .+ y
+
+    @test Float32(
+        only(
+            Reactant.@jit(
+                Ops.hlo_call(
+                    """
+                    module {
+                      func.func @main(%arg0: tensor<f32>, %arg1: tensor<f32>) -> tensor<f32> {
+                        %0 = stablehlo.add %arg0, %arg1 : tensor<f32>
+                        return %0 : tensor<f32>
+                      }
+                    }
+                    """,
+                    Reactant.ConcreteRNumber(2.0f0),
+                    Reactant.ConcreteRNumber(2.0f0),
+                )
+            )
+        ),
+    ) == 4.0f0
 end
 
 function f_repeat(x, y)

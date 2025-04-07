@@ -1572,16 +1572,16 @@ julia> Reactant.@jit(
     ftype_attr = MLIR.IR.attr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
-    @assert all(Base.Fix2(isa, Reactant.AnyTracedRArray), args) "hlo_call: all inputs to hlo_call should be reactant arrays"
+    @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
     @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name"
 
     for (i, arg) in enumerate(args)
         expected_type = MLIR.IR.input(ftype, i)
-        arg_type = MLIR.IR.type(arg.mlir_data)
+        arg_type = MLIR.IR.type(Reactant.TracedUtils.get_mlir_data(arg))
         @assert expected_type == arg_type "hlo_call: argument #$i has the wrong type (expected $expected_type, got $arg_type)"
     end
 
-    operands = [a.mlir_data for a in args]
+    operands = MLIR.IR.Value[Reactant.TracedUtils.get_mlir_data(a) for a in args]
     call = MLIR.Dialects.func.call(
         operands;
         result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
