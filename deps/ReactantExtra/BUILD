@@ -633,6 +633,8 @@ cc_library(
             "@xla//xla/service/gpu:gpu_transfer_manager",
             "@xla//xla/stream_executor:kernel",
             "@xla//xla/backends/profiler/gpu:device_tracer",
+            "@xla//xla/backends/profiler:profiler_backends",
+            "@xla//xla/pjrt/c:pjrt_c_api_gpu_internal",
         ],
         "//conditions:default": [
         ],
