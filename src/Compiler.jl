@@ -459,7 +459,10 @@ end
 
 const WHILE_CONCAT = Ref(false)
 const DUS_TO_CONCAT = Ref(false)
+const SUM_TO_REDUCEWINDOW = Ref(false)
 const SUM_TO_CONV = Ref(false)
+const AGGRESSIVE_SUM_TO_CONV = Ref(false)
+const AGGRESSIVE_PROPAGATION = Ref(false)
 
 # Optimization passes via transform dialect
 function optimization_passes(;
@@ -507,6 +510,7 @@ function optimization_passes(;
         "cse_min<16>",
         "cse_max<16>",
         "cse_neg<16>",
+        "cse_abs<16>",
         "cse_concatenate<16>",
         "concatenate_op_canon<16>(1024)",
         "select_op_canon<16>(1024)",
@@ -516,6 +520,8 @@ function optimization_passes(;
         "max_simplify<16>",
         "min_simplify<16>",
         "or_simplify<16>",
+        "xor_simplify<16>",
+        "abs_const_prop<16>",
         "negate_simplify<16>",
         "mul_simplify<16>",
         "div_simplify<16>",
@@ -664,8 +670,14 @@ function optimization_passes(;
         "dus_to_i32",
     ]
 
+    if SUM_TO_REDUCEWINDOW[]
+        push!(transform_passes_list, "sum_to_reducewindow")
+    end
     if SUM_TO_CONV[]
-        push!(transform_passes_list, "sum_to_conv")
+        push!(transform_passes_list, "sum_to_conv(0)")
+    end
+    if AGGRESSIVE_SUM_TO_CONV[]
+        push!(transform_passes_list, "sum_to_conv(1)")
     end
 
     if WHILE_CONCAT[]
@@ -680,9 +692,7 @@ function optimization_passes(;
         append!(
             transform_passes_list,
             [
-                "reshape_elementwise",
                 "reshape_concat",
-                "reshape_slice",
                 "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
@@ -690,6 +700,13 @@ function optimization_passes(;
                 "reshape_pad",
             ],
         )
+        if AGGRESSIVE_PROPAGATION[]
+            push!(transform_passes_list, "reshape_slice(0)")
+            push!(transform_passes_list, "reshape_elementwise(0)")
+        else
+            push!(transform_passes_list, "reshape_slice(1)")
+            push!(transform_passes_list, "reshape_elementwise(1)")
+        end
     elseif reshape_propagate === :down
         append!(
             transform_passes_list,
@@ -711,9 +728,9 @@ function optimization_passes(;
         append!(
             transform_passes_list,
             [
+                "transpose_select",
                 "transpose_while",
                 "transpose_slice",
-                "transpose_elementwise(0)",
                 "transpose_concat",
                 "transpose_iota",
                 "transpose_reduce",
@@ -723,6 +740,11 @@ function optimization_passes(;
                 "transpose_einsum<1>",
             ],
         )
+        if AGGRESSIVE_PROPAGATION[]
+            push!(transform_passes_list, "transpose_elementwise(0)")
+        else
+            push!(transform_passes_list, "transpose_elementwise(1)")
+        end
     elseif transpose_propagate === :down
         append!(
             transform_passes_list,
