@@ -16,7 +16,7 @@ import ...API
 """
 `apply`
 
-The `affine.apply` operation applies an [affine mapping](https://mlir.llvm.org/docs/Dialects/Affine/#affine-maps)
+The `affine.apply` operation applies an [affine mapping](#affine-maps)
 to a list of SSA values, yielding a single SSA value. The number of
 dimension and symbol arguments to `affine.apply` must be equal to the
 respective number of dimensional and symbolic inputs to the affine mapping;
@@ -151,9 +151,9 @@ shorthand-bound ::= ssa-id | `-`? integer-literal
 
 The `affine.for` operation represents an affine loop nest. It has one region
 containing its body. This region must contain one block that terminates with
-[`affine.yield`](https://mlir.llvm.org/docs/Dialects/Affine/#affineyield-affineaffineyieldop). *Note:* when
+[`affine.yield`](#affineyield-mliraffineyieldop). *Note:* when
 `affine.for` is printed in custom format, the terminator is omitted. The
-block has one argument of [`index`](https://mlir.llvm.org/docs/Dialects/Builtin/#indextype) type that
+block has one argument of [`index`](Builtin.md/#indextype) type that
 represents the induction variable of the loop.
 
 The `affine.for` operation executes its body a number of times iterating
@@ -164,7 +164,7 @@ lower bound but does not include the upper bound.
 
 The lower and upper bounds of a `affine.for` operation are represented as an
 application of an affine mapping to a list of SSA values passed to the map.
-The [same restrictions](https://mlir.llvm.org/docs/Dialects/Affine/#restrictions-on-dimensions-and-symbols) hold for
+The [same restrictions](#restrictions-on-dimensions-and-symbols) hold for
 these SSA values as for all bindings of SSA values to dimensions and
 symbols.
 
@@ -296,9 +296,9 @@ iteration space defined by an integer set (a conjunction of affine
 constraints). A single `affine.if` may end with an optional `else` clause.
 
 The condition of the `affine.if` is represented by an
-[integer set](https://mlir.llvm.org/docs/Dialects/Affine/#integer-sets) (a conjunction of affine constraints),
+[integer set](#integer-sets) (a conjunction of affine constraints),
 and the SSA values bound to the dimensions and symbols in the integer set.
-The [same restrictions](https://mlir.llvm.org/docs/Dialects/Affine/#restrictions-on-dimensions-and-symbols) hold for
+The [same restrictions](#restrictions-on-dimensions-and-symbols) hold for
 these SSA values as for all bindings of SSA values to dimensions and
 symbols.
 
@@ -548,7 +548,7 @@ end
 operation ::= ssa-id `=` `affine.min` affine-map-attribute dim-and-symbol-use-list
 ```
 
-The `affine.min` operation applies an [affine mapping](https://mlir.llvm.org/docs/Dialects/Affine/#affine-expressions)
+The `affine.min` operation applies an [affine mapping](#affine-expressions)
 to a list of SSA values, and returns the minimum value of all result
 expressions. The number of dimension and symbol arguments to `affine.min`
 must be equal to the respective number of dimensional and symbolic inputs to
@@ -791,9 +791,9 @@ end
 `vector_load`
 
 The `affine.vector_load` is the vector counterpart of
-[affine.load](https://mlir.llvm.org/docs/Dialects/Affine/#affineload-affineaffineloadop). It reads a slice from a
-[MemRef](https://mlir.llvm.org/docs/Dialects/Builtin/#memreftype), supplied as its first operand,
-into a [vector](https://mlir.llvm.org/docs/Dialects/Builtin/#vectortype) of the same base elemental type.
+[affine.load](#affineload-mliraffineloadop). It reads a slice from a
+[MemRef](Builtin.md/#memreftype), supplied as its first operand,
+into a [vector](Builtin.md/#vectortype) of the same base elemental type.
 The index for each memref dimension is an affine expression of loop induction
 variables and symbols. These indices determine the start position of the read
 within the memref. The shape of the return vector type determines the shape of
@@ -824,7 +824,7 @@ Example 3: 2-dim f32 vector load.
 TODOs:
 * Add support for strided vector loads.
 * Consider adding a permutation map to permute the slice that is read from memory
-(see [vector.transfer_read](https://mlir.llvm.org/docs/Dialects/Vector/#vectortransfer_read-vectortransferreadop)).
+(see [vector.transfer_read](../Vector/#vectortransfer_read-mlirvectortransferreadop)).
 """
 function vector_load(
     memref::Value, indices::Vector{Value}; result::IR.Type, map, location=Location()
@@ -851,9 +851,9 @@ end
 `vector_store`
 
 The `affine.vector_store` is the vector counterpart of
-[affine.store](https://mlir.llvm.org/docs/Dialects/Affine/#affinestore-affineaffinestoreop). It writes a
-[vector](https://mlir.llvm.org/docs/Dialects/Builtin/#vectortype), supplied as its first operand,
-into a slice within a [MemRef](https://mlir.llvm.org/docs/Dialects/Builtin/#memreftype) of the same base
+[affine.store](#affinestore-mliraffinestoreop). It writes a
+[vector](Builtin.md/#vectortype), supplied as its first operand,
+into a slice within a [MemRef](Builtin.md/#memreftype) of the same base
 elemental type, supplied as its second operand.
 The index for each memref dimension is an affine expression of loop
 induction variables and symbols. These indices determine the start position
@@ -886,7 +886,7 @@ affine.vector_store %v0, %0[%i0, %i1] : memref<100x100xf32>, vector<2x8xf32>
 TODOs:
 * Add support for strided vector stores.
 * Consider adding a permutation map to permute the slice that is written to memory
-(see [vector.transfer_write](https://mlir.llvm.org/docs/Dialects/Vector/#vectortransfer_write-vectortransferwriteop)).
+(see [vector.transfer_write](../Vector/#vectortransfer_write-mlirvectortransferwriteop)).
 """
 function vector_store(
     value::Value, memref::Value, indices::Vector{Value}; map, location=Location()
