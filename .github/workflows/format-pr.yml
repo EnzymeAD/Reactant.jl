@@ -23,7 +23,7 @@ jobs:
         shell: julia --color=yes {0}
         run: |
           import Pkg
-          Pkg.add("JuliaFormatter")
+          Pkg.add(; name="JuliaFormatter", version="1")
       - name: Format code
         shell: julia --color=yes {0}
         run: |
