@@ -463,6 +463,7 @@ const SUM_TO_REDUCEWINDOW = Ref(false)
 const SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_PROPAGATION = Ref(false)
+const DUS_SLICE_SIMPLIFY = Ref(true)
 
 # Optimization passes via transform dialect
 function optimization_passes(;
@@ -670,6 +671,9 @@ function optimization_passes(;
         "dus_to_i32",
     ]
 
+    if DUS_SLICE_SIMPLIFY[]
+        push!(transform_passes_list, "dus_slice_simplify")
+    end
     if SUM_TO_REDUCEWINDOW[]
         push!(transform_passes_list, "sum_to_reducewindow")
     end
