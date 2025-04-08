@@ -104,9 +104,8 @@ function ka_with_reactant end # defined in the CUDA extension
 
 Reactant.@reactant_overlay @noinline Base.@nospecializeinfer function (
     obj::KA.Kernel{ReactantBackend}
-)(
-    args...; ndrange=nothing, workgroupsize=nothing
 )
+    (args...; ndrange=nothing, workgroupsize=nothing)
     @nospecialize
     return Reactant.call_with_reactant(
         ka_with_reactant, ndrange, workgroupsize, obj, args...

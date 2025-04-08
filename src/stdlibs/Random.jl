@@ -19,8 +19,9 @@ using ..Reactant:
     unwrapped_eltype
 using Random: Random, AbstractRNG
 
-@noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =
-    Random.rand!(rng, Vector{UInt64}(undef, 2))
+@noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) = Random.rand!(
+    rng, Vector{UInt64}(undef, 2)
+)
 
 @noinline function Random.seed!(rng::TracedRNG, seed::Number)
     if seed isa TracedRNumber
@@ -142,7 +143,9 @@ for randfun in (:rand, :randn, :randexp)
         end
 
         # scalars
-        @noinline function $(overload_randfun)(rng::TracedRNG, ::Type{T}=Float64) where {T}
+        @noinline function $(overload_randfun)(
+            rng::TracedRNG, (::Type{T})=Float64
+        ) where {T}
             A = TracedUtils.promote_to(TracedRArray{T,0}, fill(T(0)))
             $(overload_randfun!)(rng, A)
             return TracedRNumber{T}((), A.mlir_data)

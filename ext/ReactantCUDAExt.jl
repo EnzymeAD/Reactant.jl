@@ -301,10 +301,12 @@ end
 
 Base.IndexStyle(::Type{<:CuTracedArray}) = Base.IndexLinear()
 
-Base.@propagate_inbounds Base.getindex(A::CuTracedArray{T}, i1::Integer) where {T} =
-    arrayref(A, i1)
-Base.@propagate_inbounds Base.setindex!(A::CuTracedArray{T}, x, i1::Integer) where {T} =
-    arrayset(A, convert(T, x)::T, i1)
+Base.@propagate_inbounds Base.getindex(A::CuTracedArray{T}, i1::Integer) where {T} = arrayref(
+    A, i1
+)
+Base.@propagate_inbounds Base.setindex!(A::CuTracedArray{T}, x, i1::Integer) where {T} = arrayset(
+    A, convert(T, x)::T, i1
+)
 
 # preserve the specific integer type when indexing device arrays,
 # to avoid extending 32-bit hardware indices to 64-bit.
@@ -312,9 +314,9 @@ Base.to_index(::CuTracedArray, i::Integer) = i
 
 # Base doesn't like Integer indices, so we need our own ND get and setindex! routines.
 # See also: https://github.com/JuliaLang/julia/pull/42289
-Base.@propagate_inbounds Base.getindex(
-    A::CuTracedArray, I::Union{Integer,CartesianIndex}...
-) = A[Base._to_linear_index(A, to_indices(A, I)...)]
+Base.@propagate_inbounds Base.getindex(A::CuTracedArray, I::Union{Integer,CartesianIndex}...) = A[Base._to_linear_index(
+    A, to_indices(A, I)...
+)]
 Base.@propagate_inbounds Base.setindex!(
     A::CuTracedArray, x, I::Union{Integer,CartesianIndex}...
 ) = A[Base._to_linear_index(A, to_indices(A, I)...)] = x

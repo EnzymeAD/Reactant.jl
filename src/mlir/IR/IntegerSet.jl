@@ -12,8 +12,9 @@ end
 
 Gets or creates a new canonically empty integer set with the give number of dimensions and symbols in the given context.
 """
-IntegerSet(ndims, nsymbols; context::Context=context()) =
+function IntegerSet(ndims, nsymbols; context::Context=context())
     IntegerSet(API.mlirIntegerSetEmptyGet(context, ndims, nsymbols))
+end
 
 """
     IntegerSet(ndims, nsymbols, constraints, eqflags; context=context())
@@ -22,11 +23,13 @@ Gets or creates a new integer set in the given context.
 The set is defined by a list of affine constraints, with the given number of input dimensions and symbols, which are treated as either equalities (eqflags is 1) or inequalities (eqflags is 0).
 Both `constraints` and `eqflags` need to be arrays of the same length.
 """
-IntegerSet(ndims, nsymbols, constraints, eqflags; context::Context=context()) = IntegerSet(
-    API.mlirIntegerSetGet(
-        context, ndims, nsymbols, length(constraints), constraints, eqflags
-    ),
-)
+function IntegerSet(ndims, nsymbols, constraints, eqflags; context::Context=context())
+    IntegerSet(
+        API.mlirIntegerSetGet(
+            context, ndims, nsymbols, length(constraints), constraints, eqflags
+        ),
+    )
+end
 
 """
     mlirIntegerSetReplaceGet(set, dimReplacements, symbolReplacements, numResultDims, numResultSymbols)
@@ -35,15 +38,17 @@ Gets or creates a new integer set in which the values and dimensions of the give
 `dimReplacements` and `symbolReplacements` are expected to point to at least as many consecutive expressions as the given set has dimensions and symbols, respectively.
 The new set will have `numResultDims` and `numResultSymbols` dimensions and symbols, respectively.
 """
-Base.replace(set::IntegerSet, dim_replacements, symbol_replacements) = IntegerSet(
-    API.mlirIntegerSetReplaceGet(
-        set,
-        dim_replacements,
-        symbol_replacements,
-        length(dim_replacements),
-        length(symbol_replacements),
-    ),
-)
+function Base.replace(set::IntegerSet, dim_replacements, symbol_replacements)
+    IntegerSet(
+        API.mlirIntegerSetReplaceGet(
+            set,
+            dim_replacements,
+            symbol_replacements,
+            length(dim_replacements),
+            length(symbol_replacements),
+        ),
+    )
+end
 
 Base.convert(::Core.Type{API.MlirIntegerSet}, set::IntegerSet) = set.set
 

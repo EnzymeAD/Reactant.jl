@@ -277,7 +277,7 @@ end
 
     f = rand(ComplexF64, N, N)
     p = rand(ComplexF64, N * N)
-    I = 1:(N^2)
+    I = 1:(N ^ 2)
     out = rand(ComplexF64, M, M)
 
     fr = Reactant.to_rarray(f)

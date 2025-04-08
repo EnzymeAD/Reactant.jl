@@ -83,10 +83,10 @@ end
             ReactantCacheToken(),
             REACTANT_METHOD_TABLE,
             world,
-            false,            #=forward_rules=#
-            false,            #=reverse_rules=#
-            false,            #=inactive_rules=#
-            false,            #=broadcast_rewrite=#
+            false,
+            false,
+            false,
+            false,
             set_reactant_abi,
         )
     end
@@ -100,10 +100,10 @@ else
             REACTANT_CACHE,
             REACTANT_METHOD_TABLE,
             world,
-            false,            #=forward_rules=#
-            false,            #=reverse_rules=#
-            false,            #=inactive_rules=#
-            false,            #=broadcast_rewrite=#
+            false,
+            false,
+            false,
+            false,
             set_reactant_abi,
         )
     end
@@ -116,20 +116,25 @@ const enzyme_dupnoneed = 3
 const enzyme_outnoneed = 4
 const enzyme_constnoneed = 5
 
-@inline act_from_type(x, reverse, needs_primal=true) =
-    throw(AssertionError("Unhandled activity $(typeof(x))"))
-@inline act_from_type(::Enzyme.Const, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Const, reverse, needs_primal)
-@inline act_from_type(::Enzyme.Duplicated, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Duplicated, reverse, needs_primal)
+@inline act_from_type(x, reverse, needs_primal=true) = throw(
+    AssertionError("Unhandled activity $(typeof(x))")
+)
+@inline act_from_type(::Enzyme.Const, reverse, needs_primal=true) = act_from_type(
+    Enzyme.Const, reverse, needs_primal
+)
+@inline act_from_type(::Enzyme.Duplicated, reverse, needs_primal=true) = act_from_type(
+    Enzyme.Duplicated, reverse, needs_primal
+)
 @inline act_from_type(::Enzyme.DuplicatedNoNeed, reverse, needs_primal=true) =
     reverse ? enzyme_out : enzyme_dupnoneed
-@inline act_from_type(::Enzyme.BatchDuplicated, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Duplicated, reverse, needs_primal)
+@inline act_from_type(::Enzyme.BatchDuplicated, reverse, needs_primal=true) = act_from_type(
+    Enzyme.Duplicated, reverse, needs_primal
+)
 @inline act_from_type(::Enzyme.BatchDuplicatedNoNeed, reverse, needs_primal=true) =
     reverse ? enzyme_out : enzyme_dupnoneed
-@inline act_from_type(::Enzyme.Active, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Active, reverse, needs_primal)
+@inline act_from_type(::Enzyme.Active, reverse, needs_primal=true) = act_from_type(
+    Enzyme.Active, reverse, needs_primal
+)
 @inline act_from_type(::Type{<:Enzyme.Const}, reverse, needs_primal) =
     if needs_primal
         enzyme_const
@@ -151,10 +156,12 @@ const enzyme_constnoneed = 5
         end
     end
 
-@inline act_from_type(::Type{<:Enzyme.BatchDuplicated}, reverse, needs_primal) =
-    act_from_type(Enzyme.Duplicated, reverse, needs_primal)
-@inline act_from_type(::Type{<:Enzyme.BatchDuplicatedNoNeed}, reverse, needs_primal) =
-    act_from_type(Enzyme.DuplicatedNoNeed, Reverse, needs_primal)
+@inline act_from_type(::Type{<:Enzyme.BatchDuplicated}, reverse, needs_primal) = act_from_type(
+    Enzyme.Duplicated, reverse, needs_primal
+)
+@inline act_from_type(::Type{<:Enzyme.BatchDuplicatedNoNeed}, reverse, needs_primal) = act_from_type(
+    Enzyme.DuplicatedNoNeed, Reverse, needs_primal
+)
 
 @inline act_from_type(::Type{<:Enzyme.Active}, reverse, needs_primal) =
     if needs_primal
@@ -498,7 +505,7 @@ function overload_autodiff(
                     false,
                     TracedUtils.transpose_val(MLIR.IR.result(res, residx));
                     emptypaths=true,
-                ) #=reverse=#
+                )
                 residx += 1
                 continue
             end

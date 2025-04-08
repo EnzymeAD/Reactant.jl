@@ -357,7 +357,9 @@ function Base.setindex!(a::ConcreteIFRTArray, v, args::Vararg{Int,N}) where {N}
 end
 
 # TODO is there any way to allocate an uninitialized buffer in XLA?
-function Base.similar(a::ConcretePJRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
+function Base.similar(
+    a::ConcretePJRTArray{T}, (::Type{S})=T, dims::Dims=size(a)
+) where {T,S}
     return ConcretePJRTArray(
         Array{S}(undef, dims); client=XLA.client(a), device=XLA.device(a), a.sharding
     )
@@ -367,7 +369,9 @@ function Base.similar(::Type{ConcretePJRTArray{T}}, dims) where {T}
     return ConcretePJRTArray(similar(Array{T}, dims))
 end
 
-function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
+function Base.similar(
+    a::ConcreteIFRTArray{T}, (::Type{S})=T, dims::Dims=size(a)
+) where {T,S}
     return ConcreteIFRTArray(
         Array{S}(undef, dims); client=XLA.client(a), device=XLA.device(a), a.sharding
     )
@@ -403,7 +407,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
     if all(buffer_on_cpu, bc.args) && all(
         x ->
             !(x isa ConcretePJRTArray) ||
-                (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
+            (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
         bc.args,
     )
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)

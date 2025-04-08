@@ -182,12 +182,10 @@ function trace_for(mod, expr; track_numbers)
     step = length(range.args) == 3 ? 1 : range.args[3]
     limit = range.args[end]
 
-    body_symbols = ExpressionExplorer.compute_symbols_state(
-        quote
-            $(Expr(:local, assign))
-            $body
-        end,
-    )
+    body_symbols = ExpressionExplorer.compute_symbols_state(quote
+        $(Expr(:local, assign))
+        $body
+    end)
 
     external_syms = body_symbols.assignments ∪ body_symbols.references
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
@@ -243,8 +241,8 @@ function trace_for(mod, expr; track_numbers)
                 cond_fn,
                 body_fn,
                 args;
-                track_numbers=$(track_numbers),
-                verify_arg_names=$(QuoteNode(args_names)),
+                track_numbers=($(track_numbers)),
+                verify_arg_names=($(QuoteNode(args_names))),
             )
         end
     end
@@ -420,7 +418,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
             $(true_branch_fn_name),
             $(false_branch_fn_name),
             ($(all_input_vars...),);
-            track_numbers=$(track_numbers),
+            track_numbers=($(track_numbers)),
         )
     end
 

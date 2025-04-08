@@ -58,7 +58,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
             px = materialize_traced_array(parent(x))
             row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
             col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
-            indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(comp))
+            indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=($(comp)))
             return Ops.select(indicator, px, zero(px))
         end
 
@@ -142,8 +142,10 @@ for (AT, dcomp, ocomp) in (
         m, n = size(x)
         row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
         col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
-        data_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(dcomp))
-        original_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(ocomp))
+        data_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=($(dcomp)))
+        original_indicator = Ops.compare(
+            row_idxs, col_idxs; comparison_direction=($(ocomp))
+        )
         res = Ops.add(
             Ops.select(data_indicator, tdata, z), Ops.select(original_indicator, x.data, z)
         )

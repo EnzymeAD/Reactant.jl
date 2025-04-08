@@ -391,7 +391,7 @@ for (dialect, op) in
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
                     x.mlir_data;
-                    $(result)=mlir_type(TracedRArray{Bool,N}, size(x)),
+                    ($(result))=mlir_type(TracedRArray{Bool,N}, size(x)),
                     location,
                 ),
             )
@@ -404,7 +404,7 @@ for (dialect, op) in
         ) where {T}
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
-                    x.mlir_data; $(result)=mlir_type(TracedRArray{Bool,0}, ()), location
+                    x.mlir_data; ($(result))=mlir_type(TracedRArray{Bool,0}, ()), location
                 ),
             )
             return TracedRNumber{Bool}((), res)
@@ -1127,16 +1127,15 @@ end
         sample_inputs[2i - 1] = Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0)
         sample_inputs[2i] = Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0)
     end
-    func =
-        Reactant.TracedUtils.make_mlir_fn(
-            comparator,
-            (sample_inputs...,),
-            (),
-            "comparator",
-            false;
-            args_in_result=:none,
-            return_dialect=:stablehlo,
-        ).f
+    func = Reactant.TracedUtils.make_mlir_fn(
+        comparator,
+        (sample_inputs...,),
+        (),
+        "comparator",
+        false;
+        args_in_result=:none,
+        return_dialect=:stablehlo,
+    ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
         MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
@@ -1745,36 +1744,34 @@ end
 
     input_types = [mlir_type(arg) for arg in linear_args]
 
-    cond_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            cond_fn,
-            traced_args,
-            (),
-            string(gensym("cond_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:result,
-            do_transpose=false,
-            argprefix=gensym("loop_condarg"),
-            resprefix=gensym("loop_condres"),
-            resargprefix=gensym("loop_condresarg"),
-        ).f
+    cond_fn_compiled = Reactant.TracedUtils.make_mlir_fn(
+        cond_fn,
+        traced_args,
+        (),
+        string(gensym("cond_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:result,
+        do_transpose=false,
+        argprefix=gensym("loop_condarg"),
+        resprefix=gensym("loop_condres"),
+        resargprefix=gensym("loop_condresarg"),
+    ).f
 
-    body_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            body_fn,
-            traced_args,
-            (),
-            string(gensym("body_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:all,
-            do_transpose=false,
-            verify_arg_names,
-            argprefix=gensym("loop_bodyarg"),
-            resprefix=gensym("loop_bodyres"),
-            resargprefix=gensym("loop_bodyresarg"),
-        ).f
+    body_fn_compiled = Reactant.TracedUtils.make_mlir_fn(
+        body_fn,
+        traced_args,
+        (),
+        string(gensym("body_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:all,
+        do_transpose=false,
+        verify_arg_names,
+        argprefix=gensym("loop_bodyarg"),
+        resprefix=gensym("loop_bodyres"),
+        resargprefix=gensym("loop_bodyresarg"),
+    ).f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
     body_reg = Reactant.TracedUtils.__take_region(body_fn_compiled)
@@ -2384,7 +2381,7 @@ end
     @assert ndevices == length(logical_device_ids) "length(logical_device_ids) should be \
                                                     same as prod(last, mesh_axes)"
     @assert all(Base.Fix2(≥, 0), logical_device_ids) "logical_device_ids must be \
-                                                      non-negative"
+                                                    non-negative"
 
     sorted_logical_device_ids = Base.sort(logical_device_ids)
     @assert sorted_logical_device_ids == 0:(ndevices - 1) "sorted logical_device_ids \
@@ -2526,16 +2523,15 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
         Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
     ]
 
-    func =
-        Reactant.TracedUtils.make_mlir_fn(
-            fn,
-            (sample_inputs),
-            (),
-            "reduce_fn",
-            false;
-            args_in_result=:none,
-            return_dialect=:stablehlo,
-        ).f
+    func = Reactant.TracedUtils.make_mlir_fn(
+        fn,
+        (sample_inputs),
+        (),
+        "reduce_fn",
+        false;
+        args_in_result=:none,
+        return_dialect=:stablehlo,
+    ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
         MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))

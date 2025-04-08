@@ -461,7 +461,7 @@ function condition_with_structure(x)
     @trace if sum(y) > 0
         z = (; a=y, b=(y .- 1, y))
     else
-        z = (; a=-y, b=(y, y .+ 1))
+        z = (; a=(-y), b=(y, y .+ 1))
     end
     return z
 end

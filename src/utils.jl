@@ -769,8 +769,6 @@ function call_with_reactant_generator(
     push!(overdubbed_code, Core.ReturnNode(ocres))
     push!(overdubbed_codelocs, code_info.codelocs[1])
 
-    #=== set `code_info`/`reflection` fields accordingly ===#
-
     if code_info.method_for_inference_limit_heuristics === nothing
         code_info.method_for_inference_limit_heuristics = method
     end

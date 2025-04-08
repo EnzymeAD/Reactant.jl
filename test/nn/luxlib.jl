@@ -1,8 +1,9 @@
 using LuxLib, Reactant, Enzyme, NNlib
 
 @testset "Fused Dense" begin
-    sumabs2fuseddense(act, weight, x, bias) =
-        sum(abs2, fused_dense_bias_activation(act, weight, x, bias))
+    sumabs2fuseddense(act, weight, x, bias) = sum(
+        abs2, fused_dense_bias_activation(act, weight, x, bias)
+    )
 
     function ∇fuseddense(act, weight, x, bias)
         dw = Enzyme.make_zero(weight)

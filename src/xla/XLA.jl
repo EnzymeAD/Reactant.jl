@@ -132,8 +132,9 @@ function __init__()
         end
 
         if haskey(ENV, "REACTANT_VISIBLE_GPU_DEVICES")
-            global_state.local_gpu_device_ids =
-                parse.(Int, split(ENV["REACTANT_VISIBLE_GPU_DEVICES"], ","))
+            global_state.local_gpu_device_ids = parse.(
+                Int, split(ENV["REACTANT_VISIBLE_GPU_DEVICES"], ",")
+            )
             @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids
         end
 

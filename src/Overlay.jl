@@ -78,7 +78,7 @@ for randfun in (:rand, :randn, :randexp)
 
         # scalars
         @reactant_overlay @noinline function Random.$(randfun)(
-            rng::AbstractRNG, ::Type{T}=Float64
+            rng::AbstractRNG, (::Type{T})=Float64
         ) where {T}
             if T <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(rng, T)

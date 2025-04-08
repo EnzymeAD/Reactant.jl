@@ -87,8 +87,9 @@ end
     return Base.setproperty!(obj, field, val)
 end
 
-@inline traced_setfield!(@nospecialize(obj), field, val, path) =
-    Base.setfield!(obj, field, val)
+@inline traced_setfield!(@nospecialize(obj), field, val, path) = Base.setfield!(
+    obj, field, val
+)
 
 @inline function traced_setfield!(
     @nospecialize(obj::AbstractArray{T}), field, val, path
@@ -1852,7 +1853,7 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
             $(compiled_symbol) = $(compiler)(
                 $(f_symbol),
                 $(args_symbol);
-                fn_kwargs=$(kwargs_symbol),
+                fn_kwargs=($(kwargs_symbol)),
                 $(Expr.(:kw, keys(options), values(options))...),
             )
         end,
@@ -2873,9 +2874,8 @@ end
 
 @generated function (
     thunk::Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
-)(
-    args...
-) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
+)
+    (args...) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     FoundTypes = Tuple{args...}
     if ArgTypes != FoundTypes
         return quote

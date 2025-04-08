@@ -44,8 +44,9 @@ context(map::AffineMap) = API.mlirAffineMapGetContext(map)
 Creates a zero result affine map of the given dimensions and symbols in the context.
 The affine map is owned by the context.
 """
-AffineMap(ndims, nsymbols; context::Context=context()) =
+function AffineMap(ndims, nsymbols; context::Context=context())
     AffineMap(API.mlirAffineMapZeroResultGet(context, ndims, nsymbols))
+end
 
 """
     AffineMap(ndims, nsymbols, affineExprs; context=context())
@@ -53,24 +54,27 @@ AffineMap(ndims, nsymbols; context::Context=context()) =
 Creates an affine map with results defined by the given list of affine expressions.
 The map resulting map also has the requested number of input dimensions and symbols, regardless of them being used in the results.
 """
-AffineMap(ndims, nsymbols, exprs::Vector{AffineExpr}; context::Context=context()) =
+function AffineMap(ndims, nsymbols, exprs::Vector{AffineExpr}; context::Context=context())
     AffineMap(API.mlirAffineMapGet(context, ndims, nsymbols, length(exprs), exprs))
+end
 
 """
     ConstantAffineMap(val; context=context())
 
 Creates a single constant result affine map in the context. The affine map is owned by the context.
 """
-ConstantAffineMap(val; context::Context=context()) =
+function ConstantAffineMap(val; context::Context=context())
     AffineMap(API.mlirAffineMapConstantGet(context, val))
+end
 
 """
     IdentityAffineMap(ndims; context=context())
 
 Creates an affine map with 'ndims' identity in the context. The affine map is owned by the context.
 """
-IdentityAffineMap(ndims; context::Context=context()) =
+function IdentityAffineMap(ndims; context::Context=context())
     AffineMap(API.mlirAffineMapMultiDimIdentityGet(context, ndims))
+end
 
 """
     MinorIdentityAffineMap(ndims, nresults; context=context())
@@ -189,8 +193,9 @@ Base.isperm(map::AffineMap) = API.mlirAffineMapIsPermutation(map)
 
 Returns the affine map consisting of the `positions` subset.
 """
-submap(map::AffineMap, pos::Vector{Int}) =
+function submap(map::AffineMap, pos::Vector{Int})
     AffineMap(API.mlirAffineMapGetSubMap(map, length(pos), pos))
+end
 
 """
     majorsubmap(affineMap, nresults)
@@ -199,8 +204,9 @@ Returns the affine map consisting of the most major `nresults` results.
 Returns the null AffineMap if the `nresults` is equal to zero.
 Returns the `affineMap` if `nresults` is greater or equals to number of results of the given affine map.
 """
-majorsubmap(map::AffineMap, nresults) =
+function majorsubmap(map::AffineMap, nresults)
     AffineMap(API.mlirAffineMapGetMajorSubMap(map, nresults))
+end
 
 """
     minorsubmap(affineMap, nresults)
@@ -208,19 +214,24 @@ majorsubmap(map::AffineMap, nresults) =
 Returns the affine map consisting of the most minor `nresults` results. Returns the null AffineMap if the `nresults` is equal to zero.
 Returns the `affineMap` if `nresults` is greater or equals to number of results of the given affine map.
 """
-minorsubmap(map::AffineMap, nresults) =
+function minorsubmap(map::AffineMap, nresults)
     AffineMap(API.mlirAffineMapGetMinorSubMap(map, nresults))
+end
 
 """
     mlirAffineMapReplace(affineMap, expression => replacement, numResultDims, numResultSyms)
 
 Apply `AffineExpr::replace(map)` to each of the results and return a new new AffineMap with the new results and the specified number of dims and symbols.
 """
-Base.replace(
+function Base.replace(
     map::AffineMap, old_new::Pair{AffineExpr,AffineExpr}, nresultdims, nresultsyms
-) = AffineMap(
-    API.mlirAffineMapReplace(map, old_new.first, old_new.second, nresultdims, nresultsyms),
 )
+    AffineMap(
+        API.mlirAffineMapReplace(
+            map, old_new.first, old_new.second, nresultdims, nresultsyms
+        ),
+    )
+end
 
 """
     simplify(affineMaps, size, result, populateResult)

@@ -56,8 +56,9 @@ ismultipleof(expr::AffineExpr, factor) = API.mlirAffineExprIsMultipleOf(expr, fa
 
 Checks whether the given affine expression involves AffineDimExpr 'position'.
 """
-isfunctionofdimexpr(expr::AffineExpr, position) =
+function isfunctionofdimexpr(expr::AffineExpr, position)
     API.mlirAffineExprIsFunctionOfDim(expr, position)
+end
 
 """
     isdimexpr(affineExpr)
@@ -71,8 +72,9 @@ isdimexpr(expr::AffineExpr) = API.mlirAffineExprIsADim(expr)
 
 Creates an affine dimension expression with 'position' in the context.
 """
-AffineDimensionExpr(position; context::Context=context()) =
+function AffineDimensionExpr(position; context::Context=context())
     AffineExpr(API.mlirAffineDimExprGet(context, position))
+end
 
 """
     issymbolexpr(affineExpr)
@@ -86,8 +88,9 @@ issymbolexpr(expr::AffineExpr) = API.mlirAffineExprIsASymbol(expr)
 
 Creates an affine symbol expression with 'position' in the context.
 """
-SymbolExpr(position; context::Context=context()) =
+function SymbolExpr(position; context::Context=context())
     AffineExpr(API.mlirAffineSymbolExprGet(context, position))
+end
 
 """
     position(affineExpr)
@@ -120,8 +123,9 @@ isconstantexpr(expr::AffineExpr) = API.mlirAffineExprIsAConstant(expr)
 
 Creates an affine constant expression with 'constant' in the context.
 """
-ConstantExpr(constant; context::Context=context()) =
+function ConstantExpr(constant; context::Context=context())
     AffineExpr(API.mlirAffineConstantExprGet(context, constant))
+end
 
 """
     value(affineExpr)
@@ -189,8 +193,9 @@ isfloordiv(expr::AffineExpr) = API.mlirAffineExprIsAFloorDiv(expr)
 
 Creates an affine floordiv expression with 'lhs' and 'rhs'.
 """
-Base.div(lhs::AffineExpr, rhs::AffineExpr) =
+function Base.div(lhs::AffineExpr, rhs::AffineExpr)
     AffineExpr(API.mlirAffineFloorDivExprGet(lhs, rhs))
+end
 Base.fld(lhs::AffineExpr, rhs::AffineExpr) = div(lhs, rhs)
 
 """
@@ -205,8 +210,9 @@ isceildiv(expr::AffineExpr) = API.mlirAffineExprIsACeilDiv(expr)
 
 Creates an affine ceildiv expression with 'lhs' and 'rhs'.
 """
-Base.cld(lhs::AffineExpr, rhs::AffineExpr) =
+function Base.cld(lhs::AffineExpr, rhs::AffineExpr)
     AffineExpr(API.mlirAffineCeilDivExprGet(lhs, rhs))
+end
 
 """
     isbinary(affineExpr)

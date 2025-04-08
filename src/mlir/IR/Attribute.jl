@@ -16,8 +16,9 @@ Base.convert(::Core.Type{API.MlirAttribute}, attribute::Attribute) = attribute.a
 
 Parses an attribute. The attribute is owned by the context.
 """
-Base.parse(::Core.Type{Attribute}, str; context::Context=context()) =
+function Base.parse(::Core.Type{Attribute}, str; context::Context=context())
     Attribute(API.mlirAttributeParseGet(context, str))
+end
 
 """
     ==(a1, a2)
@@ -80,8 +81,9 @@ isarray(attr::Attribute) = API.mlirAttributeIsAArray(attr)
 
 Creates an array element containing the given list of elements in the given context.
 """
-Attribute(attrs::Vector{Attribute}; context::Context=context()) =
+function Attribute(attrs::Vector{Attribute}; context::Context=context())
     Attribute(API.mlirArrayAttrGet(context, length(attrs), attrs))
+end
 
 """
     isdict(attr)
@@ -168,8 +170,9 @@ isinteger(attr::Attribute) = API.mlirAttributeIsAInteger(attr)
 
 Creates an integer attribute of the given type with the given integer value.
 """
-Attribute(i::T, type=Type(T)) where {T<:Integer} =
+function Attribute(i::T, type=Type(T)) where {T<:Integer}
     Attribute(API.mlirIntegerAttrGet(type, Int64(i)))
+end
 
 """
     Int64(attr)
@@ -237,8 +240,9 @@ isopaque(attr::Attribute) = API.mlirAttributeIsAOpaque(attr)
 Creates an opaque attribute in the given context associated with the dialect identified by its namespace.
 The attribute contains opaque byte data of the specified length (data need not be null-terminated).
 """
-OpaqueAttribute(namespace, data, type; context::Context=context) =
+function OpaqueAttribute(namespace, data, type; context::Context=context)
     Attribute(API.mlirOpaqueAttrGet(context, namespace, length(data), data, type))
+end
 
 """
     mlirOpaqueAttrGetDialectNamespace(attr)
@@ -272,8 +276,9 @@ isstring(attr::Attribute) = API.mlirAttributeIsAString(attr)
 
 Creates a string attribute in the given context containing the given string.
 """
-Attribute(str::AbstractString; context::Context=context()) =
+function Attribute(str::AbstractString; context::Context=context())
     Attribute(API.mlirStringAttrGet(context, str))
+end
 
 """
     Attribute(type, str)
@@ -307,9 +312,11 @@ issymbolref(attr::Attribute) = API.mlirAttributeIsASymbolRef(attr)
 Creates a symbol reference attribute in the given context referencing a symbol identified by the given string inside a list of nested references.
 Each of the references in the list must not be nested.
 """
-SymbolRefAttribute(
+function SymbolRefAttribute(
     symbol::String, references::Vector{Attribute}; context::Context=context()
-) = Attribute(API.mlirSymbolRefAttrGet(context, symbol, length(references), references))
+)
+    Attribute(API.mlirSymbolRefAttrGet(context, symbol, length(references), references))
+end
 
 """
     rootref(attr)
@@ -353,8 +360,9 @@ isflatsymbolref(attr::Attribute) = API.mlirAttributeIsAFlatSymbolRef(attr)
 
 Creates a flat symbol reference attribute in the given context referencing a symbol identified by the given string.
 """
-FlatSymbolRefAttribute(symbol::String; context::Context=context()) =
+function FlatSymbolRefAttribute(symbol::String; context::Context=context())
     Attribute(API.mlirFlatSymbolRefAttrGet(context, symbol))
+end
 
 """
     flatsymbol(attr)
@@ -675,20 +683,27 @@ issparseelements(attr::Attribute) = API.mlirAttributeIsASparseElements(attr)
   """
 function isdensearray end
 
-@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Bool}) =
-    API.mlirAttributeIsADenseBoolArray(attr)
-@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Int8}) =
-    API.mlirAttributeIsADenseI8Array(attr)
-@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Int16}) =
-    API.mlirAttributeIsADenseI16Array(attr)
-@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Int32}) =
-    API.mlirAttributeIsADenseI32Array(attr)
-@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Int64}) =
-    API.mlirAttributeIsADenseI64Array(attr)
-@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Float32}) =
-    API.mlirAttributeIsADenseF32Array(attr)
-@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Float64}) =
-    API.mlirAttributeIsADenseF64Array(attr)
+@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Bool}) = API.mlirAttributeIsADenseBoolArray(
+    attr
+)
+@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Int8}) = API.mlirAttributeIsADenseI8Array(
+    attr
+)
+@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Int16}) = API.mlirAttributeIsADenseI16Array(
+    attr
+)
+@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Int32}) = API.mlirAttributeIsADenseI32Array(
+    attr
+)
+@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Int64}) = API.mlirAttributeIsADenseI64Array(
+    attr
+)
+@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Float32}) = API.mlirAttributeIsADenseF32Array(
+    attr
+)
+@llvmversioned min = v"16" isdensearray(attr::Attribute, ::Core.Type{Float64}) = API.mlirAttributeIsADenseF64Array(
+    attr
+)
 
 @llvmversioned min = v"16" """
       DenseArrayAttribute(array; context=context())
@@ -697,34 +712,32 @@ function isdensearray end
   """
 function DenseArrayAttribute end
 
-@llvmversioned min = v"16" DenseArrayAttribute(
-    values::AbstractArray{Bool}; context::Context=context()
-) = Attribute(
+@llvmversioned min = v"16" DenseArrayAttribute(values::AbstractArray{Bool}; context::Context=context()) = Attribute(
     API.mlirDenseBoolArrayGet(
         context, length(values), AbstractArray{Cint}(to_row_major(values))
     ),
 )
-@llvmversioned min = v"16" DenseArrayAttribute(
-    values::AbstractArray{Int8}; context::Context=context()
-) = Attribute(API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values)))
-@llvmversioned min = v"16" DenseArrayAttribute(
-    values::AbstractArray{UInt8}; context::Context=context()
-) = Attribute(API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values)))
-@llvmversioned min = v"16" DenseArrayAttribute(
-    values::AbstractArray{Int16}; context::Context=context()
-) = Attribute(API.mlirDenseI16ArrayGet(context, length(values), to_row_major(values)))
-@llvmversioned min = v"16" DenseArrayAttribute(
-    values::AbstractArray{Int32}; context::Context=context()
-) = Attribute(API.mlirDenseI32ArrayGet(context, length(values), to_row_major(values)))
-@llvmversioned min = v"16" DenseArrayAttribute(
-    values::AbstractArray{Int64}; context::Context=context()
-) = Attribute(API.mlirDenseI64ArrayGet(context, length(values), to_row_major(values)))
-@llvmversioned min = v"16" DenseArrayAttribute(
-    values::AbstractArray{Float32}; context::Context=context()
-) = Attribute(API.mlirDenseF32ArrayGet(context, length(values), to_row_major(values)))
-@llvmversioned min = v"16" DenseArrayAttribute(
-    values::AbstractArray{Float64}; context::Context=context()
-) = Attribute(API.mlirDenseF64ArrayGet(context, length(values), to_row_major(values)))
+@llvmversioned min = v"16" DenseArrayAttribute(values::AbstractArray{Int8}; context::Context=context()) = Attribute(
+    API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values))
+)
+@llvmversioned min = v"16" DenseArrayAttribute(values::AbstractArray{UInt8}; context::Context=context()) = Attribute(
+    API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values))
+)
+@llvmversioned min = v"16" DenseArrayAttribute(values::AbstractArray{Int16}; context::Context=context()) = Attribute(
+    API.mlirDenseI16ArrayGet(context, length(values), to_row_major(values))
+)
+@llvmversioned min = v"16" DenseArrayAttribute(values::AbstractArray{Int32}; context::Context=context()) = Attribute(
+    API.mlirDenseI32ArrayGet(context, length(values), to_row_major(values))
+)
+@llvmversioned min = v"16" DenseArrayAttribute(values::AbstractArray{Int64}; context::Context=context()) = Attribute(
+    API.mlirDenseI64ArrayGet(context, length(values), to_row_major(values))
+)
+@llvmversioned min = v"16" DenseArrayAttribute(values::AbstractArray{Float32}; context::Context=context()) = Attribute(
+    API.mlirDenseF32ArrayGet(context, length(values), to_row_major(values))
+)
+@llvmversioned min = v"16" DenseArrayAttribute(values::AbstractArray{Float64}; context::Context=context()) = Attribute(
+    API.mlirDenseF64ArrayGet(context, length(values), to_row_major(values))
+)
 
 @llvmversioned min = v"16" Attribute(values::AbstractArray) = DenseArrayAttribute(values)
 

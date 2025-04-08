@@ -59,16 +59,18 @@ end
 
 Takes a block owned by the caller and inserts it after the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, prepends the block to the region.
 """
-insert_after!(region::Region, reference::Block, block::Block) =
+function insert_after!(region::Region, reference::Block, block::Block)
     API.mlirRegionInsertOwnedBlockAfter(region, reference, lose_ownership!(block))
+end
 
 """
     insert_before!(region, reference, block)
 
 Takes a block owned by the caller and inserts it before the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, appends the block to the region.
 """
-insert_before!(region::Region, reference::Block, block::Block) =
+function insert_before!(region::Region, reference::Block, block::Block)
     API.mlirRegionInsertOwnedBlockBefore(region, reference, lose_ownership!(block))
+end
 
 """
     first_block(region)

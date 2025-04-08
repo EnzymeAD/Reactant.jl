@@ -390,9 +390,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
 
     set_mlir_data!(
         a,
-        Ops.dynamic_update_slice(
-            a, v, [i isa Colon ? 1 : first(i) for i in indices]
-        ).mlir_data,
+        Ops.dynamic_update_slice(a, v, [i isa Colon ? 1 : first(i) for i in indices]).mlir_data,
     )
     return v
 end
