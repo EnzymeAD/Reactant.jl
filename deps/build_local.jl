@@ -137,6 +137,10 @@ push!(build_cmd_list, "--repo_env=CC=$(cc)")
 push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
+if Sys.isapple()
+    push!(build_cmd_list, "--define")
+    push!(build_cmd_list, "using_clang=true")
+end
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
 end

@@ -1292,23 +1292,25 @@ function compile_mlir!(
     end
 
     # HACK: remove with next JLL
-    if transpose_propagate === :up
-        run_pass_pipeline!(
-            mod,
-            "enzyme-hlo-generate-td{patterns=transpose_while},transform-interpreter,enzyme-hlo-remove-transform",
-            "transpose_while",
-        )
-    end
+    if !(optimize isa String)
+        if transpose_propagate === :up
+            run_pass_pipeline!(
+                mod,
+                "enzyme-hlo-generate-td{patterns=transpose_while},transform-interpreter,enzyme-hlo-remove-transform",
+                "transpose_while",
+            )
+        end
 
-    if optimize ∉ (:none, :just_batch, :canonicalize) &&
-        (transpose_propagate === :up || reshape_propagate === :up)
-        # We tried propagating reshapes and transposes up. If at this point we are left with
-        # them, we propagate them down to minimize the number of Ops in the IR.
-        run_pass_pipeline!(
-            mod,
-            optimization_passes(; transpose_propagate=:down, reshape_propagate=:down),
-            "post_op_transpose_reshape",
-        )
+        if optimize ∉ (:none, :just_batch, :canonicalize) &&
+            (transpose_propagate === :up || reshape_propagate === :up)
+            # We tried propagating reshapes and transposes up. If at this point we are left with
+            # them, we propagate them down to minimize the number of Ops in the IR.
+            run_pass_pipeline!(
+                mod,
+                optimization_passes(; transpose_propagate=:down, reshape_propagate=:down),
+                "post_op_transpose_reshape",
+            )
+        end
     end
 
     # Now we resolve paddings if `optimize_then_pad`
