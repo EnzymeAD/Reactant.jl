@@ -18,10 +18,10 @@ s = ArgParseSettings()
         arg_type = String
     "--gcc_host_compiler_path"
         help = "Path to the gcc host compiler."
-        default = "/usr/bin/gcc"
+        default = something(Sys.which("gcc"), "/usr/bin/gcc")
         arg_type = String
     "--cc"
-        default = "/usr/bin/cc"
+        default = something(Sys.which("cc"), Sys.which("gcc"), Sys.which("clang"), "/usr/bin/cc")
         arg_type = String
     "--hermetic_python_version"
         help = "Hermetic Python version."
