@@ -1,14 +1,22 @@
 load("@rules_cc//cc:defs.bzl", "cc_toolchain")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
 
-# name = "ygg_aarch64_toolchain_config"
-# cpu = "aarch64"
-# toolchain_identifier = "ygg_aarch64"
-# target_system_name = "aarch64-unknown-linux-gnu"
-def _ygg_cc_toolchain_impl(ctx):
-    bb_target = ctx.configuration.default_shell_env["bb_target"]
-    bb_full_target = ctx.configuration.default_shell_env["bb_full_target"]
-    cpu = ctx.configuration.default_shell_env["bb_cpu"]
+# based on https://github.com/bazelbuild/examples/blob/main/bzlmod/04-local_config_and_register_toolchains/local_config_sh.bzl
+# TODO move this configuration to BinaryBuilderBase
+ygg_config_repository_rule = repository_rule(
+    environ = ["bb_target", "bb_full_target", "bb_cpu"],
+    local = True,
+    implementation = _ygg_cc_toolchain_impl,
+)
+
+def ygg_configure(name = "my_ygg_config"):
+    """Detect the Yggdrasil toolchain and register its toolchain."""
+    ygg_config_repository_rule(name)
+
+def ygg_cc_toolchain():
+    bb_target = "aarch64-linux-gnu"
+    bb_full_target = "aarch64-linux-gnu-libgfortran5-cxx11-gpu+none-mode+opt"
+    cpu = "aarch64"
     toolchain_identifier = "ygg_toolchain"
     target_system_name = ""
     supports_start_end_lib = False
@@ -30,7 +38,7 @@ def _ygg_cc_toolchain_impl(ctx):
     cc_toolchain_config(
         name = "ygg_target_toolchain_config",
         cpu = cpu,
-        compiler = "clang",
+        compiler = "compiler",
         toolchain_identifier = toolchain_identifier,
         target_system_name = target_system_name,
         target_libc = "",
@@ -123,12 +131,3 @@ def _ygg_cc_toolchain_impl(ctx):
         # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
         # supports_start_end_lib = supports_start_end_lib,
     )
-
-ygg_cc_toolchain = rule(
-    implementation = _ygg_cc_toolchain_impl,
-    attrs = {
-        "name": attr.string(default = "ygg_cc_toolchain"),
-    },
-    executable = False,
-    test = False,
-)
