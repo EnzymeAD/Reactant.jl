@@ -1468,13 +1468,16 @@ function compile_mlir!(
         module_op = copy(MLIR.IR.Operation(mod))
         mod_copied = MLIR.IR.Module(module_op)
 
+	@show shardy_passes
+	flush(stdout)
+	comms_passes = shardy_passes === :none ? () : optimize_comms_passes
         if shardy_passes isa Sharding.ShardyPropagationOptions
             run_pass_pipeline!(mod_copied, shardy_passes)
-	    run_pass_pipeline!(mod_copied, join([optimize_comms_passes..., "sdy-close-shardings"], ","), "sdy_close_shardings")
+	    run_pass_pipeline!(mod_copied, join([comms_passes..., "sdy-close-shardings"], ","), "sdy_close_shardings")
         else
             run_pass_pipeline!(
                 mod_copied,
-                join([optimize_comms_passes..., "sdy-close-shardings"], ","),
+                join([comms_passes..., "sdy-close-shardings"], ","),
                 "sdy_prop_capture_res_shardings",
             )
         end
@@ -1505,7 +1508,7 @@ function compile_mlir!(
             # the options is to export them to MHLO shardings
             run_pass_pipeline!(
                 mod,
-                join([optimize_comms_passes..., "sdy-close-shardings", "xla-sdy-stablehlo-export-pipeline"], ","),
+                join([comms_passes..., "sdy-close-shardings", "xla-sdy-stablehlo-export-pipeline"], ","),
                 "sdy_export",
             )
         elseif shardy_passes == :to_mhlo_shardings
@@ -1514,7 +1517,7 @@ function compile_mlir!(
                 join(
                     [
                         "sdy-propagation-pipeline",
-			optimize_comms_passes...,
+			comms_passes...,
                         "sdy-close-shardings",
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
