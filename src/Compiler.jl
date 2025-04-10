@@ -1164,7 +1164,12 @@ function compile_mlir!(
         lower_comms,
     )
     opt_passes2 = optimization_passes(;
-        no_nan, sroa=false, transpose_propagate, reshape_propagate, recognize_comms, lower_comms
+        no_nan,
+        sroa=false,
+        transpose_propagate,
+        reshape_propagate,
+        recognize_comms,
+        lower_comms,
     )
 
     raise_passes = if raise isa String
@@ -1520,7 +1525,7 @@ function compile_mlir!(
 
         if shardy_passes isa Sharding.ShardyPropagationOptions
             run_pass_pipeline!(mod_copied, shardy_passes)
-	    run_pass_pipeline!(mod_copied, "sdy-close-shardings", "sdy_close_shardings")
+            run_pass_pipeline!(mod_copied, "sdy-close-shardings", "sdy_close_shardings")
         else
             run_pass_pipeline!(
                 mod_copied,
@@ -1555,7 +1560,14 @@ function compile_mlir!(
             # the options is to export them to MHLO shardings
             run_pass_pipeline!(
                 mod,
-                join([optimize_comms_passes..., "sdy-close-shardings", "xla-sdy-stablehlo-export-pipeline"], ","),
+                join(
+                    [
+                        optimize_comms_passes...,
+                        "sdy-close-shardings",
+                        "xla-sdy-stablehlo-export-pipeline",
+                    ],
+                    ",",
+                ),
                 "sdy_export",
             )
         elseif shardy_passes == :to_mhlo_shardings
@@ -1564,7 +1576,7 @@ function compile_mlir!(
                 join(
                     [
                         "sdy-propagation-pipeline",
-			             optimize_comms_passes...,
+                        optimize_comms_passes...,
                         "sdy-close-shardings",
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
