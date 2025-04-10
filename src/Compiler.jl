@@ -473,6 +473,8 @@ function optimization_passes(;
     transpose_propagate::Symbol=:up,
     reshape_propagate::Symbol=:up,
     dus_to_concat::Bool=false,
+    recognize_comms::Bool=true,
+    lower_comms::Bool=true,
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -669,6 +671,16 @@ function optimization_passes(;
         "pad_concat_to_concat_pad",
         "slice_if",
         "dus_to_i32",
+        "rotate_pad",
+        "slice_extend",
+        "concat_wrap",
+        "cse_extend<16>",
+        "cse_wrap<16>",
+        "cse_rotate<16>",
+        "cse_rotate<16>",
+        "concat_concat_axis_swap",
+        "concat_multipad",
+        "concat_concat_to_dus",
     ]
 
     if DUS_SLICE_SIMPLIFY[]
@@ -783,6 +795,32 @@ function optimization_passes(;
     else
         push!(transform_passes_list, "no_nan_add_sub_simplify(0)")
     end
+
+
+    lower_transform_passes = copy(transform_passes_list)
+
+    if recognize_comms
+        append!(
+            transform_passes_list,
+            [
+                "recognize_extend",
+                "recognize_wrap",
+                "recognize_rotate",
+            ],
+        )
+    end
+
+    if lower_comms
+        append!(
+            lower_transform_passes,
+            [
+                "lower_extend",
+                "lower_wrap",
+                "lower_rotate",
+            ],
+        )
+    end
+
     transform_passes = join(
         [
             "enzyme-hlo-generate-td{" * join(transform_passes_list, ';') * "}",
@@ -792,6 +830,12 @@ function optimization_passes(;
         ",",
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
+    if lower_comms
+        push!(transform_passes_list, "enzyme-hlo-generate-td{patterns="*join(lower_transform_passes, ';')*"},transform-interpreter,enzyme-hlo-remove-transform")
+    end
+    if concats_to_dus
+        push!(transform_passes_list, "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform")
+    end
     passes = String[]
     if inline
         push!(passes, "inline{default-pipeline=canonicalize max-iterations=4}")
@@ -988,13 +1032,11 @@ function raising!(f, is_raising::Bool)
 end
 
 const optimize_comms_passes = (
-			       "print",
 		"enzyme-hlo-generate-td{patterns=recognize_rotate}",
-			"transform-interpreter",
-			"enzyme-hlo-remove-transform",
-			"print",
-			"optimize-communication",
-			"print"
+		"transform-interpreter",
+		"enzyme-hlo-remove-transform",
+		"optimize-communication",
+        "enzyme-hlo-generate-td{patterns=lower_rotate,lower_wrap,lower_extend}",
 )
 
 function compile_mlir!(
@@ -1110,11 +1152,18 @@ function compile_mlir!(
         jit = "lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
+    recognize_comms = true
+    lower_comms = true
+    
+    if is_sharded && shardy_passes == :to_mhlo_shardings
+        lower_comms = false
+    end
+
     opt_passes = optimization_passes(;
-        no_nan, sroa=true, transpose_propagate, reshape_propagate
+        no_nan, sroa=true, transpose_propagate, reshape_propagate, recognize_comms, lower_comms
     )
     opt_passes2 = optimization_passes(;
-        no_nan, sroa=false, transpose_propagate, reshape_propagate
+        no_nan, sroa=false, transpose_propagate, reshape_propagate, recognize_comms, lower_comms
     )
 
     raise_passes = if raise isa String
@@ -1514,7 +1563,7 @@ function compile_mlir!(
                 join(
                     [
                         "sdy-propagation-pipeline",
-			optimize_comms_passes...,
+			             optimize_comms_passes...,
                         "sdy-close-shardings",
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
