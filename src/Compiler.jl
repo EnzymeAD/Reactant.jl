@@ -464,6 +464,7 @@ const SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_PROPAGATION = Ref(false)
 const DUS_SLICE_SIMPLIFY = Ref(true)
+const CONCATS_TO_DUS = Ref(false)
 
 # Optimization passes via transform dialect
 function optimization_passes(;
@@ -833,7 +834,7 @@ function optimization_passes(;
     if lower_comms
         push!(transform_passes_list, "enzyme-hlo-generate-td{patterns="*join(lower_transform_passes, ';')*"},transform-interpreter,enzyme-hlo-remove-transform")
     end
-    if concats_to_dus
+    if CONCATS_TO_DUS[]
         push!(transform_passes_list, "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform")
     end
     passes = String[]
