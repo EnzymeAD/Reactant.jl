@@ -868,6 +868,8 @@ end
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
+    @show "running pass pipeline", key, pass_pipeline
+    println(string(mod))
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
@@ -879,6 +881,7 @@ end
 function run_pass_pipeline!(
     mod, propagation_options::Sharding.ShardyPropagationOptions; enable_verifier=true
 )
+    @show "running pass pipeline", "sdy_prop"
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
