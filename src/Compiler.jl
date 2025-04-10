@@ -820,12 +820,9 @@ function optimization_passes(;
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
     if lower_comms
-        push!(
-            transform_passes_list,
-            "enzyme-hlo-generate-td{patterns=" *
+        func_passes = func_passes * ",enzyme-hlo-generate-td{" *
             join(lower_transform_passes, ';') *
-            "},transform-interpreter,enzyme-hlo-remove-transform",
-        )
+            "},transform-interpreter,enzyme-hlo-remove-transform"
     end
     if CONCATS_TO_DUS[]
         push!(
@@ -868,8 +865,6 @@ end
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
-    @show "running pass pipeline", key, pass_pipeline
-    println(string(mod))
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
@@ -881,7 +876,6 @@ end
 function run_pass_pipeline!(
     mod, propagation_options::Sharding.ShardyPropagationOptions; enable_verifier=true
 )
-    @show "running pass pipeline", "sdy_prop"
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
@@ -1193,6 +1187,8 @@ function compile_mlir!(
                 transpose_propagate,
                 reshape_propagate,
                 dus_to_concat=true,
+                recognize_comms,
+                lower_comms,
             )
             result = result * "," * opt_passes3
         end
@@ -1375,8 +1371,10 @@ function compile_mlir!(
             # them, we propagate them down to minimize the number of Ops in the IR.
             run_pass_pipeline!(
                 mod,
-                optimization_passes(; transpose_propagate=:down, reshape_propagate=:down),
+                optimization_passes(; transpose_propagate=:down, reshape_propagate=:down,        recognize_comms,
+        lower_comms),
                 "post_op_transpose_reshape",
+
             )
         end
     end
@@ -1732,7 +1730,7 @@ macro code_hlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -1765,7 +1763,7 @@ macro code_mhlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -1798,7 +1796,7 @@ macro code_xla(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -1830,7 +1828,7 @@ macro compile(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :serializable => false,
         :donated_args => :(:auto),
@@ -1853,7 +1851,7 @@ macro jit(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
