@@ -205,7 +205,7 @@ end
             return Reactant.Ops.sharding_constraint(y, constraint)
         end
 
-        hlo = @code_hlo fn_with_constraint(x_ra)
+        hlo = @code_hlo shardy_passes=:none fn_with_constraint(x_ra)
         @test contains(repr(hlo), "sharding_constraint")
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
         @test !contains(repr(hlo), "sharding_constraint")
