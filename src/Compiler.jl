@@ -1033,7 +1033,7 @@ const optimize_comms_passes = (
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
     "optimize-communication",
-    "enzyme-hlo-generate-td{patterns=lower_rotate,lower_wrap,lower_extend}",
+    "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
 )
 
 function compile_mlir!(
