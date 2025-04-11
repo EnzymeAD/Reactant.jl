@@ -464,6 +464,7 @@ const SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_PROPAGATION = Ref(false)
 const DUS_SLICE_SIMPLIFY = Ref(true)
+const CONCATS_TO_DUS = Ref(false)
 
 # Optimization passes via transform dialect
 function optimization_passes(;
@@ -473,6 +474,8 @@ function optimization_passes(;
     transpose_propagate::Symbol=:up,
     reshape_propagate::Symbol=:up,
     dus_to_concat::Bool=false,
+    recognize_comms::Bool=true,
+    lower_comms::Bool=true,
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -669,6 +672,16 @@ function optimization_passes(;
         "pad_concat_to_concat_pad",
         "slice_if",
         "dus_to_i32",
+        "rotate_pad",
+        "slice_extend",
+        "concat_wrap",
+        "cse_extend<16>",
+        "cse_wrap<16>",
+        "cse_rotate<16>",
+        "cse_rotate<16>",
+        "concat_concat_axis_swap",
+        "concat_multipad",
+        "concat_concat_to_dus",
     ]
 
     if DUS_SLICE_SIMPLIFY[]
@@ -783,6 +796,20 @@ function optimization_passes(;
     else
         push!(transform_passes_list, "no_nan_add_sub_simplify(0)")
     end
+
+    lower_transform_passes = copy(transform_passes_list)
+
+    if recognize_comms
+        append!(
+            transform_passes_list,
+            ["recognize_extend", "recognize_wrap", "recognize_rotate"],
+        )
+    end
+
+    if lower_comms
+        append!(lower_transform_passes, ["lower_extend", "lower_wrap", "lower_rotate"])
+    end
+
     transform_passes = join(
         [
             "enzyme-hlo-generate-td{" * join(transform_passes_list, ';') * "}",
@@ -792,6 +819,19 @@ function optimization_passes(;
         ",",
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
+    if lower_comms
+        func_passes =
+            func_passes *
+            ",enzyme-hlo-generate-td{" *
+            join(lower_transform_passes, ';') *
+            "},transform-interpreter,enzyme-hlo-remove-transform"
+    end
+    if CONCATS_TO_DUS[]
+        push!(
+            transform_passes_list,
+            "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform",
+        )
+    end
     passes = String[]
     if inline
         push!(passes, "inline{default-pipeline=canonicalize max-iterations=4}")
@@ -987,6 +1027,15 @@ function raising!(f, is_raising::Bool)
     end
 end
 
+const optimize_comms_passes = (
+    # rotate handler presently broken (and handled okay presently), disabling for now
+    "enzyme-hlo-generate-td{patterns=lower_rotate}",
+    "transform-interpreter",
+    "enzyme-hlo-remove-transform",
+    "optimize-communication",
+    "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+)
+
 function compile_mlir!(
     mod,
     f,
@@ -1100,11 +1149,27 @@ function compile_mlir!(
         jit = "lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
+    recognize_comms = true
+    lower_comms = true
+    if is_sharded && shardy_passes == :to_mhlo_shardings
+        lower_comms = false
+    end
+
     opt_passes = optimization_passes(;
-        no_nan, sroa=true, transpose_propagate, reshape_propagate
+        no_nan,
+        sroa=true,
+        transpose_propagate,
+        reshape_propagate,
+        recognize_comms,
+        lower_comms,
     )
     opt_passes2 = optimization_passes(;
-        no_nan, sroa=false, transpose_propagate, reshape_propagate
+        no_nan,
+        sroa=false,
+        transpose_propagate,
+        reshape_propagate,
+        recognize_comms,
+        lower_comms,
     )
 
     raise_passes = if raise isa String
@@ -1125,6 +1190,8 @@ function compile_mlir!(
                 transpose_propagate,
                 reshape_propagate,
                 dus_to_concat=true,
+                recognize_comms,
+                lower_comms,
             )
             result = result * "," * opt_passes3
         end
@@ -1307,7 +1374,12 @@ function compile_mlir!(
             # them, we propagate them down to minimize the number of Ops in the IR.
             run_pass_pipeline!(
                 mod,
-                optimization_passes(; transpose_propagate=:down, reshape_propagate=:down),
+                optimization_passes(;
+                    transpose_propagate=:down,
+                    reshape_propagate=:down,
+                    recognize_comms,
+                    lower_comms,
+                ),
                 "post_op_transpose_reshape",
             )
         end
@@ -1495,7 +1567,14 @@ function compile_mlir!(
             # the options is to export them to MHLO shardings
             run_pass_pipeline!(
                 mod,
-                join(["sdy-close-shardings", "xla-sdy-stablehlo-export-pipeline"], ","),
+                join(
+                    [
+                        optimize_comms_passes...,
+                        "sdy-close-shardings",
+                        "xla-sdy-stablehlo-export-pipeline",
+                    ],
+                    ",",
+                ),
                 "sdy_export",
             )
         elseif shardy_passes == :to_mhlo_shardings
@@ -1504,6 +1583,7 @@ function compile_mlir!(
                 join(
                     [
                         "sdy-propagation-pipeline",
+                        optimize_comms_passes...,
                         "sdy-close-shardings",
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
@@ -1656,7 +1736,7 @@ macro code_hlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -1689,7 +1769,7 @@ macro code_mhlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -1722,7 +1802,7 @@ macro code_xla(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -1754,7 +1834,7 @@ macro compile(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :serializable => false,
         :donated_args => :(:auto),
@@ -1777,7 +1857,7 @@ macro jit(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
-        :shardy_passes => :(:none),
+        :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
