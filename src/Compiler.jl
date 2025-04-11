@@ -1026,7 +1026,8 @@ function raising!(f, is_raising::Bool)
 end
 
 const optimize_comms_passes = (
-    "enzyme-hlo-generate-td{patterns=recognize_rotate}",
+    # rotate handler presently broken (and handled okay presently), disabling for now
+    "enzyme-hlo-generate-td{patterns=lower_rotate}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
     "optimize-communication",
