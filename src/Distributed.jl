@@ -1,6 +1,6 @@
 module Distributed
 
-using ..Reactant: Reactant
+using ..Reactant: Reactant, Hostlists
 using Sockets
 
 const initialized = Ref(false)
@@ -266,27 +266,40 @@ const _SLURM_NUM_NODES = "SLURM_STEP_NUM_NODES"
 is_env_present(::SlurmEnvDetector) = haskey(ENV, _SLURM_JOB_ID)
 
 function get_coordinator_address(::SlurmEnvDetector, ::Integer)
-    port = parse(Int, ENV[_SLURM_JOB_ID]) % 2^12 + (65535 - 2^12 + 1)
+    # port = parse(Int, ENV[_SLURM_JOB_ID]) % 2^12 + (65535 - 2^12 + 1)
+    #
+    # # Parse the first hostname of the job
+    # # If we are looking for 'node001',
+    # # node_list potential formats are 'node001', 'node001,host2',
+    # # 'node[001-0015],host2', and 'node[001,007-015],host2'.
+    # node_list = ENV[_SLURM_NODELIST]
+    # ind = findfirst(Base.Fix2(in, (',', '[')), node_list)
+    # ind = isnothing(ind) ? length(node_list) + 1 : ind
 
-    # Parse the first hostname of the job
-    # If we are looking for 'node001',
-    # node_list potential formats are 'node001', 'node001,host2',
-    # 'node[001-0015],host2', and 'node[001,007-015],host2'.
-    node_list = ENV[_SLURM_NODELIST]
-    ind = findfirst(Base.Fix2(in, (',', '[')), node_list)
-    ind = isnothing(ind) ? length(node_list) + 1 : ind
-
-    if ind == length(node_list) + 1 || node_list[ind] == ','
-        # 'node001' or 'node001,host2'
-        return "$(node_list[1:ind-1]):$(port)"
+    # if ind == length(node_list) + 1 || node_list[ind] == ','
+    #     # 'node001' or 'node001,host2'
+    #     return "$(node_list[1:ind-1]):$(port)"
+    # else
+    #     # 'node[001-0015],host2' or 'node[001,007-015],host2'
+    #     prefix = node_list[1:(ind - 1)]
+    #     suffix = node_list[(ind + 1):end]
+    #     ind2 = findfirst(Base.Fix2(in, (',', '-')), suffix)
+    #     ind2 = isnothing(ind2) ? length(suffix) : ind2
+    #     return "$(prefix)$(suffix[1:ind2-1]):$(port)"
+    # end
+    if haskey(ENV, "REACTANT_COORDINATOR_BIND_ADDRESS")
+        port = ENV["REACTANT_COORDINATOR_BIND_ADDRESS"] |>
+            Base.Fix2(split, ":") |> last |> Base.Fix1(parse, Int)
+        @debug "Port: $(port) inferred from REACTANT_COORDINATOR_BIND_ADDRESS"
     else
-        # 'node[001-0015],host2' or 'node[001,007-015],host2'
-        prefix = node_list[1:(ind - 1)]
-        suffix = node_list[(ind + 1):end]
-        ind2 = findfirst(Base.Fix2(in, (',', '-')), suffix)
-        ind2 = isnothing(ind2) ? length(suffix) : ind2
-        return "$(prefix)$(suffix[1:ind2-1]):$(port)"
+        port = parse(Int, ENV[_SLURM_JOB_ID]) % 2^12 + (65535 - 2^12 + 1)
+        @debug "Port: $(port) inferred from _SLURM_JOB_ID"
     end
+    node_list = ENV[_SLURM_NODELIST]
+    @debug "Setup coordinator: node_list=$(node_list)"
+    broker_addr = Hostlists.Hostlist(node_list) |> first
+    @debug "Setup coordinator: broker_addr=$(node_list)"
+    return "$(broker_addr):$(port)"
 end
 
 get_process_count(::SlurmEnvDetector) = parse(Int, ENV[_SLURM_PROCESS_COUNT])
