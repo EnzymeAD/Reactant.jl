@@ -820,7 +820,9 @@ function optimization_passes(;
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
     if lower_comms
-        func_passes = func_passes * ",enzyme-hlo-generate-td{" *
+        func_passes =
+            func_passes *
+            ",enzyme-hlo-generate-td{" *
             join(lower_transform_passes, ';') *
             "},transform-interpreter,enzyme-hlo-remove-transform"
     end
@@ -1372,10 +1374,13 @@ function compile_mlir!(
             # them, we propagate them down to minimize the number of Ops in the IR.
             run_pass_pipeline!(
                 mod,
-                optimization_passes(; transpose_propagate=:down, reshape_propagate=:down,        recognize_comms,
-        lower_comms),
+                optimization_passes(;
+                    transpose_propagate=:down,
+                    reshape_propagate=:down,
+                    recognize_comms,
+                    lower_comms,
+                ),
                 "post_op_transpose_reshape",
-
             )
         end
     end
