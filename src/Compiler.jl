@@ -1530,7 +1530,7 @@ function compile_mlir!(
         else
             run_pass_pipeline!(
                 mod_copied,
-                "sdy-close-shardings",
+                join(["sdy-propagation-pipeline", "sdy-close-shardings"], ","),
                 "sdy_prop_capture_res_shardings",
             )
         end
