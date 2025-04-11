@@ -1029,7 +1029,7 @@ end
 
 const optimize_comms_passes = (
     # rotate handler presently broken (and handled okay presently), disabling for now
-    "enzyme-hlo-generate-td{patterns=lower_rotate}",
+    "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
     "optimize-communication",
