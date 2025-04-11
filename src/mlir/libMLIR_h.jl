@@ -260,9 +260,6 @@ struct MlirDialectRegistry
     ptr::Ptr{Cvoid}
 end
 
-"""
-    MlirOperation
-"""
 struct MlirOperation
     ptr::Ptr{Cvoid}
 end
@@ -287,9 +284,6 @@ struct MlirSymbolTable
     ptr::Ptr{Cvoid}
 end
 
-"""
-    MlirAttribute
-"""
 struct MlirAttribute
     ptr::Ptr{Cvoid}
 end
@@ -298,10 +292,6 @@ struct MlirIdentifier
     ptr::Ptr{Cvoid}
 end
 
-"""
-    MlirLocation
-A location in MLIR.
-"""
 struct MlirLocation
     ptr::Ptr{Cvoid}
 end
@@ -310,10 +300,6 @@ struct MlirModule
     ptr::Ptr{Cvoid}
 end
 
-"""
-    MlirType
-A type in MLIR.
-"""
 struct MlirType
     ptr::Ptr{Cvoid}
 end
@@ -3372,7 +3358,7 @@ end
 """
     mlirIntegerSetIsCanonicalEmpty(set)
 
-Checks whether the given set is a canonical empty set, e.g., the set returned by [`Reactant.MLIR.API.mlirIntegerSetEmptyGet`](@ref).
+Checks whether the given set is a canonical empty set, e.g., the set returned by [`mlirIntegerSetEmptyGet`](@ref).
 """
 function mlirIntegerSetIsCanonicalEmpty(set)
     @ccall mlir_c.mlirIntegerSetIsCanonicalEmpty(set::MlirIntegerSet)::Bool
@@ -5727,7 +5713,7 @@ end
 """
     mlirRankedTensorTypeGet(rank, shape, elementType, encoding)
 
-Creates a tensor type of a fixed rank with the given shape, element type, and optional encoding in the same context as the element type. The type is owned by the context. Tensor types without any specific encoding field should assign [`Reactant.MLIR.API.mlirAttributeGetNull`](@ref)() to this parameter.
+Creates a tensor type of a fixed rank with the given shape, element type, and optional encoding in the same context as the element type. The type is owned by the context. Tensor types without any specific encoding field should assign [`mlirAttributeGetNull`](@ref)() to this parameter.
 """
 function mlirRankedTensorTypeGet(rank, shape, elementType, encoding)
     @ccall mlir_c.mlirRankedTensorTypeGet(
@@ -8507,9 +8493,6 @@ function mlirInferShapedTypeOpInterfaceInferReturnTypes(
     )::MlirLogicalResult
 end
 
-"""
-    MlirPass
-"""
 struct MlirPass
     ptr::Ptr{Cvoid}
 end
@@ -10618,7 +10601,4 @@ function sdyManualAxesAttrGetAxesElem(attr, pos)
     )::MlirStringRef
 end
 
-"""
-    MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL
-"""
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1
