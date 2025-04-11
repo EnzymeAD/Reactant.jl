@@ -1032,7 +1032,7 @@ const optimize_comms_passes = (
     "enzyme-hlo-generate-td{patterns=lower_rotate}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
-    "optimize-communication",
+    # "optimize-communication",
     "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
 )
 
