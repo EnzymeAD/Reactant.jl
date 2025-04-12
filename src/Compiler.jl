@@ -1574,8 +1574,8 @@ function compile_mlir!(
                 mod,
                 join(
                     [
-                        optimize_comms_passes...,
                         "sdy-close-shardings",
+                        optimize_comms_passes...,
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
@@ -1588,8 +1588,8 @@ function compile_mlir!(
                 join(
                     [
                         "sdy-propagation-pipeline",
-                        optimize_comms_passes...,
                         "sdy-close-shardings",
+                        optimize_comms_passes...,
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
