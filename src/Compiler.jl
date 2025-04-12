@@ -682,7 +682,8 @@ function optimization_passes(;
         "concat_concat_axis_swap",
         "concat_multipad",
         "concat_concat_to_dus",
-        "concat_to_onedim_dusslice",
+        # TODO we want to enable but may cause an infinite compile time
+        # "concat_to_onedim_dusslice",
     ]
 
     if DUS_SLICE_SIMPLIFY[]
