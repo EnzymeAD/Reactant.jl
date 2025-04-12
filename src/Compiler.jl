@@ -1030,16 +1030,19 @@ function raising!(f, is_raising::Bool)
     end
 end
 
+const comm_pass = "optimize-communication{periodic_concat=1 rotate_comm=1 wrap_comm=1 dus_to_pad_manual_comp_comm=1 dus_to_pad_comm=0 concat_two_operands_comm=1 concat_to_pad_comm=0 extend_to_pad_comm=0 wrap_to_pad_comm=0}"
+
 const optimize_comms_passes = (
     # rotate handler presently broken (and handled okay presently), disabling for now
     "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
-    "optimize-communication",
+    print,
+    comm_pass,
     "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
-    "optimize-communication",
+    comm_pass,
 )
 
 function compile_mlir!(
@@ -1518,11 +1521,9 @@ function compile_mlir!(
                         [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2],
                         ",",
                     ),
+		    "mid_pad_opts"
                 )
             end
-
-            MLIR.API.mlirOperationDestroy(compiled_f.operation)
-            compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
 
             compiled_f = func_with_padding
             in_tys = in_tys_padded
