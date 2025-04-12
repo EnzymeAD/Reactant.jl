@@ -682,6 +682,7 @@ function optimization_passes(;
         "concat_concat_axis_swap",
         "concat_multipad",
         "concat_concat_to_dus",
+        "concat_to_onedim_dusslice",
     ]
 
     if DUS_SLICE_SIMPLIFY[]
@@ -1029,7 +1030,7 @@ end
 
 const optimize_comms_passes = (
     # rotate handler presently broken (and handled okay presently), disabling for now
-    "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus}",
+    "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
     "optimize-communication",
