@@ -1520,9 +1520,6 @@ function compile_mlir!(
                 )
             end
 
-            MLIR.API.mlirOperationDestroy(compiled_f.operation)
-            compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
-
             compiled_f = func_with_padding
             in_tys = in_tys_padded
         end
