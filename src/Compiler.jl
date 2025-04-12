@@ -1034,11 +1034,11 @@ const optimize_comms_passes = (
     "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
-    "optimize-communication",
+    "optimize-communication{rotate_to_pad_comm=1 dus_to_pad_comm=1 concat_to_pad_comm=1 extend_to_pad_comm=1 wrap_to_pad_comm=1}",
     "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
-    "optimize-communication",
+    "optimize-communication{rotate_to_pad_comm=1 dus_to_pad_comm=1 concat_to_pad_comm=1 extend_to_pad_comm=1 wrap_to_pad_comm=1}",
 )
 
 function compile_mlir!(
