@@ -2514,7 +2514,7 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     x::TracedRArray{T},
     init_values::TracedRNumber{T},
     dimensions::Vector{Int},
-    fn::Function,
+    fn::Function;
     location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
 ) where {T}
     reduced_shape = Tuple(deleteat!(collect(Int64, size(x)), dimensions))
@@ -2537,14 +2537,9 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
             return_dialect=:stablehlo,
         ).f
     @assert MLIR.IR.nregions(func) == 1
-    fn_name = String(
-        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
-    )
     ftype_attr = MLIR.IR.attr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(T)) error (
-        "$fn return type is not tensor<i1>"
-    )
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(T)) "$fn return type is not tensor<i1>"
     fn = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(fn, MLIR.IR.region(func, 1))
     MLIR.IR.rmfromparent!(func)
@@ -2563,6 +2558,54 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     )
 
     return TracedRArray{T,length(reduced_shape)}((), res, reduced_shape)
+end
+
+function get_reduce_window_output_shape(
+    input_shape,
+    window_dimensions,
+    window_strides,
+    base_dilations,
+    window_dilations,
+    padding_low,
+    padding_high,
+)
+    dilated_input_shape = (input_shape .- 1) .* base_dilations .+ 1
+    padded_input_shape = dilated_input_shape .+ padding_low .+ padding_high
+    dilated_window_shape = (window_dimensions .- 1) .* window_dilations .+ 1
+    return (
+        floor.(Int64, (padded_input_shape .- dilated_window_shape) ./ window_strides) .+ 1
+    )
+end
+
+@noinline function reduce_window(
+    xs::TracedRArray{T,N},
+    init_values::TracedRNumber{T};
+    fn,
+    window_dimensions::Vector{Int64},
+    window_strides::Vector{Int64},
+    base_dilations::Vector{Int64},
+    window_dilations::Vector{Int64},
+    padding_low::Vector{Int64},
+    padding_high::Vector{Int64},
+    location=mlir_stacktrace("reduce_window", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert length(xs) == length(init_values)
+    @assert ndims(xs) == length(window_dimensions)
+    @assert length(window_dimensions) == length(window_strides)
+    @assert length(window_dimensions) == length(base_dilations)
+    @assert length(window_dimensions) == length(window_dilations)
+    @assert length(padding_low) == length(padding_high)
+
+    result_type = mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)
+
+    sample_inputs = [
+        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
+        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
+    ]
+
+    output_shapes = get_reduce_window_output_shape.()
+
+    return nothing
 end
 
 @noinline function dynamic_update_slice(
