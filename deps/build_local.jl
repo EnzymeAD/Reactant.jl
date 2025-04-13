@@ -18,10 +18,10 @@ s = ArgParseSettings()
         arg_type = String
     "--gcc_host_compiler_path"
         help = "Path to the gcc host compiler."
-        default = "/usr/bin/gcc"
+        default = something(Sys.which("gcc"), "/usr/bin/gcc")
         arg_type = String
     "--cc"
-        default = "/usr/bin/cc"
+        default = something(Sys.which("cc"), Sys.which("gcc"), Sys.which("clang"), "/usr/bin/cc")
         arg_type = String
     "--hermetic_python_version"
         help = "Hermetic Python version."
@@ -137,10 +137,6 @@ push!(build_cmd_list, "--repo_env=CC=$(cc)")
 push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
-if Sys.isapple()
-    push!(build_cmd_list, "--define")
-    push!(build_cmd_list, "using_clang=true")
-end
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
 end
@@ -160,7 +156,15 @@ if cc_is_gcc
         if gcc_version < v"12"
             push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
         end
+        if gcc_version < v"11"
+            # TODO: this is not sufficient to complete a build with GCC 10.
+            push!(build_cmd_list, "--define=xnn_enable_avxvnni=false")
+        end
     end
+else
+    # Assume the compiler is clang if not GCC. `using_clang` is an option
+    # introduced by Enzyme-JAX.
+    push!(build_cmd_list, "--define=using_clang=true")
 end
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
