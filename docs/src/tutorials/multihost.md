@@ -153,8 +153,8 @@ gcloud compute tpus queued-resources \
     --node-count ${SLICE_COUNT}
 
 # Create a Project.toml file and a LocalPreferences.toml
-echo "[deps]\nReactant = \"3c362404-f566-11ee-1572-e11a4b42c853\"" > Project.toml;
-echo "[Reactant]\nxla_runtime = \"IFRT\"" > LocalPreferences.toml;
+echo -e '[deps]\nReactant = "3c362404-f566-11ee-1572-e11a4b42c853"' > Project.toml
+echo -e '[Reactant]\nxla_runtime = "IFRT"' > LocalPreferences.toml
 
 # Copy these files to all the workers
 gcloud compute tpus queued-resources scp ./LocalPreferences.toml ${QR_ID}: \
