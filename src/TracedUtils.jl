@@ -208,6 +208,7 @@ function make_mlir_fn(
     do_transpose=true,
     input_shardings=nothing,  # This is not meant to be used by the user.
     output_shardings=nothing, # This is not meant to be used by the user.
+    no_inline::Bool=false,
     runtime=nothing,
     verify_arg_names=nothing,
     argprefix::Symbol=:args,
@@ -309,6 +310,7 @@ function make_mlir_fn(
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
             body=MLIR.IR.Region(),
+            no_inline=no_inline ? MLIR.IR.UnitAttribute() : nothing,
         )
     end
 

@@ -335,7 +335,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         func = MLIR.Dialects.func.func_(;
             sym_name="main",
             function_type=MLIR.IR.FunctionType(data_mlir_type, data_mlir_type),
-            no_inline=true,
+            no_inline=MLIR.IR.UnitAttribute(),
             body=MLIR.IR.Region(),
         )
         fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])

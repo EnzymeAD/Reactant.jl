@@ -459,3 +459,17 @@ end
         @warn "Not enough addressable devices to run sharding tests"
     end
 end
+
+@testset "Padding No Inlined" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(0:7, 2, 4), (:x, :y))
+
+        x_ra = Reactant.to_rarray(
+            randn(Float32, 4, 6); sharding=Sharding.NamedSharding(mesh, (:x, :y))
+        )
+
+        @test (@jit no_inline=true sum(x_ra)) ≈ sum(Array(x_ra))
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
