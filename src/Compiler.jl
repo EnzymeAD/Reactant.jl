@@ -682,6 +682,7 @@ function optimization_passes(;
         "concat_concat_axis_swap",
         "concat_multipad",
         "concat_concat_to_dus",
+        "speculate_if_pad_to_select",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
@@ -717,6 +718,9 @@ function optimization_passes(;
                 "pad_dot_general<1>(0)",
                 "pad_dot_general<1>(1)",
                 "reshape_pad",
+                "reshape_wrap",
+                "reshape_rotate",
+                "reshape_extend"
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -757,6 +761,9 @@ function optimization_passes(;
                 "transpose_dus",
                 "transpose_pad<1>",
                 "transpose_einsum<1>",
+                "transpose_wrap",
+                "transpose_extend",
+                "transpose_rotate"
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1399,6 +1406,7 @@ function compile_mlir!(
     end
 
     # Now we resolve paddings if `optimize_then_pad`
+    prepad_fnname = fnname
     if optimize_then_pad
         padded_inputs = IdDict()
         has_padded_inputs = false
@@ -1525,11 +1533,16 @@ function compile_mlir!(
                         [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2],
                         ",",
                     ),
+                    "mid_pad_opts",
                 )
             end
 
-            MLIR.API.mlirOperationDestroy(compiled_f.operation)
-            compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
+            MLIR.IR.attr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
+            run_pass_pipeline!(
+                mod,
+                "inline{default-pipeline=canonicalize max-iterations=4}",
+                "inline_pad_opts",
+            )
 
             compiled_f = func_with_padding
             in_tys = in_tys_padded
