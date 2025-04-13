@@ -1395,6 +1395,7 @@ function compile_mlir!(
     end
 
     # Now we resolve paddings if `optimize_then_pad`
+    prepad_fnname = fnname
     if optimize_then_pad
         padded_inputs = IdDict()
         has_padded_inputs = false
@@ -1524,6 +1525,13 @@ function compile_mlir!(
 		    "mid_pad_opts"
                 )
             end
+
+	    MLIR.IR.attr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
+                run_pass_pipeline!(
+                    mod,
+		    "inline{default-pipeline=canonicalize max-iterations=4}",
+		    "inline_pad_opts"
+                )
 
             compiled_f = func_with_padding
             in_tys = in_tys_padded
