@@ -1029,17 +1029,24 @@ function raising!(f, is_raising::Bool)
     end
 end
 
-const optimize_comms_passes = (
-    # rotate handler presently broken (and handled okay presently), disabling for now
-    "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice}",
-    "transform-interpreter",
-    "enzyme-hlo-remove-transform",
-    "optimize-communication{rotate_to_pad_comm=1 dus_to_pad_comm=1 concat_to_pad_comm=1 extend_to_pad_comm=1 wrap_to_pad_comm=1}",
-    "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
-    "transform-interpreter",
-    "enzyme-hlo-remove-transform",
-    "optimize-communication{rotate_to_pad_comm=1 dus_to_pad_comm=1 concat_to_pad_comm=1 extend_to_pad_comm=1 wrap_to_pad_comm=1}",
-)
+function get_optimize_comms_passes(options::Bool)
+    options || return String[]
+    return get_optimize_comms_passes(Reactant.OptimizeCommunicationOptions())
+end
+
+function get_optimize_comms_passes(options::Reactant.OptimizeCommunicationOptions)
+    options_str = String(options)
+    return [
+        "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice}",
+        "transform-interpreter",
+        "enzyme-hlo-remove-transform",
+        options_str,
+        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+        "transform-interpreter",
+        "enzyme-hlo-remove-transform",
+        options_str,
+    ]
+end
 
 function compile_mlir!(
     mod,
@@ -1054,6 +1061,7 @@ function compile_mlir!(
     no_nan::Bool=false,
     transpose_propagate::Symbol=:up,
     reshape_propagate::Symbol=:up,
+    optimize_communications::Bool=true,
     assert_nonallocating::Bool=false,
     backend="gpu",
     raise::Union{Bool,String}=false,
@@ -1575,7 +1583,7 @@ function compile_mlir!(
                 join(
                     [
                         "sdy-close-shardings",
-                        optimize_comms_passes...,
+                        get_optimize_comms_passes(optimize_communications)...,
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
@@ -1589,7 +1597,7 @@ function compile_mlir!(
                     [
                         "sdy-propagation-pipeline",
                         "sdy-close-shardings",
-                        optimize_comms_passes...,
+                        get_optimize_comms_passes(optimize_communications)...,
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
@@ -1747,6 +1755,7 @@ macro code_hlo(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :optimize_communications => true,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1780,6 +1789,7 @@ macro code_mhlo(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :optimize_communications => true,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1813,6 +1823,7 @@ macro code_xla(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :optimize_communications => true,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1846,6 +1857,7 @@ macro compile(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :optimize_communications => true,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1868,6 +1880,7 @@ macro jit(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :optimize_communications => true,
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
