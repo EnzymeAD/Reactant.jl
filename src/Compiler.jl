@@ -1030,14 +1030,15 @@ function raising!(f, is_raising::Bool)
     end
 end
 
-const comm_pass = "optimize-communication{periodic_concat=1 rotate_comm=1 wrap_comm=1 dus_to_pad_manual_comp_comm=1 dus_to_pad_comm=0 concat_two_operands_comm=1 concat_to_pad_comm=0 extend_to_pad_comm=0 wrap_to_pad_comm=0}"
+# TODO investigate which options need enable/disable
+# const comm_pass = "optimize-communication{periodic_concat=1 rotate_comm=1 wrap_comm=1 dus_to_pad_manual_comp_comm=1 dus_to_pad_comm=0 concat_two_operands_comm=0 concat_to_pad_comm=0 extend_to_pad_comm=0 wrap_to_pad_comm=0 concat_two_dus_like=1 extend_dus_like=1}"
+const comm_pass = "optimize-communication"
 
 const optimize_comms_passes = (
     # rotate handler presently broken (and handled okay presently), disabling for now
     "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
-    print,
     comm_pass,
     "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
     "transform-interpreter",
