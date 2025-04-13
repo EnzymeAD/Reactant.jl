@@ -1045,7 +1045,6 @@ function get_optimize_comms_passes(options::Reactant.OptimizeCommunicationOption
     options_str = String(options)
     res = [
         "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
-	"print",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
@@ -1053,7 +1052,6 @@ function get_optimize_comms_passes(options::Reactant.OptimizeCommunicationOption
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
-		     	"print",
     ]
     return res
 end
