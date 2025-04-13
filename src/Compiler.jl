@@ -682,6 +682,7 @@ function optimization_passes(;
         "concat_concat_axis_swap",
         "concat_multipad",
         "concat_concat_to_dus",
+        "speculate_if_pad_to_select",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
@@ -717,6 +718,9 @@ function optimization_passes(;
                 "pad_dot_general<1>(0)",
                 "pad_dot_general<1>(1)",
                 "reshape_pad",
+                "reshape_wrap",
+                "reshape_rotate",
+                "reshape_extend"
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -757,6 +761,9 @@ function optimization_passes(;
                 "transpose_dus",
                 "transpose_pad<1>",
                 "transpose_einsum<1>",
+                "transpose_wrap",
+                "transpose_extend",
+                "transpose_rotate"
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1029,16 +1036,20 @@ function raising!(f, is_raising::Bool)
     end
 end
 
+# TODO investigate which options need enable/disable
+# const comm_pass = "optimize-communication{periodic_concat=1 rotate_comm=1 wrap_comm=1 dus_to_pad_manual_comp_comm=1 dus_to_pad_comm=0 concat_two_operands_comm=0 concat_to_pad_comm=0 extend_to_pad_comm=0 wrap_to_pad_comm=0 concat_two_dus_like=1 extend_dus_like=1}"
+const comm_pass = "optimize-communication"
+
 const optimize_comms_passes = (
     # rotate handler presently broken (and handled okay presently), disabling for now
     "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
-    "optimize-communication",
+    comm_pass,
     "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
     "transform-interpreter",
     "enzyme-hlo-remove-transform",
-    "optimize-communication",
+    comm_pass,
 )
 
 function compile_mlir!(
@@ -1391,6 +1402,7 @@ function compile_mlir!(
     end
 
     # Now we resolve paddings if `optimize_then_pad`
+    prepad_fnname = fnname
     if optimize_then_pad
         padded_inputs = IdDict()
         has_padded_inputs = false
@@ -1517,11 +1529,16 @@ function compile_mlir!(
                         [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2],
                         ",",
                     ),
+                    "mid_pad_opts",
                 )
             end
 
-            MLIR.API.mlirOperationDestroy(compiled_f.operation)
-            compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
+            MLIR.IR.attr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
+            run_pass_pipeline!(
+                mod,
+                "inline{default-pipeline=canonicalize max-iterations=4}",
+                "inline_pad_opts",
+            )
 
             compiled_f = func_with_padding
             in_tys = in_tys_padded
