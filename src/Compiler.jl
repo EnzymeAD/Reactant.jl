@@ -718,6 +718,9 @@ function optimization_passes(;
                 "pad_dot_general<1>(0)",
                 "pad_dot_general<1>(1)",
                 "reshape_pad",
+                "reshape_wrap",
+                "reshape_rotate",
+                "reshape_extend"
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -758,6 +761,9 @@ function optimization_passes(;
                 "transpose_dus",
                 "transpose_pad<1>",
                 "transpose_einsum<1>",
+                "transpose_wrap",
+                "transpose_extend",
+                "transpose_rotate"
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
