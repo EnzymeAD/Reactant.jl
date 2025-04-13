@@ -732,7 +732,9 @@ function NamedSharding(sharding::Replicated, ndims::Int)
     return NamedSharding(sharding.mesh, ntuple(Returns(nothing), ndims))
 end
 
-function (sharding::Replicated)(client::XLA.AbstractClient, device, x)
+function (sharding::Replicated)(
+    client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
+)
     return (NamedSharding(sharding, ndims(x)))(client, device, x)
 end
 
