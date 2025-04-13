@@ -362,11 +362,13 @@ end
 
 function _get_num_slices(::AbstractCloudTPUEnvDetector)
     Reactant.TPUUtils.has_megascale_address() || return 1
+    @debug Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_NUM_SLICES")
     return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_NUM_SLICES"))
 end
 
 function _get_slice_id(::AbstractCloudTPUEnvDetector)
     Reactant.TPUUtils.has_megascale_address() || return 0
+    @debug Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_SLICE_ID")
     return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_SLICE_ID"))
 end
 
