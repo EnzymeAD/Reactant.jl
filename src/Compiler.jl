@@ -1061,6 +1061,7 @@ function compile_mlir!(
     donated_args::Symbol=:auto, # :auto | :none
     optimize_then_pad::Bool=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
+    no_inline::Bool=false,
     kwargs...,
 )
     @assert donated_args ∈ (:auto, :none)
@@ -1085,7 +1086,15 @@ function compile_mlir!(
     fnname = string(f)
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(
-            f, args, fn_kwargs, fnname, true; runtime, optimize_then_pad, kwargs...
+            f,
+            args,
+            fn_kwargs,
+            fnname,
+            true;
+            runtime,
+            optimize_then_pad,
+            no_inline,
+            kwargs...,
         )
     finally
         deactivate_raising!(is_raising)
@@ -1475,6 +1484,7 @@ function compile_mlir!(
                     call_args;
                     result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
                     callee=MLIR.IR.FlatSymbolRefAttribute(fnname_old),
+                    no_inline=no_inline ? MLIR.IR.UnitAttribute() : nothing,
                 )
 
                 results = MLIR.IR.Value[
@@ -1744,6 +1754,7 @@ macro code_hlo(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :no_inline => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1777,6 +1788,7 @@ macro code_mhlo(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :no_inline => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1810,6 +1822,7 @@ macro code_xla(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :no_inline => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1843,6 +1856,7 @@ macro compile(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :no_inline => false,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1865,6 +1879,7 @@ macro jit(args...)
         :transpose_propagate => :(:up),
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
+        :no_inline => false,
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
