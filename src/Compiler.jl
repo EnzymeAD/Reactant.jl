@@ -1043,8 +1043,9 @@ end
 
 function get_optimize_comms_passes(options::Reactant.OptimizeCommunicationOptions)
     options_str = String(options)
-    return [
-        "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice}",
+    res = [
+        "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
+	"print",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
@@ -1052,7 +1053,9 @@ function get_optimize_comms_passes(options::Reactant.OptimizeCommunicationOption
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
+		     	"print",
     ]
+    return res
 end
 
 function compile_mlir!(
@@ -1463,7 +1466,7 @@ function compile_mlir!(
                 sym_visibility=MLIR.IR.attr(compiled_f, "private"),
             )
             fnbody = MLIR.IR.Block(
-                in_tys_padded, [MLIR.IR.Location() for _ in in_tys_padded]
+		   in_tys_padded, [MLIR.IR.Location(MLIR.API.mlirValueGetLocation(MLIR.IR.argument(MLIR.IR.first_block(MLIR.IR.region(compiled_f, 1)), i))) for i in 1:length(linear_args)]
             )
             push!(MLIR.IR.region(func_with_padding, 1), fnbody)
             MLIR.IR.activate!(fnbody)
