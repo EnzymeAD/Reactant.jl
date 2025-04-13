@@ -468,7 +468,7 @@ end
             randn(Float32, 4, 6); sharding=Sharding.NamedSharding(mesh, (:x, :y))
         )
 
-        @test (@jit no_inline=true sum(x_ra)) ≈ sum(Array(x_ra))
+        @test (@jit no_inline = true sum(x_ra)) ≈ sum(Array(x_ra))
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
