@@ -78,7 +78,9 @@ default_device() = default_device(default_backend())
 process_index() = process_index(default_backend())
 
 runtime(::Nothing) = runtime()
-runtime() = runtime(default_backend())
+runtime() = runtime(global_backend_state)
+runtime(::PJRTBackendState) = Val(:PJRT)
+runtime(::IFRTBackendState) = Val(:IFRT)
 runtime(::PJRT.Client) = Val(:PJRT)
 runtime(::IFRT.Client) = Val(:IFRT)
 
