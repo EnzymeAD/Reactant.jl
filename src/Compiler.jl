@@ -684,6 +684,7 @@ function optimization_passes(;
         "concat_concat_to_dus",
         "speculate_if_pad_to_select",
 	"broadcast_iota_simplify",
+	"select_comp_iota_to_dus",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
