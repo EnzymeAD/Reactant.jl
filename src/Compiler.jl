@@ -726,7 +726,7 @@ function optimization_passes(;
                 "reshape_pad",
                 "reshape_wrap",
                 "reshape_rotate",
-                "reshape_extend"
+                "reshape_extend",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -769,7 +769,7 @@ function optimization_passes(;
                 "transpose_einsum<1>",
                 "transpose_wrap",
                 "transpose_extend",
-                "transpose_rotate"
+                "transpose_rotate",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1473,7 +1473,16 @@ function compile_mlir!(
                 sym_visibility=MLIR.IR.attr(compiled_f, "private"),
             )
             fnbody = MLIR.IR.Block(
-		   in_tys_padded, [MLIR.IR.Location(MLIR.API.mlirValueGetLocation(MLIR.IR.argument(MLIR.IR.first_block(MLIR.IR.region(compiled_f, 1)), i))) for i in 1:length(linear_args)]
+                in_tys_padded,
+                [
+                    MLIR.IR.Location(
+                        MLIR.API.mlirValueGetLocation(
+                            MLIR.IR.argument(
+                                MLIR.IR.first_block(MLIR.IR.region(compiled_f, 1)), i
+                            ),
+                        ),
+                    ) for i in 1:length(linear_args)
+                ],
             )
             push!(MLIR.IR.region(func_with_padding, 1), fnbody)
             MLIR.IR.activate!(fnbody)
