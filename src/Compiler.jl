@@ -1052,13 +1052,11 @@ function get_optimize_comms_passes(options::Reactant.OptimizeCommunicationOption
 	"enzyme-hlo-generate-td{patterns=reshape_to_broadcast}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
-	"print",
         options_str,
         "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
-	"print",
     ]
     return res
 end
