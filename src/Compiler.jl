@@ -686,6 +686,7 @@ function optimization_passes(;
         "broadcast_iota_simplify",
         "select_comp_iota_to_dus",
 	"compare_cleanup",
+	"broadcast_compare",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
