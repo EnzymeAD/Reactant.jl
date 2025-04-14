@@ -685,10 +685,10 @@ function optimization_passes(;
         "speculate_if_pad_to_select",
         "broadcast_iota_simplify",
         "select_comp_iota_to_dus",
-	"compare_cleanup",
-	"broadcast_compare",
-	"not_compare",
-	"broadcast_iota",
+        "compare_cleanup",
+        "broadcast_compare",
+        "not_compare",
+        "broadcast_iota",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
