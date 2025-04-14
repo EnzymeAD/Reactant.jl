@@ -683,8 +683,8 @@ function optimization_passes(;
         "concat_multipad",
         "concat_concat_to_dus",
         "speculate_if_pad_to_select",
-	"broadcast_iota_simplify",
-	"select_comp_iota_to_dus",
+        "broadcast_iota_simplify",
+        "select_comp_iota_to_dus",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
@@ -1049,7 +1049,7 @@ function get_optimize_comms_passes(options::Reactant.OptimizeCommunicationOption
         "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
-	"enzyme-hlo-generate-td{patterns=reshape_to_broadcast}",
+        "enzyme-hlo-generate-td{patterns=reshape_to_broadcast}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
