@@ -690,7 +690,8 @@ function optimization_passes(;
         "not_compare",
         "broadcast_iota",
 	"cse_iota",
-	"compare_iota_const_simplify",
+	# X/REF: https://github.com/EnzymeAD/Enzyme-JAX/issues/822#issuecomment-2803437127, sharding doesn't like the new DUS of constants
+	# "compare_iota_const_simplify",
 	"reshuffle_ands_compares",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
