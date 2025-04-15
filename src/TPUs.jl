@@ -38,7 +38,7 @@ function download_libtpu_if_needed(path=nothing)
     @assert path !== nothing "libtpu_dir is not set!"
     if !isfile(path * "/libtpu.so")
         Downloads.download(
-            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250326+nightly-py3-none-manylinux_2_31_x86_64.whl",
+            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250415+nightly-py3-none-manylinux_2_31_x86_64.whl",
             path * "/tpu.zip",
         )
         run(`unzip -qq $(path*"/tpu.zip") -d $(path)/tmp`)
