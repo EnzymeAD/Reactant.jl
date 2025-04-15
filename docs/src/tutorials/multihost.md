@@ -169,14 +169,14 @@ gcloud compute tpus queued-resources ssh ${QR_ID} \
     --worker=all --node=all \
     --zone=${ZONE} --project=${PROJECT} \
     --command="
-        wget --quiet https://julialang-s3.julialang.org/bin/linux/x64/1.11/julia-1.11.4-linux-x86_64.tar.gz;
-        tar xzf julia-1.11.4-linux-x86_64.tar.gz;
-        rm julia-1.11.4-linux-x86_64.tar.gz;
-        unset LD_PRELOAD;
-        ./julia-1.11.4/bin/julia --project=. --threads=auto -e '
-            using Pkg;
-            Pkg.instantiate();
-            Pkg.precompile();'"
+       wget --quiet https://julialang-s3.julialang.org/bin/linux/x64/1.11/julia-1.11.5-linux-x86_64.tar.gz;
+                tar xzf julia-1.11.5-linux-x86_64.tar.gz;
+                rm julia-1.11.5-linux-x86_64.tar.gz;
+                unset LD_PRELOAD;
+                ./julia-1.11.5/bin/julia --project=. --threads=auto -e '
+                    using Pkg;
+                    Pkg.instantiate();
+                    Pkg.precompile();'"
 
 # Run the sharding code
 gcloud compute tpus queued-resources ssh ${QR_ID} \
