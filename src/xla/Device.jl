@@ -11,6 +11,8 @@ function device_kind end
 function default_memory end
 function memories end
 function is_addressable end
+function core_on_chip end
+function coords end
 
 """
     device_ordinal(device::Device)

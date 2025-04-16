@@ -2583,3 +2583,62 @@ extern "C" void addSdyPropagationPipeline(
                                                   0};
   mlir::sdy::addPropagationPipeline(pm, options);
 }
+
+extern "C" int *pjrt_device_get_coords(PjRtDevice *device, int *size) {
+  const auto &attrs = device->Attributes();
+
+  auto it = attrs.find("coords");
+  if (it == attrs.end()) {
+    *size = 0;
+    return nullptr;
+  }
+
+  const auto &variant = it->second;
+  if (!std::holds_alternative<std::vector<int64_t>>(variant)) {
+    *size = 0;
+    return nullptr;
+  }
+
+  const auto &coords = std::get<std::vector<int64_t>>(variant);
+  *size = coords.size();
+
+  int *coords_ptr = new int[*size];
+  std::transform(coords.begin(), coords.end(), coords_ptr, [](int64_t val) {
+    return static_cast<int>(val);
+  });
+
+  return coords_ptr;
+}
+
+extern "C" int *ifrt_device_get_coords(ifrt::Device *device, int *size) {
+  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+    ReactantThrowError(
+        "ifrt_device_get_coords: only supported for ifrt-pjrt.");
+  }
+  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  return pjrt_device_get_coords(ifrt_pjrt_device->pjrt_device(), size);
+}
+
+extern "C" int pjrt_device_get_core_on_chip(xla::PjRtDevice* device) {
+  const auto& attrs = device->Attributes();
+  auto it = attrs.find("core_on_chip");
+  if (it == attrs.end()) {
+    return -1;  // Attribute not found
+  }
+
+  const auto& attr = it->second;
+  if (!std::holds_alternative<int64_t>(attr)) {
+    return -1;  // Attribute exists but is not an int
+  }
+
+  return static_cast<int>(std::get<int64_t>(attr));
+}
+
+extern "C" int ifrt_device_get_core_on_chip(ifrt::Device* device) {
+  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+    ReactantThrowError(
+        "ifrt_device_get_core_on_chip: only supported for ifrt-pjrt.");
+  }
+  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  return pjrt_device_get_core_on_chip(ifrt_pjrt_device->pjrt_device());
+}

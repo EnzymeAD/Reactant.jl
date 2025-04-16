@@ -48,3 +48,21 @@ function XLA.allocatorstats_internal(device::Device)
     )::Cvoid
     return ref[]
 end
+
+function XLA.coords(device::Device)
+    GC.@preserve device begin
+        size = Ref{Cint}()
+        coords = @ccall MLIR.API.mlir_c.pjrt_device_get_coords(
+            device.device::Ptr{Cvoid}, size::Ptr{Cint}
+        )::Ptr{Cint}
+        return unsafe_wrap(Array, coords, size[])
+    end
+end
+
+function XLA.core_on_chip(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.pjrt_device_get_core_on_chip(
+            device.device::Ptr{Cvoid}
+        )::Cint
+    end
+end
