@@ -476,6 +476,7 @@ function optimization_passes(;
     dus_to_concat::Bool=false,
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
+    max_constant_threshold::Int=1024,
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -516,8 +517,8 @@ function optimization_passes(;
         "cse_neg<16>",
         "cse_abs<16>",
         "cse_concatenate<16>",
-        "concatenate_op_canon<16>(1024)",
-        "select_op_canon<16>(1024)",
+        "concatenate_op_canon<16>($max_constant_threshold)",
+        "select_op_canon<16>($max_constant_threshold)",
         "add_simplify<16>",
         "sub_simplify<16>",
         "and_simplify<16>",
@@ -531,6 +532,9 @@ function optimization_passes(;
         "div_simplify<16>",
         "rem_simplify<16>",
         "pow_simplify<16>",
+        "simplify_extend<16>",
+        "simplify_wrap<16>",
+        "simplify_rotate<16>",
         "sqrt_simplify<16>",
         "cos_simplify<16>",
         "sin_simplify<16>",
@@ -551,15 +555,16 @@ function optimization_passes(;
         "reduce_to_reshape<16>",
         "broadcast_to_reshape<16>",
         "gather_simplify<16>",
-        "iota_simplify<16>(1024)",
-        "broadcast_in_dim_simplify<16>(1024)",
+        "slice_internal",
+        "iota_simplify<16>($max_constant_threshold)",
+        "broadcast_in_dim_simplify<16>($max_constant_threshold)",
         "convert_concat<1>",
         "dynamic_update_to_concat<1>",
         "slice_of_dynamic_update<1>",
         "slice_elementwise<1>",
         "slice_pad<1>",
         "dot_reshape_dot<1>",
-        "concat_const_prop<1>",
+        "concat_const_prop<1>($max_constant_threshold)",
         "concat_fuse<1>",
         "pad_reshape_pad<1>",
         "pad_pad<1>",
@@ -711,6 +716,7 @@ function optimization_passes(;
 
     if WHILE_CONCAT[]
         push!(transform_passes_list, "while_concat")
+        push!(transform_passes_list, "while_wrap")
     end
 
     if dus_to_concat
