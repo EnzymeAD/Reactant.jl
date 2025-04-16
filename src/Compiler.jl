@@ -716,6 +716,7 @@ function optimization_passes(;
 
     if WHILE_CONCAT[]
         push!(transform_passes_list, "while_concat")
+        push!(transform_passes_list, "while_wrap")
     end
 
     if dus_to_concat
