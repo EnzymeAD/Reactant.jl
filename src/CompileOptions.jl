@@ -15,7 +15,7 @@ end
 
 function Base.String(options::OptimizeCommunicationOptions)
     return (
-        "optimize-communication{" *
+        "print,optimize-communication{" *
         join(["$(f)=$(getfield(options, f))" for f in fieldnames(typeof(options))], " ") *
         "}"
     )
