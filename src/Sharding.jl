@@ -87,6 +87,8 @@ struct Mesh{D,ID<:AbstractVector{Int}}
     end
 end
 
+include("MeshUtils.jl")
+
 function sdy_mesh_to_reactant_mesh(mesh_attr::MLIR.IR.Attribute, global_device_ids)
     @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
 
