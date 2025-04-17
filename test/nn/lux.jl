@@ -5,6 +5,11 @@ function loss_function(model, x, y, ps, st)
     return CrossEntropyLoss()(y_hat, y)
 end
 
+function loss_function(model, x, ps, st)
+    y_hat, _ = model(x, ps, st)
+    return sum(abs2, y_hat)
+end
+
 function gradient_loss_function(model, x, y, ps, st)
     dps = Enzyme.make_zero(ps)
     _, res = Enzyme.autodiff(
@@ -14,6 +19,20 @@ function gradient_loss_function(model, x, y, ps, st)
         Const(model),
         Const(x),
         Const(y),
+        Duplicated(ps, dps),
+        Const(st),
+    )
+    return res, dps
+end
+
+function gradient_loss_function(model, x, ps, st)
+    dps = Enzyme.make_zero(ps)
+    _, res = Enzyme.autodiff(
+        set_runtime_activity(ReverseWithPrimal),
+        loss_function,
+        Active,
+        Const(model),
+        Const(x),
         Duplicated(ps, dps),
         Const(st),
     )
@@ -66,4 +85,17 @@ end
     for (dps1, dps2) in zip(fleaves(dps), fleaves(dps_reactant))
         @test_skip dps1 ≈ dps2 atol = 1e-3 rtol = 1e-2
     end
+end
+
+@testset "RNN Integration" begin
+    using Reactant, Lux, Enzyme, Random
+
+    model = Recurrence(RNNCell(4 => 4); ordering=BatchLastIndex())
+    ps, st = Reactant.to_rarray(Lux.setup(Random.default_rng(), model))
+
+    x = Reactant.to_rarray(rand(Float32, 4, 16, 12))
+
+    # This test requires running optimizations between the enzyme autodiff passes
+    res, ∂ps = @jit gradient_loss_function(model, x, ps, st)
+    @test res isa Reactant.ConcreteRNumber
 end
