@@ -779,6 +779,7 @@ function optimization_passes(;
                 "transpose_wrap",
                 "transpose_extend",
                 "transpose_rotate",
+                "transpose_dynamic_slice",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1397,16 +1398,7 @@ function compile_mlir!(
         error("Invalid optimize option: $(Meta.quot(optimize))")
     end
 
-    # HACK: remove with next JLL
     if !(optimize isa String)
-        if transpose_propagate === :up
-            run_pass_pipeline!(
-                mod,
-                "enzyme-hlo-generate-td{patterns=transpose_while},transform-interpreter,enzyme-hlo-remove-transform",
-                "transpose_while",
-            )
-        end
-
         if optimize ∉ (:none, :just_batch, :canonicalize) &&
             (transpose_propagate === :up || reshape_propagate === :up)
             # We tried propagating reshapes and transposes up. If at this point we are left with
@@ -1425,7 +1417,6 @@ function compile_mlir!(
     end
 
     # Now we resolve paddings if `optimize_then_pad`
-    prepad_fnname = fnname
     if optimize_then_pad
         padded_inputs = IdDict()
         has_padded_inputs = false
