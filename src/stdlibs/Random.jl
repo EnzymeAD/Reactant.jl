@@ -14,8 +14,8 @@ using ..Reactant:
     Reactant,
     TracedUtils,
     Ops,
-    ConcretePJRTArray,
-    ConcretePJRTNumber,
+    AbstractConcreteArray,
+    AbstractConcreteNumber,
     unwrapped_eltype
 using Random: Random, AbstractRNG
 
@@ -48,9 +48,9 @@ end
 end
 
 @noinline function Random.seed!(rng::ConcreteRNG, seed::Number)
-    seed isa ConcretePJRTNumber && (seed = unwrapped_eltype(seed)(seed))
+    seed isa AbstractConcreteNumber && (seed = unwrapped_eltype(seed)(seed))
     seed = reinterpret(UInt64, Random.hash_seed(seed))
-    return Random.seed!(rng, ConcretePJRTArray(seed))
+    return Random.seed!(rng, Reactant.to_rarray(seed))
 end
 
 @noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractVector{<:Integer})
@@ -58,10 +58,10 @@ end
 end
 
 @noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractVector{UInt64})
-    return Random.seed!(rng, ConcretePJRTArray(seed))
+    return Random.seed!(rng, Reactant.to_rarray(seed))
 end
 
-@noinline function Random.seed!(rng::ConcreteRNG, seed::ConcretePJRTArray{UInt64,1})
+@noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractConcreteArray{UInt64,1})
     rng.seed = seed
     return rng
 end
@@ -69,8 +69,8 @@ end
 Base.copy(rng::ConcreteRNG) = ConcreteRNG(copy(rng.seed), rng.algorithm)
 Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
 
-@noinline ConcreteRNG() = ConcreteRNG(ConcretePJRTArray(make_seed()))
-@noinline ConcreteRNG(seed::ConcretePJRTArray{UInt64,1}) = ConcreteRNG(seed, "DEFAULT")
+@noinline ConcreteRNG() = ConcreteRNG(Reactant.to_rarray(make_seed()))
+@noinline ConcreteRNG(seed::AbstractConcreteArray{UInt64,1}) = ConcreteRNG(seed, "DEFAULT")
 
 @noinline default_rng() = ConcreteRNG()
 
