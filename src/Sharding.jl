@@ -191,9 +191,7 @@ end
 function (::NoSharding)(client::XLA.IFRT.Client, device, x::Union{AbstractArray,Number})
     device === nothing && (device = XLA.default_device(client))
     return (
-        XLA.IFRT.AsyncArray(client, x, device),
-        ShardInfo(NoSharding(), nothing),
-        ntuple(Returns(0), ndims(x)),
+        XLA.IFRT.AsyncArray(client, x, device), ShardInfo(NoSharding(), nothing), nothing
     )
 end
 
@@ -722,7 +720,7 @@ struct Replicated{M<:Mesh} <: AbstractSharding
     mesh::M
 end
 
-codegen_with_new_mesh(replicated::Replicated, mesh_sym) = :($(Replicated)($mesh_sym))
+codegen_with_new_mesh(::Replicated, mesh_sym) = :($(Replicated)($mesh_sym))
 
 @inline ndevices(sharding::Replicated) = length(sharding.mesh)
 

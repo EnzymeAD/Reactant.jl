@@ -239,6 +239,7 @@ function create_result(
     unresharded_code::Vector{Expr},
     unresharded_arrays_cache,
     used_shardinfo,
+    result_cache,
 ) where {T,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -256,12 +257,17 @@ function create_result(
     end
 
     # We will set the data for this later
+    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
+
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
         push!(used_shardinfo, sharding)
-        return :(ConcretePJRTNumber{$T}(($(tocopy.data...,)), $sharding))
+        result = ConcretePJRTNumber{T}(tocopy.data, sharding)
+    else
+        result = ConcretePJRTNumber{T}(tocopy.data)
     end
-    return :(ConcretePJRTNumber{$T}($(tocopy.data)))
+    result_cache[tocopy] = result
+    return Meta.quot(result)
 end
 
 function create_result(
@@ -273,6 +279,7 @@ function create_result(
     unresharded_code::Vector{Expr},
     unresharded_arrays_cache,
     used_shardinfo,
+    result_cache,
 ) where {T,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -290,12 +297,17 @@ function create_result(
     end
 
     # We will set the data for this later
+    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
+
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
         push!(used_shardinfo, sharding)
-        return :(ConcreteIFRTNumber{$T}($(tocopy.data), $sharding))
+        result = ConcreteIFRTNumber{T}(tocopy.data, sharding)
+    else
+        result = ConcreteIFRTNumber{T}(tocopy.data)
     end
-    return :(ConcreteIFRTNumber{$T}($(tocopy.data)))
+    result_cache[tocopy] = result
+    return Meta.quot(result)
 end
 
 function create_result(
@@ -307,6 +319,7 @@ function create_result(
     unresharded_code::Vector{Expr},
     unresharded_arrays_cache,
     used_shardinfo,
+    result_cache,
 ) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -324,14 +337,17 @@ function create_result(
     end
 
     # We will set the data for this later
+    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
+
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
         push!(used_shardinfo, sharding)
-        return :(ConcretePJRTArray{$T,$N}(($(tocopy.data)...,), $(tocopy.shape), $sharding))
+        result = ConcretePJRTArray{T,N}(tocopy.data, tocopy.shape, sharding)
+    else
+        result = ConcretePJRTArray{T,N,D,S}(tocopy.data, tocopy.shape, tocopy.sharding)
     end
-    return :(ConcretePJRTArray{$T,$N,$D,$S}(
-        $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
-    ))
+    result_cache[tocopy] = result
+    return Meta.quot(result)
 end
 
 function create_result(
@@ -343,6 +359,7 @@ function create_result(
     unresharded_code::Vector{Expr},
     unresharded_arrays_cache,
     used_shardinfo,
+    result_cache,
 ) where {T,N,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
@@ -377,14 +394,17 @@ function create_result(
     end
 
     # We will set the data for this later
+    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
+
     if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
         sharding = pop!(path_to_shard_info, path)
         push!(used_shardinfo, sharding)
-        return :(ConcreteIFRTArray{$T,$N}($(tocopy.data), $(tocopy.shape), $sharding))
+        result = ConcreteIFRTArray{T,N}(tocopy.data, tocopy.shape, sharding)
+    else
+        result = ConcreteIFRTArray{T,N,S}(tocopy.data, tocopy.shape, tocopy.sharding)
     end
-    return :(ConcreteIFRTArray{$T,$N,$S}(
-        $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
-    ))
+    result_cache[tocopy] = result
+    return Meta.quot(result)
 end
 
 function generate_unresharded_ifrt_array(
@@ -2472,6 +2492,7 @@ function codegen_unflatten!(
     end
 
     prevkeys = collect(keys(result_stores))
+    result_cache = IdDict{ctypes,ctypes}()
     result_code = create_result(
         concrete_result,
         (),
@@ -2481,6 +2502,7 @@ function codegen_unflatten!(
         unresharded_code,
         unresharded_arrays_cache,
         used_shardinfo,
+        result_cache,
     )
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
