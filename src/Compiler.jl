@@ -2492,7 +2492,7 @@ function codegen_unflatten!(
     end
 
     prevkeys = collect(keys(result_stores))
-    result_cache = Dict{ctypes,ctypes}()
+    result_cache = IdDict{ctypes,ctypes}()
     result_code = create_result(
         concrete_result,
         (),
