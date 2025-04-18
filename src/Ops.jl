@@ -615,20 +615,19 @@ end
     return TracedRNumber{T}((), res)
 end
 
-# function bitcast_convert(
-#     ::Type{TracedRArray{U,N}},
-#     x::TracedRArray{T,N};
-#     location=mlir_stacktrace(
-#         "bitcast_convert", @__FILE__, @__LINE__
-#     ),
-# ) where {T,N}
-#     res = MLIR.IR.result(
-#         stablehlo.bitcast_convert(
-#             x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location
-#         ),
-#     )
-#     return TracedRArray{T,N}((), res, size(x))
-# end
+function bitcast_convert(
+    ::Type{TracedRArray{U,N}},
+    x::TracedRArray{T,N};
+    location=mlir_stacktrace("bitcast_convert", @__FILE__, @__LINE__),
+) where {T,U,N}
+    res = MLIR.IR.result(
+        stablehlo.bitcast_convert(
+            x.mlir_data; result_0=mlir_type(TracedRArray{U,N}, size(x)), location
+        ),
+    )
+    return TracedRArray{U,N}((), res, size(x))
+end
+
 @noinline function bitcast_convert(
     ::Type{U},
     x::TracedRNumber{T};
@@ -1244,7 +1243,8 @@ end
     )
 
 Generate a random array of type `T` with the given shape and seed from a uniform random
-distribution between 0 and 1. Returns a NamedTuple with the following fields:
+distribution between 0 and 1 (for floating point types). Returns a NamedTuple with the
+following fields:
 
 - `output_state`: The state of the random number generator after the operation.
 - `output`: The generated array.
@@ -1283,6 +1283,7 @@ distribution between 0 and 1. Returns a NamedTuple with the following fields:
     )
 end
 
+# https://github.com/jax-ml/jax/blob/474dcd409d6fa4c048014851922460f9d4fc199e/jax/_src/random.py#L444-L464
 @noinline function rng_bit_generator(
     ::Type{T},
     seed::TracedRArray{UInt64,1},
@@ -1291,11 +1292,20 @@ end
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
 ) where {T<:AbstractFloat}
     nbits = sizeof(T) * 8
-    uT = nbits == 16 ? UInt16 : (nbits == 32 ? UInt32 : UInt64)
+    @assert nbits ∈ (8, 16, 32, 64) "Unsupported type: $(T)"
+    uT = nbits == 8 ? UInt8 : (nbits == 16 ? UInt16 : (nbits == 32 ? UInt32 : UInt64))
     (; output_state, output) = rng_bit_generator(uT, seed, shape; algorithm, location)
-    output = divide(
-        convert(TracedRArray{T,ndims(output)}, output),
-        fill(T(typemax(uT)), Tuple(shape); location),
+    float_bits = or(
+        shift_right_logical(
+            output,
+            fill(uT(nbits - Reactant.nmantissa(T)), size(output); location);
+            location,
+        ),
+        fill(reinterpret(uT, T(1)), size(output); location),
+    )
+    output = subtract(
+        bitcast_convert(TracedRArray{T,length(shape)}, float_bits; location),
+        fill(T(1), size(output); location),
     )
     return (; output_state, output)
 end
