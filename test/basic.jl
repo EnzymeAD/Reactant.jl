@@ -1157,7 +1157,7 @@ function test_aliased_numbers(ps, x)
 end
 
 @testset "Correct Aliasing" begin
-    ps = (a = rand(4), b = rand(2), c = rand(4)) |> Reactant.to_rarray
+    ps = Reactant.to_rarray((a=rand(4), b=rand(2), c=rand(4)))
     x = ConcreteRNumber(3.14)
     res = @jit test_aliased_numbers(ps, x)
 
