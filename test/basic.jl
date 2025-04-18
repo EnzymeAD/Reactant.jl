@@ -1151,3 +1151,15 @@ end
         end
     end
 end
+
+function test_aliased_numbers(ps, x)
+    return map(Returns(x), ps)
+end
+
+@testset "Correct Aliasing" begin
+    ps = (a = rand(4), b = rand(2), c = rand(4)) |> Reactant.to_rarray
+    x = ConcreteRNumber(3.14)
+    res = @jit test_aliased_numbers(ps, x)
+
+    @test res[1] === res[2] === res[3]
+end
