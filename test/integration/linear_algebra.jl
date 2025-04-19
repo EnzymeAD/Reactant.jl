@@ -185,6 +185,88 @@ end
     end
 end
 
+@testset "dot" begin
+    a = [1, 2, 3, 4]
+    b = [-2, 5, 6, 7]
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit dot(a_ra, b_ra) ≈ dot(a, b)
+
+    a = rand(Int64, 4)
+    b = rand(4)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    
+    @test @jit dot(a_ra, b_ra) ≈ dot(a, b)
+
+    a = rand(Complex{Float64}, 4)
+    b = rand(Complex{Float64}, 4)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    ab_ra = @jit dot(a_ra, b_ra)
+    ab = dot(a,b)
+    
+    @test ab_ra ≈ ab 
+end
+
+@testset "cross" begin
+    a = [1, 2, 3]
+    b = [-2, 5, 7]
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit cross(a_ra, b_ra) ≈ cross(a, b)
+
+    a = rand(Int64, 3)
+    b = rand(3)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    
+    @test @jit dot(a_ra, b_ra) ≈ dot(a, b)
+
+    a = rand(Complex{Float64}, 3)
+    b = rand(Complex{Float64}, 3)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit cross(a_ra, b_ra) ≈ cross(a,b)
+end  
+
+@testset "adjoint!" begin
+    v = zeros(5)
+    M = rand(1, 5)
+    v_ra = Reactant.to_rarray(v)
+    M_ra = Reactant.to_rarray(M)
+
+    @jit adjoint!(v_ra, M_ra)
+    @test v_ra ≈ adjoint!(v, M)
+
+    v = rand(7)
+    M = zeros(1, 7)
+    v_ra = Reactant.to_rarray(v)
+    M_ra = Reactant.to_rarray(M)
+
+    @jit adjoint!(M_ra, v_ra)
+    @test M_ra ≈ adjoint!(M, v)
+
+    A = [1 2; 3 4; 5 6]
+    B = fill(Float64(0), (2,3))
+    A_ra = Reactant.to_rarray(A)
+    B_ra = Reactant.to_rarray(B)
+    
+    @jit adjoint!(B_ra, A_ra)
+    @test B_ra ≈ adjoint!(B, A)
+
+    A = rand(Complex{Float64}, (2, 3))
+    B = rand(Complex{Float64}, (3, 2))
+    A_ra = Reactant.to_rarray(A)
+    B_ra = Reactant.to_rarray(B)
+    
+    @jit adjoint!(B_ra, A_ra)
+    @test B_ra ≈ adjoint!(B, A)
+end
+
 @testset "axpy!" begin
     α = 3
     x = rand(Int64, 4)
