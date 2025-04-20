@@ -717,6 +717,8 @@ function optimization_passes(;
         "cse_iota",
         "compare_iota_const_simplify",
         "reshuffle_ands_compares",
+        "square_abs_simplify",
+        "divide_divide_simplify",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
