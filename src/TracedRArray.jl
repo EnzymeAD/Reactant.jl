@@ -377,7 +377,9 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         v = TracedUtils.promote_to(TracedRArray{T,N}, v)
     else
         v = TracedUtils.promote_to(TracedRArray{T,ndims(v)}, v)
-        non_integer_indices = [!(idx isa Integer) for idx in indices]
+        non_integer_indices = [
+            !(idx isa Union{Integer,TracedRNumber{<:Integer}}) for idx in indices
+        ]
         broadcast_dims = findall(non_integer_indices)
         if length(broadcast_dims) == N
             v = TracedUtils.broadcast_to_size(v, length.(indices))
