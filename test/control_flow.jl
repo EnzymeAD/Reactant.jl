@@ -836,3 +836,19 @@ end
     recursivenottraced.x[3].x = recursivenottraced
     @test !Reactant.ReactantCore.is_traced(recursivenottraced)
 end
+
+function loop_batched(x)
+    y = similar(x)
+    @trace for i in 1:size(x, 1)
+        y[i, :] = x[i, :] .+ 1
+        y[i, :] = y[i, :] .^ 2
+    end
+    return y
+end
+
+@testset "setindex: batched" begin
+    x = rand(1024, 128)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(loop_batched(x_ra)) ≈ loop_batched(x)
+end
