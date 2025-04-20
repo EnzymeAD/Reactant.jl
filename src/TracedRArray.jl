@@ -666,6 +666,10 @@ function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T2,N}) where {T
     return copyto!(dest, Ops.convert(TracedRArray{T,N}, src))
 end
 
+function Base.copyto!(dest::TracedRArray{T,N}, src::Array{T2,N}) where {T,T2,N}
+    return copyto!(dest, TracedUtils.promote_to(TracedRArray{T2,N}, src))
+end
+
 function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
