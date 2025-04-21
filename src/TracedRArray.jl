@@ -1001,14 +1001,14 @@ function overloaded_partialsort(
     k2_time_complexity = approx_mean_complexity_for_topk(k2max, length(x), rev)
 
     if rev # topk
-        if k_time_complexity < k2_time_complexity
+        if k_time_complexity < k2_time_complexity || unwrapped_eltype(x) <: Unsigned
             (; values, indices) = Ops.top_k(materialize_traced_array(x), kmax)
         else
             (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), k2max)
             values = Ops.negate(values)
         end
     else   # bottomk
-        if k_time_complexity < k2_time_complexity
+        if k_time_complexity < k2_time_complexity && !(unwrapped_eltype(x) <: Unsigned)
             (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), kmax)
             values = Ops.negate(values)
         else
