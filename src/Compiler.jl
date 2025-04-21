@@ -1631,8 +1631,22 @@ function compile_mlir!(
             result_shardings = [Sharding.Replicated() for _ in 1:length(linear_results)]
         end
 
-        if shardy_passes == :none
+        if shardy_passes === :none
             use_shardy_partitioner = true
+        elseif shardy_passes === :post_sdy_propagation
+            use_shardy_partitioner = true
+            run_pass_pipeline!(
+                mod,
+                join(
+                    [
+                        "sdy-propagation-pipeline",
+                        "sdy-close-shardings",
+                        get_optimize_comms_passes(optimize_communications)...,
+                    ],
+                    ",",
+                ),
+                "post_sdy_propagation",
+            )
         elseif shardy_passes isa Sharding.ShardyPropagationOptions
             run_pass_pipeline!(mod, shardy_passes)
             # sdy passes are run deep inside the XLA compiler. So the only way to respect
@@ -1649,7 +1663,7 @@ function compile_mlir!(
                 ),
                 "sdy_export",
             )
-        elseif shardy_passes == :to_mhlo_shardings
+        elseif shardy_passes === :to_mhlo_shardings
             run_pass_pipeline!(
                 mod,
                 join(
