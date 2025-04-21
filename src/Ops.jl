@@ -1699,10 +1699,15 @@ instead.
 @noinline function scatter_setindex(
     dest::TracedRArray{T,N},
     scatter_indices::TracedRArray{Int64,2},
-    updates::TracedRArray{T2,1},
+    updates::TracedRArray{T2,1};
+    location=mlir_stacktrace("scatter_setindex", @__FILE__, @__LINE__),
 ) where {T,N,T2}
     @assert length(updates) == size(scatter_indices, 1)
     @assert size(scatter_indices, 2) == N
+
+    scatter_indices = subtract(
+        scatter_indices, fill(Int64(1), size(scatter_indices)); location
+    )
 
     updates = convert(TracedRArray{T,1}, updates)
 
@@ -1760,7 +1765,9 @@ specified by `gather_indices`. If the indices are contiguous it is recommended t
 use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
 """
 @noinline function gather_getindex(
-    src::TracedRArray{T,N}, gather_indices::TracedRArray{Int64,2}
+    src::TracedRArray{T,N},
+    gather_indices::TracedRArray{Int64,2};
+    location=mlir_stacktrace("gather_getindex", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert size(gather_indices, 2) == N
 
@@ -1769,6 +1776,10 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
             "gather_getindex(::TracedRArray, ::TracedRArray{Int64,2}"
         )
     end
+
+    gather_getindex = subtract(
+        gather_indices, fill(Int64(1), size(gather_indices)); location
+    )
 
     #! format: off
     offset_dims = Int64[1]
@@ -1798,6 +1809,7 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
                     dimension_numbers,
                     slice_sizes=Base.fill(Int64(1), N),
                     indices_are_sorted=false,
+                    location,
                 ),
                 1,
             ),
