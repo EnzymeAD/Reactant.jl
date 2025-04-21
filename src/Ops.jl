@@ -1174,11 +1174,12 @@ end
     x::TracedRArray{T,N},
     k::Integer;
     comparator,
+    init_val::T,
     dimension::Integer=N,
     recall_target::AbstractFloat=0.95f0,
     reduction_input_size_override::Int64=-1,
     aggregate_to_topk::Bool=true,
-    fallback::Bool=false,
+    fallback::Bool=true,
     location=mlir_stacktrace("approx_top_k", @__FILE__, @__LINE__),
 ) where {T<:AbstractFloat,N}
     func =
@@ -1203,7 +1204,7 @@ end
 
     iota_arg = iota(Int32, collect(Int64, size(x)); iota_dimension=dimension, location)
     init_arg = constant(Int32(-1); location)
-    init_val = constant(-typemax(T); location)
+    init_val = constant(init_val; location)
 
     dimension ≤ 0 && (dimension += N)
 
@@ -1214,7 +1215,7 @@ end
         "top_k" => MLIR.IR.Attribute(k),
         "aggregate_to_topk" => MLIR.IR.Attribute(aggregate_to_topk),
     )
-    fallback && (backend_config["fallback"] = MLIR.IR.UnitAttribute())
+    fallback && (backend_config["is_fallback"] = MLIR.IR.Attribute(true))
 
     result_shape = collect(Int64, size(x))
     result_shape[dimension] = k

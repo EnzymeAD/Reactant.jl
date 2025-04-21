@@ -1,3 +1,7 @@
+```@meta
+CollapsedDocStrings = true
+```
+
 # Configuration Options
 
 ## Scoped Values
@@ -10,6 +14,13 @@
 ```@docs
 Reactant.with_config
 ```
+
+### Values
+
+- `DOT_GENERAL_PRECISION`: Controls the `precision_config` for `stablehlo.dot_general`.
+- `DOT_GENERAL_ALGORITHM`: Controls the `algorithm` for `stablehlo.dot_general`.
+- `LOWER_PARTIALSORT_TO_APPROX_TOP_K`: Whether to lower `partialsort` to `Ops.approx_top_k`.
+  Note that XLA only supports lowering `ApproxTopK` for TPUs.
 
 ### DotGeneral
 

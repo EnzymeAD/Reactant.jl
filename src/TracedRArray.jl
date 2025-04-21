@@ -977,12 +977,24 @@ function approx_mean_complexity_for_topk(k, n, flipped::Bool)
 end
 
 function overloaded_partialsort(
-    x::AnyTracedRVector,
+    x::AnyTracedRVector{T},
     k::Union{Integer,OrdinalRange};
     by=identity,
     rev::Bool=false,
     lt=isless,
-)
+) where {T}
+    if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
+        comparator =
+            rev ? (a, b, i1, i2) -> !lt(by(a), by(b)) : (a, b, i1, i2) -> lt(by(a), by(b))
+        result = Ops.approx_top_k(
+            materialize_traced_array(x),
+            maximum(k);
+            dimension=1,
+            init_val=rev ? typemin(T) : typemax(T),
+        )
+        return result.values[1:maximum(k)], result.indices[1:maximum(k)]
+    end
+
     if lt !== isless || by !== identity
         comparator =
             rev ? (a, b, i1, i2) -> !lt(by(a), by(b)) : (a, b, i1, i2) -> lt(by(a), by(b))
@@ -1001,14 +1013,14 @@ function overloaded_partialsort(
     k2_time_complexity = approx_mean_complexity_for_topk(k2max, length(x), rev)
 
     if rev # topk
-        if k_time_complexity < k2_time_complexity || unwrapped_eltype(x) <: Unsigned
+        if k_time_complexity < k2_time_complexity || T <: Unsigned
             (; values, indices) = Ops.top_k(materialize_traced_array(x), kmax)
         else
             (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), k2max)
             values = Ops.negate(values)
         end
     else   # bottomk
-        if k_time_complexity < k2_time_complexity && !(unwrapped_eltype(x) <: Unsigned)
+        if k_time_complexity < k2_time_complexity && !(T <: Unsigned)
             (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), kmax)
             values = Ops.negate(values)
         else
