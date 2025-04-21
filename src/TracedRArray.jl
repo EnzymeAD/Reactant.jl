@@ -969,6 +969,13 @@ function Base.partialsortperm!(
     return view(ix, k)
 end
 
+# rough estimate to figure out which one we should use
+function approx_mean_complexity_for_topk(k, n, flipped::Bool)
+    base = k * log(n)
+    !flipped && return base
+    return base + k + n
+end
+
 function overloaded_partialsort(
     x::AnyTracedRVector,
     k::Union{Integer,OrdinalRange};
@@ -986,14 +993,31 @@ function overloaded_partialsort(
         return sorted_x[1:maximum(k)], sorted_idxs[1:maximum(k)]
     end
 
-    # XXX: If `maxk` is beyond a threshold should we emit a sort directly?
-    !rev && (k = length(x) .- k .+ 1)
-    !(k isa Integer) && (k = maximum(k))
-    (; values, indices) = Ops.top_k(materialize_traced_array(x), k)
-    if !rev
+    k2 = length(x) .- k .+ 1
+    kmax = maximum(k)
+    k2max = maximum(k2)
+
+    k_time_complexity = approx_mean_complexity_for_topk(kmax, length(x), !rev)
+    k2_time_complexity = approx_mean_complexity_for_topk(k2max, length(x), rev)
+
+    if rev # topk
+        if k_time_complexity < k2_time_complexity
+            (; values, indices) = Ops.top_k(materialize_traced_array(x), kmax)
+        else
+            (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), k2max)
+            values = Ops.negate(values)
+        end
+    else   # bottomk
+        if k_time_complexity < k2_time_complexity
+            (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), kmax)
+            values = Ops.negate(values)
+        else
+            (; values, indices) = Ops.top_k(materialize_traced_array(x), k2max)
+        end
         values = Ops.reverse(values; dimensions=[1])
         indices = Ops.reverse(indices; dimensions=[1])
     end
+
     return values, indices
 end
 
