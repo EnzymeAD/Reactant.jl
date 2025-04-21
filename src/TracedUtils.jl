@@ -87,7 +87,7 @@ function get_ancestor_indices(
     x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
 ) where {T,N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
-    indices = normalize_indices(x, indices...)
+    indices = Base.to_indices(x, indices)
     if any(is_traced, indices)
         indices, integer_indices, result_size, _, flattened_size = traced_indices(
             indices...
@@ -977,15 +977,6 @@ end
 
 @noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
     return Ops.broadcast_in_dim(x, collect(Int64, 1:ndims(x)), collect(Int64, rsize))
-end
-
-function normalize_indices(a::AbstractArray, indices...)
-    return map(enumerate(indices)) do (i, idx)
-        idx isa Colon && return collect(Int64, 1:size(a, i))
-        idx isa CartesianIndex && return Tuple(idx)
-        idx isa AbstractArray{Bool} && return findall(idx)
-        return idx
-    end
 end
 
 function traced_indices(indices...)

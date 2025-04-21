@@ -109,13 +109,39 @@ function scalar_index_to_cartesian(idx::T, sz::NTuple{N,Int}) where {T<:Number,N
 end
 
 function Base.getindex(
-    a::TracedRArray{T,N}, indices::Union{Int,TracedRNumber{Int}}
+    a::TracedRArray{T,N}, index::Union{Int,TracedRNumber{Int}}
 ) where {T,N}
-    if indices isa Int
-        indices = TracedUtils.promote_to(TracedRNumber{Int}, indices)
-    end
-    indices = TracedUtils.broadcast_to_size(indices, (1,))
-    return Ops.gather_getindex(a, scalar_index_to_cartesian(indices, size(a)))[1]
+    GPUArraysCore.assertscalar("getindex(::TracedRArray, ::Union{Int, TracedRNumber{Int}})")
+    return TracedRNumber{T}(
+        (),
+        Ops.reshape(
+            Ops.dynamic_slice(
+                a, collect(scalar_index_to_cartesian(index, size(a)) .+ 1), ones(Int32, N)
+            ),
+            Int64[],
+        ).mlir_data,
+    )
+end
+
+function Base.getindex(a::TracedRArray{T,N}, index::CartesianIndex{N}) where {T,N}
+    GPUArraysCore.assertscalar("getindex(::TracedRArray, ::CartesianIndex{N})")
+    return TracedRNumber{T}(
+        (),
+        Ops.reshape(
+            Ops.dynamic_slice(a, collect(Int64, index.I) .- 1, ones(Int32, N)), Int64[]
+        ).mlir_data,
+    )
+end
+
+# Needed to prevent method ambiguity
+function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {T}
+    GPUArraysCore.assertscalar("getindex(::TracedRArray, ::CartesianIndex{N})")
+    return TracedRNumber{T}(
+        (),
+        Ops.reshape(
+            Ops.dynamic_slice(a, collect(Int64, indices.I) .- 1, ones(Int32, 1)), Int64[]
+        ).mlir_data,
+    )
 end
 
 function Base.getindex(a::TracedRArray{T,N}, indices) where {T,N}
@@ -134,37 +160,8 @@ end
 
 Base.getindex(a::TracedRArray{T,N}, ::Colon) where {T,N} = materialize_traced_array(vec(a))
 
-function Base.getindex(a::TracedRArray{T,N}, indices::CartesianIndex{N}) where {T,N}
-    indices =
-        materialize_traced_array(
-            reshape(
-                TracedUtils.promote_to(
-                    TracedRArray{Int,1}, collect(Int64, vcat(Tuple(indices)...))
-                ),
-                1,
-                N,
-            ),
-        ) .- 1
-    return Ops.gather_getindex(a, indices)[1]
-end
-
-# Needed to prevent method ambiguity
-function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {T}
-    indices =
-        materialize_traced_array(
-            reshape(
-                TracedUtils.promote_to(
-                    TracedRArray{Int,1}, collect(Int64, vcat(Tuple(indices)...))
-                ),
-                1,
-                1,
-            ),
-        ) .- 1
-    return Ops.gather_getindex(a, indices)[1]
-end
-
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
-    indices = TracedUtils.normalize_indices(a, indices...)
+    indices = Base.to_indices(a, indices)
 
     use_gather_getindex = false
     for idxs in indices
@@ -186,6 +183,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
+
         indices, integer_indices, result_size, preddim_result_size, _ = TracedUtils.traced_indices(
             indices...
         )
@@ -343,7 +341,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     end
     maybe_assert_scalar_setindexing(a, indices...)
 
-    indices = TracedUtils.normalize_indices(a, indices...)
+    indices = Base.to_indices(a, indices)
 
     use_scatter_setindex = false
     for idxs in indices
