@@ -930,27 +930,40 @@ function Base.sortperm!(
     return ix
 end
 
-function Base.partialsort(x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...)
-    values, _ = overloaded_partialsort(x, k; kwargs...)
-    k = k .- minimum(k) .+ 1
+function Base.partialsort(
+    x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; rev=false, kwargs...
+)
+    if rev
+        values, _ = overloaded_partialsort_descending(x, k; kwargs...)
+    else
+        values, _ = overloaded_partialsort_ascending(x, k; kwargs...)
+    end
     k isa Integer && return @allowscalar(values[k])
     return view(values, k)
 end
 
-function Base.partialsort!(x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...)
-    values, _ = overloaded_partialsort(x, k; kwargs...)
-    kget = k .- minimum(k) .+ 1
-    val = @allowscalar(values[kget])
+function Base.partialsort!(
+    x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; rev=false, kwargs...
+)
+    if rev
+        values, _ = overloaded_partialsort_descending(x, k; kwargs...)
+    else
+        values, _ = overloaded_partialsort_ascending(x, k; kwargs...)
+    end
+    val = @allowscalar(values[k])
     @allowscalar setindex!(x, val, k)
     k isa Integer && return val
     return view(x, k)
 end
 
 function Base.partialsortperm(
-    x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; kwargs...
+    x::AnyTracedRVector, k::Union{Integer,OrdinalRange}; rev=false, kwargs...
 )
-    idxs = overloaded_partialsort(x, k; kwargs...)[2]
-    k = k .- minimum(k) .+ 1
+    if rev
+        _, idxs = overloaded_partialsort_descending(x, k; kwargs...)
+    else
+        _, idxs = overloaded_partialsort_ascending(x, k; kwargs...)
+    end
     k isa Integer && return @allowscalar(idxs[k])
     return view(idxs, k)
 end
@@ -959,78 +972,78 @@ function Base.partialsortperm!(
     ix::AnyTracedRVector{Int},
     x::AnyTracedRVector,
     k::Union{Integer,OrdinalRange};
+    rev=false,
     kwargs...,
 )
-    _, idxs = overloaded_partialsort(x, k; kwargs...)
-    kget = k .- minimum(k) .+ 1
-    val = @allowscalar(idxs[kget])
+    if rev
+        _, idxs = overloaded_partialsort_descending(x, k; kwargs...)
+    else
+        _, idxs = overloaded_partialsort_ascending(x, k; kwargs...)
+    end
+    val = @allowscalar(idxs[k])
     @allowscalar setindex!(ix, val, k)
-    k isa Integer && return val
-    return view(ix, k)
+    k isa Integer && return @allowscalar(ix[k])
+    return val
 end
 
-# rough estimate to figure out which one we should use
-function approx_mean_complexity_for_topk(k, n, flipped::Bool)
-    base = k * log(n)
-    !flipped && return base
-    return base + k + n
-end
-
-function overloaded_partialsort(
-    x::AnyTracedRVector{T},
-    k::Union{Integer,OrdinalRange};
-    by=identity,
-    rev::Bool=false,
-    lt=isless,
+function overloaded_partialsort_descending(
+    x::AnyTracedRVector{T}, k::Union{Integer,OrdinalRange}; by=identity, lt=isless
 ) where {T}
+    comparator = (a, b, i1, i2) -> !lt(by(a), by(b))
+
     if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
-        comparator =
-            rev ? (a, b, i1, i2) -> !lt(by(a), by(b)) : (a, b, i1, i2) -> lt(by(a), by(b))
         result = Ops.approx_top_k(
             materialize_traced_array(x),
             maximum(k);
+            comparator,
             dimension=1,
-            init_val=rev ? typemin(T) : typemax(T),
+            init_val=typemin(T),
         )
         return result.values[1:maximum(k)], result.indices[1:maximum(k)]
     end
 
     if lt !== isless || by !== identity
-        comparator =
-            rev ? (a, b, i1, i2) -> !lt(by(a), by(b)) : (a, b, i1, i2) -> lt(by(a), by(b))
-        idxs = Ops.constant(collect(LinearIndices(x)))
         sorted_x, sorted_idxs = Ops.sort(
-            materialize_traced_array(x), idxs; dimension=1, comparator
+            materialize_traced_array(x),
+            Ops.constant(collect(LinearIndices(x)));
+            dimension=1,
+            comparator,
         )
         return sorted_x[1:maximum(k)], sorted_idxs[1:maximum(k)]
     end
 
-    k2 = length(x) .- k .+ 1
-    kmax = maximum(k)
-    k2max = maximum(k2)
+    (; values, indices) = Ops.top_k(materialize_traced_array(x), maximum(k))
+    return values, indices
+end
 
-    k_time_complexity = approx_mean_complexity_for_topk(kmax, length(x), !rev)
-    k2_time_complexity = approx_mean_complexity_for_topk(k2max, length(x), rev)
+function overloaded_partialsort_ascending(
+    x::AnyTracedRVector{T}, k::Union{Integer,OrdinalRange}; by=identity, lt=isless
+) where {T}
+    comparator = (a, b, i1, i2) -> !lt(by(a), by(b))
 
-    if rev # topk
-        if k_time_complexity < k2_time_complexity || T <: Unsigned
-            (; values, indices) = Ops.top_k(materialize_traced_array(x), kmax)
-        else
-            (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), k2max)
-            values = Ops.negate(values)
-        end
-    else   # bottomk
-        if k_time_complexity < k2_time_complexity && !(T <: Unsigned)
-            (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), kmax)
-            values = Ops.negate(values)
-        else
-            (; values, indices) = Ops.top_k(materialize_traced_array(x), k2max)
-        end
-        values = Ops.reverse(values; dimensions=[1])
-        indices = Ops.reverse(indices; dimensions=[1])
+    if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
+        result = Ops.approx_top_k(
+            materialize_traced_array(x),
+            maximum(k);
+            comparator,
+            dimension=1,
+            init_val=typemax(T),
+        )
+        return result.values[1:maximum(k)], result.indices[1:maximum(k)]
     end
 
-    return values, indices
+    if lt !== isless || by !== identity || T <: Unsigned
+        sorted_x, sorted_idxs = Ops.sort(
+            materialize_traced_array(x),
+            Ops.constant(collect(LinearIndices(x)));
+            dimension=1,
+            comparator,
+        )
+        return sorted_x[1:maximum(k)], sorted_idxs[1:maximum(k)]
+    end
+
+    (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), maximum(k))
+    return Ops.negate(values), indices
 end
 
 # arg* functions

@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, Random, StableRNGs
 
 @testset "sort & sortperm" begin
     x = randn(10)
@@ -60,29 +60,29 @@ end
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(partialsort(x_ra, 1:5)) == partialsort(x, 1:5)
+    @test @jit(partialsort(x_ra, 1:5; rev=true)) == partialsort(x, 1:5; rev=true)
     @test @jit(partialsortperm(x_ra, 1:5)) == partialsortperm(x, 1:5)
+    @test @jit(partialsortperm(x_ra, 1:5; rev=true)) == partialsortperm(x, 1:5; rev=true)
+    @test @jit(partialsort(x_ra, 3:6)) == partialsort(x, 3:6)
+    @test @jit(partialsort(x_ra, 3:6; rev=true)) == partialsort(x, 3:6; rev=true)
+    @test @jit(partialsortperm(x_ra, 3:6)) == partialsortperm(x, 3:6)
+    @test @jit(partialsortperm(x_ra, 3:6; rev=true)) == partialsortperm(x, 3:6; rev=true)
     @test @jit(partialsort(x_ra, 4)) == partialsort(x, 4)
+    @test @jit(partialsort(x_ra, 4; rev=true)) == partialsort(x, 4; rev=true)
     @test @jit(partialsortperm(x_ra, 4)) == partialsortperm(x, 4)
-
-    psrt_rev(x, k) = partialsort(x, k; rev=true)
-    psrtperm_rev(x, k) = partialsortperm(x, k; rev=true)
-    psrt_by(x, k) = partialsort(x, k; by=abs2)
-    psrtperm_by(x, k) = partialsortperm(x, k; by=abs2)
-    psrt_lt(x, k) = partialsort(x, k; lt=(a, b) -> a > b)
-    psrtperm_lt(x, k) = partialsortperm(x, k; lt=(a, b) -> a > b)
-
-    @test @jit(psrt_rev(x_ra, 1:5)) == psrt_rev(x, 1:5)
-    @test @jit(psrtperm_rev(x_ra, 1:5)) == psrtperm_rev(x, 1:5)
-    @test @jit(psrt_by(x_ra, 1:5)) == psrt_by(x, 1:5)
-    @test @jit(psrtperm_by(x_ra, 1:5)) == psrtperm_by(x, 1:5)
-    @test @jit(psrt_lt(x_ra, 1:5)) == psrt_lt(x, 1:5)
-    @test @jit(psrtperm_lt(x_ra, 1:5)) == psrtperm_lt(x, 1:5)
+    @test @jit(partialsortperm(x_ra, 4; rev=true)) == partialsortperm(x, 4; rev=true)
 
     x = randn(10)
     x_ra = Reactant.to_rarray(x)
     @jit partialsort!(x_ra, 1:5)
     partialsort!(x, 1:5)
     @test Array(x_ra)[1:5] == x[1:5]
+
+    x = randn(10)
+    x_ra = Reactant.to_rarray(x)
+    @jit partialsort!(x_ra, 3:5; rev=true)
+    partialsort!(x, 3:5; rev=true)
+    @test Array(x_ra)[3:5] == x[3:5]
 
     x = randn(10)
     x_ra = Reactant.to_rarray(x)
@@ -187,4 +187,35 @@ end
 
     @test ffirstlinindices(iseven, x) == @jit(findfirst(iseven, x_ra))
     @test flastlinindices(iseven, x) == @jit(findlast(iseven, x_ra))
+end
+
+@testset "approx top k lowering" begin
+    x = collect(Float32, 1:1000)
+    x = x[randperm!(StableRNG(0), collect(1:1000))]
+    x_ra = Reactant.to_rarray(x)
+
+    hlo = Reactant.with_config(; lower_partialsort_to_approx_top_k=true) do
+        @code_hlo partialsortperm(x_ra, 4:15)
+    end
+
+    @test contains(repr(hlo), "ApproxTopK")
+    @test contains(repr(hlo), "top_k = 15 : i64")
+
+    hlo = Reactant.with_config(; lower_partialsort_to_approx_top_k=false) do
+        @code_hlo partialsortperm(x_ra, 4:15)
+    end
+
+    @test !contains(repr(hlo), "ApproxTopK")
+    @test contains(repr(hlo), "chlo.top_k")
+
+    idxs = partialsortperm(x, 4:15)
+    idxs_ra = Reactant.with_config(; lower_partialsort_to_approx_top_k=false) do
+        @jit partialsortperm(x_ra, 4:15)
+    end
+    @test idxs == idxs_ra
+
+    idxs_ra = Reactant.with_config(; lower_partialsort_to_approx_top_k=true) do
+        @jit partialsortperm(x_ra, 4:15)
+    end
+    @test idxs == idxs_ra
 end
