@@ -218,4 +218,15 @@ end
         @jit partialsortperm(x_ra, 4:15)
     end
     @test idxs == idxs_ra
+
+    idxs = partialsortperm(x, 4:15; rev=true)
+    idxs_ra = Reactant.with_config(; lower_partialsort_to_approx_top_k=false) do
+        @jit partialsortperm(x_ra, 4:15; rev=true)
+    end
+    @test idxs == idxs_ra
+
+    idxs_ra = Reactant.with_config(; lower_partialsort_to_approx_top_k=true) do
+        @jit partialsortperm(x_ra, 4:15; rev=true)
+    end
+    @test idxs == idxs_ra
 end

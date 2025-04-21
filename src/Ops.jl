@@ -1179,9 +1179,11 @@ end
     recall_target::AbstractFloat=0.95f0,
     reduction_input_size_override::Int64=-1,
     aggregate_to_topk::Bool=true,
-    fallback::Bool=true,
+    fallback::Union{Missing,Bool}=missing,
     location=mlir_stacktrace("approx_top_k", @__FILE__, @__LINE__),
 ) where {T<:AbstractFloat,N}
+    fallback === missing && (fallback = Reactant.FALLBACK_APPROX_TOP_K_LOWERING[])
+
     func =
         Reactant.TracedUtils.make_mlir_fn(
             comparator,

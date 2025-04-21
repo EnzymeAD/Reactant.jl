@@ -17,7 +17,9 @@ scope will use the provided values.
 
   - `lower_partialsort_to_approx_top_k`: Whether to lower `partialsort` and
     `partialsortperm` to `Ops.approx_top_k`. Note that XLA only supports lowering
-    `ApproxTopK` for TPUs.
+    `ApproxTopK` for TPUs unless `fallback_approx_top_k_lowering` is set to `true`.
+  - `fallback_approx_top_k_lowering`: Whether to lower `Ops.approx_top_k` to
+    `stablehlo.top_k` if the XLA backend doesn't support `ApproxTopK`. Defaults to `true`.
 
 ### DotGeneral
 
@@ -32,6 +34,7 @@ function with_config(
     dot_general_algorithm=missing,
     dot_general_precision=missing,
     lower_partialsort_to_approx_top_k=missing,
+    fallback_approx_top_k_lowering=missing,
 )
     config_vars = ()
     dot_general_algorithm !== missing &&
@@ -44,12 +47,19 @@ function with_config(
             LOWER_PARTIALSORT_TO_APPROX_TOP_K => lower_partialsort_to_approx_top_k,
         )
     )
+    fallback_approx_top_k_lowering !== missing && (
+        config_vars = (
+            config_vars...,
+            FALLBACK_APPROX_TOP_K_LOWERING => fallback_approx_top_k_lowering,
+        )
+    )
 
     return ScopedValues.with(f, config_vars...)
 end
 
 # Lower to ApproxTopK
 const LOWER_PARTIALSORT_TO_APPROX_TOP_K = ScopedValue(false)
+const FALLBACK_APPROX_TOP_K_LOWERING = ScopedValue(true)
 
 # DotGeneral Attributes Configuration
 """

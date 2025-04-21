@@ -989,27 +989,25 @@ end
 function overloaded_partialsort_descending(
     x::AnyTracedRVector{T}, k::Union{Integer,OrdinalRange}; by=identity, lt=isless
 ) where {T}
-    comparator = (a, b, i1, i2) -> !lt(by(a), by(b))
-
-    if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
-        result = Ops.approx_top_k(
-            materialize_traced_array(x),
-            maximum(k);
-            comparator,
-            dimension=1,
-            init_val=typemin(T),
-        )
-        return result.values[1:maximum(k)], result.indices[1:maximum(k)]
-    end
-
     if lt !== isless || by !== identity
         sorted_x, sorted_idxs = Ops.sort(
             materialize_traced_array(x),
             Ops.constant(collect(LinearIndices(x)));
             dimension=1,
-            comparator,
+            comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
         )
         return sorted_x[1:maximum(k)], sorted_idxs[1:maximum(k)]
+    end
+
+    if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
+        result = Ops.approx_top_k(
+            materialize_traced_array(x),
+            maximum(k);
+            comparator=(a, b, i1, i2) -> a > b,
+            dimension=1,
+            init_val=typemin(T),
+        )
+        return result.values[1:maximum(k)], result.indices[1:maximum(k)]
     end
 
     (; values, indices) = Ops.top_k(materialize_traced_array(x), maximum(k))
@@ -1019,27 +1017,25 @@ end
 function overloaded_partialsort_ascending(
     x::AnyTracedRVector{T}, k::Union{Integer,OrdinalRange}; by=identity, lt=isless
 ) where {T}
-    comparator = (a, b, i1, i2) -> !lt(by(a), by(b))
-
-    if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
-        result = Ops.approx_top_k(
-            materialize_traced_array(x),
-            maximum(k);
-            comparator,
-            dimension=1,
-            init_val=typemax(T),
-        )
-        return result.values[1:maximum(k)], result.indices[1:maximum(k)]
-    end
-
     if lt !== isless || by !== identity || T <: Unsigned
         sorted_x, sorted_idxs = Ops.sort(
             materialize_traced_array(x),
             Ops.constant(collect(LinearIndices(x)));
             dimension=1,
-            comparator,
+            comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
         )
         return sorted_x[1:maximum(k)], sorted_idxs[1:maximum(k)]
+    end
+
+    if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
+        result = Ops.approx_top_k(
+            materialize_traced_array(x),
+            maximum(k);
+            comparator=(a, b, i1, i2) -> a < b,
+            dimension=1,
+            init_val=typemax(T),
+        )
+        return result.values[1:maximum(k)], result.indices[1:maximum(k)]
     end
 
     (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), maximum(k))

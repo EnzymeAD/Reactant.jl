@@ -20,7 +20,10 @@ Reactant.with_config
 - `DOT_GENERAL_PRECISION`: Controls the `precision_config` for `stablehlo.dot_general`.
 - `DOT_GENERAL_ALGORITHM`: Controls the `algorithm` for `stablehlo.dot_general`.
 - `LOWER_PARTIALSORT_TO_APPROX_TOP_K`: Whether to lower `partialsort` to `Ops.approx_top_k`.
-  Note that XLA only supports lowering `ApproxTopK` for TPUs.
+  Note that XLA only supports lowering `ApproxTopK` for TPUs unless
+  `FALLBACK_APPROX_TOP_K_LOWERING` is set to `true`. Defaults to `false`.
+- `FALLBACK_APPROX_TOP_K_LOWERING`: Whether to fallback to lowering `ApproxTopK` to
+  `stablehlo.top_k` if the XLA backend doesn't support `ApproxTopK`. Defaults to `true`.
 
 ### DotGeneral
 
