@@ -160,6 +160,9 @@ end
 
 Base.getindex(a::TracedRArray{T,N}, ::Colon) where {T,N} = materialize_traced_array(vec(a))
 
+__contiguous_indices(::Base.LogicalIndex) = false
+__contiguous_indices(x) = all(isone, diff(x))
+
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = Base.to_indices(a, indices)
 
@@ -170,7 +173,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
             use_gather_getindex = true
             break
         end
-        contiguous = all(isone, diff(vec(idxs)))
+        contiguous = __contiguous_indices(vec(idxs))
         if typeof(contiguous) <: Bool && !contiguous
             use_gather_getindex = true
             break
@@ -346,7 +349,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
             use_scatter_setindex = true
             break
         end
-        contiguous = all(isone, diff(idxs))
+        contiguous = __contiguous_indices(idxs)
         if typeof(contiguous) <: Bool && !contiguous
             use_scatter_setindex = true
             break
