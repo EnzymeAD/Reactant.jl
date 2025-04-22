@@ -719,6 +719,7 @@ function optimization_passes(;
         "reshuffle_ands_compares",
         "square_abs_simplify",
         "divide_divide_simplify",
+        "concat_reshape_slice",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
