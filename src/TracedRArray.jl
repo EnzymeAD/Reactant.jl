@@ -140,6 +140,12 @@ function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {
     return _getindex_cartesian(a, indices)
 end
 
+_isone(x) = isone(x)
+_isone(::CartesianIndex) = false
+
+__contiguous_indices(::Base.LogicalIndex) = false
+__contiguous_indices(x) = all(_isone, diff(x))
+
 function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
     if !(indices isa Reactant.TracedType) && __contiguous_indices(vec(indices))
         a_flat = materialize_traced_array(vec(a))
@@ -169,9 +175,6 @@ function Base.getindex(a::TracedRArray{T,1}, indices::AbstractArray) where {T}
 end
 
 Base.getindex(a::TracedRArray{T,N}, ::Colon) where {T,N} = materialize_traced_array(vec(a))
-
-__contiguous_indices(::Base.LogicalIndex) = false
-__contiguous_indices(x) = all(isone, diff(x))
 
 function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = Base.to_indices(a, indices)
@@ -224,8 +227,10 @@ function Base.getindex(
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...)
 end
 
-function Base.getindex(a::WrappedArray{TracedRNumber{T}}, indices) where {T}
-    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices))
+function Base.getindex(a::WrappedArray{TracedRNumber{T}}, linear_indices) where {T}
+    return getindex(
+        ancestor(a), TracedUtils.get_ancestor_indices(a, linear_indices)
+    )
 end
 
 function Base.getindex(a::WrappedArray{TracedRNumber{T},1}, indices) where {T}

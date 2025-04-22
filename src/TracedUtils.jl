@@ -131,12 +131,17 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     return x
 end
 
-get_ancestor_indices(::TracedRArray, indices...) = indices
+get_ancestor_indices(::TracedRArray, indices) = indices
+get_ancestor_indices(::TracedRArray, indices, args...) = (indices, args...)
 
 get_ancestor_indices(::Array{<:TracedRNumber}, indices...) = indices
+get_ancestor_indices(::Array{<:TracedRNumber}, indices, args...) = (indices, args...)
 
 function get_ancestor_indices(x::AnyTracedRArray, indices...)
     return get_ancestor_indices_inner(x, indices...) # redirect to avoid ambiguity
+end
+function get_ancestor_indices(x::AnyTracedRArray, indices, args...)
+    return get_ancestor_indices_inner(x, indices, args...) # redirect to avoid ambiguity
 end
 
 function get_ancestor_indices_inner(
