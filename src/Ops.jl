@@ -1705,10 +1705,6 @@ instead.
     @assert length(updates) == size(scatter_indices, 1)
     @assert size(scatter_indices, 2) == N
 
-    scatter_indices = subtract(
-        scatter_indices, fill(Int64(1), size(scatter_indices)); location
-    )
-
     updates = convert(TracedRArray{T,1}, updates)
 
     update_computation = MLIR.IR.Region()
@@ -1721,14 +1717,39 @@ instead.
     push!(block, return_op)
     pushfirst!(update_computation, block)
 
-    #! format: off
-    update_window_dims = Int64[]
-    inserted_window_dims = collect(Int64, 0:(N - 1))
-    input_batching_dims = Int64[]
-    scatter_indices_batching_dims = Int64[]
-    scatter_dims_to_operand_dims = collect(Int64, 0:(N - 1))
-    index_vector_dim = Int64(1)
+    return scatter(
+        [dest],
+        scatter_indices,
+        [updates];
+        update_computation,
+        update_window_dims=Int64[],
+        inserted_window_dims=collect(Int64, 0:(N - 1)),
+        input_batching_dims=Int64[],
+        scatter_indices_batching_dims=Int64[],
+        scatter_dims_to_operand_dims=collect(Int64, 0:(N - 1)),
+        index_vector_dim=Int64(1),
+        location,
+    )
+end
 
+@noinline function scatter(
+    dest::Vector{TracedRArray{T,N}},
+    scatter_indices::TracedRArray{Int64,2},
+    updates::Vector{<:TracedRArray{T}};
+    update_computation::MLIR.IR.Region,
+    update_window_dims::Vector{Int64},
+    inserted_window_dims::Vector{Int64},
+    input_batching_dims::Vector{Int64},
+    scatter_indices_batching_dims::Vector{Int64},
+    scatter_dims_to_operand_dims::Vector{Int64},
+    index_vector_dim::Int64,
+    location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
+) where {T,N}
+    scatter_indices = subtract(
+        scatter_indices, fill(Int64(1), size(scatter_indices)); location
+    )
+
+    #! format: off
     scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
         MLIR.IR.context(),
         length(update_window_dims), update_window_dims,
@@ -1740,21 +1761,22 @@ instead.
     )
     #! format: on
 
-    return TracedRArray{T,N}(
-        (),
-        MLIR.IR.result(
-            MLIR.Dialects.stablehlo.scatter(
-                [dest.mlir_data],
-                scatter_indices.mlir_data,
-                [updates.mlir_data];
-                result_0=[mlir_type(TracedRArray{T,N}, size(dest))],
-                update_computation,
-                scatter_dimension_numbers,
-            ),
-            1,
-        ),
-        size(dest),
+    dest_values = [d.mlir_data for d in dest]
+    update_values = [u.mlir_data for u in updates]
+    scatter_op = stablehlo.scatter(
+        dest_values,
+        scatter_indices.mlir_data,
+        update_values;
+        update_computation,
+        scatter_dimension_numbers,
+        result_0=[mlir_type(TracedRArray{T,N}, size(d)) for d in dest],
+        location,
     )
+
+    return [
+        TracedRArray{T,N}((), MLIR.IR.result(scatter_op, i), size(dest[i])) for
+        i in eachindex(dest)
+    ]
 end
 
 """
@@ -1777,18 +1799,42 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
         )
     end
 
-    gather_getindex = subtract(
+    return reshape(
+        gather(
+            src,
+            gather_indices;
+            offset_dims=Int64[1],
+            collapsed_slice_dims=collect(Int64, 0:(N - 2)),
+            operand_batching_dims=Int64[],
+            start_indices_batching_dims=Int64[],
+            start_index_map=collect(Int64, 0:(N - 1)),
+            index_vector_dim=Int64(1),
+            slice_sizes=ones(Int64, N),
+            indices_are_sorted=false,
+            location,
+        ),
+        [size(gather_indices, 1)],
+    )
+end
+
+@noinline function gather(
+    src::TracedRArray{T,N},
+    gather_indices::TracedRArray{Int64,2};
+    offset_dims::Vector{Int64},
+    collapsed_slice_dims::Vector{Int64},
+    operand_batching_dims::Vector{Int64},
+    start_indices_batching_dims::Vector{Int64},
+    start_index_map::Vector{Int64},
+    index_vector_dim::Int64,
+    slice_sizes::Vector{Int64},
+    indices_are_sorted::Bool=false,
+    location=mlir_stacktrace("gather", @__FILE__, @__LINE__),
+) where {T,N}
+    gather_indices = subtract(
         gather_indices, fill(Int64(1), size(gather_indices)); location
     )
 
     #! format: off
-    offset_dims = Int64[1]
-    collapsed_slice_dims = collect(Int64, 0:(N - 2))
-    operand_batching_dims = Int64[]
-    start_indices_batching_dims = Int64[]
-    start_index_map = collect(Int64, 0:(N - 1))
-    index_vector_dim = Int64(1)
-
     dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
         MLIR.IR.context(),
         Int64(length(offset_dims)), offset_dims,
@@ -1800,21 +1846,18 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
     )
     #! format: on
 
-    return reshape(
-        TracedRArray{T}(
-            MLIR.IR.result(
-                MLIR.Dialects.stablehlo.gather(
-                    src.mlir_data,
-                    gather_indices.mlir_data;
-                    dimension_numbers,
-                    slice_sizes=Base.fill(Int64(1), N),
-                    indices_are_sorted=false,
-                    location,
-                ),
-                1,
+    return TracedRArray{T}(
+        MLIR.IR.result(
+            MLIR.Dialects.stablehlo.gather(
+                src.mlir_data,
+                gather_indices.mlir_data;
+                dimension_numbers,
+                slice_sizes,
+                indices_are_sorted,
+                location,
             ),
+            1,
         ),
-        size(gather_indices, 1),
     )
 end
 
