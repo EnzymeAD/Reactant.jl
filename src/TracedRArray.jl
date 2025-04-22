@@ -345,7 +345,7 @@ end
 function Base.setindex!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
     return _setindex_linear!(a, v, indices)
 end
-function Base.setindex!(a::TracedRArray{T,1}, v, indices::AbstractArray) where {T,N}
+function Base.setindex!(a::TracedRArray{T,1}, v, indices::AbstractArray) where {T}
     return _setindex_linear!(a, v, indices)
 end
 
