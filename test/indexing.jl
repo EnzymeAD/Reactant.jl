@@ -37,6 +37,9 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
+    hlo = @code_hlo optimize=false setindex!(x_ra, y_ra, 6:11)
+    @test contains(repr(hlo), "dynamic_update_slice")
+
     @jit setindex!(x_ra, y_ra, 6:11)
     setindex!(x, y, 6:11)
 

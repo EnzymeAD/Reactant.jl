@@ -8,14 +8,6 @@
     return f
 end
 
-@reactant_overlay @noinline function Base.setindex!(
-    a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}
-) where {T,N}
-    ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
-    (Base.inferencebarrier(setindex!))(Reactant.ancestor(a), v, ancestor_indices...)
-    return a
-end
-
 # Enzyme.jl overlays
 @reactant_overlay @noinline function Enzyme.autodiff_deferred(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
