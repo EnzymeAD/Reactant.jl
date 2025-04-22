@@ -40,8 +40,7 @@ function ReactantCore.materialize_traced_array(x::UnitRange)
 end
 
 function ReactantCore.materialize_traced_array(x::SubArray)
-    z = SubArray(materialize_traced_array(parent(x)), x.indices)
-    return z[axes(z)...]
+    return materialize_traced_array(parent(x))[Base.reindex(parentindices(x), axes(x))...]
 end
 
 function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
@@ -87,7 +86,7 @@ function get_ancestor_indices(
     x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
 ) where {T,N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
-    indices = normalize_indices(x, indices...)
+    indices = Base.to_indices(x, indices)
     if any(is_traced, indices)
         indices, integer_indices, result_size, _, flattened_size = traced_indices(
             indices...
@@ -132,10 +131,46 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     return x
 end
 
-get_ancestor_indices(::TracedRArray, indices...) = indices
+get_ancestor_indices(::TracedRArray, indices) = indices
+get_ancestor_indices(::TracedRArray, indices, args...) = (indices, args...)
+
 get_ancestor_indices(::Array{<:TracedRNumber}, indices...) = indices
+get_ancestor_indices(::Array{<:TracedRNumber}, indices, args...) = (indices, args...)
+
 function get_ancestor_indices(x::AnyTracedRArray, indices...)
+    return get_ancestor_indices_inner(x, indices...) # redirect to avoid ambiguity
+end
+function get_ancestor_indices(x::AnyTracedRArray, indices, args...)
+    return get_ancestor_indices_inner(x, indices, args...) # redirect to avoid ambiguity
+end
+
+function get_ancestor_indices_inner(
+    x::AnyTracedRArray{T,N}, indices::Vararg{Any,N}
+) where {T,N}
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
+end
+function get_ancestor_indices_inner(x::AnyTracedRArray{T,1}, indices) where {T}
+    return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices))
+end
+
+function get_ancestor_indices_inner(
+    x::AnyTracedRArray{T,N}, linear_indices::AbstractArray
+) where {T,N}
+    return _get_ancestor_indices_linear(x, linear_indices)
+end
+function get_ancestor_indices_inner(
+    x::AnyTracedRArray{T,1}, linear_indices::AbstractArray
+) where {T}
+    return _get_ancestor_indices_linear(x, linear_indices)
+end
+
+function _get_ancestor_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
+    indices = CartesianIndices(x)[indices]
+    pidxs = parentindices(x)
+    parent_indices = map(indices) do idx
+        CartesianIndex(Base.reindex(pidxs, (idx.I...,)))
+    end
+    return get_ancestor_indices(parent(x), parent_indices)
 end
 
 Base.@nospecializeinfer function batch_ty(
@@ -977,15 +1012,6 @@ end
 
 @noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
     return Ops.broadcast_in_dim(x, collect(Int64, 1:ndims(x)), collect(Int64, rsize))
-end
-
-function normalize_indices(a::AbstractArray, indices...)
-    return map(enumerate(indices)) do (i, idx)
-        idx isa Colon && return collect(Int64, 1:size(a, i))
-        idx isa CartesianIndex && return Tuple(idx)
-        idx isa AbstractArray{Bool} && return findall(idx)
-        return idx
-    end
 end
 
 function traced_indices(indices...)

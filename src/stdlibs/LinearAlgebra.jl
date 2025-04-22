@@ -269,26 +269,6 @@ function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
     return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
 end
 
-function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
-    y = materialize_traced_array(x)
-
-    rows, cols = size(y)
-    (start_row, start_col) = k ≥ 0 ? (0, k) : (-k, 0)
-    diag_length = min(rows - start_row, cols - start_col)
-
-    indices = stack((
-        start_row:(start_row + diag_length - 1), start_col:(start_col + diag_length - 1)
-    ))
-
-    # XXX: creating an empty array causes
-    # terminate called after throwing an instance of 'xla::XlaRuntimeError'
-    #   what():  UNKNOWN: <unknown>:0: error: 'tensor.empty' op unsupported op for export to XLA
-    #   <unknown>:0: note: see current operation: %0 = "tensor.empty"() : () -> tensor<0xf64>
-    length(indices) ≤ 0 && return TracedUtils.promote_to(TracedRArray{T,1}, T[])
-
-    return Ops.gather_getindex(y, TracedUtils.promote_to(TracedRArray{Int,2}, indices))
-end
-
 function LinearAlgebra._diagm(
     shape, kv::Pair{<:Integer,<:AnyTracedRArray{T,1}}...
 ) where {T}
@@ -307,7 +287,7 @@ function LinearAlgebra._diagm(
     scatter_indices = Matrix{Int64}[]
     concat_inputs = MLIR.IR.Value[]
     for (k, v) in pairs(kv_updated)
-        push!(scatter_indices, diagonal_indices_zero_indexed(m, n, k)[1:length(v), :])
+        push!(scatter_indices, diagonal_indices(m, n, k)[1:length(v), :])
         push!(concat_inputs, get_mlir_data(v))
     end
     scatter_indices = Ops.constant(reduce(vcat, scatter_indices))
@@ -321,13 +301,13 @@ end
 
 # Common Utilities
 ## The cartesian version doesn't exist in julia 1.10
-function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
+function diagonal_indices(m::Integer, n::Integer, k::Integer=0)
     idx1, idx2 = 1 + max(0, -k), 1 + max(0, k)
     L = max(0, k ≤ 0 ? min(m + k, n) : min(m, n - k))
     indices = Matrix{Int}(undef, (L, 2))
     for i in axes(indices, 1)
-        indices[i, 1] = idx1 + i - 2
-        indices[i, 2] = idx2 + i - 2
+        indices[i, 1] = idx1 + i - 1
+        indices[i, 2] = idx2 + i - 1
     end
     return indices
 end
