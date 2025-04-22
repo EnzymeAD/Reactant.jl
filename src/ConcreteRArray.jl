@@ -547,25 +547,22 @@ function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
         return a
     end
 
-    idxs = ntuple(Returns(Colon()), N)
-    fn = compile(mysetindex!, (a, val, idxs...))
-    fn(a, val, idxs...)
+    fn = compile(fill!, (a, val))
+    fn(a, val)
     return a
 end
 
 function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
-    idxs = ntuple(Returns(Colon()), N)
-    fn = compile(mysetindex!, (a, val, idxs...))
-    fn(a, val, idxs...)
+    fn = compile(fill!, (a, val))
+    fn(a, val)
     return a
 end
 
 function Base.fill!(x::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, val)
-    idxs = ntuple(Returns(Colon()), ndims(x))
-    fn = compile(mysetindex!, (x, val, idxs...))
-    fn(x, val, idxs...)
+    fn = compile(fill!, (x, val))
+    fn(x, val)
     return x
 end
 
