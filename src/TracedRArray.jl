@@ -147,10 +147,8 @@ function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T
         indices = TracedUtils.promote_to(TracedRArray{Int,ndims(indices)}, indices)
     end
     return materialize_traced_array(
-        Ops.reshape(
-            Ops.dynamic_slice(
-                a, scalar_index_to_cartesian(vec(indices), size(a)), ones(Int32, N)
-            ),
+        reshape(
+            Ops.gather_getindex(a, scalar_index_to_cartesian(vec(indices), size(a))),
             size(indices),
         ),
     )
