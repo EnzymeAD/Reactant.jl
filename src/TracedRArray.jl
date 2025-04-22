@@ -141,16 +141,23 @@ function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {
 end
 
 function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
+    if !(indices isa Reactant.TracedType) && __contiguous_indices(vec(indices))
+        a_flat = materialize_traced_array(vec(a))
+        indices_flat = vec(indices)
+        return Ops.reshape(
+            Ops.dynamic_slice(a_flat, [first(indices_flat)], [length(indices_flat)]),
+            collect(size(indices)),
+        )
+    end
+
     if !(indices isa TracedRArray)
         indices = collect(indices)
         eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
         indices = TracedUtils.promote_to(TracedRArray{Int,ndims(indices)}, indices)
     end
-    return materialize_traced_array(
-        reshape(
-            Ops.gather_getindex(a, scalar_index_to_cartesian(vec(indices), size(a))),
-            size(indices),
-        ),
+    return Ops.reshape(
+        Ops.gather_getindex(a, scalar_index_to_cartesian(vec(indices), size(a))),
+        collect(size(indices)),
     )
 end
 
@@ -279,34 +286,12 @@ end
 function Base.setindex!(
     a::TracedRArray{T,N}, v, index::Union{Int,TracedRNumber{Int}}
 ) where {T,N}
-    _setindex_scalar!(a, v, index)
-    return a
+    return _setindex_scalar!(a, v, index)
 end
-
-# Avoid ambiguity
 function Base.setindex!(
     a::TracedRArray{T,1}, v, index::Union{Int,TracedRNumber{Int}}
 ) where {T}
-    _setindex_scalar!(a, v, index)
-    return a
-end
-
-function _setindex_unitrange!(a, v, indices)
-    originalsz = size(a)
-    flattened = Ops.reshape(a, [prod(originalsz)])
-    result = Ops.dynamic_update_slice(flattened, v[begin:length(indices)], [first(indices)])
-    result = Ops.reshape(result, collect(originalsz))
-    set_mlir_data!(a, get_mlir_data(result))
-    return a
-end
-
-function Base.setindex!(
-    a::Reactant.TracedRArray{T,N}, v, indices::UnitRange{Int}
-) where {T,N}
-    return _setindex_unitrange!(a, v, indices)
-end
-function Base.setindex!(a::Reactant.TracedRArray{T,1}, v, indices::UnitRange{Int}) where {T}
-    return _setindex_unitrange!(a, v, indices)
+    return _setindex_scalar!(a, v, index)
 end
 
 function Base.setindex!(a::TracedRArray{T,N}, v, index::CartesianIndex{N}) where {T,N}
@@ -324,7 +309,22 @@ function Base.setindex!(a::TracedRArray{T,N}, v, index::CartesianIndex{N}) where
     return a
 end
 
-function Base.setindex!(a::TracedRArray{T,N}, v, indices) where {T,N}
+function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
+    if !(indices isa Reactant.TracedType) && __contiguous_indices(vec(indices))
+        res = Ops.reshape(
+            Ops.dynamic_update_slice(
+                materialize_traced_array(vec(a)),
+                TracedUtils.broadcast_to_size(
+                    TracedUtils.promote_to(TracedRArray{T,1}, vec(v)), (length(indices),)
+                ),
+                [first(indices)],
+            ),
+            collect(size(a)),
+        )
+        set_mlir_data!(a, get_mlir_data(res))
+        return a
+    end
+
     if !(indices isa TracedRArray)
         indices = collect(indices)
         eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
@@ -337,6 +337,13 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices) where {T,N}
     )
     set_mlir_data!(a, get_mlir_data(res))
     return a
+end
+
+function Base.setindex!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
+    return _setindex_linear!(a, v, indices)
+end
+function Base.setindex!(a::TracedRArray{T,1}, v, indices::AbstractArray) where {T,N}
+    return _setindex_linear!(a, v, indices)
 end
 
 function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
