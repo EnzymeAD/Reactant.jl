@@ -12,6 +12,8 @@ ReactantCore.is_traced(::TracedRNumber) = true
 
 Base.getindex(a::TracedRNumber{T}) where {T} = a
 
+Base.to_index(x::TracedRNumber{<:Integer}) = x
+
 Base.zero(::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{T}, zero(T))
 Base.one(::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{T}, one(T))
 Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
