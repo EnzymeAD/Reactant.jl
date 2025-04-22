@@ -279,6 +279,7 @@ function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
     indices = stack((
         start_row:(start_row + diag_length - 1), start_col:(start_col + diag_length - 1)
     ))
+    indices .+= 1
 
     # XXX: creating an empty array causes
     # terminate called after throwing an instance of 'xla::XlaRuntimeError'
