@@ -133,8 +133,24 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
 end
 
 get_ancestor_indices(::TracedRArray, indices...) = indices
+get_ancestor_indices(::TracedRArray, indices::AbstractVector) = indices
+
 get_ancestor_indices(::Array{<:TracedRNumber}, indices...) = indices
-function get_ancestor_indices(x::AnyTracedRArray, indices...)
+get_ancestor_indices(::Array{<:TracedRNumber}, indices::AbstractVector) = indices
+
+function get_ancestor_indices(x::AnyTracedRArray, linear_indices::AbstractVector)
+    indices = CartesianIndices(x)[linear_indices]
+    pidxs = parentindices(x)
+    parent_indices = map(indices) do idx
+        CartesianIndex(Base.reindex(pidxs, (idx.I...,)))
+    end
+    return get_ancestor_indices(parent(x), parent_indices)
+end
+
+function get_ancestor_indices(x::AnyTracedRArray{T,1}, indices) where {T}
+    return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices))
+end
+function get_ancestor_indices(x::AnyTracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 

@@ -214,7 +214,16 @@ function Base.getindex(
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...)
 end
 
-function Base.getindex(a::WrappedArray{TracedRNumber{T}}, indices...) where {T}
+function Base.getindex(a::WrappedArray{TracedRNumber{T}}, indices) where {T}
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices))
+end
+
+function Base.getindex(a::WrappedArray{TracedRNumber{T},1}, indices) where {T}
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices))
+end
+function Base.getindex(
+    a::WrappedArray{TracedRNumber{T},N}, indices::Vararg{Any,N}
+) where {T,N}
     return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
 end
 
