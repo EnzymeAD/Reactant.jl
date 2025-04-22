@@ -138,13 +138,22 @@ get_ancestor_indices(::TracedRArray, indices::AbstractVector) = indices
 get_ancestor_indices(::Array{<:TracedRNumber}, indices...) = indices
 get_ancestor_indices(::Array{<:TracedRNumber}, indices::AbstractVector) = indices
 
-function get_ancestor_indices(x::AnyTracedRArray, linear_indices::AbstractVector)
-    indices = CartesianIndices(x)[linear_indices]
+function _get_ancestor_indices_linear(x::AnyTracedRArray, indices::AbstractVector)
+    indices = CartesianIndices(x)[indices]
     pidxs = parentindices(x)
     parent_indices = map(indices) do idx
         CartesianIndex(Base.reindex(pidxs, (idx.I...,)))
     end
     return get_ancestor_indices(parent(x), parent_indices)
+end
+
+function get_ancestor_indices(x::AnyTracedRArray, linear_indices::AbstractVector)
+    return _get_ancestor_indices_linear(x, linear_indices)
+end
+function get_ancestor_indices(
+    x::AnyTracedRArray{T,1}, linear_indices::AbstractVector
+) where {T}
+    return _get_ancestor_indices_linear(x, linear_indices)
 end
 
 function get_ancestor_indices(x::AnyTracedRArray{T,1}, indices) where {T}
