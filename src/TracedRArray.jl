@@ -250,7 +250,10 @@ function _setindex_scalar!(
     res = Ops.reshape(
         Ops.dynamic_update_slice(
             a,
-            TracedUtils.broadcast_to_size(T(v), ntuple(Returns(1), N)),
+            TracedUtils.broadcast_to_size(
+                TracedUtils.promote_to(TracedRNumber{T}, v),
+                ntuple(Returns(1), N)
+            ),
             collect(scalar_index_to_cartesian(index, size(a))),
         ),
         collect(size(a)),
