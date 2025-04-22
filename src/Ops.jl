@@ -1729,7 +1729,7 @@ instead.
         scatter_dims_to_operand_dims=collect(Int64, 0:(N - 1)),
         index_vector_dim=Int64(1),
         location,
-    )
+    )[1]
 end
 
 @noinline function scatter(
