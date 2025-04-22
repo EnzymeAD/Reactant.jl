@@ -1170,6 +1170,81 @@ end
     ]
 end
 
+@noinline function approx_top_k(
+    x::TracedRArray{T,N},
+    k::Integer;
+    comparator,
+    init_val::T,
+    dimension::Integer=N,
+    recall_target::AbstractFloat=0.95f0,
+    reduction_input_size_override::Int64=-1,
+    aggregate_to_topk::Bool=true,
+    fallback::Union{Missing,Bool}=missing,
+    location=mlir_stacktrace("approx_top_k", @__FILE__, @__LINE__),
+) where {T<:AbstractFloat,N}
+    fallback === missing && (fallback = Reactant.FALLBACK_APPROX_TOP_K_LOWERING[])
+
+    func =
+        Reactant.TracedUtils.make_mlir_fn(
+            comparator,
+            (
+                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
+                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
+                Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, 0),
+                Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, 0),
+            ),
+            (),
+            "comparator",
+            false;
+            args_in_result=:none,
+            return_dialect=:stablehlo,
+        ).f
+    @assert MLIR.IR.nregions(func) == 1
+    fn_name = MLIR.IR.FlatSymbolRefAttribute(
+        String(MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())))
+    )
+
+    iota_arg = iota(Int32, collect(Int64, size(x)); iota_dimension=dimension, location)
+    init_arg = constant(Int32(-1); location)
+    init_val = constant(init_val; location)
+
+    dimension ≤ 0 && (dimension += N)
+
+    backend_config = Dict(
+        "reduction_dim" => MLIR.IR.Attribute(dimension - 1),
+        "recall_target" => MLIR.IR.Attribute(Float32(recall_target)),
+        "reduction_input_size_override" => MLIR.IR.Attribute(reduction_input_size_override),
+        "top_k" => MLIR.IR.Attribute(k),
+        "aggregate_to_topk" => MLIR.IR.Attribute(aggregate_to_topk),
+    )
+    fallback && (backend_config["is_fallback"] = MLIR.IR.Attribute(true))
+
+    result_shape = collect(Int64, size(x))
+    result_shape[dimension] = k
+
+    out = stablehlo.custom_call(
+        [x.mlir_data, iota_arg.mlir_data, init_val.mlir_data, init_arg.mlir_data];
+        result_0=[
+            mlir_type(TracedRArray{T,N}, result_shape),
+            mlir_type(TracedRArray{Int32,N}, result_shape),
+        ],
+        call_target_name="ApproxTopK",
+        called_computations=[fn_name],
+        backend_config,
+        api_version=Int32(4),
+    )
+
+    indices = add(
+        TracedRArray{Int32,N}((), MLIR.IR.result(out, 2), result_shape),
+        fill(Int32(1), Tuple(result_shape)), # return the 1-indexed index
+    ) # stablehlo.approx_top_k returns 0-indexed indices
+    indices = convert(TracedRArray{Int64,N}, indices) # julia indexes with Int64 generally
+
+    values = TracedRArray{T,N}((), MLIR.IR.result(out, 1), result_shape)
+
+    return (; values, indices)
+end
+
 @noinline function top_k(
     x::TracedRArray{T,N},
     k;

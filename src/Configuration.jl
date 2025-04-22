@@ -9,7 +9,17 @@ export DotGeneralAlgorithmPreset, DotGeneralPrecision, DotGeneralAlgorithm
 Run the function `f` within a dynamic scope such that all uses of the config within this
 scope will use the provided values.
 
+# Extended Help
+
 ## Configuration Options
+
+### Lowering
+
+  - `lower_partialsort_to_approx_top_k`: Whether to lower `partialsort` and
+    `partialsortperm` to `Ops.approx_top_k`. Note that XLA only supports lowering
+    `ApproxTopK` for TPUs unless `fallback_approx_top_k_lowering` is set to `true`.
+  - `fallback_approx_top_k_lowering`: Whether to lower `Ops.approx_top_k` to
+    `stablehlo.top_k` if the XLA backend doesn't support `ApproxTopK`. Defaults to `true`.
 
 ### DotGeneral
 
@@ -19,15 +29,37 @@ scope will use the provided values.
   - `dot_general_precision`: Precision for `stablehlo.dot_general`. Can be `nothing`,
     or [`DotGeneralPrecision`](@ref). Defaults to `DotGeneralPrecision.DEFAULT`.
 """
-function with_config(f; dot_general_algorithm=missing, dot_general_precision=missing)
+function with_config(
+    f;
+    dot_general_algorithm=missing,
+    dot_general_precision=missing,
+    lower_partialsort_to_approx_top_k=missing,
+    fallback_approx_top_k_lowering=missing,
+)
     config_vars = ()
     dot_general_algorithm !== missing &&
         (config_vars = (config_vars..., DOT_GENERAL_ALGORITHM => dot_general_algorithm))
     dot_general_precision !== missing &&
         (config_vars = (config_vars..., DOT_GENERAL_PRECISION => dot_general_precision))
+    lower_partialsort_to_approx_top_k !== missing && (
+        config_vars = (
+            config_vars...,
+            LOWER_PARTIALSORT_TO_APPROX_TOP_K => lower_partialsort_to_approx_top_k,
+        )
+    )
+    fallback_approx_top_k_lowering !== missing && (
+        config_vars = (
+            config_vars...,
+            FALLBACK_APPROX_TOP_K_LOWERING => fallback_approx_top_k_lowering,
+        )
+    )
 
     return ScopedValues.with(f, config_vars...)
 end
+
+# Lower to ApproxTopK
+const LOWER_PARTIALSORT_TO_APPROX_TOP_K = ScopedValue(false)
+const FALLBACK_APPROX_TOP_K_LOWERING = ScopedValue(true)
 
 # DotGeneral Attributes Configuration
 """

@@ -52,17 +52,3 @@ Reactant.addressable_devices
 ```@docs
 ReactantCore.materialize_traced_array
 ```
-
-## Configuration
-
-```@docs
-Reactant.with_config
-```
-
-### DotGeneral
-
-```@docs
-Reactant.DotGeneralAlgorithmPreset
-Reactant.DotGeneralPrecision
-Reactant.DotGeneralAlgorithm
-```
