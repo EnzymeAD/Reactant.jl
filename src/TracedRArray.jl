@@ -70,12 +70,12 @@ function Base.getindex(a::TracedRArray{T,0}, ::CartesianIndex{0}) where {T}
 end
 
 function generate_index_list(i1, is...)
-    list = reshape(i1, :, 1) .- 1
+    list = reshape(i1, :, 1)
     for i in is
         i = TracedUtils.broadcast_to_size(i, (length(i), 1))
         lorig = size(list, 1)
         list = repeat(list, size(i, 1), 1)
-        i = repeat(i; inner=(lorig, 1)) .- 1
+        i = repeat(i; inner=(lorig, 1))
         list = hcat(list, i)
     end
     return list
@@ -128,7 +128,7 @@ function Base.getindex(a::TracedRArray{T,N}, index::CartesianIndex{N}) where {T,
     return TracedRNumber{T}(
         (),
         Ops.reshape(
-            Ops.dynamic_slice(a, collect(Int64, index.I) .- 1, ones(Int32, N)), Int64[]
+            Ops.dynamic_slice(a, collect(Int64, index.I), ones(Int32, N)), Int64[]
         ).mlir_data,
     )
 end
@@ -139,7 +139,7 @@ function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {
     return TracedRNumber{T}(
         (),
         Ops.reshape(
-            Ops.dynamic_slice(a, collect(Int64, indices.I) .- 1, ones(Int32, 1)), Int64[]
+            Ops.dynamic_slice(a, collect(Int64, indices.I), ones(Int32, 1)), Int64[]
         ).mlir_data,
     )
 end
@@ -377,7 +377,9 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
             v = TracedUtils.broadcast_to_size(v, length.(indices))
         else
             v = Ops.broadcast_in_dim(
-                materialize_traced_array(v), broadcast_dims, Int64.(length.(indices))
+                materialize_traced_array(v),
+                broadcast_dims,
+                collect(Int64, length.(indices)),
             )
         end
     end
