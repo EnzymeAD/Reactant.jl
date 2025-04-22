@@ -40,7 +40,7 @@ function ReactantCore.materialize_traced_array(x::UnitRange)
 end
 
 function ReactantCore.materialize_traced_array(x::SubArray)
-    return materialize_traced_array(parent(x))[axes(x)...]
+    return materialize_traced_array(parent(x))[Base.reindex(parentindices(x), axes(x))...]
 end
 
 function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
