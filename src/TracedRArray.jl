@@ -123,7 +123,7 @@ function Base.getindex(
     )
 end
 
-function Base.getindex(a::TracedRArray{T,N}, index::CartesianIndex{N}) where {T,N}
+function _getindex_cartesian(a::TracedRArray{T,N}, index::CartesianIndex{N}) where {T,N}
     GPUArraysCore.assertscalar("getindex(::TracedRArray, ::CartesianIndex{N})")
     return TracedRNumber{T}(
         (),
@@ -133,29 +133,34 @@ function Base.getindex(a::TracedRArray{T,N}, index::CartesianIndex{N}) where {T,
     )
 end
 
-# Needed to prevent method ambiguity
+function Base.getindex(a::TracedRArray{T,N}, index::CartesianIndex{N}) where {T,N}
+    return _getindex_cartesian(a, index)
+end
 function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {T}
-    GPUArraysCore.assertscalar("getindex(::TracedRArray, ::CartesianIndex{N})")
-    return TracedRNumber{T}(
-        (),
-        Ops.reshape(
-            Ops.dynamic_slice(a, collect(Int64, indices.I), ones(Int32, 1)), Int64[]
-        ).mlir_data,
-    )
+    return _getindex_cartesian(a, indices)
 end
 
-function Base.getindex(a::TracedRArray{T,N}, indices) where {T,N}
+function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
     if !(indices isa TracedRArray)
         indices = collect(indices)
         eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
         indices = TracedUtils.promote_to(TracedRArray{Int,ndims(indices)}, indices)
     end
     return materialize_traced_array(
-        reshape(
-            Ops.gather_getindex(a, scalar_index_to_cartesian(vec(indices), size(a))),
+        Ops.reshape(
+            Ops.dynamic_slice(
+                a, scalar_index_to_cartesian(vec(indices), size(a)), ones(Int32, N)
+            ),
             size(indices),
         ),
     )
+end
+
+function Base.getindex(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
+    return _getindex_linear(a, indices)
+end
+function Base.getindex(a::TracedRArray{T,1}, indices::AbstractArray) where {T}
+    return _getindex_linear(a, indices)
 end
 
 Base.getindex(a::TracedRArray{T,N}, ::Colon) where {T,N} = materialize_traced_array(vec(a))
