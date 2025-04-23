@@ -1115,6 +1115,7 @@ function compile_mlir!(
     assert_nonallocating::Bool=false,
     backend="gpu",
     raise::Union{Bool,String}=false,
+    raise_first::Bool=false,
     # TODO: allow more fine-grained options to control the donation of specific arguments
     donated_args::Symbol=:auto, # :auto | :none
     optimize_then_pad::Bool=true,
@@ -1267,6 +1268,21 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
+                raise_first ? 
+                [
+                    opt_passes,
+                    kern,
+                    raise_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
+                    opt_passes2,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes2,
+                    jit,
+                ] : 
                 [
                     opt_passes,
                     "enzyme-batch",
@@ -1289,6 +1305,10 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
+                raise_first ? 
+                [
+                    opt_passes,
+                ] : 
                 [
                     opt_passes,
                     "enzyme-batch",
@@ -1308,6 +1328,20 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
+                raise_first ? 
+                [
+                    opt_passes,
+                    kern,
+                    raise_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
+                    opt_passes2,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes2,
+                ] : 
                 [
                     opt_passes,
                     "enzyme-batch",
@@ -1329,7 +1363,9 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
-                [
+                raise_first ? [
+                    opt_passes
+                ] : [
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
@@ -1383,7 +1419,18 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
+                raise_first ? 
                 [
+                    kern,
+                    raise_passes,
+                    "enzyme-batch",
+                    enzyme_pass,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    opt_passes2,
+                    jit,
+                ] : [
                     "enzyme-batch",
                     enzyme_pass,
                     "canonicalize",
@@ -1401,7 +1448,17 @@ function compile_mlir!(
     elseif optimize === :before_enzyme
         run_pass_pipeline!(
             mod,
-            join(
+            join( raise_first ? 
+            [
+                    opt_passes,
+                    kern,
+                    raise_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
+                    "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                    jit,
+            ] : 
                 [
                     opt_passes,
                     "enzyme-batch",
@@ -1823,6 +1880,7 @@ macro code_hlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :raise_first => false,
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
@@ -1857,6 +1915,7 @@ macro code_mhlo(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :raise_first => false,
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
@@ -1891,6 +1950,7 @@ macro code_xla(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :raise_first => false,
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
@@ -1924,6 +1984,7 @@ macro compile(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :raise_first => false,
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :serializable => false,
@@ -1948,6 +2009,7 @@ macro jit(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :raise_first => false,
         :shardy_passes => :(:to_mhlo_shardings),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
