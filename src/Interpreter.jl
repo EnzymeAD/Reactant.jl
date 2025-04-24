@@ -434,6 +434,7 @@ function overload_autodiff(
                             push!(limits, v)
                         end
                         sval = Ops.slice(TracedRArray(tval), starts, limits)
+                        sval = Ops.reshape(sval, collect(Int64, sz))
                         TracedUtils.set!(
                             dresult[i], path[2:end], TracedUtils.get_mlir_data(sval)
                         )
