@@ -1268,8 +1268,8 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
-                raise_first ? 
-                [
+                if raise_first
+                    [
                     opt_passes,
                     kern,
                     raise_passes,
@@ -1282,8 +1282,9 @@ function compile_mlir!(
                     "enzyme-simplify-math",
                     opt_passes2,
                     jit,
-                ] : 
-                [
+                ]
+                else
+                    [
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
@@ -1296,7 +1297,8 @@ function compile_mlir!(
                     kern,
                     raise_passes,
                     jit,
-                ],
+                ]
+                end,
                 ",",
             ),
             "all",
@@ -1305,11 +1307,10 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
-                raise_first ? 
-                [
-                    opt_passes,
-                ] : 
-                [
+                if raise_first
+                    [opt_passes]
+                else
+                    [
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
@@ -1319,7 +1320,8 @@ function compile_mlir!(
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes2,
-                ],
+                ]
+                end,
                 ',',
             ),
             "before_kernel",
@@ -1328,8 +1330,8 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
-                raise_first ? 
-                [
+                if raise_first
+                    [
                     opt_passes,
                     kern,
                     raise_passes,
@@ -1341,8 +1343,9 @@ function compile_mlir!(
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     opt_passes2,
-                ] : 
-                [
+                ]
+                else
+                    [
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
@@ -1354,7 +1357,8 @@ function compile_mlir!(
                     opt_passes2,
                     kern,
                     raise_passes,
-                ],
+                ]
+                end,
                 ',',
             ),
             "before_jit",
@@ -1363,9 +1367,10 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
-                raise_first ? [
-                    opt_passes
-                ] : [
+                if raise_first
+                    [opt_passes]
+                else
+                    [
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
@@ -1376,7 +1381,8 @@ function compile_mlir!(
                     "enzyme-simplify-math",
                     opt_passes2,
                     kern,
-                ],
+                ]
+                end,
                 ',',
             ),
             "before_raise",
@@ -1419,8 +1425,8 @@ function compile_mlir!(
         run_pass_pipeline!(
             mod,
             join(
-                raise_first ? 
-                [
+                if raise_first
+                    [
                     kern,
                     raise_passes,
                     "enzyme-batch",
@@ -1430,7 +1436,9 @@ function compile_mlir!(
                     "enzyme-simplify-math",
                     opt_passes2,
                     jit,
-                ] : [
+                ]
+                else
+                    [
                     "enzyme-batch",
                     enzyme_pass,
                     "canonicalize",
@@ -1440,7 +1448,8 @@ function compile_mlir!(
                     kern,
                     raise_passes,
                     jit,
-                ],
+                ]
+                end,
                 ',',
             ),
             "before_enzyme",
@@ -1448,8 +1457,9 @@ function compile_mlir!(
     elseif optimize === :before_enzyme
         run_pass_pipeline!(
             mod,
-            join( raise_first ? 
-            [
+            join(
+                if raise_first
+                    [
                     opt_passes,
                     kern,
                     raise_passes,
@@ -1458,8 +1468,9 @@ function compile_mlir!(
                     enzyme_pass,
                     "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                     jit,
-            ] : 
-                [
+                ]
+                else
+                    [
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
@@ -1468,7 +1479,8 @@ function compile_mlir!(
                     kern,
                     raise_passes,
                     jit,
-                ],
+                ]
+                end,
                 ',',
             ),
             "after_enzyme",
