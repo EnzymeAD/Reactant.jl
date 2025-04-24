@@ -1170,3 +1170,13 @@ end
     fr! = @compile f!(vr)
     @test fr!(vr) ≈ f!(v)
 end
+
+@testset "Ops.fill" begin
+    @testset "Fill with TracedScalar" begin
+        fn(x) = Ops.fill(x, [2, 3])
+        x_ra = ConcreteRNumber(1.0f0)
+        y_ra = @jit fn(x_ra)
+        @test y_ra isa ConcreteRArray{Float32,2}
+        @test Array(y_ra) == ones(Float32, 2, 3)
+    end
+end

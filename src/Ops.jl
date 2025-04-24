@@ -182,7 +182,9 @@ function fill(
     shape::Vector{Int};
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
 ) where {T}
-    return Base.fill(number, Tuple(shape))
+    return broadcast_in_dim(
+        TracedRArray{T,0}((), number.mlir_data, ()), Int64[], shape; location
+    )
 end
 
 for (T, mlir_func) in (
