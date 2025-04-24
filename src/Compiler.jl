@@ -1515,11 +1515,7 @@ function compile_mlir!(
     end
 
     if backend == "cuda" && cudnn_hlo_optimize
-        run_pass_pipeline!(
-            mod,
-            "enzymexla-cudnn-hlo-opt",
-            "cudnn-hlo-opt",
-        )
+        run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
     end
 
     # Now we resolve paddings if `optimize_then_pad`
