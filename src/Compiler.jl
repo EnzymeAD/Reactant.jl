@@ -1106,6 +1106,7 @@ function compile_mlir!(
     sdycache=default_sdycache();
     fn_kwargs=(),
     optimize::Union{Bool,Symbol,String}=true,
+    cudnn_hlo_optimize::Bool=false,
     # :none | :to_mhlo_shardings or Sharding.ShardyPropagationOptions
     shardy_passes::Union{Symbol,Sharding.ShardyPropagationOptions}=:to_mhlo_shardings,
     no_nan::Bool=false,
@@ -1513,6 +1514,10 @@ function compile_mlir!(
         end
     end
 
+    if backend == "cuda" && cudnn_hlo_optimize
+        run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
+    end
+
     # Now we resolve paddings if `optimize_then_pad`
     if optimize_then_pad
         padded_inputs = IdDict()
@@ -1900,6 +1905,7 @@ macro code_hlo(args...)
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
         :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1935,6 +1941,7 @@ macro code_mhlo(args...)
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
         :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1970,6 +1977,7 @@ macro code_xla(args...)
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
         :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -2005,6 +2013,7 @@ macro compile(args...)
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
         :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -2029,6 +2038,7 @@ macro jit(args...)
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
         :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
