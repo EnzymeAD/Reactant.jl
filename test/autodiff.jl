@@ -148,3 +148,9 @@ end
     @test res.derivs[1] ≈ 4ones(2, 2)
     @test res.derivs[2] ≈ 2ones(2, 2)
 end
+
+@testset "onehot" begin
+    x = Reactant.to_rarray(rand(3, 4))
+    hlo = @code_hlo optimize=false Enzyme.onehot(x)
+    @test !contains("stablehlo.constant", repr(hlo))
+end
