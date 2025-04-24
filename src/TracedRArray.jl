@@ -1174,7 +1174,9 @@ function Base.mapslices(f::F, A::AnyTracedRArray; dims) where {F}
 end
 
 function Base.mapslices(f::F, A::TracedRArray; dims) where {F}
-    return Ops.batch(f, A, collect(Int64, dims))
+    dims isa Integer && (dims = Int64[dims])
+    dims isa AbstractVector && (dims = collect(Int64, dims))
+    return Ops.batch(f, A, dims)
 end
 
 end
