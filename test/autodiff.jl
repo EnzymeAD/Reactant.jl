@@ -158,15 +158,10 @@ end
 end
 
 fn(x) = sum(abs2, x)
-
-function vector_forward_ad(x, dx1, dx2)
-    return Enzyme.autodiff(Forward, fn, BatchDuplicated(x, (dx1, dx2)))
-end
+vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.onehot(x)))
 
 @testset "Vector Mode AD" begin
-    x = Reactant.to_rarray([1.0, 3.0])
-    dx1 = Reactant.to_rarray([1.0, 0.0])
-    dx2 = Reactant.to_rarray([0.0, 1.0])
+    x = Reactant.to_rarray(reshape(collect(Float32, 1:4), 2, 2))
 
-    res = @jit vector_forward_ad(x, dx1, dx2)
+    res = @jit vector_forward_ad(x)
 end
