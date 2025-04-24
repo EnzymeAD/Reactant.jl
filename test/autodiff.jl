@@ -151,6 +151,6 @@ end
 
 @testset "onehot" begin
     x = Reactant.to_rarray(rand(3, 4))
-    hlo = @code_hlo optimize=false Enzyme.onehot(x)
+    hlo = @code_hlo optimize = false Enzyme.onehot(x)
     @test !contains("stablehlo.constant", repr(hlo))
 end
