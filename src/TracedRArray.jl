@@ -1169,4 +1169,14 @@ function Base.map!(f, y::AnyTracedRArray, x::AbstractArray)
     return y
 end
 
+function Base.mapslices(f::F, A::AnyTracedRArray; dims) where {F}
+    return mapslices(f, materialize_traced_array(A); dims)
+end
+
+function Base.mapslices(f::F, A::TracedRArray; dims) where {F}
+    dims isa Integer && (dims = Int64[dims])
+    dims isa AbstractVector || (dims = collect(Int64, dims))
+    return Ops.batch(f, A, dims)
+end
+
 end

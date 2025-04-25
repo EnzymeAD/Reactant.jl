@@ -65,6 +65,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Comm Optimization" include("optimize_comm.jl")
         @safetestset "Cluster Detection" include("cluster_detector.jl")
         @safetestset "Config" include("config.jl")
+        @safetestset "Batching" include("batching.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"

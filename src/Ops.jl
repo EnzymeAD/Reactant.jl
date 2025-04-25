@@ -177,8 +177,14 @@ function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE_
     return fill(v, Int[]; location)
 end
 
-function fill(number::TracedRNumber{T}, shape::Vector{Int}; location) where {T}
-    return Base.fill(number, Tuple(shape))
+function fill(
+    number::TracedRNumber{T},
+    shape::Vector{Int};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {T}
+    return broadcast_in_dim(
+        TracedRArray{T,0}((), number.mlir_data, ()), Int64[], shape; location
+    )
 end
 
 for (T, mlir_func) in (
@@ -2744,6 +2750,97 @@ end
         1,
     )
     return TracedRArray{T,ndims(res)}((), res, size(res))
+end
+
+# Currently this is very simplistic and doesn't linearize/delinearize and supports only
+# a single argument (similar to how Julia's mapslices works)
+@noinline function batch(
+    f::F,
+    A::TracedRArray{T,N},
+    dims::Vector{Int};
+    location=mlir_stacktrace("batch", @__FILE__, @__LINE__),
+) where {F,T,N}
+    sort!(dims)
+
+    # First we permute and make sure the batch dims are at the beginning
+    batch_dims = Int64[i for i in 1:N if i ∉ dims]
+    permutation = zeros(Int64, N)
+    for (i, d) in enumerate(batch_dims)
+        permutation[i] = d
+    end
+    for (i, d) in enumerate(dims)
+        permutation[i + length(batch_dims)] = d
+    end
+
+    A = Ops.transpose(A, permutation; location)
+
+    sample_input = fill(T(0), [size(A, i) for i in (length(batch_dims) + 1):N]; location)
+    # TODO: detect and forbid internal mutations
+    mlir_fn_res = Reactant.TracedUtils.make_mlir_fn(
+        f,
+        (sample_input,),
+        (),
+        "unbatched_" * string(f),
+        false;
+        args_in_result=:none,
+        do_transpose=false,
+    )
+
+    @assert !mlir_fn_res.fnwrapped "Currently we don't support batching closures."
+
+    func = mlir_fn_res.f
+    @assert MLIR.IR.nregions(func) == 1
+
+    result = only(mlir_fn_res.linear_results)
+    batch_shape = [size(A, i) for i in 1:length(batch_dims)]
+
+    if result isa TracedRArray
+        @assert ndims(result) == ndims(sample_input)
+        output_type = MLIR.IR.TensorType(
+            vcat(batch_shape, collect(Int64, size(result))),
+            MLIR.IR.Type(unwrapped_eltype(result)),
+        )
+    elseif result isa TracedRNumber
+        output_type = MLIR.IR.TensorType(
+            batch_shape, MLIR.IR.Type(unwrapped_eltype(result))
+        )
+    else
+        error("Unsupported result type $(typeof(result))")
+    end
+
+    batched_result = batch([A], [output_type], batch_shape; fn=func, location)[1]
+
+    if result isa TracedRNumber
+        batched_result = Ops.reshape(
+            batched_result, vcat(batch_shape, ones(Int64, ndims(sample_input))); location
+        )
+    end
+
+    return Ops.transpose(batched_result, invperm(permutation); location)
+end
+
+@noinline function batch(
+    inputs::Vector{<:Union{<:TracedRArray,<:MLIR.IR.Value}},
+    output_types::Vector{<:MLIR.IR.Type},
+    batch_shape::Vector{Int64};
+    fn,
+    location=mlir_stacktrace("batch", @__FILE__, @__LINE__),
+)
+    op = MLIR.Dialects.enzyme.batch(
+        [i isa TracedRArray ? i.mlir_data : i for i in inputs];
+        outputs=output_types,
+        fn=MLIR.IR.FlatSymbolRefAttribute(
+            String(Reactant.TracedUtils.get_attribute_by_name(fn, "sym_name"))
+        ),
+        batch_shape=MLIR.IR.DenseArrayAttribute(batch_shape),
+        location,
+    )
+
+    return [
+        TracedRArray{MLIR.IR.julia_type(eltype(out_type)),ndims(out_type)}(
+            (), MLIR.IR.result(op, i), size(out_type)
+        ) for (i, out_type) in enumerate(output_types)
+    ]
 end
 
 end # module Ops
