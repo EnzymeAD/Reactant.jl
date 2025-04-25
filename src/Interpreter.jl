@@ -387,7 +387,7 @@ function overload_autodiff(
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
     res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)(
-        [TracedUtils.transpose_val(v) for v in ad_inputs];
+        [TracedUtils.transpose_val(v; keep_first_intact=width > 1) for v in ad_inputs];
         outputs=outtys,
         fn=fname,
         width,
