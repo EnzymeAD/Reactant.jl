@@ -263,3 +263,12 @@ end
     @jit axpby!(α, x_ra, β, y_ra)
     @test y_ra ≈ axpby!(α, x, β, y)
 end
+
+@testset "Dot" begin
+    x = collect(Float32, 1:10)
+    y = collect(Float32, 10:-1:1)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
+end
