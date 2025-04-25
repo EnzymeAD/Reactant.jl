@@ -452,4 +452,8 @@ end
 
 #-------------
 
+function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
+    return sum(materialize_traced_array(x) .* materialize_traced_array(y))
+end
+
 end
