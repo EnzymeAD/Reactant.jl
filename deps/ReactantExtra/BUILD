@@ -921,6 +921,20 @@ gentbl_cc_library(
     includes = ["external/shardy"],
 )
 
+gentbl_cc_library(
+    name = "SparseTensorJLIncGen",
+    tbl_outs = [(
+            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
+            "SparseTensor.jl"
+        )
+    ],
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/SparseTensor/IR/SparseTensorOps.td",
+    deps = [
+        "@llvm-project//mlir:SparseTensorTdFiles",
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+)
+
 genrule(
     name = "libMLIR_h.jl",
     tags = [
