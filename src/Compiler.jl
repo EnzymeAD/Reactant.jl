@@ -720,6 +720,7 @@ function optimization_passes(;
         "square_abs_simplify",
         "divide_divide_simplify",
         "concat_reshape_slice",
+        "full_reduce_reshape_or_transpose",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
@@ -803,6 +804,7 @@ function optimization_passes(;
                 "transpose_extend",
                 "transpose_rotate",
                 "transpose_dynamic_slice",
+                "transpose_reverse",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -830,6 +832,7 @@ function optimization_passes(;
                 "einsum_transpose<1>",
                 "slice_reshape_transpose<1>",
                 "reduce_transpose_simplify",
+                "reverse_transpose",
             ],
         )
     else
