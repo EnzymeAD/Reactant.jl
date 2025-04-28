@@ -461,11 +461,12 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
         )
     end
 
-    return Ops.dot_general(
+    res = Ops.dot_general(
         Ops.conj(materialize_traced_array(x)),
         materialize_traced_array(y);
         contracting_dimensions=([1], [1]),
     )
+    return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
 end
 
 end
