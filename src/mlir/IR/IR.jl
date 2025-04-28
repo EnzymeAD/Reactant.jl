@@ -139,19 +139,18 @@ verifyall(module_::Module; debug=false) = verifyall(Operation(module_); debug)
 function tryinject!(sym_name, code; verify=false, mod=IR.mmodule(), location=Location())
     fn = lookup(SymbolTable(Operation(mod)), sym_name)
 
-    if isnothing(fn)
+    if fn === nothing
         ctx = IR.context()
         block = body(mod)
-        res = @ccall API.mlir_c.mlirOperationInject(
+        return @ccall API.mlir_c.mlirOperationInject(
             ctx::API.MlirContext,
             block::API.MlirBlock,
             code::API.MlirStringRef,
             location::API.MlirLocation,
             verify::Bool,
         )::Bool
-        return res
     else
-        return true
+        return false
     end
 end
 
