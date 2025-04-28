@@ -243,6 +243,30 @@ function Base.show(io::IO, operation::Operation)
 end
 
 """
+    parse(::Type{Operation}, code; context=context())
+
+Parses an operation from the string and transfers ownership to the caller.
+"""
+function Base.parse(
+    ::Core.Type{Operation},
+    code;
+    verify::Bool=false,
+    context::Context=context(),
+    block=Block(),
+    location::Location=Location(),
+)
+    return Operation(
+        @ccall API.mlir_c.mlirOperationParse(
+            context::API.MlirContext,
+            block::API.MlirBlock,
+            code::API.MlirStringRef,
+            location::API.MlirLocation,
+            verify::Bool,
+        )::API.MlirOperation
+    )
+end
+
+"""
     verify(op)
 
 Verify the operation and return true if it passes, false if it fails.
