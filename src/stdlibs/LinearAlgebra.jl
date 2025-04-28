@@ -453,6 +453,14 @@ end
 #-------------
 
 function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
+    if length(x) != length(y)
+        throw(
+            DimensionMismatch(
+                lazy"x has length $(length(x)), but y has length $(length(y))"
+            ),
+        )
+    end
+
     return Ops.dot_general(
         Ops.conj(materialize_traced_array(x)),
         materialize_traced_array(y);
