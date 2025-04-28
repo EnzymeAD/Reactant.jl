@@ -453,7 +453,11 @@ end
 #-------------
 
 function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
-    return sum(materialize_traced_array(x) .* materialize_traced_array(y))
+    return Ops.dot_general(
+        Ops.conj(materialize_traced_array(x)),
+        materialize_traced_array(y);
+        contracting_dimensions=([1], [1]),
+    )
 end
 
 end
