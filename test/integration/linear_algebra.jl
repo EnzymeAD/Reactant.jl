@@ -271,4 +271,11 @@ end
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
+
+    x = rand(Complex{Float32}, 4)
+    y = rand(Complex{Float32}, 4)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
 end
