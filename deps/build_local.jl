@@ -25,7 +25,7 @@ s = ArgParseSettings()
         arg_type = String
     "--hermetic_python_version"
         help = "Hermetic Python version."
-        default = "3.10"
+        default = "3.12"
         arg_type = String
     "--jobs"
         help = "Number of parallel jobs."
