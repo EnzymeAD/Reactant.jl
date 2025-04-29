@@ -30,6 +30,115 @@ cc_toolchain_suite(
 filegroup(name = "empty")
 
 cc_toolchain(
+    name = "ygg_host_toolchain",
+    all_files = ":empty",
+    compiler_files = ":empty",
+    dwp_files = ":empty",
+    linker_files = ":empty",
+    objcopy_files = ":empty",
+    strip_files = ":empty",
+    supports_param_files = 1,
+    toolchain_config = ":ygg_host_toolchain_config",
+    toolchain_identifier = "ygg_host_toolchain",
+)
+
+toolchain(
+    name = "cc_toolchain_for_ygg_host",
+    toolchain = ":ygg_host_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+    exec_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+)
+
+cc_toolchain_config(
+    name = "ygg_host_toolchain_config",
+    abi_libc_version = "local",
+    abi_version = "local",
+    builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
+    compile_flags = [
+    ],
+    compiler = "clang",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    cpu = "k8",
+    cxx_builtin_include_directories = [
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/GCC_VERSION",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/GCC_VERSION/x86_64-linux-musl",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include/c++/GCC_VERSION/backward",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/include",
+        "/opt/x86_64-linux-musl/bin/../include/x86_64-unknown-linux-musl/c++/v1",
+        "/opt/x86_64-linux-musl/bin/../include/c++/v1",
+        "/opt/x86_64-linux-musl/x86_64-linux-musl/sys-root/usr/include",
+        "/opt/x86_64-linux-musl/lib/clang/16/include",
+        "/opt/x86_64-linux-musl/lib/clang/17/include",
+        "/opt/x86_64-linux-musl/lib/clang/18/include",
+        #         "/opt/x86_64-linux-musl/x86_64-linux-musl/include",
+        #         "/opt/x86_64-linux-musl/lib/gcc/x86_64-linux-musl/10.2.0/include",
+        #         "/opt/x86_64-linux-musl/x86_64-linux-musl/sys-root/usr/include",
+        #         "/opt/x86_64-linux-musl/lib/gcc/x86_64-linux-musl/12.1.0/include",
+        #         "/opt/x86_64-linux-musl/include",
+    ],
+    dbg_compile_flags = ["-g"],
+    host_system_name = "linux",
+    link_flags = [
+        "-fuse-ld=lld",
+        #"--ld-path=/opt/x86_64-linux-musl/bin/ld.lld",
+        "--ld-path=/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
+        "-stdlib=libstdc++",
+    ],
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-stdlib=libstdc++"
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    supports_start_end_lib = True,
+    target_libc = "",
+    target_system_name = "x86_64-unknown-linux-gnu",
+    tool_paths = {
+        #"gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-gcc",
+        #"cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-g++",
+        #"ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld",
+		"gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang",
+		"g++": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
+		"cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
+		"ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
+        #"gcc": "/opt/x86_64-linux-musl/bin/clang",
+        #"ld": "/opt/x86_64-linux-musl/bin/ld.lld",
+        #"cpp": "/opt/x86_64-linux-musl/bin/clang++",
+        "ar": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ar",
+        "llvm-cov": "/usr/lib/llvm-18/bin/llvm-cov",
+        "nm": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-nm",
+        "objdump": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-objdump",
+        "strip": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-strip",
+    },
+    toolchain_identifier = "ygg_x86_toolchain",
+    unfiltered_compile_flags = [
+        "-no-canonical-prefixes",
+        "-Wno-builtin-macro-redefined",
+        "-D__DATE__=\"redacted\"",
+        "-D__TIMESTAMP__=\"redacted\"",
+        "-D__TIME__=\"redacted\"",
+        "-Wno-unused-command-line-argument",
+        "-Wno-gnu-offsetof-extensions",
+    ],
+)
+
+cc_toolchain(
     name = "ygg_x86_toolchain",
     all_files = ":empty",
     compiler_files = ":empty",
