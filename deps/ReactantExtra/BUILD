@@ -50,6 +50,10 @@ toolchain(
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
+    exec_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
 )
 
 # TODO distinguish between clang and gcc toolchains?
@@ -66,11 +70,15 @@ cc_toolchain_config(
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
         "/opt/BB_TARGET/BB_TARGET/include",
+        "/opt/BB_TARGET/BB_TARGET/sys-root",
         "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "/opt/x86_64-linux-musl/lib/clang/16/include",
+        "/opt/x86_64-linux-musl/lib/clang/17/include",
+        "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
@@ -170,6 +178,10 @@ toolchain(
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
+    exec_compatible_with = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:linux",
+    ],
 )
 
 # TODO distinguish between clang and gcc toolchains?
@@ -186,11 +198,15 @@ cc_toolchain_config(
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
         "/opt/BB_TARGET/BB_TARGET/include",
+        "/opt/BB_TARGET/BB_TARGET/sys-root",
         "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "/opt/x86_64-linux-musl/lib/clang/16/include",
+        "/opt/x86_64-linux-musl/lib/clang/17/include",
+        "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
@@ -270,7 +286,7 @@ cc_toolchain_config(
 )
 
 cc_toolchain(
-    name = "ygg_arm64_toolchain",
+    name = "ygg_darwin_x86_toolchain",
     all_files = ":empty",
     compiler_files = ":empty",
     dwp_files = ":empty",
@@ -278,27 +294,31 @@ cc_toolchain(
     objcopy_files = ":empty",
     strip_files = ":empty",
     supports_param_files = 1,
-    toolchain_config = ":ygg_arm64_toolchain_config",
-    toolchain_identifier = "ygg_arm64_toolchain",
+    toolchain_config = ":ygg_darwin_x86_toolchain_config",
+    toolchain_identifier = "ygg_darwin_x86_toolchain",
 )
 
 toolchain(
-    name = "cc_toolchain_for_ygg_arm64",
-    toolchain = ":ygg_arm64_toolchain",
+    name = "cc_toolchain_for_ygg_darwin_x86",
+    toolchain = ":ygg_darwin_x86_toolchain",
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
     exec_compatible_with = [
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:macos",
+    ],
 )
 
 # TODO distinguish between clang and gcc toolchains?
 cc_toolchain_config(
-    name = "ygg_arm64_toolchain_config",
-    cpu = "arm64",
+    name = "ygg_darwin_x86_toolchain_config",
+    cpu = "k8",
     compiler = "compiler",
-    toolchain_identifier = "ygg_arm64",
-    target_system_name = "arm64-unknown-linux-gnu",
+    toolchain_identifier = "ygg_darwin_x86",
+    # target_system_name = "arm64-unknown-linux-gnu",
     target_libc = "",
     abi_libc_version = "local",
     abi_version = "local",
@@ -306,6 +326,126 @@ cc_toolchain_config(
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
         "/opt/BB_TARGET/BB_TARGET/include",
+        "/opt/BB_TARGET/BB_TARGET/sys-root",
+        "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "/opt/x86_64-linux-musl/lib/clang/16/include",
+        "/opt/x86_64-linux-musl/lib/clang/17/include",
+        "/opt/x86_64-linux-musl/lib/clang/18/include",
+    ],
+    tool_paths = {
+        "ar": "/opt/bin/BB_FULL_TARGET/ar",
+        "as": "/opt/bin/BB_FULL_TARGET/as",
+        "c++": "/opt/bin/BB_FULL_TARGET/c++",
+        "c++filt": "/opt/bin/BB_FULL_TARGET/c++filt",
+        "cc": "/opt/bin/BB_FULL_TARGET/cc",
+        "clang": "/opt/bin/BB_FULL_TARGET/clang",
+        "clang++": "/opt/bin/BB_FULL_TARGET/clang++",
+        "cpp": "/opt/bin/BB_FULL_TARGET/cpp",
+        "f77": "/opt/bin/BB_FULL_TARGET/f77",
+        "gcc": "/opt/bin/BB_FULL_TARGET/clang",
+        "g++": "/opt/bin/BB_FULL_TARGET/clang++",
+        # "g++": "/opt/bin/BB_FULL_TARGET/g++",
+        # "gcc": "/opt/bin/BB_FULL_TARGET/gcc",
+        "gfortran": "/opt/bin/BB_FULL_TARGET/gfortran",
+        "ld": "/opt/bin/BB_FULL_TARGET/ld",
+        "ld.lld": "/opt/bin/BB_FULL_TARGET/ld.lld",
+        "libtool": "/opt/bin/BB_FULL_TARGET/libtool",
+        "lld": "/opt/bin/BB_FULL_TARGET/lld",
+        "nm": "/opt/bin/BB_FULL_TARGET/nm",
+        "objcopy": "/opt/bin/BB_FULL_TARGET/objcopy",
+        "patchelf": "/opt/bin/BB_FULL_TARGET/patchelf",
+        "ranlib": "/opt/bin/BB_FULL_TARGET/ranlib",
+        "readelf": "/opt/bin/BB_FULL_TARGET/readelf",
+        "strip": "/opt/bin/BB_FULL_TARGET/strip",
+        # from host
+        "llvm-cov": "/opt/x86_64-linux-musl/bin/llvm-cov",
+        "llvm-profdata": "/opt/x86_64-linux-musl/bin/llvm-profdata",
+        "objdump": "/usr/bin/objdump",
+    },
+    compile_flags = [
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-stdlib=libstdc++",
+    ],
+    dbg_compile_flags = ["-g"],
+    link_flags = [
+        "-fuse-ld=lld",
+        "--ld-path=/opt/bin/BB_FULL_TARGET/ld.lld",
+        "-stdlib=libstdc++",
+    ],
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    unfiltered_compile_flags = [
+        "-no-canonical-prefixes",
+        "-Wno-builtin-macro-redefined",
+        "-D__DATE__=\"redacted\"",
+        "-D__TIMESTAMP__=\"redacted\"",
+        "-D__TIME__=\"redacted\"",
+        "-Wno-unused-command-line-argument",
+        "-Wno-gnu-offsetof-extensions",
+    ],
+    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    host_system_name = "linux",
+    supports_start_end_lib = True,
+)
+
+cc_toolchain(
+    name = "ygg_darwin_arm64_toolchain",
+    all_files = ":empty",
+    compiler_files = ":empty",
+    dwp_files = ":empty",
+    linker_files = ":empty",
+    objcopy_files = ":empty",
+    strip_files = ":empty",
+    supports_param_files = 1,
+    toolchain_config = ":ygg_darwin_arm64_toolchain_config",
+    toolchain_identifier = "ygg_darwin_arm64_toolchain",
+)
+
+toolchain(
+    name = "cc_toolchain_for_ygg_darwin_arm64",
+    toolchain = ":ygg_darwin_arm64_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+    exec_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    target_compatible_with = [
+        "@platforms//cpu:arm64",
+        "@platforms//os:macos",
+    ],
+)
+
+# TODO distinguish between clang and gcc toolchains?
+cc_toolchain_config(
+    name = "ygg_darwin_arm64_toolchain_config",
+    cpu = "arm64",
+    compiler = "compiler",
+    toolchain_identifier = "ygg_darwin_arm64",
+    # target_system_name = "arm64-unknown-linux-gnu",
+    target_libc = "",
+    abi_libc_version = "local",
+    abi_version = "local",
+    cxx_builtin_include_directories = [
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
+        "/opt/BB_TARGET/BB_TARGET/include",
+        "/opt/BB_TARGET/BB_TARGET/sys-root",
         "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
