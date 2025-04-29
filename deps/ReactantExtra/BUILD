@@ -13,7 +13,7 @@ package(
 cc_toolchain_suite(
     name = "ygg_cross_compile_toolchain_suite",
     toolchains = {
-        "k8": ":ygg_x86_toolchain",
+        "k8": ":ygg_host_toolchain",
         "darwin": ":ygg_darwin_x86_toolchain",
         "darwin_arm64": ":ygg_darwin_arm64_toolchain",
         "aarch64": ":ygg_aarch64_toolchain",
