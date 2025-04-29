@@ -282,7 +282,7 @@ function make_mlir_fn(
 
     seen_args = OrderedIdDict()
 
-    (
+    (;
         N,
         traced_args,
         linear_args,
@@ -316,23 +316,7 @@ function make_mlir_fn(
     MLIR.IR.activate!(fnbody)
 
     result = try
-        for (i, arg) in enumerate(linear_args)
-            raw_arg = MLIR.IR.argument(fnbody, i)
-            row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
-            if !optimize_then_pad
-                carg = inv_map[arg]
-                if Reactant.has_padding(carg)
-                    padding = Reactant.get_padding(carg)
-                    sz = size(carg) .+ padding
-                    if !do_transpose
-                        padding = reverse(padding)
-                        sz = reverse(sz)
-                    end
-                    row_maj_arg = MLIR.IR.result(unpad_val_op(row_maj_arg, padding, sz), 1)
-                end
-            end
-            set_mlir_data!(arg, row_maj_arg)
-        end
+        process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
 
         if isempty(kwargs)
             Reactant.call_with_reactant(f, traced_args...)
@@ -357,7 +341,6 @@ function make_mlir_fn(
 
     seen_results = OrderedIdDict()
     
-    # Call the second extracted function to finalize
     (
         func2,
         traced_result,
@@ -537,7 +520,7 @@ function prepare_mlir_fn_args(
     fnbody = MLIR.IR.Block(in_tys, arglocs)
     push!(MLIR.IR.region(func, 1), fnbody)
     
-    return (
+    return (;
         N,
         traced_args,
         linear_args,
@@ -550,6 +533,26 @@ function prepare_mlir_fn_args(
         func,
         fnbody
     )
+end
+
+function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
+    for (i, arg) in enumerate(linear_args)
+        raw_arg = MLIR.IR.argument(fnbody, i)
+        row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
+        if !optimize_then_pad
+            carg = inv_map[arg]
+            if Reactant.has_padding(carg)
+                padding = Reactant.get_padding(carg)
+                sz = size(carg) .+ padding
+                if !do_transpose
+                    padding = reverse(padding)
+                    sz = reverse(sz)
+                end
+                row_maj_arg = MLIR.IR.result(unpad_val_op(row_maj_arg, padding, sz), 1)
+            end
+        end
+        set_mlir_data!(arg, row_maj_arg)
+    end
 end
 
 function finalize_mlir_fn(
