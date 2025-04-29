@@ -311,6 +311,9 @@ cc_toolchain_config(
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "/opt/x86_64-linux-musl/lib/clang/16/include",
+        "/opt/x86_64-linux-musl/lib/clang/17/include",
+        "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
@@ -322,8 +325,10 @@ cc_toolchain_config(
         "clang++": "/opt/bin/BB_FULL_TARGET/clang++",
         "cpp": "/opt/bin/BB_FULL_TARGET/cpp",
         "f77": "/opt/bin/BB_FULL_TARGET/f77",
-        "g++": "/opt/bin/BB_FULL_TARGET/g++",
-        "gcc": "/opt/bin/BB_FULL_TARGET/gcc",
+        "gcc": "/opt/bin/BB_FULL_TARGET/clang",
+        "g++": "/opt/bin/BB_FULL_TARGET/clang++",
+        # "g++": "/opt/bin/BB_FULL_TARGET/g++",
+        # "gcc": "/opt/bin/BB_FULL_TARGET/gcc",
         "gfortran": "/opt/bin/BB_FULL_TARGET/gfortran",
         "ld": "/opt/bin/BB_FULL_TARGET/ld",
         "ld.lld": "/opt/bin/BB_FULL_TARGET/ld.lld",
@@ -341,20 +346,6 @@ cc_toolchain_config(
         "objdump": "/usr/bin/objdump",
     },
     compile_flags = [
-        "-fstack-protector",
-        "-Wall",
-        "-Wunused-but-set-parameter",
-        "-Wno-free-nonheap-object",
-        "-fno-omit-frame-pointer",
-        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
     ],
     opt_compile_flags = [
         "-g0",
@@ -363,10 +354,14 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        # "-stdlib=libstdc++",
+        "-stdlib=libstdc++",
     ],
     dbg_compile_flags = ["-g"],
-    link_flags = [],
+    link_flags = [
+        "-fuse-ld=lld",
+        "--ld-path=/opt/bin/BB_FULL_TARGET/ld.lld",
+        "-stdlib=libstdc++",
+    ],
     link_libs = [
         "-lstdc++",
         "-lm",
@@ -385,8 +380,7 @@ cc_toolchain_config(
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     host_system_name = "linux",
-    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
-    supports_start_end_lib = False,
+    supports_start_end_lib = True,
 )
 
 cc_toolchain(
