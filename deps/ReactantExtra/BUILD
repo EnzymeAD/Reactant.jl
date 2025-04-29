@@ -489,7 +489,6 @@ cc_toolchain_config(
     dbg_compile_flags = ["-g"],
     link_flags = [
         "-fuse-ld=lld",
-        "--ld-path=/opt/bin/BB_FULL_TARGET/ld.lld",
         "-stdlib=libstdc++",
     ],
     link_libs = [
@@ -607,8 +606,6 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = ["-g"],
     link_flags = [
-        "-fuse-ld=lld",
-        "--ld-path=/opt/bin/BB_FULL_TARGET/ld.lld",
         "-stdlib=libstdc++",
     ],
     link_libs = [
