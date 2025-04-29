@@ -640,6 +640,7 @@ function call_with_reactant_generator(
     function push_inst!(inst)
         push!(overdubbed_code, inst)
         push!(overdubbed_codelocs, code_info.codelocs[1])
+        return Core.SSAValue(length(overdubbed_code))
     end
     # Rewire the arguments from our tuple input of fn and args, to the corresponding calling convention
     # required by the base method.
@@ -666,9 +667,9 @@ function call_with_reactant_generator(
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
         )
-        push_inst!(actual_argument)
+        arg = push_inst!(actual_argument)
         offset += 1
-        push!(fn_args, Core.SSAValue(length(overdubbed_code)))
+        push!(fn_args, arg)
         push!(tys, redub_arguments[i + (guaranteed_error ? 1 : 0)])
 
         if DEBUG_INTERP[]
@@ -688,15 +689,14 @@ function call_with_reactant_generator(
     if method.isva
         trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
         for i in n_method_args:n_actual_args
-            push_inst(
+            arg = push_inst!(
                 Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset),
             )
-            push!(trailing_arguments.args, Core.SSAValue(length(overdubbed_code)))
+            push!(trailing_arguments.args, arg)
             offset += 1
         end
 
-        push_inst!(trailing_arguments)
-        push!(fn_args, Core.SSAValue(length(overdubbed_code)))
+        push!(fn_args, push_inst!(trailing_arguments))
         push!(
             tys,
             Tuple{
