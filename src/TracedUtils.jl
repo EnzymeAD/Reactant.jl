@@ -356,6 +356,243 @@ function make_mlir_fn(
     end
 
     seen_results = OrderedIdDict()
+    
+    # Call the second extracted function to finalize
+    (
+        func2,
+        traced_result,
+        ret,
+        linear_args,
+        in_tys,
+        linear_results,
+        num_partitions,
+        is_sharded,
+        unique_meshes,
+        mutated_args,
+        global_device_ids
+    ) = finalize_mlir_fn(
+        result,
+        traced_args,
+        linear_args,
+        seen_args,
+        seen_results,
+        fnbody,
+        func,
+        mod,
+        name,
+        in_tys,
+        do_transpose,
+        optimize_then_pad,
+        inv_map,
+        args_in_result,
+        resprefix,
+        argprefix,
+        resargprefix,
+        verify_arg_names,
+        return_dialect,
+        traced_args_to_shardings,
+        output_shardings,
+        sym_visibility,
+        num_replicas,
+        runtime,
+        construct_function_without_args,
+        args,
+        N,
+        concretein,
+        toscalar
+    )
+
+    return CompiledMlirFnResult(
+        false,
+        func2,
+        traced_result,
+        result,
+        seen_args,
+        ret,
+        linear_args,
+        in_tys,
+        linear_results,
+        num_partitions,
+        num_replicas,
+        is_sharded,
+        nothing,
+        nothing,
+        unique_meshes,
+        mutated_args,
+        true,
+        missing,
+        global_device_ids,
+        nothing, # populated later in `compile_mlir!`
+    )
+end
+
+function prepare_mlir_fn_args(
+    args,
+    name,
+    seen_args,
+    concretein,
+    toscalar,
+    argprefix,
+    runtime,
+    optimize_then_pad,
+    do_transpose,
+    input_shardings,
+    verify_arg_names
+)
+    N = length(args)
+    traced_args = Vector{Any}(undef, N)
+    inmode = if concretein
+        @assert !toscalar
+        Reactant.ConcreteToTraced
+    else
+        Reactant.TracedSetPath
+    end
+    for i in 1:N
+        @inbounds traced_args[i] = Reactant.make_tracer(
+            seen_args, args[i], (argprefix, i), inmode; toscalar, runtime
+        )
+    end
+
+    linear_args = Reactant.TracedType[]
+    inv_map = IdDict()
+    for (k, v) in seen_args
+        v isa Reactant.TracedType || continue
+        push!(linear_args, v)
+        inv_map[v] = k
+    end
+
+    in_tys = Vector{MLIR.IR.Type}(undef, length(linear_args))
+    for (i, arg) in enumerate(linear_args)
+        elT = MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
+        if toscalar
+            in_tys[i] = MLIR.IR.TensorType(Int[], elT)
+        else
+            sz = collect(Int, size(arg))
+            if !optimize_then_pad
+                carg = inv_map[arg]
+                Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
+            end
+
+            typ = MLIR.IR.TensorType(sz, elT)
+            do_transpose && (typ = transpose_ty(typ))
+            in_tys[i] = typ
+        end
+    end
+
+    sym_visibility = nothing
+    if !concretein
+        sym_visibility = MLIR.IR.Attribute("private")
+    end
+
+    ctx = MLIR.IR.context()
+    mod = MLIR.IR.mmodule()
+
+    # Insert meshes for the sharded arguments
+    traced_args_to_shardings = OrderedIdDict()
+    for (k, v) in seen_args
+        if k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
+            if Reactant.Sharding.is_sharded(k)
+                Reactant.Ops.mesh(k.sharding.mesh)
+                traced_args_to_shardings[v] = k.sharding
+            elseif input_shardings !== nothing && haskey(input_shardings, k)
+                Reactant.Ops.mesh(input_shardings[k].mesh)
+                traced_args_to_shardings[v] = input_shardings[k]
+            end
+        end
+    end
+
+    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
+        return MLIR.Dialects.func.func_(;
+            sym_name=name * "_tmp",
+            function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
+            body=MLIR.IR.Region(),
+        )
+    end
+
+    arglocs = MLIR.IR.Location[]
+    for arg in linear_args
+        path = get_idx(arg, argprefix)
+        stridx = if verify_arg_names isa Nothing
+            "arg" * string(path[2])
+        else
+            string(verify_arg_names.args[path[2]])
+        end
+        aval = args[path[2]]
+        for (cidx, idx) in enumerate(path[3:end])
+            if aval isa Array || aval isa Dict
+                aval = getindex(aval, idx)
+                stridx = stridx * "[" * string(idx) * "]"
+            else
+                fldname = if idx isa Integer
+                    string(fieldname(Core.Typeof(aval), idx))
+                else
+                    string(idx)
+                end
+                stridx *= "." * fldname
+                aval = getfield(aval, idx)
+            end
+        end
+        push!(arglocs, MLIR.IR.Location(stridx * " (path=$path)", MLIR.IR.Location()))
+    end
+    fnbody = MLIR.IR.Block(in_tys, arglocs)
+    push!(MLIR.IR.region(func, 1), fnbody)
+    
+    return (
+        N,
+        traced_args,
+        linear_args,
+        inv_map,
+        in_tys,
+        sym_visibility,
+        ctx,
+        mod,
+        traced_args_to_shardings,
+        func,
+        fnbody
+    )
+end
+
+function finalize_mlir_fn(
+    result,
+    traced_args,
+    linear_args,
+    seen_args,
+    seen_results,
+    fnbody,
+    func,
+    mod,
+    name,
+    in_tys,
+    do_transpose,
+    optimize_then_pad,
+    inv_map,
+    args_in_result,
+    resprefix,
+    argprefix,
+    resargprefix,
+    verify_arg_names,
+    return_dialect,
+    traced_args_to_shardings,
+    output_shardings,
+    sym_visibility,
+    num_replicas,
+    runtime,
+    construct_function_without_args,
+    args,
+    N,
+    concretein,
+    toscalar
+)
+    # check which arguments have been mutated
+    mutated_args = Int[]
+    if !construct_function_without_args
+        for (i, arg) in enumerate(linear_args)
+            if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
+                # mutation occured!
+                push!(mutated_args, i)
+            end
+        end
+    end
 
     outmode = if concretein
         @assert !toscalar
@@ -671,153 +908,18 @@ function make_mlir_fn(
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
 
-    return CompiledMlirFnResult(
-        false,
+    return (
         func2,
         traced_result,
-        result,
-        seen_args,
         ret,
         linear_args,
         in_tys,
         linear_results,
         num_partitions,
-        num_replicas,
         is_sharded,
-        nothing,
-        nothing,
         unique_meshes,
         mutated_args,
-        true,
-        missing,
-        global_device_ids,
-        nothing, # populated later in `compile_mlir!`
-    )
-end
-
-function prepare_mlir_fn_args(
-    args,
-    name,
-    seen_args,
-    concretein,
-    toscalar,
-    argprefix,
-    runtime,
-    optimize_then_pad,
-    do_transpose,
-    input_shardings,
-    verify_arg_names
-)
-    N = length(args)
-    traced_args = Vector{Any}(undef, N)
-    inmode = if concretein
-        @assert !toscalar
-        Reactant.ConcreteToTraced
-    else
-        Reactant.TracedSetPath
-    end
-    for i in 1:N
-        @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, args[i], (argprefix, i), inmode; toscalar, runtime
-        )
-    end
-
-    linear_args = Reactant.TracedType[]
-    inv_map = IdDict()
-    for (k, v) in seen_args
-        v isa Reactant.TracedType || continue
-        push!(linear_args, v)
-        inv_map[v] = k
-    end
-
-    in_tys = Vector{MLIR.IR.Type}(undef, length(linear_args))
-    for (i, arg) in enumerate(linear_args)
-        elT = MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-        if toscalar
-            in_tys[i] = MLIR.IR.TensorType(Int[], elT)
-        else
-            sz = collect(Int, size(arg))
-            if !optimize_then_pad
-                carg = inv_map[arg]
-                Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
-            end
-
-            typ = MLIR.IR.TensorType(sz, elT)
-            do_transpose && (typ = transpose_ty(typ))
-            in_tys[i] = typ
-        end
-    end
-
-    sym_visibility = nothing
-    if !concretein
-        sym_visibility = MLIR.IR.Attribute("private")
-    end
-
-    ctx = MLIR.IR.context()
-    mod = MLIR.IR.mmodule()
-
-    # Insert meshes for the sharded arguments
-    traced_args_to_shardings = OrderedIdDict()
-    for (k, v) in seen_args
-        if k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
-            if Reactant.Sharding.is_sharded(k)
-                Reactant.Ops.mesh(k.sharding.mesh)
-                traced_args_to_shardings[v] = k.sharding
-            elseif input_shardings !== nothing && haskey(input_shardings, k)
-                Reactant.Ops.mesh(input_shardings[k].mesh)
-                traced_args_to_shardings[v] = input_shardings[k]
-            end
-        end
-    end
-
-    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
-            sym_name=name * "_tmp",
-            function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
-            body=MLIR.IR.Region(),
-        )
-    end
-
-    arglocs = MLIR.IR.Location[]
-    for arg in linear_args
-        path = get_idx(arg, argprefix)
-        stridx = if verify_arg_names isa Nothing
-            "arg" * string(path[2])
-        else
-            string(verify_arg_names.args[path[2]])
-        end
-        aval = args[path[2]]
-        for (cidx, idx) in enumerate(path[3:end])
-            if aval isa Array || aval isa Dict
-                aval = getindex(aval, idx)
-                stridx = stridx * "[" * string(idx) * "]"
-            else
-                fldname = if idx isa Integer
-                    string(fieldname(Core.Typeof(aval), idx))
-                else
-                    string(idx)
-                end
-                stridx *= "." * fldname
-                aval = getfield(aval, idx)
-            end
-        end
-        push!(arglocs, MLIR.IR.Location(stridx * " (path=$path)", MLIR.IR.Location()))
-    end
-    fnbody = MLIR.IR.Block(in_tys, arglocs)
-    push!(MLIR.IR.region(func, 1), fnbody)
-    
-    return (
-        N,
-        traced_args,
-        linear_args,
-        inv_map,
-        in_tys,
-        sym_visibility,
-        ctx,
-        mod,
-        traced_args_to_shardings,
-        func,
-        fnbody
+        global_device_ids
     )
 end
 
