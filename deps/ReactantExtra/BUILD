@@ -487,7 +487,8 @@ cc_toolchain_config(
         "-fdata-sections",
         "-stdlib=libc++",
     ],
-    dbg_compile_flags = ["-g"
+    dbg_compile_flags = [
+        "-g",
         "-stdlib=libc++",
     ],
     link_flags = [
