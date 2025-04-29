@@ -50,7 +50,7 @@ toolchain(
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
-    exec_compatible_with = [
+    target_compatible_with = [
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
@@ -178,7 +178,7 @@ toolchain(
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
-    exec_compatible_with = [
+    target_compatible_with = [
         "@platforms//cpu:aarch64",
         "@platforms//os:linux",
     ],
