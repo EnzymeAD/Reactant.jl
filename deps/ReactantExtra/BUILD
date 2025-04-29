@@ -476,6 +476,7 @@ cc_toolchain_config(
         "objdump": "/usr/bin/objdump",
     },
     compile_flags = [
+        "-stdlib=libc++",
     ],
     opt_compile_flags = [
         "-g0",
@@ -484,15 +485,17 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++",
+        "-stdlib=libc++",
     ],
-    dbg_compile_flags = ["-g"],
+    dbg_compile_flags = ["-g"
+        "-stdlib=libc++",
+    ],
     link_flags = [
         "-fuse-ld=lld",
-        "-stdlib=libstdc++",
+        "-stdlib=libc++",
     ],
     link_libs = [
-        "-lstdc++",
+        "-lc++",
         "-lm",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
