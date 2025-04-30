@@ -1406,8 +1406,8 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
       device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
       use_shardy_partitioner, num_replicas, num_partitions,
       use_spmd_partitioning);
-  auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
-      xla::ifrt::XlaCompileOptions(compile_options));
+  xla::ifrt::DeviceListRef devices = MyValueOrThrow(xla::ifrt::GetDeviceListFromXlaCompileOptions(client, compile_options));
+  auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(compile_options, std::move(devices));
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
   if (use_spmd_partitioning && use_shardy_partitioner) {
