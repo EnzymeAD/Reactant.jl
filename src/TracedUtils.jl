@@ -952,7 +952,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     return traced2_result
 end
 
-function broadcast_to_size(arg::AnyTracedRArray, rsize)
+function broadcast_to_size(arg::AbstractArray{<:TracedRNumber}, rsize)
     if Reactant.isa_traced_soa(Reactant.ancestor(arg))
         return broadcast_to_size(materialize_traced_array(arg), rsize)
     end
