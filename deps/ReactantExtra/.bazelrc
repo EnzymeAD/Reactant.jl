@@ -1,17 +1,18 @@
 build --announce_rc
 
-query --experimental_repo_remote_exec
-build --experimental_repo_remote_exec
-build --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
-build --cxxopt=-w --host_cxxopt=-w
-build --define=grpc_no_ares=true
-build --define=tsl_link_protobuf=true
-build --define open_source_build=true
-
-build --define framework_shared_object=true
-build --define tsl_protobuf_header_only=true
-build --define=use_fast_cpp_protos=true
-build --define=allow_oversize_protos=true
+# TODO: Migrate for https://github.com/bazelbuild/bazel/issues/7260
+common --noincompatible_enable_cc_toolchain_resolution
+common --experimental_repo_remote_exec
+common --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
+common --cxxopt=-w --host_cxxopt=-w
+common --define=grpc_no_ares=true
+common --define=tsl_link_protobuf=true
+common --define open_source_build=true
+common
+common --define framework_shared_object=true
+common --define tsl_protobuf_header_only=true
+common --define=use_fast_cpp_protos=true
+common --define=allow_oversize_protos=true
 
 build -c opt
 
