@@ -413,9 +413,9 @@ extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id) {
 
 // xla/python/xla.cc 390
 extern "C" PjRtClient *
-MakeGPUClient(int node_id, int num_nodes, int *allowed_devices,
-              int num_allowed_devices, double memory_fraction, bool preallocate,
-              const char *platform_name, const char **error,
+MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
+              int64_t num_allowed_devices, double memory_fraction,
+              bool preallocate, const char *platform_name, const char **error,
               void *distributed_runtime_client) {
   GpuClientOptions options;
 
@@ -437,10 +437,15 @@ MakeGPUClient(int node_id, int num_nodes, int *allowed_devices,
   options.allocator_config.memory_fraction = memory_fraction;
   options.node_id = node_id;
   options.num_nodes = num_nodes;
-  options.allowed_devices =
-      allowed_devices ? std::set<int>(allowed_devices,
-                                      allowed_devices + num_allowed_devices)
-                      : std::optional<std::set<int>>();
+  if (allowed_devices) {
+    std::set<int> allowed_devices_set;
+    for (int i = 0; i < num_allowed_devices; i++) {
+      allowed_devices_set.insert(static_cast<int>(allowed_devices[i]));
+    }
+    options.allowed_devices = allowed_devices_set;
+  } else {
+    options.allowed_devices = std::optional<std::set<int>>();
+  }
   options.platform_name =
       platform_name ? std::string(platform_name) : std::optional<std::string>();
   // options.collectives = num_nodes;
@@ -1637,10 +1642,12 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
                                kv_store);
 }
 
-extern "C" ifrt::Client *ifrt_make_pjrt_gpu_client(
-    int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
-    double memory_fraction, bool preallocate, const char *platform_name,
-    const char **error, void *distributed_runtime_client) {
+extern "C" ifrt::Client *
+ifrt_make_pjrt_gpu_client(int node_id, int num_nodes, int64_t *allowed_devices,
+                          int64_t num_allowed_devices, double memory_fraction,
+                          bool preallocate, const char *platform_name,
+                          const char **error,
+                          void *distributed_runtime_client) {
   PjRtClient *pjrt_client = MakeGPUClient(
       node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
       preallocate, platform_name, error, distributed_runtime_client);

@@ -163,8 +163,8 @@ function MakeGPUClient(;
         client = @ccall MLIR.API.mlir_c.MakeGPUClient(
             node_id::Cint,
             num_nodes::Cint,
-            allowed_devices::Ptr{Cvoid},
-            num_allowed_devices::Cint,
+            allowed_devices::Ptr{Int64},
+            num_allowed_devices::Int64,
             XLA.XLA_REACTANT_GPU_MEM_FRACTION[]::Cdouble,
             XLA.XLA_REACTANT_GPU_PREALLOCATE[]::Bool,
             platform::Cstring,
