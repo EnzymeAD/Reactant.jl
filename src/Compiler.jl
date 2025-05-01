@@ -1291,6 +1291,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         opt_passes2,
+                        "lower-factorization{backend=$backend}",
                         jit,
                     ]
                 else
@@ -1307,6 +1308,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
+                        "lower-factorization{backend=$backend}",
                         jit,
                     ]
                 end,
@@ -1453,6 +1455,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         opt_passes2,
+                        "lower-factorization{backend=$backend}",
                         jit,
                     ]
                 else
@@ -1466,6 +1469,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
+                        "lower-factorization{backend=$backend}",
                         jit,
                     ]
                 end,
@@ -1487,6 +1491,7 @@ function compile_mlir!(
                         opt_passes2,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                        "lower-factorization{backend=$backend}",
                         jit,
                     ]
                 else
@@ -1499,6 +1504,7 @@ function compile_mlir!(
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
                         raise_passes,
+                        "lower-factorization{backend=$backend}",
                         jit,
                     ]
                 end,
