@@ -690,7 +690,7 @@ function call_with_reactant_generator(
         trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
         for i in n_method_args:n_actual_args
             arg = push_inst!(
-                Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset),
+                Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset)
             )
             push!(trailing_arguments.args, arg)
             offset += 1

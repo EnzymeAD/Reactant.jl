@@ -282,19 +282,7 @@ function make_mlir_fn(
 
     seen_args = OrderedIdDict()
 
-    (;
-        N,
-        traced_args,
-        linear_args,
-        inv_map,
-        in_tys,
-        sym_visibility,
-        ctx,
-        mod,
-        traced_args_to_shardings,
-        func,
-        fnbody
-    ) = prepare_mlir_fn_args(
+    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, ctx, mod, traced_args_to_shardings, func, fnbody) = prepare_mlir_fn_args(
         args,
         name,
         seen_args,
@@ -305,7 +293,7 @@ function make_mlir_fn(
         optimize_then_pad,
         do_transpose,
         input_shardings,
-        verify_arg_names
+        verify_arg_names,
     )
 
     Ops.activate_constant_context!(fnbody)
@@ -340,20 +328,8 @@ function make_mlir_fn(
     end
 
     seen_results = OrderedIdDict()
-    
-    (
-        func2,
-        traced_result,
-        ret,
-        linear_args,
-        in_tys,
-        linear_results,
-        num_partitions,
-        is_sharded,
-        unique_meshes,
-        mutated_args,
-        global_device_ids
-    ) = finalize_mlir_fn(
+
+    (func2, traced_result, ret, linear_args, in_tys, linear_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
         result,
         traced_args,
         linear_args,
@@ -382,7 +358,7 @@ function make_mlir_fn(
         args,
         N,
         concretein,
-        toscalar
+        toscalar,
     )
 
     return CompiledMlirFnResult(
@@ -420,7 +396,7 @@ function prepare_mlir_fn_args(
     optimize_then_pad,
     do_transpose,
     input_shardings,
-    verify_arg_names
+    verify_arg_names,
 )
     N = length(args)
     traced_args = Vector{Any}(undef, N)
@@ -519,7 +495,7 @@ function prepare_mlir_fn_args(
     end
     fnbody = MLIR.IR.Block(in_tys, arglocs)
     push!(MLIR.IR.region(func, 1), fnbody)
-    
+
     return (;
         N,
         traced_args,
@@ -531,7 +507,7 @@ function prepare_mlir_fn_args(
         mod,
         traced_args_to_shardings,
         func,
-        fnbody
+        fnbody,
     )
 end
 
@@ -584,7 +560,7 @@ function finalize_mlir_fn(
     args,
     N,
     concretein,
-    toscalar
+    toscalar,
 )
     # check which arguments have been mutated
     mutated_args = Int[]
@@ -922,7 +898,7 @@ function finalize_mlir_fn(
         is_sharded,
         unique_meshes,
         mutated_args,
-        global_device_ids
+        global_device_ids,
     )
 end
 
