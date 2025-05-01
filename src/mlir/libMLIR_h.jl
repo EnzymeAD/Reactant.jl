@@ -260,9 +260,6 @@ struct MlirDialectRegistry
     ptr::Ptr{Cvoid}
 end
 
-"""
-    MlirOperation
-"""
 struct MlirOperation
     ptr::Ptr{Cvoid}
 end
@@ -287,9 +284,6 @@ struct MlirSymbolTable
     ptr::Ptr{Cvoid}
 end
 
-"""
-    MlirAttribute
-"""
 struct MlirAttribute
     ptr::Ptr{Cvoid}
 end
@@ -298,10 +292,6 @@ struct MlirIdentifier
     ptr::Ptr{Cvoid}
 end
 
-"""
-    MlirLocation
-A location in MLIR.
-"""
 struct MlirLocation
     ptr::Ptr{Cvoid}
 end
@@ -310,10 +300,6 @@ struct MlirModule
     ptr::Ptr{Cvoid}
 end
 
-"""
-    MlirType
-A type in MLIR.
-"""
 struct MlirType
     ptr::Ptr{Cvoid}
 end
@@ -3372,7 +3358,7 @@ end
 """
     mlirIntegerSetIsCanonicalEmpty(set)
 
-Checks whether the given set is a canonical empty set, e.g., the set returned by [`Reactant.MLIR.API.mlirIntegerSetEmptyGet`](@ref).
+Checks whether the given set is a canonical empty set, e.g., the set returned by [`mlirIntegerSetEmptyGet`](@ref).
 """
 function mlirIntegerSetIsCanonicalEmpty(set)
     @ccall mlir_c.mlirIntegerSetIsCanonicalEmpty(set::MlirIntegerSet)::Bool
@@ -5727,7 +5713,7 @@ end
 """
     mlirRankedTensorTypeGet(rank, shape, elementType, encoding)
 
-Creates a tensor type of a fixed rank with the given shape, element type, and optional encoding in the same context as the element type. The type is owned by the context. Tensor types without any specific encoding field should assign [`Reactant.MLIR.API.mlirAttributeGetNull`](@ref)() to this parameter.
+Creates a tensor type of a fixed rank with the given shape, element type, and optional encoding in the same context as the element type. The type is owned by the context. Tensor types without any specific encoding field should assign [`mlirAttributeGetNull`](@ref)() to this parameter.
 """
 function mlirRankedTensorTypeGet(rank, shape, elementType, encoding)
     @ccall mlir_c.mlirRankedTensorTypeGet(
@@ -7355,6 +7341,48 @@ function mlirLinalgFillBuiltinNamedOpRegion(mlirOp)
     @ccall mlir_c.mlirLinalgFillBuiltinNamedOpRegion(mlirOp::MlirOperation)::Cvoid
 end
 
+function mlirLinalgIsAContractionOp(op)
+    @ccall mlir_c.mlirLinalgIsAContractionOp(op::MlirOperation)::Bool
+end
+
+struct MlirLinalgContractionDimensions
+    batch::MlirAttribute
+    m::MlirAttribute
+    n::MlirAttribute
+    k::MlirAttribute
+end
+
+function mlirLinalgInferContractionDimensions(op)
+    @ccall mlir_c.mlirLinalgInferContractionDimensions(
+        op::MlirOperation
+    )::MlirLinalgContractionDimensions
+end
+
+function mlirLinalgIsAConvolutionOp(op)
+    @ccall mlir_c.mlirLinalgIsAConvolutionOp(op::MlirOperation)::Bool
+end
+
+struct MlirLinalgConvolutionDimensions
+    batch::MlirAttribute
+    outputImage::MlirAttribute
+    outputChannel::MlirAttribute
+    filterLoop::MlirAttribute
+    inputChannel::MlirAttribute
+    depth::MlirAttribute
+    strides::MlirAttribute
+    dilations::MlirAttribute
+end
+
+function mlirLinalgInferConvolutionDimensions(op)
+    @ccall mlir_c.mlirLinalgInferConvolutionDimensions(
+        op::MlirOperation
+    )::MlirLinalgConvolutionDimensions
+end
+
+function mlirLinalgGetIndexingMapsAttribute(op)
+    @ccall mlir_c.mlirLinalgGetIndexingMapsAttribute(op::MlirOperation)::MlirAttribute
+end
+
 function mlirGetDialectHandle__linalg__()
     @ccall mlir_c.mlirGetDialectHandle__linalg__()::MlirDialectHandle
 end
@@ -7941,6 +7969,208 @@ function mlirGetDialectHandle__scf__()
     @ccall mlir_c.mlirGetDialectHandle__scf__()::MlirDialectHandle
 end
 
+function mlirGetDialectHandle__smt__()
+    @ccall mlir_c.mlirGetDialectHandle__smt__()::MlirDialectHandle
+end
+
+"""
+    mlirSMTTypeIsAnyNonFuncSMTValueType(type)
+
+Checks if the given type is any non-func SMT value type.
+"""
+function mlirSMTTypeIsAnyNonFuncSMTValueType(type)
+    @ccall mlir_c.mlirSMTTypeIsAnyNonFuncSMTValueType(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeIsAnySMTValueType(type)
+
+Checks if the given type is any SMT value type.
+"""
+function mlirSMTTypeIsAnySMTValueType(type)
+    @ccall mlir_c.mlirSMTTypeIsAnySMTValueType(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeIsAArray(type)
+
+Checks if the given type is a smt::ArrayType.
+"""
+function mlirSMTTypeIsAArray(type)
+    @ccall mlir_c.mlirSMTTypeIsAArray(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetArray(ctx, domainType, rangeType)
+
+Creates an array type with the given domain and range types.
+"""
+function mlirSMTTypeGetArray(ctx, domainType, rangeType)
+    @ccall mlir_c.mlirSMTTypeGetArray(
+        ctx::MlirContext, domainType::MlirType, rangeType::MlirType
+    )::MlirType
+end
+
+"""
+    mlirSMTTypeIsABitVector(type)
+
+Checks if the given type is a smt::BitVectorType.
+"""
+function mlirSMTTypeIsABitVector(type)
+    @ccall mlir_c.mlirSMTTypeIsABitVector(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetBitVector(ctx, width)
+
+Creates a smt::BitVectorType with the given width.
+"""
+function mlirSMTTypeGetBitVector(ctx, width)
+    @ccall mlir_c.mlirSMTTypeGetBitVector(ctx::MlirContext, width::Int32)::MlirType
+end
+
+"""
+    mlirSMTTypeIsABool(type)
+
+Checks if the given type is a smt::BoolType.
+"""
+function mlirSMTTypeIsABool(type)
+    @ccall mlir_c.mlirSMTTypeIsABool(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetBool(ctx)
+
+Creates a smt::BoolType.
+"""
+function mlirSMTTypeGetBool(ctx)
+    @ccall mlir_c.mlirSMTTypeGetBool(ctx::MlirContext)::MlirType
+end
+
+"""
+    mlirSMTTypeIsAInt(type)
+
+Checks if the given type is a smt::IntType.
+"""
+function mlirSMTTypeIsAInt(type)
+    @ccall mlir_c.mlirSMTTypeIsAInt(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetInt(ctx)
+
+Creates a smt::IntType.
+"""
+function mlirSMTTypeGetInt(ctx)
+    @ccall mlir_c.mlirSMTTypeGetInt(ctx::MlirContext)::MlirType
+end
+
+"""
+    mlirSMTTypeIsASMTFunc(type)
+
+Checks if the given type is a smt::FuncType.
+"""
+function mlirSMTTypeIsASMTFunc(type)
+    @ccall mlir_c.mlirSMTTypeIsASMTFunc(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetSMTFunc(ctx, numberOfDomainTypes, domainTypes, rangeType)
+
+Creates a smt::FuncType with the given domain and range types.
+"""
+function mlirSMTTypeGetSMTFunc(ctx, numberOfDomainTypes, domainTypes, rangeType)
+    @ccall mlir_c.mlirSMTTypeGetSMTFunc(
+        ctx::MlirContext,
+        numberOfDomainTypes::Csize_t,
+        domainTypes::Ptr{MlirType},
+        rangeType::MlirType,
+    )::MlirType
+end
+
+"""
+    mlirSMTTypeIsASort(type)
+
+Checks if the given type is a smt::SortType.
+"""
+function mlirSMTTypeIsASort(type)
+    @ccall mlir_c.mlirSMTTypeIsASort(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetSort(ctx, identifier, numberOfSortParams, sortParams)
+
+Creates a smt::SortType with the given identifier and sort parameters.
+"""
+function mlirSMTTypeGetSort(ctx, identifier, numberOfSortParams, sortParams)
+    @ccall mlir_c.mlirSMTTypeGetSort(
+        ctx::MlirContext,
+        identifier::MlirIdentifier,
+        numberOfSortParams::Csize_t,
+        sortParams::Ptr{MlirType},
+    )::MlirType
+end
+
+"""
+    mlirSMTAttrCheckBVCmpPredicate(ctx, str)
+
+Checks if the given string is a valid smt::BVCmpPredicate.
+"""
+function mlirSMTAttrCheckBVCmpPredicate(ctx, str)
+    @ccall mlir_c.mlirSMTAttrCheckBVCmpPredicate(ctx::MlirContext, str::MlirStringRef)::Bool
+end
+
+"""
+    mlirSMTAttrCheckIntPredicate(ctx, str)
+
+Checks if the given string is a valid smt::IntPredicate.
+"""
+function mlirSMTAttrCheckIntPredicate(ctx, str)
+    @ccall mlir_c.mlirSMTAttrCheckIntPredicate(ctx::MlirContext, str::MlirStringRef)::Bool
+end
+
+"""
+    mlirSMTAttrIsASMTAttribute(attr)
+
+Checks if the given attribute is a smt::SMTAttribute.
+"""
+function mlirSMTAttrIsASMTAttribute(attr)
+    @ccall mlir_c.mlirSMTAttrIsASMTAttribute(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirSMTAttrGetBitVector(ctx, value, width)
+
+Creates a smt::BitVectorAttr with the given value and width.
+"""
+function mlirSMTAttrGetBitVector(ctx, value, width)
+    @ccall mlir_c.mlirSMTAttrGetBitVector(
+        ctx::MlirContext, value::UInt64, width::Cuint
+    )::MlirAttribute
+end
+
+"""
+    mlirSMTAttrGetBVCmpPredicate(ctx, str)
+
+Creates a smt::BVCmpPredicateAttr with the given string.
+"""
+function mlirSMTAttrGetBVCmpPredicate(ctx, str)
+    @ccall mlir_c.mlirSMTAttrGetBVCmpPredicate(
+        ctx::MlirContext, str::MlirStringRef
+    )::MlirAttribute
+end
+
+"""
+    mlirSMTAttrGetIntPredicate(ctx, str)
+
+Creates a smt::IntPredicateAttr with the given string.
+"""
+function mlirSMTAttrGetIntPredicate(ctx, str)
+    @ccall mlir_c.mlirSMTAttrGetIntPredicate(
+        ctx::MlirContext, str::MlirStringRef
+    )::MlirAttribute
+end
+
 function mlirGetDialectHandle__spirv__()
     @ccall mlir_c.mlirGetDialectHandle__spirv__()::MlirDialectHandle
 end
@@ -8507,9 +8737,6 @@ function mlirInferShapedTypeOpInterfaceInferReturnTypes(
     )::MlirLogicalResult
 end
 
-"""
-    MlirPass
-"""
 struct MlirPass
     ptr::Ptr{Cvoid}
 end
@@ -9244,6 +9471,35 @@ function mlirApplyPatternsAndFoldGreedily(op, patterns, arg3)
         op::MlirModule,
         patterns::MlirFrozenRewritePatternSet,
         arg3::MlirGreedyRewriteDriverConfig,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirTranslateModuleToSMTLIB(arg1, arg2, userData, inlineSingleUseValues, indentLetBody)
+
+Emits SMTLIB for the specified module using the provided callback and user data
+"""
+function mlirTranslateModuleToSMTLIB(
+    arg1, arg2, userData, inlineSingleUseValues, indentLetBody
+)
+    @ccall mlir_c.mlirTranslateModuleToSMTLIB(
+        arg1::MlirModule,
+        arg2::MlirStringCallback,
+        userData::Ptr{Cvoid},
+        inlineSingleUseValues::Bool,
+        indentLetBody::Bool,
+    )::MlirLogicalResult
+end
+
+function mlirTranslateOperationToSMTLIB(
+    arg1, arg2, userData, inlineSingleUseValues, indentLetBody
+)
+    @ccall mlir_c.mlirTranslateOperationToSMTLIB(
+        arg1::MlirOperation,
+        arg2::MlirStringCallback,
+        userData::Ptr{Cvoid},
+        inlineSingleUseValues::Bool,
+        indentLetBody::Bool,
     )::MlirLogicalResult
 end
 
@@ -10618,7 +10874,4 @@ function sdyManualAxesAttrGetAxesElem(attr, pos)
     )::MlirStringRef
 end
 
-"""
-    MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL
-"""
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1
