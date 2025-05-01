@@ -9,7 +9,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "1fbe4f7b2c0563f7d3d72486e2b71674c8104bc5"
+ENZYMEXLA_COMMIT = "fc12061c02f057da8cd22e7e7bb12e050eca3f60"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
@@ -17,14 +17,6 @@ http_archive(
     sha256 = ENZYMEXLA_SHA256,
     strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
-)
-
-
-http_archive(
-    name = "rules_python",
-    sha256 = "778aaeab3e6cfd56d681c89f5c10d7ad6bf8d2f1a72de9de55b23081b2d31618",
-    strip_prefix = "rules_python-0.34.0",
-    url = "https://github.com/bazelbuild/rules_python/releases/download/0.34.0/rules_python-0.34.0.tar.gz",
 )
 
 # Hedron's Compile Commands Extractor for Bazel

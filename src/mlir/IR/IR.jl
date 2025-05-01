@@ -136,4 +136,38 @@ function verifyall(operation::Operation; debug=false)
 end
 verifyall(module_::Module; debug=false) = verifyall(Operation(module_); debug)
 
+function tryinject!(sym_name, code; verify=false, mod=IR.mmodule(), location=Location())
+    fn = lookup(SymbolTable(Operation(mod)), sym_name)
+
+    if fn === nothing
+        ctx = IR.context()
+        block = body(mod)
+        return @ccall API.mlir_c.mlirOperationInject(
+            ctx::API.MlirContext,
+            block::API.MlirBlock,
+            code::API.MlirStringRef,
+            location::API.MlirLocation,
+            verify::Bool,
+        )::Bool
+    else
+        return false
+    end
+end
+
+function inject!(sym_name, code; kwargs...)
+    success = tryinject!(sym_name, code; kwargs...)
+    @assert success "Failed injecting MLIR to top-level block"
+end
+
+function tryinjectop!(sym_name, code; mod=IR.mmodule(), location=Location())
+    fn = lookup(SymbolTable(Operation(mod)), sym_name)
+
+    if isnothing(fn)
+        top_level_block = body(mod)
+        return parse(Operation, code; block=top_level_block, location)
+    else
+        return nothing
+    end
+end
+
 end # module IR

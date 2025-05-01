@@ -2457,6 +2457,12 @@ extern "C" void ifrt_hlo_module_cost_analysis_properties(
 
 #pragma endregion
 
+extern "C" void dump_op(Operation *op) {
+  llvm::errs() << *op << "\n";
+}
+extern "C" void dump_mval(mlir::Value v) {
+  llvm::errs() << v << "\n";
+}
 extern "C" void dump_operation(Operation *op, const char *filename) {
   std::error_code EC;
   llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Text);
