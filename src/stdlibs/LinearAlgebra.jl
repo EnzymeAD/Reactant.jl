@@ -25,13 +25,12 @@ function __init__()
         LinearAlgebra.BLAS.libblas, Libdl.RTLD_GLOBAL | Libdl.RTLD_LAZY
     )
 
-    for (cname, enzymexla_name_prefix) in [
-        (:sgetrf_, :enzymexla_lapack_),
-        (:dgetrf_, :enzymexla_lapack_),
-        (:cgetrf_, :enzymexla_lapack_),
-        (:zgetrf_, :enzymexla_lapack_),
+    for (cname, enzymexla_name) in [
+        (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
+        (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
+        (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
+        (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
     ]
-        enzymexla_name = Symbol(enzymexla_name_prefix, cname)
         sym = Libdl.dlsym(libblastrampoline_handle, cname)
         @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
             enzymexla_name::Cstring, sym::Ptr{Cvoid}
