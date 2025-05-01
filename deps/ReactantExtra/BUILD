@@ -900,7 +900,7 @@ cc_library(
 "-Wl,-exported_symbol,_addSdyPropagationPipeline",
     ]}),
     deps = [
-                "@enzyme//:EnzymeMLIR",
+        "@enzyme//:EnzymeMLIR",
         "@llvm-project//mlir:AffineDialect",
         "@llvm-project//mlir:AllPassesAndDialects",
         "@llvm-project//mlir:ArithDialect",
@@ -1025,8 +1025,11 @@ cc_library(
         "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
         "@jax//jaxlib/triton:triton_dialect_capi_objects",
         "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
+        "@xla//xla/service:gpu_plugin",
+        "@xla//xla/pjrt/c:pjrt_c_api_gpu",
     ] + select({
         "@xla//xla/tsl:is_cuda_enabled_and_oss":[
+            "@xla//xla/stream_executor:cuda_platform",
             "@xla//xla/stream_executor/cuda:all_runtime",
             "@xla//xla/service/gpu/model:hlo_op_profiles",
             "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
@@ -1040,6 +1043,7 @@ cc_library(
         "//conditions:default": [
         ],
     }) + if_rocm([
+        "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/backends/profiler/gpu:device_tracer",
     ]) + select({
