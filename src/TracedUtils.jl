@@ -282,7 +282,7 @@ function make_mlir_fn(
 
     seen_args = OrderedIdDict()
 
-    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, ctx, mod, traced_args_to_shardings, func, fnbody) = prepare_mlir_fn_args(
+    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, mod, traced_args_to_shardings, func, fnbody) = prepare_mlir_fn_args(
         args,
         name,
         seen_args,
@@ -443,7 +443,6 @@ function prepare_mlir_fn_args(
         sym_visibility = MLIR.IR.Attribute("private")
     end
 
-    ctx = MLIR.IR.context()
     mod = MLIR.IR.mmodule()
 
     # Insert meshes for the sharded arguments
@@ -503,7 +502,6 @@ function prepare_mlir_fn_args(
         inv_map,
         in_tys,
         sym_visibility,
-        ctx,
         mod,
         traced_args_to_shardings,
         func,
@@ -789,6 +787,8 @@ function finalize_mlir_fn(
             end
         end
 
+        ctx = MLIR.IR.context()
+        
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
