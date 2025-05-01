@@ -148,7 +148,7 @@ end
         (res.val ≈ 4ones(2, 2)) &&
             (res.derivs[1] ≈ 4ones(2, 2)) &&
             (res.derivs[2] ≈ 2ones(2, 2))
-    end broken = true
+    end
 end
 
 @testset "onehot" begin
