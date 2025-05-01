@@ -42,8 +42,8 @@ steps:
           cuda: "*"
         env:
           REACTANT_TEST_GROUP: "{{matrix.group}}"
-          CUDA_VISIBLE_DEVICES: 0
           JULIA_DEBUG: "Reactant,Reactant_jll"
+          TF_CPP_MAX_VLOG_LEVEL: 3
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 120
 
