@@ -18,6 +18,28 @@ using ReactantCore: materialize_traced_array
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 
 using LinearAlgebra
+using Libdl: Libdl
+
+function __init__()
+    libblastrampoline_handle = Libdl.dlopen(
+        LinearAlgebra.BLAS.libblas, Libdl.RTLD_GLOBAL | Libdl.RTLD_LAZY
+    )
+
+    for (cname, enzymexla_name_prefix) in [
+        (:sgetrf_, :enzymexla_lapack_),
+        (:dgetrf_, :enzymexla_lapack_),
+        (:cgetrf_, :enzymexla_lapack_),
+        (:zgetrf_, :enzymexla_lapack_),
+    ]
+        enzymexla_name = Symbol(enzymexla_name_prefix, cname)
+        sym = Libdl.dlsym(libblastrampoline_handle, cname)
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+            enzymexla_name::Cstring, sym::Ptr{Cvoid}
+        )::Cvoid
+    end
+
+    return nothing
+end
 
 # Various Wrapper Arrays defined in LinearAlgebra
 function ReactantCore.materialize_traced_array(
@@ -467,6 +489,33 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
         contracting_dimensions=([1], [1]),
     )
     return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+end
+
+# Factorizations
+function LinearAlgebra.lu!(
+    A::TracedRArray{T,2},
+    ::LinearAlgebra.RowMaximum;
+    check::Bool=true,
+    allowsingular::Bool=false,
+) where {T}
+    # TODO: stop ignoring `check` and `allowsingular`
+    m, n = size(A)
+
+    lu_op = MLIR.Dialects.enzymexla.lu_factorization(
+        materialize_traced_array(A).mlir_data;
+        output=MLIR.IR.TensorType(
+            collect(Int64, size(A)), MLIR.IR.Type(unwrapped_eltype(A))
+        ),
+        pivots=MLIR.IR.TensorType(Int64[max(m, n)], MLIR.IR.Type(Int32)),
+        info=MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Int32)),
+    )
+    set_mlir_data!(A, MLIR.IR.result(lu_op, 1))
+    pivots = TracedRArray{Int32,1}((), MLIR.IR.result(lu_op, 2), (max(m, n),))
+    info = TracedRNumber{Int32}((), MLIR.IR.result(lu_op, 3))
+
+    # XXX: `info` needs to be a BLASInt for LU
+    # return LinearAlgebra.LU{T, typeof(A), typeof(pivots)}(A, pivots, -1)
+    return (A, pivots, info)
 end
 
 end
