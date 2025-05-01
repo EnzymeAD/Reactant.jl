@@ -788,7 +788,6 @@ function finalize_mlir_fn(
         end
 
         ctx = MLIR.IR.context()
-        
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
