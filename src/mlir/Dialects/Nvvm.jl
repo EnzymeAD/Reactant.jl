@@ -77,18 +77,15 @@ function barrier(
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
     !isnothing(numberOfThreads) && push!(operands, numberOfThreads)
-    push!(
-        attributes,
-        operandsegmentsizes([
-            if (barrierId == nothing)
-                0
-            elseif 1(numberOfThreads == nothing)
-                0
-            else
-                1
-            end
-        ]),
-    )
+    push!(attributes, operandsegmentsizes([
+        if (barrierId == nothing)
+            0
+        elseif 1(numberOfThreads == nothing)
+            0
+        else
+            1
+        end,
+    ]))
 
     return create_operation(
         "nvvm.barrier",
@@ -750,18 +747,19 @@ function cp_async_bulk_shared_cluster_global(
     attributes = NamedAttribute[]
     !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
-    push!(
-        attributes,
-        operandsegmentsizes([
-            1, 1, 1, 1, if (multicastMask == nothing)
-                0
-            elseif 1(l2CacheHint == nothing)
-                0
-            else
-                1
-            end
-        ]),
-    )
+    push!(attributes, operandsegmentsizes([
+        1,
+        1,
+        1,
+        1,
+        if (multicastMask == nothing)
+            0
+        elseif 1(l2CacheHint == nothing)
+            0
+        else
+            1
+        end,
+    ]))
 
     return create_operation(
         "nvvm.cp.async.bulk.shared.cluster.global",
