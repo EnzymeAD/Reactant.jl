@@ -378,6 +378,88 @@ function bitcast(arg::Value; res::IR.Type, location=Location())
     )
 end
 
+"""
+`blockaddress`
+
+Creates an SSA value containing a pointer to a basic block. The block
+address information (function and block) is given by the `BlockAddressAttr`
+attribute. This operation assumes an existing `llvm.blocktag` operation
+identifying an existing MLIR block within a function. Example:
+
+```mlir
+llvm.mlir.global private @g() : !llvm.ptr {
+  %0 = llvm.blockaddress <function = @fn, tag = <id = 0>> : !llvm.ptr
+  llvm.return %0 : !llvm.ptr
+}
+
+llvm.func @fn() {
+  llvm.br ^bb1
+^bb1:  // pred: ^bb0
+  llvm.blocktag <id = 0>
+  llvm.return
+}
+```
+"""
+function blockaddress(; res::IR.Type, block_addr, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("block_addr", block_addr),]
+
+    return create_operation(
+        "llvm.blockaddress",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`blocktag`
+
+This operation uses a `tag` to uniquely identify an MLIR block in a
+function. The same tag is used by `llvm.blockaddress` in order to compute
+the target address.
+
+A given function should have at most one `llvm.blocktag` operation with a
+given `tag`. This operation cannot be used as a terminator.
+
+# Example
+
+```mlir
+llvm.func @f() -> !llvm.ptr {
+  %addr = llvm.blockaddress <function = @f, tag = <id = 1>> : !llvm.ptr
+  llvm.br ^bb1
+^bb1:
+  llvm.blocktag <id = 1>
+  llvm.return %addr : !llvm.ptr
+}
+```
+"""
+function blocktag(; tag, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("tag", tag),]
+
+    return create_operation(
+        "llvm.blocktag",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function br(
     destOperands::Vector{Value}; loop_annotation=nothing, dest::Block, location=Location()
 )
@@ -466,6 +548,11 @@ optional indirect callee type and the MLIR function type, which differs from
 the LLVM function type that uses an explicit void type to model functions
 that do not return a value.
 
+If this operatin has the `no_inline` attribute, then this specific function call 
+will never be inlined. The opposite behavior will occur if the call has `always_inline` 
+attribute. The `inline_hint` attribute indicates that it is desirable to inline 
+this function call.
+
 Examples:
 
 ```mlir
@@ -506,6 +593,7 @@ function call(
     res_attrs=nothing,
     no_inline=nothing,
     always_inline=nothing,
+    inline_hint=nothing,
     access_groups=nothing,
     alias_scopes=nothing,
     noalias_scopes=nothing,
@@ -544,6 +632,7 @@ function call(
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
     !isnothing(always_inline) &&
         push!(attributes, namedattribute("always_inline", always_inline))
+    !isnothing(inline_hint) && push!(attributes, namedattribute("inline_hint", inline_hint))
     !isnothing(access_groups) &&
         push!(attributes, namedattribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
@@ -1450,6 +1539,65 @@ function icmp(
 end
 
 """
+`indirectbr`
+
+Transfer control flow to address in `\$addr`. A list of possible target
+blocks in `\$successors` can be provided and maybe used as a hint in LLVM:
+
+```mlir
+...
+llvm.func @g(...
+  %dest = llvm.blockaddress <function = @g, tag = <id = 0>> : !llvm.ptr
+  llvm.indirectbr %dest : !llvm.ptr, [
+    ^head
+  ]
+^head:
+  llvm.blocktag <id = 0>
+  llvm.return %arg0 : i32
+  ...
+```
+
+It also supports a list of operands that can be passed to a target block:
+
+```mlir
+  llvm.indirectbr %dest : !llvm.ptr, [
+    ^head(%arg0 : i32),
+    ^tail(%arg1, %arg0 : i32, i32)
+  ]
+^head(%r0 : i32):
+  llvm.return %r0 : i32
+^tail(%r1 : i32, %r2 : i32):
+  ...
+```
+"""
+function indirectbr(
+    addr::Value,
+    succOperands::Vector{Value};
+    indbr_operand_segments,
+    successors::Vector{Block},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr, succOperands...]
+    owned_regions = Region[]
+    successors = Block[successors...,]
+    attributes = NamedAttribute[namedattribute(
+        "indbr_operand_segments", indbr_operand_segments
+    ),]
+
+    return create_operation(
+        "llvm.indirectbr",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `inline_asm`
 
 The InlineAsmOp mirrors the underlying LLVM semantics with a notable
@@ -1711,6 +1859,7 @@ function func(;
     work_group_size_hint=nothing,
     reqd_work_group_size=nothing,
     intel_reqd_sub_group_size=nothing,
+    uwtable_kind=nothing,
     body::Region,
     location=Location(),
 )
@@ -1798,6 +1947,8 @@ function func(;
         attributes,
         namedattribute("intel_reqd_sub_group_size", intel_reqd_sub_group_size),
     )
+    !isnothing(uwtable_kind) &&
+        push!(attributes, namedattribute("uwtable_kind", uwtable_kind))
 
     return create_operation(
         "llvm.func",

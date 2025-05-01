@@ -77,15 +77,18 @@ function barrier(
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
     !isnothing(numberOfThreads) && push!(operands, numberOfThreads)
-    push!(attributes, operandsegmentsizes([
-        if (barrierId == nothing)
-            0
-        elseif 1(numberOfThreads == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            if (barrierId == nothing)
+                0
+            elseif 1(numberOfThreads == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
 
     return create_operation(
         "nvvm.barrier",
@@ -747,19 +750,18 @@ function cp_async_bulk_shared_cluster_global(
     attributes = NamedAttribute[]
     !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        1,
-        if (multicastMask == nothing)
-            0
-        elseif 1(l2CacheHint == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, 1, if (multicastMask == nothing)
+                0
+            elseif 1(l2CacheHint == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
 
     return create_operation(
         "nvvm.cp.async.bulk.shared.cluster.global",
@@ -3520,15 +3522,35 @@ function read_ptx_sreg_tid_z(; res::IR.Type, range=nothing, location=Location())
     )
 end
 
-function vote_ballot_sync(mask::Value, pred::Value; res::IR.Type, location=Location())
+"""
+`vote_sync`
+
+The `vote.sync` op will cause executing thread to wait until all non-exited
+threads corresponding to membermask have executed `vote.sync` with the same
+qualifiers and same membermask value before resuming execution.
+
+The vote operation kinds are:
+- `any`: True if source predicate is True for some thread in membermask.
+- `all`: True if source predicate is True for all non-exited threads in
+  membermask. 
+- `uni`: True if source predicate has the same value in all non-exited
+  threads in membermask.
+- `ballot`: In the ballot form, the destination result is a 32 bit integer.
+  In this form, the predicate from each thread in membermask are copied into
+  the corresponding bit position of the result, where the bit position
+  corresponds to the thread’s lane id.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-vote-sync)
+"""
+function vote_sync(mask::Value, pred::Value; res::IR.Type, kind, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[mask, pred]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
 
     return create_operation(
-        "nvvm.vote.ballot.sync",
+        "nvvm.vote.sync",
         location;
         operands,
         owned_regions,
