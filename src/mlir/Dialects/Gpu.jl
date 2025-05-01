@@ -1598,7 +1598,7 @@ dimensions are present, grouped as follows:
 -   a variadic number of Private memory attributions.
 
 The `kernelFunc` and `kernelModule` attributes are optional and specifies
-the kernel name and a module in which the kernel should be outlined. 
+the kernel name and a module in which the kernel should be outlined.
 
 # Syntax
 

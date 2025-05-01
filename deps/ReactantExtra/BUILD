@@ -1236,6 +1236,7 @@ gentbl_cc_library(
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
+        "@stablehlo//:stablehlo_ops_td_files",
     ],
     tblgen = "//:mlir-jl-tblgen",
 )
