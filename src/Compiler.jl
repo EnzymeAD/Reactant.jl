@@ -1274,6 +1274,7 @@ function compile_mlir!(
             join(
                 if raise_first
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         kern,
                         raise_passes,
@@ -1289,6 +1290,7 @@ function compile_mlir!(
                     ]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1312,9 +1314,10 @@ function compile_mlir!(
             mod,
             join(
                 if raise_first
-                    [opt_passes]
+                    ["mark-func-memory-effects", opt_passes]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1336,6 +1339,7 @@ function compile_mlir!(
             join(
                 if raise_first
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         kern,
                         raise_passes,
@@ -1350,6 +1354,7 @@ function compile_mlir!(
                     ]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1372,9 +1377,11 @@ function compile_mlir!(
             mod,
             join(
                 if raise_first
-                    [opt_passes]
+                    [
+                        "mark-func-memory-effects",opt_passes]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1396,6 +1403,7 @@ function compile_mlir!(
             mod,
             join(
                 [
+                    "mark-func-memory-effects",
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
@@ -1415,6 +1423,7 @@ function compile_mlir!(
             mod,
             join(
                 [
+                    "mark-func-memory-effects",
                     "enzyme-batch",
                     enzyme_pass,
                     "canonicalize",
@@ -1431,6 +1440,7 @@ function compile_mlir!(
             join(
                 if raise_first
                     [
+                        "mark-func-memory-effects",
                         kern,
                         raise_passes,
                         "enzyme-batch",
@@ -1443,6 +1453,7 @@ function compile_mlir!(
                     ]
                 else
                     [
+                        "mark-func-memory-effects",
                         "enzyme-batch",
                         enzyme_pass,
                         "canonicalize",
@@ -1464,6 +1475,7 @@ function compile_mlir!(
             join(
                 if raise_first
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         kern,
                         raise_passes,
@@ -1475,6 +1487,7 @@ function compile_mlir!(
                     ]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1490,7 +1503,7 @@ function compile_mlir!(
             "after_enzyme",
         )
     elseif optimize === :canonicalize
-        run_pass_pipeline!(mod, "canonicalize", "canonicalize")
+        run_pass_pipeline!(mod, "mark-func-memory-effects,canonicalize", "canonicalize")
     elseif optimize === :just_batch
         run_pass_pipeline!(mod, "enzyme-batch", "enzyme-batch")
     elseif optimize isa String
