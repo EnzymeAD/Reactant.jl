@@ -1377,8 +1377,7 @@ function compile_mlir!(
             mod,
             join(
                 if raise_first
-                    [
-                        "mark-func-memory-effects",opt_passes]
+                    ["mark-func-memory-effects", opt_passes]
                 else
                     [
                         "mark-func-memory-effects",
