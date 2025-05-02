@@ -21,6 +21,18 @@ end
     return overload_autodiff(rmode, f, rt, args...)
 end
 
+@reactant_overlay @noinline function Enzyme.generate(
+    f::Function, args::Vararg{Any,Nargs}
+) where {Nargs}
+    return overload_generate(f, args...)
+end
+
+@reactant_overlay @noinline function Enzyme.sample(
+    f::Function, args::Vararg{Any,Nargs}
+) where {Nargs}
+    return overload_sample(f, args...)
+end
+
 # Random.jl overlays
 @reactant_overlay @noinline function Random.default_rng()
     return call_with_reactant(TracedRandom.default_rng)

@@ -1489,6 +1489,49 @@ function compile_mlir!(
             ),
             "after_enzyme",
         )
+    elseif optimize === :probprog
+        run_pass_pipeline!(
+            mod,
+            join(
+                if raise_first
+                    [
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "probprog",
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        jit,
+                    ]
+                else
+                    [
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "probprog",
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        kern,
+                        raise_passes,
+                        jit,
+                    ]
+                end,
+                ',',
+            ),
+            "probprog",
+        )
     elseif optimize === :canonicalize
         run_pass_pipeline!(mod, "canonicalize", "canonicalize")
     elseif optimize === :just_batch
