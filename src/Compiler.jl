@@ -915,7 +915,7 @@ end
 
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
-const enzyme_pass::String = "enzyme{postpasses=\"canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,arith-raise{stablehlo=true},canonicalize,cse,canonicalize\"}"
+const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
@@ -1274,6 +1274,7 @@ function compile_mlir!(
             join(
                 if raise_first
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         kern,
                         raise_passes,
@@ -1289,6 +1290,7 @@ function compile_mlir!(
                     ]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1312,9 +1314,10 @@ function compile_mlir!(
             mod,
             join(
                 if raise_first
-                    [opt_passes]
+                    ["mark-func-memory-effects", opt_passes]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1336,6 +1339,7 @@ function compile_mlir!(
             join(
                 if raise_first
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         kern,
                         raise_passes,
@@ -1350,6 +1354,7 @@ function compile_mlir!(
                     ]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1372,9 +1377,10 @@ function compile_mlir!(
             mod,
             join(
                 if raise_first
-                    [opt_passes]
+                    ["mark-func-memory-effects", opt_passes]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1396,6 +1402,7 @@ function compile_mlir!(
             mod,
             join(
                 [
+                    "mark-func-memory-effects",
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
@@ -1415,6 +1422,7 @@ function compile_mlir!(
             mod,
             join(
                 [
+                    "mark-func-memory-effects",
                     "enzyme-batch",
                     enzyme_pass,
                     "canonicalize",
@@ -1431,6 +1439,7 @@ function compile_mlir!(
             join(
                 if raise_first
                     [
+                        "mark-func-memory-effects",
                         kern,
                         raise_passes,
                         "enzyme-batch",
@@ -1443,6 +1452,7 @@ function compile_mlir!(
                     ]
                 else
                     [
+                        "mark-func-memory-effects",
                         "enzyme-batch",
                         enzyme_pass,
                         "canonicalize",
@@ -1464,6 +1474,7 @@ function compile_mlir!(
             join(
                 if raise_first
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         kern,
                         raise_passes,
@@ -1475,6 +1486,7 @@ function compile_mlir!(
                     ]
                 else
                     [
+                        "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
@@ -1533,7 +1545,7 @@ function compile_mlir!(
             "probprog",
         )
     elseif optimize === :canonicalize
-        run_pass_pipeline!(mod, "canonicalize", "canonicalize")
+        run_pass_pipeline!(mod, "mark-func-memory-effects,canonicalize", "canonicalize")
     elseif optimize === :just_batch
         run_pass_pipeline!(mod, "enzyme-batch", "enzyme-batch")
     elseif optimize isa String

@@ -1191,7 +1191,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         )
     end
 
-    location = MLIR.IR.Location()
     @assert length(restys) == length(aliases)
     call = MLIR.Dialects.enzymexla.kernel_call(
         blk_operands...,
@@ -1199,6 +1198,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
+        xla_side_effect_free=MLIR.IR.UnitAttribute(),
     )
 
     argidx = 1

@@ -172,9 +172,10 @@ end
 """
 `all_to_all`
 
-Slices chunks of a tensor along dimension `tgt_dim` and axes specified in
-`axes`, scatteres those chunks along the axes, and concatenates them along
-dimension `src_dim`.
+For each (axes, src_dim, tgt_dim) tuple in the parameter list, this
+operation slices chunks of a tensor along dimension `tgt_dim` and axes
+specified in `axes`, scatteres those chunks along the axes, and concatenates
+them along dimension `src_dim`.
 
 This operation is essentially a combination of an all-gather along `src_dim`
 and `axes`, followed by an all-slice along `tgt_dim` and `axes`, i.e., a
@@ -191,24 +192,26 @@ this inferred sharding.
 
 # Example
 ```mlir
-%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\", \"c\"}, {}\\]>]>} : tensor<8x8xf32>
-%2 = sdy.all_to_all {\"b\", \"c\"} 0->1 %1 out_sharding=<@mesh, [{\"a\"}, {\"b\", \"c\"}\\]> : tensor<8x8xf32>
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\"}, {\"c\"}, {}, {}\\]>]>} : tensor<8x8x4x4x32>
+%2 = sdy.all_to_all [{\"b\"}: 0->2, {\"c\"}: 1->3] %1 out_sharding=<@mesh, [{\"a\"}, {}, {\"b\"}, {\"c\"}\\]> : tensor<8x8x4x4x32>
 ```
 
 **Constraints:**
 - Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
-- `axes` must satisfy the constraints listed in `AxisRefListAttr`.
-- `src_dim` and `tgt_dim` must be valid dimensions (positive and less than
-  rank of tensor), and different from each other.
+- The parameter list must not be empty.
+- For each parameter in `params`:
+  - Elements in `axes` must satisfy the constraints of `AxisRefAttr`.
+  - `src_dim` and `tgt_dim` must be valid dimensions (non-negative and less
+  than rank of tensor).
+  - Any `src_dim` or `tgt_dim` must be unique across all parameters.
+  - `src_dim` must be sorted in ascending order across all parameters.
 - Moving `axes` from `src_dim` to `tgt_dim` in the operand sharding gets
   `out_sharding`.
 """
 function all_to_all(
     tensor::Value;
     result=nothing::Union{Nothing,IR.Type},
-    src_dim,
-    tgt_dim,
-    axes,
+    params,
     out_sharding,
     location=Location(),
 )
@@ -217,10 +220,7 @@ function all_to_all(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("src_dim", src_dim),
-        namedattribute("tgt_dim", tgt_dim),
-        namedattribute("axes", axes),
-        namedattribute("out_sharding", out_sharding),
+        namedattribute("params", params), namedattribute("out_sharding", out_sharding)
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -425,6 +425,7 @@ the body on any free axes - those not in the manual_axes list.
 - Elements in `in_shardings` and `out_shardings` must satisfy the constraints listed in `TensorShardingAttr`.
 - The number of global and local tensor inputs/outputs of the op region must match.
 - The manual axes must come before any free axes in each dim sharding.
+- The manual axes cannot introduce padding. Namely, the dimension size must be divisible by the corresponding manual axes size.
 - The global and local shapes of the op regions arguments/results must match.
 - No manual axes are split.
 """

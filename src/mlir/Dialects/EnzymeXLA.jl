@@ -34,6 +34,56 @@ function scope(
     )
 end
 
+function comm_region(; result_0::Vector{IR.Type}, body::Region, location=Location())
+    op_ty_results = IR.Type[result_0...,]
+    operands = Value[]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.comm_region",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function extend(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    lhs,
+    rhs,
+    dimension,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("lhs", lhs),
+        namedattribute("rhs", rhs),
+        namedattribute("dimension", dimension),
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.extend",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function get_stream(; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
@@ -61,6 +111,7 @@ function jit_call(
     operand_layouts=nothing,
     result_layouts=nothing,
     output_operand_aliases=nothing,
+    xla_side_effect_free=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
@@ -76,6 +127,8 @@ function jit_call(
         push!(attributes, namedattribute("result_layouts", result_layouts))
     !isnothing(output_operand_aliases) &&
         push!(attributes, namedattribute("output_operand_aliases", output_operand_aliases))
+    !isnothing(xla_side_effect_free) &&
+        push!(attributes, namedattribute("xla_side_effect_free", xla_side_effect_free))
 
     return create_operation(
         "enzymexla.jit_call",
@@ -104,6 +157,7 @@ function kernel_call(
     operand_layouts=nothing,
     result_layouts=nothing,
     output_operand_aliases=nothing,
+    xla_side_effect_free=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
@@ -119,6 +173,8 @@ function kernel_call(
         push!(attributes, namedattribute("result_layouts", result_layouts))
     !isnothing(output_operand_aliases) &&
         push!(attributes, namedattribute("output_operand_aliases", output_operand_aliases))
+    !isnothing(xla_side_effect_free) &&
+        push!(attributes, namedattribute("xla_side_effect_free", xla_side_effect_free))
 
     return create_operation(
         "enzymexla.kernel_call",
@@ -167,6 +223,65 @@ function pointer2memref(source::Value; result::IR.Type, location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function rotate(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    amount,
+    dimension,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("amount", amount), namedattribute("dimension", dimension)
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.rotate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function wrap(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    lhs,
+    rhs,
+    dimension,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("lhs", lhs),
+        namedattribute("rhs", rhs),
+        namedattribute("dimension", dimension),
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.wrap",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
