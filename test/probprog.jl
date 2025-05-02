@@ -1,16 +1,17 @@
-using Enzyme, Reactant, Test, Random, StableRNGs, Statistics
+using Reactant, Test, Random, StableRNGs, Statistics
+using Reactant: ProbProg
 
 normal(rng, mean, stddev) = mean .+ stddev .* randn(rng, 10000)
 
 function model(mean, stddev)
-    s = Enzyme.sample(normal, StableRNG(0), mean, stddev)
-    t = Enzyme.sample(normal, StableRNG(0), s, stddev)
+    s = ProbProg.sample(normal, StableRNG(0), mean, stddev)
+    t = ProbProg.sample(normal, StableRNG(0), s, stddev)
     return t
 end
 
 @testset "ProbProg" begin
     @testset "normal_hlo" begin
-        hlo = @code_hlo Enzyme.generate(
+        hlo = @code_hlo ProbProg.generate(
             model, Reactant.to_rarray(0.0), Reactant.to_rarray(1.0)
         )
         @test contains(repr(hlo), "enzyme.generate")
@@ -23,7 +24,7 @@ end
 
     @testset "normal_generate" begin
         X = Array(
-            @jit optimize = :probprog Enzyme.generate(
+            @jit optimize = :probprog ProbProg.generate(
                 model, Reactant.to_rarray(0.0), Reactant.to_rarray(1.0)
             )
         )
