@@ -1934,7 +1934,7 @@ end
         cond=cond_reg,
         body=body_reg,
     )
-
+    MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
     return map(enumerate(linear_args)) do (i, arg)
         Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
