@@ -497,6 +497,10 @@ extern "C" PjRtClient *GetCApiClient(const char *device_type) {
   return xla::GetCApiClient(device_type).value().release();
 }
 
+extern "C" void pjrt_client_register_profiler(const PJRT_Api *api) {
+  RegisterProfiler(api);
+}
+
 extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
   std::string tpu_library_path;
@@ -517,7 +521,7 @@ extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
   if (tpu_status)
     return nullptr;
 
-  RegisterProfiler(pluginLoad);
+  pjrt_client_register_profiler(pluginLoad);
   return GetCApiClient("TPU");
 }
 
@@ -1587,6 +1591,16 @@ extern "C" ifrt::Client *ifrt_pjrt_make_client(
   options.num_processes = num_nodes;
 
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
+}
+
+extern "C" ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
+    PjRtClient *pjrt_client, int node_id, int num_nodes,
+    void *distributed_runtime_client, const char **error,
+    std::string key_prefix) {
+  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
+  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
+                               distributed_runtime_client, error, key_prefix,
+                               kv_store);
 }
 
 const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
