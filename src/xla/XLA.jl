@@ -1,6 +1,6 @@
 module XLA
 
-using ..Reactant: Reactant, MLIR
+using ..Reactant: Reactant, MLIR, Accelerators
 using Reactant_jll
 using Libdl
 using EnumX: @enumx
@@ -192,15 +192,15 @@ for runtime in (:PJRT, :IFRT)
         # Try TPU if possible, then try GPU (CUDA)
         if !Reactant.precompiling()
             @static if !Sys.isapple()
-                if Reactant.has_tpu()
-                    Reactant.Accelerators.TPU.download_libtpu_if_needed()
+                if Accelerators.TPU.has_tpu()
+                    Accelerators.TPU.download_libtpu_if_needed()
                     try
                         if was_initialized && haskey(state.clients, "tpu")
                             XLA.free_client(state.clients["tpu"])
                             XLA.$(runtime).tpu_client_count[] -= 1
                         end
                         tpu = $(runtime).TPUClient(;
-                            tpu_path=Reactant.Accelerators.TPU.get_libtpu_path(), common_kwargs...
+                            tpu_path=Accelerators.TPU.get_libtpu_path(), common_kwargs...
                         )
                         state.clients["tpu"] = tpu
                         state.default_client = tpu

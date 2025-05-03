@@ -214,10 +214,9 @@ function MakeClientViaPluginAPI(
 
     status == 1 && throw(AssertionError(unsafe_string(errstr[])))
 
-    # XXX: Needs new JLL
-    # GC.@preserve plugin begin
-    #     @ccall MLIR.API.mlir_c.pjrt_client_register_profiler(plugin::Ptr{Cvoid})::Cvoid
-    # end
+    GC.@preserve plugin begin
+        @ccall MLIR.API.mlir_c.pjrt_client_register_profiler(plugin::Ptr{Cvoid})::Cvoid
+    end
 
     GC.@preserve plugin begin
         @ccall MLIR.API.mlir_c.GetCApiClient(client_name::Cstring)::Ptr{Cvoid}
