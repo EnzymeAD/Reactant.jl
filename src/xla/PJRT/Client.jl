@@ -216,7 +216,7 @@ function MakeClientViaPluginAPI(
     errstr = Ref{Cstring}()
     GC.@preserve errstr library_path device_type begin
         plugin = @ccall MLIR.API.mlir_c.LoadPjrtPlugin(
-            library_path::Cstring, device_type::Cstring, errstr::Ptr{Cstring}
+            device_type::Cstring, library_path::Cstring, errstr::Ptr{Cstring}
         )::Ptr{Cvoid}
     end
 
