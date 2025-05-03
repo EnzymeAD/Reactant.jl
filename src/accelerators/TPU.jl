@@ -31,20 +31,24 @@ end
 
 get_libtpu_dir() = libtpu_dir[]
 
-get_libtpu_path() = get_libtpu_dir() * "/libtpu.so"
+get_libtpu_path() = joinpath(get_libtpu_dir(), "libtpu.so")
 
 function download_libtpu_if_needed(path=nothing)
     path === nothing && (path = get_libtpu_dir())
     @assert path !== nothing "libtpu_dir is not set!"
-    if !isfile(path * "/libtpu.so")
+
+    libtpu_path = joinpath(path, "libtpu.so")
+    if !isfile(libtpu_path)
+        zip_file_path = joinpath(path, "tpu.zip")
+        tmp_dir = joinpath(path, "tmp")
         Downloads.download(
             "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250415+nightly-py3-none-manylinux_2_31_x86_64.whl",
-            path * "/tpu.zip",
+            zip_file_path,
         )
-        run(`unzip -qq $(path*"/tpu.zip") -d $(path)/tmp`)
-        run(`mv $(path)/tmp/libtpu/libtpu.so $(path)/libtpu.so`)
-        rm(path * "/tmp"; recursive=true)
-        rm(path * "/tpu.zip"; recursive=true)
+        run(`unzip -qq $(zip_file_path) -d $(tmp_dir)`)
+        mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
+        rm(tmp_dir; recursive=true)
+        rm(zip_file_path; recursive=true)
     end
 end
 

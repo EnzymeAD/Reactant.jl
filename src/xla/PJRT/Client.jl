@@ -107,13 +107,15 @@ end
 
 # Different Backends
 const cpu_client_count = Ref(0)
-const gpu_client_count = Ref(0)
+const cuda_client_count = Ref(0)
 const tpu_client_count = Ref(0)
+const metal_client_count = Ref(0)
 
 for (backend, counter) in (
     (:CPUClient, :cpu_client_count),
-    (:GPUClient, :gpu_client_count),
+    (:CUDAClient, :cuda_client_count),
     (:TPUClient, :tpu_client_count),
+    (:MetalClient, :metal_client_count),
 )
     main_fn = Symbol(:Make, backend)
     @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
@@ -145,7 +147,7 @@ function MakeCPUClient(;
     )::Ptr{Cvoid}
 end
 
-function MakeGPUClient(;
+function MakeCUDAClient(;
     node_id::Integer=0,
     num_nodes::Integer=1,
     platform::String="gpu",
@@ -189,6 +191,20 @@ function MakeTPUClient(;
                                                     distributed_runtime_client"
 
     return MakeClientViaPluginAPI(tpu_path, "tpu", "TPU")
+end
+
+function MakeMetalClient(;
+    metal_pjrt_plugin_path::String,
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+)
+    @assert node_id == 0 "`PJRT.MakeMetalClient` does not support node_id"
+    @assert num_nodes == 1 "`PJRT.MakeMetalClient` does not support num_nodes > 1"
+    @assert distributed_runtime_client === nothing "`PJRT.MakeMetalClient` does not support \
+                                                    distributed_runtime_client"
+
+    return MakeClientViaPluginAPI(metal_pjrt_plugin_path, "metal", "METAL")
 end
 
 function MakeClientViaPluginAPI(

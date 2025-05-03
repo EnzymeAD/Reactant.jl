@@ -211,9 +211,9 @@ for runtime in (:PJRT, :IFRT)
                     try
                         if was_initialized && haskey(state.clients, "gpu")
                             XLA.free_client(state.clients["gpu"])
-                            XLA.$(runtime).gpu_client_count[] -= 1
+                            XLA.$(runtime).cuda_client_count[] -= 1
                         end
-                        gpu = $(runtime).GPUClient(;
+                        gpu = $(runtime).CUDAClient(;
                             common_kwargs...,
                             allowed_devices=global_state.local_gpu_device_ids,
                         )
@@ -222,6 +222,22 @@ for runtime in (:PJRT, :IFRT)
                     catch e
                         println(stdout, e)
                     end
+                end
+            else
+                try
+                    if was_initialized && haskey(state.clients, "gpu")
+                        XLA.free_client(state.clients["gpu"])
+                        XLA.$(runtime).metal_client_count[] -= 1
+                    end
+                    gpu = $(runtime).MetalClient(;
+                        metal_pjrt_plugin_path=Accelerators.Metal.get_metal_pjrt_plugin_path(),
+                        common_kwargs...,
+                    )
+                    state.clients["gpu"] = gpu
+                    # Don't put this in the default_client since metal support is fairly
+                    # limited
+                catch e
+                    println(stdout, e)
                 end
             end
         end

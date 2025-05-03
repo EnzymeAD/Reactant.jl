@@ -1,5 +1,6 @@
 module Accelerators
 
-include("TPUs.jl")
+include("TPU.jl")
+include("Metal.jl")
 
 end
