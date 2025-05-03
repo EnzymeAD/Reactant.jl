@@ -129,19 +129,23 @@ end
 ```
 """
 macro trace(args...)
-    track_numbers = true
     expr = first(args)
-    if length(args) > 1 && Meta.isexpr(args[1], :(=))
-        tn_expr = args[1]
-        tn_expr.args[1] == :track_numbers ||
-            error("@trace supports setting track_numbers, but got $(tn_expr)")
-
-        track_numbers = tn_expr.args[2]
-        expr = only(args[2:end])
-    else
-        expr = only(args)
+    options = Dict([:track_numbers => false, :include_paths => :([])])
+    while length(args) > 1
+        kwarg, args = first(args), args[2:end]
+        if !Meta.isexpr(kwarg, :(=))
+            error("Expected keyword argument but got $(kwarg)")
+        end
+        option, value = kwarg.args
+        if !haskey(options, option)
+            error("Unknown keyword argument $(option), expected one of $(keys(options))")
+        else
+            options[option] = value
+        end
     end
-    track_numbers = track_numbers ? Number : Union{}
+    expr = only(args)
+    track_numbers = options[:track_numbers] ? Number : Union{}
+    include_paths_expr = options[:include_paths]
     expr = macroexpand(__module__, expr)
 
     if Meta.isexpr(expr, :(=))
@@ -157,11 +161,12 @@ macro trace(args...)
         return esc(trace_call(__module__, call))
     end
     Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr; track_numbers))
-    Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr; track_numbers)))
+    Meta.isexpr(expr, :for) &&
+        return (esc(trace_for(__module__, expr; track_numbers, include_paths_expr)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
 end
 
-function trace_for(mod, expr; track_numbers)
+function trace_for(mod, expr; track_numbers, include_paths_expr)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
@@ -216,6 +221,8 @@ function trace_for(mod, expr; track_numbers)
         ) for (s, ref) in zip(external_syms, ref_syms)
     ]
 
+    include_paths = gensym(:include_paths)
+
     reactant_code_block = quote
         let args = $(args_init)
             cond_fn =
@@ -238,13 +245,14 @@ function trace_for(mod, expr; track_numbers)
                     $counter[].mlir_data = ($counter[] + 1).mlir_data
                     nothing
                 end
-
+            $(include_paths) = $(include_paths_expr)
             $(ReactantCore).traced_while(
                 cond_fn,
                 body_fn,
                 args;
                 track_numbers=$(track_numbers),
                 verify_arg_names=$(QuoteNode(args_names)),
+                include_paths=$(include_paths),
             )
         end
     end
