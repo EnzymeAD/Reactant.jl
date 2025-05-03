@@ -190,7 +190,7 @@ function MakeTPUClient(;
     @assert distributed_runtime_client === nothing "`PJRT.MakeTPUClient` does not support \
                                                     distributed_runtime_client"
 
-    return MakeClientViaPluginAPI(tpu_path, "tpu", "TPU")
+    return MakeClientUsingPluginAPI(tpu_path, "tpu", "TPU")
 end
 
 function MakeMetalClient(;
@@ -204,39 +204,25 @@ function MakeMetalClient(;
     @assert distributed_runtime_client === nothing "`PJRT.MakeMetalClient` does not support \
                                                     distributed_runtime_client"
 
-    return MakeClientViaPluginAPI(metal_pjrt_plugin_path, "metal", "METAL")
+    return MakeClientUsingPluginAPI(metal_pjrt_plugin_path, "metal", "METAL")
 end
 
-function MakeClientViaPluginAPI(
+function MakeClientUsingPluginAPI(
     library_path::String, device_type::String, client_name::String=uppercase(device_type)
 )
     @assert isfile(library_path) "$(library_path) does not exist for $(device_type) PJRT \
                                   plugin."
 
     errstr = Ref{Cstring}()
-    GC.@preserve errstr library_path device_type begin
-        plugin = @ccall MLIR.API.mlir_c.LoadPjrtPlugin(
-            device_type::Cstring, library_path::Cstring, errstr::Ptr{Cstring}
+    GC.@preserve errstr library_path device_type client_name begin
+        client = @ccall MLIR.API.mlir_c.MakeClientUsingPluginAPI(
+            device_type::Cstring,
+            library_path::Cstring,
+            client_name::Cstring,
+            errstr::Ptr{Cstring},
         )::Ptr{Cvoid}
     end
 
-    plugin == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
-
-    GC.@preserve plugin errstr begin
-        status = @ccall MLIR.API.mlir_c.InitializePJRTPlugin(
-            device_type::Cstring, errstr::Ptr{Cstring}
-        )::Cint
-    end
-
-    status == 1 && throw(AssertionError(unsafe_string(errstr[])))
-
-    GC.@preserve plugin begin
-        @ccall MLIR.API.mlir_c.pjrt_client_register_profiler(plugin::Ptr{Cvoid})::Cvoid
-    end
-
-    GC.@preserve plugin begin
-        @ccall MLIR.API.mlir_c.GetCApiClient(client_name::Cstring)::Ptr{Cvoid}
-    end
-
+    client == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
     return client
 end
