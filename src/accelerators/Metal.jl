@@ -49,7 +49,7 @@ function download_metal_pjrt_plugin_if_needed(path=nothing)
         )
         run(`unzip -qq $(zip_file_path) -d $(tmp_dir)`)
         mv(
-            joinpath(tmp_dir, "jax_metal", "metal_plugin", "pjrt_plugin_metal_14.dylib"),
+            joinpath(tmp_dir, "jax_plugins", "metal_plugin", "pjrt_plugin_metal_14.dylib"),
             metal_pjrt_plugin_path,
         )
         rm(tmp_dir; recursive=true)
