@@ -534,7 +534,8 @@ extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
     return nullptr;
   }
 
-  return MakeClientUsingPluginAPI("tpu", tpu_library_path.c_str(), "TPU", error);
+  return MakeClientUsingPluginAPI("tpu", tpu_library_path.c_str(), "TPU",
+                                  error);
 }
 
 extern "C" int ClientNumDevices(PjRtClient *client) {
