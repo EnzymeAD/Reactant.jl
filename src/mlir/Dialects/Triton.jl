@@ -424,15 +424,12 @@ end
 """
 `descriptor_gather`
 
-The `tt.desciptor_gather` op will be lowered to NVIDIA TMA
-load operations on targets that support it.
+The `tt.descriptor_gather` op will be lowered to NVIDIA TMA
+gather operations on targets that support it.
 
 `desc_ptr` is a pointer to the TMA descriptor allocated in global memory.
 The descriptor block must have 1 row and the indices must be a 1D tensor.
 Accordingly, the result is a 2D tensor multiple rows.
-
-This is an escape hatch and is only there for testing/experimenting. This
-op will be removed in the future.
 """
 function descriptor_gather(
     desc::Value, x_offsets::Value, y_offset::Value; result::IR.Type, location=Location()
@@ -461,9 +458,6 @@ end
 This operation will be lowered to Nvidia TMA load operation on targets supporting it.
 `desc` is a tensor descriptor object.
 The destination tensor type and shape must match the descriptor otherwise the result is undefined.
-
-This is an escape hatch and is only there for testing/experimenting.
-This op will be removed in the future.
 """
 function descriptor_load(
     desc::Value,
@@ -493,6 +487,44 @@ function descriptor_load(
     )
 end
 
+"""
+`descriptor_reduce`
+
+This operation will be lowered to Nvidia TMA store operation on targets supporting it.
+`desc` is a tensor descriptor object.
+The shape and types of `src` must match the descriptor otherwise the result is undefined.
+"""
+function descriptor_reduce(
+    desc::Value, src::Value, indices::Vector{Value}; kind, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[desc, src, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
+
+    return create_operation(
+        "tt.descriptor_reduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`descriptor_scatter`
+
+The `tt.descriptor_scatter` op will be lowered to NVIDIA TMA
+scatter operations on targets that support it.
+
+`desc_ptr` is a pointer to the TMA descriptor allocated in global memory.
+The descriptor block must have 1 row and the indices must be a 1D tensor.
+Accordingly, the result is a 2D tensor multiple rows.
+"""
 function descriptor_scatter(
     desc::Value, x_offsets::Value, y_offset::Value, src::Value; location=Location()
 )
@@ -520,9 +552,6 @@ end
 This operation will be lowered to Nvidia TMA store operation on targets supporting it.
 `desc` is a tensor descriptor object.
 The shape and types of `src` must match the descriptor otherwise the result is undefined.
-
-This is an escape hatch and is only there for testing/experimenting.
-This op will be removed in the future.
 """
 function descriptor_store(
     desc::Value, src::Value, indices::Vector{Value}; location=Location()
@@ -603,6 +632,8 @@ function dot_scaled(
     a_elem_type,
     b_elem_type,
     fastMath,
+    lhs_k_pack=nothing,
+    rhs_k_pack=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[d,]
@@ -628,6 +659,8 @@ function dot_scaled(
             1
         end,
     ]))
+    !isnothing(lhs_k_pack) && push!(attributes, namedattribute("lhs_k_pack", lhs_k_pack))
+    !isnothing(rhs_k_pack) && push!(attributes, namedattribute("rhs_k_pack", rhs_k_pack))
 
     return create_operation(
         "tt.dot_scaled",

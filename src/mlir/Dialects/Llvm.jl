@@ -1222,8 +1222,12 @@ Like in LLVM IR, it is possible to use both constants as well as SSA values
 as indices. In the case of indexing within a structure, it is required to
 either use constant indices directly, or supply a constant SSA value.
 
-An optional \'inbounds\' attribute specifies the low-level pointer arithmetic
+The no-wrap flags can be used to specify the low-level pointer arithmetic
 overflow behavior that LLVM uses after lowering the operation to LLVM IR.
+Valid options include \'inbounds\' (pointer arithmetic must be within object
+bounds), \'nusw\' (no unsigned signed wrap), and \'nuw\' (no unsigned wrap).
+Note that \'inbounds\' implies \'nusw\' which is ensured by the enum
+definition. The flags can be set individually or in combination.
 
 Examples:
 
@@ -1245,7 +1249,6 @@ function getelementptr(
     res::IR.Type,
     rawConstantIndices,
     elem_type,
-    inbounds=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[res,]
@@ -1256,7 +1259,6 @@ function getelementptr(
         namedattribute("rawConstantIndices", rawConstantIndices),
         namedattribute("elem_type", elem_type),
     ]
-    !isnothing(inbounds) && push!(attributes, namedattribute("inbounds", inbounds))
 
     return create_operation(
         "llvm.getelementptr",
