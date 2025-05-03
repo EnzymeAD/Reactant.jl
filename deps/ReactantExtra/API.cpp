@@ -497,6 +497,10 @@ extern "C" PjRtClient *GetCApiClient(const char *device_type) {
   return xla::GetCApiClient(device_type).value().release();
 }
 
+extern "C" void pjrt_client_register_profiler(const PJRT_Api *api) {
+  RegisterProfiler(api);
+}
+
 extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
   std::string tpu_library_path;
@@ -517,7 +521,7 @@ extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
   if (tpu_status)
     return nullptr;
 
-  RegisterProfiler(pluginLoad);
+  pjrt_client_register_profiler(pluginLoad);
   return GetCApiClient("TPU");
 }
 
