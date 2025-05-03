@@ -508,6 +508,20 @@ extern "C" void pjrt_client_register_profiler(const PJRT_Api *api) {
   RegisterProfiler(api);
 }
 
+extern "C" PjRtClient *MakeClientUsingPluginAPI(const char *device_type,
+                                                const char *library_path,
+                                                const char *client_name,
+                                                const char **error) {
+  const PJRT_Api *pluginLoad = LoadPjrtPlugin(device_type, library_path, error);
+  if (pluginLoad == nullptr)
+    return nullptr;
+  if (InitializePjrtPlugin(device_type, error) == 1)
+    return nullptr;
+
+  RegisterProfiler(pluginLoad);
+  return GetCApiClient(client_name);
+}
+
 extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
   std::string tpu_library_path;

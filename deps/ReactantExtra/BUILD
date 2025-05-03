@@ -811,6 +811,7 @@ cc_library(
 "-Wl,-exported_symbol,_MakeTPUClient",
 "-Wl,-exported_symbol,_LoadPjrtPlugin",
 "-Wl,-exported_symbol,_InitializePjrtPlugin",
+"-Wl,-exported_symbol,_MakeClientUsingPluginAPI",
 "-Wl,-exported_symbol,_GetCApiClient",
 "-Wl,-exported_symbol,_ClientNumDevices",
 "-Wl,-exported_symbol,_ClientNumAddressableDevices",
