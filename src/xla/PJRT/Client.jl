@@ -188,13 +188,40 @@ function MakeTPUClient(;
     @assert distributed_runtime_client === nothing "`PJRT.MakeTPUClient` does not support \
                                                     distributed_runtime_client"
 
-    refstr = Ref{Cstring}()
-    GC.@preserve refstr begin
-        client = @ccall MLIR.API.mlir_c.MakeTPUClient(
-            tpu_path::Cstring, refstr::Ptr{Cstring}
+    return MakeClientViaPluginAPI(tpu_path, "tpu", "TPU")
+end
+
+function MakeClientViaPluginAPI(
+    library_path::String, device_type::String, client_name::String=uppercase(device_type)
+)
+    @assert isfile(library_path) "$(library_path) does not exist for $(device_type) PJRT \
+                                  plugin."
+
+    errstr = Ref{Cstring}()
+    GC.@preserve errstr library_path device_type begin
+        plugin = @ccall MLIR.API.mlir_c.LoadPjrtPlugin(
+            library_path::Cstring, device_type::Cstring, errstr::Ptr{Cstring}
         )::Ptr{Cvoid}
     end
 
-    client == C_NULL && throw(AssertionError(unsafe_string(refstr[])))
+    plugin == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
+
+    GC.@preserve plugin errstr begin
+        status = @ccall MLIR.API.mlir_c.InitializePJRTPlugin(
+            device_type::Cstring, errstr::Ptr{Cstring}
+        )::Cint
+    end
+
+    status == 1 && throw(AssertionError(unsafe_string(errstr[])))
+
+    # XXX: Needs new JLL
+    # GC.@preserve plugin begin
+    #     @ccall MLIR.API.mlir_c.pjrt_client_register_profiler(plugin::Ptr{Cvoid})::Cvoid
+    # end
+
+    GC.@preserve plugin begin
+        @ccall MLIR.API.mlir_c.GetCApiClient(client_name::Cstring)::Ptr{Cvoid}
+    end
+
     return client
 end

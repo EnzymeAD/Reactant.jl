@@ -196,19 +196,35 @@ function MakeIFRTPJRTTPUClient(;
     num_nodes::Integer=1,
     distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
 )
-    refstr = Ref{Cstring}()
+    return MakeIFRTPJRTClientViaPluginAPI(
+        tpu_path, "tpu", "TPU"; node_id, num_nodes, distributed_runtime_client
+    )
+end
+
+function MakeIFRTPJRTClientViaPluginAPI(
+    library_path::String,
+    device_type::String,
+    client_name::String=uppercase(device_type);
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+)
+    pjrt_client = XLA.PJRT.MakeClientViaPluginAPI(library_path, device_type, client_name)
+
     distributed_runtime_client =
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
-    GC.@preserve refstr distributed_runtime_client begin
-        client = @ccall MLIR.API.mlir_c.ifrt_make_pjrt_tpu_client(
-            tpu_path::Cstring,
-            refstr::Ptr{Cstring},
+    errstr = Ref{Cstring}()
+    GC.@preserve pjrt_client begin
+        client = @ccall MLIR.API.mlir_c.ifrt_pjrt_make_client_with_default_kv_store(
+            pjrt_client::Ptr{Cvoid},
             node_id::Cint,
             num_nodes::Cint,
             distributed_runtime_client::Ptr{Cvoid},
+            errstr::Ptr{Cstring},
+            device_type::Cstring,
         )::Ptr{Cvoid}
     end
 
-    return client, refstr
+    return client, errstr
 end
