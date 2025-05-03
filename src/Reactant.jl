@@ -45,9 +45,9 @@ function ancestor(T::Type{<:AbstractArray})
     return T
 end
 
-include("TPUs.jl")
+include("accelerators/Accelerators.jl")
 
-using .TPUUtils: has_tpu
+using .Accelerators.TPU: has_tpu
 
 include("mlir/MLIR.jl")
 include("xla/XLA.jl")

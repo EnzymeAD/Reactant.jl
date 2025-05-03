@@ -193,14 +193,14 @@ for runtime in (:PJRT, :IFRT)
         if !Reactant.precompiling()
             @static if !Sys.isapple()
                 if Reactant.has_tpu()
-                    Reactant.TPUUtils.download_libtpu_if_needed()
+                    Reactant.Accelerators.TPU.download_libtpu_if_needed()
                     try
                         if was_initialized && haskey(state.clients, "tpu")
                             XLA.free_client(state.clients["tpu"])
                             XLA.$(runtime).tpu_client_count[] -= 1
                         end
                         tpu = $(runtime).TPUClient(;
-                            tpu_path=Reactant.TPUUtils.get_libtpu_path(), common_kwargs...
+                            tpu_path=Reactant.Accelerators.TPU.get_libtpu_path(), common_kwargs...
                         )
                         state.clients["tpu"] = tpu
                         state.default_client = tpu

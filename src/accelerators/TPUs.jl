@@ -1,4 +1,4 @@
-module TPUUtils
+module TPU
 
 using Reactant: Reactant
 using EnumX: @enumx
