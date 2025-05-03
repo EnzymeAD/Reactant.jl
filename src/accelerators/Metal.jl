@@ -39,9 +39,9 @@ function download_metal_pjrt_plugin_if_needed(path=nothing)
         tmp_dir = joinpath(path, "tmp")
         Downloads.download(
             if Sys.ARCH === :aarch64
-                "https://files.pythonhosted.org/packages/80/af/ed482a421a868726e7ca3f51ac19b0c9a8e37f33f54413312c37e9056acc/jax_metal-0.1.0-py3-none-macosx_11_0_arm64.whl"
+                "https://files.pythonhosted.org/packages/09/dc/6d8fbfc29d902251cf333414cf7dcfaf4b252a9920c881354584ed36270d/jax_metal-0.1.1-py3-none-macosx_13_0_arm64.whl"
             elseif Sys.ARCH === :x86_64
-                "https://files.pythonhosted.org/packages/51/6a/1c0e2d07d92c6583e874ef2bbf4382662a3469bbb661d885eeaaddca426f/jax_metal-0.1.0-py3-none-macosx_10_14_x86_64.whl"
+                "https://files.pythonhosted.org/packages/87/ec/9bb7f7f0ffd06c3fb89813126b2f698636ac7a4263ed7bdd1ff7d7c94f8f/jax_metal-0.1.1-py3-none-macosx_10_14_x86_64.whl"
             else
                 error("Unsupported architecture: $(Sys.ARCH)")
             end,
