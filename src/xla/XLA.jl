@@ -236,6 +236,7 @@ for runtime in (:PJRT, :IFRT)
                 end
             else
                 try
+                    #=
                     if was_initialized && haskey(state.clients, "metal")
                         XLA.free_client(state.clients["metal"])
                         XLA.$(runtime).metal_client_count[] -= 1
@@ -247,6 +248,8 @@ for runtime in (:PJRT, :IFRT)
                     state.clients["metal"] = gpu
                     # Don't put this in the default_client since metal support is fairly
                     # limited
+                    =#
+                    # Metal PJRT plugin is not yet compatible with latest OpenXLA
                 catch e
                     println(stdout, e)
                 end
