@@ -227,7 +227,7 @@ function MakeIFRTPJRTClientViaPluginAPI(
     num_nodes::Integer=1,
     distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
 )
-    pjrt_client = XLA.PJRT.MakeClientViaPluginAPI(library_path, device_type, client_name)
+    pjrt_client = XLA.PJRT.MakeClientUsingPluginAPI(library_path, device_type, client_name)
 
     distributed_runtime_client =
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
