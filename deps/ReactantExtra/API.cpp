@@ -146,14 +146,16 @@
 #include "xla/service/hlo_cost_analysis.h"
 
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
-#include "triton/Dialect/Triton/IR/Dialect.h"
+
+// Triton did a dumb thing and their import is incompatible
+// We don't use so disabling until upstream fix
+// #include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
 using namespace mlir;
-using namespace llvm;
 using namespace xla;
 
 namespace mlir {
@@ -161,6 +163,11 @@ namespace enzyme {
 void registerRemoveTransformPass();
 void registerGenerateApplyPatternsPass();
 } // namespace enzyme
+
+namespace triton {
+class TritonDialect;
+}
+
 } // namespace mlir
 
 namespace reactant {
@@ -759,7 +766,7 @@ extern "C" void RegisterCustomCallTarget(const char *name, void *address,
 
 #include "mlir/Target/LLVMIR/Import.h"
 extern "C" MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
-  auto llvmModule = std::unique_ptr<llvm::Module>(unwrap(lmod));
+  auto llvmModule = std::unique_ptr<llvm::Module>(llvm::unwrap(lmod));
   mlir::MLIRContext &context = *unwrap(cctx);
 
   auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context,
@@ -771,8 +778,8 @@ extern "C" MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
 
 #include "llvm/IRReader/IRReader.h"
 extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
-  LLVMContext Context;
-  SMDiagnostic Err;
+  llvm::LLVMContext Context;
+  llvm::SMDiagnostic Err;
   auto llvmModule =
       llvm::parseIR(llvm::MemoryBufferRef(lmod, "conversion"), Err, Context);
   if (!llvmModule) {
@@ -1109,7 +1116,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::arith::ArithDialect>();
   context.loadDialect<mlir::enzyme::EnzymeDialect>();
   context.loadDialect<mlir::enzymexla::EnzymeXLADialect>();
-  context.loadDialect<mlir::triton::TritonDialect>();
+  // context.loadDialect<mlir::triton::TritonDialect>();
   context.loadDialect<mlir::tpu::TPUDialect>();
   context.loadDialect<mlir::tensor::TensorDialect>();
   context.loadDialect<mlir::func::FuncDialect>();
@@ -2283,8 +2290,9 @@ extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
     mlir::MLIRContext *context, const xla::HloSharding *hloSharding,
     mlir::StringAttr meshName, mlir::sdy::MeshAttr meshAttr, int64_t rank,
     const bool *isClosed, const int64_t *priority) {
-  const SmallDenseMap<int64_t, StringRef> deviceIdToMaximalMeshName =
-      SmallDenseMap<int64_t, StringRef>();
+  const llvm::SmallDenseMap<int64_t, llvm::StringRef>
+      deviceIdToMaximalMeshName =
+          llvm::SmallDenseMap<int64_t, llvm::StringRef>();
   mlir::sdy::TensorShardingAttr tensorShardingAttr =
       xla::sdy::convertToSdySharding(*hloSharding, meshAttr,
                                      deviceIdToMaximalMeshName, rank,
