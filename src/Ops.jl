@@ -2353,24 +2353,6 @@ end
 end
 
 @noinline function call(f, args...)
-    seen_cache = Reactant.OrderedIdDict()
-    Reactant.make_tracer(
-        seen_cache,
-        args,
-        (), # we have to insert something here, but we remove it immediately below.
-        Reactant.TracedTrack;
-        toscalar=false,
-    )
-    linear_args = []
-    mlir_caller_args = Reactant.MLIR.IR.Value[]
-    for (k, v) in seen_cache
-        v isa Reactant.TracedType || continue
-        push!(linear_args, v)
-        push!(mlir_caller_args, v.mlir_data)
-        # make tracer inserted `()` into the path, here we remove it:
-        v.paths = v.paths[1:(end - 1)]
-    end
-
     seen = Dict()
     cache_key = []
     Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
@@ -2412,6 +2394,24 @@ end
             resprefix,
             resargprefix,
         )
+    end
+
+    seen_cache = Reactant.OrderedIdDict()
+    Reactant.make_tracer(
+        seen_cache,
+        args,
+        (), # we have to insert something here, but we remove it immediately below.
+        Reactant.TracedTrack;
+        toscalar=false,
+    )
+    linear_args = []
+    mlir_caller_args = Reactant.MLIR.IR.Value[]
+    for (k, v) in seen_cache
+        v isa Reactant.TracedType || continue
+        push!(linear_args, v)
+        push!(mlir_caller_args, v.mlir_data)
+        # make tracer inserted `()` into the path, here we remove it:
+        v.paths = v.paths[1:(end - 1)]
     end
 
     call_op = MLIR.Dialects.func.call(
