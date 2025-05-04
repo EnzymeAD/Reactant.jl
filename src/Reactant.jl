@@ -201,7 +201,15 @@ function Enzyme.make_zero(
     return res
 end
 
-using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
+using .Compiler:
+    @compile,
+    @code_hlo,
+    @code_mhlo,
+    @jit,
+    @code_xla,
+    @mlir_visualize,
+    traced_getfield,
+    compile
 export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,
@@ -214,6 +222,7 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
+    @mlir_visualize,
     within_compile
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
