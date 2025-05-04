@@ -703,7 +703,7 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
 
     res = TracedUtils.promote_to(
         TracedRArray{unwrapped_eltype(dest),ndims(dest)},
-        TracedUtils.elem_apply(bc.f, args...),
+	bc.f isa Nothing ? args[1] : TracedUtils.elem_apply(bc.f, args...),
     )
     TracedUtils.set_mlir_data!(dest, res.mlir_data)
     return dest
