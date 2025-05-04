@@ -534,16 +534,8 @@ extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
     return nullptr;
   }
 
-  const PJRT_Api *pluginLoad =
-      LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
-  if (pluginLoad == nullptr)
-    return nullptr;
-  auto tpu_status = InitializePjrtPlugin("tpu", error);
-  if (tpu_status)
-    return nullptr;
-
-  pjrt_client_register_profiler(pluginLoad);
-  return GetCApiClient("TPU");
+  return MakeClientUsingPluginAPI("tpu", tpu_library_path.c_str(), "TPU",
+                                  error);
 }
 
 extern "C" int ClientNumDevices(PjRtClient *client) {

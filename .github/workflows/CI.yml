@@ -143,6 +143,7 @@ jobs:
         id: run_tests
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+          ENABLE_PJRT_COMPATIBILITY: 1
           REACTANT_TEST_GROUP: ${{ matrix.test_group }}
           XLA_FLAGS: "--xla_force_host_platform_device_count=12"
           JULIA_DEBUG: "Reactant,Reactant_jll"

@@ -44,6 +44,7 @@ steps:
           REACTANT_TEST_GROUP: "{{matrix.group}}"
           JULIA_DEBUG: "Reactant,Reactant_jll"
           CUDA_VISIBLE_DEVICES: 0
+          REACTANT_BACKEND_GROUP: "GPU"
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 120
 
@@ -138,31 +139,3 @@ steps:
   #     rocm: "*"
   #   if: build.message !~ /\[skip tests\]/
   #   timeout_in_minutes: 60
-
-  # - label: "Metal Julia v{{matrix.version}}"
-  #   matrix:
-  #     setup:
-  #       version:
-  #         - "1.8"
-  #         - "1.9"
-  #   plugins:
-  #     - JuliaCI/julia#v1:
-  #         version: "{{matrix.version}}"
-  #   agents:
-  #     queue: "juliaecosystem"
-  #     os: "macos"
-  #     arch: "aarch64"
-  #   if: build.message !~ /\[skip tests\]/
-  #   timeout_in_minutes: 60
-  #   commands: |
-  #     echo "--- Setup Julia packages"
-  #     julia --color=yes -e '
-  #         import Pkg
-  #         Pkg.develop(; path = pwd())
-  #         Pkg.develop(; path = joinpath(pwd(), "lib", "EnzymeCore"))
-  #         Pkg.develop(; name = "Metal")' || exit 3
-
-  #     echo "+++ Run tests"
-  #     julia --color=yes test/metal.jl
-  #   env:
-  #     JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
