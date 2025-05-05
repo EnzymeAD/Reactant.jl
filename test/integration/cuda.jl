@@ -3,6 +3,15 @@ using Reactant
 using Test
 using CUDA
 
+const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
+
+@testset "Promote CuTraced" begin
+    TFT = ReactantCUDAExt.CuTracedRNumber{Float64,1}
+    FT = Float64
+    @test Reactant.promote_traced_type(TFT, FT) == TFT
+    @test Base.promote_type(TFT, FT) == FT
+end
+
 function square_kernel!(x, y)
     i = threadIdx().x
     x[i] *= y[i]
