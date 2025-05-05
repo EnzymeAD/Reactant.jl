@@ -81,6 +81,8 @@ Base.@constprop :aggressive @inline Base.:^(
     a::CuTracedRNumber{T,A}, b::Integer
 ) where {T,A} = ^(a[], b)
 
+@inline Base.unsafe_trunc(::Type{T}, a::CuTracedRNumber) where T = Base.unsafe_trunc(T, a[])
+
 for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
     @eval begin
         @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
