@@ -329,7 +329,7 @@ function make_mlir_fn(
 
     seen_results = OrderedIdDict()
 
-    (func2, traced_result, ret, linear_args, in_tys, linear_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
+    (; func2, traced_result, ret, linear_args, in_tys, linear_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
         result,
         traced_args,
         linear_args,
@@ -753,9 +753,11 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
+    f_name = __lookup_unique_name_in_module(mod, name)
+
     func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
-            sym_name=__lookup_unique_name_in_module(mod, name),
+            sym_name=f_name,
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
             arg_attrs=MLIR.IR.attr(func, "arg_attrs"),
@@ -886,8 +888,9 @@ function finalize_mlir_fn(
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
 
-    return (
+    return (;
         func2,
+        f_name,
         traced_result,
         ret,
         linear_args,
