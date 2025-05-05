@@ -157,7 +157,7 @@ end
 
 function pow_number_kernel!(x, y)
     i = threadIdx().x
-    x[i] *= (y ^ 2)
+    x[i] *= (y^2)
     return nothing
 end
 
