@@ -59,6 +59,7 @@ end
 
 for jlop in (
     :(Base.min),
+    :(Base.mod),
     :(Base.max),
     :(Base.:+),
     :(Base.:-),
