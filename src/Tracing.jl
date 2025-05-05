@@ -1170,6 +1170,21 @@ end
 
 Base.@nospecializeinfer function make_tracer(
     seen,
+    @nospecialize(prev::Memory),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    if mode == TracedToTypes
+        return
+    end
+    # TODO: does anything more need to be done here?
+    return prev
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen,
     @nospecialize(prev::ConcretePJRTArray{T,N}),
     @nospecialize(path),
     mode;
