@@ -395,7 +395,7 @@ Base.@nospecializeinfer function traced_type_inner(
             }
         end
         error("Unsupported runtime $runtime")
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedToTypes
         return T
     else
         throw("Abstract RArray cannot be made concrete in mode $mode")
@@ -441,7 +441,7 @@ Base.@nospecializeinfer function traced_type_inner(
             }
         end
         error("Unsupported runtime $runtime")
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedToTypes
         return T
     else
         throw("Abstract RNumber cannot be made concrete in mode $mode")
