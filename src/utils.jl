@@ -462,6 +462,7 @@ function safe_print(name, x)
 end
 
 const DEBUG_INTERP = Ref(false)
+const TRACE_CALLS = Ref(true)
 
 # Rewrite type unstable calls to recurse into call_with_reactant to ensure
 # they continue to use our interpreter. Reset the derived return type
@@ -489,6 +490,283 @@ function rewrite_insts!(ir, interp, guaranteed_error)
     return ir, any_changed
 end
 
+"""
+    Get the cached result of a function call with the given arguments.
+    Returns the cached result if it exists, otherwise returns nothing.
+"""
+function get_cache(f, args...)
+    seen = IdDict()
+    cache_key = []
+    Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
+    cache = Reactant.Compiler.callcache()
+    return nothing
+    return get(cache, cache_key, nothing)
+end
+
+function get_args_for(target_func::Symbol, prologue_result)
+    pr = prologue_result
+    if target_func == :process_linear_args!
+        do_transpose = false
+        optimize_then_pad = true
+
+        return (pr.linear_args, pr.fnbody, do_transpose, optimize_then_pad, pr.inv_map)
+    elseif target_func == :oc
+        return pr.traced_args
+    elseif target_func == :deactivate_fnbody!
+        return pr.fnbody
+    elseif target_func == :finalize_function
+        return (
+            pr.traced_args,
+            pr.linear_args,
+            pr.seen_args,
+            pr.fnbody,
+            pr.func,
+            pr.mod,
+            pr.name,
+            pr.in_tys,
+            pr.inv_map,
+            pr.argprefix,
+            pr.traced_args_to_shardings,
+            pr.sym_visibility,
+            pr.args,
+            pr.N
+        )
+    else
+        error("Unknown target function: $target_func")
+    end
+end
+
+function get_args_from_finalize_function(finalize_function_result)
+    ffr = finalize_function_result
+    return (
+        ffr.f_name,
+        ffr.ret,
+        ffr.linear_results,
+        ffr.argprefix,
+        ffr.resprefix,
+    )
+end
+
+function deactivate_fnbody!(fnbody)
+    MLIR.IR.deactivate!(fnbody)
+    Ops.deactivate_constant_context!(fnbody)
+end
+
+function call_prologue(f, args, )
+    f_name = String(gensym(Symbol(f)))
+
+    argprefix::Symbol = gensym("callarg")
+
+    concretein = false
+    toscalar = false
+    optimize_then_pad = true
+    do_transpose = false
+    input_shardings = nothing
+    runtime = nothing
+    verify_arg_names = nothing
+
+    seen_args = OrderedIdDict()
+    (;
+        N,
+        traced_args,
+        linear_args,
+        inv_map,
+        in_tys,
+        sym_visibility,
+        mod,
+        traced_args_to_shardings,
+        func,
+        fnbody
+    ) = result = TracedUtils.prepare_mlir_fn_args(
+        args,
+        f_name,
+        seen_args,
+        concretein,
+        toscalar,
+        argprefix,
+        runtime,
+        optimize_then_pad,
+        do_transpose,
+        input_shardings,
+        verify_arg_names
+    )
+    result = (; result..., seen_args, args, argprefix, name=f_name)
+
+    Ops.activate_constant_context!(fnbody)
+    @assert MLIR.IR._has_block()
+
+    # Explicitly don't use block! to avoid creating a closure, which creates
+    # both compile-time and relocatability issues
+    MLIR.IR.activate!(fnbody)
+    return result
+end
+
+function finalize_function(result, traced_args, linear_args, seen_args, fnbody, func, mod, name, in_tys, inv_map, argprefix, traced_args_to_shardings, sym_visibility, args, N)
+    resprefix::Symbol = gensym("calllresult")
+    resargprefix::Symbol = gensym("callresarg")
+
+    concretein = false
+    toscalar = false
+    optimize_then_pad = true
+    do_transpose = false
+    runtime = nothing
+    verify_arg_names = nothing
+    args_in_result = :all
+    return_dialect = :func
+    num_replicas = 1
+    construct_function_without_args = false
+    output_shardings = nothing
+
+
+    # check which arguments have been mutated
+    mutated_args = Int[]
+    for (i, arg) in enumerate(linear_args)
+        if TracedUtils.get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
+            # mutation occured!
+            push!(mutated_args, i)
+        end
+    end
+
+    seen_results = OrderedIdDict()
+    
+    (;
+        func2,
+        f_name,
+        traced_result,
+        ret,
+        linear_args,
+        in_tys,
+        linear_results,
+        num_partitions,
+        is_sharded,
+        unique_meshes,
+        mutated_args,
+        global_device_ids
+    ) = TracedUtils.finalize_mlir_fn(
+        result,
+        traced_args,
+        linear_args,
+        seen_args,
+        seen_results,
+        fnbody,
+        func,
+        mod,
+        name,
+        in_tys,
+        do_transpose,
+        optimize_then_pad,
+        inv_map,
+        args_in_result,
+        resprefix,
+        argprefix,
+        resargprefix,
+        verify_arg_names,
+        return_dialect,
+        traced_args_to_shardings,
+        output_shardings,
+        sym_visibility,
+        num_replicas,
+        runtime,
+        construct_function_without_args,
+        args,
+        N,
+        concretein,
+        toscalar
+    )
+
+    return (;
+        fnwrapped=false,
+        f=func2,
+        f_name,
+        traced_result,
+        result,
+        seen_args,
+        ret,
+        linear_args,
+        in_tys,
+        linear_results,
+        num_partitions,
+        num_replicas,
+        is_sharded,
+        unique_meshes,
+        mutated_args,
+        global_device_ids,
+        argprefix,
+        resprefix,
+        resargprefix,
+    ) 
+    
+end
+
+function call_epilogue(f, args, traced_result, f_name, ret, linear_results, argprefix, resprefix)
+    fnwrapped = false # TODO: should this sometimes be true (look at start of `make_mlir_fn`)?
+    mlir_result_types = [
+        MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
+    ]
+    seen_cache = Reactant.OrderedIdDict()
+    Reactant.make_tracer(
+        seen_cache,
+        args,
+        (), # we have to insert something here, but we remove it immediately below.
+        Reactant.TracedTrack;
+        toscalar=false,
+    )
+    linear_args = []
+    mlir_caller_args = Reactant.MLIR.IR.Value[]
+    for (k, v) in seen_cache
+        v isa Reactant.TracedType || continue
+        push!(linear_args, v)
+        push!(mlir_caller_args, v.mlir_data)
+        # make tracer inserted `()` into the path, here we remove it:
+        v.paths = v.paths[1:(end - 1)]
+    end
+
+    call_op = MLIR.Dialects.func.call(
+        mlir_caller_args;
+        result_0=mlir_result_types,
+        callee=MLIR.IR.FlatSymbolRefAttribute(f_name),
+    )
+
+    seen_results = Reactant.OrderedIdDict()
+    traced_result = Reactant.make_tracer(
+        seen_results,
+        traced_result,
+        (), # we have to insert something here, but we remove it immediately below.
+        Reactant.TracedSetPath;
+        toscalar=false,
+    )
+
+    for r in seen_results
+        if r isa TracedRNumber || r isa TracedRArray
+            r.paths = ()
+        end
+    end
+
+    for (i, res) in enumerate(linear_results)
+        resv = MLIR.IR.result(call_op, i)
+        for path in res.paths
+            if length(path) == 0
+                continue
+            end
+            if path[1] == resprefix
+                Reactant.TracedUtils.set!(traced_result, path[2:end], resv)
+            elseif path[1] == argprefix
+                idx = path[2]::Int
+                if idx == 1 && fnwrapped
+                    Reactant.TracedUtils.set!(f, path[3:end], resv)
+                else
+                    if fnwrapped
+                        idx -= 1
+                    end
+                    Reactant.TracedUtils.set!(args[idx], path[3:end], resv)
+                end
+            end
+        end
+    end
+
+    return traced_result
+end
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -510,6 +788,19 @@ function call_with_reactant_generator(
     )
 
     fn = args[1]
+    # should_trace_call = TRACE_CALLS[] && (if (hasfield(typeof(fn), :name) && hasfield(typeof(fn.name), :module))
+    #     mod = fn.name.module
+    #     # Only create function calls for Reactant Ops.
+    #     !(has_ancestor(mod, Reactant.TracedRArrayOverrides) || has_ancestor(mod, Reactant.TracedRNumberOverrides))
+    # else
+    #     true
+    # end)
+
+    # if should_trace_call
+    #     Core.println("About to trace call to $fn.")
+    # else
+    #     Core.println("Not tracing call to $fn.")
+    # end
     sig = Tuple{args...}
 
     guaranteed_error = false
@@ -565,6 +856,14 @@ function call_with_reactant_generator(
         match.sparams,
     )
     method = mi.def
+    should_trace_call = TRACE_CALLS[] &&  !(method.module == Reactant.TracedRNumberOverrides ||
+        method.module == Reactant.TracedRArrayOverrides)
+    if should_trace_call
+        Core.println("About to trace call to $fn.")
+    else
+        Core.println("Not tracing call to $fn.")
+    end
+
 
     @static if VERSION < v"1.11"
         # For older Julia versions, we vendor in some of the code to prevent
@@ -743,10 +1042,104 @@ function call_with_reactant_generator(
         res = Core._call_in_world_total(
             world, make_oc, dict, octup, rt, src, ocnargs, ocva, fn.instance
         )::Core.OpaqueClosure
-
     else
         farg = fn_args[1]
         rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
+        res = push_inst!(rep)
+    end
+
+    ocres = if should_trace_call
+        cached_or_nothing = push_inst!(Expr(:call, get_cache, fn_args[1], fn_args[2:end]...))
+        is_not_cached = push_inst!(
+            Expr(:call, GlobalRef(Base, :isnothing), cached_or_nothing)
+        )
+        # TODO: conditional jump to cached block
+        # cached_dest = 0
+        # push_inst!(Core.GotoIfNot(is_not_cached, cached_dest))
+
+        prologue_result = push_inst!(
+            Expr(
+                :call,
+                GlobalRef(Reactant, :call_prologue),
+                fn_args[1],
+                push_inst!(Expr(:call, GlobalRef(Core, :tuple), fn_args[2:end]...))
+            )
+        )
+
+        # TODO: try-finally construction.
+        push_inst!(Expr(
+            :call,
+            GlobalRef(Core, :_apply_iterate),
+            Base.iterate,
+            GlobalRef(TracedUtils, :process_linear_args!),
+            push_inst!(Expr(:call, GlobalRef(Reactant, :get_args_for), QuoteNode(:process_linear_args!), prologue_result))
+        ))
+        traced_result = push_inst!(Expr(
+            :call,
+            GlobalRef(Core, :_apply_iterate),
+            Base.iterate,
+            oc,
+            push_inst!(Expr(:call, GlobalRef(Reactant, :get_args_for), QuoteNode(:oc), prologue_result))
+        ))
+        # TODO: finally:
+        push_inst!(Expr(
+            :call,
+            GlobalRef(Reactant, :deactivate_fnbody!),
+            push_inst!(Expr(:call, GlobalRef(Reactant, :get_args_for), QuoteNode(:deactivate_fnbody!), prologue_result))
+        ))
+        # TODO: end try-finally.
+
+        finalize_function_result = push_inst!(Expr(
+            :call,
+            GlobalRef(Core, :_apply_iterate),
+            Base.iterate,
+            GlobalRef(Reactant, :finalize_function),
+            push_inst!(Expr(:call, GlobalRef(Core, :tuple), traced_result)),
+            push_inst!(Expr(:call, GlobalRef(Reactant, :get_args_for), QuoteNode(:finalize_function), prologue_result))
+        ))
+
+        # TODO: save cache
+
+        # TODO: unconditional jump over cached block.
+
+        # TODO: cached block
+
+        # TODO: common final handling
+        #=
+        f
+        args (push_inst!(Expr(:call, tuple, fn_args[2:end]...)))
+        traced_result (oc result)
+        f_name (?)
+        ret (finalize_function)
+        linear_results (finalize_function)
+        resprefix (finalize_function)
+        =#
+        traced_result = push_inst!(Expr(
+            :call,
+            GlobalRef(Core, :_apply_iterate),
+            Base.iterate,
+            call_epilogue,
+            push_inst!(Expr(:call, GlobalRef(Core, :tuple), fn_args[1], push_inst!(Expr(:call, GlobalRef(Core, :tuple), fn_args[2:end]...)))),
+            push_inst!(Expr(:call, GlobalRef(Core, :tuple), traced_result)),
+            push_inst!(Expr(:call, GlobalRef(Reactant, :get_args_from_finalize_function), finalize_function_result)),
+        ))
+        traced_result
+    else
+        # propagate should_trace_call
+        push_inst!(Expr(
+            :call,
+            GlobalRef(Base, :setindex!),
+            GlobalRef(Reactant, :TRACE_CALLS),
+            should_trace_call,
+        ))
+        traced_result = push_inst!(Expr(:call, oc, fn_args[2:end]...))
+        # reset the trace calls flag:
+        push_inst!(Expr(
+            :call,
+            GlobalRef(Base, :setindex!),
+            GlobalRef(Reactant, :TRACE_CALLS),
+            TRACE_CALLS[],
+        ))
         push_inst!(rep)
         Core.SSAValue(length(overdubbed_code))
     end
@@ -754,6 +1147,9 @@ function call_with_reactant_generator(
     push_inst!(Expr(:call, oc, fn_args[2:end]...))
 
     ocres = Core.SSAValue(length(overdubbed_code))
+
+        traced_result
+    end
 
     if DEBUG_INTERP[]
         push_inst!(Expr(:call, safe_print, "ocres", ocres))
