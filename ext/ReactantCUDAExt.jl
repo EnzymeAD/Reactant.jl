@@ -146,29 +146,55 @@ Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
 Base.zero(a::CuTracedRNumber) = zero(a[])
 Base.zero(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = zero(T)
 
-function Base.promote_rule(
-    ::Type{<:CuTracedRNumber{T}}, ::Type{<:CuTracedRNumber{T2}}
+Base.@nospecializeinfer function Base.promote_rule(
+    @nospecialize(a::Type{<:CuTracedRNumber{T}}), @nospecialize(b::Type{<:CuTracedRNumber{T2}})
 ) where {T,T2}
     return Base.promote_rule(T, T2)
 end
-function Base.promote_rule(::Type{Any}, ::Type{<:CuTracedRNumber})
+Base.@nospecializeinfer function Base.promote_rule(::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber}))
     return Any
 end
-function Base.promote_rule(::Type{<:CuTracedRNumber}, ::Type{Any})
+Base.@nospecializeinfer function Base.promote_rule(@nospecialize(a::Type{<:CuTracedRNumber}), ::Type{Any})
     return Any
 end
-function Base.promote_rule(::Type{T2}, ::Type{<:CuTracedRNumber{T}}) where {T,T2}
+Base.@nospecializeinfer function Base.promote_rule(@nospecialize(T2::Type), @nospecialize(b::Type{<:CuTracedRNumber{T}})) where {T}
     if T == T2
         return T
     else
         return Base.promote_rule(T, T2)
     end
 end
-function Base.promote_rule(::Type{<:CuTracedRNumber{T}}, ::Type{T2}) where {T,T2}
+Base.@nospecializeinfer function Base.promote_rule(@nospecialize(a::Type{<:CuTracedRNumber{T}}), @nospecialize(T2::Type)) where {T}
     if T == T2
         return T
     else
         return Base.promote_rule(T, T2)
+    end
+end
+
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+  @nospecialize(a::Type{<:CuTracedRNumber{T, A}}), @nospecialize(b::Type{<:CuTracedRNumber{T2, A}})
+) where {T,T2, A}
+   return CuTracedRNumber{Reactant.promote_traced_type(T, T2), A}
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber}))
+    return Any
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(@nospecialize(a::Type{<:CuTracedRNumber}), ::Type{Any})
+    return Any
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(@nospecialize(T2::Type), ::Type{<:CuTracedRNumber{T, A}}) where {T,A}
+    if T == T2
+        return CuTracedRNumber{T, A}
+    else
+        return CuTracedRNumber{Reactant.promote_trace_type(T, T2), A}
+    end
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(::Type{<:CuTracedRNumber{T, A}}, @nospecialize(T2::Type)) where {T, A}
+    if T == T2
+        return CuTracedRNumber{T, A}
+    else
+        return CuTracedRNumber{Reactant.promote_trace_type(T, T2), A}
     end
 end
 
