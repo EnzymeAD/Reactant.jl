@@ -159,16 +159,16 @@ function Base.promote_rule(::Type{<:CuTracedRNumber}, ::Type{Any})
 end
 function Base.promote_rule(::Type{T2}, ::Type{<:CuTracedRNumber{T}}) where {T,T2}
     if T == T2
-	return T
+        return T
     else
-	return Base.promote_rule(T, T2)
+        return Base.promote_rule(T, T2)
     end
 end
 function Base.promote_rule(::Type{<:CuTracedRNumber{T}}, ::Type{T2}) where {T,T2}
     if T == T2
-	return T
+        return T
     else
-	return Base.promote_rule(T, T2)
+        return Base.promote_rule(T, T2)
     end
 end
 
