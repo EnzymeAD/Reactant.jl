@@ -723,7 +723,8 @@ function optimization_passes(;
         "concat_reshape_slice",
         "full_reduce_reshape_or_transpose",
         "concat_reshape_reduce",
-        "concat_elementwise",
+        # XXX: broken
+        # "concat_elementwise",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
