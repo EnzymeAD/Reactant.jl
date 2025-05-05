@@ -104,7 +104,9 @@ end
     end
 
     value = MLIR.IR.DenseElementsAttribute(x)
-    constants = constant_context()[2]
+    constant_blk, constants = constant_context()
+    parent = MLIR.IR.parent_op(constant_blk)
+    @assert MLIR.IR.name(parent) != "builtin.module"
     if haskey(constants, value)
         return constants[value]
     else
@@ -137,6 +139,7 @@ end
 @noinline function constant(
     x::AbstractArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
+    @assert !(x isa TracedRArray)
     return constant(collect(x); location)
 end
 

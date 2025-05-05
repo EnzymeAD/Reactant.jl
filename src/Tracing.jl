@@ -1128,12 +1128,19 @@ Base.@nospecializeinfer function make_tracer_unknown(
             if xi !== xi2
                 changed = true
             end
-            if mode != TracedToTypes && !(Core.Typeof(xi2) <: fieldtype(TT, i))
-                throw(
-                    AssertionError(
-                        "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
-                    ),
-                )
+            FT = fieldtype(TT, i)
+            if mode != TracedToTypes && !(Core.Typeof(xi2) <: FT)
+                if FT <: TracedRNumber && xi2 isa unwrapped_eltype(FT)
+                    xi2 = FT(xi2)
+                    xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
+                    seen[xi2] = xi2
+                else
+                    throw(
+                        AssertionError(
+                            "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                        ),
+                    )
+                end
             end
             flds[i] = xi2
         else

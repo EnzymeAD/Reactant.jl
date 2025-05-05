@@ -991,6 +991,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 ) where {F,tt}
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
+    mod = MLIR.IR.mmodule()
 
     if convert == Val(true)
         args = recudaconvert.(args)
@@ -1021,7 +1022,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 
     sym_name = String(gensym("call_$fname"))
-    mod = MLIR.IR.mmodule()
     CConv = MLIR.IR.Attribute(
         MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvPTX_Kernel)
     )
