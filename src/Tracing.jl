@@ -1022,8 +1022,8 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
                     xi2 = FT(xi2)
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
-		    changed = true
-		end
+                    changed = true
+                end
             end
             flds[i] = xi2
         else
@@ -1143,7 +1143,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     xi2 = FT(xi2)
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
-		    changed = true
+                    changed = true
                 else
                     throw(
                         AssertionError(
