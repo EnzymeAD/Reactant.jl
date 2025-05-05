@@ -328,7 +328,7 @@ function make_mlir_fn(
         result,
         traced_args,
         linear_args,
-	skipped_args,
+        skipped_args,
         seen_args,
         fnbody,
         func,
@@ -405,11 +405,11 @@ function prepare_mlir_fn_args(
     Ops.activate_constant_context!(fnbody)
     seen_args0 = OrderedIdDict()
     try
-      for i in 1:N
-          @inbounds traced_args[i] = Reactant.make_tracer(
-              seen_args0, args[i], (argprefix, i), inmode; toscalar, runtime
-          )
-      end
+        for i in 1:N
+            @inbounds traced_args[i] = Reactant.make_tracer(
+                seen_args0, args[i], (argprefix, i), inmode; toscalar, runtime
+            )
+        end
     finally
         MLIR.IR.deactivate!(fnbody)
         Ops.deactivate_constant_context!(fnbody)
@@ -421,12 +421,14 @@ function prepare_mlir_fn_args(
     inv_map = IdDict()
     for (k, v) in seen_args0
         v isa Reactant.TracedType || continue
-	arg = get_mlir_data(v)
-	if (arg isa MLIR.IR.Value) && MLIR.IR.is_op_res(arg) && MLIR.IR.block(MLIR.IR.op_owner(arg)) == fnbody
-	  push!(skipped_args, v)
-	  continue
-	end
-	seen_args[k] = v
+        arg = get_mlir_data(v)
+        if (arg isa MLIR.IR.Value) &&
+            MLIR.IR.is_op_res(arg) &&
+            MLIR.IR.block(MLIR.IR.op_owner(arg)) == fnbody
+            push!(skipped_args, v)
+            continue
+        end
+        seen_args[k] = v
         push!(linear_args, v)
         inv_map[v] = k
     end
@@ -501,9 +503,12 @@ function prepare_mlir_fn_args(
                 aval = getfield(aval, idx)
             end
         end
-	MLIR.IR.push_argument!(fnbody, in_tys[i]; location=MLIR.IR.Location(stridx * " (path=$path)", MLIR.IR.Location()))
+        MLIR.IR.push_argument!(
+            fnbody,
+            in_tys[i];
+            location=MLIR.IR.Location(stridx * " (path=$path)", MLIR.IR.Location()),
+        )
     end
-    
     push!(MLIR.IR.region(func, 1), fnbody)
 
     return (;
@@ -517,8 +522,8 @@ function prepare_mlir_fn_args(
         traced_args_to_shardings,
         func,
         fnbody,
-	seen_args,
-	skipped_args
+        seen_args,
+        skipped_args,
     )
 end
 
@@ -616,9 +621,9 @@ function finalize_mlir_fn(
     linear_results = Reactant.TracedType[]
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
-	if any(Base.Fix1(===, k), skipped_args)
-	  continue
-	end
+        if any(Base.Fix1(===, k), skipped_args)
+            continue
+        end
         if args_in_result != :all
             if has_idx(v, argprefix)
                 if !(
