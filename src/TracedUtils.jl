@@ -280,12 +280,9 @@ function make_mlir_fn(
         return mlir_fn_res
     end
 
-    seen_args = OrderedIdDict()
-
-    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, mod, traced_args_to_shardings, func, fnbody) = prepare_mlir_fn_args(
+    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, mod, traced_args_to_shardings, func, fnbody, seen_args, skipped_args) = prepare_mlir_fn_args(
         args,
         name,
-        seen_args,
         concretein,
         toscalar,
         argprefix,
@@ -327,14 +324,12 @@ function make_mlir_fn(
         end
     end
 
-    seen_results = OrderedIdDict()
-
     (func2, traced_result, ret, linear_args, in_tys, linear_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
         result,
         traced_args,
         linear_args,
+	skipped_args,
         seen_args,
-        seen_results,
         fnbody,
         func,
         mod,
@@ -388,7 +383,6 @@ end
 function prepare_mlir_fn_args(
     args,
     name,
-    seen_args,
     concretein,
     toscalar,
     argprefix,
@@ -406,16 +400,33 @@ function prepare_mlir_fn_args(
     else
         Reactant.TracedSetPath
     end
-    for i in 1:N
-        @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, args[i], (argprefix, i), inmode; toscalar, runtime
-        )
+    fnbody = MLIR.IR.Block(MLIR.IR.Type[], MLIR.IR.Location[])
+    MLIR.IR.activate!(fnbody)
+    Ops.activate_constant_context!(fnbody)
+    seen_args0 = OrderedIdDict()
+    try
+      for i in 1:N
+          @inbounds traced_args[i] = Reactant.make_tracer(
+              seen_args0, args[i], (argprefix, i), inmode; toscalar, runtime
+          )
+      end
+    finally
+        MLIR.IR.deactivate!(fnbody)
+        Ops.deactivate_constant_context!(fnbody)
     end
 
+    seen_args = OrderedIdDict()
     linear_args = Reactant.TracedType[]
+    skipped_args = Reactant.TracedType[]
     inv_map = IdDict()
-    for (k, v) in seen_args
+    for (k, v) in seen_args0
         v isa Reactant.TracedType || continue
+	arg = get_mlir_data(v)
+	if (arg isa MLIR.IR.Value) && MLIR.IR.is_op_res(arg) && MLIR.IR.block(MLIR.IR.op_owner(arg)) == fnbody
+	  push!(skipped_args, v)
+	  continue
+	end
+	seen_args[k] = v
         push!(linear_args, v)
         inv_map[v] = k
     end
@@ -468,7 +479,7 @@ function prepare_mlir_fn_args(
     end
 
     arglocs = MLIR.IR.Location[]
-    for arg in linear_args
+    for (i, arg) in enumerate(linear_args)
         path = get_idx(arg, argprefix)
         stridx = if verify_arg_names isa Nothing
             "arg" * string(path[2])
@@ -490,9 +501,9 @@ function prepare_mlir_fn_args(
                 aval = getfield(aval, idx)
             end
         end
-        push!(arglocs, MLIR.IR.Location(stridx * " (path=$path)", MLIR.IR.Location()))
+	MLIR.IR.push_argument!(fnbody, in_tys[i]; location=MLIR.IR.Location(stridx * " (path=$path)", MLIR.IR.Location()))
     end
-    fnbody = MLIR.IR.Block(in_tys, arglocs)
+    
     push!(MLIR.IR.region(func, 1), fnbody)
 
     return (;
@@ -506,6 +517,8 @@ function prepare_mlir_fn_args(
         traced_args_to_shardings,
         func,
         fnbody,
+	seen_args,
+	skipped_args
     )
 end
 
@@ -533,8 +546,8 @@ function finalize_mlir_fn(
     result,
     traced_args,
     linear_args,
+    skipped_args,
     seen_args,
-    seen_results,
     fnbody,
     func,
     mod,
@@ -578,6 +591,7 @@ function finalize_mlir_fn(
         Reactant.TracedTrack
     end
 
+    seen_results = OrderedIdDict()
     MLIR.IR.activate!(fnbody)
     traced_result = try
         traced_result = Reactant.make_tracer(
@@ -602,6 +616,9 @@ function finalize_mlir_fn(
     linear_results = Reactant.TracedType[]
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
+	if any(Base.Fix1(===, k), skipped_args)
+	  continue
+	end
         if args_in_result != :all
             if has_idx(v, argprefix)
                 if !(
