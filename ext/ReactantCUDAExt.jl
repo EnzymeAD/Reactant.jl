@@ -76,6 +76,8 @@ for jlop in (
         @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
     end
 end
+        
+@constprop :aggressive @inline ^(a::CuTracedRNumber, b::Integer) = ^(a[], b)
 
 for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
     @eval begin
