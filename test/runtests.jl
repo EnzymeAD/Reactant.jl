@@ -7,8 +7,6 @@ end
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
 @testset "Reactant.jl Tests" begin
-    include("basic.jl")
-    #=
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
         if Sys.isapple() && haskey(Reactant.XLA.global_backend_state.clients, "metal")
             @safetestset "Metal Plugin" include("plugins/metal.jl")
@@ -16,7 +14,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
         @safetestset "Layout" include("layout.jl")
         @safetestset "Tracing" include("tracing.jl")
-        @safetestset "Basic" 
+        @safetestset "Basic" include("basic.jl")
         @safetestset "Autodiff" include("autodiff.jl")
         @safetestset "Complex" include("complex.jl")
         @safetestset "Broadcast" include("bcast.jl")
@@ -59,5 +57,5 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
             @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
             @safetestset "Lux Integration" include("nn/lux.jl")
         end
-    end =#
+    end
 end
