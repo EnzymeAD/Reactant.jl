@@ -783,7 +783,8 @@ function optimization_passes(;
                 "slice_reshape_elementwise<1>",
                 "slice_reshape_dot_general<1>",
                 "slice_reshape_pad<1>",
-                "elementwise_reshape_like",
+                # error: 'stablehlo.broadcast_in_dim' op requires compatible element types for all operands and results. Needs upstream fix.
+                # "elementwise_reshape_like",
             ],
         )
     else
