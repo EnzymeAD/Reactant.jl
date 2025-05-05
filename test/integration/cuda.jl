@@ -155,6 +155,25 @@ end
     @test all(Array(A) .≈ oA .* 3.1)
 end
 
+function pow_number_kernel!(x, y)
+    i = threadIdx().x
+    x[i] *= (y ^ 2)
+    return nothing
+end
+
+function pow_number!(x, y)
+    @cuda blocks = 1 threads = length(x) pow_number_kernel!(x, y)
+    return nothing
+end
+
+@testset "Pow Number" begin
+    oA = collect(Float64, 1:1:64)
+    A = Reactant.to_rarray(oA)
+    B = ConcreteRNumber(3.1)
+    @jit pow_number!(A, B)
+    @test all(Array(A) .≈ oA .* 3.1 * 3.1)
+end
+
 function searchsorted_kernel!(x, y)
     i = threadIdx().x
     times = 0:0.01:4.5
