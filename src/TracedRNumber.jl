@@ -427,7 +427,14 @@ function Base.iseven(x::TracedRNumber{<:Real})
 end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
-    @eval Base.clamp(x::TracedRNumber, min::$(minT), max::$(maxT)) = Ops.clamp(min, x, max)
+    @eval function Base.clamp(x::TracedRNumber, min::$(minT), max::$(maxT))
+        T = promote_type(unwrapped_eltype(x), unwrapped_eltype(min), unwrapped_eltype(max))
+        return Ops.clamp(
+            TracedUtils.promote_to(TracedRNumber{T}, min),
+            TracedUtils.promote_to(TracedRNumber{T}, x),
+            TracedUtils.promote_to(TracedRNumber{T}, max),
+        )
+    end
 end
 
 function Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N}
