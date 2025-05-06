@@ -500,7 +500,7 @@ function prepare_mlir_fn_args(
                     string(idx)
                 end
                 stridx *= "." * fldname
-                aval = getfield(aval, idx)
+                aval = Reactant.Compiler.traced_getfield(aval, idx)
             end
         end
         MLIR.IR.push_argument!(
