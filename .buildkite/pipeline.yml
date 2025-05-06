@@ -1,7 +1,7 @@
 steps:
   - group: ":test_tube: CUDA Tests"
     steps:
-      - label: ":julia: :linux: Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
+      - label: ":julia: :linux: Julia v{{matrix.version}} -- CUDA -- {{matrix.group}} -- {{matrix.runtime}}"
         matrix:
           setup:
             version:
@@ -50,7 +50,7 @@ steps:
 
   - group: ":test_tube: Intel GPU (SYCL) Tests"
     steps:
-      - label: ":julia: :linux: Julia v{{matrix.julia}} -- {{matrix.group}} -- {{matrix.runtime}}"
+      - label: ":julia: :linux: Julia v{{matrix.version}} -- Intel GPU -- {{matrix.group}} -- {{matrix.runtime}}"
         matrix:
           setup:
             version:
