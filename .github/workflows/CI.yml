@@ -230,6 +230,7 @@ jobs:
           REACTANT_BACKEND_GROUP: "GPU"
           LD_LIBRARY_PATH: ""
           XLA_REACTANT_GPU_MEM_FRACTION: "0.25" # our runners are pretty big
+          LD_PRELOAD: ""
       - name: Upload MLIR modules
         uses: actions/upload-artifact@v4
         timeout-minutes: 10
