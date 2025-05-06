@@ -1764,9 +1764,9 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
-    prev2 = try
+    prev2 = if isdefined(prev, :contents)
         prev.contents
-    catch
+    else
         UndefinedBox()
     end
 
