@@ -637,7 +637,7 @@ function optimization_passes(;
         "slice_dot_general<1>",
         "if_inline<1>",
         "if_to_select<1>",
-        "dynamic_update_slice_const_prop",
+        "dynamic_update_slice_const_prop($max_constant_threshold)",
         "dynamic_gather_op_is_not_dynamic<16>",
         "divide_sqrt_to_multiply_rsqrt<16>",
         "associative_binary_op_reordering<1>",
@@ -656,6 +656,7 @@ function optimization_passes(;
         "while_simplify<1>(1)",
         "if_remove_unused",
         "transpose_reshape_to_broadcast",
+        "reshape_transpose_to_broadcast",
         "dus_dus",
         "dus_dus_concat",
         "abs_positive_simplify",
@@ -721,6 +722,8 @@ function optimization_passes(;
         "divide_divide_simplify",
         "concat_reshape_slice",
         "full_reduce_reshape_or_transpose",
+        "concat_reshape_reduce",
+        "concat_elementwise",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
@@ -780,6 +783,7 @@ function optimization_passes(;
                 "slice_reshape_elementwise<1>",
                 "slice_reshape_dot_general<1>",
                 "slice_reshape_pad<1>",
+                "elementwise_reshape_like",
             ],
         )
     else
@@ -833,6 +837,7 @@ function optimization_passes(;
                 "slice_reshape_transpose<1>",
                 "reduce_transpose_simplify",
                 "reverse_transpose",
+                "transpose_all_users_slice",
             ],
         )
     else

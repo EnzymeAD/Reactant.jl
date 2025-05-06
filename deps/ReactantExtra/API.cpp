@@ -146,14 +146,16 @@
 #include "xla/service/hlo_cost_analysis.h"
 
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
-#include "triton/Dialect/Triton/IR/Dialect.h"
+
+// Triton did a dumb thing and their import is incompatible
+// We don't use so disabling until upstream fix
+// #include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
 using namespace mlir;
-using namespace llvm;
 using namespace xla;
 
 namespace mlir {
@@ -161,6 +163,11 @@ namespace enzyme {
 void registerRemoveTransformPass();
 void registerGenerateApplyPatternsPass();
 } // namespace enzyme
+
+namespace triton {
+class TritonDialect;
+}
+
 } // namespace mlir
 
 namespace reactant {
@@ -497,6 +504,24 @@ extern "C" PjRtClient *GetCApiClient(const char *device_type) {
   return xla::GetCApiClient(device_type).value().release();
 }
 
+extern "C" void pjrt_client_register_profiler(const PJRT_Api *api) {
+  RegisterProfiler(api);
+}
+
+extern "C" PjRtClient *MakeClientUsingPluginAPI(const char *device_type,
+                                                const char *library_path,
+                                                const char *client_name,
+                                                const char **error) {
+  const PJRT_Api *pluginLoad = LoadPjrtPlugin(device_type, library_path, error);
+  if (pluginLoad == nullptr)
+    return nullptr;
+  if (InitializePjrtPlugin(device_type, error) == 1)
+    return nullptr;
+
+  RegisterProfiler(pluginLoad);
+  return GetCApiClient(client_name);
+}
+
 extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
   std::string tpu_library_path;
@@ -509,16 +534,8 @@ extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
     return nullptr;
   }
 
-  const PJRT_Api *pluginLoad =
-      LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
-  if (pluginLoad == nullptr)
-    return nullptr;
-  auto tpu_status = InitializePjrtPlugin("tpu", error);
-  if (tpu_status)
-    return nullptr;
-
-  RegisterProfiler(pluginLoad);
-  return GetCApiClient("TPU");
+  return MakeClientUsingPluginAPI("tpu", tpu_library_path.c_str(), "TPU",
+                                  error);
 }
 
 extern "C" int ClientNumDevices(PjRtClient *client) {
@@ -755,7 +772,7 @@ extern "C" void RegisterCustomCallTarget(const char *name, void *address,
 
 #include "mlir/Target/LLVMIR/Import.h"
 extern "C" MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
-  auto llvmModule = std::unique_ptr<llvm::Module>(unwrap(lmod));
+  auto llvmModule = std::unique_ptr<llvm::Module>(llvm::unwrap(lmod));
   mlir::MLIRContext &context = *unwrap(cctx);
 
   auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context,
@@ -767,8 +784,8 @@ extern "C" MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
 
 #include "llvm/IRReader/IRReader.h"
 extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
-  LLVMContext Context;
-  SMDiagnostic Err;
+  llvm::LLVMContext Context;
+  llvm::SMDiagnostic Err;
   auto llvmModule =
       llvm::parseIR(llvm::MemoryBufferRef(lmod, "conversion"), Err, Context);
   if (!llvmModule) {
@@ -1105,7 +1122,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::arith::ArithDialect>();
   context.loadDialect<mlir::enzyme::EnzymeDialect>();
   context.loadDialect<mlir::enzymexla::EnzymeXLADialect>();
-  context.loadDialect<mlir::triton::TritonDialect>();
+  // context.loadDialect<mlir::triton::TritonDialect>();
   context.loadDialect<mlir::tpu::TPUDialect>();
   context.loadDialect<mlir::tensor::TensorDialect>();
   context.loadDialect<mlir::func::FuncDialect>();
@@ -1587,6 +1604,16 @@ extern "C" ifrt::Client *ifrt_pjrt_make_client(
   options.num_processes = num_nodes;
 
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
+}
+
+extern "C" ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
+    PjRtClient *pjrt_client, int node_id, int num_nodes,
+    void *distributed_runtime_client, const char **error,
+    std::string key_prefix) {
+  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
+  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
+                               distributed_runtime_client, error, key_prefix,
+                               kv_store);
 }
 
 const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
@@ -2269,8 +2296,9 @@ extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
     mlir::MLIRContext *context, const xla::HloSharding *hloSharding,
     mlir::StringAttr meshName, mlir::sdy::MeshAttr meshAttr, int64_t rank,
     const bool *isClosed, const int64_t *priority) {
-  const SmallDenseMap<int64_t, StringRef> deviceIdToMaximalMeshName =
-      SmallDenseMap<int64_t, StringRef>();
+  const llvm::SmallDenseMap<int64_t, llvm::StringRef>
+      deviceIdToMaximalMeshName =
+          llvm::SmallDenseMap<int64_t, llvm::StringRef>();
   mlir::sdy::TensorShardingAttr tensorShardingAttr =
       xla::sdy::convertToSdySharding(*hloSharding, meshAttr,
                                      deviceIdToMaximalMeshName, rank,

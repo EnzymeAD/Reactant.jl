@@ -104,7 +104,9 @@ end
     end
 
     value = MLIR.IR.DenseElementsAttribute(x)
-    constants = constant_context()[2]
+    constant_blk, constants = constant_context()
+    parent = MLIR.IR.parent_op(constant_blk)
+    @assert MLIR.IR.name(parent) != "builtin.module"
     if haskey(constants, value)
         return constants[value]
     else
@@ -137,6 +139,7 @@ end
 @noinline function constant(
     x::AbstractArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T,N}
+    @assert !(x isa TracedRArray)
     return constant(collect(x); location)
 end
 
@@ -1934,7 +1937,7 @@ end
         cond=cond_reg,
         body=body_reg,
     )
-
+    MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
     return map(enumerate(linear_args)) do (i, arg)
         Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
@@ -2353,24 +2356,6 @@ end
 end
 
 @noinline function call(f, args...)
-    seen_cache = Reactant.OrderedIdDict()
-    Reactant.make_tracer(
-        seen_cache,
-        args,
-        (), # we have to insert something here, but we remove it immediately below.
-        Reactant.TracedTrack;
-        toscalar=false,
-    )
-    linear_args = []
-    mlir_caller_args = Reactant.MLIR.IR.Value[]
-    for (k, v) in seen_cache
-        v isa Reactant.TracedType || continue
-        push!(linear_args, v)
-        push!(mlir_caller_args, v.mlir_data)
-        # make tracer inserted `()` into the path, here we remove it:
-        v.paths = v.paths[1:(end - 1)]
-    end
-
     seen = Dict()
     cache_key = []
     Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
@@ -2412,6 +2397,24 @@ end
             resprefix,
             resargprefix,
         )
+    end
+
+    seen_cache = Reactant.OrderedIdDict()
+    Reactant.make_tracer(
+        seen_cache,
+        args,
+        (), # we have to insert something here, but we remove it immediately below.
+        Reactant.TracedTrack;
+        toscalar=false,
+    )
+    linear_args = []
+    mlir_caller_args = Reactant.MLIR.IR.Value[]
+    for (k, v) in seen_cache
+        v isa Reactant.TracedType || continue
+        push!(linear_args, v)
+        push!(mlir_caller_args, v.mlir_data)
+        # make tracer inserted `()` into the path, here we remove it:
+        v.paths = v.paths[1:(end - 1)]
     end
 
     call_op = MLIR.Dialects.func.call(

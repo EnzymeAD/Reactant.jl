@@ -1247,6 +1247,45 @@ function cvt_float_to_tf32(
 end
 
 """
+`cvt_to_f6x2`
+
+This Op converts each of the given float inputs to the specified fp6 type.
+The result `dst` is represented either as an i16 type or as a vector
+of two i8 types.
+If `dst` is returned as an i16 type, the converted values are packed such 
+that the value converted from `a` is stored in the upper 8 bits of `dst` 
+with 2 MSB bits padded with zeros and the value converted from `b` is 
+stored in the lower 8 bits of `dst` with 2 MSB bits padded with zeros.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function cvt_to_f6x2(
+    a::Value, b::Value; dst::IR.Type, type, relu=nothing, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[a, b]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("type", type),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.cvt.to.f6x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `elect_sync`
 
 The `elect.sync` instruction elects one predicated active leader

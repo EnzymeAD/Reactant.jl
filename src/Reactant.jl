@@ -45,9 +45,9 @@ function ancestor(T::Type{<:AbstractArray})
     return T
 end
 
-include("TPUs.jl")
+include("accelerators/Accelerators.jl")
 
-using .TPUUtils: has_tpu
+using .Accelerators.TPU: has_tpu
 
 include("mlir/MLIR.jl")
 include("xla/XLA.jl")
@@ -93,6 +93,8 @@ unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 
 unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
+
+promote_traced_type(a::Type, b::Type) = Base.promote_type(a, b)
 
 aos_to_soa(x::AbstractArray) = x
 

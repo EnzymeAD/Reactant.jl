@@ -509,6 +509,10 @@ end
         @test minimum(y) ≥ 0.0
         @test x_ra ≈ x
     end
+
+    x_ra = ConcreteRNumber(3.0)
+    y = @jit(clamp(x_ra, 0.0, 0.25))
+    @test y isa ConcreteRNumber{Float64}
 end
 
 @testset for op in [round, ceil, floor]

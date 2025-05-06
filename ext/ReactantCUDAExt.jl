@@ -46,7 +46,12 @@ struct CuTracedRNumber{T,A} <: Number
     end
 end
 
-CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
+Base.@nospecializeinfer Reactant.is_traced_number(
+    @nospecialize(T::Type{<:CuTracedRNumber})
+) = true
+Reactant.unwrapped_eltype(::Type{<:CuTracedRNumber{T}}) where {T} = T
+
+@inline CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
 
 function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     align = alignment(RN)
@@ -59,6 +64,7 @@ end
 
 for jlop in (
     :(Base.min),
+    :(Base.mod),
     :(Base.max),
     :(Base.:+),
     :(Base.:-),
@@ -77,6 +83,13 @@ for jlop in (
     end
 end
 
+Base.@constprop :aggressive @inline Base.:^(
+    a::CuTracedRNumber{T,A}, b::Integer
+) where {T,A} = ^(a[], b)
+
+@inline Base.unsafe_trunc(::Type{T}, a::CuTracedRNumber) where {T} =
+    Base.unsafe_trunc(T, a[])
+
 for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
     @eval begin
         @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
@@ -91,13 +104,13 @@ Base.OneTo(x::CuTracedRNumber{<:Integer}) = Base.OneTo(x[])
     end
 end
 
-function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
+@inline function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
     return CT(
         Base.llvmcall(
             (
                 """define double addrspace(1)* @entry(double %d) alwaysinline {
           %a = alloca double
-          store double %d, double* %a
+          store atomic double %d, double* %a release, align 8
           %ac = addrspacecast double* %a to double addrspace(1)*
           ret double addrspace(1)* %ac
                     }
@@ -111,13 +124,13 @@ function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
     )
 end
 
-function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
+@inline function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
     return CT(
         Base.llvmcall(
             (
                 """define float addrspace(1)* @entry(float %d) alwaysinline {
           %a = alloca float
-          store float %d, float* %a
+          store atomic float %d, float* %a release, align 4
           %ac = addrspacecast float* %a to float addrspace(1)*
           ret float addrspace(1)* %ac
                     }
@@ -138,22 +151,74 @@ Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
 Base.zero(a::CuTracedRNumber) = zero(a[])
 Base.zero(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = zero(T)
 
-function Base.promote_rule(
-    ::Type{<:CuTracedRNumber{T}}, ::Type{<:CuTracedRNumber{T2}}
+Base.@nospecializeinfer function Base.promote_rule(
+    @nospecialize(a::Type{<:CuTracedRNumber{T}}),
+    @nospecialize(b::Type{<:CuTracedRNumber{T2}})
 ) where {T,T2}
     return Base.promote_rule(T, T2)
 end
-function Base.promote_rule(::Type{Any}, ::Type{<:CuTracedRNumber})
+Base.@nospecializeinfer function Base.promote_rule(
+    ::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber})
+)
     return Any
 end
-function Base.promote_rule(::Type{<:CuTracedRNumber}, ::Type{Any})
+Base.@nospecializeinfer function Base.promote_rule(
+    @nospecialize(a::Type{<:CuTracedRNumber}), ::Type{Any}
+)
     return Any
 end
-function Base.promote_rule(::Type{T2}, ::Type{<:CuTracedRNumber{T}}) where {T,T2}
-    return Base.promote_rule(T, T2)
+Base.@nospecializeinfer function Base.promote_rule(
+    @nospecialize(T2::Type), @nospecialize(b::Type{<:CuTracedRNumber{T}})
+) where {T}
+    if T == T2
+        return T
+    else
+        return Base.promote_rule(T, T2)
+    end
 end
-function Base.promote_rule(::Type{<:CuTracedRNumber{T}}, ::Type{T2}) where {T,T2}
-    return Base.promote_rule(T, T2)
+Base.@nospecializeinfer function Base.promote_rule(
+    @nospecialize(a::Type{<:CuTracedRNumber{T}}), @nospecialize(T2::Type)
+) where {T}
+    if T == T2
+        return T
+    else
+        return Base.promote_rule(T, T2)
+    end
+end
+
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    @nospecialize(a::Type{<:CuTracedRNumber{T,A}}),
+    @nospecialize(b::Type{<:CuTracedRNumber{T2,A}})
+) where {T,T2,A}
+    return CuTracedRNumber{Reactant.promote_traced_type(T, T2),A}
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    ::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber})
+)
+    return Any
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    @nospecialize(a::Type{<:CuTracedRNumber}), ::Type{Any}
+)
+    return Any
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    @nospecialize(T2::Type), ::Type{<:CuTracedRNumber{T,A}}
+) where {T,A}
+    if T == T2
+        return CuTracedRNumber{T,A}
+    else
+        return CuTracedRNumber{Reactant.promote_trace_type(T, T2),A}
+    end
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    ::Type{<:CuTracedRNumber{T,A}}, @nospecialize(T2::Type)
+) where {T,A}
+    if T == T2
+        return CuTracedRNumber{T,A}
+    else
+        return CuTracedRNumber{Reactant.promote_trace_type(T, T2),A}
+    end
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
@@ -991,6 +1056,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 ) where {F,tt}
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
+    mod = MLIR.IR.mmodule()
 
     if convert == Val(true)
         args = recudaconvert.(args)
@@ -1009,6 +1075,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     # linearize kernel arguments
     seen = Reactant.OrderedIdDict()
     kernelargsym = gensym("kernelarg")
+
     for (i, prev) in enumerate(Any[func.f, args...])
         Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
@@ -1021,7 +1088,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 
     sym_name = String(gensym("call_$fname"))
-    mod = MLIR.IR.mmodule()
     CConv = MLIR.IR.Attribute(
         MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvPTX_Kernel)
     )

@@ -38,14 +38,14 @@ Base.unsafe_convert(::Core.Type{API.MlirBlock}, block::Block) = block.block
 
 Returns the closest surrounding operation that contains this block.
 """
-parent_op(block::Block) = Operation(API.mlirBlockGetParentOperation(block))
+parent_op(block::Block) = Operation(API.mlirBlockGetParentOperation(block), false)
 
 """
     parent_region(block)
 
 Returns the region that contains this block.
 """
-parent_region(block::Block) = Region(API.mlirBlockGetParentRegion(block))
+parent_region(block::Block) = Region(API.mlirBlockGetParentRegion(block), false)
 
 Base.parent(block::Block) = parent_region(block)
 

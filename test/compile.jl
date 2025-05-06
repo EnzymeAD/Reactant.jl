@@ -147,3 +147,45 @@ end
     x = [:a, :b, :a]
     @test @jit(unique(x)) == [:a, :b]
 end
+
+@testset "custom trace path" begin
+    struct MockTestCustomPath{T}
+        x::T
+    end
+
+    function Reactant.Compiler.make_tracer(
+        seen, prev::MockTestCustomPath, path, mode; kwargs...
+    )
+        custom_path = Reactant.append_path(path, (; custom_id=1))
+        traced_x = Reactant.make_tracer(seen, prev.x, custom_path, mode; kwargs...)
+        return MockTestCustomPath(traced_x)
+    end
+
+    function Reactant.traced_getfield(
+        x::MockTestCustomPath, fld::@NamedTuple{custom_id::Int}
+    )
+        return if fld.custom_id == 1
+            x.x
+        else
+            error("this is awkward... shouldn't have reach here")
+        end
+    end
+
+    function Reactant.Compiler.create_result(
+        tocopy::MockTestCustomPath, path, result_stores
+    )
+        custom_path = Reactant.append_path(path, (; custom_id=1))
+        res_x = Reactant.Compiler.create_result(tocopy.x, custom_path, result_stores)
+        return :($MockTestCustomPath($res_x))
+    end
+
+    fcustom_path(x) = MockTestCustomPath(x.x)
+
+    x = MockTestCustomPath(ones(Int))
+    xre = MockTestCustomPath(Reactant.to_rarray(x.x))
+
+    y = @jit fcustom_path(xre)
+    @test y isa MockTestCustomPath
+    @test y.x isa Reactant.RArray
+    @test y.x == fcustom_path(x).x
+end

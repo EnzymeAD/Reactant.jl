@@ -1297,7 +1297,79 @@ end
 
 Modify offset, sizes and strides of an unranked/ranked memref.
 
-# Example
+Example 1:
+
+Consecutive `reinterpret_cast` operations on memref\'s with static
+dimensions.
+
+We distinguish between *underlying memory* — the sequence of elements as
+they appear in the contiguous memory of the memref — and the
+*strided memref*, which refers to the underlying memory interpreted
+according to specified offsets, sizes, and strides.
+
+```mlir
+%result1 = memref.reinterpret_cast %arg0 to 
+  offset: [9],
+  sizes: [4, 4],
+  strides: [16, 2]
+: memref<8x8xf32, strided<[8, 1], offset: 0>> to
+  memref<4x4xf32, strided<[16, 2], offset: 9>>
+
+%result2 = memref.reinterpret_cast %result1 to 
+  offset: [0],
+  sizes: [2, 2],
+  strides: [4, 2]
+: memref<4x4xf32, strided<[16, 2], offset: 9>> to
+  memref<2x2xf32, strided<[4, 2], offset: 0>>
+```
+
+The underlying memory of `%arg0` consists of a linear sequence of integers
+from 1 to 64. Its memref has the following 8x8 elements:
+
+```mlir
+[[1,  2,  3,  4,  5,  6,  7,  8],
+[9,  10, 11, 12, 13, 14, 15, 16],
+[17, 18, 19, 20, 21, 22, 23, 24],
+[25, 26, 27, 28, 29, 30, 31, 32],
+[33, 34, 35, 36, 37, 38, 39, 40],
+[41, 42, 43, 44, 45, 46, 47, 48],
+[49, 50, 51, 52, 53, 54, 55, 56],
+[57, 58, 59, 60, 61, 62, 63, 64]]
+```
+
+Following the first `reinterpret_cast`, the strided memref elements
+of `%result1` are:
+
+```mlir
+[[10, 12, 14, 16],
+[26, 28, 30, 32],
+[42, 44, 46, 48],
+[58, 60, 62, 64]]
+```
+
+Note: The offset and strides are relative to the underlying memory of
+`%arg0`.
+
+The second `reinterpret_cast` results in the following strided memref
+for `%result2`:
+
+```mlir
+[[1, 3],
+[5, 7]]
+```
+
+Notice that it does not matter if you use %result1 or %arg0 as a source
+for the second `reinterpret_cast` operation. Only the underlying memory
+pointers will be reused.
+
+The offset and stride are relative to the base underlying memory of the
+memref, starting at 1, not at 10 as seen in the output of `%result1`.
+This behavior contrasts with the `subview` operator, where values are
+relative to the strided memref (refer to `subview` examples).
+Consequently, the second `reinterpret_cast` behaves as if `%arg0` were
+passed directly as its argument.
+
+Example 2:
 ```mlir
 memref.reinterpret_cast %ranked to
   offset: [0],
@@ -1602,6 +1674,64 @@ performing an out-of-bounds subview at runtime is undefined behavior.
 
 Example 1:
 
+Consecutive `subview` operations on memref\'s with static dimensions.
+
+We distinguish between *underlying memory* — the sequence of elements as
+they appear in the contiguous memory of the memref — and the
+*strided memref*, which refers to the underlying memory interpreted
+according to specified offsets, sizes, and strides.
+
+```mlir
+%result1 = memref.subview %arg0[1, 1][4, 4][2, 2]
+: memref<8x8xf32, strided<[8, 1], offset: 0>> to
+  memref<4x4xf32, strided<[16, 2], offset: 9>>
+
+%result2 = memref.subview %result1[1, 1][2, 2][2, 2]
+: memref<4x4xf32, strided<[16, 2], offset: 9>> to
+  memref<2x2xf32, strided<[32, 4], offset: 27>>
+```
+
+The underlying memory of `%arg0` consists of a linear sequence of integers
+from 1 to 64. Its memref has the following 8x8 elements:
+
+```mlir
+[[1,  2,  3,  4,  5,  6,  7,  8],
+[9,  10, 11, 12, 13, 14, 15, 16],
+[17, 18, 19, 20, 21, 22, 23, 24],
+[25, 26, 27, 28, 29, 30, 31, 32],
+[33, 34, 35, 36, 37, 38, 39, 40],
+[41, 42, 43, 44, 45, 46, 47, 48],
+[49, 50, 51, 52, 53, 54, 55, 56],
+[57, 58, 59, 60, 61, 62, 63, 64]]
+```
+
+Following the first `subview`, the strided memref elements of `%result1`
+are:
+
+```mlir
+[[10, 12, 14, 16],
+[26, 28, 30, 32],
+[42, 44, 46, 48],
+[58, 60, 62, 64]]
+```
+
+Note: The offset and strides are relative to the strided memref of `%arg0`
+(compare to the corresponding `reinterpret_cast` example).
+
+The second `subview` results in the following strided memref for
+`%result2`:
+
+```mlir
+[[28, 32],
+[60, 64]]
+```
+
+Unlike the `reinterpret_cast`, the values are relative to the strided
+memref of the input (`%result1` in this case) and not its
+underlying memory.
+
+Example 2:
+
 ```mlir
 // Subview of static memref with strided layout at static offsets, sizes
 // and strides.
@@ -1610,7 +1740,7 @@ Example 1:
       memref<8x2xf32, strided<[21, 18], offset: 137>>
 ```
 
-Example 2:
+Example 3:
 
 ```mlir
 // Subview of static memref with identity layout at dynamic offsets, sizes
@@ -1619,7 +1749,7 @@ Example 2:
     : memref<64x4xf32> to memref<?x?xf32, strided<[?, ?], offset: ?>>
 ```
 
-Example 3:
+Example 4:
 
 ```mlir
 // Subview of dynamic memref with strided layout at dynamic offsets and
@@ -1629,7 +1759,7 @@ Example 3:
       memref<4x4xf32, strided<[?, ?], offset: ?>>
 ```
 
-Example 4:
+Example 5:
 
 ```mlir
 // Rank-reducing subviews.
@@ -1639,7 +1769,7 @@ Example 4:
     : memref<8x16x4xf32> to memref<6x3xf32, strided<[4, 1], offset: 210>>
 ```
 
-Example 5:
+Example 6:
 
 ```mlir
 // Identity subview. The subview is the full source memref.
