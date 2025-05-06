@@ -12,6 +12,10 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
             @safetestset "Metal Plugin" include("plugins/metal.jl")
         end
 
+        if Sys.ARCH === :x86_64 && haskey(Reactant.XLA.global_backend_state.clients, "sycl")
+            @safetestset "Intel XPU Plugin" include("plugins/sycl.jl")
+        end
+
         @safetestset "Layout" include("layout.jl")
         @safetestset "Tracing" include("tracing.jl")
         @safetestset "Basic" include("basic.jl")
