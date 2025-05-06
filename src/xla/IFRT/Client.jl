@@ -115,12 +115,14 @@ const cpu_client_count = Ref(0)
 const cuda_client_count = Ref(0)
 const tpu_client_count = Ref(0)
 const metal_client_count = Ref(0)
+const sycl_client_count = Ref(0)
 
 for (backend, counter) in (
     (:CPUClient, :cpu_client_count),
     (:CUDAClient, :cuda_client_count),
     (:TPUClient, :tpu_client_count),
     (:MetalClient, :metal_client_count),
+    (:SYCLClient, :sycl_client_count),
 )
     main_fn = Symbol(:MakeIFRTPJRT, backend)
     @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
@@ -213,6 +215,22 @@ function MakeIFRTPJRTMetalClient(;
         metal_pjrt_plugin_path,
         "metal",
         "METAL";
+        node_id,
+        num_nodes,
+        distributed_runtime_client,
+    )
+end
+
+function MakeIFRTPJRTSYCLClient(;
+    sycl_pjrt_plugin_path::String,
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+)
+    return MakeIFRTPJRTClientViaPluginAPI(
+        sycl_pjrt_plugin_path,
+        "sycl",
+        "SYCL";
         node_id,
         num_nodes,
         distributed_runtime_client,
