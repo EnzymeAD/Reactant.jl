@@ -1021,7 +1021,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
             end
             FT = fieldtype(TT, i)
             if mode != TracedToTypes && !(Core.Typeof(xi2) <: FT)
-	        if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
+                if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
                     xi2 = FT(xi2)
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
@@ -1142,7 +1142,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
             end
             FT = fieldtype(TT, i)
             if mode != TracedToTypes && !(Core.Typeof(xi2) <: FT)
-	        if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
+                if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
                     xi2 = FT(xi2)
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2

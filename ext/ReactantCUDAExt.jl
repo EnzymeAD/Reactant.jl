@@ -46,7 +46,9 @@ struct CuTracedRNumber{T,A} <: Number
     end
 end
 
-Base.@nospecializeinfer Reactant.is_traced_number(@nospecialize(T::Type{<:CuTracedRNumber})) = true
+Base.@nospecializeinfer Reactant.is_traced_number(
+    @nospecialize(T::Type{<:CuTracedRNumber})
+) = true
 Reactant.unwrapped_eltype(::Type{<:CuTracedRNumber{T}}) where {T} = T
 
 @inline CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
@@ -1084,7 +1086,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         end
         push!(wrapper_tys, cullvm_ty)
     end
-
 
     sym_name = String(gensym("call_$fname"))
     CConv = MLIR.IR.Attribute(
