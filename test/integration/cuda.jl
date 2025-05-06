@@ -204,21 +204,21 @@ end
     @test all(Array(A) .≈ 311)
 end
 
-function convert_mul!(Gu, w::FT) where {FT}
+function convert_mul_kernel!(Gu, w::FT) where {FT}
     r = FT(0.5) * w
     @inbounds Gu[1, 1, 1] = r
     return nothing
 end
 
 function convert_mul!(Gu, w)
-    @cuda blocks = 1 threads = 1 convert_mul!(Gu, w)
+    @cuda blocks = 1 threads = 1 convert_mul_kernel!(Gu, w)
     return nothing
 end
 
 @testset "Convert mul" begin
     w = Reactant.ConcreteRNumber(0.6)
     Gu = Reactant.to_rarray(ones(24, 24, 24))
-    @jit simple_tendency!(grid, Gu, w)
+    @jit convert_mul!(grid, Gu, w)
     Gui = Array((Gu))
     @test Gui[1] ≈ 0.3
 end
