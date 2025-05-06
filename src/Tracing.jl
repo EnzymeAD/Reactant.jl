@@ -1754,6 +1754,8 @@ Base.@nospecializeinfer function make_tracer(
     ))
 end
 
+struct UndefinedBox end
+
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Core.Box),
@@ -1762,14 +1764,23 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
+    prev2 = if isdefined(prev, :contents)
+        prev.contents
+    else
+        UndefinedBox()
+    end
+
     if mode == TracedToTypes
         push!(path, Core.Box)
-        return make_tracer(seen, prev.contents, path, mode; sharding, kwargs...)
+        return make_tracer(seen, prev2, path, mode; sharding, kwargs...)
     end
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
-    prev2 = prev.contents
+    if prev2 isa UndefinedBox
+        seen[prev] = prev
+        return prev
+    end
     tr = make_tracer(
         seen,
         prev2,
