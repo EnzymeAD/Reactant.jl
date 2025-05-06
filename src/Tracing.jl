@@ -1754,8 +1754,7 @@ Base.@nospecializeinfer function make_tracer(
     ))
 end
 
-struct UndefinedBox
-end
+struct UndefinedBox end
 
 Base.@nospecializeinfer function make_tracer(
     seen,
@@ -1765,7 +1764,6 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
-
     prev2 = try
         prev.contents
     catch
