@@ -35,6 +35,7 @@ jobs:
       JULIA_DEBUG: "Reactant,Reactant_jll"
       REACTANT_TEST_GROUP: ${{ inputs.test_group }}
       XLA_FLAGS: "--xla_force_host_platform_device_count=12"
+      LD_LIBRARY_PATH: ""  # use binaries from our JLLs
     steps:
       - uses: actions/checkout@v4
       - name: Create TMPDIR
