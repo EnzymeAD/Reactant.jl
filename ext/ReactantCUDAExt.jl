@@ -46,7 +46,10 @@ struct CuTracedRNumber{T,A} <: Number
     end
 end
 
-CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
+Base.@nospecializeinfer Reactant.is_traced_number(@nospecialize(T::Type{<:CuTracedRNumber})) = true
+Reactant.unwrapped_eltype(::Type{<:CuTracedRNumber{T}}) where {T} = T
+
+@inline CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
 
 function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     align = alignment(RN)
@@ -99,13 +102,13 @@ Base.OneTo(x::CuTracedRNumber{<:Integer}) = Base.OneTo(x[])
     end
 end
 
-function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
+@inline function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
     return CT(
         Base.llvmcall(
             (
                 """define double addrspace(1)* @entry(double %d) alwaysinline {
           %a = alloca double
-          store double %d, double* %a
+          store atomic double %d, double* %a release, align 8
           %ac = addrspacecast double* %a to double addrspace(1)*
           ret double addrspace(1)* %ac
                     }
@@ -119,13 +122,13 @@ function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
     )
 end
 
-function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
+@inline function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
     return CT(
         Base.llvmcall(
             (
                 """define float addrspace(1)* @entry(float %d) alwaysinline {
           %a = alloca float
-          store float %d, float* %a
+          store atomic float %d, float* %a release, align 4
           %ac = addrspacecast float* %a to float addrspace(1)*
           ret float addrspace(1)* %ac
                     }
@@ -1070,6 +1073,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     # linearize kernel arguments
     seen = Reactant.OrderedIdDict()
     kernelargsym = gensym("kernelarg")
+
     for (i, prev) in enumerate(Any[func.f, args...])
         Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
@@ -1080,6 +1084,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         end
         push!(wrapper_tys, cullvm_ty)
     end
+
 
     sym_name = String(gensym("call_$fname"))
     CConv = MLIR.IR.Attribute(
