@@ -218,7 +218,7 @@ end
 @testset "Convert mul" begin
     w = Reactant.ConcreteRNumber(0.6)
     Gu = Reactant.to_rarray(ones(24, 24, 24))
-    @jit convert_mul!(grid, Gu, w)
+    @jit convert_mul!(Gu, w)
     Gui = Array((Gu))
     @test Gui[1] ≈ 0.3
 end
