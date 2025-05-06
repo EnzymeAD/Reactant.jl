@@ -187,5 +187,5 @@ end
     y = @jit fcustom_path(xre)
     @test y isa MockTestCustomPath
     @test y.x isa Reactant.RArray
-    @test y.x[] == fcustom_path(x).x[]
+    @test y.x == fcustom_path(x).x
 end
