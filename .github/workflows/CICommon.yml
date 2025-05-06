@@ -1,0 +1,99 @@
+name: "CI Common"
+
+on:
+  workflow_call:
+    inputs:
+      julia_version:
+        description: 'Julia version'
+        required: true
+        type: string
+      runner:
+        description: 'OS/Runner'
+        required: true
+        type: string
+      xla_runtime:
+        description: 'The XLA runtime'
+        required: true
+        type: string
+      assertions:
+        description: 'Enable assertions'
+        required: false
+        default: false
+        type: boolean
+      test_group:
+        description: 'Test group'
+        required: true
+        type: string
+
+jobs:
+  test:
+    name: Julia ${{ inputs.julia_version }} - ${{ inputs.runner }} - ${{ inputs.xla_runtime }} - ${{ github.event_name }}
+    runs-on: ${{ inputs.runner }}
+    env:
+      TMPDIR: ${{ github.workspace }}/tmp
+      JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+      JULIA_DEBUG: "Reactant,Reactant_jll"
+      REACTANT_TEST_GROUP: ${{ inputs.test_group }}
+      XLA_FLAGS: "--xla_force_host_platform_device_count=12"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create TMPDIR
+        run: |
+          mkdir -p ${{ env.TMPDIR }}
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ inputs.julia_version }}
+      - uses: julia-actions/cache@v2
+      - uses: actions/checkout@v4
+        if: ${{ inputs.assertions }}
+        with:
+          repository: "JuliaLang/julia"
+          ref: release-${{ inputs.julia_version }}
+          path: "julia"
+      - name: Compile Julia
+        if: ${{ inputs.assertions }}
+        run: |
+          sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
+          make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
+          echo $PWD/julia/usr/bin >> $GITHUB_PATH
+      - name: "Setup Runtime Preferences"
+        uses: "DamianReeves/write-file-action@master"
+        with:
+          path: "LocalPreferences.toml"
+          write-mode: "overwrite"
+          contents: |
+            [Reactant]
+            xla_runtime = "${{ inputs.xla_runtime }}"
+      - name: "Install Dependencies"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          # Install packages present in subdirectories
+          dev_pks = Pkg.PackageSpec[]
+          for path in ("lib/ReactantCore",)
+              push!(dev_pks, Pkg.PackageSpec(; path))
+          end
+          Pkg.develop(dev_pks)
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
+        # Only in Julia v1.10 we need to install `ReactantCore` manually.
+        if: ${{ inputs.julia_version == '1.10' }}
+      - name: "Run Tests"
+        timeout-minutes: 60
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.test(; coverage="user")
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
+        id: run_tests
+      - name: Upload MLIR modules
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 10
+        with:
+          name: "mlir-${{ inputs.julia_version }}-${{ inputs.test_group }}-${{ inputs.os }}-${{ inputs.xla_runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}"
+          path: "**/*.mlir"
+          retention-days: 90
+          overwrite: false
+      - uses: julia-actions/julia-processcoverage@v1
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
