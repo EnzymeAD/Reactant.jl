@@ -637,7 +637,7 @@ function optimization_passes(;
         "slice_dot_general<1>",
         "if_inline<1>",
         "if_to_select<1>",
-        "dynamic_update_slice_const_prop",
+        "dynamic_update_slice_const_prop(0)",
         "dynamic_gather_op_is_not_dynamic<16>",
         "divide_sqrt_to_multiply_rsqrt<16>",
         "associative_binary_op_reordering<1>",
