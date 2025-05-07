@@ -106,7 +106,7 @@ end
 
 @inline function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
     return CT(
-	   Base.reinterpret(Core.LLVMPtr{Float32,1},
+	   Base.reinterpret(Core.LLVMPtr{Float64,1},
         Base.llvmcall(
             (
                 """define i8 addrspace(1)* @entry(double %d) alwaysinline {
