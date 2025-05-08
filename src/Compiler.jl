@@ -837,7 +837,8 @@ function optimization_passes(;
                 "slice_reshape_transpose<1>",
                 "reduce_transpose_simplify",
                 "reverse_transpose",
-                "transpose_all_users_slice",
+                # XXX: See https://github.com/EnzymeAD/Reactant.jl/issues/1269
+                # "transpose_all_users_slice",
             ],
         )
     else
