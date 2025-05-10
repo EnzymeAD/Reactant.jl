@@ -151,6 +151,33 @@ function fwddiff(
     )
 end
 
+"""
+`generate`
+
+Generate a sample from a probabilistic function by replacing all SampleOps with distribution calls.
+"""
+function generate(
+    inputs::Vector{Value}; outputs::Vector{IR.Type}, fn, name=nothing, location=Location()
+)
+    op_ty_results = IR.Type[outputs...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+    !isnothing(name) && push!(attributes, namedattribute("name", name))
+
+    return create_operation(
+        "enzyme.generate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function genericAdjoint(
     inputs::Vector{Value},
     outputs::Vector{Value};
@@ -313,6 +340,141 @@ function set(gradient::Value, value::Value; location=Location())
 
     return create_operation(
         "enzyme.set",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`simulate`
+
+Simulate a probabilistic function to generate execution trace
+by replacing all SampleOps with distribution calls and inserting
+sampled values into the choice map.
+"""
+function simulate(
+    inputs::Vector{Value}; newTrace::IR.Type, fn, name=nothing, location=Location()
+)
+    op_ty_results = IR.Type[newTrace,]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+    !isnothing(name) && push!(attributes, namedattribute("name", name))
+
+    return create_operation(
+        "enzyme.simulate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`trace`
+
+Execute a probabilistic function specified by a symbol reference using the provided arguments,
+and a set of constraints on the sampled variables (if provided). Return the execution trace
+(if provided) and the log-likelihood of the execution trace.
+"""
+function trace(
+    inputs::Vector{Value},
+    oldTrace=nothing::Union{Nothing,Value};
+    constraints=nothing::Union{Nothing,Value},
+    newTrace::IR.Type,
+    weights::Vector{IR.Type},
+    fn,
+    name=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[newTrace, weights...]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+    !isnothing(oldTrace) && push!(operands, oldTrace)
+    !isnothing(constraints) && push!(operands, constraints)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            length(inputs), if (oldTrace == nothing)
+                0
+            elseif 1(constraints == nothing)
+                0
+            else
+                1
+            end
+        ]),
+    )
+    !isnothing(name) && push!(attributes, namedattribute("name", name))
+
+    return create_operation(
+        "enzyme.trace",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`addSampleToTrace`
+
+Add a sampled value into the execution trace.
+"""
+function addSampleToTrace(trace::Value, sample::Value; name=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[trace, sample]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(name) && push!(attributes, namedattribute("name", name))
+
+    return create_operation(
+        "enzyme.addSampleToTrace",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`insertChoiceToMap`
+
+Insert a constraint on a sampled variable into the choice map.
+"""
+function insertChoiceToMap(
+    choiceMap::Value,
+    choice::Value;
+    newChoiceMap::IR.Type,
+    name=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[newChoiceMap,]
+    operands = Value[choiceMap, choice]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(name) && push!(attributes, namedattribute("name", name))
+
+    return create_operation(
+        "enzyme.insertChoiceToMap",
         location;
         operands,
         owned_regions,
