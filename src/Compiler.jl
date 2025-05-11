@@ -724,6 +724,7 @@ function optimization_passes(;
         "full_reduce_reshape_or_transpose",
         "concat_reshape_reduce",
         "concat_elementwise",
+        "reduce_reduce",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
@@ -837,8 +838,7 @@ function optimization_passes(;
                 "slice_reshape_transpose<1>",
                 "reduce_transpose_simplify",
                 "reverse_transpose",
-                # XXX: See https://github.com/EnzymeAD/Reactant.jl/issues/1269
-                # "transpose_all_users_slice",
+                "transpose_all_users_slice",
             ],
         )
     else
