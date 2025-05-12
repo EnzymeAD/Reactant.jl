@@ -569,7 +569,6 @@ function call_prologue(f, args, )
     runtime = nothing
     verify_arg_names = nothing
 
-    seen_args = OrderedIdDict()
     (;
         N,
         traced_args,
@@ -584,7 +583,6 @@ function call_prologue(f, args, )
     ) = result = TracedUtils.prepare_mlir_fn_args(
         args,
         f_name,
-        seen_args,
         concretein,
         true, # mutate_args
         toscalar,
