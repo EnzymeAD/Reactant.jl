@@ -832,8 +832,14 @@ GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
   options.executable_build_options.set_num_replicas(num_replicas);
   options.executable_build_options.set_num_partitions(num_partitions);
 
-  if (num_replicas > 1 || num_partitions > 1) {
-    assert(device_id < 0);
+  if (device_id < 0) {
+    if (num_replicas == 1 && num_partitions == 1) {
+      llvm::errs()
+          << "[libReactantExtra] num_replicas & num_partitions are both 1, but "
+             "device_id is negative. This can happen if you are sharding with "
+             "a single device.\n";
+    }
+
     assert(num_replicas * num_partitions == num_mesh_ids);
 
     options.executable_build_options.set_use_spmd_partitioning(
