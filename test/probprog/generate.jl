@@ -15,7 +15,7 @@ function generate_model(seed, μ, σ)
     return ProbProg.generate(model, seed, μ, σ)
 end
 
-@testset "ProbProg" begin
+@testset "Generate" begin
     @testset "normal_deterministic" begin
         seed1 = Reactant.to_rarray(UInt64[1, 4])
         seed2 = Reactant.to_rarray(UInt64[1, 4])
