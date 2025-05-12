@@ -1182,12 +1182,6 @@ function compile_mlir!(
         raise isa Bool && (raise = true)
     end
 
-    concrete_seen = OrderedIdDict()
-
-    concrete_result = make_tracer(
-        concrete_seen, traced_result, ("result",), TracedToConcrete; runtime
-    )
-
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
     toolkit = ""
@@ -1811,6 +1805,12 @@ function compile_mlir!(
         ]
     end
 
+    if result_shardings isa Vector
+        result_shardings = [
+            result_shardings[i] for (i, present) in enumerate(results_mask) if present
+        ]
+    end
+
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
@@ -1897,7 +1897,6 @@ function compile_mlir!(
         mlir_fn_res.num_replicas,
         mlir_fn_res.is_sharded,
         preserved_args,
-        concrete_result,
         mlir_fn_res.unique_meshes,
         mlir_fn_res.mutated_args,
         use_shardy_partitioner,
@@ -2985,7 +2984,7 @@ function compile(f, args; sync=false, kwargs...)
         seen_args,
         linear_results,
         preserved_args,
-        concrete_result,
+        traced_result,
         donated_args_mask,
     ) = mlir_fn_res
 
@@ -3035,6 +3034,15 @@ function compile(f, args; sync=false, kwargs...)
         mlir_fn_res.result_shardings,
         exec,
         ndevices,
+    )
+
+    concrete_result = make_tracer(
+        OrderedIdDict(),
+        traced_result,
+        ("result",),
+        TracedToConcrete;
+        runtime=XLA.runtime(client),
+        sharding=mlir_fn_res.result_shardings,
     )
 
     unflatten_code, used_shardinfo = codegen_unflatten!(
