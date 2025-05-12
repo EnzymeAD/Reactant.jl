@@ -1306,7 +1306,7 @@ Base.@nospecializeinfer function make_tracer(
         end
         res = if toscalar
             TracedRNumber{T}((path,), nothing)
-        elseif tobatch !== nothing
+        elseif tobatch !== nothing && prev.shape != tobatch
             error("This should not happen...")
         else
             TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
