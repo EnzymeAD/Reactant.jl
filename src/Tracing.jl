@@ -1275,7 +1275,14 @@ Base.@nospecializeinfer function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == TracedToTypes
-        push!(path, MLIR.IR.type(prev.mlir_data))
+        # for TracedRArrays, we check for objectid equality because make_mlir_fn gets rid of duplicate TracedRArrays.
+        # i.e. (a, a) should hash differently than (a, b) when a and b are different TracedRArrays.
+        if haskey(seen, objectid(prev))
+            push!(path, seen[objectid(prev)])
+        else
+            push!(path, MLIR.IR.type(prev.mlir_data))
+            seen[objectid(prev)] = VisitedObject(length(seen) + 1)
+        end
         return nothing
     end
     if mode == TracedTrack
@@ -1353,7 +1360,14 @@ Base.@nospecializeinfer function make_tracer(
         throw("Cannot trace existing trace type")
     end
     if mode == TracedToTypes
-        push!(path, MLIR.IR.type(prev.mlir_data))
+        # for TracedRArrays, we check for objectid equality because make_mlir_fn gets rid of duplicate TracedRArrays.
+        # i.e. (a, a) should hash differently than (a, b) when a and b are different TracedRArrays.
+        if haskey(seen, objectid(prev))
+            push!(path, seen[objectid(prev)])
+        else
+            push!(path, MLIR.IR.type(prev.mlir_data))
+            seen[objectid(prev)] = VisitedObject(length(seen) + 1)
+        end
         return nothing
     end
     if mode == TracedTrack
