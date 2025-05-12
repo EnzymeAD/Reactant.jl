@@ -11,7 +11,7 @@ function generate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     resargprefix::Symbol = gensym("generateresarg")
 
     mlir_fn_res = TracedUtils.make_mlir_fn(
-        f, args, (), string(f) * "_generate", false; argprefix, resprefix, resargprefix
+        f, args, (), string(f), false; argprefix, resprefix, resargprefix
     )
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
@@ -69,7 +69,7 @@ function sample(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     resargprefix = gensym("sampleresarg")
 
     mlir_fn_res = TracedUtils.make_mlir_fn(
-        f, args, (), string(f) * "_sample", false; argprefix, resprefix, resargprefix
+        f, args, (), string(f), false; argprefix, resprefix, resargprefix
     )
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
