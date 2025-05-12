@@ -54,6 +54,15 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         axis_names::NTuple{D,Union{String,Symbol}},
         axis_sizes::Dims{D},
     ) where {D}
+        @assert length(logical_device_ids) ≥ 1
+        if length(logical_device_ids) == 1
+            @warn "Constructing a single device mesh is not well supported and is \
+                   equivalent to not specifying any sharding. If you want to mock \
+                   multi-device setup on a single cpu host, set the environment variable \
+                   XLA_FLAGS=\"--xla_force_host_platform_device_count=12\" before loading \
+                   Reactant.jl and force reactant to use `cpu` devices using \
+                   `Reactant.set_default_backend(\"cpu\")`." maxlog=1
+        end
         return new{D,typeof(logical_device_ids)}(
             sorted_device_ids, logical_device_ids, Symbol.(axis_names), axis_sizes
         )
