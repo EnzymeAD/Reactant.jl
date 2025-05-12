@@ -495,12 +495,12 @@ end
     Returns the cached result if it exists, otherwise returns nothing.
 """
 function get_cache(f, args...)
-    seen = IdDict()
-    cache_key = []
-    Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
-    cache = Reactant.Compiler.callcache()
     return nothing
-    return get(cache, cache_key, nothing)
+    # seen = IdDict()
+    # cache_key = []
+    # Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
+    # cache = Reactant.Compiler.callcache()
+    # return get(cache, cache_key, nothing)
 end
 
 function get_args_for(target_func::Symbol, prologue_result)
@@ -518,6 +518,7 @@ function get_args_for(target_func::Symbol, prologue_result)
         return (
             pr.traced_args,
             pr.linear_args,
+            pr.mlir_caller_args,
             pr.seen_args,
             pr.fnbody,
             pr.func,
@@ -539,11 +540,14 @@ end
 function get_args_from_finalize_function(finalize_function_result)
     ffr = finalize_function_result
     return (
+        ffr.linear_args,
         ffr.f_name,
         ffr.ret,
         ffr.linear_results,
+        ffr.mlir_caller_args,
         ffr.argprefix,
         ffr.resprefix,
+        ffr.resargprefix,
     )
 end
 
@@ -591,7 +595,8 @@ function call_prologue(f, args, )
         input_shardings,
         verify_arg_names
     )
-    result = (; result..., seen_args, args, argprefix, name=f_name)
+    mlir_caller_args = Reactant.MLIR.IR.Value[TracedUtils.get_mlir_data(x) for x in linear_args]
+    result = (; result..., seen_args, args, mlir_caller_args, argprefix, name=f_name)
 
     Ops.activate_constant_context!(fnbody)
     @assert MLIR.IR._has_block()
@@ -602,7 +607,7 @@ function call_prologue(f, args, )
     return result
 end
 
-function finalize_function(result, traced_args, linear_args, seen_args, fnbody, func, mod, name, in_tys, inv_map, argprefix, traced_args_to_shardings, sym_visibility, args, N)
+function finalize_function(result, traced_args, linear_args, mlir_caller_args, seen_args, fnbody, func, mod, name, in_tys, inv_map, argprefix, traced_args_to_shardings, sym_visibility, args, N)
     resprefix::Symbol = gensym("calllresult")
     resargprefix::Symbol = gensym("callresarg")
 
@@ -684,6 +689,7 @@ function finalize_function(result, traced_args, linear_args, seen_args, fnbody, 
         seen_args,
         ret,
         linear_args,
+        mlir_caller_args,
         in_tys,
         linear_results,
         num_partitions,
@@ -699,28 +705,28 @@ function finalize_function(result, traced_args, linear_args, seen_args, fnbody, 
     
 end
 
-function call_epilogue(f, args, traced_result, f_name, ret, linear_results, argprefix, resprefix)
+function call_epilogue(f, args, traced_result, linear_args, f_name, ret, linear_results, mlir_caller_args, argprefix, resprefix, resargprefix)
     fnwrapped = false # TODO: should this sometimes be true (look at start of `make_mlir_fn`)?
     mlir_result_types = [
         MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
     ]
-    seen_cache = Reactant.OrderedIdDict()
-    Reactant.make_tracer(
-        seen_cache,
-        args,
-        (), # we have to insert something here, but we remove it immediately below.
-        Reactant.TracedTrack;
-        toscalar=false,
-    )
-    linear_args = []
-    mlir_caller_args = Reactant.MLIR.IR.Value[]
-    for (k, v) in seen_cache
-        v isa Reactant.TracedType || continue
-        push!(linear_args, v)
-        push!(mlir_caller_args, v.mlir_data)
-        # make tracer inserted `()` into the path, here we remove it:
-        v.paths = v.paths[1:(end - 1)]
-    end
+    # seen_cache = Reactant.OrderedIdDict()
+    # Reactant.make_tracer(
+    #     seen_cache,
+    #     args,
+    #     (), # we have to insert something here, but we remove it immediately below.
+    #     Reactant.TracedTrack;
+    #     toscalar=false,
+    # )
+    # linear_args = []
+    # mlir_caller_args = Reactant.MLIR.IR.Value[]
+    # for (k, v) in seen_cache
+    #     v isa Reactant.TracedType || continue
+    #     push!(linear_args, v)
+    #     push!(mlir_caller_args, v.mlir_data)
+    #     # make tracer inserted `()` into the path, here we remove it:
+    #     v.paths = v.paths[1:(end - 1)]
+    # end
 
     call_op = MLIR.Dialects.func.call(
         mlir_caller_args;
@@ -728,20 +734,6 @@ function call_epilogue(f, args, traced_result, f_name, ret, linear_results, argp
         callee=MLIR.IR.FlatSymbolRefAttribute(f_name),
     )
 
-    seen_results = Reactant.OrderedIdDict()
-    traced_result = Reactant.make_tracer(
-        seen_results,
-        traced_result,
-        (), # we have to insert something here, but we remove it immediately below.
-        Reactant.TracedSetPath;
-        toscalar=false,
-    )
-
-    for r in seen_results
-        if r isa TracedRNumber || r isa TracedRArray
-            r.paths = ()
-        end
-    end
 
     for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(call_op, i)
@@ -857,8 +849,12 @@ function call_with_reactant_generator(
         match.sparams,
     )
     method = mi.def
-    should_trace_call = TRACE_CALLS[] &&  !(method.module == Reactant.TracedRNumberOverrides ||
-        method.module == Reactant.TracedRArrayOverrides)
+    Core.println("Found method from module $(method.module) with name $(method.name)")
+    should_trace_call = TRACE_CALLS[] &&  !(
+        has_ancestor(method.module, Reactant.TracedRNumberOverrides) ||
+        has_ancestor(method.module, Reactant.TracedRArrayOverrides) ||
+        has_ancestor(method.module, Core)
+        )
     if should_trace_call
         Core.println("About to trace call to $fn.")
     else
@@ -1048,8 +1044,8 @@ function call_with_reactant_generator(
         rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
         res = push_inst!(rep)
     end
-
     ocres = if should_trace_call
+    # ocres = if  should_trace_call && sizeof(typeof(fn)) != 0 || fn isa Base.BroadcastFunction
         cached_or_nothing = push_inst!(Expr(:call, get_cache, fn_args[1], fn_args[2:end]...))
         is_not_cached = push_inst!(
             Expr(:call, GlobalRef(Base, :isnothing), cached_or_nothing)
@@ -1106,15 +1102,6 @@ function call_with_reactant_generator(
         # TODO: cached block
 
         # TODO: common final handling
-        #=
-        f
-        args (push_inst!(Expr(:call, tuple, fn_args[2:end]...)))
-        traced_result (oc result)
-        f_name (?)
-        ret (finalize_function)
-        linear_results (finalize_function)
-        resprefix (finalize_function)
-        =#
         traced_result = push_inst!(Expr(
             :call,
             GlobalRef(Core, :_apply_iterate),
@@ -1141,13 +1128,6 @@ function call_with_reactant_generator(
             GlobalRef(Reactant, :TRACE_CALLS),
             TRACE_CALLS[],
         ))
-        push_inst!(rep)
-        Core.SSAValue(length(overdubbed_code))
-    end
-
-    push_inst!(Expr(:call, oc, fn_args[2:end]...))
-
-    ocres = Core.SSAValue(length(overdubbed_code))
 
         traced_result
     end
