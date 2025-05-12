@@ -287,6 +287,7 @@ function make_mlir_fn(
         name,
         seen_args,
         concretein,
+        false, # mutate_args
         toscalar,
         argprefix,
         runtime,
@@ -390,6 +391,7 @@ function prepare_mlir_fn_args(
     name,
     seen_args,
     concretein,
+    mutate_args,
     toscalar,
     argprefix,
     runtime,
@@ -404,7 +406,11 @@ function prepare_mlir_fn_args(
         @assert !toscalar
         Reactant.ConcreteToTraced
     else
-        Reactant.TracedSetPath
+        if mutate_args
+            Reactant.TracedTrack
+        else
+            Reactant.TracedSetPath
+        end
     end
     for i in 1:N
         @inbounds traced_args[i] = Reactant.make_tracer(

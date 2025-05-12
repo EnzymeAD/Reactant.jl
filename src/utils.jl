@@ -582,6 +582,7 @@ function call_prologue(f, args, )
         f_name,
         seen_args,
         concretein,
+        true, # mutate_args
         toscalar,
         argprefix,
         runtime,
