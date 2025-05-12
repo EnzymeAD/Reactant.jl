@@ -1,6 +1,6 @@
 module XLA
 
-using ..Reactant: Reactant, MLIR
+using ..Reactant: Reactant, MLIR, Accelerators
 using Reactant_jll
 using Libdl
 using EnumX: @enumx
@@ -72,7 +72,18 @@ else
 end
 const global_state = State()
 
-client(backend::String) = global_backend_state.clients[backend]
+function client(backend::String)
+    if backend == "gpu"
+        if haskey(global_backend_state.clients, "cuda")
+            backend = "cuda"
+        elseif haskey(global_backend_state.clients, "metal")
+            backend = "metal"
+        else
+            error("No GPU client found")
+        end
+    end
+    return global_backend_state.clients[backend]
+end
 default_backend() = global_backend_state.default_client
 default_device() = default_device(default_backend())
 process_index() = process_index(default_backend())
@@ -192,15 +203,15 @@ for runtime in (:PJRT, :IFRT)
         # Try TPU if possible, then try GPU (CUDA)
         if !Reactant.precompiling()
             @static if !Sys.isapple()
-                if Reactant.has_tpu()
-                    Reactant.TPUUtils.download_libtpu_if_needed()
+                if Accelerators.TPU.has_tpu()
+                    Accelerators.TPU.download_libtpu_if_needed()
                     try
                         if was_initialized && haskey(state.clients, "tpu")
                             XLA.free_client(state.clients["tpu"])
                             XLA.$(runtime).tpu_client_count[] -= 1
                         end
                         tpu = $(runtime).TPUClient(;
-                            tpu_path=Reactant.TPUUtils.get_libtpu_path(), common_kwargs...
+                            tpu_path=Accelerators.TPU.get_libtpu_path(), common_kwargs...
                         )
                         state.clients["tpu"] = tpu
                         state.default_client = tpu
@@ -209,19 +220,38 @@ for runtime in (:PJRT, :IFRT)
                     end
                 else
                     try
-                        if was_initialized && haskey(state.clients, "gpu")
-                            XLA.free_client(state.clients["gpu"])
-                            XLA.$(runtime).gpu_client_count[] -= 1
+                        if was_initialized && haskey(state.clients, "cuda")
+                            XLA.free_client(state.clients["cuda"])
+                            XLA.$(runtime).cuda_client_count[] -= 1
                         end
-                        gpu = $(runtime).GPUClient(;
+                        gpu = $(runtime).CUDAClient(;
                             common_kwargs...,
                             allowed_devices=global_state.local_gpu_device_ids,
                         )
-                        state.clients["gpu"] = gpu
+                        state.clients["cuda"] = gpu
                         state.default_client = gpu
                     catch e
                         println(stdout, e)
                     end
+                end
+            else
+                try
+                    #=
+                    if was_initialized && haskey(state.clients, "metal")
+                        XLA.free_client(state.clients["metal"])
+                        XLA.$(runtime).metal_client_count[] -= 1
+                    end
+                    gpu = $(runtime).MetalClient(;
+                        metal_pjrt_plugin_path=Accelerators.Metal.get_metal_pjrt_plugin_path(),
+                        common_kwargs...,
+                    )
+                    state.clients["metal"] = gpu
+                    # Don't put this in the default_client since metal support is fairly
+                    # limited
+                    =#
+                    # Metal PJRT plugin is not yet compatible with latest OpenXLA
+                catch e
+                    println(stdout, e)
                 end
             end
         end

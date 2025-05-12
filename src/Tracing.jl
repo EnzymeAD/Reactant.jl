@@ -12,6 +12,9 @@ struct VisitedObject
     id::Int
 end
 
+is_traced_number(x::Type) = false
+Base.@nospecializeinfer is_traced_number(@nospecialize(T::Type{<:TracedRNumber})) = true
+
 function traced_type_inner end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -1017,6 +1020,15 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
             if xi !== xi2
                 changed = true
             end
+            FT = fieldtype(TT, i)
+            if mode != TracedToTypes && !(Core.Typeof(xi2) <: FT)
+                if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
+                    xi2 = FT(xi2)
+                    xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
+                    seen[xi2] = xi2
+                    changed = true
+                end
+            end
             flds[i] = xi2
         else
             nf = i - 1 # rest of tail must be undefined values
@@ -1129,12 +1141,20 @@ Base.@nospecializeinfer function make_tracer_unknown(
             if xi !== xi2
                 changed = true
             end
-            if mode != TracedToTypes && !(Core.Typeof(xi2) <: fieldtype(TT, i))
-                throw(
-                    AssertionError(
-                        "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
-                    ),
-                )
+            FT = fieldtype(TT, i)
+            if mode != TracedToTypes && !(Core.Typeof(xi2) <: FT)
+                if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
+                    xi2 = FT(xi2)
+                    xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
+                    seen[xi2] = xi2
+                    changed = true
+                else
+                    throw(
+                        AssertionError(
+                            "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                        ),
+                    )
+                end
             end
             flds[i] = xi2
         else
@@ -1767,6 +1787,8 @@ Base.@nospecializeinfer function make_tracer(
     ))
 end
 
+struct UndefinedBox end
+
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Core.Box),
@@ -1775,14 +1797,23 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
+    prev2 = if isdefined(prev, :contents)
+        prev.contents
+    else
+        UndefinedBox()
+    end
+
     if mode == TracedToTypes
         push!(path, Core.Box)
-        return make_tracer(seen, prev.contents, path, mode; sharding, kwargs...)
+        return make_tracer(seen, prev2, path, mode; sharding, kwargs...)
     end
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
-    prev2 = prev.contents
+    if prev2 isa UndefinedBox
+        seen[prev] = prev
+        return prev
+    end
     tr = make_tracer(
         seen,
         prev2,
