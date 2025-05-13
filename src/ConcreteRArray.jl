@@ -504,7 +504,9 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
             dest::SubArray{<:Any,<:Any,$(aType)},
             src::Array,
         )
-            return @jit mycopyto!(dest, src)
+            fn = compile(mycopyto!, (dest, src))
+            fn(dest, src)
+            return dest
         end
     end
 end
