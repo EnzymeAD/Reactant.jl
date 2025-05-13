@@ -1042,6 +1042,14 @@ end
         [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
 end
 
+@testset "copyto! ConcreteArray Array" begin
+    x_ra = Reactant.to_rarray(ones(4, 4))
+    y_ra = view(zeros(4, 4), 1:2, 1:2)
+    copyto!(view(x_ra, 1:2, 1:2), y_ra)
+    @test Array(x_ra) ==
+        [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
+end
+
 @testset "copyto! TracedRArray" begin
     x_ra = Reactant.to_rarray(ones(4, 4))
     y_ra = Reactant.to_rarray(zeros(2, 2))
