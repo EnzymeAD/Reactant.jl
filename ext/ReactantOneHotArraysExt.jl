@@ -17,8 +17,6 @@ function Reactant.traced_type_inner(
 	else
 		T
 	end
-	@show I2, T2
-	@show eltype(I2), eltype(I2) <: Reactant.TracedRNumber
     return OneHotArrays.OneHotArray{T2, N, Np1, I2}
 end
 
