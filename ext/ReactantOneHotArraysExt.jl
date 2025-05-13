@@ -1,4 +1,4 @@
-module ReactantOffsetArraysExt
+module ReactantOneHotArraysExt
 
 using OneHotArrays
 using Reactant
