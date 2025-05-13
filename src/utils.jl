@@ -849,12 +849,12 @@ function call_with_reactant_generator(
     )
     method = mi.def
     Core.println("Found method from module $(method.module) with name $(method.name)")
-    should_trace_call = TRACE_CALLS[] &&  !(
+    trace_call_within = TRACE_CALLS[] &&  !(
         has_ancestor(method.module, Reactant.TracedRNumberOverrides) ||
         has_ancestor(method.module, Reactant.TracedRArrayOverrides) ||
         has_ancestor(method.module, Core)
         )
-    if should_trace_call
+    if TRACE_CALLS[]
         Core.println("About to trace call to $fn.")
     else
         Core.println("Not tracing call to $fn.")
@@ -1043,7 +1043,7 @@ function call_with_reactant_generator(
         rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
         res = push_inst!(rep)
     end
-    ocres = if should_trace_call
+    ocres = if TRACE_CALLS[]
     # ocres = if  should_trace_call && sizeof(typeof(fn)) != 0 || fn isa Base.BroadcastFunction
         cached_or_nothing = push_inst!(Expr(:call, get_cache, fn_args[1], fn_args[2:end]...))
         is_not_cached = push_inst!(
@@ -1070,6 +1070,13 @@ function call_with_reactant_generator(
             GlobalRef(TracedUtils, :process_linear_args!),
             push_inst!(Expr(:call, GlobalRef(Reactant, :get_args_for), QuoteNode(:process_linear_args!), prologue_result))
         ))
+        # propagate trace_call_within
+        push_inst!(Expr(
+            :call,
+            GlobalRef(Base, :setindex!),
+            GlobalRef(Reactant, :TRACE_CALLS),
+            trace_call_within,
+        ))
         traced_result = push_inst!(Expr(
             :call,
             GlobalRef(Core, :_apply_iterate),
@@ -1077,6 +1084,14 @@ function call_with_reactant_generator(
             oc,
             push_inst!(Expr(:call, GlobalRef(Reactant, :get_args_for), QuoteNode(:oc), prologue_result))
         ))
+        # reset trace_call_within:
+        push_inst!(Expr(
+            :call,
+            GlobalRef(Base, :setindex!),
+            GlobalRef(Reactant, :TRACE_CALLS),
+            TRACE_CALLS[],
+        ))
+
         # TODO: finally:
         push_inst!(Expr(
             :call,
@@ -1112,22 +1127,7 @@ function call_with_reactant_generator(
         ))
         traced_result
     else
-        # propagate should_trace_call
-        push_inst!(Expr(
-            :call,
-            GlobalRef(Base, :setindex!),
-            GlobalRef(Reactant, :TRACE_CALLS),
-            should_trace_call,
-        ))
         traced_result = push_inst!(Expr(:call, oc, fn_args[2:end]...))
-        # reset the trace calls flag:
-        push_inst!(Expr(
-            :call,
-            GlobalRef(Base, :setindex!),
-            GlobalRef(Reactant, :TRACE_CALLS),
-            TRACE_CALLS[],
-        ))
-
         traced_result
     end
 
