@@ -572,6 +572,7 @@ function call_prologue(f, args, )
     (;
         N,
         traced_args,
+        seen_args,
         linear_args,
         inv_map,
         in_tys,
@@ -594,7 +595,7 @@ function call_prologue(f, args, )
         verify_arg_names
     )
     mlir_caller_args = Reactant.MLIR.IR.Value[TracedUtils.get_mlir_data(x) for x in linear_args]
-    result = (; result..., seen_args, args, mlir_caller_args, argprefix, name=f_name)
+    result = (; result..., args, mlir_caller_args, argprefix, name=f_name)
 
     Ops.activate_constant_context!(fnbody)
     @assert MLIR.IR._has_block()
