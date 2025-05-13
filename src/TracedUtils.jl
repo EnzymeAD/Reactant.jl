@@ -131,6 +131,11 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     return x
 end
 
+function set_mlir_data!(x::MissingTracedValue, data)
+    @warn "Setting mlir data on a MissingTracedValue is a no-op."
+    return x
+end
+
 get_ancestor_indices(::TracedRArray, indices) = indices
 get_ancestor_indices(::TracedRArray, indices, args...) = (indices, args...)
 
