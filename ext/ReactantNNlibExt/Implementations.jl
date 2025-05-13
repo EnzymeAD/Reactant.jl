@@ -463,9 +463,10 @@ function NNlib.gather!(
     )
     #! format: on
 
+    resty = MLIR.IR.TensorType(Int[size(dst)...], MLIR.IR.Type(T1))
     res = MLIR.IR.result(
         Reactant.MLIR.Dialects.stablehlo.dynamic_gather(
-            get_mlir_data(src), idxs, slice_sizes; dimension_numbers
+            get_mlir_data(src), idxs, slice_sizes; dimension_numbers, result_0=resty
         ),
         1,
     )
