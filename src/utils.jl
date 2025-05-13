@@ -1043,8 +1043,18 @@ function call_with_reactant_generator(
         rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
         res = push_inst!(rep)
     end
-    ocres = if TRACE_CALLS[]
     # ocres = if  should_trace_call && sizeof(typeof(fn)) != 0 || fn isa Base.BroadcastFunction
+    ocres = if TRACE_CALLS[]
+        push!(code_info.slotnames, :tryfinallystate)
+        push!(code_info.slotflags, zero(UInt8))
+        tryfinally_slot = Core.SlotNumber(length(code_info.slotnames))
+
+        push!(code_info.slotnames, :ocres)
+        push!(code_info.slotflags, zero(UInt8))
+        ocres_slot = Core.SlotNumber(length(code_info.slotnames))
+        push_inst!(Core.NewvarNode(ocres_slot))
+
+
         cached_or_nothing = push_inst!(Expr(:call, get_cache, fn_args[1], fn_args[2:end]...))
         is_not_cached = push_inst!(
             Expr(:call, GlobalRef(Base, :isnothing), cached_or_nothing)
@@ -1062,7 +1072,19 @@ function call_with_reactant_generator(
             )
         )
 
-        # TODO: try-finally construction.
+        catch_dest = length(overdubbed_code) + 12
+        enter = push_inst!(@static if VERSION < v"1.11"
+            Expr(:enter, catch_dest)
+        else
+            Core.EnterNode(catch_dest)
+        end)
+
+        @static if VERSION < v"1.11"
+            enter = 1
+        end
+        #== try block =====================================================#
+        push_inst!(Expr(:(=), tryfinally_slot, -1))
+        
         push_inst!(Expr(
             :call,
             GlobalRef(Core, :_apply_iterate),
@@ -1077,12 +1099,17 @@ function call_with_reactant_generator(
             GlobalRef(Reactant, :TRACE_CALLS),
             trace_call_within,
         ))
-        traced_result = push_inst!(Expr(
+        ocres_call = Expr(
             :call,
             GlobalRef(Core, :_apply_iterate),
             Base.iterate,
             oc,
             push_inst!(Expr(:call, GlobalRef(Reactant, :get_args_for), QuoteNode(:oc), prologue_result))
+        )
+        push_inst!(Expr(
+            :(=),
+            ocres_slot,
+            ocres_call
         ))
         # reset trace_call_within:
         push_inst!(Expr(
@@ -1092,13 +1119,38 @@ function call_with_reactant_generator(
             TRACE_CALLS[],
         ))
 
-        # TODO: finally:
+        push_inst!(Expr(:(=), tryfinally_slot, 1)) # indicate that no error occured
+        push_inst!(Expr(:leave, enter))
+
+        finally_dest = length(overdubbed_code) + 4
+        push_inst!(Core.GotoNode(finally_dest))
+
+        @static if VERSION < v"1.11"
+            push_inst!(Expr(:leave, enter))
+        else
+            push_inst!(nothing)
+        end
+
+        push_inst!(Expr(:(=), tryfinally_slot, 2))
+
+
+        #== finally block =================================================#
         push_inst!(Expr(
             :call,
             GlobalRef(Reactant, :deactivate_fnbody!),
             push_inst!(Expr(:call, GlobalRef(Reactant, :get_args_for), QuoteNode(:deactivate_fnbody!), prologue_result))
         ))
-        # TODO: end try-finally.
+        error_cond = push_inst!(
+            Expr(:call, GlobalRef(@__MODULE__, :(===)), tryfinally_slot, 2)
+        ) # check if error occured
+
+        exitdest = length(overdubbed_code) + 3
+        push_inst!(Core.GotoIfNot(error_cond, exitdest))
+
+        push_inst!(Expr(:call, GlobalRef(@__MODULE__, :rethrow)))
+        #==================================================================#
+
+        traced_result = push_inst!(ocres_slot)
 
         finalize_function_result = push_inst!(Expr(
             :call,
