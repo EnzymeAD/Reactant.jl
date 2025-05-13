@@ -21,9 +21,7 @@ using LinearAlgebra
 using Libdl: Libdl
 
 function __init__()
-    libblastrampoline_handle = Libdl.dlopen(
-        LinearAlgebra.BLAS.libblas, Libdl.RTLD_GLOBAL | Libdl.RTLD_LAZY
-    )
+    libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
 
     for (cname, enzymexla_name) in [
         (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
