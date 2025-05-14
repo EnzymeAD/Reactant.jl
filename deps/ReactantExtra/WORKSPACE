@@ -9,7 +9,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "657c2f62e4cc3dd2b52ff0587f644b64858d7c0b"
+ENZYMEXLA_COMMIT = "77682f10a02e722c0ff618d926d9014e008a1cff"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
