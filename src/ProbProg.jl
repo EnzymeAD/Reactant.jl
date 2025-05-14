@@ -64,9 +64,9 @@ function generate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
 end
 
 function sample(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
-    argprefix = gensym("samplearg")
-    resprefix = gensym("sampleresult")
-    resargprefix = gensym("sampleresarg")
+    argprefix::Symbol = gensym("samplearg")
+    resprefix::Symbol = gensym("sampleresult")
+    resargprefix::Symbol = gensym("sampleresarg")
 
     mlir_fn_res = TracedUtils.make_mlir_fn(
         f, args, (), string(f), false; argprefix, resprefix, resargprefix
