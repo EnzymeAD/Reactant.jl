@@ -1275,7 +1275,7 @@ function compile_mlir!(
     end
 
     blas_int_width = sizeof(BLAS.BlasInt) * 8
-    lower_factorization_pass = "lower-factorization{backend=$backend \
+    lower_factorization_pass = "lower-enzymexla-linalg{backend=$backend \
                                 blas_int_width=$blas_int_width}"
 
     if optimize === :all
