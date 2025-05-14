@@ -1190,10 +1190,7 @@ function compile_mlir!(
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
-    toolkit = ""
-    if isdefined(Reactant_jll, :ptxas_path)
-        toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
-    end
+    toolkit = XLA.CUDA_DATA_DIR[]
 
     if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
