@@ -2868,6 +2868,7 @@ end
     ]
 end
 
+<<<<<<< HEAD
 function triangular_solve(
     a::TracedRArray{T,N},
     b::TracedRArray{T,M};
@@ -2928,6 +2929,48 @@ function triangular_solve(
     )
 
     return TracedRArray{T,N}((), res, size(res))
+=======
+@noinline function lu(
+    x::TracedRArray{T},
+    ::Type{pT}=Int32;
+    location=mlir_stacktrace("lu", @__FILE__, @__LINE__),
+) where {T,pT}
+    @assert ndims(x) >= 2
+
+    output_shape = collect(Int64, size(x))
+    batch_shape = output_shape[1:(end - 2)]
+    pivots_shape = vcat(batch_shape, min(size(x, ndims(x) - 1), size(x, ndims(x))))
+    permutation_shape = vcat(batch_shape, size(x, ndims(x) - 1))
+    info_shape = batch_shape
+
+    op = MLIR.Dialects.enzymexla.linalg_lu(
+        x.mlir_data;
+        output=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
+        pivots=MLIR.IR.TensorType(pivots_shape, MLIR.IR.Type(unwrapped_eltype(pT))),
+        permutation=MLIR.IR.TensorType(
+            permutation_shape, MLIR.IR.Type(unwrapped_eltype(pT))
+        ),
+        info=MLIR.IR.TensorType(info_shape, MLIR.IR.Type(unwrapped_eltype(pT))),
+        location,
+    )
+
+    res = TracedRArray{unwrapped_eltype(T),ndims(x)}((), MLIR.IR.result(op, 1), size(x))
+    ipiv = TracedRArray{unwrapped_eltype(pT),ndims(x) - 1}(
+        (), MLIR.IR.result(op, 2), pivots_shape
+    )
+    perm = TracedRArray{unwrapped_eltype(pT),ndims(x) - 1}(
+        (), MLIR.IR.result(op, 3), permutation_shape
+    )
+
+    if ndims(x) == 2
+        info = TracedRNumber{unwrapped_eltype(pT)}((), MLIR.IR.result(op, 4))
+    else
+        info = TracedRArray{unwrapped_eltype(pT),ndims(x) - 2}(
+            (), MLIR.IR.result(op, 4), info_shape
+        )
+    end
+    return (res, ipiv, perm, info)
+>>>>>>> 86b335e13 (feat: Ops.lu)
 end
 
 end # module Ops
