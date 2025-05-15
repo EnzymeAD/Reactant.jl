@@ -1828,7 +1828,7 @@ end
 
 @noinline function gather(
     src::TracedRArray{T,N},
-    gather_indices::TracedRArray{Int64,2};
+    gather_indices::TracedRArray{Int64};
     offset_dims::Vector{Int64},
     collapsed_slice_dims::Vector{Int64},
     operand_batching_dims::Vector{Int64},

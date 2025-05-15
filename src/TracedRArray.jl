@@ -16,7 +16,12 @@ using ..Reactant:
     allowscalar,
     aos_to_soa,
     unwrapped_eltype
-using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
+using ..TracedUtils:
+    TracedUtils,
+    get_mlir_data,
+    set_mlir_data!,
+    materialize_traced_array,
+    __contiguous_indices
 
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore, @allowscalar
@@ -140,12 +145,6 @@ function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {
     return _getindex_cartesian(a, indices)
 end
 
-_isone(x) = isone(x)
-_isone(::CartesianIndex) = false
-
-__contiguous_indices(::Base.LogicalIndex) = false
-__contiguous_indices(x) = all(_isone, diff(x))
-
 function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
     if !(indices isa Reactant.TracedType) && __contiguous_indices(vec(indices))
         a_flat = materialize_traced_array(vec(a))
@@ -200,15 +199,28 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
 
-        indices, integer_indices, result_size, preddim_result_size, _ = TracedUtils.traced_indices(
-            indices...
+        gather_dims = TracedUtils.indices_to_gather_dims(indices...)
+
+        return Ops.reshape(
+            Ops.transpose(
+                Ops.reshape(
+                    Ops.gather(
+                        a,
+                        gather_dims.start_indices;
+                        gather_dims.offset_dims,
+                        gather_dims.collapsed_slice_dims,
+                        operand_batching_dims=Int64[],
+                        start_indices_batching_dims=Int64[],
+                        gather_dims.start_index_map,
+                        gather_dims.index_vector_dim,
+                        gather_dims.slice_sizes,
+                    ),
+                    gather_dims.gather_reshape_shape,
+                ),
+                gather_dims.permutation,
+            ),
+            gather_dims.result_shape,
         )
-        res = Ops.reshape(
-            Ops.gather_getindex(a, generate_index_list(indices...)), preddim_result_size
-        )
-        isempty(integer_indices) ||
-            (res = materialize_traced_array(dropdims(res; dims=integer_indices)))
-        return Ops.reshape(res, result_size)
     end
 
     x = Ops.dynamic_slice(a, [first.(indices)...], [length.(indices)...])
