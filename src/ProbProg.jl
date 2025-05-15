@@ -5,13 +5,21 @@ using ReactantCore: ReactantCore
 
 using Enzyme
 
-function generate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+@noinline function generate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     argprefix::Symbol = gensym("generatearg")
     resprefix::Symbol = gensym("generateresult")
     resargprefix::Symbol = gensym("generateresarg")
 
     mlir_fn_res = TracedUtils.make_mlir_fn(
-        f, args, (), string(f), false; argprefix, resprefix, resargprefix
+        f,
+        args,
+        (),
+        string(f),
+        false;
+        args_in_result=:result,
+        argprefix,
+        resprefix,
+        resargprefix,
     )
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
@@ -69,7 +77,15 @@ function sample(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     resargprefix::Symbol = gensym("sampleresarg")
 
     mlir_fn_res = TracedUtils.make_mlir_fn(
-        f, args, (), string(f), false; argprefix, resprefix, resargprefix
+        f,
+        args,
+        (),
+        string(f),
+        false;
+        args_in_result=:result,
+        argprefix,
+        resprefix,
+        resargprefix,
     )
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped

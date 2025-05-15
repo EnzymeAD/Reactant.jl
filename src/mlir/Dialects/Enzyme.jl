@@ -258,8 +258,8 @@ Simulate a probabilistic function to generate execution trace
 by replacing all SampleOps with distribution calls and inserting
 sampled values into the choice map.
 """
-function simulate(inputs::Vector{Value}; trace::IR.Type, fn, name=nothing, location=Location())
-    op_ty_results = IR.Type[trace, ]
+function simulate(inputs::Vector{Value}; outputs::Vector{IR.Type}, fn, name=nothing, location=Location())
+    op_ty_results = IR.Type[outputs..., ]
     operands = Value[inputs..., ]
     owned_regions = Region[]
     successors = Block[]
@@ -326,8 +326,8 @@ end
 
 Insert a constraint on a sampled variable into the choice map.
 """
-function insertChoiceToMap(choiceMap::Value, choice::Value; newChoiceMap::IR.Type, name=nothing, location=Location())
-    op_ty_results = IR.Type[newChoiceMap, ]
+function insertChoiceToMap(choiceMap::Value, choice::Value; outputs::IR.Type, name=nothing, location=Location())
+    op_ty_results = IR.Type[outputs, ]
     operands = Value[choiceMap, choice, ]
     owned_regions = Region[]
     successors = Block[]
