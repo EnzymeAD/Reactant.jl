@@ -2868,7 +2868,6 @@ end
     ]
 end
 
-<<<<<<< HEAD
 function triangular_solve(
     a::TracedRArray{T,N},
     b::TracedRArray{T,M};
@@ -2929,7 +2928,18 @@ function triangular_solve(
     )
 
     return TracedRArray{T,N}((), res, size(res))
-=======
+end
+
+"""
+    lu(
+        x::TracedRArray{T},
+        ::Type{pT}=Int32;
+        location=mlir_stacktrace("lu", @__FILE__, @__LINE__)
+    ) where {T,pT}
+
+Compute the row maximum pivoted LU factorization of `x` and return the factors `LU`,
+`ipiv`, `permutation` tensor, and `info`.
+"""
 @noinline function lu(
     x::TracedRArray{T},
     ::Type{pT}=Int32;
@@ -2946,31 +2956,22 @@ function triangular_solve(
     op = MLIR.Dialects.enzymexla.linalg_lu(
         x.mlir_data;
         output=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
-        pivots=MLIR.IR.TensorType(pivots_shape, MLIR.IR.Type(unwrapped_eltype(pT))),
-        permutation=MLIR.IR.TensorType(
-            permutation_shape, MLIR.IR.Type(unwrapped_eltype(pT))
-        ),
-        info=MLIR.IR.TensorType(info_shape, MLIR.IR.Type(unwrapped_eltype(pT))),
+        pivots=MLIR.IR.TensorType(pivots_shape, MLIR.IR.Type(pT)),
+        permutation=MLIR.IR.TensorType(permutation_shape, MLIR.IR.Type(pT)),
+        info=MLIR.IR.TensorType(info_shape, MLIR.IR.Type(pT)),
         location,
     )
 
-    res = TracedRArray{unwrapped_eltype(T),ndims(x)}((), MLIR.IR.result(op, 1), size(x))
-    ipiv = TracedRArray{unwrapped_eltype(pT),ndims(x) - 1}(
-        (), MLIR.IR.result(op, 2), pivots_shape
-    )
-    perm = TracedRArray{unwrapped_eltype(pT),ndims(x) - 1}(
-        (), MLIR.IR.result(op, 3), permutation_shape
-    )
+    res = TracedRArray{T,ndims(x)}((), MLIR.IR.result(op, 1), size(x))
+    ipiv = TracedRArray{pT,ndims(x) - 1}((), MLIR.IR.result(op, 2), pivots_shape)
+    perm = TracedRArray{pT,ndims(x) - 1}((), MLIR.IR.result(op, 3), permutation_shape)
 
     if ndims(x) == 2
-        info = TracedRNumber{unwrapped_eltype(pT)}((), MLIR.IR.result(op, 4))
+        info = TracedRNumber{pT}((), MLIR.IR.result(op, 4))
     else
-        info = TracedRArray{unwrapped_eltype(pT),ndims(x) - 2}(
-            (), MLIR.IR.result(op, 4), info_shape
-        )
+        info = TracedRArray{pT,ndims(x) - 2}((), MLIR.IR.result(op, 4), info_shape)
     end
     return (res, ipiv, perm, info)
->>>>>>> 86b335e13 (feat: Ops.lu)
 end
 
 end # module Ops
