@@ -1274,7 +1274,9 @@ function indices_to_gather_dims(indices...)
         push!(start_index_map, i - 1)
     end
 
-    collapsed_slice_dims = sort(vcat(non_contiguous_indices_idxs, ddims))
+    collapsed_slice_dims = vcat(non_contiguous_indices_idxs, ddims)
+    sort!(collapsed_slice_dims)
+    unique!(collapsed_slice_dims)
     offset_dims = collect(1:(length(indices) - length(collapsed_slice_dims)))
     start_indices = hcat(new_indices...)
 
