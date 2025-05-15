@@ -3087,6 +3087,7 @@ function compile(f, args; sync=false, kwargs...)
 
     if DEBUG_PRINT_CODEGEN[] && Reactant.Distributed.local_rank() == 0
         display(body)
+        display(mlir_fn_res.donated_args_mask)
     end
 
     return register_thunk(
