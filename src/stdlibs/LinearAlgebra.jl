@@ -472,14 +472,25 @@ end
 # Linear Solve
 # XXX: We should not be overloading these functions. Instead we need to overload
 #      `generic_trimatdiv!` & `LAPACK.trtrs!`. Doing it like this for testing rn
-function Base.:(\)(
-    A::LowerTriangular{TracedRNumber{T1},TracedRArray{T1,2}},
-    B::AbstractVecOrMat{TracedRNumber{T2}},
-) where {T1,T2}
-    pA = Ops.convert(TracedRArray{T2,2}, parent(A))
-    return Ops.triangular_solve(
-        pA, B; left_side=true, lower=true, transpose_a='N', unit_diagonal=false
-    )
+for (wT, lower, unit_diagonal) in (
+    (LowerTriangular, true, false),
+    (UnitLowerTriangular, true, true),
+    (UpperTriangular, false, false),
+    (UnitUpperTriangular, false, true),
+)
+    @eval function Base.:(\)(
+        A::$(wT){TracedRNumber{T1},TracedRArray{T1,2}},
+        B::AbstractVecOrMat{TracedRNumber{T2}},
+    ) where {T1,T2}
+        return Ops.triangular_solve(
+            Ops.convert(TracedRArray{T2,2}, parent(A)),
+            B;
+            left_side=true,
+            lower=$(lower),
+            transpose_a='N',
+            unit_diagonal=$(unit_diagonal),
+        )
+    end
 end
 
 end
