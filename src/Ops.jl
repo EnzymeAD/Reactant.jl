@@ -539,12 +539,17 @@ end
 ) where {T,N}
     start_indices = start_indices .- 1
     limit_indices = limit_indices
+    @assert all(Base.Fix2(≥, 0), start_indices) "Invalid start indices: $(start_indices)"
+    @assert all(s < l for (s, l) in zip(start_indices, limit_indices)) "Invalid slice indices: $(start_indices), $(limit_indices)"
+
     strides = isnothing(strides) ? ones(Int64, N) : strides
+    @assert all(s > 0 for s in strides) "Invalid strides: $(strides)"
     rsize = [
         length((start + 1):st:stop) for
         (start, stop, st) in zip(start_indices, limit_indices, strides)
     ]
     @assert all(rsize .> 0) "Invalid slice dimensions"
+
     res = MLIR.IR.result(
         stablehlo.slice(
             x.mlir_data;

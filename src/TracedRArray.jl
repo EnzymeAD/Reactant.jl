@@ -405,8 +405,6 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
 
-        # gather_dims = TracedUtils.indices_to_gather_dims(indices...)
-
         indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
         v = Ops.convert(
             TracedRArray{T,ndims(v)},
