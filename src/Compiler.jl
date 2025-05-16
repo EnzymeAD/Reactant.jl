@@ -1275,8 +1275,8 @@ function compile_mlir!(
     end
 
     blas_int_width = sizeof(BLAS.BlasInt) * 8
-    lower_factorization_pass = "lower-enzymexla-linalg{backend=$backend \
-                                blas_int_width=$blas_int_width}"
+    lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
+                                   blas_int_width=$blas_int_width}"
 
     if optimize === :all
         run_pass_pipeline!(
@@ -1296,7 +1296,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         opt_passes2,
-                        lower_factorization_pass,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 else
@@ -1313,7 +1313,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_factorization_pass,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 end,
@@ -1460,7 +1460,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         opt_passes2,
-                        lower_factorization_pass,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 else
@@ -1474,7 +1474,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_factorization_pass,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 end,
@@ -1496,7 +1496,7 @@ function compile_mlir!(
                         opt_passes2,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                        lower_factorization_pass,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 else
@@ -1509,7 +1509,7 @@ function compile_mlir!(
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
                         raise_passes,
-                        lower_factorization_pass,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 end,
