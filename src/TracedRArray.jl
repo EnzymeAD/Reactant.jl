@@ -142,6 +142,12 @@ end
 
 function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
     if !(indices isa Reactant.TracedType)
+        if length(indices) == 1 && first(indices) isa CartesianIndex
+            # fast-path else we will end up with a gather
+            return TracedUtils.broadcast_to_size(
+                @allowscalar(_getindex_cartesian(a, first(indices))), (1,)
+            )
+        end
         stride = TracedUtils._get_slice_stride(vec(indices))
         if stride > 0
             a_flat = materialize_traced_array(vec(a))

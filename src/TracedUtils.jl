@@ -1210,12 +1210,15 @@ __contiguous_indices(::Base.LogicalIndex) = false
 __contiguous_indices(x) = all(_isone, diff(x))
 
 _get_slice_stride(::Base.LogicalIndex) = -1
+_get_slice_stride(x::CartesianIndex) = -1
 function _get_slice_stride(x)
     length(x) == 1 && return 1
     strides = diff(x)
     isempty(strides) && return -1
     allequal(strides) || return -1
-    return first(strides)
+    val = first(strides)
+    val isa Number || return -1
+    return val
 end
 
 function create_index_mesh(idxs::AbstractVector...)
