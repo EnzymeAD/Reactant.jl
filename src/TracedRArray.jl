@@ -419,14 +419,43 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
 
-        indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
+        gather_dims = TracedUtils.indices_to_gather_dims(indices...)
+
         v = Ops.convert(
             TracedRArray{T,ndims(v)},
             TracedUtils.promote_to(TracedRArray{unwrapped_eltype(v),ndims(v)}, v),
         )
 
-        indices_list = generate_index_list(indices_list...)
-        res = Ops.scatter_setindex(a, indices_list, Ops.reshape(v, length(v)))
+        updates = Ops.transpose(v, invperm(gather_dims.permutation))
+        n_collapsed = length(gather_dims.collapsed_slice_dims)
+        updates_shape = Int64[
+            prod(size(updates)[1:n_collapsed]), size(updates)[(n_collapsed + 1):end]...
+        ]
+        updates = Ops.reshape(updates, updates_shape)
+
+        # simply set the 2nd block argument as a result
+        update_computation = MLIR.IR.Region()
+        block = MLIR.IR.Block(
+            [Ops.mlir_type(TracedRNumber{T}), Ops.mlir_type(TracedRNumber{T})],
+            [MLIR.IR.Location(), MLIR.IR.Location()],
+        )
+        return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
+        MLIR.IR.rmfromparent!(return_op)
+        push!(block, return_op)
+        pushfirst!(update_computation, block)
+
+        res = Ops.scatter(
+            [a],
+            gather_dims.start_indices,
+            [updates];
+            update_computation,
+            update_window_dims=gather_dims.offset_dims,
+            inserted_window_dims=gather_dims.collapsed_slice_dims,
+            input_batching_dims=Int64[],
+            scatter_indices_batching_dims=Int64[],
+            scatter_dims_to_operand_dims=gather_dims.start_index_map,
+            index_vector_dim=gather_dims.index_vector_dim,
+        )[1]
         set_mlir_data!(a, get_mlir_data(res))
         return v
     end
