@@ -106,40 +106,48 @@ end
 
 @inline function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
     return CT(
-        Base.llvmcall(
-            (
-                """define double addrspace(1)* @entry(double %d) alwaysinline {
-          %a = alloca double
-          store atomic double %d, double* %a release, align 8
-          %ac = addrspacecast double* %a to double addrspace(1)*
-          ret double addrspace(1)* %ac
-                    }
-      """,
-                "entry",
-            ),
+        Base.reinterpret(
             Core.LLVMPtr{Float64,1},
-            Tuple{Float64},
-            Base.convert(Float64, x),
+            Base.llvmcall(
+                (
+                    """define i8 addrspace(1)* @entry(double %d) alwaysinline {
+              %a = alloca double
+              store atomic double %d, double* %a release, align 8
+       %bc = bitcast double* %a to i8*
+              %ac = addrspacecast i8* %bc to i8 addrspace(1)*
+              ret i8 addrspace(1)* %ac
+                        }
+          """,
+                    "entry",
+                ),
+                Core.LLVMPtr{UInt8,1},
+                Tuple{Float64},
+                Base.convert(Float64, x),
+            ),
         ),
     )
 end
 
 @inline function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
     return CT(
-        Base.llvmcall(
-            (
-                """define float addrspace(1)* @entry(float %d) alwaysinline {
-          %a = alloca float
-          store atomic float %d, float* %a release, align 4
-          %ac = addrspacecast float* %a to float addrspace(1)*
-          ret float addrspace(1)* %ac
-                    }
-      """,
-                "entry",
-            ),
+        Base.reinterpret(
             Core.LLVMPtr{Float32,1},
-            Tuple{Float32},
-            Base.convert(Float32, x),
+            Base.llvmcall(
+                (
+                    """define i8 addrspace(1)* @entry(float %d) alwaysinline {
+              %a = alloca float
+              store atomic float %d, float* %a release, align 4
+       %bc = bitcast float* %a to i8*
+              %ac = addrspacecast i8* %bc to i8 addrspace(1)*
+              ret i8 addrspace(1)* %ac
+                        }
+          """,
+                    "entry",
+                ),
+                Core.LLVMPtr{UInt8,1},
+                Tuple{Float32},
+                Base.convert(Float32, x),
+            ),
         ),
     )
 end
@@ -908,6 +916,14 @@ function compile(job)
         if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl pre vendor IR\n", string(mod))
         end
+
+        LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
+            LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
+                LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
+            end
+            LLVM.run!(pb, mod, tm)
+        end
+
         vendored_optimize_module!(job, mod)
         if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl post vendor IR\n", string(mod))

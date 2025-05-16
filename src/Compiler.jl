@@ -563,7 +563,9 @@ function optimization_passes(;
         "const_prop_through_barrier<16>",
         "slice_slice<16>",
         "shift_right_logical_simplify<16>",
-        "pad_simplify<16>",
+        "pad_simplify<16>($max_constant_threshold)",
+        "select_pad_to_dus<1>",
+        "and_pad_pad<1>",
         "negative_pad_to_slice<16>",
         "tanh_simplify<16>",
         "exp_simplify<16>",
@@ -724,6 +726,7 @@ function optimization_passes(;
         "full_reduce_reshape_or_transpose",
         "concat_reshape_reduce",
         "concat_elementwise",
+        "reduce_reduce",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
@@ -1189,10 +1192,7 @@ function compile_mlir!(
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
-    toolkit = ""
-    if isdefined(Reactant_jll, :ptxas_path)
-        toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
-    end
+    toolkit = XLA.CUDA_DATA_DIR[]
 
     if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
@@ -3105,6 +3105,7 @@ function compile(f, args; sync=false, kwargs...)
 
     if DEBUG_PRINT_CODEGEN[] && Reactant.Distributed.local_rank() == 0
         display(body)
+        display(mlir_fn_res.donated_args_mask)
     end
 
     return register_thunk(

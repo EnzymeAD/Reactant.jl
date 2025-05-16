@@ -18,7 +18,7 @@ export default defineConfig({
   outDir: 'REPLACE_ME_DOCUMENTER_VITEPRESS', // This is required for MarkdownVitepress to work correctly...
   ignoreDeadLinks: true, // tested in Documenter.jl directly
   lastUpdated: true,
-  
+
   head: [
     ['link', { rel: "icon", href: `${baseTemp.base}favicon.ico` }],
     ['script', {src: `/versions.js` }],
@@ -31,18 +31,18 @@ export default defineConfig({
       }
     },
     optimizeDeps: {
-      exclude: [ 
+      exclude: [
         '@nolebase/vitepress-plugin-enhanced-readabilities/client',
         'vitepress',
         '@nolebase/ui',
-      ], 
-    }, 
-    ssr: { 
-      noExternal: [ 
+      ],
+    },
+    ssr: {
+      noExternal: [
         // If there are other packages that need to be processed by Vite, you can add them here.
         '@nolebase/vitepress-plugin-enhanced-readabilities',
         '@nolebase/ui',
-      ], 
+      ],
     },
   },
   markdown: {

@@ -492,6 +492,12 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
             copyto!(dest, convert(Array, copy(src)))
             return dest
         end
+
+        function Base.copyto!(
+            dest::SubArray{<:Any,<:Any,<:$(aType)}, src::SubArray{<:Any,<:Any,<:Array}
+        )
+            return Base.copyto!(dest, convert(Array, copy(src)))
+        end
     end
 end
 

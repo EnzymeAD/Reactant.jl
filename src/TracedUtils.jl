@@ -22,8 +22,6 @@ ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
 ReactantCore.materialize_traced_array(x::TracedRArray) = x
 
-ReactantCore.materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
-
 function ReactantCore.materialize_traced_array(x::AbstractRange)
     return Reactant.aos_to_soa(collect(x))
 end
@@ -54,7 +52,11 @@ function ReactantCore.materialize_traced_array(
 end
 
 function ReactantCore.materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where {T}
-    return Reactant.aos_to_soa(x)
+    as = Reactant.aos_to_soa(x)
+    if as === x
+        as = x[axes(x)...]
+    end
+    return ReactantCore.materialize_traced_array(as)
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
