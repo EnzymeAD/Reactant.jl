@@ -43,7 +43,7 @@ end
 end
 
 @noinline function Random.seed!(rng::TracedRNG, seed::TracedRArray{UInt64,1})
-    rng.seed = seed
+    rng.seed.mlir_data = seed.mlir_data
     return rng
 end
 
@@ -82,7 +82,7 @@ Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
 ) where {T,N}
     length(A) == 0 && return A
     res = Ops.rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
-    rng.seed = res.output_state
+    rng.seed.mlir_data = res.output_state.mlir_data
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
 end
@@ -92,7 +92,7 @@ end
 ) where {T,N}
     length(A) == 0 && return A
     res = Ops.randn(T, rng.seed, [size(A)...]; rng.algorithm)
-    rng.seed = res.output_state
+    rng.seed.mlir_data = res.output_state.mlir_data
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
 end
@@ -102,7 +102,7 @@ end
 ) where {T,N}
     length(A) == 0 && return A
     res = Ops.randexp(T, rng.seed, [size(A)...]; rng.algorithm)
-    rng.seed = res.output_state
+    rng.seed.mlir_data = res.output_state.mlir_data
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
 end
