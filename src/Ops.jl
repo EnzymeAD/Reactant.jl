@@ -532,9 +532,9 @@ end
 
 @noinline function slice(
     x::TracedRArray{T,N},
-    start_indices,
-    limit_indices;
-    strides=nothing,
+    start_indices::Vector{<:Integer},
+    limit_indices::Vector{<:Integer};
+    strides::Union{Nothing,Vector{<:Integer}}=nothing,
     location=mlir_stacktrace("slice", @__FILE__, @__LINE__),
 ) where {T,N}
     start_indices = start_indices .- 1

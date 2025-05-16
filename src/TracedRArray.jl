@@ -182,9 +182,11 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = Base.to_indices(a, indices)
 
     use_gather_getindex = false
+    use_dynamic_slice = false
     strides = Int64[]
     for idxs in indices
         if idxs isa Number
+            idxs isa TracedRNumber && (use_dynamic_slice = true)
             push!(strides, 1)
             continue
         end
@@ -194,7 +196,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         end
         stride = TracedUtils._get_slice_stride(vec(idxs))
         push!(strides, stride)
-        if stride ≤ 0
+        if stride ≤ 0 || (use_dynamic_slice && stride != 1)
             use_gather_getindex = true
             break
         end
@@ -231,7 +233,13 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         )
     end
 
-    x = Ops.slice(a, [first.(indices)...], [last.(indices)...]; strides)
+    if use_dynamic_slice
+        @assert all(isone, strides) "This should not happen, please report a bug"
+        x = Ops.dynamic_slice(a, [first.(indices)...], [length.(indices)...])
+    else
+        x = Ops.slice(a, [first.(indices)...], [last.(indices)...]; strides)
+    end
+
     ddims = findall(indices) do idx
         return idx isa Integer || idx isa TracedRNumber{<:Integer}
     end
