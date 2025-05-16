@@ -184,7 +184,10 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     use_gather_getindex = false
     strides = Int64[]
     for idxs in indices
-        idxs isa Number && continue
+        if idxs isa Number
+            push!(strides, 1)
+            continue
+        end
         if idxs isa Reactant.TracedType
             use_gather_getindex = true
             break
@@ -401,7 +404,15 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
+
+        # gather_dims = TracedUtils.indices_to_gather_dims(indices...)
+
         indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
+        v = Ops.convert(
+            TracedRArray{T,ndims(v)},
+            TracedUtils.promote_to(TracedRArray{unwrapped_eltype(v),ndims(v)}, v),
+        )
+
         indices_list = generate_index_list(indices_list...)
         res = Ops.scatter_setindex(a, indices_list, Ops.reshape(v, length(v)))
         set_mlir_data!(a, get_mlir_data(res))
