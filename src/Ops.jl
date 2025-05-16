@@ -539,9 +539,12 @@ end
 ) where {T,N}
     start_indices = start_indices .- 1
     limit_indices = limit_indices
-    rsize = limit_indices .- start_indices
-    @assert all(rsize .> 0) "Invalid slice dimensions"
     strides = isnothing(strides) ? ones(Int64, N) : strides
+    rsize = [
+        length((start + 1):st:stop) for
+        (start, stop, st) in zip(start_indices, limit_indices, strides)
+    ]
+    @assert all(rsize .> 0) "Invalid slice dimensions"
     res = MLIR.IR.result(
         stablehlo.slice(
             x.mlir_data;

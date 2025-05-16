@@ -1209,6 +1209,13 @@ _isone(::CartesianIndex) = false
 __contiguous_indices(::Base.LogicalIndex) = false
 __contiguous_indices(x) = all(_isone, diff(x))
 
+_get_slice_stride(::Base.LogicalIndex) = -1
+function _get_slice_stride(x)
+    strides = diff(x)
+    allequal(strides) || return -1
+    return first(strides)
+end
+
 function create_index_mesh(idxs::AbstractVector...)
     lens = map(length, idxs)
     inner_repeats = cumprod(lens) .÷ lens

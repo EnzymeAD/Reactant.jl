@@ -16,12 +16,7 @@ using ..Reactant:
     allowscalar,
     aos_to_soa,
     unwrapped_eltype
-using ..TracedUtils:
-    TracedUtils,
-    get_mlir_data,
-    set_mlir_data!,
-    materialize_traced_array,
-    __contiguous_indices
+using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
 
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore, @allowscalar
@@ -146,13 +141,21 @@ function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {
 end
 
 function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
-    if !(indices isa Reactant.TracedType) && __contiguous_indices(vec(indices))
-        a_flat = materialize_traced_array(vec(a))
-        indices_flat = vec(indices)
-        return Ops.reshape(
-            Ops.dynamic_slice(a_flat, [first(indices_flat)], [length(indices_flat)]),
-            collect(size(indices)),
-        )
+    if !(indices isa Reactant.TracedType)
+        stride = TracedUtils._get_slice_stride(vec(indices))
+        if stride > 0
+            a_flat = materialize_traced_array(vec(a))
+            indices_flat = vec(indices)
+            return Ops.reshape(
+                Ops.slice(
+                    a_flat,
+                    Int64[first(indices_flat)],
+                    Int64[last(indices_flat)];
+                    strides=Int64[stride],
+                ),
+                collect(Int64, size(indices)),
+            )
+        end
     end
 
     if !(indices isa TracedRArray)
@@ -179,14 +182,16 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = Base.to_indices(a, indices)
 
     use_gather_getindex = false
+    strides = Int64[]
     for idxs in indices
         idxs isa Number && continue
         if idxs isa Reactant.TracedType
             use_gather_getindex = true
             break
         end
-        contiguous = __contiguous_indices(vec(idxs))
-        if typeof(contiguous) <: Bool && !contiguous
+        stride = TracedUtils._get_slice_stride(vec(idxs))
+        push!(strides, stride)
+        if stride ≤ 0
             use_gather_getindex = true
             break
         end
@@ -223,7 +228,7 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
         )
     end
 
-    x = Ops.dynamic_slice(a, [first.(indices)...], [length.(indices)...])
+    x = Ops.slice(a, [first.(indices)...], [last.(indices)...]; strides)
     ddims = findall(indices) do idx
         return idx isa Integer || idx isa TracedRNumber{<:Integer}
     end
@@ -325,7 +330,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, index::CartesianIndex{N}) where
 end
 
 function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
-    if !(indices isa Reactant.TracedType) && __contiguous_indices(vec(indices))
+    if !(indices isa Reactant.TracedType) && TracedUtils.__contiguous_indices(vec(indices))
         res = Ops.reshape(
             Ops.dynamic_update_slice(
                 materialize_traced_array(vec(a)),
@@ -383,7 +388,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
             use_scatter_setindex = true
             break
         end
-        contiguous = __contiguous_indices(idxs)
+        contiguous = TracedUtils.__contiguous_indices(idxs)
         if typeof(contiguous) <: Bool && !contiguous
             use_scatter_setindex = true
             break
