@@ -98,9 +98,9 @@ function dump_mlir(
         if isempty(mode)
             fname *= ".mlir"
         else
-	    if length(mode) > 100
-	      mode = mode[1:100]
-	    end
+            if length(mode) > 100
+                mode = mode[1:100]
+            end
             fname *= "_$(mode).mlir"
         end
         MLIR_DUMP_COUNTER[] += 1
