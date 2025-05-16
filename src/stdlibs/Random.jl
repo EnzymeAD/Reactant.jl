@@ -62,7 +62,7 @@ end
 end
 
 @noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractConcreteArray{UInt64,1})
-    rng.seed = seed
+    Base.copyto!(rng.seed, seed)
     return rng
 end
 
