@@ -1262,7 +1262,7 @@ function indices_to_gather_dims(indices...)
         if cont_idx !== nothing
             if !isone(contiguous_indices[cont_idx][1])
                 push!(new_indices, broadcast_to_size(contiguous_indices[cont_idx][1], (L,)))
-                push!(start_index_map, i - 1)
+                push!(start_index_map, i)
             end
             slice_sizes[i] = contiguous_indices[cont_idx][2]
             continue
@@ -1271,13 +1271,13 @@ function indices_to_gather_dims(indices...)
         non_cont_idx = findfirst(==(i), non_contiguous_indices_idxs)
         @assert non_cont_idx !== nothing
         push!(new_indices, expanded_non_contiguous_indices[non_cont_idx])
-        push!(start_index_map, i - 1)
+        push!(start_index_map, i)
     end
 
     collapsed_slice_dims = vcat(non_contiguous_indices_idxs, ddims)
     sort!(collapsed_slice_dims)
     unique!(collapsed_slice_dims)
-    offset_dims = collect(1:(length(indices) - length(collapsed_slice_dims)))
+    offset_dims = collect(2:(length(indices) - length(collapsed_slice_dims) + 1))
     start_indices = hcat(new_indices...)
 
     gather_reshape_shape = Int64[]
@@ -1291,12 +1291,10 @@ function indices_to_gather_dims(indices...)
         push!(perm, i)
     end
 
-    collapsed_slice_dims .-= 1
-
     return (;
         start_indices,
         slice_sizes,
-        index_vector_dim=ndims(start_indices) - 1,
+        index_vector_dim=ndims(start_indices),
         start_index_map,
         collapsed_slice_dims,
         offset_dims,
