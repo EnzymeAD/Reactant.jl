@@ -11,3 +11,4 @@ ReactantCore = {path = "../lib/ReactantCore"}
 
 [compat]
 Documenter = "1.4.1"
+DocumenterVitepress = "0.2"
