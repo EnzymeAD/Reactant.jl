@@ -74,7 +74,7 @@ end
 @leaf TracedRArray
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
-const AnyTracedRArray{T,N} = AbstractArray{<:TracedRNumber{T},N}
+const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
