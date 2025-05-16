@@ -1743,7 +1743,7 @@ end
 
 @noinline function scatter(
     dest::Vector{TracedRArray{T,N}},
-    scatter_indices::TracedRArray{Int64,},
+    scatter_indices::TracedRArray{Int64},
     updates::Vector{<:TracedRArray{T}};
     update_computation::MLIR.IR.Region,
     update_window_dims::Vector{Int64},

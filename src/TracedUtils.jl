@@ -1291,6 +1291,11 @@ function indices_to_gather_dims(indices...)
         push!(perm, i)
     end
 
+    start_indices = Ops.reshape(
+        start_indices,
+        [gather_reshape_shape[non_contiguous_indices_idxs]..., size(start_indices, 2)],
+    )
+
     return (;
         start_indices,
         slice_sizes,

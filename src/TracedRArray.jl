@@ -203,19 +203,16 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 
         return Ops.reshape(
             Ops.transpose(
-                Ops.reshape(
-                    Ops.gather(
-                        a,
-                        gather_dims.start_indices;
-                        gather_dims.offset_dims,
-                        gather_dims.collapsed_slice_dims,
-                        operand_batching_dims=Int64[],
-                        start_indices_batching_dims=Int64[],
-                        gather_dims.start_index_map,
-                        gather_dims.index_vector_dim,
-                        gather_dims.slice_sizes,
-                    ),
-                    gather_dims.gather_reshape_shape,
+                Ops.gather(
+                    a,
+                    gather_dims.start_indices;
+                    gather_dims.offset_dims,
+                    gather_dims.collapsed_slice_dims,
+                    operand_batching_dims=Int64[],
+                    start_indices_batching_dims=Int64[],
+                    gather_dims.start_index_map,
+                    gather_dims.index_vector_dim,
+                    gather_dims.slice_sizes,
                 ),
                 gather_dims.permutation,
             ),
