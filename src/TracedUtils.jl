@@ -22,8 +22,6 @@ ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
 ReactantCore.materialize_traced_array(x::TracedRArray) = x
 
-ReactantCore.materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
-
 function ReactantCore.materialize_traced_array(x::AbstractRange)
     return Reactant.aos_to_soa(collect(x))
 end
