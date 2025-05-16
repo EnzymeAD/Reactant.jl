@@ -1277,8 +1277,8 @@ function indices_to_gather_dims(indices...)
     collapsed_slice_dims = vcat(non_contiguous_indices_idxs, ddims)
     sort!(collapsed_slice_dims)
     unique!(collapsed_slice_dims)
-    offset_dims = collect(2:(length(indices) - length(collapsed_slice_dims) + 1))
     start_indices = hcat(new_indices...)
+    offset_dims = collect(Int64, 2:(length(indices) - length(collapsed_slice_dims) + 1))
 
     gather_reshape_shape = Int64[]
     perm = Int64[]
@@ -1290,11 +1290,6 @@ function indices_to_gather_dims(indices...)
         push!(gather_reshape_shape, length(indices[i]))
         push!(perm, i)
     end
-
-    start_indices = Ops.reshape(
-        start_indices,
-        [gather_reshape_shape[non_contiguous_indices_idxs]..., size(start_indices, 2)],
-    )
 
     return (;
         start_indices,
