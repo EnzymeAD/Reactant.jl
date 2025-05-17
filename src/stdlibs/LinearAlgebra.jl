@@ -469,4 +469,55 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
     return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
 end
 
+# ldiv & rdiv interfaces
+tfun_to_char(::typeof(identity)) = 'N'
+tfun_to_char(::typeof(transpose)) = 'T'
+tfun_to_char(::typeof(adjoint)) = 'C'
+
+function LinearAlgebra.generic_trimatdiv!(
+    C::AbstractVecOrMat{TracedRNumber{T}},
+    uploc,
+    isunitc,
+    tfun::Function,
+    A::AbstractMatrix,
+    B::AbstractVecOrMat,
+) where {T}
+    @assert uploc in ('L', 'U')
+    @assert isunitc in ('N', 'U')
+
+    res = Ops.triangular_solve(
+        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A)),
+        TracedUtils.promote_to(TracedRArray{T,ndims(B)}, materialize_traced_array(B));
+        left_side=true,
+        lower=(uploc == 'L'),
+        transpose_a=tfun_to_char(tfun),
+        unit_diagonal=(isunitc == 'U'),
+    )
+    set_mlir_data!(C, get_mlir_data(res))
+    return C
+end
+
+function LinearAlgebra.generic_mattridiv!(
+    C::AbstractMatrix{TracedRNumber{T}},
+    uploc,
+    isunitc,
+    tfun::Function,
+    A::AbstractMatrix,
+    B::AbstractMatrix,
+) where {T}
+    @assert uploc in ('L', 'U')
+    @assert isunitc in ('N', 'U')
+
+    res = Ops.triangular_solve(
+        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(B)),
+        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A));
+        left_side=false,
+        lower=(uploc == 'L'),
+        transpose_a=tfun_to_char(tfun),
+        unit_diagonal=(isunitc == 'U'),
+    )
+    set_mlir_data!(C, get_mlir_data(res))
+    return C
+end
+
 end
