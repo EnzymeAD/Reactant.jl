@@ -742,7 +742,7 @@ function call_epilogue(f, args, traced_result, linear_args, f_name, ret, linear_
             end
             if path[1] == resprefix
                 Reactant.TracedUtils.set!(traced_result, path[2:end], resv)
-            elseif path[1] == argprefix
+            elseif path[1] == argprefix || path[1] == resargprefix
                 idx = path[2]::Int
                 if idx == 1 && fnwrapped
                     Reactant.TracedUtils.set!(f, path[3:end], resv)
