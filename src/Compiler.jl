@@ -583,8 +583,7 @@ function optimization_passes(;
         "convert_concat<1>",
         "dynamic_update_to_concat<1>",
         "slice_of_dynamic_update<1>",
-        # XXX: generates incorrect slice op https://github.com/EnzymeAD/Enzyme-JAX/issues/953
-        # "slice_elementwise<1>",
+        "slice_elementwise<1>",
         "slice_pad<1>",
         "dot_reshape_dot<1>",
         "concat_const_prop<1>($max_constant_threshold)",
