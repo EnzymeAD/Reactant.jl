@@ -854,7 +854,7 @@ function call_with_reactant_generator(
         has_ancestor(method.module, Reactant.TracedRArrayOverrides) ||
         has_ancestor(method.module, Core)
         )
-    if TRACE_CALLS[] && !(sizeof(fn) != 0 || fn <: Base.BroadcastFunction)
+    if TRACE_CALLS[] && !(!(fn <: Function) || sizeof(fn) != 0 || fn <: Base.BroadcastFunction)
         Core.println("About to trace call to $fn.")
     else
         Core.println("Not tracing call to $fn.")
@@ -1044,7 +1044,7 @@ function call_with_reactant_generator(
         res = push_inst!(rep)
     end
     # ocres = if  should_trace_call && sizeof(typeof(fn)) != 0 || fn isa Base.BroadcastFunction
-    ocres = if TRACE_CALLS[] && !(sizeof(fn) != 0 || fn <: Base.BroadcastFunction)
+    ocres = if TRACE_CALLS[] && !(!(fn <: Function) || sizeof(fn) != 0 || fn <: Base.BroadcastFunction)
         push!(code_info.slotnames, :tryfinallystate)
         push!(code_info.slotflags, zero(UInt8))
         tryfinally_slot = Core.SlotNumber(length(code_info.slotnames))
