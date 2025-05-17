@@ -470,27 +470,41 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
 end
 
 # Linear Solve
-# XXX: We should not be overloading these functions. Instead we need to overload
-#      `generic_trimatdiv!` & `LAPACK.trtrs!`. Doing it like this for testing rn
-for (wT, lower, unit_diagonal) in (
-    (LowerTriangular, true, false),
-    (UnitLowerTriangular, true, true),
-    (UpperTriangular, false, false),
-    (UnitUpperTriangular, false, true),
-)
-    @eval function Base.:(\)(
-        A::$(wT){TracedRNumber{T1},TracedRArray{T1,2}},
-        B::AbstractVecOrMat{TracedRNumber{T2}},
-    ) where {T1,T2}
-        return Ops.triangular_solve(
-            Ops.convert(TracedRArray{T2,2}, parent(A)),
-            B;
-            left_side=true,
-            lower=$(lower),
-            transpose_a='N',
-            unit_diagonal=$(unit_diagonal),
-        )
+
+function LinearAlgebra.generic_trimatdiv!(
+    C::AbstractVecOrMat{TracedRNumber{T}},
+    uploc,
+    isunitc,
+    tfun::Function,
+    A::AbstractMatrix,
+    B::AbstractVecOrMat,
+) where {T}
+    @assert uploc in ('L', 'U')
+    @assert isunitc in ('N', 'U')
+    @assert tfun === identity || tfun === transpose || tfun === adjoint
+
+    A = TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A))
+    B = TracedUtils.promote_to(TracedRArray{T,ndims(B)}, materialize_traced_array(B))
+
+    transpose_a = if tfun === identity
+        'N'
+    elseif tfun === transpose
+        'T'
+    else
+        'C'
     end
+
+    res = Ops.triangular_solve(
+        A,
+        B;
+        left_side=true,
+        lower=(uploc == 'L'),
+        transpose_a,
+        unit_diagonal=(isunitc == 'U'),
+    )
+
+    set_mlir_data!(C, get_mlir_data(res))
+    return C
 end
 
 end
