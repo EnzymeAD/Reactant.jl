@@ -2846,4 +2846,66 @@ end
     ]
 end
 
+function triangular_solve(
+    a::TracedRArray{T,N},
+    b::TracedRArray{T,M};
+    left_side::Bool,
+    location=mlir_stacktrace("triangular_solve", @__FILE__, @__LINE__),
+    kwargs...,
+) where {T,N,M}
+    @assert M == N - 1
+
+    if left_side
+        b = reshape(b, size(b)..., 1)
+    else
+        b = reshape(b, size(b)[1:(M - 1)]..., 1, size(b, M))
+    end
+
+    return dropdims(
+        triangular_solve(a, b; location, left_side, kwargs...); dims=(N - 1 + left_side)
+    )
+end
+
+function triangular_solve(
+    a::TracedRArray{T,N},
+    b::TracedRArray{T,N};
+    left_side::Bool,
+    lower::Bool,
+    transpose_a::Char,
+    unit_diagonal::Bool,
+    location=mlir_stacktrace("triangular_solve", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert N >= 2
+    @assert size(a, N - 1) == size(a, N) == size(b, N - left_side)
+    @assert size(a)[1:(N - 2)] == size(b)[1:(N - 2)] "a and b must have the same leading \
+                                                      dimensions"
+
+    @assert transpose_a in ('N', 'T', 'C') "transpose_a must be one of 'N', 'T', or 'C'"
+    transpose_attr = MLIR.API.stablehloTransposeAttrGet(
+        MLIR.IR.context(),
+        if transpose_a == 'N'
+            "NO_TRANSPOSE"
+        elseif transpose_a == 'T'
+            "TRANSPOSE"
+        else
+            "ADJOINT"
+        end,
+    )
+
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.triangular_solve(
+            a.mlir_data,
+            b.mlir_data;
+            left_side=left_side,
+            lower=lower,
+            transpose_a=transpose_attr,
+            unit_diagonal=unit_diagonal,
+            location,
+        ),
+        1,
+    )
+
+    return TracedRArray{T,N}((), res, size(res))
+end
+
 end # module Ops

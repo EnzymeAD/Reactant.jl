@@ -279,3 +279,43 @@ end
 
     @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
 end
+
+@testset "Triangular ldiv and rdiv" begin
+    fn1(A, b) = A \ b
+    fn2(A, b) = A' \ b
+    fn3(A, b) = transpose(A) \ b
+
+    fn4(A, B) = B / A
+    fn5(A, B) = B / A'
+    fn6(A, B) = B / transpose(A)
+
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = rand(T, 6, 6)
+        B = rand(T, 6, 6)
+        b = rand(T, 6)
+        b_ra = Reactant.to_rarray(b)
+        B_ra = Reactant.to_rarray(B)
+
+        @testset for wT in (
+            UnitLowerTriangular, UnitUpperTriangular, LowerTriangular, UpperTriangular
+        )
+            A_wrapped = wT(A)
+            A_ra = Reactant.to_rarray(A_wrapped)
+
+            @testset "no_tranpose" begin
+                @test @jit(fn1(A_ra, b_ra)) ≈ fn1(A_wrapped, b)
+                @test @jit(fn4(A_ra, B_ra)) ≈ fn4(A_wrapped, B)
+            end
+
+            @testset "adjoint" begin
+                @test @jit(fn2(A_ra, b_ra)) ≈ fn2(A_wrapped, b)
+                @test @jit(fn5(A_ra, B_ra)) ≈ fn5(A_wrapped, B)
+            end
+
+            @testset "transpose" begin
+                @test @jit(fn3(A_ra, b_ra)) ≈ fn3(A_wrapped, b)
+                @test @jit(fn6(A_ra, B_ra)) ≈ fn6(A_wrapped, B)
+            end
+        end
+    end
+end
