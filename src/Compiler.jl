@@ -1285,6 +1285,7 @@ function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        "probprog",
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -1299,6 +1300,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        "probprog",
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -1421,6 +1423,22 @@ function compile_mlir!(
                 ',',
             ),
             "only_enzyme",
+        )
+    elseif optimize === :probprog
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "mark-func-memory-effects",
+                    "enzyme-batch",
+                    "probprog",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                ],
+                ',',
+            ),
+            "probprog",
         )
     elseif optimize === :only_enzyme
         run_pass_pipeline!(
