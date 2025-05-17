@@ -1040,6 +1040,7 @@ cc_library(
             "@xla//xla/backends/profiler/gpu:device_tracer",
             "@xla//xla/backends/profiler:profiler_backends",
             "@xla//xla/pjrt/c:pjrt_c_api_gpu_internal",
+            "@jax//jaxlib/cuda:cuda_gpu_kernels"
         ],
         "//conditions:default": [
         ],
