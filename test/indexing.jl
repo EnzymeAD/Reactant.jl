@@ -134,6 +134,19 @@ end
     @test y ≈ x[idx, :]
 end
 
+@testset "strided indexing" begin
+    x = reshape(collect(1:24), 4, 6)
+    x_ra = Reactant.to_rarray(x)
+
+    hlo = @code_hlo optimize = false getindex(x_ra, 1:2:4, 3:2:6)
+    @test contains(repr(hlo), "stablehlo.slice")
+    @test @jit(getindex(x_ra, 1:2:4, 3:2:6)) ≈ getindex(x, 1:2:4, 3:2:6)
+
+    hlo = @code_hlo optimize = false getindex(x_ra, 1:3:8)
+    @test contains(repr(hlo), "stablehlo.slice")
+    @test @jit(getindex(x_ra, 1:3:8)) ≈ getindex(x, 1:3:8)
+end
+
 @testset "non-contiguous indexing" begin
     x = rand(4, 4, 3)
     x_ra = Reactant.to_rarray(x)

@@ -532,16 +532,24 @@ end
 
 @noinline function slice(
     x::TracedRArray{T,N},
-    start_indices,
-    limit_indices;
-    strides=nothing,
+    start_indices::Vector{<:Integer},
+    limit_indices::Vector{<:Integer};
+    strides::Union{Nothing,Vector{<:Integer}}=nothing,
     location=mlir_stacktrace("slice", @__FILE__, @__LINE__),
 ) where {T,N}
     start_indices = start_indices .- 1
     limit_indices = limit_indices
-    rsize = limit_indices .- start_indices
-    @assert all(rsize .> 0) "Invalid slice dimensions"
+    @assert all(Base.Fix2(≥, 0), start_indices) "Invalid start indices: $(start_indices)"
+    @assert all(s < l for (s, l) in zip(start_indices, limit_indices)) "Invalid slice indices: $(start_indices), $(limit_indices)"
+
     strides = isnothing(strides) ? ones(Int64, N) : strides
+    @assert all(s > 0 for s in strides) "Invalid strides: $(strides)"
+    rsize = [
+        length((start + 1):st:stop) for
+        (start, stop, st) in zip(start_indices, limit_indices, strides)
+    ]
+    @assert all(rsize .> 0) "Invalid slice dimensions"
+
     res = MLIR.IR.result(
         stablehlo.slice(
             x.mlir_data;
@@ -1732,18 +1740,18 @@ instead.
         [updates];
         update_computation,
         update_window_dims=Int64[],
-        inserted_window_dims=collect(Int64, 0:(N - 1)),
+        inserted_window_dims=collect(Int64, 1:N),
         input_batching_dims=Int64[],
         scatter_indices_batching_dims=Int64[],
-        scatter_dims_to_operand_dims=collect(Int64, 0:(N - 1)),
-        index_vector_dim=Int64(1),
+        scatter_dims_to_operand_dims=collect(Int64, 1:N),
+        index_vector_dim=Int64(2),
         location,
     )[1]
 end
 
 @noinline function scatter(
     dest::Vector{TracedRArray{T,N}},
-    scatter_indices::TracedRArray{Int64,2},
+    scatter_indices::TracedRArray{Int64},
     updates::Vector{<:TracedRArray{T}};
     update_computation::MLIR.IR.Region,
     update_window_dims::Vector{Int64},
@@ -1757,6 +1765,13 @@ end
     scatter_indices = subtract(
         scatter_indices, fill(Int64(1), size(scatter_indices)); location
     )
+
+    update_window_dims = update_window_dims .- 1
+    inserted_window_dims = inserted_window_dims .- 1
+    input_batching_dims = input_batching_dims .- 1
+    scatter_indices_batching_dims = scatter_indices_batching_dims .- 1
+    scatter_dims_to_operand_dims = scatter_dims_to_operand_dims .- 1
+    index_vector_dim -= 1
 
     #! format: off
     scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
@@ -1813,11 +1828,11 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
             src,
             gather_indices;
             offset_dims=Int64[1],
-            collapsed_slice_dims=collect(Int64, 0:(N - 2)),
+            collapsed_slice_dims=collect(Int64, 1:(N - 1)),
             operand_batching_dims=Int64[],
             start_indices_batching_dims=Int64[],
-            start_index_map=collect(Int64, 0:(N - 1)),
-            index_vector_dim=Int64(1),
+            start_index_map=collect(Int64, 1:N),
+            index_vector_dim=Int64(2),
             slice_sizes=ones(Int64, N),
             indices_are_sorted=false,
             location,
@@ -1828,7 +1843,7 @@ end
 
 @noinline function gather(
     src::TracedRArray{T,N},
-    gather_indices::TracedRArray{Int64,2};
+    gather_indices::TracedRArray{Int64};
     offset_dims::Vector{Int64},
     collapsed_slice_dims::Vector{Int64},
     operand_batching_dims::Vector{Int64},
@@ -1842,6 +1857,13 @@ end
     gather_indices = subtract(
         gather_indices, fill(Int64(1), size(gather_indices)); location
     )
+
+    offset_dims = offset_dims .- 1
+    start_indices_batching_dims = start_indices_batching_dims .- 1
+    start_index_map = start_index_map .- 1
+    operand_batching_dims = operand_batching_dims .- 1
+    collapsed_slice_dims = collapsed_slice_dims .- 1
+    index_vector_dim -= 1
 
     #! format: off
     dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
