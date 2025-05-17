@@ -18,6 +18,25 @@ using ReactantCore: materialize_traced_array
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 
 using LinearAlgebra
+using Libdl: Libdl
+
+function __init__()
+    libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
+
+    for (cname, enzymexla_name) in [
+        (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
+        (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
+        (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
+        (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+    ]
+        sym = Libdl.dlsym(libblastrampoline_handle, cname)
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+            enzymexla_name::Cstring, sym::Ptr{Cvoid}
+        )::Cvoid
+    end
+
+    return nothing
+end
 
 # Various Wrapper Arrays defined in LinearAlgebra
 function ReactantCore.materialize_traced_array(
