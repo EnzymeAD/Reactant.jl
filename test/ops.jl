@@ -1182,7 +1182,7 @@ end
 end
 
 @testset "lu factorization" begin
-    function recon_from_lu(lu_res::AbstractArray{T, 4}) where {T}
+    function recon_from_lu(lu_res::AbstractArray{T,4}) where {T}
         y = similar(lu_res)
         for i in 1:size(lu_res, 1), j in 1:size(lu_res, 2)
             y[i, j, :, :] .= recon_from_lu(lu_res[i, j, :, :])
@@ -1190,7 +1190,7 @@ end
         return y
     end
 
-    function apply_permutation(x::AbstractArray{T, 4}, perm) where {T}
+    function apply_permutation(x::AbstractArray{T,4}, perm) where {T}
         y = similar(x)
         for i in 1:size(x, 1), j in 1:size(x, 2)
             y[i, j, :, :] .= x[i, j, perm[i, j, :], :]
