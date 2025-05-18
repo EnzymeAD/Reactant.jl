@@ -19,30 +19,6 @@ end
 Base.:(==)(op::Operation, other::Operation) = API.mlirOperationEqual(op, other)
 
 """
-    parse(::Type{Operation}, code; context=context())
-
-Parses an operation from the string and transfers ownership to the caller.
-"""
-function Base.parse(
-    ::Core.Type{Operation},
-    code;
-    verify::Bool=false,
-    context::Context=context(),
-    block=Block(),
-    location::Location=Location(),
-)
-    return Operation(
-        @ccall API.mlir_c.mlirOperationParse(
-            context::API.MlirContext,
-            block::API.MlirBlock,
-            code::API.MlirStringRef,
-            location::API.MlirLocation,
-            verify::Bool,
-        )::API.MlirOperation
-    )
-end
-
-"""
     copy(op)
 
 Creates a deep copy of an operation. The operation is not inserted and ownership is transferred to the caller.

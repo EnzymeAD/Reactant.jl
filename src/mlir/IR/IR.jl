@@ -170,49 +170,4 @@ function tryinjectop!(sym_name, code; mod=IR.mmodule(), location=Location())
     end
 end
 
-function tryinject!(sym_name, code; verify=false, mod=IR.mmodule(), location=Location())
-    fn = lookup(SymbolTable(Operation(mod)), sym_name)
-
-    if isnothing(fn)
-        ctx = IR.context()
-        block = body(mod)
-        res = @ccall API.mlir_c.mlirOperationInject(
-            ctx::API.MlirContext,
-            block::API.MlirBlock,
-            code::API.MlirStringRef,
-            location::API.MlirLocation,
-            verify::Bool,
-        )::Bool
-        return res
-    else
-        return true
-    end
-end
-
-function inject!(sym_name, code; kwargs...)
-    success = tryinject!(sym_name, code; kwargs...)
-    if !success
-        throw(ErrorException("Failed injecting MLIR to top-level block"))
-    end
-end
-
-function tryinjectop!(sym_name, code; mod=IR.mmodule(), location=Location())
-    fn = lookup(SymbolTable(Operation(mod)), sym_name)
-
-    if isnothing(fn)
-        top_level_block = body(mod)
-        op = parse(Operation, code; block=top_level_block, location)
-
-        # using `collect` because if we remove the op, then the `OperationIterator` state is broken and skips ops
-        # for op in collect(OperationIterator(code))
-        #     rmfromparent!(op)
-        #     push!(top_level_block, op)
-        # end
-
-        return op
-    else
-        return nothing
-    end
-end
-
 end # module IR
